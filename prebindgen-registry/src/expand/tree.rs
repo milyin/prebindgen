@@ -354,3 +354,120 @@ impl TransformLowerer<IntoRust> for CollectSlots<'_> {
         Ok(())
     }
 }
+
+/// What a construction needs converters for, split by where the need comes
+/// from.
+///
+/// Derived by [`dependencies`], through the same traversal an adapter lowers
+/// with — so a subtree claimed whole by a direct converter contributes nothing
+/// here either.
+#[derive(Default)]
+pub struct Dependencies {
+    /// Types the binding **demands** an input converter for: the values a
+    /// constructor actually takes, and the payload an arity layer decodes.
+    pub required: Vec<prebindgen_flat::flat::TypeRef>,
+    /// Wire primitives a **layout** contributes rather than a source value: a
+    /// dispatch's `i32` selector and an `Option` layer's `bool` presence flag.
+    ///
+    /// Named apart because which of them exist — and whether they exist at all
+    /// — is the adapter's choice of physical representation, not something the
+    /// transformation says. They are required today so the current layout keeps
+    /// resolving; an adapter that picks its own selector representation should
+    /// not inherit this one's (#444 §1).
+    pub intrinsic: Vec<prebindgen_flat::flat::TypeRef>,
+}
+
+/// What a construction depends on, read off the tree rather than off the flat
+/// signature.
+pub fn dependencies(tree: &InNode) -> Dependencies {
+    tree.lower(&mut CollectDeps)
+        .expect("collecting dependencies of a built tree cannot fail")
+}
+
+/// The lowerer behind [`dependencies`]: each node states the crossings it
+/// needs, and nothing states one twice.
+struct CollectDeps;
+
+impl CollectDeps {
+    fn merge(parts: Lowered<'_, IntoRust, Dependencies>) -> Dependencies {
+        let mut out = Dependencies::default();
+        for (_, mut part) in parts {
+            out.required.append(&mut part.required);
+            out.intrinsic.append(&mut part.intrinsic);
+        }
+        out
+    }
+
+    fn scalar(kind: prebindgen_flat::flat::ScalarKind) -> prebindgen_flat::flat::TypeRef {
+        prebindgen_flat::flat::TypeRef::scalar(kind)
+    }
+}
+
+impl TransformLowerer<IntoRust> for CollectDeps {
+    type Value = Dependencies;
+    type Error = std::convert::Infallible;
+
+    fn leaf(&mut self, node: &InNode, op: &InLeaf) -> Result<Dependencies, Self::Error> {
+        Ok(match op {
+            InLeaf::Slot { .. } => Dependencies {
+                required: vec![node.ty.clone()],
+                intrinsic: Vec::new(),
+            },
+            // A bound argument reads what its layer decoded; that crossing is
+            // the layer's, stated there.
+            InLeaf::Bound => Dependencies::default(),
+        })
+    }
+
+    fn product(
+        &mut self,
+        _node: &InNode,
+        _op: &InProduct,
+        children: Lowered<'_, IntoRust, Dependencies>,
+    ) -> Result<Dependencies, Self::Error> {
+        Ok(Self::merge(children))
+    }
+
+    fn choice(
+        &mut self,
+        _node: &InNode,
+        _op: &InChoice,
+        variants: Lowered<'_, IntoRust, Dependencies>,
+    ) -> Result<Dependencies, Self::Error> {
+        let mut out = Self::merge(variants);
+        out.intrinsic
+            .push(Self::scalar(prebindgen_flat::flat::ScalarKind::I32));
+        Ok(out)
+    }
+
+    fn optional(
+        &mut self,
+        _node: &InNode,
+        op: &InPresence,
+        _inner: &InNode,
+        value: Dependencies,
+    ) -> Result<Dependencies, Self::Error> {
+        let mut out = value;
+        match op {
+            // Absence rides the dispatch's own selector.
+            InPresence::Selector => {}
+            InPresence::Flag(_) => out
+                .intrinsic
+                .push(Self::scalar(prebindgen_flat::flat::ScalarKind::Bool)),
+            InPresence::Payload { ty, .. } => out.required.push(ty.clone()),
+        }
+        Ok(out)
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &InNode,
+        op: &InRun,
+        _inner: &InNode,
+        value: Dependencies,
+    ) -> Result<Dependencies, Self::Error> {
+        let mut out = value;
+        out.required.push(op.ty.clone());
+        Ok(out)
+    }
+}

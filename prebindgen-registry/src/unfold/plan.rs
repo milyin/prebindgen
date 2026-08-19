@@ -395,6 +395,13 @@ pub struct UnfoldLeaf {
     /// Grouping is what turns a leaf list into a `match`: leaves sharing a
     /// group are emitted together in one arm instead of as independent
     /// per-leaf expressions.
+    ///
+    /// `None` says two different things, told apart by [`Self::source`]: on a
+    /// [`SumTag`](LeafSource::SumTag) leaf it means *the selector*, which is
+    /// live whichever arm is — it chooses between the groups rather than
+    /// joining one — and on any other leaf it means the leaf is not under a
+    /// choice at all. Deriving the field from the tree does not merge the two,
+    /// because the tag is the only leaf a choice node contributes itself.
     pub group: Option<i32>,
 }
 

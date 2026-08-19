@@ -43,8 +43,8 @@ pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape},
     tree::{
-        wire_leaves, InChild, InChoice, InLeaf, InLink, InNode, InPresence, InProduct, InRun,
-        InSlot, IntoRust,
+        dependencies, wire_leaves, Dependencies, InChild, InChoice, InLeaf, InLink, InNode,
+        InPresence, InProduct, InRun, InSlot, IntoRust,
     },
 };
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
@@ -321,8 +321,14 @@ fn process_expand<M>(
         &mut visited,
     )?;
 
-    for leaf in &plan.leaves {
-        registry.require_input(&leaf.ty);
+    // Both halves are required for now: the current layout's selector and
+    // presence flag cross as an `i32` and a `bool`, so their converters must
+    // resolve. They are named apart (`Dependencies::intrinsic`) because an
+    // adapter that picks its own physical representation should not inherit
+    // this one's — see #444 §1.
+    let deps = dependencies(&plan.tree);
+    for ty in deps.required.iter().chain(deps.intrinsic.iter()) {
+        registry.require_input(ty);
     }
     registry
         .expansion_plans
