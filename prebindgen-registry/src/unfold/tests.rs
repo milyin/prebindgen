@@ -2027,7 +2027,7 @@ impl crate::transform::TransformLowerer<OutOfRust> for Render {
     fn sequence(
         &mut self,
         _node: &OutNode,
-        _op: &(),
+        _op: &OutRun,
         _inner: &OutNode,
         value: String,
     ) -> Result<String, Self::Error> {
@@ -2201,7 +2201,7 @@ impl crate::transform::TransformLowerer<OutOfRust> for Direct {
     fn sequence(
         &mut self,
         _node: &OutNode,
-        _op: &(),
+        _op: &OutRun,
         _inner: &OutNode,
         value: String,
     ) -> Result<String, Self::Error> {
@@ -2503,7 +2503,7 @@ fn a_whole_element_run_requires_its_element() {
     let tree = OutNode {
         ty: tref(syn::parse_quote!(Vec<&ZSample>)),
         kind: TransformKind::Sequence {
-            op: (),
+            op: OutRun { borrowed: false },
             inner: Box::new(OutNode {
                 ty: elem.clone(),
                 kind: TransformKind::Leaf(OutLeaf {
@@ -2643,7 +2643,7 @@ fn a_variant_payload_must_be_a_leaf_that_binds_a_member() {
     let run = OutNode {
         ty: tref(syn::parse_quote!(Vec<i64>)),
         kind: TransformKind::Sequence {
-            op: (),
+            op: OutRun { borrowed: false },
             inner: Box::new(leaf(OutReach::Field)),
         },
     };
@@ -2803,7 +2803,7 @@ fn a_choice_and_a_variant_arm_must_be_paired() {
             inner: Box::new(arm().node),
         },
         TransformKind::Sequence {
-            op: (),
+            op: OutRun { borrowed: false },
             inner: Box::new(arm().node),
         },
     ] {

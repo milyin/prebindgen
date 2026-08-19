@@ -33,9 +33,11 @@ impl TransformDirection for OutOfRust {
     /// The `Option<T>` / `Option<&T>` return layer carries nothing of its own:
     /// absent delivers a null result and the builder is skipped.
     type Optional = ();
-    /// The `Vec<T>` / `&[T]` return layer carries nothing of its own — how its
-    /// elements are delivered is what sits under it (see [`element_of`]).
-    type Sequence = ();
+    /// A run says whether its elements are reached **through a borrow** — a
+    /// shared slice is read by copying out of it, an owned collection is
+    /// consumed. How its elements are *delivered* is what sits under it (see
+    /// [`element_of`]).
+    type Sequence = OutRun;
     type Link = OutLink;
 }
 
@@ -450,7 +452,7 @@ impl TransformLowerer<OutOfRust> for FlatView {
     fn sequence(
         &mut self,
         _node: &OutNode,
-        _op: &(),
+        _op: &OutRun,
         inner: &OutNode,
         value: Partial,
     ) -> Result<Partial, Self::Error> {
@@ -492,7 +494,11 @@ pub fn shaped(
             UnfoldShape::Iterable(rest) => OutNode {
                 ty: tys[0].clone(),
                 kind: TransformKind::Sequence {
-                    op: (),
+                    // The layer's own type says it: `&[T]` is reached through a
+                    // borrow, `Vec<T>` is not.
+                    op: OutRun {
+                        borrowed: tys[0].borrow_target().is_some(),
+                    },
                     inner: Box::new(wrap(rest, &tys[1..], core)),
                 },
             },
@@ -628,7 +634,7 @@ impl TransformLowerer<OutOfRust> for CollectDeps {
     fn sequence(
         &mut self,
         _node: &OutNode,
-        _op: &(),
+        _op: &OutRun,
         _inner: &OutNode,
         value: Dependencies,
     ) -> Result<Dependencies, Self::Error> {
@@ -641,12 +647,22 @@ impl TransformLowerer<OutOfRust> for CollectDeps {
     }
 }
 
+/// What a run says about itself.
+///
+/// A property of the Rust type, not of any one boundary: `&[T]` is read through
+/// a borrow and `Vec<T>` is not. Carried here so a lowering reads a plan fact
+/// rather than classifying the type a second time.
+#[derive(Clone)]
+pub struct OutRun {
+    pub borrowed: bool,
+}
+
 /// One arity layer a boundary reads off a type.
 pub enum OrdinaryLayer {
     /// The value may be absent.
     Optional,
-    /// The value is a run of its inner type.
-    Sequence,
+    /// The value is a run of its inner type, read through a borrow or not.
+    Sequence { borrowed: bool },
 }
 
 /// The semantic plan of an **ordinary** boundary use: one with no declared
@@ -673,8 +689,14 @@ pub fn ordinary(ty: &prebindgen_flat::flat::TypeRef) -> OutNode {
                 .map(|inner| (OrdinaryLayer::Optional, inner.clone())),
             UnfoldShape::Iterable(_) => {
                 let _ = core;
-                t.sequence_elem()
-                    .map(|elem| (OrdinaryLayer::Sequence, elem.clone()))
+                t.sequence_elem().map(|elem| {
+                    (
+                        OrdinaryLayer::Sequence {
+                            borrowed: t.borrow_target().is_some(),
+                        },
+                        elem.clone(),
+                    )
+                })
             }
         }
     })
@@ -703,7 +725,10 @@ pub fn ordinary_with(
                 ty: ty.clone(),
                 kind: match layer {
                     OrdinaryLayer::Optional => TransformKind::Optional { op: (), inner },
-                    OrdinaryLayer::Sequence => TransformKind::Sequence { op: (), inner },
+                    OrdinaryLayer::Sequence { borrowed } => TransformKind::Sequence {
+                        op: OutRun { borrowed },
+                        inner,
+                    },
                 },
             }
         }
@@ -832,14 +857,14 @@ impl TransformLowerer<OutOfRust> for Select<'_> {
     fn sequence(
         &mut self,
         node: &OutNode,
-        _op: &(),
+        op: &OutRun,
         _inner: &OutNode,
         value: OutNode,
     ) -> Result<OutNode, Self::Error> {
         Ok(OutNode {
             ty: node.ty.clone(),
             kind: TransformKind::Sequence {
-                op: (),
+                op: op.clone(),
                 inner: Box::new(value),
             },
         })
