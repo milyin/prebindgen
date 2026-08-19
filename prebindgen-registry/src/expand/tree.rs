@@ -8,14 +8,19 @@
 //! tree's, so a nested build is the same node kind as the top-level one rather
 //! than a second type spelling the same thing.
 //!
-//! What is NOT here yet: the flat [`FoldPlan::leaves`] vector and the selector
-//! and presence slots that ride in it are still built by the walk rather than
-//! derived from the tree. Separating constructor semantics from those synthetic
-//! wire slots is the next step of #442.
+//! Every wire slot is described exactly once, by the node that uses it: its
+//! type is that node's [`ty`](TransformNode::ty) and its foreign-side name is
+//! on the node's payload. [`FoldPlan::leaves`] is [collected](wire_leaves) from
+//! them — a derived view of the tree, in slot order, not a second list the
+//! builder keeps in step by hand.
 //!
 //! [`FoldPlan::leaves`]: super::FoldPlan::leaves
 
-use crate::transform::{TransformChild, TransformDirection, TransformKind, TransformNode};
+use crate::transform::{
+    Lowered, TransformChild, TransformDirection, TransformKind, TransformLowerer, TransformNode,
+};
+
+use super::FoldLeaf;
 
 /// Direction marker: crossing values assembled into a Rust value.
 pub enum IntoRust {}
@@ -32,12 +37,15 @@ pub type InNode = TransformNode<IntoRust>;
 /// One argument of an into-Rust product, or one arm of a choice.
 pub type InChild = TransformChild<IntoRust>;
 
-/// One decoded wire value, used as it stands.
+/// One decoded wire value, used as it stands. The slot's type is the node's
+/// [`ty`](TransformNode::ty).
 pub struct InLeaf {
     /// Which slot of [`FoldPlan::leaves`](super::FoldPlan::leaves) this decodes
     /// — the wire signature's own order, and the index of the caller's decoded
     /// local.
-    pub leaf: usize,
+    pub slot: usize,
+    /// The slot's foreign-side parameter name.
+    pub name: syn::Ident,
     /// The slot is `Option`-wrapped by **selector presence** (it belongs to a
     /// dispatched arm and only the taken arm's slots are filled), so a consumer
     /// unwraps it before use and treats a missing value as an error.
@@ -67,13 +75,16 @@ pub enum InProduct {
     },
 }
 
-/// How a choice node picks the arm that runs.
+/// How a choice node picks the arm that runs. The selector is a slot of its
+/// own — a wire value no source wrote, contributed by this node.
 pub struct InChoice {
     /// Which slot of [`FoldPlan::leaves`](super::FoldPlan::leaves) carries the
     /// `i32` selector. Arm `i` is taken when the selector reads `i`; under an
     /// [`Optional`](super::FoldShape::Optional) shape `-1` additionally means
     /// absent.
     pub selector: usize,
+    /// The selector slot's foreign-side parameter name.
+    pub name: syn::Ident,
 }
 
 /// How one child hangs off its parent.
@@ -130,9 +141,81 @@ impl InNode {
         children
             .iter()
             .map(|c| match &c.node.kind {
-                TransformKind::Leaf(op) => Some(op.leaf),
+                TransformKind::Leaf(op) => Some(op.slot),
                 _ => None,
             })
             .collect()
+    }
+}
+
+/// Collect the wire slots a construction uses, in slot order — the flat
+/// signature [`FoldPlan::leaves`](super::FoldPlan::leaves) exposes.
+///
+/// `extra` carries slots that belong to the parameter rather than to the
+/// construction: today only the whole-parameter presence flag of a multi-argument
+/// `Option<T>`, which the [`Optional`](super::FoldShape::Optional) shape reads
+/// and the construction never sees. Every slot is named exactly once — a gap or
+/// a collision here means the builder handed out an id twice.
+pub fn wire_leaves(core: &InNode, extra: Vec<(usize, FoldLeaf)>) -> Vec<FoldLeaf> {
+    let mut slots = extra;
+    core.lower(&mut CollectSlots(&mut slots))
+        .expect("collecting wire slots cannot fail");
+    let mut out: Vec<Option<FoldLeaf>> = (0..slots.len()).map(|_| None).collect();
+    for (slot, leaf) in slots {
+        let cell = out
+            .get_mut(slot)
+            .expect("a wire slot outside the construction's own count");
+        assert!(cell.is_none(), "two wire values claim slot {slot}");
+        *cell = Some(leaf);
+    }
+    out.into_iter()
+        .enumerate()
+        .map(|(slot, leaf)| leaf.unwrap_or_else(|| panic!("wire slot {slot} is unclaimed")))
+        .collect()
+}
+
+/// The lowerer behind [`wire_leaves`]: each node contributes the slots it uses
+/// and nothing else.
+struct CollectSlots<'a>(&'a mut Vec<(usize, FoldLeaf)>);
+
+impl TransformLowerer<IntoRust> for CollectSlots<'_> {
+    type Value = ();
+    type Error = std::convert::Infallible;
+
+    fn leaf(&mut self, node: &InNode, op: &InLeaf) -> Result<(), Self::Error> {
+        self.0.push((
+            op.slot,
+            FoldLeaf {
+                name: op.name.clone(),
+                ty: node.ty.clone(),
+            },
+        ));
+        Ok(())
+    }
+
+    fn product(
+        &mut self,
+        _node: &InNode,
+        _op: &InProduct,
+        _children: Lowered<'_, IntoRust, ()>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn choice(
+        &mut self,
+        _node: &InNode,
+        op: &InChoice,
+        _variants: Lowered<'_, IntoRust, ()>,
+    ) -> Result<(), Self::Error> {
+        self.0.push((
+            op.selector,
+            FoldLeaf {
+                name: op.name.clone(),
+                // The selector: composed, and placeless by construction.
+                ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
+            },
+        ));
+        Ok(())
     }
 }

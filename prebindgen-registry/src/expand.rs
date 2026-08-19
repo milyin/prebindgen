@@ -42,7 +42,7 @@ mod tree;
 pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape},
-    tree::{InChild, InChoice, InLeaf, InLink, InNode, InProduct, IntoRust},
+    tree::{wire_leaves, InChild, InChoice, InLeaf, InLink, InNode, InProduct, IntoRust},
 };
 
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
@@ -414,7 +414,9 @@ fn build_plan<M>(
     visited: &mut HashSet<TypeKey>,
 ) -> Result<FoldPlan, ExpandError> {
     let param = &ed.param;
-    let mut leaves: Vec<FoldLeaf> = Vec::new();
+    // Wire slots are handed out as the construction is built; the flat
+    // signature is collected from the tree once it stands.
+    let mut next = 0usize;
 
     // Optional (`Option<T>`/`Option<&T>`) param. No recursion under `Optional`.
     //  * single single-arg ctor → one nullable leaf (`Option<arg>`) decides
@@ -432,22 +434,14 @@ fn build_plan<M>(
             visited.insert(target.key());
             let prefix = param.to_string();
             let core = build_core(
-                exp,
-                registry,
-                ed,
-                target,
-                variants,
-                by_ref,
-                &prefix,
-                &mut leaves,
-                visited,
+                exp, registry, ed, target, variants, by_ref, &prefix, &mut next, visited,
             )?;
             visited.remove(&target.key());
             return Ok(FoldPlan {
                 target: target.clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
-                leaves,
+                leaves: wire_leaves(&core, Vec::new()),
                 present: None,
                 core,
             });
@@ -455,47 +449,38 @@ fn build_plan<M>(
         let sig = ctor_signature(registry, func, &target.key())?;
         if sig.params.len() == 1 {
             let (_pn, pty) = &sig.params[0];
-            let leaf_ty = pty.optional();
-            leaves.push(FoldLeaf {
-                name: param.clone(),
-                ty: leaf_ty.clone(),
-            });
+            // The sole slot's `Option` is WHOLE-PARAM presence, unwrapped by
+            // the enclosing shape — not selector presence, so the constructor
+            // argument is not `wrapped`.
+            let arg = leaf_child(pty.optional(), next_slot(&mut next), param.clone(), false);
+            let core = ctor_node(target, func, sig.fallible, vec![arg]);
             return Ok(FoldPlan {
                 target: target.clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
-                leaves,
+                leaves: wire_leaves(&core, Vec::new()),
                 present: None,
-                // The sole leaf's `Option` is WHOLE-PARAM presence, unwrapped
-                // by the enclosing shape — not selector presence, so the
-                // constructor argument is not `wrapped`.
-                core: ctor_node(
-                    target,
-                    func,
-                    sig.fallible,
-                    vec![leaf_child(leaf_ty, 0, false)],
-                ),
+                core,
             });
         }
-        // Multi-arg: presence flag (leaf 0) + one flat leaf per ctor arg.
-        leaves.push(FoldLeaf {
-            name: ident(&format!("{}_present", param)),
-            // A presence flag no source wrote — placeless by construction.
-            ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::Bool),
-        });
+        // Multi-arg: presence flag (slot 0) + one flat slot per ctor arg. The
+        // flag belongs to the PARAMETER, not to the construction — the
+        // `Optional` shape reads it and the constructor never sees it — so it
+        // is contributed to the signature beside the tree rather than by it.
+        let present = (
+            next_slot(&mut next),
+            FoldLeaf {
+                name: ident(&format!("{}_present", param)),
+                // A presence flag no source wrote — placeless by construction.
+                ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::Bool),
+            },
+        );
         let prefix = param.to_string();
         let mut args = Vec::new();
         for (pname, pty) in &sig.params {
             let name = ident(&format!("{}_{}", prefix, pname));
             let arg = build_arg(
-                exp,
-                registry,
-                ed,
-                pty,
-                name,
-                /*dispatched=*/ false,
-                &mut leaves,
-                visited,
+                exp, registry, ed, pty, name, /*dispatched=*/ false, &mut next, visited,
             )?;
             if !matches!(arg.node.kind, TransformKind::Leaf(_)) {
                 return Err(ExpandError::UnsupportedOptional {
@@ -506,13 +491,15 @@ fn build_plan<M>(
             }
             args.push(arg);
         }
+        let present_slot = present.0;
+        let core = ctor_node(target, func, sig.fallible, args);
         return Ok(FoldPlan {
             target: target.clone(),
             by_ref,
             shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
-            leaves,
-            present: Some(0),
-            core: ctor_node(target, func, sig.fallible, args),
+            leaves: wire_leaves(&core, vec![present]),
+            present: Some(present_slot),
+            core,
         });
     }
 
@@ -521,22 +508,14 @@ fn build_plan<M>(
     visited.insert(target.key());
     let prefix = param.to_string();
     let core = build_core(
-        exp,
-        registry,
-        ed,
-        target,
-        variants,
-        by_ref,
-        &prefix,
-        &mut leaves,
-        visited,
+        exp, registry, ed, target, variants, by_ref, &prefix, &mut next, visited,
     )?;
     visited.remove(&target.key());
     Ok(FoldPlan {
         target: target.clone(),
         by_ref,
         shape: FoldShape::Base,
-        leaves,
+        leaves: wire_leaves(&core, Vec::new()),
         present: None,
         core,
     })
@@ -561,24 +540,44 @@ fn ctor_node(
     }
 }
 
-/// One wire leaf used as an argument: decoded from slot `leaf`, `wrapped` when
-/// selector presence put an `Option` around it.
-fn leaf_child(ty: prebindgen_flat::flat::TypeRef, leaf: usize, wrapped: bool) -> InChild {
+/// One wire slot used as an argument: `wrapped` when selector presence put an
+/// `Option` around it.
+fn leaf_child(
+    ty: prebindgen_flat::flat::TypeRef,
+    slot: usize,
+    name: syn::Ident,
+    wrapped: bool,
+) -> InChild {
     InChild {
         link: InLink { by_ref: false },
         node: InNode {
             ty,
-            kind: TransformKind::Leaf(InLeaf { leaf, wrapped }),
+            kind: TransformKind::Leaf(InLeaf {
+                slot,
+                name,
+                wrapped,
+            }),
         },
     }
 }
 
-/// Build a construct core for `target` from its `variants`, appending wire
-/// leaves to `leaves`: a single constructor is one product, anything else is a
-/// selector choice over one product per arm. Recursive: a constructor parameter
-/// whose type has its OWN default constructor becomes a nested core in place of
-/// a leaf. Used by both the top-level [`build_plan`] and each nested build.
-/// `prefix` disambiguates leaf names across the tree.
+/// Hand out the next wire slot. Slots are numbered as the walk meets them,
+/// which is the order the foreign signature takes them in.
+fn next_slot(next: &mut usize) -> usize {
+    let slot = *next;
+    *next += 1;
+    slot
+}
+
+/// Build a construct core for `target` from its `variants`: a single
+/// constructor is one product, anything else is a selector choice over one
+/// product per arm. Recursive: a constructor parameter whose type has its OWN
+/// default constructor becomes a nested core in place of a leaf. Used by both
+/// the top-level [`build_plan`] and each nested build.
+///
+/// `next` hands out wire slots — a node names the slot it uses and the
+/// signature is [collected](wire_leaves) from the finished tree. `prefix`
+/// disambiguates slot names across the tree.
 #[allow(clippy::too_many_arguments)]
 fn build_core<M>(
     exp: &Expansions,
@@ -588,7 +587,7 @@ fn build_core<M>(
     variants: &[Variant],
     by_ref: bool,
     prefix: &str,
-    leaves: &mut Vec<FoldLeaf>,
+    next: &mut usize,
     visited: &mut HashSet<TypeKey>,
 ) -> Result<InNode, ExpandError> {
     if let [Variant::Ctor(func)] = variants {
@@ -603,18 +602,13 @@ fn build_core<M>(
                 ident(&format!("{}_{}", prefix, pname))
             };
             args.push(build_arg(
-                exp, registry, ed, pty, name, false, leaves, visited,
+                exp, registry, ed, pty, name, false, next, visited,
             )?);
         }
         return Ok(ctor_node(target, func, sig.fallible, args));
     }
-    // Combined — selector leaf, then `Option`-wrapped per-arm inputs.
-    let sel_idx = leaves.len();
-    leaves.push(FoldLeaf {
-        name: ident(&format!("{}_sel", prefix)),
-        // The selector, likewise composed and placeless.
-        ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
-    });
+    // Combined — selector slot, then `Option`-wrapped per-arm inputs.
+    let sel_idx = next_slot(next);
     let mut arms: Vec<InChild> = Vec::new();
     for (vi, v) in variants.iter().enumerate() {
         let node = match v {
@@ -632,27 +626,28 @@ fn build_core<M>(
                     // `Option`-wrapped (selector presence). Recursive nesting
                     // under a combined arm is rejected by `build_arg`.
                     args.push(build_arg(
-                        exp, registry, ed, pty, name, true, leaves, visited,
+                        exp, registry, ed, pty, name, true, next, visited,
                     )?);
                 }
                 ctor_node(target, func, sig.fallible, args)
             }
             Variant::Identity => {
-                let idx = leaves.len();
                 let leaf_ty = if by_ref {
                     target.borrowed().optional()
                 } else {
                     target.optional()
                 };
-                leaves.push(FoldLeaf {
-                    name: ident(&format!("{}_{}", prefix, vi)),
-                    ty: leaf_ty.clone(),
-                });
+                let slot = next_slot(next);
                 InNode {
                     ty: target.clone(),
                     kind: TransformKind::Product {
                         op: InProduct::Identity { clone: by_ref },
-                        children: vec![leaf_child(leaf_ty, idx, true)],
+                        children: vec![leaf_child(
+                            leaf_ty,
+                            slot,
+                            ident(&format!("{}_{}", prefix, vi)),
+                            true,
+                        )],
                     },
                 }
             }
@@ -665,7 +660,10 @@ fn build_core<M>(
     Ok(InNode {
         ty: target.clone(),
         kind: TransformKind::Choice {
-            op: InChoice { selector: sel_idx },
+            op: InChoice {
+                selector: sel_idx,
+                name: ident(&format!("{}_sel", prefix)),
+            },
             variants: arms,
         },
     })
@@ -682,7 +680,7 @@ fn build_arg<M>(
     pty: &prebindgen_flat::flat::TypeRef,
     name: syn::Ident,
     dispatched: bool,
-    leaves: &mut Vec<FoldLeaf>,
+    next: &mut usize,
     visited: &mut HashSet<TypeKey>,
 ) -> Result<InChild, ExpandError> {
     // The boundary layers down to the parameter's core type.
@@ -720,7 +718,7 @@ fn build_arg<M>(
             &variants,
             pby_ref,
             &name.to_string(),
-            leaves,
+            next,
             visited,
         )?;
         visited.remove(&key);
@@ -729,19 +727,14 @@ fn build_arg<M>(
             node,
         })
     } else {
-        let idx = leaves.len();
-        // A dispatched (selector-presence) arm `Option`-wraps its leaves — but
+        // A dispatched (selector-presence) arm `Option`-wraps its slots — but
         // an argument that is itself `Option<…>` passes through with its own
         // type: `None` is a legitimate value for the taken arm, and the wire
         // cannot represent the double `Option` anyway. Such an argument is not
         // `wrapped`, so the emit side skips the selector-presence unwrap.
         let wrapped = dispatched && !popt;
         let leaf_ty = if wrapped { pty.optional() } else { pty.clone() };
-        leaves.push(FoldLeaf {
-            name,
-            ty: leaf_ty.clone(),
-        });
-        Ok(leaf_child(leaf_ty, idx, wrapped))
+        Ok(leaf_child(leaf_ty, next_slot(next), name, wrapped))
     }
 }
 
@@ -919,7 +912,7 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
     type Error = std::convert::Infallible;
 
     fn leaf(&mut self, _node: &InNode, op: &InLeaf) -> Result<syn::Expr, Self::Error> {
-        let local = &self.leaf_locals[op.leaf];
+        let local = &self.leaf_locals[op.slot];
         Ok(syn::parse_quote!(#local))
     }
 

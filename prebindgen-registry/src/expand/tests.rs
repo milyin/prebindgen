@@ -381,8 +381,9 @@ fn optional_combined_selector_encodes_absence() {
         matches!(
             &args(arms[0])[1].node.kind,
             TransformKind::Leaf(InLeaf {
-                leaf: 2,
-                wrapped: false
+                slot: 2,
+                wrapped: false,
+                ..
             })
         ),
         "an already-Option ctor arg passes through unwrapped"
@@ -447,7 +448,8 @@ fn iterable_emit_shape() {
                     node: InNode {
                         ty: tref(syn::parse_quote!(String)),
                         kind: TransformKind::Leaf(InLeaf {
-                            leaf: 0,
+                            slot: 0,
+                            name: ident("kes"),
                             wrapped: false,
                         }),
                     },
@@ -868,7 +870,7 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
     type Error = std::convert::Infallible;
 
     fn leaf(&mut self, _node: &InNode, op: &InLeaf) -> Result<String, Self::Error> {
-        Ok(format!("#{}{}", op.leaf, if op.wrapped { "?" } else { "" }))
+        Ok(format!("#{}{}", op.slot, if op.wrapped { "?" } else { "" }))
     }
 
     fn product(
@@ -972,19 +974,23 @@ fn core_lowers_through_the_shared_visitor() {
         "z_sample_new(&#0 ? z_keyexpr_try_from!(#1?) | self.clone(#2?), z_zbytes_from_vec(#3))"
     );
 
-    // The slots that rendering named, in wire order.
-    let leaves: Vec<String> = plan
+    // The signature is COLLECTED from those same nodes: each slot's name and
+    // type come from the node that uses it, in slot order.
+    let leaves: Vec<(String, String)> = plan
         .leaves
         .iter()
-        .map(|l| l.ty.spell().to_string())
+        .map(|l| (l.name.to_string(), l.ty.spell().to_string()))
         .collect();
     assert_eq!(
         leaves,
         vec![
-            "i32",
-            "Option < String >",
-            "Option < & ZKeyExpr >",
-            "Vec < u8 >"
+            ("sample_ke_sel".to_string(), "i32".to_string()),
+            ("sample_ke_0".to_string(), "Option < String >".to_string()),
+            (
+                "sample_ke_1".to_string(),
+                "Option < & ZKeyExpr >".to_string()
+            ),
+            ("sample_payload".to_string(), "Vec < u8 >".to_string()),
         ]
     );
 }

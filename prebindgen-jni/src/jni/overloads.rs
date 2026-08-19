@@ -630,7 +630,8 @@ mod tests {
                         node: InNode {
                             ty: p.ty.clone(),
                             kind: TransformKind::Leaf(InLeaf {
-                                leaf: i,
+                                slot: i,
+                                name: p.name.clone(),
                                 wrapped: false,
                             }),
                         },
