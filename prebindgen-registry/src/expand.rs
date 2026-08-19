@@ -41,7 +41,7 @@ mod tree;
 
 pub use self::{
     error::{ExpandDeclError, ExpandError},
-    plan::{FoldLeaf, FoldPlan, FoldShape},
+    plan::{FoldLeaf, FoldPlan, FoldShape, SlotLayout},
     tree::{
         dependencies, select, wire_leaves, Claim, Dependencies, InChild, InChoice, InLeaf, InLink,
         InNode, InPresence, InProduct, InRun, InSlot, IntoRust, Lift, SelectError,
@@ -437,7 +437,7 @@ fn build_plan<M>(
     let param = &ed.param;
     // Wire slots are handed out as the construction is built; the flat
     // signature is collected from the tree once it stands.
-    let mut next = 0usize;
+    let mut next = SlotLayout::default();
 
     // Optional (`Option<T>`/`Option<&T>`) param. No recursion under the layer.
     // The three ways the layer decides presence — see `InPresence`:
@@ -460,7 +460,7 @@ fn build_plan<M>(
                     // `Option` is whole-parameter presence, and what the
                     // constructor gets is the payload the layer unwrapped.
                     let payload = InSlot {
-                        slot: next_slot(&mut next),
+                        slot: next_slot(&mut next, param),
                         name: param.clone(),
                     };
                     let arg = InChild {
@@ -481,7 +481,7 @@ fn build_plan<M>(
                     // Multi-arg: presence flag first, then one plain slot per
                     // constructor argument.
                     let flag = InSlot {
-                        slot: next_slot(&mut next),
+                        slot: next_slot(&mut next, param),
                         name: ident(&format!("{}_present", param)),
                     };
                     let prefix = param.to_string();
@@ -539,6 +539,7 @@ fn build_plan<M>(
             target: target.clone(),
             by_ref,
             leaves: wire_leaves(&tree),
+            layout: next,
             tree,
         });
     }
@@ -555,6 +556,7 @@ fn build_plan<M>(
         target: target.clone(),
         by_ref,
         leaves: wire_leaves(&tree),
+        layout: next,
         tree,
     })
 }
@@ -600,10 +602,14 @@ fn leaf_child(
 
 /// Hand out the next wire slot. Slots are numbered as the walk meets them,
 /// which is the order the foreign signature takes them in.
-fn next_slot(next: &mut usize) -> usize {
-    let slot = *next;
-    *next += 1;
-    slot
+/// Claim the next foreign-signature position, recording what it is called.
+///
+/// The counter is a [`SlotLayout`], not a bare `usize`: allocating and naming a
+/// position are the same act, and the layout is where both live once they stop
+/// living in the tree (#447 §1). Positions are claimed in the order the wire
+/// carries them, which is the order this walk meets them.
+fn next_slot(next: &mut SlotLayout, name: &syn::Ident) -> usize {
+    next.claim(name.clone())
 }
 
 /// Build a construct core for `target` from its `variants`: a single
@@ -629,7 +635,7 @@ fn build_core<M>(
     by_ref: bool,
     prefix: &str,
     at: &str,
-    next: &mut usize,
+    next: &mut SlotLayout,
     visited: &mut HashSet<TypeKey>,
 ) -> Result<InNode, ExpandError> {
     if let [Variant::Ctor(func)] = variants {
@@ -658,9 +664,10 @@ fn build_core<M>(
         return Ok(ctor_node(target, func, sig.fallible, args));
     }
     // Combined — selector slot, then `Option`-wrapped per-arm inputs.
+    let sel_name = ident(&format!("{}_sel", prefix));
     let selector = InSlot {
-        slot: next_slot(next),
-        name: ident(&format!("{}_sel", prefix)),
+        slot: next_slot(next, &sel_name),
+        name: sel_name,
     };
     let mut arms: Vec<InChild> = Vec::new();
     for (vi, v) in variants.iter().enumerate() {
@@ -701,7 +708,8 @@ fn build_core<M>(
                 } else {
                     target.clone()
                 };
-                let slot = next_slot(next);
+                let arm_name = ident(&format!("{}_{}", prefix, vi));
+                let slot = next_slot(next, &arm_name);
                 InNode {
                     ty: target.clone(),
                     kind: TransformKind::Product {
@@ -714,12 +722,7 @@ fn build_core<M>(
                                 Lift::Direct
                             },
                         },
-                        children: vec![leaf_child(
-                            leaf_ty,
-                            slot,
-                            ident(&format!("{}_{}", prefix, vi)),
-                            true,
-                        )],
+                        children: vec![leaf_child(leaf_ty, slot, arm_name, true)],
                     },
                 }
             }
@@ -750,7 +753,7 @@ fn build_arg<M>(
     name: syn::Ident,
     at: &str,
     dispatched: bool,
-    next: &mut usize,
+    next: &mut SlotLayout,
     visited: &mut HashSet<TypeKey>,
 ) -> Result<InChild, ExpandError> {
     // The boundary layers down to the parameter's core type.
@@ -810,7 +813,12 @@ fn build_arg<M>(
         // The node carries the PAYLOAD; the `Option` selector presence adds is
         // derived from `wrapped` wherever the wire is asked for, so the two
         // cannot drift apart (#447 §1).
-        Ok(leaf_child(pty.clone(), next_slot(next), name, wrapped))
+        Ok(leaf_child(
+            pty.clone(),
+            next_slot(next, &name),
+            name,
+            wrapped,
+        ))
     }
 }
 

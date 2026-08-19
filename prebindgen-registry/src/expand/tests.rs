@@ -469,10 +469,13 @@ fn iterable_emit_shape() {
             inner: Box::new(core),
         },
     };
+    let mut layout = crate::expand::SlotLayout::default();
+    layout.claim(ident("kes"));
     let plan = FoldPlan {
         target: tref(syn::parse_quote!(ZKeyExpr)),
         by_ref: false,
         leaves: wire_leaves(&tree),
+        layout,
         tree,
     };
     let locals = vec![ident("kes")];
@@ -2306,6 +2309,33 @@ fn a_gated_slots_wire_type_is_derived_from_its_payload() {
 /// under it, and a dispatch its selector before its arms.
 #[test]
 fn slot_numbers_are_derivable_from_the_tree_walk() {
+    /// The slot names the tree carries, in the same walk order.
+    fn stored_names(node: &InNode, out: &mut Vec<String>) {
+        match &node.kind {
+            TransformKind::Leaf(InLeaf::Slot { slot, .. }) => out.push(slot.name.to_string()),
+            TransformKind::Leaf(InLeaf::Bound) => {}
+            TransformKind::Product { children, .. } => {
+                children.iter().for_each(|c| stored_names(&c.node, out))
+            }
+            TransformKind::Choice { op, variants } => {
+                out.push(op.selector.name.to_string());
+                variants.iter().for_each(|v| stored_names(&v.node, out));
+            }
+            TransformKind::Optional { op, inner } => {
+                match op {
+                    InPresence::Selector => {}
+                    InPresence::Flag(s) => out.push(s.name.to_string()),
+                    InPresence::Payload { slot, .. } => out.push(slot.name.to_string()),
+                }
+                stored_names(inner, out);
+            }
+            TransformKind::Sequence { op, inner } => {
+                out.push(op.slot.name.to_string());
+                stored_names(inner, out);
+            }
+        }
+    }
+
     fn stored(node: &InNode, out: &mut Vec<usize>) {
         match &node.kind {
             TransformKind::Leaf(InLeaf::Slot { slot, .. }) => out.push(slot.slot),
@@ -2412,6 +2442,23 @@ fn slot_numbers_are_derivable_from_the_tree_walk() {
             order.len(),
             plan.leaves().len(),
             "{label}: and it meets every slot the wire has"
+        );
+
+        // …and the layout beside the tree says the same thing the tree does,
+        // which is what licenses the tree to stop saying it.
+        assert_eq!(
+            plan.layout().len(),
+            plan.leaves().len(),
+            "{label}: the layout has a position per wire value"
+        );
+        let mut names = Vec::new();
+        stored_names(plan.tree(), &mut names);
+        assert_eq!(
+            names,
+            (0..plan.layout().len())
+                .map(|i| plan.layout().name(i).to_string())
+                .collect::<Vec<_>>(),
+            "{label}: and calls each position what the tree calls it"
         );
     }
 }

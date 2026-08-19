@@ -41,6 +41,9 @@ pub struct FoldPlan {
     /// an expansion lives here — a constructor argument that is itself built
     /// has the same node kinds as the top level.
     pub(crate) tree: crate::expand::InNode,
+    /// Where each value sits on the foreign signature — the compatibility
+    /// projection the tree stops carrying (#447 §1).
+    pub(crate) layout: SlotLayout,
 }
 
 impl FoldPlan {
@@ -49,6 +52,16 @@ impl FoldPlan {
     /// Handed out by reference and never by value, for the reason
     /// [`UnfoldPlan::tree`](crate::unfold::UnfoldPlan::tree) gives: the
     /// signature beside it is collected from this tree when the plan is built.
+    /// Where each value sits on the foreign signature.
+    ///
+    /// Slot numbers and names are one flat layout's facts, not the semantic
+    /// act of folding, so they live beside the tree rather than in it. An
+    /// adapter wanting a different physical shape builds its own from
+    /// [`Self::tree`].
+    pub fn layout(&self) -> &SlotLayout {
+        &self.layout
+    }
+
     pub fn tree(&self) -> &crate::expand::InNode {
         &self.tree
     }
@@ -116,4 +129,41 @@ pub struct FoldLeaf {
     /// [`TypeRef::scalar`](prebindgen_flat::flat::TypeRef::scalar), which
     /// pairs the kind with its own spelling and is placeless by construction.
     pub ty: prebindgen_flat::flat::TypeRef,
+}
+
+/// Where every value sits on the foreign signature: one entry per position, in
+/// the order the wire carries them.
+///
+/// The **compatibility projection** of #447 §1. Slot numbers and names are
+/// properties of one flat wire layout rather than of the semantic act of
+/// folding values into Rust, so they live here and not on the tree's nodes. A
+/// future adapter that wants an object parameter, a tagged union, overloads or
+/// another presence representation builds its own from the same tree instead of
+/// inheriting this one.
+#[derive(Debug, Default, Clone)]
+pub struct SlotLayout {
+    names: Vec<syn::Ident>,
+}
+
+impl SlotLayout {
+    /// Claim the next position for `name`, returning its index.
+    pub(crate) fn claim(&mut self, name: syn::Ident) -> usize {
+        self.names.push(name);
+        self.names.len() - 1
+    }
+
+    /// What the position at `slot` is called on the foreign signature.
+    pub fn name(&self, slot: usize) -> &syn::Ident {
+        &self.names[slot]
+    }
+
+    /// How many positions the signature has.
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    /// Whether the signature has no positions at all.
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
 }
