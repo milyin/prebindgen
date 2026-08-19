@@ -1142,6 +1142,23 @@ fn value_struct_vec_is_fixed_iterable_fold() {
                     if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))),
         "Option<Vec<T>> ⇒ Optional(Iterable(Base))"
     );
+    // …and the shape is that reading of the tree: an `Optional` node over a
+    // `Sequence` node over the product the elements decompose into. The three
+    // structural kinds nest in one plan, which is what the derived views are
+    // read back off.
+    {
+        use crate::transform::TransformKind;
+        let TransformKind::Optional { inner, .. } = &plan.tree.kind else {
+            panic!("the return's `Option` is a node");
+        };
+        let TransformKind::Sequence { inner, .. } = &inner.kind else {
+            panic!("the run is a node under it");
+        };
+        assert!(
+            matches!(&inner.kind, TransformKind::Product { children, .. } if children.len() == 2),
+            "each element decomposes into its fields"
+        );
+    }
     assert_eq!(plan.delivery, Delivery::Callback);
     assert!(plan.decon.is_some(), "carries the field decon");
     assert!(
