@@ -37,7 +37,7 @@ failing cell prints its diagnostics on the run's stderr.
 | Target | header | kotlin | rustc | bad header | bad kotlin | bad rust | rejected | panic | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | C | 70 | 0 | 0 | 0 | 0 | 0 | 42 | 32 | 22 |
-| Kotlin/JNI | 0 | 94 | 0 | 0 | 4 | 1 | 36 | 9 | 22 |
+| Kotlin/JNI | 0 | 98 | 0 | 0 | 0 | 1 | 36 | 9 | 22 |
 
 The two targets end at different stages, and each column belongs to one of them: a C cell goes on to cbindgen and tops out at `header`, a Kotlin/JNI cell goes on to the Kotlin compiler and tops out at `kotlin`. `rustc` is where a cell stopped without reaching either — for JNI that means it emitted no Kotlin to compile, and for C that its Rust did not reach the header stage.
 
@@ -181,7 +181,7 @@ The two targets end at different stages, and each column belongs to one of them:
 - `cow_str` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `Cow < 'static , str >`
 - `array_record` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `[Rec ; 2]`
 - `array_record` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `[Rec ; 2]`
-- `vec_opt` / C: Cbindgen: `Vec<Option < u64 >>` element must be a single-value type (scalar, data struct, String, or handle), not a composite
+- `vec_opt` / C: Cbindgen: `Vec<Option < u64 >>` element has no wire of its own, so there is nothing for the array to hold — give it a `convert!` declaration or deliver its parts separately
 - `result_sum_err` / C: Cbindgen: function `probe` returns `Result<_, Sum>` but `Sum` is not a declared error type — add `.data_struct(Sum).error()`
 - `result_sum_err` / Kotlin/JNI: fn `probe`: `Result<_, Sum>` — `Sum` is declared `sealed_class!`, but nothing decomposes it in the error position, so it would be delivered as `e.to_string()` on the plain binding-error channel rather than as the sealed hierarchy (and wo…
 - `callback` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `impl Fn (u64) + Send + Sync + 'static`
@@ -216,7 +216,7 @@ The two targets end at different stages, and each column belongs to one of them:
 | `boxed_scalar` | `Box<u64>` | **panic** | rejected |
 | `cow_str` | `Cow<'static, str>` | **panic** | kotlin |
 | `opt_record` | `Option<Rec>` | **panic** | kotlin |
-| `opt_handle` | `Option<Handle>` | **panic** | **bad kotlin** |
+| `opt_handle` | `Option<Handle>` | **panic** | kotlin |
 | `opt_ref` | `Option<&Handle>` | — | — |
 | `vec_record` | `Vec<Rec>` | **panic** | kotlin |
 | `vec_handle` | `Vec<Handle>` | **panic** | **panic** |
@@ -286,7 +286,7 @@ The two targets end at different stages, and each column belongs to one of them:
 | `exclusive_ref` | `&mut Rec` | — | — |
 | `handle_ref` | `&Handle` | — | — |
 | `out_param` | `&mut MaybeUninit<u64>` | — | — |
-| `opt_scalar` | `Option<u64>` | **panic** | **bad kotlin** |
+| `opt_scalar` | `Option<u64>` | **panic** | kotlin |
 | `vec_scalar` | `Vec<u64>` | **panic** | rejected |
 | `slice_scalar` | `&[u64]` | — | — |
 | `slice_mut_scalar` | `&mut [u64]` | — | — |
@@ -294,7 +294,7 @@ The two targets end at different stages, and each column belongs to one of them:
 | `boxed_scalar` | `Box<u64>` | rejected | rejected |
 | `cow_str` | `Cow<'static, str>` | rejected | kotlin |
 | `opt_record` | `Option<Rec>` | **panic** | kotlin |
-| `opt_handle` | `Option<Handle>` | header | **bad kotlin** |
+| `opt_handle` | `Option<Handle>` | header | kotlin |
 | `opt_ref` | `Option<&Handle>` | — | — |
 | `vec_record` | `Vec<Rec>` | **panic** | kotlin |
 | `vec_handle` | `Vec<Handle>` | **panic** | **panic** |
@@ -303,7 +303,7 @@ The two targets end at different stages, and each column belongs to one of them:
 | `opt_sum` | `Option<Sum>` | **panic** | rejected |
 | `array_record` | `[Rec; 2]` | rejected | rejected |
 | `opt_vec` | `Option<Vec<u64>>` | rejected | rejected |
-| `vec_opt` | `Vec<Option<u64>>` | **panic** | **bad kotlin** |
+| `vec_opt` | `Vec<Option<u64>>` | **panic** | kotlin |
 | `result_scalar` | `Result<u64, ZError>` | rejected | kotlin |
 | `result_handle` | `Result<Handle, ZError>` | rejected | kotlin |
 | `result_sum_err` | `Result<u64, Sum>` | rejected | kotlin |

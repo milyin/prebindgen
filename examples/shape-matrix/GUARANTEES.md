@@ -66,11 +66,11 @@ is which. A floor does not need a reviewer.
 | `handle_ref__param__jni` | `kotlin` |
 | `handle_ref__ret__c` | `header` |
 | `handle_ref__ret__jni` | `kotlin` |
-| `opt_handle__field__jni` | `compiles` |
+| `opt_handle__field__jni` | `kotlin` |
 | `opt_handle__param__c` | `header` |
 | `opt_handle__param__jni` | `kotlin` |
 | `opt_handle__payload__c` | `header` |
-| `opt_handle__payload__jni` | `compiles` |
+| `opt_handle__payload__jni` | `kotlin` |
 | `opt_handle__ret__c` | `header` |
 | `opt_handle__ret__jni` | `kotlin` |
 | `opt_record__field__jni` | `kotlin` |
@@ -88,7 +88,7 @@ is which. A floor does not need a reviewer.
 | `opt_scalar__field__jni` | `kotlin` |
 | `opt_scalar__param__c` | `header` |
 | `opt_scalar__param__jni` | `kotlin` |
-| `opt_scalar__payload__jni` | `compiles` |
+| `opt_scalar__payload__jni` | `kotlin` |
 | `opt_scalar__ret__c` | `header` |
 | `opt_scalar__ret__jni` | `kotlin` |
 | `opt_sum__field__jni` | `kotlin` |
@@ -168,7 +168,7 @@ is which. A floor does not need a reviewer.
 | `vec_handle__ret__c` | `header` |
 | `vec_handle__ret__jni` | `kotlin` |
 | `vec_opt__param__jni` | `kotlin` |
-| `vec_opt__payload__jni` | `compiles` |
+| `vec_opt__payload__jni` | `kotlin` |
 | `vec_opt__ret__jni` | `kotlin` |
 | `vec_record__field__jni` | `kotlin` |
 | `vec_record__param__jni` | `kotlin` |
