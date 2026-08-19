@@ -490,13 +490,20 @@ impl TransformLowerer<IntoRust> for CollectDeps {
 /// passed as independent wire slots.  A converter must land on a wire slot, so
 /// claiming such a subtree is always an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BoundOnlySubtreeClaimed;
+pub struct BoundOnlySubtreeClaimed {
+    /// The construction that was claimed, so the report says which one — the
+    /// same reason the planning errors carry a target and a node path.
+    pub claimed: String,
+}
 
 impl std::fmt::Display for BoundOnlySubtreeClaimed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(
-            "a claimed construction has no wire slot: the subtree consists entirely of \
-             layer-bound values and has no position to inherit",
+        write!(
+            f,
+            "input expansion: the claimed construction of `{}` has no wire slot — its subtree is \
+             entirely layer-bound values, which a containing layer supplies rather than the \
+             foreign signature, so there is no position for a converter to land on",
+            self.claimed
         )
     }
 }
@@ -585,7 +592,9 @@ impl TransformLowerer<IntoRust> for Select<'_> {
             return Ok(crate::transform::Descend::Recurse);
         };
         let Some(slot) = Self::first_slot(node) else {
-            return Err(BoundOnlySubtreeClaimed);
+            return Err(BoundOnlySubtreeClaimed {
+                claimed: node.ty.key().to_string(),
+            });
         };
         Ok(crate::transform::Descend::Atomic(InNode {
             ty: selected,

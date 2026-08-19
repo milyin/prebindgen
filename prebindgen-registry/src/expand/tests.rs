@@ -1230,8 +1230,11 @@ fn claiming_a_bound_only_subtree_is_an_error() {
             && !matches!(node.kind, TransformKind::Optional { .. }))
         .then(|| node.ty.clone())
     });
-    assert!(
-        matches!(result, Err(crate::expand::BoundOnlySubtreeClaimed)),
-        "claiming a bound-only subtree must return BoundOnlySubtreeClaimed"
-    );
+    let err = match result {
+        // `InNode` has no `Debug`, so the refusal is taken by matching.
+        Ok(_) => panic!("claiming a bound-only subtree must be refused"),
+        Err(e) => e,
+    };
+    assert_eq!(err.claimed, "ZZBytes", "the error says which construction");
+    assert!(err.to_string().contains("no wire slot"), "and why: {err}");
 }
