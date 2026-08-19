@@ -43,8 +43,8 @@ pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape},
     tree::{
-        dependencies, dependencies_with, wire_leaves, Dependencies, InChild, InChoice, InLeaf,
-        InLink, InNode, InPresence, InProduct, InRun, InSlot, IntoRust,
+        dependencies, select, wire_leaves, Claim, Dependencies, InChild, InChoice, InLeaf, InLink,
+        InNode, InPresence, InProduct, InRun, InSlot, IntoRust, Lift, SelectError,
     },
 };
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
@@ -321,7 +321,7 @@ fn process_expand<M>(
         &mut visited,
     )?;
 
-    register_dependencies(registry, &plan.tree, &mut claims_nothing());
+    register_dependencies(registry, &plan.tree);
     registry
         .expansion_plans
         .insert((ed.func.clone(), ed.param.clone()), plan);
@@ -411,22 +411,11 @@ struct CtorSig {
 /// make the *same* decision: a subtree claimed in one and not the other roots
 /// converters the binding never calls, and a root can only be gained, never
 /// taken back.
-fn register_dependencies<M>(
-    registry: &mut Registry<M>,
-    tree: &InNode,
-    claims: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
-) {
-    let deps = dependencies_with(tree, claims);
+fn register_dependencies<M>(registry: &mut Registry<M>, tree: &InNode) {
+    let deps = dependencies(tree);
     for ty in deps.required.iter().chain(deps.intrinsic.iter()) {
         registry.require_input(ty);
     }
-}
-
-/// The selection every caller passes today: no adapter states one yet. Handing
-/// an adapter's in is #444 §5.
-fn claims_nothing() -> impl FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>
-{
-    |_, _| None
 }
 
 /// Build the [`FoldPlan`] for a chosen construction. A single `Ctor` variant
@@ -713,7 +702,15 @@ fn build_core<M>(
                 InNode {
                     ty: target.clone(),
                     kind: TransformKind::Product {
-                        op: InProduct::Identity { clone: by_ref },
+                        op: InProduct::Identity {
+                            // A `&T` arm reaches the caller's handle, so the
+                            // fold copies out of it rather than consuming it.
+                            lift: if by_ref {
+                                Lift::CloneDeref
+                            } else {
+                                Lift::Direct
+                            },
+                        },
                         children: vec![leaf_child(
                             leaf_ty,
                             slot,
@@ -842,12 +839,27 @@ pub fn emit_fold(
     leaf_locals: &[syn::Ident],
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
 ) -> syn::Expr {
-    plan.tree
-        .lower(&mut ConstructEmitter {
-            leaf_locals,
-            qualify,
-        })
-        .expect("emitting a built construct cannot fail")
+    emit_fold_tree(plan.tree(), leaf_locals, qualify)
+}
+
+/// [`emit_fold`] over a construction tree that is not a plan's own — the tree
+/// [`select`] produced for an adapter's converter
+/// choices.
+///
+/// A selected tree owes the same contract as the tree it came from: the
+/// expression has type `Result<<shaped> target, String>`. Without this an
+/// adapter can choose its converters and then has nothing to emit from, since
+/// a `FoldPlan` cannot be built outside this crate.
+pub fn emit_fold_tree(
+    tree: &InNode,
+    leaf_locals: &[syn::Ident],
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+) -> syn::Expr {
+    tree.lower(&mut ConstructEmitter {
+        leaf_locals,
+        qualify,
+    })
+    .expect("emitting a built construct cannot fail")
 }
 
 /// The local an arity layer binds its unwrapped value to, and the local an
@@ -906,23 +918,27 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
             "constructor variant input missing"
         )));
         match op {
-            InProduct::Identity { clone } => {
-                // The sole input is the target value (or a borrow of it that we
-                // clone, for `&T` consumers — preserving the caller's handle).
+            InProduct::Identity { lift } => {
+                // The sole input is the target value, or something that reaches
+                // it — the `lift` says which, and the adapter said the lift.
+                //
+                // Both deref forms go through `&*` / `*`, which see through
+                // whatever the leaf decoded to: a plain `&T`, a `Box<T>`, or an
+                // adapter smart-pointer like jnigen's `OwnedObject<T>`. The core
+                // never has to know that type, only whether the value can be
+                // moved out of it.
                 let (child, value) = &children[0];
-                // `&*__v` derefs through whatever the borrow leaf decoded to (a
-                // plain `&T`, or an adapter smart-pointer like jnigen's
-                // `OwnedObject<T>`) down to `T`, then clones — keeping the
-                // caller's handle alive without the core knowing the adapter's
-                // borrow type.
+                let lifted = |v: &syn::Expr| -> syn::Expr {
+                    match lift {
+                        Lift::Direct => syn::parse_quote!(::core::result::Result::Ok(#v)),
+                        Lift::CloneDeref => syn::parse_quote!(::core::result::Result::Ok(
+                            ::core::clone::Clone::clone(&*#v)
+                        )),
+                        Lift::MoveDeref => syn::parse_quote!(::core::result::Result::Ok(*#v)),
+                    }
+                };
                 if Self::wrapped(child) == Some(true) {
-                    let some_val: syn::Expr = if *clone {
-                        syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(
-                            &*__v
-                        )))
-                    } else {
-                        syn::parse_quote!(::core::result::Result::Ok(__v))
-                    };
+                    let some_val = lifted(&syn::parse_quote!(__v));
                     return Ok(syn::parse_quote!(match #value {
                         ::core::option::Option::Some(__v) => #some_val,
                         ::core::option::Option::None => ::core::result::Result::Err(
@@ -930,13 +946,7 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
                         ),
                     }));
                 }
-                Ok(if *clone {
-                    syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(
-                        &*#value
-                    )))
-                } else {
-                    syn::parse_quote!(::core::result::Result::Ok(#value))
-                })
+                Ok(lifted(value))
             }
             InProduct::Ctor { func, fallible } => {
                 let path = (self.qualify)(func);

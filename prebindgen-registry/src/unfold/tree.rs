@@ -33,9 +33,11 @@ impl TransformDirection for OutOfRust {
     /// The `Option<T>` / `Option<&T>` return layer carries nothing of its own:
     /// absent delivers a null result and the builder is skipped.
     type Optional = ();
-    /// The `Vec<T>` / `&[T]` return layer carries nothing of its own — how its
-    /// elements are delivered is what sits under it (see [`element_of`]).
-    type Sequence = ();
+    /// A run says whether its elements are reached **through a borrow** — a
+    /// shared slice is read by copying out of it, an owned collection is
+    /// consumed. How its elements are *delivered* is what sits under it (see
+    /// [`element_of`]).
+    type Sequence = OutRun;
     type Link = OutLink;
 }
 
@@ -450,7 +452,7 @@ impl TransformLowerer<OutOfRust> for FlatView {
     fn sequence(
         &mut self,
         _node: &OutNode,
-        _op: &(),
+        _op: &OutRun,
         inner: &OutNode,
         value: Partial,
     ) -> Result<Partial, Self::Error> {
@@ -492,7 +494,11 @@ pub fn shaped(
             UnfoldShape::Iterable(rest) => OutNode {
                 ty: tys[0].clone(),
                 kind: TransformKind::Sequence {
-                    op: (),
+                    // The layer's own type says it: `&[T]` is reached through a
+                    // borrow, `Vec<T>` is not.
+                    op: OutRun {
+                        borrowed: tys[0].borrow_target().is_some(),
+                    },
                     inner: Box::new(wrap(rest, &tys[1..], core)),
                 },
             },
@@ -558,45 +564,20 @@ pub struct Dependencies {
 /// list — so the question is answered by the same structure every other pass
 /// walks.
 ///
-/// Assumes nothing is claimed by a direct converter. An adapter that claims
-/// subtrees must ask [`dependencies_with`] with the **same** decision it lowers
-/// by, or it will have rooted converters it never calls.
+/// Ask it of the tree the adapter actually lowers: a subtree claimed by a
+/// direct converter is a [`select`]ed leaf by then, so it contributes that
+/// converter and nothing from below it. Registration and lowering cannot
+/// disagree, because there is one tree rather than one policy consulted twice.
 pub fn dependencies(root: &OutNode) -> Dependencies {
-    dependencies_with(root, &mut |_, _| None)
-}
-
-/// [`dependencies`] under one adapter's converter selection: `claims` answers
-/// with the **reading of the converter it selected** for the node reached by
-/// `link`, or `None` to recurse.
-///
-/// A claimed subtree contributes exactly that reading and nothing from below
-/// it. The reading is the adapter's to state rather than this walk's to guess:
-/// a structural node carries the OWNED core type, while the value at that
-/// position may be a borrow — `flatten` makes the same distinction when it
-/// gives a non-owned identity leaf `source.borrowed()` — so requiring
-/// `node.ty` would root `T` where the plan calls the converter for `&T`, and
-/// resolution would build one converter and omit the other.
-///
-/// Taking the decision as a parameter is what keeps registration and lowering
-/// from disagreeing: an adapter that claims a subtree in its lowerer but not
-/// here would root converters for children it never converts, and one of those
-/// failing to resolve would fail a binding that does not need it.
-pub fn dependencies_with(
-    root: &OutNode,
-    claims: &mut dyn FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef>,
-) -> Dependencies {
-    root.lower(&mut CollectDeps { claims })
+    root.lower(&mut CollectDeps)
         .expect("collecting dependencies of a built tree cannot fail")
 }
 
-/// The lowerer behind [`dependencies_with`]: a leaf needs its converter, a
-/// choice names its sum, a claimed node needs its own, and everything else
-/// contributes only what is under it.
-struct CollectDeps<'a> {
-    claims: &'a mut dyn FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef>,
-}
+/// The lowerer behind [`dependencies`]: a leaf needs its converter, a choice
+/// names its sum, and everything else contributes only what is under it.
+struct CollectDeps;
 
-impl CollectDeps<'_> {
+impl CollectDeps {
     fn merge(parts: Lowered<'_, OutOfRust, Dependencies>) -> Dependencies {
         let mut out = Dependencies::default();
         for (_, mut part) in parts {
@@ -607,23 +588,9 @@ impl CollectDeps<'_> {
     }
 }
 
-impl TransformLowerer<OutOfRust> for CollectDeps<'_> {
+impl TransformLowerer<OutOfRust> for CollectDeps {
     type Value = Dependencies;
     type Error = std::convert::Infallible;
-
-    fn descend(
-        &mut self,
-        node: &OutNode,
-        link: Option<&OutLink>,
-    ) -> Result<crate::transform::Descend<Dependencies>, Self::Error> {
-        Ok(match (self.claims)(node, link) {
-            Some(selected) => crate::transform::Descend::Atomic(Dependencies {
-                required: vec![selected],
-                referenced: Vec::new(),
-            }),
-            None => crate::transform::Descend::Recurse,
-        })
-    }
 
     fn leaf(&mut self, node: &OutNode, _op: &OutLeaf) -> Result<Dependencies, Self::Error> {
         Ok(Dependencies {
@@ -667,7 +634,7 @@ impl TransformLowerer<OutOfRust> for CollectDeps<'_> {
     fn sequence(
         &mut self,
         _node: &OutNode,
-        _op: &(),
+        _op: &OutRun,
         _inner: &OutNode,
         value: Dependencies,
     ) -> Result<Dependencies, Self::Error> {
@@ -678,4 +645,248 @@ impl TransformLowerer<OutOfRust> for CollectDeps<'_> {
         // required set of a `Vec<T>` empty.
         Ok(value)
     }
+}
+
+/// What a run says about itself.
+///
+/// A property of the Rust type, not of any one boundary: `&[T]` is read through
+/// a borrow and `Vec<T>` is not. Carried here so a lowering reads a plan fact
+/// rather than classifying the type a second time.
+#[derive(Clone)]
+pub struct OutRun {
+    pub borrowed: bool,
+}
+
+/// One arity layer a boundary reads off a type.
+pub enum OrdinaryLayer {
+    /// The value may be absent.
+    Optional,
+    /// The value is a run of its inner type, read through a borrow or not.
+    Sequence { borrowed: bool },
+}
+
+/// The semantic plan of an **ordinary** boundary use: one with no declared
+/// decomposition, where the value crosses whole under whatever arity layers the
+/// boundary reads off it.
+///
+/// This is what lets an adapter consume the mechanism without inventing
+/// declarations (#444 §2). Cbindgen declares no decompositions at all, so
+/// without it there is no tree to lower for the great majority of crossings —
+/// and an adapter that has to special-case "no plan" is back to walking
+/// `TypeRef`, which is the walk the tree exists to remove.
+///
+/// Uses [`TypeRef::layer_stack`](prebindgen_flat::flat::TypeRef::layer_stack)'s
+/// reading of the layers, which is deliberately bounded — at most one `Option`,
+/// then at most one run. A boundary that accepts more says so with
+/// [`ordinary_with`] rather than by walking the type itself.
+pub fn ordinary(ty: &prebindgen_flat::flat::TypeRef) -> OutNode {
+    ordinary_with(ty, &mut |t| {
+        let (shape, core) = t.layer_stack();
+        match shape {
+            UnfoldShape::Base => None,
+            UnfoldShape::Optional(..) => t
+                .optional_inner()
+                .map(|inner| (OrdinaryLayer::Optional, inner.clone())),
+            UnfoldShape::Iterable(_) => {
+                let _ = core;
+                t.sequence_elem().map(|elem| {
+                    (
+                        OrdinaryLayer::Sequence {
+                            borrowed: t.borrow_target().is_some(),
+                        },
+                        elem.clone(),
+                    )
+                })
+            }
+        }
+    })
+}
+
+/// [`ordinary`] under one boundary's reading of the arity layers.
+///
+/// `peel` answers what the outermost layer of a type is and what it wraps, or
+/// `None` when the value crosses whole. The recursion is here rather than in
+/// the adapter for the same reason every other walk is: which layers a boundary
+/// accepts is node-level policy, and rebuilding the descent around it is not.
+///
+/// C accepts shapes the decomposition boundary does not — nested `Option`s,
+/// each spending a niche, and a shared-slice borrow as a run — and says so here
+/// instead of classifying the type itself.
+pub fn ordinary_with(
+    ty: &prebindgen_flat::flat::TypeRef,
+    peel: &mut dyn FnMut(
+        &prebindgen_flat::flat::TypeRef,
+    ) -> Option<(OrdinaryLayer, prebindgen_flat::flat::TypeRef)>,
+) -> OutNode {
+    match peel(ty) {
+        Some((layer, inner)) => {
+            let inner = Box::new(ordinary_with(&inner, peel));
+            OutNode {
+                ty: ty.clone(),
+                kind: match layer {
+                    OrdinaryLayer::Optional => TransformKind::Optional { op: (), inner },
+                    OrdinaryLayer::Sequence { borrowed } => TransformKind::Sequence {
+                        op: OutRun { borrowed },
+                        inner,
+                    },
+                },
+            }
+        }
+        None => OutNode {
+            ty: ty.clone(),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: false,
+                identity: false,
+                reach: OutReach::Accessor,
+            }),
+        },
+    }
+}
+
+/// Apply one adapter's converter selection, producing the tree every later pass
+/// reads: each subtree the adapter claims is replaced by a leaf carrying the
+/// reading of the converter it chose.
+///
+/// `claim` answers with that reading, or `None` to recurse. It is asked before
+/// anything below a node is visited, and it sees the edge the node was reached
+/// by — a converter is chosen for a value *in a position*, not for a type.
+///
+/// The point of returning a **tree** rather than taking the policy at each pass
+/// is that there is then only one decision to disagree with: dependencies,
+/// layout, conversion and cleanup all read this value. A policy consulted twice
+/// can answer differently the second time; a tree cannot.
+pub fn select(
+    root: &OutNode,
+    claim: &mut dyn FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef>,
+) -> OutNode {
+    root.lower(&mut Select { claim })
+        .expect("selecting over a built tree cannot fail")
+}
+
+/// The lowerer behind [`select`]: it rebuilds the tree it walks, replacing a
+/// claimed subtree with the leaf that stands for its converter.
+struct Select<'a> {
+    claim: &'a mut dyn FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef>,
+}
+
+impl TransformLowerer<OutOfRust> for Select<'_> {
+    type Value = OutNode;
+    type Error = std::convert::Infallible;
+
+    fn descend(
+        &mut self,
+        node: &OutNode,
+        link: Option<&OutLink>,
+    ) -> Result<crate::transform::Descend<OutNode>, Self::Error> {
+        Ok(match (self.claim)(node, link) {
+            // A claim changes WHICH converter carries the value, never what the
+            // position means. Where the claimed node is already a leaf its own
+            // `OutLeaf` says that — a nullable payload stays nullable, an
+            // identity leaf stays identity, and a variant member keeps naming
+            // its member — so only the reading is replaced. Synthesizing a
+            // default leaf there would silently drop all three.
+            Some(selected) => crate::transform::Descend::Atomic(OutNode {
+                ty: selected,
+                kind: TransformKind::Leaf(match &node.kind {
+                    TransformKind::Leaf(op) => op.clone(),
+                    _ => OutLeaf {
+                        nullable: false,
+                        identity: false,
+                        // How a claimed subtree is REACHED is unchanged by
+                        // claiming it: the links above still say, and the last
+                        // step says which kind of chain they are.
+                        reach: match link.and_then(|l| l.steps.last()) {
+                            Some(step) if step.is_field() => OutReach::Field,
+                            _ => OutReach::Accessor,
+                        },
+                    },
+                }),
+            }),
+            None => crate::transform::Descend::Recurse,
+        })
+    }
+
+    fn leaf(&mut self, node: &OutNode, op: &OutLeaf) -> Result<OutNode, Self::Error> {
+        Ok(OutNode {
+            ty: node.ty.clone(),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: op.nullable,
+                identity: op.identity,
+                reach: op.reach.clone(),
+            }),
+        })
+    }
+
+    fn product(
+        &mut self,
+        node: &OutNode,
+        op: &OutProduct,
+        children: Lowered<'_, OutOfRust, OutNode>,
+    ) -> Result<OutNode, Self::Error> {
+        Ok(OutNode {
+            ty: node.ty.clone(),
+            kind: TransformKind::Product {
+                op: op.clone(),
+                children: rebuilt(children),
+            },
+        })
+    }
+
+    fn choice(
+        &mut self,
+        node: &OutNode,
+        op: &OutChoice,
+        variants: Lowered<'_, OutOfRust, OutNode>,
+    ) -> Result<OutNode, Self::Error> {
+        Ok(OutNode {
+            ty: node.ty.clone(),
+            kind: TransformKind::Choice {
+                op: op.clone(),
+                variants: rebuilt(variants),
+            },
+        })
+    }
+
+    fn optional(
+        &mut self,
+        node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: OutNode,
+    ) -> Result<OutNode, Self::Error> {
+        Ok(OutNode {
+            ty: node.ty.clone(),
+            kind: TransformKind::Optional {
+                op: (),
+                inner: Box::new(value),
+            },
+        })
+    }
+
+    fn sequence(
+        &mut self,
+        node: &OutNode,
+        op: &OutRun,
+        _inner: &OutNode,
+        value: OutNode,
+    ) -> Result<OutNode, Self::Error> {
+        Ok(OutNode {
+            ty: node.ty.clone(),
+            kind: TransformKind::Sequence {
+                op: op.clone(),
+                inner: Box::new(value),
+            },
+        })
+    }
+}
+
+/// Children put back on the links they came in on.
+fn rebuilt(children: Lowered<'_, OutOfRust, OutNode>) -> Vec<OutChild> {
+    children
+        .into_iter()
+        .map(|(child, node)| OutChild {
+            link: child.link.clone(),
+            node,
+        })
+        .collect()
 }

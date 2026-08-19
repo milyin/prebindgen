@@ -2027,7 +2027,7 @@ impl crate::transform::TransformLowerer<OutOfRust> for Render {
     fn sequence(
         &mut self,
         _node: &OutNode,
-        _op: &(),
+        _op: &OutRun,
         _inner: &OutNode,
         value: String,
     ) -> Result<String, Self::Error> {
@@ -2201,7 +2201,7 @@ impl crate::transform::TransformLowerer<OutOfRust> for Direct {
     fn sequence(
         &mut self,
         _node: &OutNode,
-        _op: &(),
+        _op: &OutRun,
         _inner: &OutNode,
         value: String,
     ) -> Result<String, Self::Error> {
@@ -2343,40 +2343,36 @@ fn a_spliced_sum_is_named_not_required() {
     );
 }
 
-/// #444 (review): a claimed subtree must drop out of **registration** too, not
-/// only out of the lowerer that claimed it. Asking `dependencies_with` the same
-/// question the lowerer answers is what couples them — a `dependencies()` that
-/// recursed anyway would root converters for children the adapter never
-/// converts, and one of those failing to resolve would fail a binding that does
-/// not need it.
+/// #444: an adapter's converter selection is a **tree**, not a policy each
+/// pass re-runs. `select` applies it once; everything after reads that value,
+/// so there is nothing for two passes to disagree about.
+///
+/// The selected reading replaces the subtree, and it is the adapter's to state:
+/// a structural node names the OWNED core, while the accessor that reached it
+/// may borrow, so taking `node.ty` would root `T` where the plan calls the
+/// converter for `&T`.
 #[test]
-fn a_claimed_subtree_drops_out_of_the_dependency_set() {
+fn a_selected_tree_replaces_what_it_claims() {
     let reg = reply_sample_registry();
     let plan = reg
         .unfold_plans
         .get(&ident("z_reply_sample"))
         .expect("plan");
-
-    let all = crate::unfold::dependencies(&plan.tree);
     let names = |d: &[prebindgen_flat::flat::TypeRef]| -> Vec<String> {
         d.iter().map(|t| t.spell().to_string()).collect()
     };
+
     assert_eq!(
-        names(&all.required),
+        names(&crate::unfold::dependencies(plan.tree()).required),
         vec!["& ZKeyExpr", "& str", "i64"],
-        "with nothing claimed, every crossing is required"
+        "with nothing selected, every crossing is required"
     );
 
-    // The same tree, with an adapter that converts a whole `ZKeyExpr` directly.
-    // The claim states the reading of the converter it selected. The node says
-    // `ZKeyExpr` — the owned core — while the accessor that reached it borrows,
-    // so the converter the plan calls is the one for `&ZKeyExpr`. Taking
-    // `node.ty` here would root a converter the plan never calls and omit the
-    // one it does.
-    let claimed = crate::unfold::dependencies_with(&plan.tree, &mut |node, link| {
+    // An adapter that converts a whole key expression directly, through the
+    // borrowed converter, because the accessor that reaches it borrows.
+    let selected = crate::unfold::select(plan.tree(), &mut |node, link| {
         (node.ty.spell().to_string() == "ZKeyExpr").then(|| {
-            let borrowed = link.is_some_and(|l| l.steps.iter().any(|s| !s.yields_owned()));
-            if borrowed {
+            if link.is_some_and(|l| l.steps.iter().any(|st| !st.yields_owned())) {
                 node.ty.borrowed()
             } else {
                 node.ty.clone()
@@ -2384,11 +2380,74 @@ fn a_claimed_subtree_drops_out_of_the_dependency_set() {
         })
     });
     assert_eq!(
-        names(&claimed.required),
+        names(&crate::unfold::dependencies(&selected).required),
         vec!["& ZKeyExpr", "i64"],
-        "the selected reading replaces the children, and it is the borrowed one \
-         because the accessor that reached the subtree borrows"
+        "the selected reading replaces the subtree; its children are gone"
     );
+
+    // …and the same tree registers accordingly, which is what a binding
+    // actually demands. `TypeCell::root` only ever gains, so a selection
+    // honoured by one pass and not another could not be taken back.
+    let rooted = |reg: &Registry<()>, ty: syn::Type| -> Option<bool> {
+        reg.output_types
+            .get(&TypeKey::from_type(&ty))
+            .map(|cell| cell.root)
+    };
+    let mut claimed: Registry<()> = reg_with(&[]);
+    crate::unfold::register_dependencies(&mut claimed, &selected);
+    assert_eq!(rooted(&claimed, syn::parse_quote!(&ZKeyExpr)), Some(true));
+    assert_ne!(
+        rooted(&claimed, syn::parse_quote!(&str)),
+        Some(true),
+        "a child of the selected subtree is never demanded"
+    );
+
+    let mut plain: Registry<()> = reg_with(&[]);
+    crate::unfold::register_dependencies(&mut plain, plan.tree());
+    assert_eq!(rooted(&plain, syn::parse_quote!(&str)), Some(true));
+}
+
+/// #444 §2: a boundary use with no declared decomposition still has a semantic
+/// plan — the value crosses whole under its arity layers. Without it an adapter
+/// that declares nothing, as Cbindgen does, has no tree to lower and is back to
+/// walking `TypeRef` itself.
+#[test]
+fn an_ordinary_boundary_use_has_a_plan() {
+    use crate::transform::TransformKind;
+
+    let plan = crate::unfold::ordinary(&tref(syn::parse_quote!(Option<Vec<ZSample>>)));
+    let TransformKind::Optional { inner, .. } = &plan.kind else {
+        panic!("the `Option` is a layer node");
+    };
+    let TransformKind::Sequence { inner, .. } = &inner.kind else {
+        panic!("the `Vec` is a layer node under it");
+    };
+    assert!(
+        matches!(inner.kind, TransformKind::Leaf(_)),
+        "the element crosses whole"
+    );
+    assert_eq!(inner.ty.spell().to_string(), "ZSample");
+
+    // The derived views agree: a whole element is delivered to the fold rather
+    // than as a named slot, and it is the dependency.
+    let (leaves, _) = crate::unfold::flat_view(&plan).expect("an ordinary plan projects");
+    assert!(leaves.is_empty());
+    assert_eq!(
+        crate::unfold::element_of(&plan).map(|t| t.spell().to_string()),
+        Some("ZSample".to_string())
+    );
+    assert_eq!(
+        crate::unfold::dependencies(&plan)
+            .required
+            .iter()
+            .map(|t| t.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["ZSample"]
+    );
+
+    // A plain value is a bare leaf, no layers.
+    let scalar = crate::unfold::ordinary(&tref(syn::parse_quote!(i64)));
+    assert!(matches!(scalar.kind, TransformKind::Leaf(_)));
 }
 
 /// #444 (review): the decision is taken for a value **in a position**. The same
@@ -2404,7 +2463,7 @@ fn the_cutoff_sees_the_edge_it_was_reached_by() {
         .expect("plan");
 
     let mut seen: Vec<(String, Option<String>)> = Vec::new();
-    crate::unfold::dependencies_with(&plan.tree, &mut |node, link| {
+    crate::unfold::select(plan.tree(), &mut |node, link| {
         seen.push((
             node.ty.spell().to_string(),
             link.map(|l| {
@@ -2444,7 +2503,7 @@ fn a_whole_element_run_requires_its_element() {
     let tree = OutNode {
         ty: tref(syn::parse_quote!(Vec<&ZSample>)),
         kind: TransformKind::Sequence {
-            op: (),
+            op: OutRun { borrowed: false },
             inner: Box::new(OutNode {
                 ty: elem.clone(),
                 kind: TransformKind::Leaf(OutLeaf {
@@ -2469,72 +2528,6 @@ fn a_whole_element_run_requires_its_element() {
         vec!["& ZSample"],
         "…but it still crosses through its own converter"
     );
-}
-
-/// #444 (review): the cutoff must reach **registration**, not only the pass
-/// that answered it — and it must root the reading the adapter selected, not
-/// the one the node happens to name.
-///
-/// Asserted over registry roots rather than over the projection, because a root
-/// is what a binding actually demands a converter for, and `TypeCell::root`
-/// only ever gains, so a claim honoured in one pass and not another cannot be
-/// taken back.
-#[test]
-fn a_claimed_subtree_is_not_rooted_by_registration() {
-    let reg = reply_sample_registry();
-    let tree = reg
-        .unfold_plans
-        .get(&ident("z_reply_sample"))
-        .expect("plan")
-        .tree
-        .clone();
-
-    let rooted = |reg: &Registry<()>, ty: syn::Type| -> Option<bool> {
-        reg.output_types
-            .get(&TypeKey::from_type(&ty))
-            .map(|cell| cell.root)
-    };
-
-    // A BORROWING accessor reached this subtree, so the converter the plan
-    // calls is the one for `&ZKeyExpr`. The node names the owned core, which is
-    // why the claim states its reading rather than leaving it to be guessed.
-    let mut borrowed: Registry<()> = reg_with(&[]);
-    crate::unfold::register_dependencies(&mut borrowed, &tree, &mut |node, _link| {
-        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.borrowed())
-    });
-    assert_eq!(
-        rooted(&borrowed, syn::parse_quote!(&ZKeyExpr)),
-        Some(true),
-        "the selected reading is what the binding converts"
-    );
-    assert_ne!(
-        rooted(&borrowed, syn::parse_quote!(ZKeyExpr)),
-        Some(true),
-        "the owned core is NOT what crosses at a borrowed position"
-    );
-    assert_ne!(
-        rooted(&borrowed, syn::parse_quote!(&str)),
-        Some(true),
-        "a child of the claimed subtree is never demanded"
-    );
-
-    // The same claim through an OWNING selection roots the owned reading
-    // instead — the difference is the adapter's choice, not the tree's.
-    let mut owned: Registry<()> = reg_with(&[]);
-    crate::unfold::register_dependencies(&mut owned, &tree, &mut |node, _link| {
-        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
-    });
-    assert_eq!(rooted(&owned, syn::parse_quote!(ZKeyExpr)), Some(true));
-    assert_ne!(rooted(&owned, syn::parse_quote!(&ZKeyExpr)), Some(true));
-
-    // With nothing claimed the children are rooted instead, so the difference
-    // is the policy and not the tree. `&ZKeyExpr` is rooted here too, but for
-    // an unrelated reason — the subtree's own identity leaf clones through it —
-    // which is why `&str` is what discriminates the two registrations.
-    let mut plain: Registry<()> = reg_with(&[]);
-    crate::unfold::register_dependencies(&mut plain, &tree, &mut |_, _| None);
-    assert_eq!(rooted(&plain, syn::parse_quote!(&str)), Some(true));
-    assert_ne!(rooted(&plain, syn::parse_quote!(ZKeyExpr)), Some(true));
 }
 
 /// `flat_view`'s `Ok` side holds types without `Debug`, so a refusal is taken
@@ -2650,7 +2643,7 @@ fn a_variant_payload_must_be_a_leaf_that_binds_a_member() {
     let run = OutNode {
         ty: tref(syn::parse_quote!(Vec<i64>)),
         kind: TransformKind::Sequence {
-            op: (),
+            op: OutRun { borrowed: false },
             inner: Box::new(leaf(OutReach::Field)),
         },
     };
@@ -2810,7 +2803,7 @@ fn a_choice_and_a_variant_arm_must_be_paired() {
             inner: Box::new(arm().node),
         },
         TransformKind::Sequence {
-            op: (),
+            op: OutRun { borrowed: false },
             inner: Box::new(arm().node),
         },
     ] {
@@ -2830,4 +2823,79 @@ fn a_choice_and_a_variant_arm_must_be_paired() {
     assert_eq!(leaves.len(), 2);
     assert_eq!(leaves[0].source, LeafSource::SumTag);
     assert_eq!(leaves[1].group, Some(0));
+}
+
+/// #444 §3: a claim says which converter carries a value, not what the position
+/// means. Where the claimed node is already a leaf, its own semantics have to
+/// survive the replacement — otherwise selecting over a decomposition tree
+/// silently turns a nullable variant payload into a non-null accessor read.
+#[test]
+fn selecting_an_existing_leaf_keeps_its_semantics() {
+    use crate::transform::TransformKind;
+
+    let rich = OutLeaf {
+        nullable: true,
+        identity: true,
+        reach: OutReach::VariantMember(syn::Member::Unnamed(syn::Index::from(0usize))),
+    };
+    let tree = OutNode {
+        ty: tref(syn::parse_quote!(Outer)),
+        kind: TransformKind::Choice {
+            op: OutChoice {
+                name: "tag".to_string(),
+            },
+            variants: vec![OutChild {
+                link: OutLink {
+                    steps: Vec::new(),
+                    name: Vec::new(),
+                },
+                node: OutNode {
+                    ty: tref(syn::parse_quote!(Outer)),
+                    kind: TransformKind::Product {
+                        op: OutProduct::Variant {
+                            name: ident("Wrapped"),
+                            tag: 0,
+                        },
+                        children: vec![OutChild {
+                            link: OutLink {
+                                steps: Vec::new(),
+                                name: vec!["wrapped_v0".to_string()],
+                            },
+                            node: OutNode {
+                                ty: tref(syn::parse_quote!(Payload)),
+                                kind: TransformKind::Leaf(rich.clone()),
+                            },
+                        }],
+                    },
+                },
+            }],
+        },
+    };
+
+    // The adapter converts the payload directly, and through the BORROWED
+    // reading — so the reading changes and the meaning of the position must not.
+    let selected = crate::unfold::select(&tree, &mut |node, _link| {
+        (node.ty.spell().to_string() == "Payload").then(|| node.ty.borrowed())
+    });
+
+    let TransformKind::Choice { variants, .. } = &selected.kind else {
+        panic!("the choice survives selection")
+    };
+    let TransformKind::Product { children, .. } = &variants[0].node.kind else {
+        panic!("the arm survives selection")
+    };
+    let TransformKind::Leaf(op) = &children[0].node.kind else {
+        panic!("the claimed payload is a leaf")
+    };
+    assert_eq!(
+        children[0].node.ty.spell().to_string(),
+        "& Payload",
+        "the claim replaces the reading"
+    );
+    assert!(op.nullable, "a nullable payload stays nullable");
+    assert!(op.identity, "an identity leaf stays identity");
+    assert!(
+        matches!(&op.reach, OutReach::VariantMember(syn::Member::Unnamed(i)) if i.index == 0),
+        "a variant member keeps naming its member, not a generic field read"
+    );
 }

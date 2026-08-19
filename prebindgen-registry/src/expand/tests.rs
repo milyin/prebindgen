@@ -134,7 +134,9 @@ fn constructor_plan_and_fold() {
         matches!(
             &arms[1].kind,
             TransformKind::Product {
-                op: InProduct::Identity { clone: true },
+                op: InProduct::Identity {
+                    lift: Lift::CloneDeref
+                },
                 ..
             }
         ),
@@ -399,7 +401,9 @@ fn optional_combined_selector_encodes_absence() {
         matches!(
             &arms[1].kind,
             TransformKind::Product {
-                op: InProduct::Identity { clone: true },
+                op: InProduct::Identity {
+                    lift: Lift::CloneDeref
+                },
                 ..
             }
         ),
@@ -914,10 +918,14 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
                 if *fallible { "!" } else { "" },
                 args.join(", ")
             ),
-            InProduct::Identity { clone } => {
+            InProduct::Identity { lift } => {
                 format!(
                     "self{}({})",
-                    if *clone { ".clone" } else { "" },
+                    match lift {
+                        Lift::Direct => "",
+                        Lift::CloneDeref => ".clone",
+                        Lift::MoveDeref => ".move",
+                    },
                     args.join(", ")
                 )
             }
@@ -1044,12 +1052,12 @@ fn core_lowers_through_the_shared_visitor() {
     );
 }
 
-/// #444 (review): the input side takes the same cutoff policy the output side
-/// does, so registration and lowering cannot disagree about which converters a
-/// construction demands. Asserted over registry roots, since a root is what a
-/// binding actually demands and `TypeCell::root` can only be gained.
+/// #444 §1/§3: an adapter's selection on the input side is a **tree**, and
+/// producing it is also a choice of layout — a claimed construction's
+/// arguments, selector and presence slots collapse into the one value that
+/// crosses instead, and the surviving slots close ranks.
 #[test]
-fn a_claimed_argument_is_not_rooted_by_registration() {
+fn selecting_a_construction_replaces_its_slots() {
     let mut reg: Registry<()> = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
@@ -1059,7 +1067,10 @@ fn a_claimed_argument_is_not_rooted_by_registration() {
         func: ident("z_keyexpr_intersects"),
         param: ident("a"),
         declared_target: Some(key("ZKeyExpr")),
-        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from"))]),
+        sel: ExpandSel::Subset(vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ]),
     });
     apply(
         &mut reg,
@@ -1069,34 +1080,1125 @@ fn a_claimed_argument_is_not_rooted_by_registration() {
         &Default::default(),
     )
     .expect("apply");
-    let tree = &reg
+    let plan = reg
         .expansion_plans
         .get(&(ident("z_keyexpr_intersects"), ident("a")))
-        .expect("plan")
-        .tree;
+        .expect("plan");
 
+    // Unselected: a selector plus one slot per arm.
+    assert_eq!(plan.leaves().len(), 3);
+    assert_eq!(plan.selector(), Some(0));
+
+    // An adapter that builds a whole `ZKeyExpr` from one value of its own.
+    let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| Claim::direct(node.ty.clone()))
+    })
+    .unwrap();
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(
+        leaves.len(),
+        1,
+        "the dispatch and both arms collapse into the value that crosses"
+    );
+    assert_eq!(leaves[0].ty.spell().to_string(), "ZKeyExpr");
+    assert_eq!(
+        crate::expand::dependencies(&selected)
+            .required
+            .iter()
+            .map(|t| t.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["ZKeyExpr"],
+        "and the arms' own crossings are not demanded"
+    );
+
+    // Registration follows the same tree, so nothing roots what is gone.
     let rooted = |reg: &Registry<()>, ty: syn::Type| -> Option<bool> {
         reg.input_types
             .get(&TypeKey::from_type(&ty))
             .map(|cell| cell.root)
     };
-
-    // The constructor's `String` argument is the only crossing; claiming the
-    // whole construction replaces it with `ZKeyExpr` itself.
     let mut claimed: Registry<()> = reg_with(&[]);
-    crate::expand::register_dependencies(&mut claimed, tree, &mut |node, _link| {
-        // The claim states the reading of the converter it selected, rather
-        // than leaving the walk to guess it from the node.
-        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
-    });
+    crate::expand::register_dependencies(&mut claimed, &selected);
     assert_eq!(rooted(&claimed, syn::parse_quote!(ZKeyExpr)), Some(true));
     assert_ne!(
-        rooted(&claimed, syn::parse_quote!(String)),
-        Some(true),
-        "an argument of a claimed construction is never demanded"
+        rooted(&claimed, syn::parse_quote!(Option<String>)),
+        Some(true)
+    );
+}
+
+/// The surviving slots keep their order and close ranks, because the foreign
+/// signature is a sequence: what a caller passes second must still be what the
+/// wrapper reads second.
+#[test]
+fn selecting_renumbers_the_surviving_slots() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_sample_new(ke: &ZKeyExpr, payload: ZZBytes) -> ZSample { todo!() }",
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_zbytes_from_vec(v: Vec<u8>) -> ZZBytes { todo!() }",
+        "fn z_reply_sample(sample: ZSample) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    for (target, variants) in [
+        (key("ZSample"), vec![Variant::Ctor(ident("z_sample_new"))]),
+        (
+            key("ZKeyExpr"),
+            vec![
+                Variant::Ctor(ident("z_keyexpr_try_from")),
+                Variant::Identity,
+            ],
+        ),
+        (
+            key("ZZBytes"),
+            vec![Variant::Ctor(ident("z_zbytes_from_vec"))],
+        ),
+    ] {
+        exp.constructors.push(ConstructorDecl {
+            target,
+            variants,
+            default: true,
+        });
+    }
+    exp.expands.push(ExpandDecl {
+        func: ident("z_reply_sample"),
+        param: ident("sample"),
+        declared_target: Some(key("ZSample")),
+        sel: ExpandSel::TopLevel,
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_reply_sample"), ident("sample")))
+        .expect("plan");
+
+    // Slots 0..2 build the key expression, slot 3 the payload.
+    assert_eq!(plan.leaves().len(), 4);
+    assert_eq!(plan.leaves()[3].name.to_string(), "sample_payload");
+
+    // Claiming the key expression drops slots 0..2 and the payload closes up
+    // into position 0 — keeping its name, because it is the same value.
+    let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| Claim::clone_deref(node.ty.borrowed()))
+    })
+    .unwrap();
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(leaves.len(), 2);
+    assert_eq!(leaves[0].ty.spell().to_string(), "& ZKeyExpr");
+    assert_eq!(leaves[1].name.to_string(), "sample_payload");
+
+    // The signature is only half the contract: the claimed node's own type says
+    // it produces an owned `ZKeyExpr`, so a borrowed reading has to be cloned
+    // back up to it. Otherwise the consumer borrows a borrow.
+    let locals = vec![ident("ke"), ident("payload")];
+    let compact: String = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+
+    assert!(
+        compact.contains("Clone::clone(&*ke)"),
+        "a borrowed selected reading is cloned into the owned value the node declares: {compact}"
+    );
+    assert!(
+        compact.contains("z_sample_new(&__a0,__a1)"),
+        "…so the outer constructor takes one borrow, not two: {compact}"
+    );
+    assert!(
+        !compact.contains("&&"),
+        "no double borrow reaches the call site: {compact}"
+    );
+}
+
+/// Claiming a subtree that occupies no wire slot of its own — the constructor
+/// node inside an `InPresence::Payload` optional — is an error, not a panic.
+///
+/// In the `Payload` case the layer's single slot holds the `Option`-wrapped
+/// argument, and the constructor under it receives the payload as
+/// `InLeaf::Bound` (bound by the layer, not from a wire slot).  There is no
+/// wire position for a converter to land on, so `select` returns
+/// `SelectError::BoundOnlySubtree`.
+#[test]
+fn claiming_a_bound_only_subtree_is_an_error() {
+    // `attachment: Option<ZZBytes>` with one single-arg constructor.
+    // The resulting tree has Optional(Payload, inner=Product([Bound])).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_zbytes_from_vec(bytes: Vec<u8>) -> ZZBytes { todo!() }",
+        "fn z_session_delete(s: &ZSession, attachment: Option<ZZBytes>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_session_delete"),
+        param: ident("attachment"),
+        declared_target: Some(key("ZZBytes")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_zbytes_from_vec"))]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_session_delete"), ident("attachment")))
+        .unwrap();
+
+    // The outer Optional has the only wire slot; its inner Product's children
+    // are all InLeaf::Bound.  Claiming the inner Product (skipping the Optional
+    // by not claiming it) has no wire position to inherit.
+    let result = crate::expand::select(plan.tree(), &mut |node, _link| {
+        // Claim on the ZZBytes product, but NOT on the wrapping Optional.
+        (node.ty.spell().to_string() == "ZZBytes"
+            && !matches!(node.kind, TransformKind::Optional { .. }))
+        .then(|| Claim::direct(node.ty.clone()))
+    });
+    let err = match result {
+        // `InNode` has no `Debug`, so the refusal is taken by matching.
+        Ok(_) => panic!("claiming a bound-only subtree must be refused"),
+        Err(e) => e,
+    };
+    assert_eq!(
+        err,
+        crate::expand::SelectError::BoundOnlySubtree {
+            claimed: "ZZBytes".to_string()
+        },
+        "the error says which construction"
+    );
+    assert!(err.to_string().contains("no wire slot"), "and why: {err}");
+}
+
+/// #444 §3: `Option`-wrapping by selector presence belongs to the POSITION, not
+/// to the value in it. Claiming a subtree inside a live `Choice` arm leaves the
+/// dispatch standing, so that position is still absent whenever another arm is
+/// selected — the claimed value has to keep saying "not this one".
+#[test]
+fn a_claim_inside_a_live_choice_stays_wrapped() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_keyexpr_intersects"), ident("a")))
+        .expect("plan");
+
+    // A selector plus one `Option`-wrapped slot per arm.
+    assert_eq!(plan.leaves().len(), 3);
+    assert_eq!(plan.selector(), Some(0));
+
+    // The adapter converts the constructor's own argument directly, and claims
+    // ONLY that — the choice above it stands.
+    // The arm's argument is offered WITH its selector-presence `Option` on, so
+    // the adapter answers about the wrapped position.
+    let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
+        (node.ty.spell().to_string() == "Option < String >").then(|| Claim::direct(node.ty.clone()))
+    })
+    .unwrap();
+
+    assert_eq!(
+        crate::expand::wire_leaves(&selected).len(),
+        3,
+        "the dispatch survives, so the selector and both arms keep their slots"
     );
 
-    let mut plain: Registry<()> = reg_with(&[]);
-    crate::expand::register_dependencies(&mut plain, tree, &mut |_, _| None);
-    assert_eq!(rooted(&plain, syn::parse_quote!(String)), Some(true));
+    // `wrapped` is read straight off the tree by the construct emitter, which
+    // uses it to decide whether a slot is unwrapped (missing ⇒ `Err`) before it
+    // reaches the constructor — so the claimed leaf itself is what to check.
+    fn claimed_wrapped(node: &crate::expand::InNode) -> Option<bool> {
+        match &node.kind {
+            TransformKind::Leaf(crate::expand::InLeaf::Slot { slot, wrapped }) => {
+                (slot.name == "a_0").then_some(*wrapped)
+            }
+            TransformKind::Leaf(_) => None,
+            TransformKind::Product { children, .. } => {
+                children.iter().find_map(|c| claimed_wrapped(&c.node))
+            }
+            TransformKind::Choice { variants, .. } => {
+                variants.iter().find_map(|v| claimed_wrapped(&v.node))
+            }
+            TransformKind::Optional { inner, .. } | TransformKind::Sequence { inner, .. } => {
+                claimed_wrapped(inner)
+            }
+        }
+    }
+    assert_eq!(
+        claimed_wrapped(&selected),
+        Some(true),
+        "a claim inside a live choice keeps the position's selector presence"
+    );
+}
+
+/// #444 §3: claiming a **structural** node inside a live `Choice` — an arm's
+/// constructor product rather than one of its argument leaves.
+///
+/// The distinction matters because the two are offered differently. An argument
+/// leaf arrives with the position's `Option` already on it; the product above it
+/// arrives as the bare constructed type. If the claim's reading were stored
+/// unchanged, the leaf would declare a plain `ZKeyExpr` crossing while carrying
+/// `wrapped = true`, and the construct emitter would pattern-match that value as
+/// `Some(..)` — a tree that cannot generate compiling Rust.
+#[test]
+fn claiming_an_arm_product_keeps_the_position_optional() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_keyexpr_intersects"), ident("a")))
+        .expect("plan");
+
+    // Claim each arm's product — reached by a link, unlike the root choice — so
+    // the dispatch above them survives.
+    let selected = crate::expand::select(plan.tree(), &mut |node, link| {
+        (link.is_some() && matches!(node.kind, TransformKind::Product { .. }))
+            .then(|| Claim::direct(node.ty.clone()))
+    })
+    .unwrap();
+
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(
+        leaves.len(),
+        3,
+        "the dispatch survives, so the selector and both arms keep their slots"
+    );
+    assert_eq!(
+        leaves[1].ty.spell().to_string(),
+        "Option < ZKeyExpr >",
+        "the claimed arm still has to be able to say `not this one`"
+    );
+
+    // The signature being right is half of it: the fold expression owes the
+    // same `Result<target, String>` the unselected tree owes, or the claimed
+    // arm hands the dispatch an `Option` where its siblings give a `Result`.
+    let locals = vec![ident("sel"), ident("v0"), ident("vid")];
+    let folded = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify);
+    let compact: String = folded
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+
+    assert!(compact.contains("matchsel"), "dispatch survives: {compact}");
+    // The present path unwraps the arm's presence and lifts the value.
+    assert!(
+        compact.contains("Option::Some(__v)=>::core::result::Result::Ok(__v)"),
+        "a claimed arm lifts its value into `Ok`: {compact}"
+    );
+    // …and the missing one is an error, not a silently absent value.
+    assert!(
+        compact.contains("identityvariantvaluemissing"),
+        "a claimed arm rejects a missing slot: {compact}"
+    );
+}
+
+/// #444 §3: claiming an **arity layer** — the `Option` shape of the parameter
+/// itself, not a construction under it.
+///
+/// A layer maps its inner value over a shape, and a claim replaces the whole
+/// layer, its presence slot included. Collapsing that to a bare identity hands
+/// `Clone::clone(&*v)` an `Option<&T>`, which does not deref, and owes
+/// `Option<T>` while producing `Option<&T>`. The layer has to survive the
+/// claim, over a core that lifts the bound value.
+#[test]
+fn claiming_an_arity_layer_keeps_its_mapping() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_encoding_from_string(s: String) -> ZEncoding { todo!() }",
+        "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_session_put"),
+        param: ident("encoding"),
+        declared_target: Some(key("ZEncoding")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_encoding_from_string"))]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_session_put"), ident("encoding")))
+        .expect("plan");
+
+    // The adapter decodes the whole optional parameter from one wire value,
+    // through the reading the layer node itself names — and says how the
+    // payload it binds becomes the owned target: `&ZEncoding` is a borrow of
+    // the caller's value, so it is copied out of rather than consumed.
+    let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
+        matches!(node.kind, TransformKind::Optional { .. })
+            .then(|| Claim::clone_deref(node.ty.clone()))
+    })
+    .unwrap();
+
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(
+        leaves.len(),
+        1,
+        "the construction's slots collapse into one"
+    );
+    assert_eq!(leaves[0].ty.spell().to_string(), "Option < & ZEncoding >");
+    assert_eq!(
+        crate::expand::dependencies(&selected)
+            .required
+            .iter()
+            .map(|t| t.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["Option < & ZEncoding >"],
+        "only the claimed crossing is required; the constructor's argument is gone"
+    );
+
+    // The shape survives and still targets the owned value: an adapter reading
+    // the selected tree gets the same answers the plan gave.
+    assert!(matches!(selected.shape(), FoldShape::Optional((), _)));
+    assert_eq!(
+        selected.core().ty.spell().to_string(),
+        "ZEncoding",
+        "the claim replaces the construction, not what it targets"
+    );
+
+    let locals = vec![ident("enc")];
+    let compact: String = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+
+    // `Some`: the layer binds the payload, and the borrowed reading is cloned
+    // up to the owned value the fold owes.
+    assert!(
+        compact.contains("Option::Some(__inner)=>{(::core::result::Result::Ok(::core::clone::Clone::clone(&*__inner))).map(::core::option::Option::Some)}"),
+        "the present arm yields an owned value inside the option: {compact}"
+    );
+    // `None`: absent stays absent, and is not an error.
+    assert!(
+        compact
+            .contains("Option::None=>{::core::result::Result::Ok(::core::option::Option::None)}"),
+        "the absent arm yields `Ok(None)`: {compact}"
+    );
+    // The whole point: no `Clone::clone(&*enc)` on the option itself.
+    assert!(
+        !compact.contains("clone(&*enc)"),
+        "the option is not dereferenced: {compact}"
+    );
+}
+
+/// #444 §3: the run analogue of [`claiming_an_arity_layer_keeps_its_mapping`],
+/// and the type a claimed run advertises for the value it binds.
+///
+/// A run's emitter iterates its slot, so a borrowed collection binds a borrowed
+/// element: `&[T]` binds `&T`, not `&[T]`. Deriving that with `sequence_elem`
+/// alone answers `None` for the borrowed spelling — a reference is not looked
+/// through the way a transparent wrapper is — and taking the reading itself
+/// would advertise the whole collection on a node whose expression is one
+/// element. Nothing in the current emitter reads that type, so only an adapter
+/// lowerer would see it, which is exactly who this tree is for.
+#[test]
+fn claiming_a_run_binds_one_borrowed_element() {
+    // The run owns the wire slot; the constructor under it takes the element
+    // the layer bound.
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Product {
+                    op: InProduct::Ctor {
+                        func: ident("z_keyexpr_try_from"),
+                        fallible: true,
+                    },
+                    children: vec![InChild {
+                        link: InLink { by_ref: false },
+                        node: InNode {
+                            ty: tref(syn::parse_quote!(String)),
+                            kind: TransformKind::Leaf(InLeaf::Bound),
+                        },
+                    }],
+                },
+            }),
+        },
+    };
+
+    // The adapter decodes the whole run from one borrowed slice.
+    let selected = crate::expand::select(&tree, &mut |node, _link| {
+        matches!(node.kind, TransformKind::Sequence { .. })
+            .then(|| Claim::clone_deref(tref(syn::parse_quote!(&[ZKeyExpr]))))
+    })
+    .unwrap();
+
+    // The layer survives, carrying the claimed reading on its slot.
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(leaves.len(), 1);
+    assert_eq!(leaves[0].ty.spell().to_string(), "& [ZKeyExpr]");
+
+    // …and the node under it advertises what the layer actually binds.
+    let TransformKind::Sequence { inner, .. } = &selected.kind else {
+        panic!("the run survives the claim")
+    };
+    let TransformKind::Product { children, .. } = &inner.kind else {
+        panic!("a claimed run stands over an identity core")
+    };
+    assert_eq!(
+        children[0].node.ty.spell().to_string(),
+        "& ZKeyExpr",
+        "iterating a borrowed collection binds a borrowed element, not the collection"
+    );
+
+    let locals = vec![ident("kes")];
+    let compact: String = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+
+    // Each borrowed element is cloned into the owned `Vec<ZKeyExpr>` the fold
+    // owes, and the run still collects.
+    assert!(
+        compact.contains("kes.into_iter().map(|__inner|"),
+        "the run still iterates its slot: {compact}"
+    );
+    assert!(
+        compact.contains("Clone::clone(&*__inner)"),
+        "the bound element is cloned to owned: {compact}"
+    );
+    assert!(
+        compact.contains("collect::<::core::result::Result<::std::vec::Vec<_>,_>>()"),
+        "…and collects into an owned Vec: {compact}"
+    );
+}
+
+/// An arity layer claimed with a reading that has none of that layer's shape is
+/// refused, rather than binding a value the layer cannot produce.
+#[test]
+fn claiming_a_layer_with_the_wrong_shape_is_an_error() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+    // `ZKeyExpr` is one value, not a run of them: there is nothing to bind.
+    let err = match crate::expand::select(&tree, &mut |node, _link| {
+        matches!(node.kind, TransformKind::Sequence { .. })
+            .then(|| Claim::direct(tref(syn::parse_quote!(ZKeyExpr))))
+    }) {
+        Ok(_) => panic!("a run claimed with a non-run reading must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LayerReadingShape { layer, .. } if *layer == "a run"
+        ),
+        "got {err}"
+    );
+    assert!(
+        err.to_string().contains("ZKeyExpr") && err.to_string().contains("layer's shape"),
+        "the refusal names the reading and why: {err}"
+    );
+}
+
+/// #444 §3: a `Cow<'_, [T]>` run binds `&T`, not `T`.
+///
+/// The model looks through `Cow` — a destination language sees a run of `T`
+/// either way — but the emitter runs `into_iter()` on the type as written, and
+/// a `Cow` iterates as its borrowed slice whatever it currently holds. Typing
+/// the bound node from the model's element alone would promise `T` where the
+/// expression yields `&T`, and the fold would collect `Vec<&T>` against a node
+/// declaring `Vec<T>`.
+#[test]
+fn claiming_a_cow_run_binds_a_borrowed_element() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+
+    let selected = crate::expand::select(&tree, &mut |node, _link| {
+        matches!(node.kind, TransformKind::Sequence { .. })
+            .then(|| Claim::clone_deref(tref(syn::parse_quote!(Cow<'static, [ZKeyExpr]>))))
+    })
+    .unwrap();
+
+    let TransformKind::Sequence { inner, .. } = &selected.kind else {
+        panic!("the run survives the claim")
+    };
+    let TransformKind::Product { children, .. } = &inner.kind else {
+        panic!("a claimed run stands over an identity core")
+    };
+    assert_eq!(
+        children[0].node.ty.spell().to_string(),
+        "& ZKeyExpr",
+        "a `Cow` run iterates as its borrowed slice, so the bound element is a borrow"
+    );
+
+    let locals = vec![ident("kes")];
+    let compact: String = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+    assert!(
+        compact.contains("Clone::clone(&*__inner)"),
+        "…so each element is cloned into the owned Vec the node declares: {compact}"
+    );
+}
+
+/// An optional claimed with a reading that only *denotes* an `Option` is
+/// refused: the payload emitter matches the slot as written, and `match` does
+/// not see through a `Box` the way the model's layer accessors do.
+#[test]
+fn claiming_an_optional_behind_a_wrapper_is_an_error() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Option<ZEncoding>)),
+        kind: TransformKind::Optional {
+            op: InPresence::Payload {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("enc"),
+                },
+                ty: tref(syn::parse_quote!(Option<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZEncoding)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+    let err = match crate::expand::select(&tree, &mut |node, _link| {
+        matches!(node.kind, TransformKind::Optional { .. })
+            .then(|| Claim::direct(tref(syn::parse_quote!(Box<Option<ZEncoding>>))))
+    }) {
+        Ok(_) => panic!("an optional behind a wrapper must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LayerReadingShape { layer, .. } if *layer == "an optional"
+        ),
+        "got {err}"
+    );
+}
+
+/// A structural claim states how its reading becomes the node's value, and the
+/// fold emitter executes exactly that.
+///
+/// The registry cannot infer this: `Box<T>` owns its target and can be moved
+/// out of, while a non-owning adapter handle dereferences to storage its
+/// language still owns and can only be copied from. The two present the same
+/// target and the same deref shape, so the adapter — which chose the converter
+/// — states the operation.
+#[test]
+fn a_claim_states_how_its_reading_is_lifted() {
+    let ctor = || InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Product {
+            op: InProduct::Ctor {
+                func: ident("z_keyexpr_try_from"),
+                fallible: true,
+            },
+            children: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(syn::parse_quote!(String)),
+                    kind: TransformKind::Leaf(InLeaf::Slot {
+                        slot: InSlot {
+                            slot: 0,
+                            name: ident("s"),
+                        },
+                        wrapped: false,
+                    }),
+                },
+            }],
+        },
+    };
+    let folded = |claim: Claim| -> String {
+        let selected = crate::expand::select(&ctor(), &mut |node, _l| {
+            matches!(node.kind, TransformKind::Product { .. }).then(|| claim.clone())
+        })
+        .unwrap();
+        crate::expand::emit_fold_tree(&selected, &[ident("v")], &src_qualify)
+            .to_token_stream()
+            .to_string()
+            .split_whitespace()
+            .collect()
+    };
+
+    // Owned: the reading IS the value, so it moves.
+    assert_eq!(
+        folded(Claim::direct(tref(syn::parse_quote!(ZKeyExpr)))),
+        "::core::result::Result::Ok(v)"
+    );
+    // A non-owning handle: dereference and copy out, leaving the caller's
+    // value alone. Its Rust type is the adapter's, and the fold never names it.
+    assert_eq!(
+        folded(Claim::clone_deref(tref(syn::parse_quote!(
+            OwnedObject<ZKeyExpr>
+        )))),
+        "::core::result::Result::Ok(::core::clone::Clone::clone(&*v))"
+    );
+    // An owning wrapper: dereference and move, which asks nothing of `ZKeyExpr`
+    // — in particular not `Clone`, which is why this cannot be folded into the
+    // case above.
+    assert_eq!(
+        folded(Claim::move_deref(tref(syn::parse_quote!(Box<ZKeyExpr>)))),
+        "::core::result::Result::Ok(*v)"
+    );
+}
+
+/// `Cow<'_, Vec<T>>` is a run to the model and not one to the emitter: a `Cow`
+/// cannot be moved out of, so `into_iter()` on it does not compile at all
+/// ("cannot move out of dereference"). `Cow<'_, [T]>` iterates its slice and
+/// binds `&T`; the `Vec` spelling has no such fallback, so it is refused rather
+/// than bound as something the layer cannot produce.
+#[test]
+fn a_cow_of_vec_run_is_refused() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+    let claim_of = |reading: syn::Type| {
+        crate::expand::select(&tree, &mut |node, _l| {
+            matches!(node.kind, TransformKind::Sequence { .. })
+                .then(|| Claim::clone_deref(tref(reading.clone())))
+        })
+    };
+
+    let err = match claim_of(syn::parse_quote!(Cow<'static, Vec<ZKeyExpr>>)) {
+        Ok(_) => panic!("a `Cow<'_, Vec<T>>` run must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LayerReadingShape { layer, .. } if *layer == "a run"
+        ),
+        "got {err}"
+    );
+
+    // …while the slice spelling, which does iterate, still binds a borrow.
+    let selected = claim_of(syn::parse_quote!(Cow<'static, [ZKeyExpr]>)).unwrap();
+    let TransformKind::Sequence { inner, .. } = &selected.kind else {
+        panic!("the run survives")
+    };
+    let TransformKind::Product { children, .. } = &inner.kind else {
+        panic!("over an identity core")
+    };
+    assert_eq!(children[0].node.ty.spell().to_string(), "& ZKeyExpr");
+}
+
+/// A claim on a **leaf** carries a lift like any other, and the operation has
+/// to reach the constructor that reads it.
+///
+/// A leaf is where converter selection lands most naturally, and a bare leaf
+/// has nowhere to put a deref: the enclosing construction would pass the
+/// reading itself. `Direct` still stays one plain slot, because there is
+/// nothing to perform.
+#[test]
+fn a_leaf_claim_lifts_before_its_constructor_reads_it() {
+    let tree = |target: syn::Type| InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Product {
+            op: InProduct::Ctor {
+                func: ident("z_keyexpr_of"),
+                fallible: false,
+            },
+            children: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(target),
+                    kind: TransformKind::Leaf(InLeaf::Slot {
+                        slot: InSlot {
+                            slot: 0,
+                            name: ident("k"),
+                        },
+                        wrapped: false,
+                    }),
+                },
+            }],
+        },
+    };
+    let folded = |target: syn::Type, claim: Claim| -> String {
+        let selected = crate::expand::select(&tree(target), &mut |node, _l| {
+            matches!(node.kind, TransformKind::Leaf(_)).then(|| claim.clone())
+        })
+        .unwrap();
+        crate::expand::emit_fold_tree(&selected, &[ident("k")], &src_qualify)
+            .to_token_stream()
+            .to_string()
+            .split_whitespace()
+            .collect()
+    };
+
+    // A non-owning handle: the constructor must read the copy, not the handle.
+    let cloned = folded(
+        syn::parse_quote!(ZKeyExpr),
+        Claim::clone_deref(tref(syn::parse_quote!(OwnedObject<ZKeyExpr>))),
+    );
+    assert!(
+        cloned.contains("Ok(::core::clone::Clone::clone(&*k))"),
+        "the lift happens: {cloned}"
+    );
+    assert!(
+        cloned.contains("z_keyexpr_of(__a0)"),
+        "…and the constructor reads its result, not the reading: {cloned}"
+    );
+
+    // An owning wrapper moves out instead, asking nothing of `ZKeyExpr`.
+    let moved = folded(
+        syn::parse_quote!(ZKeyExpr),
+        Claim::move_deref(tref(syn::parse_quote!(Box<ZKeyExpr>))),
+    );
+    assert!(moved.contains("Ok(*k)"), "the lift happens: {moved}");
+    assert!(
+        moved.contains("z_keyexpr_of(__a0)"),
+        "…and the constructor reads its result: {moved}"
+    );
+
+    // `Direct` has nothing to perform, so the slot is still passed straight in.
+    assert_eq!(
+        folded(
+            syn::parse_quote!(ZKeyExpr),
+            Claim::direct(tref(syn::parse_quote!(ZKeyExpr)))
+        ),
+        "::core::result::Result::Ok(zenoh_flat::z_keyexpr_of(k))"
+    );
+}
+
+/// Both deref lifts produce an owned value, so a leaf whose position holds a
+/// **borrow** is refused: turning an adapter handle into `&T` is a
+/// borrow-through-deref, which no [`Lift`] states. Refusing beats lowering it
+/// into a value of the wrong ownership.
+#[test]
+fn a_non_direct_lift_onto_a_borrowed_leaf_is_an_error() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Product {
+            op: InProduct::Ctor {
+                func: ident("z_keyexpr_of"),
+                fallible: false,
+            },
+            children: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(syn::parse_quote!(&ZKeyExpr)),
+                    kind: TransformKind::Leaf(InLeaf::Slot {
+                        slot: InSlot {
+                            slot: 0,
+                            name: ident("k"),
+                        },
+                        wrapped: false,
+                    }),
+                },
+            }],
+        },
+    };
+    let err = match crate::expand::select(&tree, &mut |node, _l| {
+        matches!(node.kind, TransformKind::Leaf(_))
+            .then(|| Claim::clone_deref(tref(syn::parse_quote!(OwnedObject<ZKeyExpr>))))
+    }) {
+        Ok(_) => panic!("an owned lift onto a borrowed position must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LeafLiftTarget {
+                lift: Lift::CloneDeref,
+                ..
+            }
+        ),
+        "got {err}"
+    );
+    assert!(
+        err.to_string().contains("holds a borrow"),
+        "the refusal says why: {err}"
+    );
+}
+
+/// #444 §3: a claim on a **selector-wrapped** leaf, where the position's
+/// `Option` belongs to the dispatch and not to the value.
+///
+/// The emitter unwraps presence and then lifts, so that `Option` is on neither
+/// end of the operation. Reading the node's stored type instead hides the real
+/// target: a `&ZKeyExpr` argument inside a live arm is stored as
+/// `Option<&ZKeyExpr>`, whose `borrow_target()` is `None`, so an owned-producing
+/// lift slipped past the refusal and the identity advertised the position's
+/// `Option` while producing the payload.
+#[test]
+fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
+    let tree = |arg: syn::Type| InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Choice {
+            op: InChoice {
+                selector: InSlot {
+                    slot: 0,
+                    name: ident("sel"),
+                },
+            },
+            variants: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(syn::parse_quote!(ZKeyExpr)),
+                    kind: TransformKind::Product {
+                        op: InProduct::Ctor {
+                            func: ident("z_keyexpr_of"),
+                            fallible: false,
+                        },
+                        children: vec![InChild {
+                            link: InLink { by_ref: false },
+                            node: InNode {
+                                // Stored WITH the selector's `Option`, which is
+                                // what a live arm's argument looks like.
+                                ty: tref(arg),
+                                kind: TransformKind::Leaf(InLeaf::Slot {
+                                    slot: InSlot {
+                                        slot: 1,
+                                        name: ident("a_0"),
+                                    },
+                                    wrapped: true,
+                                }),
+                            },
+                        }],
+                    },
+                },
+            }],
+        },
+    };
+    let select = |arg: syn::Type, claim: Claim| {
+        crate::expand::select(&tree(arg), &mut |node, _l| {
+            matches!(node.kind, TransformKind::Leaf(_)).then(|| claim.clone())
+        })
+    };
+
+    // An OWNED argument: the lift is honoured, and the node it lands on
+    // advertises the unwrapped target rather than the position's `Option`.
+    let selected = select(
+        syn::parse_quote!(Option<ZKeyExpr>),
+        Claim::clone_deref(tref(syn::parse_quote!(Option<OwnedObject<ZKeyExpr>>))),
+    )
+    .unwrap();
+    let TransformKind::Choice { variants, .. } = &selected.kind else {
+        panic!("the dispatch survives")
+    };
+    let TransformKind::Product { children, .. } = &variants[0].node.kind else {
+        panic!("the arm survives")
+    };
+    assert_eq!(
+        children[0].node.ty.spell().to_string(),
+        "ZKeyExpr",
+        "the identity owes the payload, not the position's `Option`"
+    );
+    let compact: String =
+        crate::expand::emit_fold_tree(&selected, &[ident("sel"), ident("a_0")], &src_qualify)
+            .to_token_stream()
+            .to_string()
+            .split_whitespace()
+            .collect();
+    assert!(
+        compact.contains(
+            "Option::Some(__v)=>::core::result::Result::Ok(::core::clone::Clone::clone(&*__v))"
+        ),
+        "presence is unwrapped and then the lift runs: {compact}"
+    );
+
+    // A BORROWED argument: the same claim now has an owned-producing lift onto
+    // a borrowed target, which the presence used to hide.
+    let err = match select(
+        syn::parse_quote!(Option<&ZKeyExpr>),
+        Claim::clone_deref(tref(syn::parse_quote!(Option<OwnedObject<ZKeyExpr>>))),
+    ) {
+        Ok(_) => panic!("an owned lift onto a borrowed argument must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LeafLiftTarget {
+                lift: Lift::CloneDeref,
+                ..
+            }
+        ),
+        "got {err}"
+    );
+
+    // A reading that owns an `Option` of its own does NOT thereby carry
+    // selector presence: `match` sees an outer kind, not a semantic shape, so a
+    // `Box<Option<T>>` slot marked `wrapped` would emit a match the `Box`
+    // blocks. Presence is added around such a reading instead — and here the
+    // claim is then contradictory, so it is refused rather than lowered.
+    let err = match select(
+        syn::parse_quote!(Option<String>),
+        Claim::direct(tref(syn::parse_quote!(Box<Option<String>>))),
+    ) {
+        Ok(_) => panic!("a boxed optional reading is not selector presence"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::DirectLiftMismatch { bound, target, .. }
+                if bound == "Box < Option < String > >" && target == "String"
+        ),
+        "presence was added around the reading, so the claim reads as what it is: {err}"
+    );
+
+    // …and a reading that needs presence added gets it explicitly, so the
+    // emitted match is on an `Option` the slot really has.
+    let selected = select(
+        syn::parse_quote!(Option<String>),
+        Claim::clone_deref(tref(syn::parse_quote!(OwnedObject<String>))),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::expand::wire_leaves(&selected)[1]
+            .ty
+            .spell()
+            .to_string(),
+        "Option < OwnedObject < String > >",
+        "selector presence is on the slot, outermost"
+    );
+    let compact: String =
+        crate::expand::emit_fold_tree(&selected, &[ident("sel"), ident("a_0")], &src_qualify)
+            .to_token_stream()
+            .to_string()
+            .split_whitespace()
+            .collect();
+    assert!(
+        compact.contains(
+            "Option::Some(__v)=>::core::result::Result::Ok(::core::clone::Clone::clone(&*__v))"
+        ),
+        "the match is on the presence the slot carries: {compact}"
+    );
+}
+
+/// `Direct` says the reading IS the value, so a claim where the two differ is a
+/// contradiction — and `Ok(value)` offers no coercion to paper over it, the
+/// `Result`'s parameter being inferred rather than a coercion site.
+#[test]
+fn a_direct_claim_that_is_not_the_value_is_an_error() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+    // A borrowed run binds `&ZKeyExpr`; claiming it `Direct` would collect
+    // `Vec<&ZKeyExpr>` where the node declares `Vec<ZKeyExpr>`.
+    let err = match crate::expand::select(&tree, &mut |node, _l| {
+        matches!(node.kind, TransformKind::Sequence { .. })
+            .then(|| Claim::direct(tref(syn::parse_quote!(&[ZKeyExpr]))))
+    }) {
+        Ok(_) => panic!("a direct claim that is not the value must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::DirectLiftMismatch { bound, target, .. }
+                if bound == "& ZKeyExpr" && target == "ZKeyExpr"
+        ),
+        "got {err}"
+    );
 }

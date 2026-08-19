@@ -458,9 +458,10 @@ impl CbindgenBuilder {
         let free_ident = match &self.free_fn {
             Some(name) => format_ident!("{}", name),
             None => panic!(
-                "Cbindgen: the generated layer hands `char*` string memory to C \
-                 (a `String` return or a `String` data-struct field) but no \
-                 memory-freeing function is declared — add \
+                "Cbindgen: the generated layer hands malloc'd memory to C — \
+                 `char*` from a `String` return or a `String` data-struct field, \
+                 or an array from a run returned or delivered to a callback — but \
+                 no memory-freeing function is declared — add \
                  `.free_memory_function(\"z_free\")`"
             ),
         };
@@ -1547,8 +1548,8 @@ impl CbindgenBuilder {
                 // leaves its slot unwritten, and the wrapper must not build a
                 // Rust value to fill it with. `#[repr(transparent)]` keeps both
                 // the C ABI and the header spelling.
-                if marker_destination(&wire) && r_is_lowered_composite(&reading, registry) {
-                    for field in self.lower_shape(&reading, registry).fields {
+                if self.callback_arg_is_composite(&reading, takeable.contains(&i), registry) {
+                    for field in self.c_value_plan(&reading, registry).shape.fields {
                         let w = field.wire;
                         arg_wires.push(syn::parse_quote!(::core::mem::MaybeUninit<#w>));
                     }
@@ -1683,6 +1684,57 @@ impl CbindgenBuilder {
 }
 
 impl CbindgenBuilder {
+    /// Whether a callback argument crosses as a **decomposed composite** — the
+    /// one delivery lowered from a [`CValuePlan`] rather than handed to the
+    /// argument's own converter.
+    ///
+    /// Asked by the lowering that builds the plan and by the prerequisite scan
+    /// that collects what those plans need, so "is there a plan here" has one
+    /// answer. A slice argument crosses by reference and never builds one.
+    fn callback_arg_is_composite(
+        &self,
+        arg: &TypeRef,
+        is_takeable: bool,
+        registry: &impl Conversions<()>,
+    ) -> bool {
+        if is_takeable || self.callback_slice_elem_wire_of(arg).is_some() {
+            return false;
+        }
+        registry.output_entry(arg).is_some_and(|entry| {
+            marker_destination(&entry.destination) && r_is_lowered_composite(arg, registry)
+        })
+    }
+
+    /// Whether any resolved plan's encoder calls `__cbg_alloc_array`, so its
+    /// definition must be emitted.
+    ///
+    /// Every value this asks about is one an emitter lowers: a declared
+    /// function's returned value, and each callback argument that crosses as a
+    /// composite. Reading the requirement off those same plans is what keeps a
+    /// helper from being called by generated code the prelude never defines —
+    /// a run reaches C through a callback argument as readily as through a
+    /// return, and scanning return types alone missed it.
+    fn needs_array_alloc(&self, registry: &Registry<()>) -> bool {
+        let from_returns = self.functions.keys().any(|orig| {
+            registry.flat().function(&orig).is_some_and(|f| {
+                let value_ty = match f.ret.fallible_parts() {
+                    Some((ok, _)) => ok,
+                    None => &f.ret,
+                };
+                self.c_value_plan(value_ty, registry).needs_array_alloc
+            })
+        });
+        from_returns
+            || self.callbacks.iter().any(|(key, cfg)| {
+                key.iter().enumerate().any(|(i, k)| {
+                    registry.reading(k).is_some_and(|arg| {
+                        self.callback_arg_is_composite(&arg, cfg.takeable.contains(&i), registry)
+                            && self.c_value_plan(&arg, registry).needs_array_alloc
+                    })
+                })
+            })
+    }
+
     fn dispatch_fn_input(
         &self,
         args: &[TypeRef],
@@ -1767,11 +1819,13 @@ impl CbindgenBuilder {
             // `out_wrappers`. Decomposing that from its shape alone would pass
             // several arguments to a `call` the struct declared with one
             // (#428 review).
-            let composite = !is_takeable
-                && marker_destination(&entry.destination)
-                && r_is_lowered_composite(arg, registry);
+            let composite = self.callback_arg_is_composite(arg, is_takeable, registry);
             if composite {
-                let shape = self.lower_shape(arg, registry);
+                // One plan, read for both the slots and the encode: a callback
+                // argument's layout and the statements that fill it must be the
+                // same resolution, not two that happen to agree (#444 §5).
+                let plan = self.c_value_plan(arg, registry);
+                let shape = &plan.shape;
                 closure_params.push(quote!(#ai: #src));
                 let mut targets = Vec::new();
                 for (f, field) in shape.fields.iter().enumerate() {
@@ -1808,13 +1862,7 @@ impl CbindgenBuilder {
                 // A firing callback has no error channel, so a fallible
                 // converter aborts — the same answer the single-value path
                 // below gives, spelled by the route the emitters share.
-                encode_stmts.push(self.encode_value(
-                    arg,
-                    quote!(#ai),
-                    &targets,
-                    registry,
-                    &ErrRoute::Panic,
-                ));
+                encode_stmts.push(plan.encode(&quote!(#ai), &targets, &ErrRoute::Panic));
                 continue;
             }
             closure_params.push(quote!(#ai: #src));
@@ -1952,7 +2000,7 @@ impl Prebindgen for CbindgenBuilder {
         // same function (per element through the `z_free_array` macro), so the
         // allocator/freer prelude is needed for them too. Each section's emitter
         // lives in the `impl CbindgenBuilder` block above; order is significant.
-        let produces_array = self.produces_array(registry);
+        let produces_array = self.needs_array_alloc(registry);
         let mut items: Vec<syn::Item> = Vec::new();
         items.extend(self.prereq_alloc_free(registry, produces_array));
         items.extend(self.prereq_array_builder(produces_array));

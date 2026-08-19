@@ -452,6 +452,7 @@ type MangleN = Box<dyn Fn(&[String]) -> String>;
 mod builder;
 mod convert;
 mod emit;
+mod plan;
 mod selector;
 #[cfg(test)]
 mod test_util;

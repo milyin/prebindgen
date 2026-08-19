@@ -5,6 +5,8 @@
 // classifier (via `use super::*`), and an explicit import would shadow it.
 use prebindgen_registry::{
     flat::{self, TypeRef},
+    transform::TransformKind,
+    unfold::{OutChild, OutLeaf, OutLink, OutNode, OutProduct, OutReach, PathStep},
     Conversions,
 };
 
@@ -1302,6 +1304,144 @@ fn push_handle_leaf(
     index
 }
 
+/// The field structure of a flattened `data_class`, as a registry tree (#444 §5).
+///
+/// This is the flattening's *semantic recursion*, stated once: which fields
+/// inline a nested declared class, which of those sit behind an `Option`, the
+/// order they cross in, and the cycle and depth limits that stop the descent.
+/// [`build_flat_struct_node`] then lowers this tree into JNI wire leaves
+/// without deciding any of it again.
+///
+/// A field is a leaf unless it names a declared `data_class` — including a
+/// data-carrying enum, which flattens into a tag plus one group per variant
+/// but does not *recurse*, because only leaf-shaped payloads flatten. Layout
+/// is the lowering's business; this says only what nests.
+///
+/// `native_prefix` is carried for diagnostics alone, so a refusal names the
+/// same path the lowering would have reported it at.
+#[allow(clippy::too_many_arguments)]
+fn synth_input_field_tree(
+    ext: &Declarations,
+    registry: &Registry<KotlinMeta>,
+    st: &flat::Struct,
+    ty: &TypeRef,
+    optional: bool,
+    native_prefix: &str,
+    root: &TypeKey,
+    stack: &mut Vec<TypeKey>,
+) -> Result<OutNode, FlatInputError> {
+    // The lowering recovers this node's struct from `ty` rather than carrying
+    // it, so the two readings of "which struct is this" must not drift: the
+    // classification `type_kind` answered for the field must name the struct
+    // `unwrapped` finds in the same type. Checked here, where both are in hand,
+    // because the corpus covers a wrapped root (`Box<Payload>`) but not yet a
+    // wrapped nested field.
+    debug_assert_eq!(
+        match ty.unwrapped().kind() {
+            flat::TypeKind::Named { id, .. } => id.ident(),
+            _ => None,
+        }
+        .as_ref(),
+        Some(&st.name),
+        "flatten tree: `{}` classifies as a struct the type does not name",
+        ty.key(),
+    );
+    let node_key = TypeKey::from_ident(&st.name);
+    if stack.contains(&node_key) {
+        return Err(flat_error(
+            root,
+            native_prefix,
+            "recursive data-class cycle",
+        ));
+    }
+    if stack.len() >= 16 {
+        return Err(flat_error(
+            root,
+            native_prefix,
+            "recursive flattening exceeds depth 16",
+        ));
+    }
+    stack.push(node_key);
+    let mut children: Vec<OutChild> = Vec::new();
+    for field in &st.fields {
+        // A positional field has no name to derive a Kotlin property from,
+        // which is what "only named-field structs can flatten" used to say one
+        // level up. Said per field, because the element models a field list
+        // rather than a `syn::Fields` shape.
+        let Some(fident) = field.name.clone() else {
+            return Err(flat_error(
+                root,
+                native_prefix,
+                "only named-field structs can flatten",
+            ));
+        };
+        let child_native = format!("{native_prefix}_{fident}");
+        let link = OutLink {
+            steps: vec![PathStep::field(fident.clone(), false)],
+            name: vec![kotlin_property_name(&fident)],
+        };
+        // The optional layer off the MODEL, asked once: it becomes the node's
+        // `Optional` layer for a nested class and the leaf's `nullable`
+        // otherwise, so no later site can disagree with it (#273).
+        let optional = field.ty.optional_inner().is_some();
+        let nested = field.ty.optional_inner().unwrap_or(&field.ty);
+
+        if let TypeKind::DataStruct {
+            st: child,
+            cfg: Some(cfg),
+        } = ext.type_kind(registry, &nested.key())
+        {
+            if cfg.name_spec.is_some() && !cfg.special_decl() && !cfg.jobject_input {
+                let node = synth_input_field_tree(
+                    ext,
+                    registry,
+                    child,
+                    nested,
+                    optional,
+                    &child_native,
+                    root,
+                    stack,
+                )?;
+                children.push(OutChild { link, node });
+                continue;
+            }
+        }
+
+        // Everything else crosses through its own converter, however many wire
+        // slots that takes.
+        children.push(OutChild {
+            link,
+            node: OutNode {
+                ty: field.ty.clone(),
+                kind: TransformKind::Leaf(OutLeaf {
+                    nullable: optional,
+                    identity: false,
+                    reach: OutReach::Field,
+                }),
+            },
+        });
+    }
+    stack.pop();
+    let product = OutNode {
+        ty: ty.clone(),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children,
+        },
+    };
+    Ok(if optional {
+        OutNode {
+            ty: ty.clone(),
+            kind: TransformKind::Optional {
+                op: (),
+                inner: Box::new(product),
+            },
+        }
+    } else {
+        product
+    })
+}
+
 /// Build the one shared recursive Kotlin→Rust plan. `Ok(None)` means the
 /// parameter is not an unmarked declared data class (including the explicit
 /// `.jobject_input()` opt-in); an unmarked data class either returns a complete
@@ -1376,18 +1516,28 @@ pub(crate) fn build_flat_input_plan(
     if entry_short != Some(dc_short.as_str()) {
         return Ok(None);
     }
-    let mut leaves: Vec<FlatLeaf> = Vec::new();
-    let mut stack = Vec::new();
-    let root = build_flat_struct_node(
+    // The structure first, once: what nests, in what order, behind which
+    // `Option` layers, and where the descent has to stop. Then the JNI leaves
+    // are lowered from it (#444 §5).
+    let tree = synth_input_field_tree(
         ext,
         registry,
         st,
+        inner,
         optional,
+        &param_name.to_string(),
+        &key,
+        &mut Vec::new(),
+    )?;
+    let mut leaves: Vec<FlatLeaf> = Vec::new();
+    let root = build_flat_struct_node(
+        ext,
+        registry,
+        &tree,
         &param_name.to_string(),
         "",
         optional,
         &key,
-        &mut stack,
         &mut leaves,
     )?;
     let contains_nested = root
@@ -1418,31 +1568,31 @@ pub(crate) fn build_flat_input_plan(
 fn build_flat_struct_node(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    st: &flat::Struct,
-    optional: bool,
+    node: &OutNode,
     native_prefix: &str,
     access_prefix: &str,
     nullable_context: bool,
     root: &TypeKey,
-    stack: &mut Vec<TypeKey>,
     leaves: &mut Vec<FlatLeaf>,
 ) -> Result<FlatStructNode, FlatInputError> {
-    let node_key = TypeKey::from_ident(&st.name);
-    if stack.contains(&node_key) {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "recursive data-class cycle",
-        ));
+    // The tree already decided that this nests and whether an `Option` layer
+    // sits over it; reading the layer off the node is what stops the lowering
+    // from re-deciding it.
+    let (optional, product) = match &node.kind {
+        TransformKind::Optional { inner, .. } => (true, inner.as_ref()),
+        _ => (false, node),
+    };
+    let TransformKind::Product { children, .. } = &product.kind else {
+        unreachable!("a flattened data-class node is a product of its fields")
+    };
+    // The NAME off the classification, not off the last path segment, so a
+    // `Box<Payload>` node answers `Payload`. This recovers what the tree
+    // already settled on; it does not decide anything again.
+    let struct_ident = match product.ty.unwrapped().kind() {
+        flat::TypeKind::Named { id, .. } => id.ident(),
+        _ => None,
     }
-    if stack.len() >= 16 {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "recursive flattening exceeds depth 16",
-        ));
-    }
-    stack.push(node_key);
+    .expect("a flattened data-class node names a declared struct");
     let present_ident = if optional {
         let native = format!("{native_prefix}_present");
         push_present_leaf(leaves, &native, format!("{access_prefix} != null"), None);
@@ -1451,31 +1601,46 @@ fn build_flat_struct_node(
         None
     };
     let mut fields = Vec::new();
-    for field in &st.fields {
-        // A positional field has no name to derive a Kotlin property from, which
-        // is what "only named-field structs can flatten" used to say one level
-        // up. Said per field now, because the element models a field list rather
-        // than a `syn::Fields` shape.
-        let Some(fident) = field.name.clone() else {
-            return Err(flat_error(
-                root,
-                native_prefix,
-                "only named-field structs can flatten",
-            ));
-        };
-        let fcamel = kotlin_property_name(&fident);
+    for child in children {
+        // Name, Kotlin property and optionality all come off the tree: the link
+        // carries the source field and the node carries the layer, so the
+        // lowering never re-reads the struct to recover them (#273).
+        let fident = child.link.steps[0].ident().clone();
+        let fcamel = child.link.name[0].clone();
         let child_native = format!("{native_prefix}_{}", fident);
         let field_ref = if nullable_context {
             format!("{access_prefix}?.{fcamel}")
         } else {
             format!("{access_prefix}.{fcamel}")
         };
-        // The optional layer off the MODEL, asked once and reused: every site
-        // below that wants "is this field optional" reads this, so they cannot
-        // disagree with each other the way seven independent path-segment tests
-        // could (#273).
-        let field_optional = field.ty.optional_inner().is_some();
+        // The field's reading is the node's own type, so the leaf resolution
+        // below reads it from the tree rather than from the struct.
+        let field = &child.node;
+        let field_optional = matches!(
+            &child.node.kind,
+            TransformKind::Optional { .. } | TransformKind::Leaf(OutLeaf { nullable: true, .. })
+        );
         let nested = field.ty.optional_inner().unwrap_or(&field.ty);
+
+        // A nested declared class: the tree said so, so descend without asking
+        // the type again.
+        if !matches!(child.node.kind, TransformKind::Leaf(_)) {
+            let node = build_flat_struct_node(
+                ext,
+                registry,
+                &child.node,
+                &child_native,
+                &field_ref,
+                nullable_context || field_optional,
+                root,
+                leaves,
+            )?;
+            fields.push(FlatFieldNode::Nested {
+                field: fident,
+                node: Box::new(node),
+            });
+            continue;
+        }
         // A data-carrying enum flattens into a tag plus one group per variant.
         // `None` means some payload is not leaf-shaped — fall through and let
         // it cross as one object through its own converter.
@@ -1496,33 +1661,6 @@ fn build_flat_struct_node(
                 continue;
             }
         }
-        if let TypeKind::DataStruct {
-            st: child,
-            cfg: Some(cfg),
-        } = ext.type_kind(registry, &nested.key())
-        {
-            if cfg.name_spec.is_some() && !cfg.special_decl() && !cfg.jobject_input {
-                let child_optional = field_optional;
-                let node = build_flat_struct_node(
-                    ext,
-                    registry,
-                    child,
-                    child_optional,
-                    &child_native,
-                    &field_ref,
-                    nullable_context || child_optional,
-                    root,
-                    stack,
-                    leaves,
-                )?;
-                fields.push(FlatFieldNode::Nested {
-                    field: fident,
-                    node: Box::new(node),
-                });
-                continue;
-            }
-        }
-
         let path = child_native.clone();
         // The field's own reading straight to its entry — the `reading_of` hop
         // only ever recovered what the field already carried.
@@ -1731,10 +1869,9 @@ fn build_flat_struct_node(
             wrappers: field.ty.erased_wrappers(),
         });
     }
-    stack.pop();
     Ok(FlatStructNode {
-        struct_module: struct_module_path(ext, registry, &st.name),
-        struct_ident: st.name.clone(),
+        struct_module: struct_module_path(ext, registry, &struct_ident),
+        struct_ident,
         binding: format_ident!("__flat_{native_prefix}"),
         optional,
         present_ident,
