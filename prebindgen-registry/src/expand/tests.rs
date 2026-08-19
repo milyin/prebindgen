@@ -1534,10 +1534,6 @@ fn claiming_an_arity_layer_keeps_its_mapping() {
 /// lowerer would see it, which is exactly who this tree is for.
 #[test]
 fn claiming_a_run_binds_one_borrowed_element() {
-    let reg: Registry<()> =
-        reg_with(&["fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }"]);
-    let _ = &reg;
-
     // The run owns the wire slot; the constructor under it takes the element
     // the layer bound.
     let tree = InNode {
