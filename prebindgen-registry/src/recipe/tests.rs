@@ -36,6 +36,7 @@ const SAMPLE: &str = "pub struct Sample { pub key: u32, pub payload: u64 }";
 
 fn shape_of(row: &Row) -> &str {
     let shape = match row {
+        Row::Callback(_) => return "callback",
         Row::Constructing(s) => {
             return match s {
                 Shape::Atomic => "atomic",
@@ -399,6 +400,21 @@ fn a_callback_has_no_row_to_declare() {
         matches!(errors.as_slice(), [RecipeError::CallbackDeclared { .. }]),
         "{errors:?}"
     );
+}
+
+#[test]
+fn a_callback_derives_the_row_that_takes_it_apart() {
+    let model = model(&["pub fn listen(on: impl Fn(u32) + Send + Sync + 'static) {}"]);
+    let listen = model.function("listen").expect("listen");
+    let table = Recipes::default();
+    for assembly in [Assembly::Construct, Assembly::Deconstruct] {
+        let crossing = Crossing::new(listen.params[0].ty.clone(), assembly);
+        let (id, row) = table.row(&crossing);
+        assert_eq!(id, RecipeId::derived());
+        assert!(matches!(*row, Row::Callback(a) if a == assembly), "{row:?}");
+        // The row's own job is the crossing's; its arguments do the other one.
+        assert_eq!(row.assembly(), assembly);
+    }
 }
 
 #[test]

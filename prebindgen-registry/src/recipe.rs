@@ -353,6 +353,14 @@ pub enum Row {
     Constructing(Constructing),
     /// A row filed under [`Assembly::Deconstruct`].
     Deconstructing(Deconstructing),
+    /// A callback, taken apart into the values that pass through it.
+    ///
+    /// Derived from the type's kind and never declared, because there is no
+    /// decision to record: a callable that crossed whole would not be callable
+    /// from Rust. Its parts are the callback's arguments, and they do the other
+    /// job — the Rust side holds those values and pushes them out through the
+    /// call. The [`Assembly`] here is the row's own, not its arguments'.
+    Callback(Assembly),
 }
 
 impl Row {
@@ -361,6 +369,7 @@ impl Row {
         match self {
             Row::Constructing(_) => Assembly::Construct,
             Row::Deconstructing(_) => Assembly::Deconstruct,
+            Row::Callback(assembly) => *assembly,
         }
     }
 }
@@ -423,12 +432,11 @@ impl Recipes {
         }
     }
 
-    /// The default row for a crossing: the declared one, or the arity row
-    /// derived from the type's kind.
+    /// The default row for a crossing: the declared one, or the row derived
+    /// from the type's kind.
     ///
-    /// A callback has no row; [`Crossing::value`]`.callback_args()` is what
-    /// answers for one, and a caller that can reach a callback checks that
-    /// before asking here.
+    /// A callback derives [`Row::Callback`], which nothing can declare, so an
+    /// adapter reaches one here the same way it reaches every other row.
     pub fn row(&self, crossing: &Crossing) -> (RecipeId, Cow<'_, Row>) {
         let key = crossing.key();
         match self.default_of(&key) {
@@ -445,6 +453,9 @@ impl Recipes {
 /// The arity row a crossing gets when nobody declared one.
 fn derive(crossing: &Crossing) -> Row {
     let value = crossing.value();
+    if value.callback_args().is_some() {
+        return Row::Callback(crossing.assembly);
+    }
     let shape = if let Some(inner) = value.optional_inner() {
         Some((inner.clone(), true))
     } else {
@@ -627,6 +638,15 @@ impl<'a> Check<'a, '_> {
         let (assembly, parts) = match row {
             Row::Constructing(shape) => (Assembly::Construct, self.constructing(ty, shape)),
             Row::Deconstructing(shape) => (Assembly::Deconstruct, self.deconstructing(ty, shape)),
+            // The one place the two jobs swap.
+            Row::Callback(assembly) => {
+                let args = Crossing::new(ty.clone(), *assembly)
+                    .value()
+                    .callback_args()
+                    .unwrap_or_default()
+                    .to_vec();
+                (assembly.swap(), args)
+            }
         };
         parts
             .into_iter()
@@ -882,13 +902,6 @@ fn walk(
 /// Every row counts, not only the default: a site may name any of them, so a
 /// cycle through the row nobody happens to default to is still a cycle.
 fn successors(model: &Flat, table: &Recipes, crossing: &Crossing) -> Vec<Crossing> {
-    if let Some(args) = crossing.value().callback_args() {
-        let swapped = crossing.assembly().swap();
-        return args
-            .iter()
-            .map(|a| Crossing::new(a.clone(), swapped))
-            .collect();
-    }
     let key = crossing.key();
     let rows: Vec<(RecipeId, TypeRef, Row)> = match table.rows.get(&key) {
         Some(entries) => entries
