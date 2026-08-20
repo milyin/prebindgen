@@ -170,3 +170,36 @@ fn an_undeclared_arity_layer_takes_the_row_the_registry_derives() {
         "construct derived:atomic, deconstruct derived:atomic"
     );
 }
+
+/// A `String` declared as a handle must not strand the **field** reading.
+///
+/// `convert!` refuses a builtin outright, so a custom `String` conversion is
+/// not the route in — but `opaque_ptr` accepts one, and `out_terminal` has an
+/// arm for exactly that shape. Declaring it that way used to suppress the field
+/// row while `bindings` still asked every string field for it.
+#[test]
+fn a_string_declared_as_a_handle_keeps_the_field_reading() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Caption { pub id: u64, pub text: String }",
+        "pub fn caption_id(c: Caption) -> u64 { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|src| (syn::parse_str(src).expect("parse"), loc.clone()))
+    .collect();
+    let model = prebindgen_registry::Flat::builder()
+        .items(declare_referenced(items))
+        .build()
+        .expect("parse");
+
+    let gen = Cbindgen::builder()
+        .source_module(syn::parse_quote!(myflat))
+        .free_memory_function("myflat_free")
+        .opaque_ptr(syn::parse_quote!(String))
+        .data_struct(syn::parse_quote!(Caption));
+    let recipes = gen
+        .recipes(&model)
+        .expect("a String handle declaration leaves the field row in place");
+    gen.bindings(&model, &recipes)
+        .expect("every string field still finds the field row");
+}
