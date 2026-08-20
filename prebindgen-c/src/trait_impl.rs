@@ -353,10 +353,13 @@ impl CbindgenBuilder {
     /// #455/#457; a **site** is one position in the generated API, and this is
     /// where they start being asked about.
     ///
-    /// What it buys today is the validity contract: `Compiler::site` refuses a
-    /// site whose role outlives the call — a return, an error arm, a constant —
-    /// when the fragment it resolves to only borrows. Inside a product that has
-    /// been checked since #462; at a function's own boundary it has not.
+    /// What it buys is that the contracts a site owns are asked at all. Which
+    /// answers count as failures is the target's, through
+    /// [`Compile::tolerates`] — and Cbindgen answers `Borrowed` everywhere,
+    /// because a `*const T` is C's own non-owning pointer and its zero-copy
+    /// accessors return one. So the validity check passes here by policy
+    /// rather than by luck, and the composition contracts — a part's type and
+    /// how it is held — are what actually run.
     ///
     /// The plans are discarded. C's per-item emitter still builds each wrapper
     /// from the converter table, and moving that is a change of its own.
@@ -1523,9 +1526,10 @@ impl CbindgenBuilder {
             .build()?;
         // Every site of every exported function, compiled. Nothing consumes
         // the plans yet — C's per-item emitter still builds each wrapper — but
-        // this is what makes the contracts a site owns run against real
-        // positions rather than only inside a product: a returned value the C
-        // side keeps cannot be a borrow of something the call drops.
+        // it is what makes the contracts a site owns run against real positions
+        // rather than only inside a product. What each one demands is the
+        // target's answer: see `CCompile::tolerates` for why C accepts a
+        // borrowed return where the JVM must not.
         {
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                 &model, &recipes, &bindings, compiled,

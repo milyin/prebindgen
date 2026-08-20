@@ -1963,15 +1963,13 @@ fn what_a_role_tolerates_is_the_adapters_own_answer() {
             func: &Function,
             args: Parts<'_, Self>,
         ) -> Frag<Self> {
-            let args: Vec<_> = args.iter().map(|(p, f)| (p.clone(), *f)).collect();
-            self.0.construct(cx, at, func, &args)
+            self.0.construct(cx, at, func, args)
         }
         fn identity(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
             self.0.identity(cx, at, inner)
         }
         fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
-            let parts: Vec<_> = parts.iter().map(|(p, f)| (p.clone(), *f)).collect();
-            self.0.fields(cx, at, &parts)
+            self.0.fields(cx, at, parts)
         }
         fn value_form(
             &mut self,
@@ -1980,8 +1978,7 @@ fn what_a_role_tolerates_is_the_adapters_own_answer() {
             func: &Function,
             parts: Parts<'_, Self>,
         ) -> Frag<Self> {
-            let parts: Vec<_> = parts.iter().map(|(p, f)| (p.clone(), *f)).collect();
-            self.0.value_form(cx, at, func, &parts)
+            self.0.value_form(cx, at, func, parts)
         }
         fn choice(
             &mut self,
