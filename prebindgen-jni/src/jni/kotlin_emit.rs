@@ -1205,8 +1205,8 @@ impl Declarations {
                     .get(&func.name)
                     .filter(|p| p.delivery == Delivery::Callback)
                 {
-                    let iterable = is_iterable_fold(&plan.shape);
-                    match (iterable, &plan.element, &plan.decon) {
+                    let iterable = is_iterable_fold(plan.shape());
+                    match (iterable, &plan.element(), &plan.decon) {
                         (true, Some(el), _) => {
                             uses.insert(SpecKey::whole_folder(el));
                         }

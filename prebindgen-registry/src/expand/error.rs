@@ -20,6 +20,9 @@ pub enum ExpandError {
         func: syn::Ident,
         param: syn::Ident,
         reason: &'static str,
+        /// Where in the construction — see
+        /// [`ExpandError::UnsupportedRecursive::at`].
+        at: String,
     },
     /// An explicit per-fn input flatten targeted a read accessor — accessors
     /// are never parameter-composed.
@@ -37,12 +40,22 @@ pub enum ExpandError {
     /// Recursive input reached a type already on the build chain (`A → … → A`).
     InputCycle {
         ty: String,
+        /// Where in the construction — see
+        /// [`ExpandError::UnsupportedRecursive::at`].
+        at: String,
     },
     /// A recursive-input shape that is declared-but-not-yet-supported (recursion
     /// under a selector-dispatched variant, or on an `Option<…>` parameter).
     UnsupportedRecursive {
         func: syn::Ident,
         reason: &'static str,
+        /// Where in the construction the transformation failed: the chain of
+        /// parameter names from the expanded parameter down to the argument
+        /// that could not be built, which is also the prefix its wire slots are
+        /// named with. A constructor argument may itself be constructed, so
+        /// naming only the function leaves the reader to work out which nesting
+        /// of it is the one that failed.
+        at: String,
     },
     /// Structurally invalid declaration records — empty variant lists or
     /// duplicate targets. All offenders are collected before failing
@@ -99,16 +112,16 @@ impl std::fmt::Display for ExpandError {
                  parameter-composed (remove the override, or declare it as `.fun`)",
                 func
             ),
-            ExpandError::InputCycle { ty } => write!(
+            ExpandError::InputCycle { ty, at } => write!(
                 f,
-                "expand: recursive input forms a cycle through `{}` — a constructor \
+                "expand at `{}`: recursive input forms a cycle through `{}` — a constructor \
                  parameter's type transitively constructs itself",
-                ty
+                at, ty
             ),
-            ExpandError::UnsupportedRecursive { func, reason } => write!(
+            ExpandError::UnsupportedRecursive { func, reason, at } => write!(
                 f,
-                "expand: `{}`: recursive input not supported here: {}",
-                func, reason
+                "expand: `{}` at `{}`: recursive input not supported here: {}",
+                func, at, reason
             ),
             ExpandError::UnknownParam(func, param) => write!(
                 f,
@@ -154,10 +167,11 @@ impl std::fmt::Display for ExpandError {
                 func,
                 param,
                 reason,
+                at,
             } => write!(
                 f,
-                "expand: optional parameter `{}` of `{}` is not supported: {}",
-                param, func, reason
+                "expand: optional parameter `{}` of `{}` is not supported at `{}`: {}",
+                param, func, at, reason
             ),
             ExpandError::InvalidDeclarations { entries } => {
                 writeln!(f, "expand: invalid declarations:")?;

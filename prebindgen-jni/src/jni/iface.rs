@@ -1220,7 +1220,7 @@ pub(crate) fn fixed_leaf_element_keys(
         .values()
         .chain(registry.callback_arg_plans().values())
         .filter(|p| p.fixed_builder)
-        .filter_map(|p| p.element.as_ref())
+        .filter_map(|p| p.element())
         .map(|el| el.key())
         .collect()
 }
@@ -1406,10 +1406,10 @@ pub(crate) fn callback_iface_spec(
         let plan = registry
             .callback_arg_plans()
             .get(&t.key())
-            .filter(|p| !super::render::is_iterable_fold(&p.shape));
+            .filter(|p| !super::render::is_iterable_fold(p.shape()));
         if let Some(plan) = plan {
-            let leaf_names = plan_leaf_names(&plan.leaves);
-            for (n, l) in leaf_names.iter().zip(plan.leaves.iter()) {
+            let leaf_names = plan_leaf_names(plan.leaves());
+            for (n, l) in leaf_names.iter().zip(plan.leaves().iter()) {
                 leaf_tys.push(LeafDesc::Plan(n.clone(), l.clone()));
             }
             if plan.fixed_builder {
@@ -1419,13 +1419,13 @@ pub(crate) fn callback_iface_spec(
                 let core = t.borrow_target().unwrap_or(t);
                 let fqn = ext.kotlin_fqn(&core.key())?;
                 let (reassemble, imports) =
-                    fixed_reassembly(ext, registry, &core.key(), &plan.leaves, &fqn);
+                    fixed_reassembly(ext, registry, &core.key(), plan.leaves(), &fqn);
                 groups.push(GroupDesc {
                     name: whole_value_name(t, i),
                     typed: Some(KtType::cls(fqn.to_string())),
                     reassemble: Some(reassemble),
                     imports,
-                    leaf_count: plan.leaves.len(),
+                    leaf_count: plan.leaves().len(),
                     close: crate::jni::struct_plan::type_close_strategy(ext, registry, core, 0),
                 });
             } else {
@@ -1436,11 +1436,11 @@ pub(crate) fn callback_iface_spec(
                 // `when` over the tag. Handing those slots over raw would defeat
                 // the `sealed_class!` the sum was declared as.
                 let mut k = 0usize;
-                while k < plan.leaves.len() {
-                    let leaf = &plan.leaves[k];
+                while k < plan.leaves().len() {
+                    let leaf = &plan.leaves()[k];
                     let seg = if leaf.source == LeafSource::SumTag {
-                        (k + 1..plan.leaves.len())
-                            .take_while(|&j| plan.leaves[j].group.is_some())
+                        (k + 1..plan.leaves().len())
+                            .take_while(|&j| plan.leaves()[j].group.is_some())
                             .last()
                             .map_or(k + 1, |j| j + 1)
                     } else {
@@ -1453,7 +1453,7 @@ pub(crate) fn callback_iface_spec(
                             ext,
                             registry,
                             &leaf.out_ty.key(),
-                            &plan.leaves[k..seg],
+                            &plan.leaves()[k..seg],
                             &fqn,
                         );
                         groups.push(GroupDesc {
@@ -1684,10 +1684,10 @@ pub(crate) fn folder_iface_for_plan(
     plan: &UnfoldPlan,
 ) -> Option<std::sync::Arc<IfaceSpec>> {
     debug_assert!(
-        plan.shape.has_iterable_layer(),
+        plan.shape().has_iterable_layer(),
         "folder_iface_for_plan requires an Iterable (or Option<Iterable>) plan"
     );
-    match (&plan.element, &plan.decon) {
+    match (&plan.element(), &plan.decon) {
         (Some(el), _) => ext.iface_spec(registry, &SpecKey::whole_folder(el)),
         (None, Some(d)) => ext.iface_spec(registry, &SpecKey::Folder(d.clone())),
         (None, None) => None,

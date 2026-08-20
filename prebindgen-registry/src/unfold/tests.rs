@@ -728,6 +728,12 @@ fn nested_cycle_errors() {
     )
     .unwrap_err();
     assert!(matches!(err, UnfoldError::Cycle { .. }));
+    // The message says WHERE: `ZB` is reached through `a_to_b`, and it is the
+    // deconstructor spliced there that closes the loop.
+    assert_eq!(
+        err.to_string(),
+        "output expansion at `value.a_to_b()`: nested deconstructors form a cycle through `ZA`"
+    );
 }
 
 #[test]
@@ -1555,11 +1561,13 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
     let declared: std::collections::HashSet<syn::Ident> =
         ["other", "strings"].iter().map(|s| ident(s)).collect();
     // Pre-seed `strings` with a sentinel plan to prove it is preserved.
+    let source = tref(syn::parse_quote!(String));
     let sentinel = UnfoldPlan {
-        source: tref(syn::parse_quote!(String)),
+        source: source.clone(),
         decon: None,
         by_ref: false,
         shape: UnfoldShape::Base,
+        tree: std::rc::Rc::new(crate::unfold::flat_tree(&source, &[])),
         leaves: vec![],
         element: None,
         delivery: Delivery::Return,
@@ -1891,5 +1899,171 @@ fn a_vec_of_optionals_installs_no_fixed_fold() {
     assert!(
         !reg.unfold_plans.contains_key(&ident("storage_get_vec")),
         "a Vec<Option<Payload>> return must not fold as a Payload decomposition"
+    );
+}
+
+/// A stand-in language adapter (#442): it says what a leaf and a product
+/// *render as* and nothing else. There is no recursion here, no `TypeRef`
+/// walk and no path arithmetic — the registry supplies the order, the links
+/// and the descent, which is the whole claim the shared tree makes.
+struct Render;
+
+impl crate::transform::TransformLowerer<OutOfRust> for Render {
+    type Value = String;
+    type Error = std::convert::Infallible;
+
+    fn leaf(&mut self, node: &OutNode, op: &OutLeaf) -> Result<String, Self::Error> {
+        Ok(format!(
+            "{}{}",
+            node.ty.spell(),
+            if op.identity { " (identity)" } else { "" }
+        ))
+    }
+
+    fn product(
+        &mut self,
+        _node: &OutNode,
+        _op: &OutProduct,
+        children: crate::transform::Lowered<'_, OutOfRust, String>,
+    ) -> Result<String, Self::Error> {
+        let rendered: Vec<String> = children
+            .into_iter()
+            .map(|(child, value)| {
+                let steps: Vec<String> = child
+                    .link
+                    .steps
+                    .iter()
+                    .map(|s| format!("{}{}", s.ident(), if s.is_optional() { "?" } else { "" }))
+                    .collect();
+                format!(
+                    "{}<-{}: {value}",
+                    child.link.name.join("__"),
+                    steps.join(".")
+                )
+            })
+            .collect();
+        Ok(format!("[{}]", rendered.join(", ")))
+    }
+
+    fn choice(
+        &mut self,
+        _node: &OutNode,
+        op: &std::convert::Infallible,
+        _variants: crate::transform::Lowered<'_, OutOfRust, String>,
+    ) -> Result<String, Self::Error> {
+        match *op {}
+    }
+
+    fn optional(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(format!("{value}?"))
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(format!("[{value}]*"))
+    }
+}
+
+#[test]
+fn tree_lowers_through_the_shared_visitor() {
+    // `z_reply_sample -> Option<&ZSample>` whose ZSample splices ZKeyExpr
+    // (identity + string) and a nullable ZTimestamp. The tree is what the
+    // decomposition IS; the leaf list below is a derived view of it, so both
+    // readings of the same plan must agree on names, order and nullability.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { todo!() }",
+        "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+        "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZTimestamp"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_timestamp_ntp64"),
+            name: "ntp64".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZSample"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "ke".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_timestamp"),
+                name: "ts".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_reply_sample")].into_iter().collect(),
+        &acc_set_without("z_reply_sample"),
+    )
+    .expect("apply");
+
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+
+    // The whole plan, read through the hooks alone — the `Option<&ZSample>`
+    // return is the trailing `?`, so the arity layer is a node like any other.
+    let rendered = plan.tree.lower(&mut Render).expect("lowering cannot fail");
+    assert_eq!(
+        rendered,
+        "[ke<-z_sample_key_expr: [<-: & ZKeyExpr (identity), str<-z_keyexpr_as_str: & str], \
+         ts<-z_sample_timestamp?: [ntp64<-z_timestamp_ntp64: i64]]?"
+    );
+    // …and the shape the plan exposes is read back off those same nodes.
+    assert!(
+        matches!(&plan.shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)),
+        "the layer node IS the plan's shape"
+    );
+    assert!(
+        plan.element.is_none(),
+        "the value is taken apart, not delivered whole"
+    );
+
+    // …and the derived view of the same tree, which is what the plan exposes:
+    // the identity takes the chain it sits at, the `Option` nesting step makes
+    // everything under it nullable, and nothing else is.
+    let names: Vec<(&str, bool)> = plan
+        .leaves
+        .iter()
+        .map(|l| (l.name.as_str(), l.nullable))
+        .collect();
+    assert_eq!(
+        names,
+        vec![("ke", false), ("ke__str", false), ("ts__ntp64", true)]
     );
 }

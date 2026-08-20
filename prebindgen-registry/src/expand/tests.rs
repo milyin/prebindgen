@@ -9,6 +9,21 @@ fn key(s: &str) -> crate::registry::TypeKey {
     crate::registry::TypeKey::parse(s).expect("a fixture type")
 }
 
+/// The children of a product node — a constructor's arguments, in parameter
+/// order.
+fn args(node: &InNode) -> &[InChild] {
+    match &node.kind {
+        TransformKind::Product { children, .. } => children,
+        _ => panic!("a constructor product, not a dispatch"),
+    }
+}
+
+/// Whether a constructor argument is itself built, rather than decoded from one
+/// wire slot.
+fn is_build(child: &InChild) -> bool {
+    !matches!(child.node.kind, TransformKind::Leaf(_))
+}
+
 /// A reading for a fixture type — see the twin in `core/unfold/tests.rs`.
 /// Plan leaves carry `TypeRef`s, and a fixture naming a type inline needs one.
 fn tref(ty: syn::Type) -> prebindgen_flat::flat::TypeRef {
@@ -54,7 +69,7 @@ fn single_constructor_plan_and_fold() {
         .get(&(ident("z_keyexpr_intersects"), ident("a")))
         .expect("plan for a");
     assert!(plan.by_ref, "param was &ZKeyExpr");
-    assert_eq!(plan.selector, None);
+    assert_eq!(plan.selector(), None);
     assert_eq!(plan.leaves.len(), 1);
     assert_eq!(plan.leaves[0].name.to_string(), "a");
     assert_eq!(plan.leaves[0].ty.spell().to_string(), "String");
@@ -101,7 +116,7 @@ fn constructor_plan_and_fold() {
         .expansion_plans
         .get(&(ident("z_keyexpr_intersects"), ident("a")))
         .unwrap();
-    assert_eq!(plan.selector, Some(0));
+    assert_eq!(plan.selector(), Some(0));
     // selector + try_from(String) + identity(ZKeyExpr) = 3 leaves
     assert_eq!(plan.leaves.len(), 3);
     assert_eq!(plan.leaves[0].ty.spell().to_string(), "i32");
@@ -111,10 +126,20 @@ fn constructor_plan_and_fold() {
         plan.leaves[2].ty.spell().to_string(),
         "Option < & ZKeyExpr >"
     );
-    assert_eq!(plan.variants.len(), 2);
-    assert!(plan.variants[0].ctor.is_some());
-    assert!(plan.variants[1].ctor.is_none(), "identity arm");
-    assert!(plan.variants[1].clone, "by-ref identity clones");
+    let arms = plan.tree.arms();
+    assert_eq!(arms.len(), 2);
+    assert!(arms[0].ctor().is_some());
+    assert!(arms[1].ctor().is_none(), "identity arm");
+    assert!(
+        matches!(
+            &arms[1].kind,
+            TransformKind::Product {
+                op: InProduct::Identity { clone: true },
+                ..
+            }
+        ),
+        "by-ref identity clones"
+    );
 
     // Leaf types registered as required inputs (so the resolver builds
     // their converters).
@@ -158,7 +183,7 @@ fn optional_byvalue_single_ctor() {
         .expansion_plans
         .get(&(ident("z_session_delete"), ident("attachment")))
         .unwrap();
-    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(matches!(plan.shape(), FoldShape::Optional((), _)));
     assert!(plan.produces_option());
     assert!(!plan.by_ref);
     assert_eq!(plan.leaves.len(), 1);
@@ -166,6 +191,14 @@ fn optional_byvalue_single_ctor() {
     assert_eq!(
         plan.leaves[0].ty.spell().to_string(),
         "Option < Vec < u8 > >"
+    );
+    // The layer owns that one slot and binds its payload (`^`); the
+    // constructor under it takes the binding, having no slot of its own.
+    assert_eq!(
+        plan.tree
+            .lower(&mut RenderIn)
+            .expect("lowering cannot fail"),
+        "z_zbytes_from_vec(^)?^#0"
     );
 
     let locals = vec![ident("att")];
@@ -211,7 +244,7 @@ fn optional_byref_single_ctor() {
         .expansion_plans
         .get(&(ident("z_session_put"), ident("encoding")))
         .unwrap();
-    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(matches!(plan.shape(), FoldShape::Optional((), _)));
     assert!(plan.produces_option());
     assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
     assert_eq!(plan.leaves[0].ty.spell().to_string(), "Option < String >");
@@ -258,10 +291,10 @@ fn optional_byref_multi_arg_ctor() {
         .expansion_plans
         .get(&(ident("z_session_put"), ident("encoding")))
         .unwrap();
-    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(matches!(plan.shape(), FoldShape::Optional((), _)));
     assert!(plan.produces_option());
     assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
-    assert_eq!(plan.present, Some(0), "explicit presence flag at leaf 0");
+    assert_eq!(plan.present(), Some(0), "explicit presence flag at leaf 0");
     // leaf 0 = present:bool, leaf 1 = id:i32, leaf 2 = schema:Option<String>
     assert_eq!(plan.leaves.len(), 3);
     assert_eq!(plan.leaves[0].name.to_string(), "encoding_present");
@@ -331,11 +364,11 @@ fn optional_combined_selector_encodes_absence() {
         .expansion_plans
         .get(&(ident("z_session_put"), ident("encoding")))
         .unwrap();
-    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(matches!(plan.shape(), FoldShape::Optional((), _)));
     assert!(plan.produces_option());
     assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
-    assert_eq!(plan.selector, Some(0), "selector at leaf 0");
-    assert_eq!(plan.present, None, "absence rides the selector, no flag");
+    assert_eq!(plan.selector(), Some(0), "selector at leaf 0");
+    assert_eq!(plan.present(), None, "absence rides the selector, no flag");
     // leaves: sel:i32, id:Option<i32> (wrapped), schema:Option<String>
     // (passthrough), identity:Option<&ZEncoding>.
     assert_eq!(plan.leaves.len(), 4);
@@ -351,11 +384,27 @@ fn optional_combined_selector_encodes_absence() {
         plan.leaves[3].ty.spell().to_string(),
         "Option < & ZEncoding >"
     );
+    let arms = plan.tree.arms();
     assert!(
-        matches!(plan.variants[0].inputs[1], FoldArg::Leaf(2, true)),
-        "schema input marked passthrough"
+        matches!(
+            &args(arms[0])[1].node.kind,
+            TransformKind::Leaf(InLeaf::Slot {
+                slot: InSlot { slot: 2, .. },
+                wrapped: false
+            })
+        ),
+        "an already-Option ctor arg passes through unwrapped"
     );
-    assert!(plan.variants[1].clone, "borrowed identity arm clones");
+    assert!(
+        matches!(
+            &arms[1].kind,
+            TransformKind::Product {
+                op: InProduct::Identity { clone: true },
+                ..
+            }
+        ),
+        "borrowed identity arm clones"
+    );
 
     let locals = vec![ident("sel"), ident("id"), ident("schema"), ident("enc")];
     let s = emit_fold(plan, &locals, &src_qualify)
@@ -385,22 +434,40 @@ fn iterable_emit_shape() {
     // param expansion is declared), but the fold is emit-ready: a hand-built
     // plan must produce the `into_iter().map(...).collect::<Result<Vec<_>,_>>()`
     // form, with the inner single-arg ctor applied per element.
+    // The run owns the wire slot; the constructor under it takes the element
+    // the layer bound.
+    let core = InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Product {
+            op: InProduct::Ctor {
+                func: ident("z_keyexpr_try_from"),
+                fallible: true,
+            },
+            children: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(syn::parse_quote!(String)),
+                    kind: TransformKind::Leaf(InLeaf::Bound),
+                },
+            }],
+        },
+    };
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InSlot {
+                slot: 0,
+                name: ident("kes"),
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(core),
+        },
+    };
     let plan = FoldPlan {
         target: tref(syn::parse_quote!(ZKeyExpr)),
         by_ref: false,
-        shape: FoldShape::Iterable(Box::new(FoldShape::Base)),
-        leaves: vec![FoldLeaf {
-            name: ident("kes"),
-            ty: tref(syn::parse_quote!(Vec<String>)),
-        }],
-        selector: None,
-        present: None,
-        variants: vec![FoldVariant {
-            ctor: Some(ident("z_keyexpr_try_from")),
-            fallible: true,
-            clone: false,
-            inputs: vec![FoldArg::Leaf(0, false)],
-        }],
+        leaves: wire_leaves(&tree),
+        tree,
     };
     let locals = vec![ident("kes")];
     let s = emit_fold(&plan, &locals, &src_qualify)
@@ -563,27 +630,23 @@ fn recursive_input_nests_param_constructors() {
         .get(&(ident("z_reply_sample"), ident("sample")))
         .expect("sample plan");
     // Top: single z_sample_new ctor, 2 args, both recursive Build.
-    assert_eq!(plan.selector, None);
-    assert_eq!(plan.variants.len(), 1);
-    let args = &plan.variants[0].inputs;
+    assert_eq!(plan.selector(), None);
+    assert_eq!(plan.tree.arms().len(), 1);
+    let args = args(plan.tree.core());
     assert_eq!(args.len(), 2);
-    assert!(
-        matches!(args[0], FoldArg::Build(_)),
-        "key_expr is a nested build"
-    );
-    assert!(
-        matches!(args[1], FoldArg::Build(_)),
-        "payload is a nested build"
-    );
+    assert!(is_build(&args[0]), "key_expr is a nested build");
+    assert!(is_build(&args[1]), "payload is a nested build");
     // key_expr's nested build is COMBINED (try_from | identity ⇒ selector).
-    if let FoldArg::Build(b) = &args[0] {
-        assert!(b.selector.is_some(), "ZKeyExpr default input is combined");
-        assert_eq!(b.variants.len(), 2);
-    }
+    assert!(
+        args[0].node.selector().is_some(),
+        "ZKeyExpr default input is combined"
+    );
+    assert_eq!(args[0].node.arms().len(), 2);
     // payload's nested build is SINGLE (no selector).
-    if let FoldArg::Build(b) = &args[1] {
-        assert!(b.selector.is_none(), "ZZBytes default input is single");
-    }
+    assert!(
+        args[1].node.selector().is_none(),
+        "ZZBytes default input is single"
+    );
     // Wire leaves: key-expr selector + try_from String + identity ZKeyExpr +
     // zbytes Vec<u8> — all flattened into the one signature.
     let leaf_tys: Vec<String> = plan
@@ -634,6 +697,12 @@ fn recursive_input_cycle_errors() {
     )
     .unwrap_err();
     assert!(matches!(err, ExpandError::InputCycle { .. }), "got {err:?}");
+    // Mutual recursion terminates with a typed error that says WHERE: the
+    // argument chain `a → b → a`, not just the function it started from.
+    assert!(
+        err.to_string().contains("expand at `a.b.a`:"),
+        "the cycle names its argument chain: {err}"
+    );
 }
 
 /// C5 validation map: a variant ctor ident that names no `#[prebindgen]`
@@ -804,5 +873,171 @@ fn a_vec_param_does_not_match_its_elements_constructor() {
         "a Vec<ZKeyExpr> parameter must not be expanded as one ZKeyExpr; \
          plans: {:?}",
         reg.expansion_plans.keys().collect::<Vec<_>>()
+    );
+}
+
+/// A stand-in language adapter (#442), the input-direction twin of
+/// `unfold::tests::Render`: it says what a leaf, a constructor and a dispatch
+/// *render as* and nothing else. No recursion, no `TypeRef` walk, no leaf-index
+/// arithmetic — the registry supplies the descent, the child order and the
+/// links.
+struct RenderIn;
+
+impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
+    type Value = String;
+    type Error = std::convert::Infallible;
+
+    fn leaf(&mut self, _node: &InNode, op: &InLeaf) -> Result<String, Self::Error> {
+        Ok(match op {
+            InLeaf::Slot { slot, wrapped } => {
+                format!("#{}{}", slot.slot, if *wrapped { "?" } else { "" })
+            }
+            InLeaf::Bound => "^".to_string(),
+        })
+    }
+
+    fn product(
+        &mut self,
+        _node: &InNode,
+        op: &InProduct,
+        children: crate::transform::Lowered<'_, IntoRust, String>,
+    ) -> Result<String, Self::Error> {
+        let args: Vec<String> = children
+            .iter()
+            .map(|(child, value)| format!("{}{value}", if child.link.by_ref { "&" } else { "" }))
+            .collect();
+        Ok(match op {
+            InProduct::Ctor { func, fallible } => format!(
+                "{func}{}({})",
+                if *fallible { "!" } else { "" },
+                args.join(", ")
+            ),
+            InProduct::Identity { clone } => {
+                format!(
+                    "self{}({})",
+                    if *clone { ".clone" } else { "" },
+                    args.join(", ")
+                )
+            }
+        })
+    }
+
+    fn choice(
+        &mut self,
+        _node: &InNode,
+        op: &InChoice,
+        variants: crate::transform::Lowered<'_, IntoRust, String>,
+    ) -> Result<String, Self::Error> {
+        let arms: Vec<String> = variants.into_iter().map(|(_, v)| v).collect();
+        Ok(format!("#{} ? {}", op.selector.slot, arms.join(" | ")))
+    }
+
+    fn optional(
+        &mut self,
+        _node: &InNode,
+        op: &InPresence,
+        _inner: &InNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(match op {
+            InPresence::Selector => format!("{value}?sel"),
+            InPresence::Flag(s) => format!("{value}?#{}", s.slot),
+            InPresence::Payload(s) => format!("{value}?^#{}", s.slot),
+        })
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &InNode,
+        op: &InSlot,
+        _inner: &InNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(format!("[{value}]*#{}", op.slot))
+    }
+}
+
+#[test]
+fn core_lowers_through_the_shared_visitor() {
+    // `z_sample_new(&ZKeyExpr, ZZBytes)` where BOTH arguments have their own
+    // default constructor: a product whose children are themselves built, one
+    // of them a dispatch. That is every into-Rust node kind in one tree, with
+    // a by-ref link over the nested one.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_sample_new(ke: &ZKeyExpr, payload: ZZBytes) -> ZSample { todo!() }",
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_zbytes_from_vec(v: Vec<u8>) -> ZZBytes { todo!() }",
+        "fn z_reply_sample(sample: ZSample) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZSample"),
+        variants: vec![Variant::Ctor(ident("z_sample_new"))],
+        default: true,
+    });
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZKeyExpr"),
+        variants: vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ],
+        default: true,
+    });
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZZBytes"),
+        variants: vec![Variant::Ctor(ident("z_zbytes_from_vec"))],
+        default: true,
+    });
+    exp.expands.push(ExpandDecl {
+        func: ident("z_reply_sample"),
+        param: ident("sample"),
+        declared_target: Some(key("ZSample")),
+        sel: ExpandSel::TopLevel,
+    });
+
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_reply_sample"), ident("sample")))
+        .expect("plan");
+
+    // The whole construction, read through the hooks alone: the key expression
+    // is a dispatch behind a by-ref link, the payload a single constructor, and
+    // every wire slot names its index in `plan.leaves`.
+    let rendered = plan
+        .tree
+        .lower(&mut RenderIn)
+        .expect("lowering cannot fail");
+    assert_eq!(
+        rendered,
+        "z_sample_new(&#0 ? z_keyexpr_try_from!(#1?) | self.clone(#2?), z_zbytes_from_vec(#3))"
+    );
+
+    // The signature is COLLECTED from those same nodes: each slot's name and
+    // type come from the node that uses it, in slot order.
+    let leaves: Vec<(String, String)> = plan
+        .leaves
+        .iter()
+        .map(|l| (l.name.to_string(), l.ty.spell().to_string()))
+        .collect();
+    assert_eq!(
+        leaves,
+        vec![
+            ("sample_ke_sel".to_string(), "i32".to_string()),
+            ("sample_ke_0".to_string(), "Option < String >".to_string()),
+            (
+                "sample_ke_1".to_string(),
+                "Option < & ZKeyExpr >".to_string()
+            ),
+            ("sample_payload".to_string(), "Vec < u8 >".to_string()),
+        ]
     );
 }

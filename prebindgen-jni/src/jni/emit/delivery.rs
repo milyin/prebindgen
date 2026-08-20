@@ -41,7 +41,7 @@ pub(crate) fn emit_unfold_delivery(
 ) -> TokenStream {
     use prebindgen_registry::unfold::UnfoldShape;
 
-    let n = plan.leaves.len();
+    let n = plan.leaves().len();
 
     // Builder-arg locals, one per leaf in declared order. The builder is a
     // generated typed `<Source>Builder<out R>` fun interface — its `run`
@@ -112,7 +112,7 @@ pub(crate) fn emit_unfold_delivery(
     // fold args are either the element WHOLE (M4) or its decomposed leaves (M5),
     // with `acc` the erased `A` (`Object`). `Option<Vec<T>>` additionally yields a
     // null result for `None` (the fold is skipped).
-    let opt_iterable = match &plan.shape {
+    let opt_iterable = match plan.shape() {
         UnfoldShape::Iterable(_) => Some(false),
         UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Iterable(_)) => {
             Some(true)
@@ -139,7 +139,7 @@ pub(crate) fn emit_unfold_delivery(
             }
         };
 
-        let loop_body = if let Some(element) = plan.element.as_ref() {
+        let loop_body = if let Some(element) = plan.element() {
             // Whole-element (M4): encode the element via its own converter —
             // a raw typed jvalue for a primitive-wire element, a JObject
             // otherwise (mirrors `leaf_is_prim`; the folder interface
@@ -247,7 +247,7 @@ pub(crate) fn emit_unfold_delivery(
         };
     }
 
-    match &plan.shape {
+    match plan.shape() {
         UnfoldShape::Base => {
             let statics = iface_statics(
                 iface.expect("builder interface spec derivable for a registered declaration"),
@@ -870,7 +870,7 @@ pub(crate) fn encode_plan_leaves(
     // module of the crate that defines it (multi-source bindings).
     let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
     let by_ref = plan.by_ref;
-    let n = plan.leaves.len();
+    let n = plan.leaves().len();
 
     // Typed `jvalue` argument expression per leaf, in leaf order: a non-null
     // primitive-wire leaf passes its raw primitive (`__objN` IS the jvalue);
@@ -878,7 +878,7 @@ pub(crate) fn encode_plan_leaves(
     // slot. Matches the descriptor [`crate::jni::iface`]
     // derives for the same leaf (primitive chunk vs object chunk).
     let mut arg_exprs: Vec<TokenStream> = Vec::with_capacity(n);
-    for (idx, leaf) in plan.leaves.iter().enumerate() {
+    for (idx, leaf) in plan.leaves().iter().enumerate() {
         let obj_ident = &obj_idents[idx];
         if leaf_is_prim(registry, leaf) {
             arg_exprs.push(quote!(#obj_ident));
@@ -887,7 +887,7 @@ pub(crate) fn encode_plan_leaves(
         }
     }
 
-    let hoisted = bind_hoists(&qualify, &plan.hoists, value, by_ref);
+    let hoisted = bind_hoists(&qualify, plan.hoists(), value, by_ref);
     let mut stmts = hoisted.stmts.clone();
 
     // Reach a leaf off the innermost value form it sits under, with that
@@ -916,10 +916,10 @@ pub(crate) fn encode_plan_leaves(
     // the returned value is the degenerate case of one segment covering
     // everything, while a value form contributes one per sum-typed field.
     let sum_segments: Vec<std::ops::Range<usize>> = (0..n)
-        .filter(|&i| plan.leaves[i].source == prebindgen_registry::unfold::LeafSource::SumTag)
+        .filter(|&i| plan.leaves()[i].source == prebindgen_registry::unfold::LeafSource::SumTag)
         .map(|start| {
             let end = (start + 1..n)
-                .take_while(|&i| plan.leaves[i].group.is_some())
+                .take_while(|&i| plan.leaves()[i].group.is_some())
                 .last()
                 .map_or(start + 1, |i| i + 1);
             start..end
@@ -934,11 +934,11 @@ pub(crate) fn encode_plan_leaves(
     // the arm too: emitted ahead of it, its `match` would reach a binding the
     // arm has not introduced yet.
     let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = plan
-        .hoists
+        .hoists()
         .iter()
         .enumerate()
         .filter_map(|(i, _)| {
-            plan.leaves
+            plan.leaves()
                 .iter()
                 .any(|l| hoisted.conditional(&l.path).is_some_and(|(j, ..)| j == i))
                 .then_some((i, TokenStream::new()))
@@ -946,7 +946,7 @@ pub(crate) fn encode_plan_leaves(
         .collect();
 
     for seg in &sum_segments {
-        let leaf = &plan.leaves[seg.start];
+        let leaf = &plan.leaves()[seg.start];
         let (base, base_is_ref, path, _) = rebase(leaf);
         // The value to `match` on. The selector's own path reaches the sum
         // (empty when the sum IS the value), and a step on it MAY be optional:
@@ -1019,7 +1019,7 @@ pub(crate) fn encode_plan_leaves(
         let (group_stmts, group_args) = encode_sum_group(
             ext,
             registry,
-            &plan.leaves[seg.clone()],
+            &plan.leaves()[seg.clone()],
             &obj_idents[seg.clone()],
             matched,
             fail,
@@ -1029,7 +1029,7 @@ pub(crate) fn encode_plan_leaves(
             None => group_stmts,
             Some((k, opt_e, bind)) => {
                 let ids: Vec<&syn::Ident> = obj_idents[seg.clone()].iter().collect();
-                let slots: Vec<Slot> = plan.leaves[seg.clone()]
+                let slots: Vec<Slot> = plan.leaves()[seg.clone()]
                     .iter()
                     .map(|l| leaf_slot(registry, l))
                     .collect();
@@ -1077,12 +1077,12 @@ pub(crate) fn encode_plan_leaves(
 
     let in_sum = |i: usize| sum_segments.iter().any(|s| s.contains(&i));
     let mut order: Vec<usize> = (0..n)
-        .filter(|&i| !plan.leaves[i].identity && !in_sum(i))
+        .filter(|&i| !plan.leaves()[i].identity && !in_sum(i))
         .collect();
-    order.extend((0..n).filter(|&i| plan.leaves[i].identity && !in_sum(i)));
+    order.extend((0..n).filter(|&i| plan.leaves()[i].identity && !in_sum(i)));
 
     for idx in order {
-        let leaf = &plan.leaves[idx];
+        let leaf = &plan.leaves()[idx];
         let obj_ident = &obj_idents[idx];
         // Route this leaf's statements: into its conditional arm, or straight
         // out. Shadows `stmts` for the rest of the body, so every `extend`
@@ -1442,17 +1442,17 @@ pub(crate) fn encode_plan_leaves(
         let idxs: Vec<usize> = (0..n)
             .filter(|&k| {
                 hoisted
-                    .conditional(&plan.leaves[k].path)
+                    .conditional(&plan.leaves()[k].path)
                     .is_some_and(|(j, ..)| j == i)
             })
             .collect();
         let ids: Vec<&syn::Ident> = idxs.iter().map(|&k| &obj_idents[k]).collect();
         let tys = idxs
             .iter()
-            .map(|&k| leaf_slot(registry, &plan.leaves[k]).ty);
+            .map(|&k| leaf_slot(registry, &plan.leaves()[k]).ty);
         let defaults = idxs
             .iter()
-            .map(|&k| leaf_slot(registry, &plan.leaves[k]).default);
+            .map(|&k| leaf_slot(registry, &plan.leaves()[k]).default);
         // Matched BY VALUE: the local is this arm's alone (every leaf under the
         // hoist is in it), so a consuming value form's fields move out here
         // exactly as they do at an unconditional one.

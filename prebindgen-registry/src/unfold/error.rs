@@ -17,11 +17,15 @@ pub enum UnfoldError {
     },
     MultipleIdentity {
         target: String,
+        /// Where in the decomposition — see [`UnfoldError::Unsupported::at`].
+        at: String,
     },
     /// A nested deconstructor recurses back into a type already on the nesting
     /// chain (`A → … → A`).
     Cycle {
         target: String,
+        /// Where in the decomposition — see [`UnfoldError::Unsupported::at`].
+        at: String,
     },
     /// A single-value (`Return`) delivery on a decomposition that does not
     /// flatten to exactly one leaf, or whose shape is `Iterable`.
@@ -38,6 +42,12 @@ pub enum UnfoldError {
     Unsupported {
         func: syn::Ident,
         reason: &'static str,
+        /// Where in the decomposition the transformation failed: the access
+        /// path from the returned value to the node that could not be built,
+        /// `value` at the root. A deconstructor splices nested ones, so naming
+        /// only the accessor leaves the reader to work out which nesting of it
+        /// is the one that failed.
+        at: String,
     },
     /// Two leaves of one deconstructor resolved to the same (literal) name.
     /// Author leaf names are explicit and emitted verbatim, so a collision is a
@@ -139,15 +149,15 @@ impl std::fmt::Display for UnfoldError {
                 "output expansion: accessor `{}` takes `{}` but the deconstructor decomposes `{}`",
                 accessor, takes, expected
             ),
-            UnfoldError::MultipleIdentity { target } => write!(
+            UnfoldError::MultipleIdentity { target, at } => write!(
                 f,
-                "output expansion: deconstructor for `{}` has more than one identity record",
-                target
+                "output expansion at `{}`: deconstructor for `{}` has more than one identity record",
+                at, target
             ),
-            UnfoldError::Cycle { target } => write!(
+            UnfoldError::Cycle { target, at } => write!(
                 f,
-                "output expansion: nested deconstructors form a cycle through `{}`",
-                target
+                "output expansion at `{}`: nested deconstructors form a cycle through `{}`",
+                at, target
             ),
             UnfoldError::ConvertNotSingle { func, reason } => write!(
                 f,
@@ -160,10 +170,10 @@ impl std::fmt::Display for UnfoldError {
                  reference functions declared via `.fun_accessor(...)`",
                 func
             ),
-            UnfoldError::Unsupported { func, reason } => write!(
+            UnfoldError::Unsupported { func, reason, at } => write!(
                 f,
-                "output expansion: `{}` not yet supported: {}",
-                func, reason
+                "output expansion of `{}` at `{}` not yet supported: {}",
+                func, at, reason
             ),
             UnfoldError::DuplicateLeafName { target, name } => write!(
                 f,

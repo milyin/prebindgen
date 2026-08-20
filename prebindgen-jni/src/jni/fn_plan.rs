@@ -166,7 +166,7 @@ pub(crate) struct UnfoldOutputPlan {
     pub optional: bool,
     /// Synthesized fixed-singleton delivery: no caller lambda, not generic.
     pub fixed_builder: bool,
-    /// `plan.element.is_some()` — whole-element (M4) vs decomposed (M5) fold.
+    /// `plan.element().is_some()` — whole-element (M4) vs decomposed (M5) fold.
     pub whole_element: bool,
     /// Kotlin type variable of the wrapper: `None` for a fixed builder,
     /// `"A"` for an `Iterable` fold (bare or `Optional`-wrapped), `"R"`
@@ -514,7 +514,7 @@ impl JniFunctionPlan {
                 .get(&(f.name.clone(), ident.clone()))
             {
                 let mut leaves = Vec::new();
-                for leaf in &plan.leaves {
+                for leaf in plan.leaves() {
                     // The lookup that stood here is gone: the fold leaf carries
                     // its own reading now, so there is nothing to fetch and
                     // nothing that can miss.
@@ -728,8 +728,8 @@ fn build_output(
     // Callback delivery: the return is decomposed to a foreign builder/fold
     // lambda; no output converter runs and the wire is the erased `JObject`.
     if let Some(plan) = unfold_plan.filter(|p| p.delivery == Delivery::Callback) {
-        let iterable_fold = super::is_iterable_fold(&plan.shape);
-        let optional = matches!(plan.shape, UnfoldShape::Optional(..));
+        let iterable_fold = super::is_iterable_fold(plan.shape());
+        let optional = matches!(plan.shape(), UnfoldShape::Optional(..));
         let fixed_builder = plan.fixed_builder;
         // The generic-surface rule (see `classify_output`): a fixed builder
         // is not generic; an `Iterable` fold — bare or `Optional`-wrapped —
@@ -755,7 +755,7 @@ fn build_output(
             iterable_fold,
             optional,
             fixed_builder,
-            whole_element: plan.element.is_some(),
+            whole_element: plan.element().is_some(),
             generic,
             iface,
         }));

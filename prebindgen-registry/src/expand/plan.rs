@@ -14,7 +14,12 @@
 pub use prebindgen_flat::shape::Shape as FoldShape;
 
 /// A resolved expansion for one `(function, parameter)`.
-#[derive(Clone)]
+///
+/// [`leaves`](Self::leaves) is readable but not settable from outside the
+/// crate, and neither is a plan constructible there: it is collected from
+/// [`Self::tree`] where the plan is built, and a caller that could set it could
+/// make a tree-reading adapter and a signature-reading one see different
+/// expansions.
 pub struct FoldPlan {
     /// Owned type the core construct produces — what the underlying call needs
     /// (before any [`Self::shape`] wrapping). A **reading**: `emit.spell(&target)` in an emission callback
@@ -25,34 +30,63 @@ pub struct FoldPlan {
     /// call-site concern (the resolver's `&_` handler shares the inner
     /// converter the same way), not part of the fold.
     pub by_ref: bool,
-    /// Outer shape over the core construct (`Construct` for a plain `T`/`&T`
-    /// param; `Optional(Construct)` for `Option<T>`/`Option<&T>`).
-    pub shape: FoldShape,
     /// Flattened wire leaves, in foreign-signature order.
-    pub leaves: Vec<FoldLeaf>,
-    /// Index into [`Self::leaves`] of the selector leaf; `None` for a single
-    /// constructor (the sole variant is applied unconditionally). Under an
-    /// [`Optional`](FoldShape::Optional) shape the selector also encodes
-    /// **absence**: `-1` = `None`, `0..n-1` = the taken arm.
-    pub selector: Option<usize>,
-    /// Index into [`Self::leaves`] of the explicit presence-flag (`bool`) leaf
-    /// for a **multi-argument** `Optional` shape (`Option<T>` built from a
-    /// constructor taking ≥2 args): the flag decides `Some`/`None`, the arg
-    /// leaves are plain (non-`Option`). `None` for a non-optional fold or the
-    /// legacy single-arg `Optional` (where presence rides the sole leaf's own
-    /// `Option`-ness). A separate flag avoids boxing a nullable primitive arg
-    /// (e.g. `Option<i32>` → `Integer?`) on the wire.
-    pub present: Option<usize>,
-    /// Dispatch arms — one for a single constructor, selector order for a
-    /// combined one.
-    pub variants: Vec<FoldVariant>,
+    ///
+    /// A derived view of [`Self::tree`]: every slot is described by the node
+    /// that uses it, and [`wire_leaves`](crate::expand::wire_leaves) collects
+    /// them.
+    pub(crate) leaves: Vec<FoldLeaf>,
+    /// The plan itself: the `Option` / `Vec` layers the parameter is written
+    /// with, and the construction under them (#442). Everything recursive about
+    /// an expansion lives here — a constructor argument that is itself built
+    /// has the same node kinds as the top level.
+    pub tree: crate::expand::InNode,
 }
 
 impl FoldPlan {
+    /// Flattened wire leaves, in foreign-signature order — see the field's own
+    /// note.
+    pub fn leaves(&self) -> &[FoldLeaf] {
+        &self.leaves
+    }
+
+    /// Outer shape over the core construct (`Construct` for a plain `T`/`&T`
+    /// param; `Optional(Construct)` for `Option<T>`/`Option<&T>`).
+    ///
+    /// A derived view of [`Self::tree`]: each layer is a node wrapping the
+    /// construction, and [`InNode::shape`](crate::expand::InNode::shape) reads
+    /// the stack back off them.
+    pub fn shape(&self) -> FoldShape {
+        self.tree.shape()
+    }
+
     /// True when the fold produces an `Option<_>` (outermost shape layer is
     /// `Optional`) — drives the by-ref call-site form (`folded.as_ref()`).
     pub fn produces_option(&self) -> bool {
-        matches!(self.shape, FoldShape::Optional((), _))
+        matches!(self.shape(), FoldShape::Optional((), _))
+    }
+
+    /// Index into [`Self::leaves`] of the explicit presence-flag (`bool`) leaf
+    /// for a **multi-argument** `Optional` shape (`Option<T>` built from a
+    /// constructor taking ≥2 args): the flag decides `Some`/`None`, the arg
+    /// leaves are plain (non-`Option`). `None` for a non-optional fold or a
+    /// single-argument `Optional` (where presence rides the layer's own
+    /// `Option` slot). A separate flag avoids boxing a nullable primitive arg
+    /// (e.g. `Option<i32>` → `Integer?`) on the wire.
+    pub fn present(&self) -> Option<usize> {
+        self.tree.present()
+    }
+
+    /// Index into [`Self::leaves`] of the selector leaf; `None` for a single
+    /// constructor (the sole variant is applied unconditionally). Under an
+    /// [`Optional`](FoldShape::Optional) layer the selector also encodes
+    /// **absence**: `-1` = `None`, `0..n-1` = the taken arm.
+    ///
+    /// Read off [`Self::tree`] rather than stored beside it: the dispatch is
+    /// the node, and a second copy of which slot selects it could disagree
+    /// with the node the emitter actually walks.
+    pub fn selector(&self) -> Option<usize> {
+        self.tree.selector()
     }
 }
 
@@ -73,58 +107,4 @@ pub struct FoldLeaf {
     /// [`TypeRef::scalar`](prebindgen_flat::flat::TypeRef::scalar), which
     /// pairs the kind with its own spelling and is placeless by construction.
     pub ty: prebindgen_flat::flat::TypeRef,
-}
-
-/// One dispatch arm of a [`FoldPlan`].
-#[derive(Clone)]
-pub struct FoldVariant {
-    /// `None` => identity (pass the decoded target value through). `Some` =>
-    /// call this constructor function.
-    pub ctor: Option<syn::Ident>,
-    /// Whether the constructor returns `Result` (its `Err` is routed through
-    /// the adapter's error channel). Always `false` for identity.
-    pub fallible: bool,
-    /// `true` for a borrowed identity arm (`&T` parameter): the input leaf is
-    /// `Option<&T>` and the fold clones it (`T: Clone`) so the caller's handle
-    /// is preserved rather than consumed. `false` otherwise.
-    pub clone: bool,
-    /// This variant's constructor inputs, in parameter order. Each is either a
-    /// flat wire leaf or a recursively-built sub-value (a parameter that is
-    /// itself a type with a default constructor — recursive input).
-    pub inputs: Vec<FoldArg>,
-}
-
-/// One constructor-parameter input of a [`FoldVariant`].
-#[derive(Clone)]
-pub enum FoldArg {
-    /// Decode the flat wire leaf at this index into [`FoldPlan::leaves`].
-    ///
-    /// The `bool` is the **passthrough** marker for selector-dispatched arms:
-    /// `false` = the leaf is `Option`-wrapped by selector presence and is
-    /// unwrapped before the constructor call (a missing input is an error);
-    /// `true` = the constructor argument is itself an `Option<…>`, so the leaf
-    /// keeps the argument's own type and passes through unwrapped (`None` is a
-    /// legitimate value for the taken arm — arm-taken-ness is decided by the
-    /// selector alone). Always `false` outside dispatched arms.
-    Leaf(usize, bool),
-    /// Build this parameter by recursively folding its own default
-    /// constructor (the parameter's type is itself a ptr_class with a default
-    /// input). Its leaves live in the shared flat [`FoldPlan::leaves`].
-    Build(Box<FoldBuild>),
-}
-
-/// A recursively-nested construction for one [`FoldArg::Build`] parameter — the
-/// same dispatch shape as a top-level [`FoldPlan`]'s core, minus the outer
-/// `Option`/`Vec` wrapping (a nested param is built by value).
-#[derive(Clone)]
-pub struct FoldBuild {
-    /// Owned type this nested build produces (the constructor parameter type).
-    pub target: prebindgen_flat::flat::TypeRef,
-    /// `true` when the consuming parameter is `&T` (the built value is borrowed
-    /// at the call site).
-    pub by_ref: bool,
-    /// Selector leaf index for a combined nested build; `None` for a single one.
-    pub selector: Option<usize>,
-    /// Dispatch arms (recursive).
-    pub variants: Vec<FoldVariant>,
 }

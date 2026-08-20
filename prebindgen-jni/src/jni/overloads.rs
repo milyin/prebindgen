@@ -33,7 +33,7 @@
 use kotlin_codegen::KtVis;
 use kotlin_codegen::{KtBody, KtCode, KtFun, KtParam, KtType};
 use prebindgen_registry::{
-    expand::{FoldArg, FoldPlan},
+    expand::{FoldPlan, InNode},
     Conversions,
 };
 
@@ -183,11 +183,7 @@ fn rust_type_erased(
 /// outer shape is in scope — its arms are filtered to single-leaf ones by
 /// [`resolve_split`] (nullable-arm rule, see module docs).
 fn plan_in_scope(plan: &FoldPlan) -> bool {
-    plan.selector.is_some()
-        && !plan
-            .variants
-            .iter()
-            .any(|v| v.inputs.iter().any(|a| matches!(a, FoldArg::Build(_))))
+    plan.selector().is_some() && plan.tree.arms().iter().all(|a| a.leaf_args().is_some())
 }
 
 /// One resolved split parameter of a function, positioned against the rendered
@@ -198,7 +194,7 @@ struct Split<'a> {
     plan: &'a FoldPlan,
     /// Start of this param's contiguous leaf block in `sel_fun.params`.
     start: usize,
-    /// Block length (`plan.leaves.len()`).
+    /// Block length (`plan.leaves().len()`).
     len: usize,
     /// Selector-leaf index within the block.
     sel_idx: usize,
@@ -251,14 +247,15 @@ fn non_null(mut ty: KtType) -> KtType {
 /// Returns `None` if any input is not a flat leaf.
 fn variant_typed_params(
     registry: &impl Conversions<KotlinMeta>,
-    variant: &prebindgen_registry::expand::FoldVariant,
+    arm: &InNode,
     origin: &syn::Ident,
     block: &[KtParam],
     multi: bool,
     optional_plan: bool,
 ) -> Option<Vec<(KtParam, usize)>> {
     let origin_kt = kt_param_name(&origin.to_string());
-    let (names, optional): (Vec<String>, Vec<bool>) = match &variant.ctor {
+    let ctor = arm.ctor();
+    let (names, optional): (Vec<String>, Vec<bool>) = match ctor {
         Some(cf) => {
             let f = registry.flat().function(&cf)?;
             // `Optional` off the kind, not `is_option` off a path: the same
@@ -280,13 +277,10 @@ fn variant_typed_params(
         None => (vec![origin_kt.clone()], vec![false]),
     };
     let mut out = Vec::new();
-    for (m, arg) in variant.inputs.iter().enumerate() {
-        let FoldArg::Leaf(idx, _) = arg else {
-            return None;
-        };
-        let slot = block.get(*idx)?;
+    for (m, idx) in arm.leaf_args()?.into_iter().enumerate() {
+        let slot = block.get(idx)?;
         let base = names.get(m).cloned().unwrap_or_else(|| slot.name.clone());
-        let name = if multi && variant.ctor.is_some() {
+        let name = if multi && ctor.is_some() {
             prefixed(&origin_kt, &base)
         } else {
             base
@@ -296,7 +290,7 @@ fn variant_typed_params(
         } else {
             non_null(slot.ty.clone())
         };
-        out.push((KtParam::new(&name, ty), *idx));
+        out.push((KtParam::new(&name, ty), idx));
     }
     Some(out)
 }
@@ -337,7 +331,7 @@ fn resolve_split<'a>(
             )
         });
     assert!(
-        plan.selector.is_some(),
+        plan.selector().is_some(),
         "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` has a single variant — there \
          is nothing to split (it already flattens to one signature)",
         f.name
@@ -349,7 +343,7 @@ fn resolve_split<'a>(
         f.name
     );
     let leaf_names: Vec<String> = plan
-        .leaves
+        .leaves()
         .iter()
         .map(|l| kt_param_name(&l.name.to_string()))
         .collect();
@@ -362,18 +356,19 @@ fn resolve_split<'a>(
         )
     });
     let block = &sel_fun.params[start..start + len];
-    let sel_idx = plan.selector.expect("selector present");
+    let sel_idx = plan.selector().expect("selector present");
     // Nullable-arm rule: an `Option<…>` param is overloadable through its
     // single-leaf arms only — the arm's one nullable param doubles as the
     // presence flag (`null` = absent). Multi-leaf arms stay selector-only.
     let optional = plan.produces_option();
     let arms: Vec<(usize, Vec<(KtParam, usize)>)> = plan
-        .variants
-        .iter()
+        .tree
+        .arms()
+        .into_iter()
         .enumerate()
-        .filter(|(_, v)| !optional || v.inputs.len() == 1)
-        .map(|(vi, v)| {
-            let typed = variant_typed_params(registry, v, &param, block, multi, optional)
+        .filter(|(_, a)| !optional || a.leaf_args().is_some_and(|l| l.len() == 1))
+        .map(|(vi, a)| {
+            let typed = variant_typed_params(registry, a, &param, block, multi, optional)
                 .unwrap_or_else(|| {
                     panic!(
                         "fun!({}).split_on_param(\"{param_name}\"): an arm has a non-flat input; \
@@ -458,7 +453,7 @@ pub(crate) fn render_param_overloads(
                 .iter()
                 .zip(combo)
                 .flat_map(|(s, &ai)| {
-                    let ctor = s.plan.variants[s.arms[ai].0].ctor.as_ref();
+                    let ctor = s.plan.tree.arms()[s.arms[ai].0].ctor();
                     arm_erased_sig(ext, registry, &s.plan.target.key(), ctor)
                 })
                 .collect()
@@ -581,7 +576,7 @@ fn combo_label(splits: &[Split], combo: &[usize]) -> String {
         .iter()
         .zip(combo)
         .map(|(s, &ai)| {
-            let v = match &s.plan.variants[s.arms[ai].0].ctor {
+            let v = match s.plan.tree.arms()[s.arms[ai].0].ctor() {
                 Some(c) => c.to_string(),
                 None => "variant_self()".to_string(),
             };
@@ -594,6 +589,10 @@ fn combo_label(splits: &[Split], combo: &[usize]) -> String {
 #[cfg(test)]
 mod tests {
     use prebindgen::SourceLocation;
+    use prebindgen_registry::{
+        expand::{InChild, InLeaf, InLink, InProduct, InSlot},
+        transform::TransformKind,
+    };
 
     use super::*;
 
@@ -608,11 +607,40 @@ mod tests {
             vec![(syn::Item::Fn(ctor), SourceLocation::default())],
         ))
         .expect("index constructor");
-        let variant = prebindgen_registry::expand::FoldVariant {
-            ctor: Some(syn::parse_quote!(z_summary_optional)),
-            fallible: false,
-            clone: false,
-            inputs: vec![FoldArg::Leaf(0, false), FoldArg::Leaf(1, false)],
+        // The arm as `expand` builds it: the constructor over one flat wire
+        // slot per parameter.
+        let ctor_name: syn::Ident = syn::parse_quote!(z_summary_optional);
+        let f = registry
+            .flat()
+            .function(&ctor_name)
+            .expect("the indexed constructor");
+        let arm = InNode {
+            ty: f.ret.clone(),
+            kind: TransformKind::Product {
+                op: InProduct::Ctor {
+                    func: ctor_name.clone(),
+                    fallible: false,
+                },
+                children: f
+                    .params
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| InChild {
+                        link: InLink { by_ref: false },
+                        node: InNode {
+                            ty: p.ty.clone(),
+                            kind: TransformKind::Leaf(InLeaf::Slot {
+                                slot: InSlot {
+                                    slot: i,
+                                    name: p.name.clone(),
+                                    ty: p.ty.clone(),
+                                },
+                                wrapped: false,
+                            }),
+                        },
+                    })
+                    .collect(),
+            },
         };
         // Both slots are nullable in the selector wrapper. Only the first is
         // nullable in the constructor's actual signature.
@@ -623,7 +651,7 @@ mod tests {
 
         let params = variant_typed_params(
             &registry,
-            &variant,
+            &arm,
             &syn::parse_quote!(expected),
             &block,
             false,

@@ -34,6 +34,7 @@ use crate::{
 
 mod error;
 mod plan;
+mod tree;
 
 pub use self::{
     error::{UnfoldDeclError, UnfoldError},
@@ -41,7 +42,12 @@ pub use self::{
         steps_are_movable, DeconId, DeconSpec, Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldPlan,
         UnfoldShape,
     },
+    tree::{
+        element_of, flat_tree, flat_view, shape_of, shaped, OutChild, OutLeaf, OutLink, OutNode,
+        OutOfRust, OutProduct,
+    },
 };
+use crate::transform::TransformKind;
 
 // ──────────────────────────────────────────────────────────────────────
 // Declarations (populated by the language builder)
@@ -457,6 +463,7 @@ pub(crate) fn apply<M>(
                     by_ref,
                     core_ty,
                     UnfoldShape::Base,
+                    &[],
                     &records,
                     decon,
                 )?;
@@ -674,13 +681,18 @@ fn wire_fixed_returns<M>(
             }
         }
         register_leaves(registry, &vd.leaves);
+        // `layer_types` ends at the core the shape stops on, so the layers are
+        // everything before it.
+        let layer_tys = &layers.layer_types[..layers.layer_types.len() - 1];
+        let tree = shaped(&shape, layer_tys, flat_tree(&vd.source, &vd.leaves));
         let plan = UnfoldPlan {
             source: vd.source.clone(),
             decon: Some(decon.clone()),
             by_ref,
-            shape,
+            shape: shape_of(&tree),
+            element: element_of(&tree).cloned(),
+            tree: std::rc::Rc::new(tree),
             leaves: vd.leaves.clone(),
-            element: None,
             delivery: Delivery::Callback,
             convert_out_ty: None,
             fixed_builder: true,
@@ -724,12 +736,15 @@ fn wire_fixed_callbacks<M>(
                 // A run of `T` is an Iterable fold over the element; anything else
                 // is a Base fold over the value itself. `Sequence` is the one
                 // question, and it covers `[T]` and `Vec<T>` alike.
-                let (shape, matches_key) = match after_ref.sequence_elem() {
+                let (shape, layer_tys, matches_key) = match after_ref.sequence_elem() {
                     Some(elem) => (
                         UnfoldShape::Iterable(Box::new(UnfoldShape::Base)),
+                        // The run itself, past the borrow the shape was read
+                        // through.
+                        vec![after_ref.clone()],
                         elem.key() == vd.key,
                     ),
-                    None => (UnfoldShape::Base, after_ref.key() == vd.key),
+                    None => (UnfoldShape::Base, Vec::new(), after_ref.key() == vd.key),
                 };
                 if !matches_key {
                     continue;
@@ -739,13 +754,15 @@ fn wire_fixed_callbacks<M>(
                     continue;
                 }
                 register_leaves(registry, &vd.leaves);
+                let tree = shaped(&shape, &layer_tys, flat_tree(&vd.source, &vd.leaves));
                 let plan = UnfoldPlan {
                     source: vd.source.clone(),
                     decon: Some(decon.clone()),
                     by_ref,
-                    shape,
+                    shape: shape_of(&tree),
+                    element: element_of(&tree).cloned(),
+                    tree: std::rc::Rc::new(tree),
                     leaves: vd.leaves.clone(),
-                    element: None,
                     delivery: Delivery::Callback,
                     convert_out_ty: None,
                     fixed_builder: true,
@@ -801,10 +818,15 @@ pub(crate) fn apply_leaf_vec_folds<M>(
                 let bare = peel_borrow(vec_elem).1;
                 if is_nominated(bare) {
                     let inner_shape = UnfoldShape::Iterable(Box::new(UnfoldShape::Base));
-                    let shape = if optional {
-                        UnfoldShape::Optional((), Box::new(inner_shape))
+                    // The types the layers wrap, outermost first: the declared
+                    // return, and under an `Option` the `Vec` inside it.
+                    let (shape, layer_tys) = if optional {
+                        (
+                            UnfoldShape::Optional((), Box::new(inner_shape)),
+                            vec![ret.clone(), after_opt.clone()],
+                        )
                     } else {
-                        inner_shape
+                        (inner_shape, vec![ret.clone()])
                     };
                     registry.require_output(vec_elem);
                     // The fold delivers the return element-by-element, so the
@@ -815,9 +837,10 @@ pub(crate) fn apply_leaf_vec_folds<M>(
                     // JObject-shaped), and de-requiring keeps that `None` from
                     // being flagged as an unresolved-required error.
                     registry.unrequire_output(&ret);
-                    registry
-                        .unfold_plans
-                        .insert(func.clone(), whole_leaf_fold_plan(vec_elem, shape));
+                    registry.unfold_plans.insert(
+                        func.clone(),
+                        whole_leaf_fold_plan(vec_elem, shape, &layer_tys),
+                    );
                 }
             }
         }
@@ -842,8 +865,13 @@ pub(crate) fn apply_leaf_vec_folds<M>(
                     continue;
                 }
                 registry.require_output(elem);
-                let plan =
-                    whole_leaf_fold_plan(elem, UnfoldShape::Iterable(Box::new(UnfoldShape::Base)));
+                let plan = whole_leaf_fold_plan(
+                    elem,
+                    UnfoldShape::Iterable(Box::new(UnfoldShape::Base)),
+                    // The run itself, past the borrow the shape was read
+                    // through.
+                    std::slice::from_ref(after_ref),
+                );
                 registry.callback_arg_plans.insert(key, plan);
             }
         }
@@ -857,14 +885,31 @@ pub(crate) fn apply_leaf_vec_folds<M>(
 fn whole_leaf_fold_plan(
     vec_elem: &prebindgen_flat::flat::TypeRef,
     shape: UnfoldShape,
+    layer_tys: &[prebindgen_flat::flat::TypeRef],
 ) -> UnfoldPlan {
+    // Nothing is taken apart: a bare leaf under the run IS the whole element,
+    // crossing through its own output converter.
+    let tree = shaped(
+        &shape,
+        layer_tys,
+        OutNode {
+            ty: vec_elem.clone(),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: false,
+                identity: false,
+                source: LeafSource::Accessor,
+                group: None,
+            }),
+        },
+    );
     UnfoldPlan {
         source: vec_elem.clone(),
         decon: None,
         by_ref: peel_borrow(vec_elem).0,
-        shape,
+        shape: shape_of(&tree),
+        element: element_of(&tree).cloned(),
+        tree: std::rc::Rc::new(tree),
         leaves: vec![],
-        element: Some(vec_elem.clone()),
         delivery: Delivery::Callback,
         convert_out_ty: None,
         fixed_builder: true,
@@ -1001,6 +1046,7 @@ fn process_decl<M>(
                     .map(|(_, e)| e.clone())
                     .ok_or_else(|| UnfoldError::Unsupported {
                         func: ed.func.clone(),
+                        at: node_path(&[]),
                         reason: "convert_error/deconstruct_error on a non-Result return",
                     })?
             }
@@ -1031,14 +1077,20 @@ fn process_decl<M>(
             if inner.optional_inner().is_some() {
                 return Err(UnfoldError::Unsupported {
                     func: ed.func.clone(),
+                    at: node_path(&[]),
                     reason: "Vec<Option<…>> returns",
                 });
             }
             let iterable = UnfoldShape::Iterable(Box::new(UnfoldShape::Base));
-            let shape = if optional {
-                UnfoldShape::Optional((), Box::new(iterable))
+            // The types the layers wrap, outermost first: the declared return,
+            // and under an `Option` the `Vec` inside it.
+            let (shape, layer_tys) = if optional {
+                (
+                    UnfoldShape::Optional((), Box::new(iterable)),
+                    vec![ret_ty.clone(), after_opt.clone()],
+                )
             } else {
-                iterable
+                (iterable, vec![ret_ty.clone()])
             };
             // The fold delivers the return element-by-element, so the
             // whole-collection converter is not needed — and for an
@@ -1061,7 +1113,9 @@ fn process_decl<M>(
                 let records = d.records.clone();
                 let decon = decl_id(&ekey, d);
                 register_decon_spec(registry, acc, &decon, &records, element)?;
-                let plan = build_plan(acc, registry, ed, by_ref, element, shape, &records, decon)?;
+                let plan = build_plan(
+                    acc, registry, ed, by_ref, element, shape, &layer_tys, &records, decon,
+                )?;
                 for leaf in &plan.leaves {
                     registry.require_output(&leaf.out_ty);
                 }
@@ -1073,41 +1127,43 @@ fn process_decl<M>(
                 // crosses whole through its own converter.
                 let by_ref = peel_borrow(inner).0;
                 registry.require_output(inner);
-                UnfoldPlan {
-                    source: inner.clone(),
-                    decon: None,
-                    by_ref,
-                    shape,
-                    leaves: vec![],
-                    element: Some(inner.clone()),
-                    delivery: ed.delivery,
-                    convert_out_ty: None,
-                    fixed_builder: false,
-                    hoists: Vec::new(),
-                }
+                let mut plan = whole_leaf_fold_plan(inner, shape, &layer_tys);
+                plan.by_ref = by_ref;
+                plan.delivery = ed.delivery;
+                plan.fixed_builder = false;
+                plan
             }
         } else {
             // Scalar/decomposed arm. The `Option` peel already happened above
             // for `Output` (exactly one layer — `Option<Option<…>>` is NOT
             // re-peeled and fails as "no deconstructor" for the inner
             // `Option`); for `Error` it happens here, unchanged.
-            let (optional, core_ty) = match ed.target {
-                DeconTarget::Output => (optional, after_opt),
+            // `opt_ty` is the type the `Option` layer wraps — the declared
+            // return for an output, the error type for an error target.
+            let (optional, core_ty, opt_ty) = match ed.target {
+                DeconTarget::Output => (optional, after_opt, &ret_ty),
                 DeconTarget::Error => match after_opt.optional_inner() {
-                    Some(inner) => (true, inner),
-                    None => (false, after_opt),
+                    Some(inner) => (true, inner, after_opt),
+                    None => (false, after_opt, after_opt),
                 },
             };
             let (by_ref, source) = peel_borrow(core_ty);
             let source_key = source.key();
-            let shape = if optional {
-                UnfoldShape::Optional((), Box::new(UnfoldShape::Base))
+            // The `Option` layer wraps the type it was peeled from, which for
+            // an error target may be the inner one rather than the return.
+            let (shape, layer_tys) = if optional {
+                (
+                    UnfoldShape::Optional((), Box::new(UnfoldShape::Base)),
+                    vec![opt_ty.clone()],
+                )
             } else {
-                UnfoldShape::Base
+                (UnfoldShape::Base, Vec::new())
             };
             let (records, decon) = resolve_deconstructor(acc, &source_key, ed)?;
             register_decon_spec(registry, acc, &decon, &records, source)?;
-            let plan = build_plan(acc, registry, ed, by_ref, source, shape, &records, decon)?;
+            let plan = build_plan(
+                acc, registry, ed, by_ref, source, shape, &layer_tys, &records, decon,
+            )?;
             for leaf in &plan.leaves {
                 registry.require_output(&leaf.out_ty);
             }
@@ -1185,24 +1241,9 @@ fn register_decon_spec<M>(
     if registry.decon_plans.contains_key(decon) {
         return Ok(());
     }
-    let mut leaves: Vec<UnfoldLeaf> = Vec::new();
-    let mut visited: HashSet<TypeKey> = HashSet::new();
-    visited.insert(source.key());
-    flatten(
-        acc,
-        registry,
-        records,
-        source,
-        &[],
-        &[],
-        true,
-        false,
-        &mut visited,
-        &mut leaves,
-        // A `DeconSpec` describes the leaf list only — signature artifacts are
-        // derived from it, never emitted code — so its hoists are discarded.
-        &mut Vec::new(),
-    )?;
+    // A `DeconSpec` describes the leaf list only — signature artifacts are
+    // derived from it, never emitted code — so the tree's hoists are dropped.
+    let (leaves, _) = flat_view(&build_tree(acc, registry, records, source, true)?);
     require_unique_leaf_names(source, &leaves)?;
     registry.decon_plans.insert(
         decon.clone(),
@@ -1258,26 +1299,13 @@ fn build_plan<M>(
     by_ref: bool,
     source: &prebindgen_flat::flat::TypeRef,
     shape: UnfoldShape,
+    layer_tys: &[prebindgen_flat::flat::TypeRef],
     records: &[DeconRecord],
     decon: DeconId,
 ) -> Result<UnfoldPlan, UnfoldError> {
-    let mut leaves: Vec<UnfoldLeaf> = Vec::new();
-    let mut visited: HashSet<TypeKey> = HashSet::new();
-    visited.insert(source.key());
-    let mut hoists: Vec<Hoist> = Vec::new();
-    flatten(
-        acc,
-        registry,
-        records,
-        source,
-        &[],
-        &[],
-        by_ref,
-        false,
-        &mut visited,
-        &mut leaves,
-        &mut hoists,
-    )?;
+    let core = build_tree(acc, registry, records, source, by_ref)?;
+    let tree = shaped(&shape, layer_tys, core);
+    let (leaves, hoists) = flat_view(&tree);
     require_unique_leaf_names(source, &leaves)?;
     require_root_identity_last(by_ref, source, &leaves)?;
 
@@ -1285,9 +1313,10 @@ fn build_plan<M>(
         source: source.clone(),
         decon: Some(decon),
         by_ref,
-        shape,
+        shape: shape_of(&tree),
+        element: element_of(&tree).cloned(),
+        tree: std::rc::Rc::new(tree),
         leaves,
-        element: None,
         delivery: ed.delivery,
         convert_out_ty: None,
         fixed_builder: false,
@@ -1324,21 +1353,28 @@ fn require_root_identity_last(
     Ok(())
 }
 
-/// Recursively flatten an accessor's records into [`UnfoldLeaf`]s.
+/// Recursively read an accessor's records into the children of one
+/// [out-of-Rust product node](OutProduct::Records).
+///
+/// The leaf list the plans expose is [derived](flat_view) from what this
+/// builds — names, access paths and nullability all live on the links, so this
+/// walk states each level once instead of carrying an accumulated copy of
+/// everything above it.
 ///
 /// * `source` — the type whose accessor `records` belong to (the root
 ///   on the first call, a nested child type on recursion).
 /// * `path_prefix` — accessor chain from the root value to `source` (empty at
 ///   the root; `[…, nesting_accessor]` when recursing into a nested child).
+///   Only [`place_is_owned`] reads it; the emitted paths come from the links.
 /// * `by_ref` — the top-level return/element borrow-ness. The identity leaf is
 ///   **owned** (`source`) only at the root of an owned value (`path_prefix`
 ///   empty && `!by_ref`) — a `Copy` value delivers itself by copy and an
 ///   opaque handle moves; everywhere else it is **borrowed** (`&source`,
 ///   cloned).
-/// * `nullable` — `true` once any nesting accessor on the path returned
-///   `Option` (the reached value may be absent ⇒ the leaf is `null`).
 /// * `visited` — type keys on the current nesting chain (cycle guard; entries
 ///   are removed after each nested recursion so sibling records may reuse a type).
+/// * `hoists` — the value forms bound so far, the input to [`place_is_owned`].
+///   The plan's own hoist list is derived from the tree, not from this.
 #[allow(clippy::too_many_arguments)]
 fn flatten<M>(
     acc: &Deconstructors,
@@ -1346,21 +1382,12 @@ fn flatten<M>(
     records: &[DeconRecord],
     source: &prebindgen_flat::flat::TypeRef,
     path_prefix: &[PathStep],
-    name_prefix: &[String],
     by_ref: bool,
-    nullable: bool,
     visited: &mut HashSet<TypeKey>,
-    leaves: &mut Vec<UnfoldLeaf>,
     hoists: &mut Vec<Hoist>,
-) -> Result<(), UnfoldError> {
+) -> Result<Vec<OutChild>, UnfoldError> {
     let source_key = source.key();
-    // The author-supplied (literal) leaf-name segment at this level, appended
-    // to the inherited chain prefix. Segments are joined with `"__"`.
-    let seg_name = |name: &str| -> Vec<String> {
-        let mut v = name_prefix.to_vec();
-        v.push(name.to_string());
-        v
-    };
+    let mut children: Vec<OutChild> = Vec::new();
     // Identity uniqueness is per accessor (one move/clone of the value
     // at this level); nested levels each get their own identity budget.
     let mut seen_identity = false;
@@ -1371,6 +1398,7 @@ fn flatten<M>(
                 if seen_identity {
                     return Err(UnfoldError::MultipleIdentity {
                         target: source_key.to_string(),
+                        at: node_path(path_prefix),
                     });
                 }
                 seen_identity = true;
@@ -1382,9 +1410,6 @@ fn flatten<M>(
                 // + projection come from this `out_ty`'s output converter, so
                 // this is what decides whether the leaf is boxed by move or
                 // cloned through the borrowed-opaque one.
-                // A plan field: the drop to spelling happens here, where the value
-                // is stored for emission, and the borrowed form is composed rather
-                // than looked up because no source wrote it.
                 // The borrowed form is COMPOSED — no source wrote it — and the
                 // composition pairs the kind with its own spelling, so nothing
                 // downstream has to look either up.
@@ -1393,19 +1418,20 @@ fn flatten<M>(
                 } else {
                     source.borrowed()
                 };
-                leaves.push(UnfoldLeaf {
-                    name: if path_prefix.is_empty() {
-                        "handle".to_string()
-                    } else {
-                        name_prefix.join("__")
-                    },
-                    path: path_prefix.to_vec(),
+                // The identity names nothing of its own: it IS the value at the
+                // level it sits on, so it takes that level's name chain (and
+                // `"handle"` at the root, where there is none).
+                children.push(leaf_child(
+                    Vec::new(),
+                    Vec::new(),
                     out_ty,
-                    identity: true,
-                    nullable,
-                    source: LeafSource::Accessor,
-                    group: None,
-                });
+                    OutLeaf {
+                        nullable: false,
+                        identity: true,
+                        source: LeafSource::Accessor,
+                        group: None,
+                    },
+                ));
             }
             DeconRecord::Fields {
                 func,
@@ -1416,7 +1442,7 @@ fn flatten<M>(
                 // The value form is called once; every field hangs off that one
                 // call, so the whole record shares a single `Call` step and the
                 // emitter can hoist it.
-                accessor_signature(registry, func, &source.key())?;
+                let form_ty = accessor_signature(registry, func, &source.key())?;
                 // The declarator states whether the value is given away; the
                 // signature has to agree, or the emitted call would not compile
                 // in the consumer's crate. Checked rather than inferred so that
@@ -1425,6 +1451,7 @@ fn flatten<M>(
                 if consuming != accessor_consumes(registry, func) {
                     return Err(UnfoldError::Unsupported {
                         func: func.clone(),
+                        at: node_path(path_prefix),
                         reason: if consuming {
                             "declared as a CONSUMING value form (`.fields_self_into(..)`) but the \
                              accessor borrows its receiver — declare it with `.fields(..)`, or \
@@ -1436,17 +1463,18 @@ fn flatten<M>(
                         },
                     });
                 }
+                let form_step = PathStep::call(func.clone(), false, false);
                 let mut root_path = path_prefix.to_vec();
-                root_path.push(PathStep::call(func.clone(), false, false));
+                root_path.push(form_step.clone());
                 // A hoist below an optional step is CONDITIONAL: it binds an
                 // `Option<TStruct>` local (built only in the `Some` arm) and
                 // every leaf under it is null when the value is absent — which
-                // is the nullability `flatten` already propagates down here.
-                // What it cannot do is nest: composing a second hoist off a
-                // conditional one would have to reach through the outer
-                // `Option`, and the binder has no arm to put that in. One level
-                // is the shape real bindings need (`Option<&Sample>` delivering
-                // a sample's value form), so implement that and name the rest.
+                // is the nullability the links already carry. What it cannot do
+                // is nest: composing a second hoist off a conditional one would
+                // have to reach through the outer `Option`, and the binder has
+                // no arm to put that in. One level is the shape real bindings
+                // need (`Option<&Sample>` delivering a sample's value form), so
+                // implement that and name the rest.
                 //
                 // A top-level `Option<T>` is represented by
                 // `UnfoldShape::Optional`, not by a path step, and is unaffected.
@@ -1457,6 +1485,7 @@ fn flatten<M>(
                 {
                     return Err(UnfoldError::Unsupported {
                         func: func.clone(),
+                        at: node_path(&root_path),
                         reason: "a value form nested under another one that is reached through \
                                  `Option` — conditional hoists do not nest",
                     });
@@ -1473,22 +1502,22 @@ fn flatten<M>(
                 if consuming && records.len() > 1 {
                     return Err(UnfoldError::Unsupported {
                         func: func.clone(),
+                        at: node_path(&root_path),
                         reason: "a consuming value form must be the only record of its \
                                  declaration — it moves the value, so `.field_self()` or \
                                  a sibling `.field()` would read a moved value",
                     });
                 }
-                // Evaluate this value form ONCE. Recorded at the prefix it sits
-                // at rather than as a lone accessor, so a nested value form
-                // (this record reached through another one's field) gets its own
-                // hoist instead of being rebuilt per child leaf. `path_prefix`
-                // grows as `flatten` descends, so the list comes out
-                // outermost-first.
+                // Evaluate this value form ONCE. The node is what says so — the
+                // derived view turns it into the [`Hoist`] at its own path — and
+                // this local copy is what [`place_is_owned`] consults while the
+                // walk is still running.
                 hoists.push(Hoist {
                     prefix: root_path.clone(),
                     consuming,
                 });
 
+                let mut form_children: Vec<OutChild> = Vec::new();
                 for fr in fields {
                     // The declaration carries the field's reading, so nothing is
                     // looked up and nothing is re-classified.
@@ -1516,6 +1545,7 @@ fn flatten<M>(
                             Some(_) => {
                                 return Err(UnfoldError::Cycle {
                                     target: child_key.to_string(),
+                                    at: node_path(&root_path),
                                 });
                             }
                             None => None,
@@ -1529,68 +1559,103 @@ fn flatten<M>(
                     // the whole `Option<F>` is what the converter takes — the
                     // same rule that makes a terminal accessor's `Option` ride
                     // its converter instead of being unwrapped.
-                    let mut field_path = root_path.clone();
                     let (last, lead) = fr
                         .members
                         .split_last()
                         .expect("a field record addresses at least one member");
                     // Only the LAST member can be optional — an inlined nested
                     // class is reached directly, never through an `Option`.
-                    field_path.extend(lead.iter().map(|m| PathStep::field(m.clone(), false)));
-                    field_path.push(PathStep::field(last.clone(), opt && decomposed));
+                    let mut field_steps: Vec<PathStep> = lead
+                        .iter()
+                        .map(|m| PathStep::field(m.clone(), false))
+                        .collect();
+                    field_steps.push(PathStep::field(last.clone(), opt && decomposed));
 
-                    // Adapter-built leaves: rebase each onto this field's path
-                    // and name. Their internal structure (a selector plus its
-                    // groups) is opaque here and passes through untouched.
+                    // Adapter-built leaves: hang each off this field's link and
+                    // name. Their internal structure (a selector plus its
+                    // groups) is opaque here and passes through untouched — the
+                    // field's own `Option` rides each leaf, since the leaves are
+                    // where this level ends.
                     if let FieldDecon::Leaves(built) = &fr.decon {
                         for l in built {
-                            let mut path = field_path.clone();
-                            path.extend(l.path.iter().cloned());
-                            let mut name = seg_name(&fr.name);
-                            name.push(l.name.clone());
-                            leaves.push(UnfoldLeaf {
-                                name: name.join("__"),
-                                path,
-                                nullable: l.nullable || nullable || opt,
-                                ..l.clone()
-                            });
+                            let mut steps = field_steps.clone();
+                            steps.extend(l.path.iter().cloned());
+                            form_children.push(leaf_child(
+                                steps,
+                                vec![fr.name.clone(), l.name.clone()],
+                                l.out_ty.clone(),
+                                OutLeaf {
+                                    nullable: l.nullable || opt,
+                                    identity: l.identity,
+                                    source: l.source.clone(),
+                                    group: l.group,
+                                },
+                            ));
                         }
                         continue;
                     }
 
                     if let Some(child_records) = child_records {
+                        let mut field_path = root_path.clone();
+                        field_path.extend(field_steps.iter().cloned());
                         visited.insert(child_key.clone());
-                        flatten(
+                        let grandchildren = flatten(
                             acc,
                             registry,
                             &child_records,
                             // The declaration's reading, peeled — not a new one.
                             child_ty,
                             &field_path,
-                            &seg_name(&fr.name),
                             by_ref,
-                            nullable || opt,
                             visited,
-                            leaves,
                             hoists,
                         )?;
                         visited.remove(&child_key);
+                        form_children.push(OutChild {
+                            link: OutLink {
+                                steps: field_steps,
+                                name: vec![fr.name.clone()],
+                            },
+                            node: OutNode {
+                                ty: child_ty.clone(),
+                                kind: TransformKind::Product {
+                                    op: OutProduct::Records,
+                                    children: grandchildren,
+                                },
+                            },
+                        });
                     } else {
                         // A plain field leaf: the value is CLONED out of the
                         // struct, so its converter takes the owned field type as
                         // written — `Option` and all, which is why a terminal
                         // `Option` step is not a nesting step for it.
-                        leaves.push(UnfoldLeaf {
-                            name: seg_name(&fr.name).join("__"),
-                            path: field_path,
-                            out_ty: fr.ty.clone(),
-                            identity: false,
-                            nullable,
-                            source: LeafSource::Field,
-                            group: None,
-                        });
+                        form_children.push(leaf_child(
+                            field_steps,
+                            vec![fr.name.clone()],
+                            fr.ty.clone(),
+                            OutLeaf {
+                                nullable: false,
+                                identity: false,
+                                source: LeafSource::Field,
+                                group: None,
+                            },
+                        ));
                     }
                 }
+                children.push(OutChild {
+                    link: OutLink {
+                        steps: vec![form_step],
+                        // The value form names nothing: its fields do.
+                        name: Vec::new(),
+                    },
+                    node: OutNode {
+                        ty: form_ty,
+                        kind: TransformKind::Product {
+                            op: OutProduct::ValueForm { consuming },
+                            children: form_children,
+                        },
+                    },
+                });
             }
             DeconRecord::Acc { name, .. } | DeconRecord::LocalAcc { name, .. } => {
                 // A binding-local record resolves through its synthesized
@@ -1625,29 +1690,41 @@ fn flatten<M>(
                     Some(_) => {
                         return Err(UnfoldError::Cycle {
                             target: child_key.to_string(),
+                            at: node_path(path_prefix),
                         });
                     }
                     None => None,
                 };
+                let step = PathStep::call(func.clone(), opt, !core_by_ref);
                 if let Some(child_decl) = splice {
                     visited.insert(child_key.clone());
                     let child_records = child_decl.records.clone();
                     let mut child_path = path_prefix.to_vec();
-                    child_path.push(PathStep::call(func.clone(), opt, !core_by_ref));
-                    flatten(
+                    child_path.push(step.clone());
+                    let grandchildren = flatten(
                         acc,
                         registry,
                         &child_records,
                         child_ty,
                         &child_path,
-                        &seg_name(name),
                         by_ref,
-                        nullable || opt,
                         visited,
-                        leaves,
                         hoists,
                     )?;
                     visited.remove(&child_key);
+                    children.push(OutChild {
+                        link: OutLink {
+                            steps: vec![step],
+                            name: vec![name.clone()],
+                        },
+                        node: OutNode {
+                            ty: child_ty.clone(),
+                            kind: TransformKind::Product {
+                                op: OutProduct::Records,
+                                children: grandchildren,
+                            },
+                        },
+                    });
                 } else {
                     // Leaf: the return value as written (`&str`, enum, `i64`, …).
                     // One exception: a binding-local field returning an
@@ -1668,34 +1745,98 @@ fn flatten<M>(
                         if seen_identity {
                             return Err(UnfoldError::MultipleIdentity {
                                 target: source_key.to_string(),
+                                at: node_path(path_prefix),
                             });
                         }
                         seen_identity = true;
                     }
-                    // A plan field: the spelling is taken here, once, where the
-                    // leaf is stored for emission.
-                    let (out_ty, nullable, identity) = if cond_handle {
-                        (core.clone(), true, true)
+                    let out_ty = if cond_handle {
+                        core.clone()
                     } else {
-                        (ret.clone(), nullable, false)
+                        ret.clone()
                     };
-                    let mut path = path_prefix.to_vec();
-                    path.push(PathStep::call(func.clone(), opt, !core_by_ref));
-                    leaves.push(UnfoldLeaf {
-                        name: seg_name(name).join("__"),
-                        path,
+                    children.push(leaf_child(
+                        vec![step],
+                        vec![name.clone()],
                         out_ty,
-                        identity,
-                        nullable,
-                        source: LeafSource::Accessor,
-                        group: None,
-                    });
+                        OutLeaf {
+                            nullable: cond_handle,
+                            identity: cond_handle,
+                            source: LeafSource::Accessor,
+                            group: None,
+                        },
+                    ));
                 }
             }
         }
     }
 
-    Ok(())
+    Ok(children)
+}
+
+/// One leaf hanging off its parent by `steps`, naming `name` at this level.
+fn leaf_child(
+    steps: Vec<PathStep>,
+    name: Vec<String>,
+    ty: prebindgen_flat::flat::TypeRef,
+    op: OutLeaf,
+) -> OutChild {
+    OutChild {
+        link: OutLink { steps, name },
+        node: OutNode {
+            ty,
+            kind: TransformKind::Leaf(op),
+        },
+    }
+}
+
+/// The whole out-of-Rust tree of one deconstructor's records: the product at
+/// `source`, everything below it reached by [`flatten`].
+fn build_tree<M>(
+    acc: &Deconstructors,
+    registry: &Registry<M>,
+    records: &[DeconRecord],
+    source: &prebindgen_flat::flat::TypeRef,
+    by_ref: bool,
+) -> Result<OutNode, UnfoldError> {
+    let mut visited: HashSet<TypeKey> = HashSet::new();
+    visited.insert(source.key());
+    let children = flatten(
+        acc,
+        registry,
+        records,
+        source,
+        &[],
+        by_ref,
+        &mut visited,
+        &mut Vec::new(),
+    )?;
+    Ok(OutNode {
+        ty: source.clone(),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children,
+        },
+    })
+}
+
+/// Where a node sits in a decomposition, for a diagnostic: the access chain
+/// from the returned value, `value` at the root. An accessor call reads `f()`
+/// and an `Option`-returning step keeps its `?`, so the reader sees the same
+/// reach the generated code takes.
+fn node_path(steps: &[PathStep]) -> String {
+    let mut out = String::from("value");
+    for step in steps {
+        out.push('.');
+        out.push_str(&step.ident().to_string());
+        if !step.is_field() {
+            out.push_str("()");
+        }
+        if step.is_optional() {
+            out.push('?');
+        }
+    }
+    out
 }
 
 /// Error if two leaves of one flattened deconstructor share a name. Author leaf
