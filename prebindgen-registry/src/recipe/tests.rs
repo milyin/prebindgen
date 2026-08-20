@@ -1134,6 +1134,35 @@ fn an_omitted_reach_contributes_no_part() {
 }
 
 #[test]
+fn one_row_answering_three_spellings_still_builds_three_fragments() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    builder.declare(ty(&model, "Sample"), id("whole"), Deconstructing::Atomic);
+    let recipes = builder.build(&model).expect("table");
+    let bindings = Bindings::default();
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    for spelling in ["Sample", "&Sample", "Box<Sample>"] {
+        let crossing = Crossing::new(ty(&model, spelling), Assembly::Deconstruct);
+        // All three find the one declared row …
+        assert_eq!(recipes.row(&crossing).0, id("whole"));
+        compiler.crossing(&mut adapter, &crossing).expect("compile");
+    }
+    // … and each still gets its own Rust, because taking a value out of a
+    // pointer, borrowing through one and rebuilding a Box are three things.
+    assert_eq!(compiler.compiled_fragments(), 3);
+    assert_eq!(
+        adapter.calls,
+        vec![
+            "atomic Sample deconstruct: Sample",
+            "atomic Sample deconstruct: & Sample",
+            "atomic Sample deconstruct: Box < Sample >",
+        ]
+    );
+}
+
+#[test]
 fn a_crossing_can_be_compiled_without_a_site() {
     let model = model(&[SAMPLE]);
     let recipes = Recipes::default();
@@ -1184,8 +1213,9 @@ fn a_row_is_compiled_once_however_many_sites_take_it() {
             )
             .expect("compile");
     }
-    // Three sites, three plans — and one fragment per row: Sample, u32, u64.
-    assert_eq!(compiler.compiled_rows(), 3);
+    // Three sites, three plans — and one fragment per crossing: Sample, u32,
+    // u64.
+    assert_eq!(compiler.compiled_fragments(), 3);
     assert_eq!(adapter.calls.len(), 3);
 }
 
@@ -1478,7 +1508,7 @@ fn a_site_takes_the_row_the_binding_names_and_others_take_the_default() {
     assert!(overridden.contains("fields Sample"), "{overridden}");
     assert!(plain.contains("atomic Sample"), "{plain}");
     // Two rows of one crossing, so two fragments — plus the two field types.
-    assert_eq!(compiler.compiled_rows(), 4);
+    assert_eq!(compiler.compiled_fragments(), 4);
 }
 
 #[test]

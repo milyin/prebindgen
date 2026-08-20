@@ -11,15 +11,21 @@
 //! every hook the fragments its parts already produced — so an adapter says
 //! what one crossing means and never writes the walk.
 //!
-//! # Per row, not per site
+//! # Per crossing, not per site
 //!
-//! A fragment is built once per `(crossing, recipe)` and reused at every site
-//! that crossing appears at. That is what makes emitted code shared without a
-//! converter table, and it rests on one assumption: **a fragment is
-//! context-free**. Where an adapter appears to need site context, the site is
-//! wrapping the fragment rather than the fragment differing, and
-//! [`Compile::plan`] — the one hook called per site — is where that wrapping
-//! belongs.
+//! A fragment is built once per crossing and reused at every site that crossing
+//! appears at. That is what makes emitted code shared without a converter
+//! table, and it rests on one assumption: **a fragment is context-free**. Where
+//! an adapter appears to need site context, the site is wrapping the fragment
+//! rather than the fragment differing, and [`Compile::plan`] — the one hook
+//! called per site — is where that wrapping belongs.
+//!
+//! A crossing here is the type **as the site spelled it**, which is finer than
+//! the identity a row is declared under. `Sample`, `&Sample` and `Box<Sample>`
+//! find one row, because the same recipe assembles all three — and they get
+//! three fragments, because taking a value out of a pointer, borrowing through
+//! one, and rebuilding a `Box` are three different pieces of Rust. Sharing the
+//! row is the declaration's business; sharing the code is not.
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -28,8 +34,8 @@ use std::{
 };
 
 use super::{
-    Assembly, Bindings, Bound, Construct, Crossing, CrossingKey, Deconstruct, Mode, Reach,
-    RecipeError, RecipeId, Recipes, Role, Row, Shape, Site,
+    Assembly, Bindings, Bound, Construct, Crossing, Deconstruct, Mode, Reach, RecipeError,
+    RecipeId, Recipes, Role, Row, Shape, Site,
 };
 use crate::{
     flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef},
@@ -326,7 +332,7 @@ pub struct Compiler<'a, C: Compile> {
     model: &'a Flat,
     recipes: &'a Recipes,
     bindings: &'a Bindings,
-    fragments: HashMap<(CrossingKey, RecipeId), Rc<C::Fragment>>,
+    fragments: HashMap<(TypeKey, Assembly, RecipeId), Rc<C::Fragment>>,
     required: BTreeSet<RequirementId>,
     emit: Emit,
 }
@@ -349,9 +355,9 @@ impl<'a, C: Compile> Compiler<'a, C> {
         self.required.iter()
     }
 
-    /// How many rows have been compiled, which is what makes the per-row
-    /// promise observable.
-    pub fn compiled_rows(&self) -> usize {
+    /// How many fragments have been built, which is what makes the
+    /// per-crossing promise observable.
+    pub fn compiled_fragments(&self) -> usize {
         self.fragments.len()
     }
 
@@ -406,11 +412,17 @@ impl<'a, C: Compile> Compiler<'a, C> {
 
     /// The fragment for one row, built once and reused.
     fn row(&mut self, adapter: &mut C, crossing: &Crossing, recipe: &RecipeId) -> Built<C> {
-        let key = (crossing.key(), recipe.clone());
+        // Keyed by the spelling, not by the row's identity: one row can answer
+        // for `T`, `&T` and `Box<T>`, and each of the three needs its own Rust.
+        let key = (
+            crossing.spelled().key(),
+            crossing.assembly(),
+            recipe.clone(),
+        );
         if let Some(built) = self.fragments.get(&key) {
             return Ok(built.clone());
         }
-        let row = match self.recipes.get(&key.0, recipe) {
+        let row = match self.recipes.get(&crossing.key(), recipe) {
             Some(row) => row.clone(),
             None => self.recipes.row(crossing).1.into_owned(),
         };
