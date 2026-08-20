@@ -506,36 +506,61 @@ impl<'a, C: Compile> Compiler<'a, C> {
     /// exported function, so it cannot answer for a row every function with
     /// that signature shares; an adapter that wants a per-function answer
     /// compiles that position as its own root site through [`Self::site`].
-    fn part(&mut self, adapter: &mut C, at: At<'_>, index: usize, ty: &TypeRef) -> Built<C> {
-        self.part_doing(adapter, at, at.crossing.assembly(), index, ty)
-    }
-
-    /// [`Self::part`] where the part does a different job from the row.
+    /// `assembly` is the row's own except for a callback, whose arguments do
+    /// the other job — Rust holds those values and pushes them out through the
+    /// call. The **site** is still the row's either way: a part is identified
+    /// by the row that names it and its index, and a binding written against
+    /// that row has to match here, so only the part's `Crossing` carries the
+    /// swap.
     ///
-    /// Only a callback: it is constructed, and the values passing through it
-    /// are deconstructed. The **site** is still the row's own — a part is
-    /// identified by the row that names it and its index, and a binding written
-    /// against that row has to match here — so only the part's `Crossing`
-    /// carries the swap.
-    fn part_doing(
+    /// `wanted` is what the edge needs, and every edge states it: a product's
+    /// declared parameter or field mode, an optional's value, the mode a
+    /// collection lends its elements in, a callback argument's own.
+    fn part(
         &mut self,
         adapter: &mut C,
         at: At<'_>,
         assembly: Assembly,
         index: usize,
         ty: &TypeRef,
+        wanted: Mode,
     ) -> Built<C> {
         let crossing = Crossing::new(ty.clone(), assembly);
         let site = Site::part(at.crossing, at.recipe, index);
-        match self.bindings.resolve(&site, &crossing, self.recipes) {
-            Some(bound) => self.row(adapter, &bound.crossing, &bound.recipe),
-            None => Err(RecipeError::UnknownRow {
+        let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
+            return Err(RecipeError::UnknownRow {
                 site,
                 crossing: crossing.key(),
                 recipe: super::RecipeId::new("<omitted>"),
             }
-            .into()),
+            .into());
+        };
+        let fragment = self.row(adapter, &bound.crossing, &bound.recipe)?;
+        // Both contracts, here rather than at each caller: an optional's value,
+        // a run's element and a callback's argument are parts as much as a
+        // product's are, and a check written per edge is a check an edge can be
+        // added without.
+        let produced = fragment.yields();
+        let expected = part_key(ty);
+        if produced.ty != expected {
+            return Err(RecipeError::ComposedType {
+                site,
+                part: index,
+                wanted: expected,
+                got: produced.ty,
+            }
+            .into());
         }
+        if !produced.mode.satisfies(wanted) {
+            return Err(RecipeError::Composition {
+                site,
+                part: index,
+                wanted,
+                got: produced.mode,
+            }
+            .into());
+        }
+        Ok(fragment)
     }
 
     fn constructing(
@@ -609,7 +634,9 @@ impl<'a, C: Compile> Compiler<'a, C> {
         at: At<'_>,
         inner: &TypeRef,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
-        let inner = self.part(adapter, at, 0, inner)?;
+        // An optional holds its value the way the value itself is spelled.
+        let wanted = mode_of(inner);
+        let inner = self.part(adapter, at, at.crossing.assembly(), 0, inner, wanted)?;
         let mut cx = self.cx();
         adapter
             .optional(&mut cx, at, &inner)
@@ -622,8 +649,10 @@ impl<'a, C: Compile> Compiler<'a, C> {
         at: At<'_>,
         inner: &TypeRef,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
-        let elements = element_mode(at.crossing);
-        let inner = self.part(adapter, at, 0, inner)?;
+        // A run's element is held the way the collection lends it, which is
+        // what the adapter is told and so what its fragment must satisfy.
+        let elements = element_mode(at.crossing, inner);
+        let inner = self.part(adapter, at, at.crossing.assembly(), 0, inner, elements)?;
         let mut cx = self.cx();
         adapter
             .sequence(&mut cx, at, elements, &inner)
@@ -647,7 +676,8 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // — the parts still belong to the callback row that names them.
         let mut built = Vec::new();
         for (index, arg) in args.iter().enumerate() {
-            built.push(self.part_doing(adapter, at, assembly.swap(), index, arg)?);
+            let wanted = mode_of(arg);
+            built.push(self.part(adapter, at, assembly.swap(), index, arg, wanted)?);
         }
         let refs: Vec<&C::Fragment> = built.iter().map(|f| &**f).collect();
         let mut cx = self.cx();
@@ -666,33 +696,17 @@ impl<'a, C: Compile> Compiler<'a, C> {
     ) -> Result<C::Fragment, CompileError<C::Error>> {
         let mut built = Vec::new();
         for (index, part) in parts.iter().enumerate() {
-            let fragment = self.part(adapter, at, index, &part.ty)?;
-            let site = || Site::part(at.crossing, at.recipe, index);
-            let produced = fragment.yields();
-            // The type first: a part producing the wrong Rust value is wrong
-            // however it is held. Both sides are normalized the way a crossing
-            // is keyed, so a fragment answering for `&T` or `Box<T>` satisfies a
-            // `T` part — holding it is the mode's question, immediately below.
-            let wanted = part_key(&part.ty);
-            if produced.ty != wanted {
-                return Err(RecipeError::ComposedType {
-                    site: site(),
-                    part: index,
-                    wanted,
-                    got: produced.ty,
-                }
-                .into());
-            }
-            if !produced.mode.satisfies(part.mode) {
-                return Err(RecipeError::Composition {
-                    site: site(),
-                    part: index,
-                    wanted: part.mode,
-                    got: produced.mode,
-                }
-                .into());
-            }
-            built.push(fragment);
+            // `part.mode` rather than the type's own spelling: a product edge
+            // states what it needs — a constructor parameter, a field, an
+            // accessor's receiver — and `part` checks against that.
+            built.push(self.part(
+                adapter,
+                at,
+                at.crossing.assembly(),
+                index,
+                &part.ty,
+                part.mode,
+            )?);
         }
         let paired: Vec<(Part<'p>, &C::Fragment)> =
             parts.into_iter().zip(built.iter().map(|f| &**f)).collect();
@@ -947,19 +961,29 @@ fn mode_of(ty: &TypeRef) -> Mode {
     }
 }
 
-/// Whether iterating a run yields owned values, shared borrows or exclusive
-/// ones.
+/// How an element of a run is held once you have it.
 ///
-/// The collection's business, not the recipe's: `Vec<T>` gives its elements up,
-/// `&[T]` and `Cow<'_, [T]>` lend them, and `&mut [T]` lends them exclusively.
-fn element_mode(crossing: &Crossing) -> Mode {
-    match crossing.mode() {
-        // A run reached through a borrow lends its elements the same way it was
-        // reached: `&mut Vec<T>` yields `&mut T`, not `&T`.
+/// Two facts, and both belong to the type rather than to the recipe.
+///
+/// How the collection hands an element over: `Vec<T>` gives its elements up,
+/// `&[T]` and `Cow<'_, [T]>` lend them, and `&mut [T]` lends them exclusively —
+/// a run reached through a borrow lends the same way it was reached, so
+/// `&mut Vec<T>` yields `&mut T` and not `&T`.
+///
+/// And whether the element **is** a borrow: a `Vec<&T>` gives its elements up,
+/// and what it gives up is a reference. So an element spelled `&T` is held as a
+/// borrow however the collection hands it over, and reading only the collection
+/// would call that element owned.
+fn element_mode(crossing: &Crossing, elem: &TypeRef) -> Mode {
+    match mode_of(elem) {
+        // The element is a reference: handing it over hands over a borrow.
         borrowed @ (Mode::Shared | Mode::Exclusive) => borrowed,
-        Mode::Owned => match crossing.value().unwrapped().kind() {
-            TypeKind::Slice(_) => Mode::Shared,
-            _ => Mode::Owned,
+        Mode::Owned => match crossing.mode() {
+            borrowed @ (Mode::Shared | Mode::Exclusive) => borrowed,
+            Mode::Owned => match crossing.value().unwrapped().kind() {
+                TypeKind::Slice(_) => Mode::Shared,
+                _ => Mode::Owned,
+            },
         },
     }
 }

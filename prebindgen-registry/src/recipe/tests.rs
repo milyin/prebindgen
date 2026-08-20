@@ -1539,6 +1539,134 @@ fn a_part_producing_the_wrong_rust_type_is_refused() {
     );
 }
 
+/// Compile one crossing with `mistyped` in force, and hand back the refusal.
+fn mistyped_refusal(
+    model: &Flat,
+    spelling: &str,
+    lie_about: &str,
+    lie: &str,
+) -> CompileError<String> {
+    let recipes = Recipes::default();
+    let bindings = Bindings::default();
+    let mut adapter = Recorder::default();
+    adapter
+        .mistyped
+        .insert(lie_about.to_owned(), ty(model, lie).stripped_key());
+    let mut compiler = Compiler::new(model, &recipes, &bindings);
+    compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(model, spelling), Assembly::Construct),
+        )
+        .expect_err("the inner fragment produces the wrong type")
+}
+
+#[test]
+fn an_optionals_value_is_a_part_and_is_checked_like_one() {
+    let model = model(&[SAMPLE]);
+    let error = mistyped_refusal(&model, "Option<u64>", "u64", "u32");
+    assert!(
+        matches!(
+            recipe_error(&error),
+            RecipeError::ComposedType { wanted, got, .. }
+                if wanted.as_str() == "u64" && got.as_str() == "u32"
+        ),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn a_runs_element_is_a_part_and_is_checked_like_one() {
+    let model = model(&[SAMPLE]);
+    for spelling in ["Vec<u64>", "&[u64]", "[u64; 4]"] {
+        let error = mistyped_refusal(&model, spelling, "u64", "u32");
+        assert!(
+            matches!(
+                recipe_error(&error),
+                RecipeError::ComposedType { wanted, got, .. }
+                    if wanted.as_str() == "u64" && got.as_str() == "u32"
+            ),
+            "{spelling}: {error:?}"
+        );
+    }
+}
+
+#[test]
+fn a_callback_argument_is_a_part_and_is_checked_like_one() {
+    let model = model(&[
+        SAMPLE,
+        "pub fn listen(on: impl Fn(u64) + Send + Sync + 'static) {}",
+    ]);
+    let listen = model.function("listen").expect("listen");
+    let recipes = Recipes::default();
+    let bindings = Bindings::default();
+    let mut adapter = Recorder::default();
+    adapter
+        .mistyped
+        .insert("u64".to_owned(), ty(&model, "u32").stripped_key());
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let error = compiler
+        .site(
+            &mut adapter,
+            site("listen", 0),
+            Crossing::new(listen.params[0].ty.clone(), Assembly::Construct),
+        )
+        .expect_err("the argument's fragment produces the wrong type");
+    assert!(
+        matches!(
+            recipe_error(&error),
+            RecipeError::ComposedType { wanted, got, .. }
+                if wanted.as_str() == "u64" && got.as_str() == "u32"
+        ),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn a_runs_element_must_be_held_the_way_the_collection_lends_it() {
+    // A `Vec<T>` gives its elements up, so an element fragment that only lends
+    // cannot serve one — the mode half of the contract, on a non-product edge.
+    let model = model(&[SAMPLE]);
+    let recipes = Recipes::default();
+    let bindings = Bindings::default();
+    let mut adapter = Recorder::default();
+    adapter.shared.insert("u64".to_owned());
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let error = compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "Vec<u64>"), Assembly::Construct),
+        )
+        .expect_err("a Vec hands its elements over");
+    assert!(
+        matches!(
+            recipe_error(&error),
+            RecipeError::Composition {
+                wanted: Mode::Owned,
+                got: Mode::Shared,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+
+    // `&[T]` lends them, so the same fragment is fine there.
+    let mut adapter = Recorder::default();
+    adapter.shared.insert("u64".to_owned());
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "&[u64]"), Assembly::Construct),
+        )
+        .expect("a slice lends its elements");
+}
+
 #[test]
 fn a_part_answering_through_a_borrow_or_a_box_still_matches_its_type() {
     // The type check normalizes the way a crossing is keyed, so a fragment
