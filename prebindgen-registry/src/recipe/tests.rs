@@ -1928,6 +1928,112 @@ fn a_constructor_reached_through_a_borrow_or_a_box_is_accepted() {
 }
 
 #[test]
+fn what_a_role_tolerates_is_the_adapters_own_answer() {
+    // The strict default refuses a borrowed return; an adapter whose target
+    // hands out non-owning pointers deliberately says so and is not refused.
+    // C is that adapter: a zero-copy accessor crosses as `*const T`, and C's
+    // contract is that the caller neither frees it nor outlives it.
+    struct Lenient(Recorder);
+    impl Compile for Lenient {
+        type Fragment = Note;
+        type Plan = String;
+        type Error = String;
+        fn tolerates(&self, _role: &Role) -> Validity {
+            Validity::Borrowed
+        }
+        fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+            self.0.atomic(cx, at)
+        }
+        fn optional(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
+            self.0.optional(cx, at, inner)
+        }
+        fn sequence(
+            &mut self,
+            cx: &mut Cx<'_>,
+            at: At<'_>,
+            elements: Mode,
+            inner: &Note,
+        ) -> Frag<Self> {
+            self.0.sequence(cx, at, elements, inner)
+        }
+        fn construct(
+            &mut self,
+            cx: &mut Cx<'_>,
+            at: At<'_>,
+            func: &Function,
+            args: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.0.construct(cx, at, func, args)
+        }
+        fn identity(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
+            self.0.identity(cx, at, inner)
+        }
+        fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
+            self.0.fields(cx, at, parts)
+        }
+        fn value_form(
+            &mut self,
+            cx: &mut Cx<'_>,
+            at: At<'_>,
+            func: &Function,
+            parts: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.0.value_form(cx, at, func, parts)
+        }
+        fn choice(
+            &mut self,
+            cx: &mut Cx<'_>,
+            at: At<'_>,
+            arms: &[(&Alternative, &Note)],
+        ) -> Frag<Self> {
+            self.0.choice(cx, at, arms)
+        }
+        fn callback(
+            &mut self,
+            cx: &mut Cx<'_>,
+            at: At<'_>,
+            args: &[&Note],
+            result: Option<&Note>,
+        ) -> Frag<Self> {
+            self.0.callback(cx, at, args, result)
+        }
+        fn plan(&mut self, cx: &mut Cx<'_>, bound: &Bound, root: &Note) -> Result<String, String> {
+            self.0.plan(cx, bound, root)
+        }
+    }
+
+    let model = model(&[SAMPLE]);
+    let recipes = Recipes::default();
+    let bindings = Bindings::default();
+    let ret = Site {
+        owner: ident("z_sample_payload"),
+        role: Role::Return,
+    };
+    let crossing = || Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+
+    // Strict: refused.
+    let mut strict = Recorder::default();
+    strict.borrowed.insert("Sample".to_owned());
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    let error = compiler
+        .site(&mut strict, ret.clone(), crossing())
+        .expect_err("the default refuses a borrowed return");
+    assert!(
+        matches!(recipe_error(&error), RecipeError::Validity { .. }),
+        "{error:?}"
+    );
+
+    // Lenient: the same fragment, accepted, because the target says so.
+    let mut inner = Recorder::default();
+    inner.borrowed.insert("Sample".to_owned());
+    let mut lenient = Lenient(inner);
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    compiler
+        .site(&mut lenient, ret, crossing())
+        .expect("an adapter that hands out non-owning pointers is not refused");
+}
+
+#[test]
 fn a_returned_value_the_foreign_side_keeps_cannot_be_borrowed() {
     let model = model(&[SAMPLE]);
     let recipes = Recipes::default();

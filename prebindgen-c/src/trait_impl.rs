@@ -346,6 +346,78 @@ impl CbindgenBuilder {
         })
     }
 
+    /// Compile every site of every exported function.
+    ///
+    /// The second half of #450 reaching real positions. A **row** is what a
+    /// type's conversion is, and both adapters have compiled those since
+    /// #455/#457; a **site** is one position in the generated API, and this is
+    /// where they start being asked about.
+    ///
+    /// What it buys is that the contracts a site owns are asked at all. Which
+    /// answers count as failures is the target's, through
+    /// [`Compile::tolerates`] — and Cbindgen answers `Borrowed` everywhere,
+    /// because a `*const T` is C's own non-owning pointer and its zero-copy
+    /// accessors return one. So the validity check passes here by policy
+    /// rather than by luck, and the composition contracts — a part's type and
+    /// how it is held — are what actually run.
+    ///
+    /// The plans are discarded. C's per-item emitter still builds each wrapper
+    /// from the converter table, and moving that is a change of its own.
+    fn check_sites<'v>(
+        &'v self,
+        compiler: &mut prebindgen_registry::recipe::Compiler<
+            '_,
+            crate::compile::CCompile<'v, Registry<()>>,
+        >,
+        registry: &'v Registry<()>,
+    ) -> Result<(), String> {
+        use prebindgen_registry::recipe::{Assembly, Crossing, Role, Site};
+
+        let mut adapter = crate::compile::CCompile {
+            gen: self,
+            registry,
+        };
+        let declared = self.declared_functions();
+        let mut names: Vec<&syn::Ident> = declared.iter().collect();
+        names.sort_by_key(|i| i.to_string());
+        for name in names {
+            let Some(f) = registry.flat().function(name) else {
+                continue;
+            };
+            for (index, param) in f.params.iter().enumerate() {
+                let site = Site {
+                    owner: name.clone(),
+                    role: Role::Param { index },
+                };
+                let crossing = Crossing::new(param.ty.clone(), Assembly::Construct);
+                compiler
+                    .site(&mut adapter, site, crossing)
+                    .map_err(|e| e.to_string())?;
+            }
+            // A `Result`'s arms are their own sites; the whole `Result` is not
+            // a value C ever holds, so it is not one.
+            let returns: Vec<(Role, &prebindgen_registry::flat::TypeRef)> =
+                match f.ret.fallible_parts() {
+                    Some((ok, err)) => vec![(Role::Return, ok), (Role::Error, err)],
+                    None => vec![(Role::Return, &f.ret)],
+                };
+            for (role, ty) in returns {
+                if matches!(ty.kind(), prebindgen_registry::flat::TypeKind::Unit) {
+                    continue;
+                }
+                let site = Site {
+                    owner: name.clone(),
+                    role,
+                };
+                let crossing = Crossing::new(ty.clone(), Assembly::Deconstruct);
+                compiler
+                    .site(&mut adapter, site, crossing)
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
     /// Which alternative of `key` these parts came from, by matching their
     /// field types against the model's.
     ///
@@ -1452,6 +1524,20 @@ impl CbindgenBuilder {
                 conv
             })?
             .build()?;
+        // Every site of every exported function, compiled. Nothing consumes
+        // the plans yet — C's per-item emitter still builds each wrapper — but
+        // it is what makes the contracts a site owns run against real positions
+        // rather than only inside a product. What each one demands is the
+        // target's answer: see `CCompile::tolerates` for why C accepts a
+        // borrowed return where the JVM must not.
+        {
+            let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+                &model, &recipes, &bindings, compiled,
+            );
+            self.check_sites(&mut compiler, &registry)
+                .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
+            compiled = compiler.finish();
+        }
         // What the compilation produced, kept for emission. The converter table
         // stays the lookup index; this is what reaches the file.
         self.compiled_fns = compiled
