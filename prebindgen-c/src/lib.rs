@@ -404,6 +404,11 @@ pub struct CbindgenBuilder {
     /// keyed by their argument-type list. Each emits one `#[repr(C)]` closure
     /// struct.
     callbacks: HashMap<CallbackKey, CbCfg>,
+    /// Resolved callback plans, memoized so the closure struct's declaration and
+    /// the Rust trampoline read one plan rather than two agreeing walks
+    /// (#447 §3). Keyed by the same identity `callbacks` is.
+    callback_plans:
+        std::cell::RefCell<HashMap<CallbackKey, std::rc::Rc<crate::plan::CCallbackPlan>>>,
     /// Types intentionally not exported by this adapter.
     ignored_types: HashSet<TypeKey>,
     /// Data structs additionally marked as error types (allowlist for the

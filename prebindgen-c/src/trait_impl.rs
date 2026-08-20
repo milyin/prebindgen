@@ -1,6 +1,7 @@
 use prebindgen_registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 use super::{builder::callback_fn_type, *};
+use crate::plan::{convert_or_abort, CCallbackArgKind};
 
 /// Per-category **input** terminal converter builders. Each returns
 /// `Some(ConverterImpl)` only for the type category it claims (and `None`
@@ -1497,66 +1498,19 @@ impl CbindgenBuilder {
         // identities — what the map is keyed by — and the arguments it was
         // declared with are beside it, so neither is rebuilt from the other
         // (#291).
-        let mut cb_keys: Vec<(&CallbackKey, &CbCfg)> = self.callbacks.iter().collect();
-        cb_keys.sort_by_key(|(k, _)| self.callback_c_name(k));
-        for (key, cfg) in cb_keys {
-            let args: Vec<syn::Type> = cfg.args.clone();
-            // Emit only if the callback is required (its input resolved); skip a
-            // declared-but-unused signature.
-            if registry
-                .reading_of(&callback_fn_type(&args))
-                .and_then(|tr| registry.input_entry(&tr))
-                .is_none()
-            {
+        let mut cb_keys: Vec<&CallbackKey> = self.callbacks.keys().collect();
+        cb_keys.sort_by_key(|k| self.callback_c_name(k));
+        for key in cb_keys {
+            // Emit only if the callback is required; skip a declared-but-unused
+            // signature.
+            if !self.callback_is_required(key, registry) {
                 continue;
             }
-            let takeable = &self.callbacks.get(key).expect("callback cfg").takeable;
-            let mut arg_wires: Vec<syn::Type> = Vec::new();
-            for (i, a) in args.iter().enumerate() {
-                // `&[E]` slice arg → TWO C `call` params: `const E_wire *` + `size_t`
-                // (the slice delivered by reference, zero-copy).
-                if let Some((_src, elem_wire)) = self.callback_slice_elem_wire(a) {
-                    arg_wires.push(syn::parse_quote!(*const #elem_wire));
-                    arg_wires.push(syn::parse_quote!(usize));
-                    continue;
-                }
-                let reading = registry.reading_of(a).unwrap_or_else(|| {
-                    panic!(
-                        "Cbindgen: callback arg `{}` was never classified",
-                        a.to_token_stream()
-                    )
-                });
-                let wire = registry
-                    .output_entry(&reading)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Cbindgen: callback arg `{}` has no output converter (declare it \
-                             as a opaque_ptr/data_struct/enum_type)",
-                            a.to_token_stream()
-                        )
-                    })
-                    .destination
-                    .clone();
-                // Takeable params are delivered as an owned pointer.
-                if takeable.contains(&i) {
-                    arg_wires.push(syn::parse_quote!(*mut #wire));
-                    continue;
-                }
-                // A composite has no wire of its own, so its C params are the
-                // fields its shape lowers to — exactly as `dispatch_fn_input`
-                // fills them (#428). Each is `MaybeUninit`: an absent value
-                // leaves its slot unwritten, and the wrapper must not build a
-                // Rust value to fill it with. `#[repr(transparent)]` keeps both
-                // the C ABI and the header spelling.
-                if self.callback_arg_is_composite(&reading, takeable.contains(&i), registry) {
-                    for field in self.c_value_plan(&reading, registry).shape.fields {
-                        let w = field.wire;
-                        arg_wires.push(syn::parse_quote!(::core::mem::MaybeUninit<#w>));
-                    }
-                    continue;
-                }
-                arg_wires.push(wire);
-            }
+            // The declaration renders the plan's wire parameters. It does not
+            // classify the arguments again: the trampoline that fills these
+            // slots reads the same plan (#447 §3).
+            let plan = self.callback_plan(key, registry);
+            let arg_wires: Vec<&syn::Type> = plan.wires().collect();
             let c_struct = self.callback_c_ident(key);
             items.push(syn::parse_quote!(
                 #[repr(C)]
@@ -1684,6 +1638,23 @@ impl CbindgenBuilder {
 }
 
 impl CbindgenBuilder {
+    /// Whether a declared callback signature is actually **required** — its
+    /// `impl Fn(..)` input resolved, because some exported function takes one.
+    ///
+    /// A declared-but-unused signature emits no closure struct and must not be
+    /// planned either: its argument types were never classified, so there is no
+    /// converter for a plan to resolve against. Asked by the emission that
+    /// skips it and by the requirement fold that would otherwise plan it, so
+    /// the two cannot disagree about which callbacks exist.
+    fn callback_is_required(&self, key: &CallbackKey, registry: &Registry<()>) -> bool {
+        self.callbacks.get(key).is_some_and(|cfg| {
+            registry
+                .reading_of(&callback_fn_type(&cfg.args))
+                .and_then(|tr| registry.input_entry(&tr))
+                .is_some()
+        })
+    }
+
     /// Whether a callback argument crosses as a **decomposed composite** — the
     /// one delivery lowered from a [`CValuePlan`] rather than handed to the
     /// argument's own converter.
@@ -1691,7 +1662,7 @@ impl CbindgenBuilder {
     /// Asked by the lowering that builds the plan and by the prerequisite scan
     /// that collects what those plans need, so "is there a plan here" has one
     /// answer. A slice argument crosses by reference and never builds one.
-    fn callback_arg_is_composite(
+    pub(crate) fn callback_arg_is_composite(
         &self,
         arg: &TypeRef,
         is_takeable: bool,
@@ -1725,14 +1696,11 @@ impl CbindgenBuilder {
             })
         });
         from_returns
-            || self.callbacks.iter().any(|(key, cfg)| {
-                key.iter().enumerate().any(|(i, k)| {
-                    registry.reading(k).is_some_and(|arg| {
-                        self.callback_arg_is_composite(&arg, cfg.takeable.contains(&i), registry)
-                            && self.c_value_plan(&arg, registry).needs_array_alloc
-                    })
-                })
-            })
+            || self
+                .callbacks
+                .keys()
+                .filter(|key| self.callback_is_required(key, registry))
+                .any(|key| self.callback_plan(key, registry).needs_array_alloc())
     }
 
     fn dispatch_fn_input(
@@ -1748,146 +1716,96 @@ impl CbindgenBuilder {
         }
         let c_struct = self.callback_c_ident(&key);
 
-        // Per-arg: closure parameter (`__aN: <src>`) + encode statement
-        // (`let __wN = <output_conv>(__aN);`, panicking if the converter is
-        // fallible — a firing callback has no error channel). A non-takeable arg
-        // is passed to the C `call` by value (the C side owns + drops it); a
-        // **takeable** arg is passed as `&mut __wN` (`*mut z_x_t`) and dropped here
-        // after the call (no-op if the C side took it, leaving a gravestone).
-        let takeable = &self.callbacks.get(&key).expect("callback cfg").takeable;
+        // Not resolvable yet ⇒ leave it for a later rank rather than planning
+        // against a half-filled table. Asked in the plan's own terms, so the
+        // guard and the plan agree about which arguments even need a converter.
+        let cfg = self.callbacks.get(&key).expect("declared, checked above");
+        for declared in &cfg.args {
+            if self.callback_slice_elem_wire(declared).is_some() {
+                continue;
+            }
+            let reading = registry.reading_of(declared)?;
+            registry.output_entry(&reading)?;
+        }
+
+        // One stored plan, rendered here as the trampoline and in
+        // `prereq_callback_structs` as the `call` pointer's signature. A
+        // non-takeable arg is passed to the C `call` by value (the C side owns
+        // and drops it); a **takeable** arg is passed as `&mut __wN`
+        // (`*mut z_x_t`) and dropped here after the call — a no-op if the C
+        // side took it, leaving a gravestone.
+        let plan = self.callback_plan(&key, registry);
         let mut closure_params: Vec<TokenStream> = Vec::new();
         let mut encode_stmts: Vec<TokenStream> = Vec::new();
         let mut call_args: Vec<TokenStream> = Vec::new();
         let mut post_drops: Vec<TokenStream> = Vec::new();
-        for (i, arg) in args.iter().enumerate() {
-            // `&[E]` slice arg: deliver the slice to the C `call` **by reference** —
-            // `(*const E_wire, size_t)`, zero-copy (the closure borrows the slice for
-            // the call). The element wire is layout-identical to `E`, so the pointer
-            // cast is sound; no per-element encode and no post-call drop.
-            if let Some((src_elem, elem_wire)) = self.callback_slice_elem_wire_of(arg) {
-                let ai = format_ident!("__a{}", i);
-                closure_params.push(quote!(#ai: &[#src_elem]));
-                call_args.push(quote!(#ai.as_ptr() as *const #elem_wire));
-                call_args.push(quote!(#ai.len()));
-                continue;
-            }
-            let entry = registry.output_entry(arg)?;
-            let conv = entry.function.sig.ident.clone();
-            let opaque = entry.destination.clone();
-            let fallible = matches!(
-                &entry.function.sig.output,
-                syn::ReturnType::Type(_, ty) if is_result(ty)
-            );
-            let src = self.src_ty_deep_of(arg);
+        for (i, arg) in plan.args.iter().enumerate() {
             let ai = format_ident!("__a{}", i);
             let wi = format_ident!("__w{}", i);
-            let is_takeable = takeable.contains(&i);
-            // A COMPOSITE argument — `Option<T>`, `Vec<T>`, `Cow<'_, [T]>` — has
-            // no converter of its own: `out_wrappers` gives it a marker with a
-            // `()` destination, which exists to resolve the entry and make the
-            // inner required while the real ABI is structural. The return path
-            // lowers those in `lower_shape` / `encode_value`; this one used to
-            // call the marker as if it were a converter, which takes no
-            // arguments (#428). Same lowering, so the two directions cannot
-            // disagree about which shapes they know.
-            //
-            // A takeable argument is a whole-value policy over an opaque handle
-            // and never a composite, so it keeps the by-reference path below.
-            //
-            // Which shapes those are is the MODEL's answer, not the marker's: a
-            // `()` destination says the type has no wire of its own, and a
-            // `Result` has one of those too while no arm lowers it. Field COUNT
-            // cannot say it either — `Option<&T>` carves the pointer's niche and
-            // lowers to a single `*const`, one field and still nothing a
-            // converter call can produce.
-            if !is_takeable
-                && marker_destination(&entry.destination)
-                && !r_is_lowered_composite(arg, registry)
-            {
-                panic!(
-                    "Cbindgen: callback argument `{}` has no C ABI — it resolves to a marker \
-                     converter and is not one of the shapes lowered structurally (`Option<T>`, \
-                     `Vec<T>`, `Cow<'_, [T]>`). Deliver its parts as separate callback \
-                     arguments instead.",
-                    arg,
-                );
-            }
-            // Both halves of the marker test, and both are load-bearing. The
-            // MODEL says which shapes `lower_shape` decomposes; the marker says
-            // this type has no wire of its own — and a `convert!`-declared
-            // `Option<T>` has one, because `out_custom` is tried before
-            // `out_wrappers`. Decomposing that from its shape alone would pass
-            // several arguments to a `call` the struct declared with one
-            // (#428 review).
-            let composite = self.callback_arg_is_composite(arg, is_takeable, registry);
-            if composite {
-                // One plan, read for both the slots and the encode: a callback
-                // argument's layout and the statements that fill it must be the
-                // same resolution, not two that happen to agree (#444 §5).
-                let plan = self.c_value_plan(arg, registry);
-                let shape = &plan.shape;
-                closure_params.push(quote!(#ai: #src));
-                let mut targets = Vec::new();
-                for (f, field) in shape.fields.iter().enumerate() {
-                    let fi = if shape.fields.len() == 1 {
-                        wi.clone()
-                    } else {
-                        format_ident!("__w{}_{}", i, f)
-                    };
-                    let wire = &field.wire;
-                    // A `MaybeUninit`, zeroed. Two things it must not be.
-                    //
-                    // Not a `wire` value: a shape with a `present` flag writes
-                    // only the flag when the value is absent, and materialising
-                    // something to fill the slot is undefined for a wire whose
-                    // all-zero pattern is not a legal value of its type — a
-                    // declared `enum_type`'s discriminants are the source's own,
-                    // so zero need not name a variant at all.
-                    //
-                    // And not left indeterminate: the slot is passed BY VALUE to
-                    // foreign code, so whatever the stack or register held is
-                    // handed to a C callback that reads it despite the flag.
-                    // Zeroing costs a store and discloses nothing, while
-                    // `MaybeUninit` keeps it from ever being a `wire` (#428
-                    // review).
-                    //
-                    // Neither assumes anything about WHICH fields the encode
-                    // writes, which is the encoder's business and not this
-                    // caller's.
-                    encode_stmts
-                        .push(quote!(let mut #fi = ::core::mem::MaybeUninit::<#wire>::zeroed();));
-                    targets.push(quote!(*#fi.as_mut_ptr()));
-                    call_args.push(quote!(#fi));
-                }
-                // A firing callback has no error channel, so a fallible
-                // converter aborts — the same answer the single-value path
-                // below gives, spelled by the route the emitters share.
-                encode_stmts.push(plan.encode(&quote!(#ai), &targets, &ErrRoute::Panic));
-                continue;
-            }
+            let src = &arg.src;
             closure_params.push(quote!(#ai: #src));
-            let mut_kw = if is_takeable { quote!(mut) } else { quote!() };
-            if fallible {
-                encode_stmts.push(quote!(
-                    let #mut_kw #wi = match #conv(#ai) {
-                        ::core::result::Result::Ok(__v) => __v,
-                        ::core::result::Result::Err(__e) => {
-                            ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
-                        }
-                    };
-                ));
-            } else {
-                encode_stmts.push(quote!(let #mut_kw #wi = #conv(#ai);));
-            }
-            if is_takeable {
-                call_args.push(quote!(&mut #wi as *mut #opaque));
-                // Always drop after the call (leak-safe): live value if untaken,
-                // gravestone (no-op) if the C side took it via `z_x_take`.
-                post_drops.push(
-                    quote!(let _ = <#opaque as ::prebindgen_c_runtime::Transmute>::into_rust(#wi);),
-                );
-            } else {
-                call_args.push(quote!(#wi));
+            match &arg.kind {
+                // Delivered by reference, zero-copy: the closure borrows the
+                // slice for the call, so there is no encode and no drop. The
+                // element wire is layout-identical to `E`, which is what makes
+                // the pointer cast sound.
+                CCallbackArgKind::Slice { elem_wire } => {
+                    call_args.push(quote!(#ai.as_ptr() as *const #elem_wire));
+                    call_args.push(quote!(#ai.len()));
+                }
+                CCallbackArgKind::Composite(value) => {
+                    let mut targets = Vec::new();
+                    for (f, field) in value.shape.fields.iter().enumerate() {
+                        let fi = if value.shape.fields.len() == 1 {
+                            wi.clone()
+                        } else {
+                            format_ident!("__w{}_{}", i, f)
+                        };
+                        let wire = &field.wire;
+                        // A `MaybeUninit`, zeroed. Two things it must not be.
+                        //
+                        // Not a `wire` value: a shape with a `present` flag
+                        // writes only the flag when the value is absent, and
+                        // materialising something to fill the slot is undefined
+                        // for a wire whose all-zero pattern is not a legal value
+                        // of its type — a declared `enum_type`'s discriminants
+                        // are the source's own, so zero need not name a variant.
+                        //
+                        // And not left indeterminate: the slot is passed BY
+                        // VALUE to foreign code, so whatever the stack or
+                        // register held would be handed to a C callback that
+                        // reads it despite the flag. Zeroing costs a store and
+                        // discloses nothing.
+                        //
+                        // Neither assumes anything about WHICH fields the encode
+                        // writes, which is the encoder's business.
+                        encode_stmts.push(
+                            quote!(let mut #fi = ::core::mem::MaybeUninit::<#wire>::zeroed();),
+                        );
+                        targets.push(quote!(*#fi.as_mut_ptr()));
+                        call_args.push(quote!(#fi));
+                    }
+                    // A firing callback has no error channel, so a fallible
+                    // converter aborts — the route the emitters share says so.
+                    encode_stmts.push(value.encode(&quote!(#ai), &targets, &ErrRoute::Panic));
+                }
+                CCallbackArgKind::Takeable {
+                    conv,
+                    opaque,
+                    fallible,
+                } => {
+                    encode_stmts.push(convert_or_abort(conv, &ai, &wi, *fallible, true));
+                    call_args.push(quote!(&mut #wi as *mut #opaque));
+                    // Always drop after the call (leak-safe): a live value if
+                    // untaken, a gravestone no-op if the C side took it.
+                    post_drops.push(quote!(
+                        let _ = <#opaque as ::prebindgen_c_runtime::Transmute>::into_rust(#wi);
+                    ));
+                }
+                CCallbackArgKind::Single { conv, fallible } => {
+                    encode_stmts.push(convert_or_abort(conv, &ai, &wi, *fallible, false));
+                    call_args.push(quote!(#wi));
+                }
             }
         }
 

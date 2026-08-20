@@ -701,3 +701,96 @@ fn callback_only_run_emits_the_array_helper() {
         "…so its definition must be emitted too: {src}"
     );
 }
+
+/// #447 §3: the closure struct's `call` signature and the Rust trampoline that
+/// fires it read **one stored plan**, not two walks that agree.
+///
+/// Agreement by determinism is a property of today's implementation rather than
+/// of the boundary: the two emitters used to classify every argument
+/// separately, so a change to one classification could silently mis-declare a
+/// signature the other still filled. Storing the plan makes them the same
+/// resolution by construction, and this checks the storage rather than the
+/// coincidence — a second ask returns the same instance.
+#[test]
+fn a_callback_plan_is_stored_not_rebuilt() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_on_batch(
+            callback: impl Fn(Vec<i64>) + Send + Sync + 'static,
+        ) -> Result<(), Error> {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Fn(func), loc.clone()),
+        (syn::Item::Struct(error_struct()), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .data_struct(syn::parse_quote!(Error))
+        .base_name("z_error")
+        .error()
+        .callback(syn::parse_quote!(impl Fn(Vec<i64>) + Send + Sync + 'static))
+        .base_name("z_closure_batch_t")
+        .function(syn::parse_quote!(z_on_batch));
+
+    let gen = cbindgen.build_with(registry).expect("resolve");
+    let key: CallbackKey = vec![TypeKey::from_type(&syn::parse_quote!(Vec<i64>))];
+
+    let first = gen.gen.callback_plan(&key, &gen.registry);
+    let second = gen.gen.callback_plan(&key, &gen.registry);
+    assert!(
+        std::rc::Rc::ptr_eq(&first, &second),
+        "the plan is stored, so both emitters read one instance"
+    );
+    // …and it is the whole boundary: the argument's wire slots and the
+    // requirement its encoder creates come off the same plan.
+    assert_eq!(
+        first.wires().count(),
+        2,
+        "a run crosses as a pointer and a length"
+    );
+    assert!(
+        first.needs_array_alloc(),
+        "the encoder it selected calls the array helper"
+    );
+}
+
+/// A declared-but-unused callback signature emits no closure struct, and must
+/// not be planned either: its arguments were never classified, so there is no
+/// converter for a plan to resolve against.
+#[test]
+fn an_unused_callback_declaration_is_not_planned() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_plain(v: i64) -> Result<(), Error> {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Fn(func), loc.clone()),
+        (syn::Item::Struct(error_struct()), loc.clone()),
+    ]))
+    .expect("index items");
+
+    // Declared, and used by nothing.
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .data_struct(syn::parse_quote!(Error))
+        .base_name("z_error")
+        .error()
+        .callback(syn::parse_quote!(impl Fn(Vec<i64>) + Send + Sync + 'static))
+        .base_name("z_closure_unused_t")
+        .function(syn::parse_quote!(z_plain));
+
+    let src = write(cbindgen, registry, "cb_unused");
+    let compact: String = src.split_whitespace().collect();
+    assert!(
+        !compact.contains("z_closure_unused_t"),
+        "an unused callback declaration emits nothing: {src}"
+    );
+}

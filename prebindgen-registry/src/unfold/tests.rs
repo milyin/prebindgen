@@ -2899,3 +2899,298 @@ fn selecting_an_existing_leaf_keeps_its_semantics() {
         "a variant member keeps naming its member, not a generic field read"
     );
 }
+
+/// #447 §5: one semantic tree, two adapters, deliberately different wire
+/// layouts — and the same semantic child order and the same direct-converter
+/// cutoff in both.
+///
+/// The point of the shared layer is that an adapter contributes *node-level
+/// lowering* and nothing else: no second recursive walk over `TypeRef`, no
+/// struct-field walker of its own. These two stand in for the shapes C and JNI
+/// actually choose — one flat and positional, one object-shaped — and neither
+/// needs a line of recursion to produce it.
+#[test]
+fn one_semantic_tree_lowers_into_two_wire_layouts() {
+    use crate::transform::{Lowered, TransformKind, TransformLowerer};
+
+    let field = |name: &str, node: OutNode| OutChild {
+        link: OutLink {
+            steps: vec![PathStep::field(ident(name), false)],
+            name: vec![name.to_string()],
+        },
+        node,
+    };
+    let leaf = |ty: syn::Type| OutNode {
+        ty: tref(ty),
+        kind: TransformKind::Leaf(OutLeaf {
+            nullable: false,
+            identity: false,
+            reach: OutReach::Field,
+        }),
+    };
+    let arm = |name: &str, tag: i32, children: Vec<OutChild>| OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: Vec::new(),
+        },
+        node: OutNode {
+            ty: tref(syn::parse_quote!(Kind)),
+            kind: TransformKind::Product {
+                op: OutProduct::Variant {
+                    name: ident(name),
+                    tag,
+                },
+                children,
+            },
+        },
+    };
+
+    // All four node kinds, in one value: a record of a scalar, a run, an
+    // optional, and a dispatch.
+    let tree = OutNode {
+        ty: tref(syn::parse_quote!(Reading)),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children: vec![
+                field("id", leaf(syn::parse_quote!(i64))),
+                field(
+                    "tags",
+                    OutNode {
+                        ty: tref(syn::parse_quote!(Vec<String>)),
+                        kind: TransformKind::Sequence {
+                            op: OutRun { borrowed: false },
+                            inner: Box::new(leaf(syn::parse_quote!(String))),
+                        },
+                    },
+                ),
+                field(
+                    "note",
+                    OutNode {
+                        ty: tref(syn::parse_quote!(Option<String>)),
+                        kind: TransformKind::Optional {
+                            op: (),
+                            inner: Box::new(leaf(syn::parse_quote!(String))),
+                        },
+                    },
+                ),
+                field(
+                    "kind",
+                    OutNode {
+                        ty: tref(syn::parse_quote!(Kind)),
+                        kind: TransformKind::Choice {
+                            op: OutChoice {
+                                name: "tag".to_string(),
+                            },
+                            variants: vec![
+                                arm("Exact", 0, vec![field("v", leaf(syn::parse_quote!(i64)))]),
+                                arm("Missing", 1, Vec::new()),
+                            ],
+                        },
+                    },
+                ),
+            ],
+        },
+    };
+
+    /// Records the order a lowering met its fields in, so two adapters can be
+    /// compared on the one thing they must agree about.
+    #[derive(Default)]
+    struct Order(Vec<String>);
+
+    impl Order {
+        /// Named edges only: an arity layer reaches its inner node directly and
+        /// a choice arm is not a field, so neither names a position.
+        fn record(&mut self, link: Option<&OutLink>) {
+            if let Some(name) = link.and_then(|l| l.name.first()) {
+                self.0.push(name.clone());
+            }
+        }
+    }
+
+    /// A flat, positional layout — C's shape. Every value takes its own slot,
+    /// presence is a leading flag, a run is a pointer and a length, and a
+    /// dispatch is a tag followed by its arms' slots.
+    struct FlatWire(Order);
+    impl TransformLowerer<OutOfRust> for FlatWire {
+        type Value = Vec<String>;
+        type Error = std::convert::Infallible;
+
+        fn descend(
+            &mut self,
+            _node: &OutNode,
+            link: Option<&OutLink>,
+        ) -> Result<crate::transform::Descend<Self::Value>, Self::Error> {
+            self.0.record(link);
+            Ok(crate::transform::Descend::Recurse)
+        }
+
+        fn leaf(&mut self, node: &OutNode, _op: &OutLeaf) -> Result<Self::Value, Self::Error> {
+            Ok(vec![node.ty.spell().to_string()])
+        }
+        fn product(
+            &mut self,
+            _node: &OutNode,
+            _op: &OutProduct,
+            children: Lowered<'_, OutOfRust, Self::Value>,
+        ) -> Result<Self::Value, Self::Error> {
+            let mut out = Vec::new();
+            for (child, slots) in children {
+                if let Some(name) = child.link.name.first() {
+                    out.extend(slots.into_iter().map(|s| format!("{name}:{s}")));
+                } else {
+                    out.extend(slots);
+                }
+            }
+            Ok(out)
+        }
+        fn optional(
+            &mut self,
+            _node: &OutNode,
+            _op: &(),
+            _inner: &OutNode,
+            value: Self::Value,
+        ) -> Result<Self::Value, Self::Error> {
+            let mut out = vec!["present".to_string()];
+            out.extend(value);
+            Ok(out)
+        }
+        fn sequence(
+            &mut self,
+            _node: &OutNode,
+            _op: &OutRun,
+            _inner: &OutNode,
+            _value: Self::Value,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(vec!["ptr".to_string(), "len".to_string()])
+        }
+        fn choice(
+            &mut self,
+            _node: &OutNode,
+            _op: &OutChoice,
+            variants: Lowered<'_, OutOfRust, Self::Value>,
+        ) -> Result<Self::Value, Self::Error> {
+            let mut out = vec!["tag".to_string()];
+            for (_, slots) in variants {
+                out.extend(slots);
+            }
+            Ok(out)
+        }
+    }
+
+    /// An object-shaped layout — the JVM's. One entry per field whatever its
+    /// shape, with the arity written into the entry rather than spent on slots.
+    struct ObjectWire(Order);
+    impl TransformLowerer<OutOfRust> for ObjectWire {
+        type Value = String;
+        type Error = std::convert::Infallible;
+
+        fn descend(
+            &mut self,
+            _node: &OutNode,
+            link: Option<&OutLink>,
+        ) -> Result<crate::transform::Descend<Self::Value>, Self::Error> {
+            self.0.record(link);
+            Ok(crate::transform::Descend::Recurse)
+        }
+
+        fn leaf(&mut self, node: &OutNode, _op: &OutLeaf) -> Result<Self::Value, Self::Error> {
+            Ok(node.ty.spell().to_string())
+        }
+        fn product(
+            &mut self,
+            _node: &OutNode,
+            _op: &OutProduct,
+            children: Lowered<'_, OutOfRust, Self::Value>,
+        ) -> Result<Self::Value, Self::Error> {
+            let mut parts = Vec::new();
+            for (child, value) in children {
+                if let Some(name) = child.link.name.first() {
+                    parts.push(format!("{name}: {value}"));
+                } else {
+                    parts.push(value);
+                }
+            }
+            Ok(format!("{{{}}}", parts.join(", ")))
+        }
+        fn optional(
+            &mut self,
+            _node: &OutNode,
+            _op: &(),
+            _inner: &OutNode,
+            value: Self::Value,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(format!("{value}?"))
+        }
+        fn sequence(
+            &mut self,
+            _node: &OutNode,
+            _op: &OutRun,
+            _inner: &OutNode,
+            value: Self::Value,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(format!("List<{value}>"))
+        }
+        fn choice(
+            &mut self,
+            _node: &OutNode,
+            _op: &OutChoice,
+            variants: Lowered<'_, OutOfRust, Self::Value>,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(format!(
+                "sealed({})",
+                variants
+                    .into_iter()
+                    .map(|(_, v)| v)
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            ))
+        }
+    }
+
+    let mut flat = FlatWire(Order::default());
+    let flat_slots = tree.lower(&mut flat).unwrap();
+    let mut object = ObjectWire(Order::default());
+    let object_shape = tree.lower(&mut object).unwrap();
+
+    // Deliberately different layouts: the same value, spent very differently.
+    assert_eq!(
+        flat_slots,
+        vec![
+            "id:i64",
+            "tags:ptr",
+            "tags:len",
+            "note:present",
+            "note:String",
+            "kind:tag",
+            "kind:v:i64",
+        ]
+    );
+    assert_eq!(
+        object_shape,
+        "{id: i64, tags: List<String>, note: String?, kind: sealed({v: i64} | {})}"
+    );
+
+    // …and the one thing they must agree about: the semantic order of the
+    // children, which is the tree's and not either adapter's.
+    assert_eq!(flat.0 .0, ["id", "tags", "note", "kind", "v"]);
+    assert_eq!(flat.0 .0, object.0 .0);
+
+    // A claimed subtree is atomic for BOTH: neither lowering reaches the run's
+    // element, because the cutoff is the tree's too.
+    let selected = crate::unfold::select(&tree, &mut |node, _link| {
+        (node.ty.spell().to_string() == "Vec < String >").then(|| node.ty.clone())
+    });
+    let mut flat = FlatWire(Order::default());
+    let flat_slots = selected.lower(&mut flat).unwrap();
+    let mut object = ObjectWire(Order::default());
+    let object_shape = selected.lower(&mut object).unwrap();
+    assert_eq!(
+        flat_slots.iter().filter(|s| s.starts_with("tags")).count(),
+        1,
+        "the claimed run is one crossing, not a pointer and a length: {flat_slots:?}"
+    );
+    assert!(
+        object_shape.contains("tags: Vec < String >"),
+        "and not a List of its elements either: {object_shape}"
+    );
+}
