@@ -519,13 +519,18 @@ fn the_two_jobs_swap_only_once() {
 
 #[test]
 fn a_part_is_accepted_where_the_edge_can_consume_it() {
+    // Owning it is enough for anything: a value handed over can be consumed,
+    // lent, or lent mutably.
     assert!(Mode::Owned.satisfies(Mode::Owned));
     assert!(Mode::Owned.satisfies(Mode::Shared));
+    assert!(Mode::Owned.satisfies(Mode::Exclusive));
+    // A borrow serves only its own kind.
     assert!(!Mode::Shared.satisfies(Mode::Owned));
     assert!(Mode::Shared.satisfies(Mode::Shared));
     assert!(!Mode::Shared.satisfies(Mode::Exclusive));
-    assert!(Mode::Exclusive.satisfies(Mode::Exclusive));
+    assert!(!Mode::Exclusive.satisfies(Mode::Owned));
     assert!(!Mode::Exclusive.satisfies(Mode::Shared));
+    assert!(Mode::Exclusive.satisfies(Mode::Exclusive));
 }
 
 // ── Sites and row selection ───────────────────────────────────────────────
@@ -1328,6 +1333,19 @@ fn an_exclusive_optional_lends_its_value_exclusively() {
     let model = model(&[SAMPLE]);
     let recipes = Recipes::default();
     let bindings = Bindings::default();
+
+    // The positive half, and the one that matters: the *ordinary* fragment for
+    // a bare `T` reports owned, and it has to serve this edge. Asserting only
+    // the refusal below would pass with no usable fragment at all.
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "&mut Option<Sample>"), Assembly::Construct),
+        )
+        .expect("an owned fragment serves an exclusive optional");
 
     let mut adapter = Recorder::default();
     adapter.shared.insert("Sample".to_owned());
