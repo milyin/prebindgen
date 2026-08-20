@@ -880,8 +880,11 @@ impl Compile for Recorder {
     type Plan = String;
     type Error = String;
 
-    fn atomic(&mut self, _cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
-        self.hook(at, "atomic", String::new())
+    fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+        // A fragment is generated Rust, so a hook is an emission callback and
+        // can spell a model type without naming the flat protocol itself.
+        let spelled = cx.emit().spell(at.crossing.spelled()).to_string();
+        self.hook(at, "atomic", spelled)
     }
 
     fn optional(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
@@ -1028,8 +1031,8 @@ fn a_constructors_parameters_are_the_parts() {
     assert_eq!(
         adapter.calls,
         vec![
-            "atomic u32 construct: ",
-            "atomic u64 construct: ",
+            "atomic u32 construct: u32",
+            "atomic u64 construct: u64",
             "construct Sample construct: sample_new(key=arg0/owned, payload=arg1/owned)",
         ]
     );
@@ -1128,6 +1131,31 @@ fn an_omitted_reach_contributes_no_part() {
         plan.contains("fields Sample deconstruct: key=field0/owned"),
         "{plan}"
     );
+}
+
+#[test]
+fn a_crossing_can_be_compiled_without_a_site() {
+    let model = model(&[SAMPLE]);
+    let recipes = Recipes::default();
+    let bindings = Bindings::default();
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let first = compiler
+        .crossing(
+            &mut adapter,
+            &Crossing::new(ty(&model, "Option<Sample>"), Assembly::Deconstruct),
+        )
+        .expect("compile");
+    assert!(first.text.starts_with("optional"), "{}", first.text);
+    // Asking twice is the same fragment, not a second compilation.
+    compiler
+        .crossing(
+            &mut adapter,
+            &Crossing::new(ty(&model, "Option<Sample>"), Assembly::Deconstruct),
+        )
+        .expect("compile");
+    assert_eq!(adapter.calls.len(), 2);
 }
 
 #[test]

@@ -31,7 +31,10 @@ use super::{
     Assembly, Bindings, Bound, Construct, Crossing, CrossingKey, Deconstruct, Mode, Reach,
     RecipeError, RecipeId, Recipes, Role, Row, Shape, Site,
 };
-use crate::flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef};
+use crate::{
+    flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef},
+    Emit,
+};
 
 /// What a fragment produces, which is the only thing the registry reads out of
 /// one.
@@ -107,10 +110,19 @@ impl fmt::Display for RequirementId {
 pub struct Cx<'a> {
     model: &'a Flat,
     recipes: &'a Recipes,
+    emit: &'a Emit,
     required: &'a mut BTreeSet<RequirementId>,
 }
 
 impl Cx<'_> {
+    /// The Rust-emission capability.
+    ///
+    /// A fragment is generated Rust, so compiling one is an emission callback
+    /// and is handed the key exactly as `Prebindgen`'s `on_*` methods are.
+    pub fn emit(&self) -> &Emit {
+        self.emit
+    }
+
     /// The model every structural fact is read off.
     pub fn model(&self) -> &Flat {
         self.model
@@ -316,6 +328,7 @@ pub struct Compiler<'a, C: Compile> {
     bindings: &'a Bindings,
     fragments: HashMap<(CrossingKey, RecipeId), Rc<C::Fragment>>,
     required: BTreeSet<RequirementId>,
+    emit: Emit,
 }
 
 impl<'a, C: Compile> Compiler<'a, C> {
@@ -327,6 +340,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             bindings,
             fragments: HashMap::new(),
             required: BTreeSet::new(),
+            emit: Emit::new(),
         }
     }
 
@@ -368,12 +382,26 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let mut cx = Cx {
             model: self.model,
             recipes: self.recipes,
+            emit: &self.emit,
             required: &mut self.required,
         };
         adapter
             .plan(&mut cx, &bound, &root)
             .map(Some)
             .map_err(CompileError::Adapter)
+    }
+
+    /// The fragment for one crossing's default row.
+    ///
+    /// The per-row half of [`Self::site`], for an adapter that composes the
+    /// per-site wrapping itself. Built once and reused, like every other row.
+    pub fn crossing(
+        &mut self,
+        adapter: &mut C,
+        crossing: &Crossing,
+    ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
+        let recipe = self.recipes.row(crossing).0;
+        self.row(adapter, crossing, &recipe)
     }
 
     /// The fragment for one row, built once and reused.
@@ -579,6 +607,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let mut cx = Cx {
             model: self.model,
             recipes: self.recipes,
+            emit: &self.emit,
             required: &mut self.required,
         };
         match kind {
@@ -603,6 +632,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let mut cx = Cx {
             model: self.model,
             recipes: self.recipes,
+            emit: &self.emit,
             required: &mut self.required,
         };
         adapter
@@ -616,6 +646,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         Cx {
             model: self.model,
             recipes: self.recipes,
+            emit: &self.emit,
             required: &mut self.required,
         }
     }
