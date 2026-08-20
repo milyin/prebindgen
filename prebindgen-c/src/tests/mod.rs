@@ -13,6 +13,7 @@ mod errors;
 mod inputs;
 mod lowering;
 mod returns;
+mod rows;
 mod structs;
 mod tagged_unions;
 

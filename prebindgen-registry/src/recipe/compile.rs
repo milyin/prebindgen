@@ -327,38 +327,89 @@ impl<E> From<RecipeError> for CompileError<E> {
 
 type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>::Error>>;
 
-/// Drives an adapter over the table: one fragment per row, one plan per site.
-pub struct Compiler<'a, C: Compile> {
-    model: &'a Flat,
-    recipes: &'a Recipes,
-    bindings: &'a Bindings,
-    fragments: HashMap<(TypeKey, Assembly, RecipeId), Rc<C::Fragment>>,
+/// What a compilation has produced, apart from its plans.
+///
+/// Carried between runs by an adapter whose view of the model is lent to it per
+/// callback rather than held: such an adapter is a different type on every call
+/// and so cannot keep one [`Compiler`], but the fragments it built borrow
+/// nothing and outlive any of them.
+pub struct Compiled<F> {
+    fragments: HashMap<(TypeKey, Assembly, RecipeId), Rc<F>>,
     required: BTreeSet<RequirementId>,
-    emit: Emit,
 }
 
-impl<'a, C: Compile> Compiler<'a, C> {
-    /// Drive `adapter` over this table.
-    pub fn new(model: &'a Flat, recipes: &'a Recipes, bindings: &'a Bindings) -> Self {
+impl<F> Default for Compiled<F> {
+    fn default() -> Self {
         Self {
-            model,
-            recipes,
-            bindings,
             fragments: HashMap::new(),
             required: BTreeSet::new(),
-            emit: Emit::new(),
         }
+    }
+}
+
+impl<F> Compiled<F> {
+    /// How many fragments have been built, which is what makes the
+    /// per-crossing promise observable.
+    pub fn len(&self) -> usize {
+        self.fragments.len()
+    }
+
+    /// Whether nothing has been compiled yet.
+    pub fn is_empty(&self) -> bool {
+        self.fragments.is_empty()
     }
 
     /// Every helper a compiled fragment asked for, de-duplicated.
     pub fn required(&self) -> impl Iterator<Item = &RequirementId> {
         self.required.iter()
     }
+}
+
+/// Drives an adapter over the table: one fragment per row, one plan per site.
+pub struct Compiler<'a, C: Compile> {
+    model: &'a Flat,
+    recipes: &'a Recipes,
+    bindings: &'a Bindings,
+    compiled: Compiled<C::Fragment>,
+    emit: Emit,
+}
+
+impl<'a, C: Compile> Compiler<'a, C> {
+    /// Drive `adapter` over this table.
+    pub fn new(model: &'a Flat, recipes: &'a Recipes, bindings: &'a Bindings) -> Self {
+        Self::resume(model, recipes, bindings, Compiled::default())
+    }
+
+    /// [`Self::new`], carrying on from what an earlier run built.
+    pub fn resume(
+        model: &'a Flat,
+        recipes: &'a Recipes,
+        bindings: &'a Bindings,
+        compiled: Compiled<C::Fragment>,
+    ) -> Self {
+        Self {
+            model,
+            recipes,
+            bindings,
+            compiled,
+            emit: Emit::new(),
+        }
+    }
+
+    /// Hand back what this run built, to carry into the next one.
+    pub fn finish(self) -> Compiled<C::Fragment> {
+        self.compiled
+    }
+
+    /// Every helper a compiled fragment asked for, de-duplicated.
+    pub fn required(&self) -> impl Iterator<Item = &RequirementId> {
+        self.compiled.required.iter()
+    }
 
     /// How many fragments have been built, which is what makes the
     /// per-crossing promise observable.
     pub fn compiled_fragments(&self) -> usize {
-        self.fragments.len()
+        self.compiled.fragments.len()
     }
 
     /// Compile one site: pick its row, build the fragment, wrap it in a plan.
@@ -389,7 +440,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.required,
+            required: &mut self.compiled.required,
         };
         adapter
             .plan(&mut cx, &bound, &root)
@@ -419,7 +470,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             crossing.assembly(),
             recipe.clone(),
         );
-        if let Some(built) = self.fragments.get(&key) {
+        if let Some(built) = self.compiled.fragments.get(&key) {
             return Ok(built.clone());
         }
         let row = match self.recipes.get(&crossing.key(), recipe) {
@@ -433,7 +484,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Row::Deconstructing(shape) => self.deconstructing(adapter, at, shape)?,
         };
         let fragment = Rc::new(fragment);
-        self.fragments.insert(key, fragment.clone());
+        self.compiled.fragments.insert(key, fragment.clone());
         Ok(fragment)
     }
 
@@ -624,7 +675,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.required,
+            required: &mut self.compiled.required,
         };
         match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
@@ -649,7 +700,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.required,
+            required: &mut self.compiled.required,
         };
         adapter
             .choice(&mut cx, at, &paired)
@@ -663,7 +714,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.required,
+            required: &mut self.compiled.required,
         }
     }
 
