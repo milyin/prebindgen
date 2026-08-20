@@ -228,13 +228,9 @@ pub(crate) unsafe fn __cbg_in_Calculator(
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Caption(v: caption_t) -> example_flat::Caption {
     example_flat::Caption {
-        id: v.id,
-        text: if v.text.is_null() {
-            ::std::string::String::new()
-        } else {
-            ::std::ffi::CStr::from_ptr(v.text).to_string_lossy().into_owned()
-        },
-        emphatic: ::core::ptr::read(v.emphatic.as_ptr() as *const u8) != 0,
+        id: __cbg_in_u64(v.id),
+        text: __cbg_in_String_field(v.text),
+        emphatic: __cbg_in_bool(v.emphatic),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -242,16 +238,16 @@ pub(crate) unsafe fn __cbg_in_Drawing(
     v: drawing_t,
 ) -> ::core::result::Result<example_flat::Drawing, ::std::string::String> {
     ::core::result::Result::Ok(example_flat::Drawing {
-        id: v.id,
+        id: __cbg_in_u64(v.id),
         shape: __cbg_in_Shape(v.shape)?,
     })
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Foo(v: foo_t) -> example_flat::Foo {
     example_flat::Foo {
-        id: v.id,
-        x86_64_field: v.x86_64_field,
-        unstable_field: v.unstable_field,
+        id: __cbg_in_u64(v.id),
+        x86_64_field: __cbg_in_u64(v.x86_64_field),
+        unstable_field: __cbg_in_u64(v.unstable_field),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -446,6 +442,16 @@ pub(crate) unsafe fn __cbg_in_String(
                 ::std::string::String::from("invalid UTF-8 in String argument"),
             )
         }
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_String_field(
+    v: *const ::core::ffi::c_char,
+) -> ::std::string::String {
+    if v.is_null() {
+        ::std::string::String::new()
+    } else {
+        ::std::ffi::CStr::from_ptr(v).to_string_lossy().into_owned()
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -653,15 +659,15 @@ pub(crate) fn __cbg_out_Calculator(v: example_flat::Calculator) -> *mut calculat
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Caption(v: example_flat::Caption) -> caption_t {
     caption_t {
-        id: v.id,
-        text: __cbg_alloc_cstr(v.text),
-        emphatic: ::core::mem::MaybeUninit::new(v.emphatic),
+        id: __cbg_out_u64(v.id),
+        text: __cbg_out_String(v.text),
+        emphatic: __cbg_out_bool_field(v.emphatic),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Drawing(v: example_flat::Drawing) -> drawing_t {
     drawing_t {
-        id: v.id,
+        id: __cbg_out_u64(v.id),
         shape: __cbg_out_Shape(v.shape),
     }
 }
@@ -672,9 +678,9 @@ pub(crate) fn __cbg_out_Error(v: example_flat::Error) -> *mut ::core::ffi::c_cha
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Foo(v: example_flat::Foo) -> foo_t {
     foo_t {
-        id: v.id,
-        x86_64_field: v.x86_64_field,
-        unstable_field: v.unstable_field,
+        id: __cbg_out_u64(v.id),
+        x86_64_field: __cbg_out_u64(v.x86_64_field),
+        unstable_field: __cbg_out_u64(v.unstable_field),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -750,6 +756,10 @@ pub(crate) fn __cbg_out_String(v: ::std::string::String) -> *mut ::core::ffi::c_
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_bool(v: bool) -> bool {
     v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_bool_field(v: bool) -> ::core::mem::MaybeUninit<bool> {
+    ::core::mem::MaybeUninit::new(v)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_f64(v: f64) -> f64 {
