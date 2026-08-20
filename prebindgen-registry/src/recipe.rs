@@ -1089,12 +1089,19 @@ pub enum RecipeError {
     /// The type half of the composition contract; [`Composition`](Self::Composition)
     /// is the ownership half. Both are checked at every part, this one first: a
     /// part producing the wrong value is wrong however it is held.
+    ///
+    /// **Every** part, in the full sense — a product's fields and constructor
+    /// arguments, an optional's value, a run's element, and a callback's
+    /// arguments. Each is a crossing the row reaches, and each is checked in
+    /// the one place the driver reaches one.
     ComposedType {
         /// The part's own site.
         site: Site,
         /// Which part of the row.
         part: usize,
-        /// What the constructor's parameter, field or accessor requires.
+        /// What the edge requires: a constructor's parameter, a field, an
+        /// accessor's receiver, an optional's value, a run's element, or a
+        /// callback argument.
         wanted: TypeKey,
         /// What the part's fragment says it produces.
         got: TypeKey,
@@ -1105,7 +1112,9 @@ pub enum RecipeError {
         site: Site,
         /// Which part of the row.
         part: usize,
-        /// What the constructor's parameter, field or accessor requires.
+        /// How the edge requires it held: a product's declared parameter or
+        /// field mode, an optional's value, the mode a collection lends its
+        /// elements in, or a callback argument's own.
         wanted: Mode,
         /// What the part's fragment produces.
         got: Mode,
