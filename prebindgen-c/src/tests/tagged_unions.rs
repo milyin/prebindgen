@@ -80,11 +80,17 @@ fn tagged_union_mirror_and_converters() {
         "{src}"
     );
     assert!(
-        compact.contains("example_flat::Shape::Circle(__f0)=>shape_t::Circle(__f0),"),
+        // The payload converts through its own scalar conversion rather than
+        // passing through inline — same value, named once.
+        compact
+            .contains("example_flat::Shape::Circle(__f0)=>shape_t::Circle(__cbg_out_f64(__f0)),"),
         "{src}"
     );
     assert!(
-        compact.contains("shape_t::Labeled(__cbg_alloc_cstr(__f0),"),
+        // The `String` payload allocates through `String`'s own conversion,
+        // which is where `__cbg_alloc_cstr` lives — one statement of it rather
+        // than one per payload position.
+        compact.contains("shape_t::Labeled(__cbg_out_String(__f0),"),
         "{src}"
     );
     assert!(
@@ -258,6 +264,8 @@ fn tagged_union_as_data_struct_field() {
         compact.contains("fn__cbg_in_Drawing(v:drawing_t,)->::core::result::Result<"),
         "{src}"
     );
+    // The union's own conversion already produces the `MaybeUninit` the
+    // mirror field holds, so the struct passes it through.
     assert!(compact.contains("shape:__cbg_out_Shape(v.shape),"), "{src}");
 }
 
@@ -553,15 +561,21 @@ fn null_opaque_payload_is_reported_not_materialised() {
     let src = write(cbindgen, registry, "tagged_union_null_payload");
     let compact: String = src.split_whitespace().collect();
 
-    // The bare `Box` arm checks before boxing, and names why.
+    // The bare `Box` arm checks before boxing, and names why. The check lives
+    // in the payload's own conversion now rather than inline in the arm, so the
+    // guard reads `v` — the converter's parameter — and the arm calls it.
     assert!(
-        compact.contains("if__f0.is_null(){return::core::result::Result::Err("),
+        compact.contains("ifv.is_null(){return::core::result::Result::Err("),
         "{src}"
     );
     assert!(compact.contains("nullpayloadfor`Blob`"), "{src}");
+    assert!(
+        compact.contains("Slot::Filled(__cbg_in_Box___Blob___payload(__f0)?)"),
+        "{src}"
+    );
     // The `Option` arm keeps NULL as a legitimate value.
     assert!(
-        compact.contains("if__f0.is_null(){::core::option::Option::None}"),
+        compact.contains("ifv.is_null(){::core::option::Option::None}"),
         "{src}"
     );
 }
@@ -747,12 +761,19 @@ fn bool_payload_is_normalised_not_materialised() {
         compact.contains("On(::core::mem::MaybeUninit<bool>),"),
         "{src}"
     );
+    // The payload converts through `bool`'s own field reading rather than
+    // inline: same normalisation, named once.
     assert!(
-        compact.contains("example_flat::Flagged::On(::core::ptr::read(__f0.as_ptr()as*constu8)!=0"),
+        compact.contains("example_flat::Flagged::On(__cbg_in_bool(__f0))"),
         "{src}"
     );
     assert!(
-        compact.contains("flagged_t::On(::core::mem::MaybeUninit::new(__f0))"),
+        compact.contains("__cbg_in_bool(v:::core::mem::MaybeUninit<bool>)->bool"),
+        "{src}"
+    );
+    assert!(
+        compact
+            .contains("example_flat::Flagged::On(__f0)=>flagged_t::On(__cbg_out_bool_field(__f0))"),
         "{src}"
     );
     // A bool owns nothing, so the union still gets no typed drop.
@@ -830,7 +851,11 @@ fn one_kind_presents_one_c_type_however_it_is_spelled() {
     // the C type follows `kind`, the conversion follows the syntax. The `Box`
     // spelling hands its box over; the bare ones are boxed here.
     assert!(
-        compact.contains("::std::boxed::Box::into_raw(__b)as*muthandle_t"),
+        // `Option<Box<Handle>>` — the box is handed over, not made. The
+        // payload conversion binds the `Some` arm as `__v`; what distinguishes
+        // the two spellings is `into_raw(__v)` against `into_raw(Box::new(__v))`
+        // below.
+        compact.contains("::std::boxed::Box::into_raw(__v)as*muthandle_t"),
         "the `Box` spelling hands over the box it already has:\n{src}"
     );
     assert!(

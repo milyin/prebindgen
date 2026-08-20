@@ -13,9 +13,10 @@
 //! whatever the build script said rather than whichever guess fired first.
 
 use prebindgen_registry::{
-    flat::{Flat, Type},
+    flat::{Flat, Type, TypeRef},
     recipe::{
-        Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeId, Recipes,
+        Arm, Assembly, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError,
+        RecipeId, Recipes,
     },
 };
 
@@ -29,6 +30,22 @@ fn whole() -> RecipeId {
 /// The row a type crossing field by field takes.
 pub(crate) fn parts() -> RecipeId {
     RecipeId::new("parts")
+}
+
+/// The row a value takes as a **tagged union's payload**, where it rides
+/// differently from both of the readings below.
+///
+/// A `Box<T>` or `Option<Box<T>>` over a declared `opaque_ptr` rides in the
+/// union as a bare `*mut t_t` the C side owns. That is neither the whole-value
+/// reading — a handle parameter is spelled `T` and reclaimed from its own
+/// pointer — nor a struct field's.
+///
+/// The row is filed on the **stripped** crossing, because `Crossing::key` peels
+/// `Box`: `Box<Blob>` and `Blob` share one crossing and are told apart by the
+/// site that picks between their rows, and by the fragment, which is keyed by
+/// the spelling.
+pub(crate) fn payload() -> RecipeId {
+    RecipeId::new("payload")
 }
 
 /// The row a value takes **inside a `data_struct`'s mirror**, where its wire
@@ -56,6 +73,15 @@ impl CbindgenBuilder {
     /// different words helps nobody.
     pub(crate) fn recipes(&self, model: &Flat) -> Result<Recipes, Vec<RecipeError>> {
         let mut rows = Recipes::builder();
+        // The crossings a payload row will also land on. `Crossing::key` peels
+        // `Box`, so a `Box<Blob>` payload shares `Blob`'s crossing — which is
+        // right for lookup, and means the handle's own row has to say it is
+        // what a site gets when it names neither.
+        let shared: std::collections::HashSet<TypeKey> = self
+            .boxed_payloads(model)
+            .iter()
+            .map(|t| t.borrow_target().unwrap_or(t).stripped_key())
+            .collect();
         // Every per-type policy, and every `convert!`-declared conversion. The
         // second matters as much as the first: a conversion may be declared on
         // a type the registry would otherwise read as an arity layer, and
@@ -85,14 +111,39 @@ impl CbindgenBuilder {
             let Ok(ty) = model.classify(&spelled) else {
                 continue;
             };
+            // A tagged union is a tag plus a union, rebuilt one arm at a time.
+            // Neither the tag nor the selector is a crossing, so neither is
+            // declared: how the C side is told which arm is live is the
+            // adapter's business.
+            if self.tagged_unions.contains_key(&_key) {
+                let Some(alternatives) = alternative_field_counts(model, &_key) else {
+                    continue;
+                };
+                let out: Vec<Arm<Deconstruct>> = alternatives
+                    .iter()
+                    .enumerate()
+                    .map(|(alternative, count)| Arm {
+                        alternative,
+                        op: Deconstruct::Fields((0..*count).map(Reach::Field).collect()),
+                    })
+                    .collect();
+                let into: Vec<Arm<Construct>> = alternatives
+                    .iter()
+                    .enumerate()
+                    .map(|(alternative, _)| Arm {
+                        alternative,
+                        op: Construct::Fields,
+                    })
+                    .collect();
+                rows.declare(ty.clone(), parts(), Deconstructing::Choice { arms: out })
+                    .declare(ty, parts(), Constructing::Choice { arms: into });
+                continue;
+            }
             // A `data_struct` converts each field and reassembles the
             // converted fields into one C struct — many parts, one wire value,
             // which is the pair #450 keeps apart. Everything else declared here
             // is one wire value with nothing inside it that crosses on its own:
-            // an opaque handle, a value-opaque mirror, a C enum. A tagged union
-            // plainly has arms and is still `Atomic`, because `in_tagged_union`
-            // walks an arm's payload inside one generated function; stating
-            // those arms is the next stage.
+            // an opaque handle, a value-opaque mirror, a C enum.
             if let Some(count) = self
                 .data
                 .contains_key(&_key)
@@ -108,9 +159,24 @@ impl CbindgenBuilder {
                 .declare(ty, parts(), Constructing::Product(Construct::Fields));
                 continue;
             }
-            rows.declare(ty.clone(), whole(), Deconstructing::Atomic)
-                .declare(ty, whole(), Constructing::Atomic);
+            if shared.contains(&ty.borrow_target().unwrap_or(&ty).stripped_key()) {
+                rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic)
+                    .declare_default(ty, whole(), Constructing::Atomic);
+            } else {
+                rows.declare(ty.clone(), whole(), Deconstructing::Atomic)
+                    .declare(ty, whole(), Constructing::Atomic);
+            }
         }
+        // The payload rows, on the stripped crossing each `Box`-over-handle
+        // shares with its own handle type. Only the types a union arm actually
+        // carries.
+        for ty in self.boxed_payloads(model) {
+            // The handle's own row is already filed on this crossing, so one of
+            // the two has to say which a site gets when it names neither.
+            rows.declare(ty.clone(), payload(), Deconstructing::Atomic)
+                .declare(ty, payload(), Constructing::Atomic);
+        }
+
         // `bool`'s second row. Declared for every binding rather than only
         // where a struct has such a field: a row for a crossing nobody uses is
         // inert, and the alternative is walking every declared struct twice to
@@ -137,6 +203,44 @@ impl CbindgenBuilder {
         rows.build(model)
     }
 
+    /// Which row a union payload of this type takes, and in which directions,
+    /// where it is not the type's own default.
+    ///
+    /// Every `Box`-over-handle a union arm carries, keyed once.
+    fn boxed_payloads(&self, model: &Flat) -> Vec<TypeRef> {
+        let mut payloads: Vec<TypeRef> = Vec::new();
+        for (key, _) in sorted_by_key(&self.tagged_unions) {
+            for fields in alternatives_of(model, key).unwrap_or_default() {
+                for field in fields {
+                    if self.declared_opaque_payload_inner(&field.ty).is_some()
+                        || r_boxed_inner(&field.ty).is_some()
+                    {
+                        payloads.push(field.ty.clone());
+                    }
+                }
+            }
+        }
+        payloads.sort_by_key(|t| t.key().as_str().to_owned());
+        payloads.dedup_by_key(|t| t.key().as_str().to_owned());
+        payloads
+    }
+
+    /// `bool` and `String` read as they do inside a struct; a `Box`-over-handle
+    /// needs [`payload`], the one reading neither of the other two covers.
+    fn payload_reading(&self, fty: &TypeRef) -> Option<(RecipeId, &'static [Assembly])> {
+        use prebindgen_registry::flat::{ScalarKind, TypeKind};
+        if self.declared_opaque_payload_inner(fty).is_some() || r_boxed_inner(fty).is_some() {
+            return Some((payload(), &[Assembly::Construct, Assembly::Deconstruct]));
+        }
+        match fty.unwrapped().kind() {
+            TypeKind::Scalar(ScalarKind::Bool) => {
+                Some((in_field(), &[Assembly::Construct, Assembly::Deconstruct]))
+            }
+            TypeKind::String => Some((in_field(), &[Assembly::Construct])),
+            _ => None,
+        }
+    }
+
     /// Which row each part of a declared product takes, where it is not the
     /// part type's own default.
     ///
@@ -154,6 +258,39 @@ impl CbindgenBuilder {
         };
 
         let mut bound = Bindings::builder();
+        // A union's payload reads like a struct's field for `bool` and
+        // `String`, and needs a reading of its own where it is a `Box` over a
+        // declared handle — see [`payload`].
+        for (key, cfg) in sorted_by_key(&self.tagged_unions) {
+            let Ok(spelled) = syn::parse2::<syn::Type>(cfg.rust_type.declared_spelling()) else {
+                continue;
+            };
+            let Ok(ty) = model.classify(&spelled) else {
+                continue;
+            };
+            let Some(alternatives) = alternatives_of(model, key) else {
+                continue;
+            };
+            // Every arm numbers its parts from zero, so a payload is addressed
+            // by its alternative as well as its index — `part 0` alone names
+            // one part per arm.
+            for (arm, fields) in alternatives.iter().enumerate() {
+                for (index, field) in fields.iter().enumerate() {
+                    let Some((row, directions)) = self.payload_reading(&field.ty) else {
+                        continue;
+                    };
+                    for &assembly in directions {
+                        let of = Crossing::new(ty.clone(), assembly);
+                        bound.bind(
+                            Site::arm_part(&of, &parts(), Some(arm), index),
+                            Crossing::new(field.ty.clone(), assembly),
+                            Ask::Recipe(row.clone()),
+                            Asked::Part,
+                        );
+                    }
+                }
+            }
+        }
         let mut declared: Vec<(TypeKey, Origin<syn::Type>)> = self
             .data
             .iter()
@@ -207,6 +344,25 @@ impl CbindgenBuilder {
 fn struct_fields(model: &Flat, key: &TypeKey) -> Option<Vec<prebindgen_registry::flat::Field>> {
     match model.declared_type(&key.ident()?)? {
         Type::Struct(s) => Some(s.fields.clone()),
+        _ => None,
+    }
+}
+
+/// The alternatives of this declared sum, with their payload fields.
+fn alternatives_of(
+    model: &Flat,
+    key: &TypeKey,
+) -> Option<Vec<Vec<prebindgen_registry::flat::Field>>> {
+    match model.declared_type(&key.ident()?)? {
+        Type::Variant(v) => Some(v.alternatives.iter().map(|a| a.fields.clone()).collect()),
+        _ => None,
+    }
+}
+
+/// How many fields each alternative of this declared sum carries.
+fn alternative_field_counts(model: &Flat, key: &TypeKey) -> Option<Vec<usize>> {
+    match model.declared_type(&key.ident()?)? {
+        Type::Variant(v) => Some(v.alternatives.iter().map(|a| a.fields.len()).collect()),
         _ => None,
     }
 }

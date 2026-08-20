@@ -116,10 +116,29 @@ impl CbindgenBuilder {
     /// A `bool` reached through a nested `data_struct` payload is covered by
     /// the same [`bool_wire`] policy, which [`c_field_wire`] and the plain
     /// `bool` parameter now share (#170).
+    /// Why this type can **never** be a union payload, whatever converts it.
+    ///
+    /// The half of [`Self::payload_field_wire`] that is a fact about the union
+    /// rather than about the conversion: one union field carries one C wire, so
+    /// a shape needing two cannot ride in one however well it converts. The
+    /// other half — "no resolved converter" — stops being a question once the
+    /// payload is composed from its own part, which is a conversion in hand.
+    pub(super) fn payload_shape_refusal(&self, fty: &TypeRef) -> Result<(), String> {
+        if r_is_vec(fty) {
+            return Err(
+                "a `Vec` needs TWO C wires (pointer + length) and one union field carries only \
+                 one, so its length would be silently dropped — hand the sequence over through \
+                 a separate function, or wrap it in a declared `opaque_ptr` handle"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+
     pub(super) fn payload_field_wire(
         &self,
         fty: &TypeRef,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> Result<syn::Type, String> {
         // `String` is the one type whose two directions disagree on the wire
         // (`*const c_char` in, `*mut c_char` out), so the union field fixes the
@@ -275,26 +294,6 @@ impl CbindgenBuilder {
             return true;
         }
         !self.owning_data_struct_fields(fty, registry).is_empty()
-    }
-
-    /// Whether a tagged-union payload crosses through a converter of its own,
-    /// rather than being its own wire. Everything except a scalar and the
-    /// hand-written `String` / opaque-pointer shapes does — a declared
-    /// `enum_type`, a nested `data_struct`, a bare `opaque_ptr` handle, a
-    /// converted leaf. Such a payload must be registered as a resolver
-    /// dependency so its converter exists by the time the union's own is
-    /// emitted; without that it silently degrades to a passthrough and the
-    /// generated code does not compile.
-    pub(super) fn payload_needs_converter(&self, fty: &TypeRef) -> bool {
-        if r_is_string(fty) || r_is_scalar(fty) || r_is_vec(fty) {
-            return false;
-        }
-        if self.enums.contains_key(&fty.key()) {
-            return true;
-        }
-        // `Box<T>` / `Option<Box<T>>` opaque pointers are built inline from the
-        // handle's C ident, not through a converter call.
-        !matches!(self.mirror_field_wire(fty), Some(syn::Type::Ptr(_)))
     }
 
     /// The `(name, type)` of every field of a declared `data_struct` whose own
