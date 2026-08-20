@@ -54,6 +54,15 @@ pub enum Role {
     ///
     /// Swaps jobs: Rust holds the value and pushes it out, so the argument is
     /// deconstructed even though it sits in a parameter list.
+    ///
+    /// A **root** role, like [`Return`](Self::Return) and
+    /// [`Param`](Self::Param): it names an argument of the callback in one
+    /// exported function, so it is what an adapter passes to
+    /// [`Compiler::site`](super::Compiler::site) when it compiles that argument
+    /// itself. It is deliberately not what the driver asks at while compiling a
+    /// callback row — a row is shared by every function whose callback has the
+    /// same signature, so a per-function answer could not apply to it. Inside a
+    /// row the driver asks at [`Part`](Self::Part), which is keyed by the row.
     CallbackArg {
         /// Which parameter of the exported function is the callback.
         param: usize,
