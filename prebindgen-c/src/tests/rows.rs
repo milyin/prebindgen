@@ -102,15 +102,15 @@ fn a_data_struct_is_its_fields() {
 }
 
 #[test]
-fn a_tagged_union_still_crosses_whole() {
-    // It plainly has arms, and is still one row with no parts: `in_tagged_union`
-    // walks an arm's payload inside one generated function, which is exactly
-    // what `Atomic` says. Stating those arms is the next stage.
+fn a_tagged_union_is_its_arms() {
+    // One arm per alternative, each a product of that alternative's payload.
+    // Neither the tag nor the selector appears: how the C side is told which
+    // arm is live is the adapter's business, so no row mentions it.
     let model = model();
     let gen = Cbindgen::builder().tagged_union(syn::parse_quote!(Reply));
     assert_eq!(
         rows_of(&gen, &model, "Reply"),
-        "construct whole:atomic, deconstruct whole:atomic"
+        "construct parts:choice(2), deconstruct parts:choice(2)"
     );
 }
 

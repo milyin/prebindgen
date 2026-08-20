@@ -35,6 +35,15 @@ impl Site {
     /// type rather than chosen, so composing one by hand is a guess — this is
     /// the answer instead.
     pub fn part(of: &Crossing, recipe: &RecipeId, index: usize) -> Self {
+        Self::arm_part(of, recipe, None, index)
+    }
+
+    /// The site of one part of `of`'s row `recipe`, inside alternative `arm`.
+    ///
+    /// [`Self::part`] with the alternative stated. A part of a
+    /// [`Shape::Choice`](super::Shape::Choice) row needs it, because every arm
+    /// numbers its parts from zero.
+    pub fn arm_part(of: &Crossing, recipe: &RecipeId, arm: Option<usize>, index: usize) -> Self {
         Self {
             owner: of
                 .value()
@@ -44,6 +53,7 @@ impl Site {
             role: Role::Part {
                 of: of.key(),
                 recipe: recipe.clone(),
+                arm,
                 index,
             },
         }
@@ -99,7 +109,16 @@ pub enum Role {
         of: CrossingKey,
         /// Which of that crossing's rows.
         recipe: RecipeId,
-        /// The part's position within the row.
+        /// Which alternative, for a part inside a [`Shape::Choice`](super::Shape::Choice)
+        /// arm; `None` for a product's own part.
+        ///
+        /// Load-bearing rather than decorative: **every arm numbers its parts
+        /// from zero**, so `part 0` of a two-armed sum names two different
+        /// parts of two different types. Without the alternative there is no
+        /// key that tells them apart, and a binding written for one silently
+        /// collides with the other.
+        arm: Option<usize>,
+        /// The part's position within the row — or within its arm.
         index: usize,
     },
     /// A `#[prebindgen]` constant's value.
@@ -116,9 +135,15 @@ impl fmt::Display for Role {
             Role::CallbackArg { param, arg } => {
                 write!(f, "argument {arg} of the callback in parameter {param}")
             }
-            Role::Part { of, recipe, index } => {
-                write!(f, "part {index} of row `{recipe}` of {of}")
-            }
+            Role::Part {
+                of,
+                recipe,
+                arm,
+                index,
+            } => match arm {
+                Some(arm) => write!(f, "part {index} of arm {arm} of row `{recipe}` of {of}"),
+                None => write!(f, "part {index} of row `{recipe}` of {of}"),
+            },
             Role::Const => f.write_str("value"),
         }
     }

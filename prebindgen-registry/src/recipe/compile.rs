@@ -546,8 +546,24 @@ impl<'a, C: Compile> Compiler<'a, C> {
         ty: &TypeRef,
         wanted: Mode,
     ) -> Built<C> {
+        self.part_of(adapter, at, assembly, None, index, ty, wanted)
+    }
+
+    /// [`Self::part`] for a part inside a [`Shape::Choice`] arm, which numbers
+    /// its parts from zero like every other arm.
+    #[allow(clippy::too_many_arguments)]
+    fn part_of(
+        &mut self,
+        adapter: &mut C,
+        at: At<'_>,
+        assembly: Assembly,
+        arm: Option<usize>,
+        index: usize,
+        ty: &TypeRef,
+        wanted: Mode,
+    ) -> Built<C> {
         let crossing = Crossing::new(ty.clone(), assembly);
-        let site = Site::part(at.crossing, at.recipe, index);
+        let site = Site::arm_part(at.crossing, at.recipe, arm, index);
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRow {
                 site,
@@ -596,7 +612,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Sequence { inner } => self.sequence(adapter, at, inner),
             Shape::Product(op) => {
                 let (kind, parts) = self.construct_parts(at, op, None)?;
-                self.product(adapter, at, kind, parts)
+                self.product(adapter, at, None, kind, parts)
             }
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
@@ -604,7 +620,8 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     let alternative = self.alternative(at, arm.alternative)?;
                     let (kind, parts) =
                         self.construct_parts(at, &arm.op, Some(&alternative.fields))?;
-                    built.push((alternative, self.product(adapter, at, kind, parts)?));
+                    let at_arm = Some(arm.alternative);
+                    built.push((alternative, self.product(adapter, at, at_arm, kind, parts)?));
                 }
                 self.choice(adapter, at, built)
             }
@@ -623,7 +640,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Sequence { inner } => self.sequence(adapter, at, inner),
             Shape::Product(op) => {
                 let (kind, parts) = self.deconstruct_parts(at, op, None)?;
-                self.product(adapter, at, kind, parts)
+                self.product(adapter, at, None, kind, parts)
             }
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
@@ -631,7 +648,8 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     let alternative = self.alternative(at, arm.alternative)?;
                     let (kind, parts) =
                         self.deconstruct_parts(at, &arm.op, Some(&alternative.fields))?;
-                    built.push((alternative, self.product(adapter, at, kind, parts)?));
+                    let at_arm = Some(arm.alternative);
+                    built.push((alternative, self.product(adapter, at, at_arm, kind, parts)?));
                 }
                 self.choice(adapter, at, built)
             }
@@ -716,6 +734,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
+        arm: Option<usize>,
         kind: ProductKind<'p>,
         parts: Vec<Part<'p>>,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
@@ -724,10 +743,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
             // `part.mode` rather than the type's own spelling: a product edge
             // states what it needs — a constructor parameter, a field, an
             // accessor's receiver — and `part` checks against that.
-            built.push(self.part(
+            built.push(self.part_of(
                 adapter,
                 at,
                 at.crossing.assembly(),
+                arm,
                 index,
                 &part.ty,
                 part.mode,
