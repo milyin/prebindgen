@@ -823,7 +823,9 @@ impl Carrier for Note {
 struct Recorder {
     /// One line per hook call, in call order.
     calls: Vec<String>,
-    /// Crossings whose fragment is reached through a borrow.
+    /// Crossings whose fragment claims to be reached through a shared borrow
+    /// where the crossing itself is not — an adapter that lends where the
+    /// spelling hands over.
     shared: HashSet<String>,
     /// Crossings whose fragment is valid only while its source is alive.
     borrowed: HashSet<String>,
@@ -845,10 +847,13 @@ impl Recorder {
                     .get(&name)
                     .cloned()
                     .unwrap_or_else(|| at.crossing.value().stripped_key()),
+                // The crossing's own mode, as both real adapters report it;
+                // `shared` is an override for the tests that need a fragment to
+                // disagree with its spelling.
                 mode: if self.shared.contains(&name) {
                     Mode::Shared
                 } else {
-                    Mode::Owned
+                    at.crossing.mode()
                 },
                 validity: if self.borrowed.contains(&name) {
                     Validity::Borrowed
@@ -1253,6 +1258,146 @@ fn a_sequence_reads_its_element_mode_off_the_collection() {
     assert!(modes("&[u32]").contains("elements &"));
     assert!(modes("&Vec<u32>").contains("elements &"));
     assert!(modes("[u32; 4]").contains("elements owned"));
+}
+
+#[test]
+fn a_mode_reached_through_a_container_composes_both_layers() {
+    use Mode::{Exclusive, Owned, Shared};
+    // An owned container gives its contents up, so the value's own mode stands.
+    assert_eq!(Owned.through(Owned), Owned);
+    assert_eq!(Shared.through(Owned), Shared);
+    assert_eq!(Exclusive.through(Owned), Exclusive);
+    // A shared view yields nothing stronger, whatever it holds.
+    assert_eq!(Owned.through(Shared), Shared);
+    assert_eq!(Shared.through(Shared), Shared);
+    assert_eq!(Exclusive.through(Shared), Shared);
+    // An exclusive view of a shared reference is still shared; of anything
+    // else it is exclusive.
+    assert_eq!(Shared.through(Exclusive), Shared);
+    assert_eq!(Owned.through(Exclusive), Exclusive);
+    assert_eq!(Exclusive.through(Exclusive), Exclusive);
+}
+
+#[test]
+fn an_optionals_value_is_held_through_the_optional() {
+    // Reading through a shared `&Option<T>` can only lend its value, so the
+    // shared fragment is the correct one and demanding an owned `T` refuses it.
+    let model = model(&[SAMPLE]);
+    let recipes = Recipes::default();
+    let bindings = Bindings::default();
+
+    let mut adapter = Recorder::default();
+    adapter.shared.insert("Sample".to_owned());
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "&Option<Sample>"), Assembly::Construct),
+        )
+        .expect("a shared optional lends its value");
+
+    // The same fragment cannot serve an owned `Option<T>`, which hands it over.
+    let mut adapter = Recorder::default();
+    adapter.shared.insert("Sample".to_owned());
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    let error = compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "Option<Sample>"), Assembly::Construct),
+        )
+        .expect_err("an owned optional hands its value over");
+    assert!(
+        matches!(
+            recipe_error(&error),
+            RecipeError::Composition {
+                wanted: Mode::Owned,
+                got: Mode::Shared,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn an_exclusive_optional_lends_its_value_exclusively() {
+    // `&mut Option<T>` lends `&mut T`, so an owned fragment satisfies it and a
+    // merely shared one does not — the opposite direction from `&Option<T>`.
+    let model = model(&[SAMPLE]);
+    let recipes = Recipes::default();
+    let bindings = Bindings::default();
+
+    let mut adapter = Recorder::default();
+    adapter.shared.insert("Sample".to_owned());
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    let error = compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "&mut Option<Sample>"), Assembly::Construct),
+        )
+        .expect_err("a shared fragment cannot serve an exclusive optional");
+    assert!(
+        matches!(
+            recipe_error(&error),
+            RecipeError::Composition {
+                wanted: Mode::Exclusive,
+                got: Mode::Shared,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn a_shared_run_of_exclusive_references_caps_at_shared() {
+    // `&[&mut T]` yields `&&mut T`, so it cannot hand over the `&mut T` its
+    // element is spelled as. Reading the element alone asks `Exclusive` and
+    // accepts the exclusive fragment, which the sequence hook could not
+    // legally be fed; composing caps the ask at `Shared` and refuses it.
+    let model = model(&[SAMPLE]);
+    let recipes = Recipes::default();
+    let bindings = Bindings::default();
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let error = compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "&[&mut Sample]"), Assembly::Construct),
+        )
+        .expect_err("a shared slice cannot lend its elements exclusively");
+    assert!(
+        matches!(
+            recipe_error(&error),
+            RecipeError::Composition {
+                wanted: Mode::Shared,
+                got: Mode::Exclusive,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+
+    // An exclusive run of exclusive references does hand them over.
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "&mut [&mut Sample]"), Assembly::Construct),
+        )
+        .expect("an exclusive slice lends its elements exclusively");
+    assert!(
+        adapter.calls.iter().any(|c| c.contains("elements &mut")),
+        "{:?}",
+        adapter.calls
+    );
 }
 
 #[test]

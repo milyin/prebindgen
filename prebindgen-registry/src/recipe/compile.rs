@@ -634,8 +634,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
         at: At<'_>,
         inner: &TypeRef,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
-        // An optional holds its value the way the value itself is spelled.
-        let wanted = mode_of(inner);
+        // Both layers: an `Option<&T>` holds a borrow, and a `&Option<T>` can
+        // only lend whatever it holds. Reading either alone is wrong in a
+        // different direction — `&Option<T>` would demand an owned `T` that
+        // reading through the shared optional cannot produce, and
+        // `&mut Option<T>` would demand an owned one where it lends `&mut T`.
+        let wanted = mode_of(inner).through(at.crossing.mode());
         let inner = self.part(adapter, at, at.crossing.assembly(), 0, inner, wanted)?;
         let mut cx = self.cx();
         adapter
@@ -975,17 +979,20 @@ fn mode_of(ty: &TypeRef) -> Mode {
 /// borrow however the collection hands it over, and reading only the collection
 /// would call that element owned.
 fn element_mode(crossing: &Crossing, elem: &TypeRef) -> Mode {
-    match mode_of(elem) {
-        // The element is a reference: handing it over hands over a borrow.
+    // How the collection hands an element over, before the element's own
+    // spelling is considered: a run reached through a borrow lends the same way
+    // it was reached, and a bare `[T]` is only ever reached through one.
+    let lent_as = match crossing.mode() {
         borrowed @ (Mode::Shared | Mode::Exclusive) => borrowed,
-        Mode::Owned => match crossing.mode() {
-            borrowed @ (Mode::Shared | Mode::Exclusive) => borrowed,
-            Mode::Owned => match crossing.value().unwrapped().kind() {
-                TypeKind::Slice(_) => Mode::Shared,
-                _ => Mode::Owned,
-            },
+        Mode::Owned => match crossing.value().unwrapped().kind() {
+            TypeKind::Slice(_) => Mode::Shared,
+            _ => Mode::Owned,
         },
-    }
+    };
+    // Then the element's own, held through that. A `Vec<&T>` gives its elements
+    // up and what it gives up is a borrow; a `&[&mut T]` yields `&&mut T` and
+    // so cannot hand over the `&mut T` its element is spelled as.
+    mode_of(elem).through(lent_as)
 }
 
 /// The weakest validity a role accepts.
