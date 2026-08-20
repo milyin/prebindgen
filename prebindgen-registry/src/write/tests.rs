@@ -182,7 +182,8 @@ fn write_rust_sorts_declared_items_by_ident() {
         .expect("clock drift")
         .as_nanos();
     let path = std::env::temp_dir().join(format!("prebindgen-write-rust-{unique}.rs"));
-    let written = write_rust(&reg, &IdentityExt, &path).expect("write_rust");
+    let written = write_rust(&reg, &IdentityExt, crate::write::Conversions::Table, &path)
+        .expect("write_rust");
     let content = std::fs::read_to_string(&written).expect("read generated file");
     let _ = std::fs::remove_file(&written);
 
@@ -305,8 +306,13 @@ fn guards_emit_ungated_and_in_stream_order() {
     let dir = crate::test_util::unique_test_dir("write_guards");
     std::fs::create_dir_all(&dir).unwrap();
     let registry = registry.resolve_gating(ConstGatingExt).expect("resolve");
-    let path = crate::write::write_rust(&registry, &ConstGatingExt, dir.join("gen.rs"))
-        .expect("write_rust");
+    let path = crate::write::write_rust(
+        &registry,
+        &ConstGatingExt,
+        crate::write::Conversions::Table,
+        dir.join("gen.rs"),
+    )
+    .expect("write_rust");
     let src = std::fs::read_to_string(&path).unwrap();
 
     // The named const is gated out; both guards emit regardless.
