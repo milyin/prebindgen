@@ -1412,7 +1412,7 @@ impl JniGenBuilder {
         self,
         registry: prebindgen_registry::RegistryBuilder<KotlinMeta>,
     ) -> Result<JniGen, prebindgen_registry::WriteRustError> {
-        let decls = self.decls;
+        let mut decls = self.decls;
         let declared = decls.declare_into(registry)?.validate_with(&decls)?;
         // A second holding of the model: `convert_with` consumes the builder,
         // and the table outlives that call.
@@ -1434,6 +1434,12 @@ impl JniGenBuilder {
         let mut compiled = Some(prebindgen_registry::recipe::Compiled::<
             crate::jni::compile::JFrag,
         >::default());
+        // A callback is still answered without the compiler — see
+        // `compile_crossing` — so no fragment carries its conversion and the
+        // fragment list alone would not reach the file. Collected here rather
+        // than papered over: this list empties when the derived callback row
+        // takes over.
+        let mut uncompiled: Vec<syn::ItemFn> = Vec::new();
         let registry = declared
             .convert_with(|crossing, built, emit| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
@@ -1444,9 +1450,31 @@ impl JniGenBuilder {
                 );
                 let conv = decls.compile_crossing(&mut compiler, crossing, built, emit);
                 compiled = Some(compiler.finish());
+                if let (Some(c), true) =
+                    (conv.as_ref(), decls.is_callback_crossing(crossing, built))
+                {
+                    uncompiled.push(c.function.clone());
+                }
                 conv
             })?
             .build()?;
+        // What the compilation produced, kept for emission. The converter table
+        // stays the lookup index; this is what reaches the file.
+        decls.compiled_fns = compiled
+            .expect("the state is put back every call")
+            .fragments()
+            .into_iter()
+            // A JNI conversion already emits more than one function: a
+            // `convert!` with a fallible or binding-local step carries it as a
+            // pre-stage, and every one of them has to reach the file. This is
+            // the case the converter table could hold only because it kept a
+            // list beside the conversion; a fragment says it directly.
+            .flat_map(|f| {
+                std::iter::once(f.conv.function.clone())
+                    .chain(f.conv.pre_stages.iter().map(|s| s.function.clone()))
+            })
+            .chain(uncompiled)
+            .collect();
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
         decls
@@ -1462,6 +1490,23 @@ impl Declarations {
     ///
     /// `None` is *cannot*, never *not yet*: the crossings arrive inner-first,
     /// so everything this could compose from is already in `built`.
+    /// Whether this crossing is the callback shape `compile_crossing` answers
+    /// without the compiler.
+    fn is_callback_crossing<R: Conversions<KotlinMeta>>(
+        &self,
+        crossing: &Crossing,
+        built: &R,
+    ) -> bool {
+        let (dir, key) = crossing;
+        matches!(dir, Direction::Input)
+            && built.reading(key).is_some_and(|r| {
+                matches!(
+                    r.unwrapped().kind(),
+                    prebindgen_registry::flat::TypeKind::Callback { .. }
+                )
+            })
+    }
+
     fn compile_crossing<'v, R: Conversions<KotlinMeta>>(
         &'v self,
         compiler: &mut prebindgen_registry::recipe::Compiler<
@@ -1776,6 +1821,13 @@ impl Prebindgen for Declarations {
     /// the Kotlin emitter reads it back to drive every wrapper /
     /// typed-handle / `JNIWrappers` signature.
     type Metadata = KotlinMeta;
+
+    fn converter_items(
+        &self,
+        _registry: &prebindgen_registry::Registry<KotlinMeta>,
+    ) -> Option<Vec<syn::ItemFn>> {
+        Some(self.compiled_fns.clone())
+    }
 
     // ── Structural type resolution ──────────────────────────────────────
     // Try the terminal categories, then the `Result` peel, then the built-in
