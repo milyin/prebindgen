@@ -433,14 +433,15 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Optional { inner } => self.optional(adapter, at, inner),
             Shape::Sequence { inner } => self.sequence(adapter, at, inner),
             Shape::Product(op) => {
-                let (kind, parts) = self.construct_parts(at, op)?;
+                let (kind, parts) = self.construct_parts(at, op, None)?;
                 self.product(adapter, at, kind, parts)
             }
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
                 for arm in arms {
                     let alternative = self.alternative(at, arm.alternative)?;
-                    let (kind, parts) = self.construct_parts(at, &arm.op)?;
+                    let (kind, parts) =
+                        self.construct_parts(at, &arm.op, Some(&alternative.fields))?;
                     built.push((alternative, self.product(adapter, at, kind, parts)?));
                 }
                 self.choice(adapter, at, built)
@@ -623,8 +624,26 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &self,
         at: At<'_>,
         op: &Construct,
+        arm: Option<&'a [Field]>,
     ) -> Result<(ProductKind<'a>, Vec<Part<'a>>), CompileError<C::Error>> {
         match op {
+            Construct::Fields => {
+                let fields = match arm {
+                    Some(fields) => fields,
+                    None => self.fields_of(at.crossing.value()),
+                };
+                let parts = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(index, field)| Part {
+                        from: PartSource::Field { index, field },
+                        mode: mode_of(&field.ty),
+                        ty: field.ty.clone(),
+                        name: field_name(field, index),
+                    })
+                    .collect();
+                Ok((ProductKind::Fields, parts))
+            }
             Construct::Identity(inner) => Ok((
                 ProductKind::Identity,
                 vec![Part {
@@ -703,11 +722,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
                         },
                         mode: mode_of(&field.ty),
                         ty: field.ty.clone(),
-                        name: field
-                            .name
-                            .as_ref()
-                            .map(|n| n.to_string())
-                            .unwrap_or_else(|| index.to_string()),
+                        name: field_name(field, *index),
                     });
                 }
                 Reach::Accessor(name) => {
@@ -771,6 +786,15 @@ impl<'a, C: Compile> Compiler<'a, C> {
             _ => None,
         }
     }
+}
+
+/// A field's name, or its position when the struct is positional.
+fn field_name(field: &Field, index: usize) -> String {
+    field
+        .name
+        .as_ref()
+        .map(|n| n.to_string())
+        .unwrap_or_else(|| index.to_string())
 }
 
 /// Which of the four product hooks composes a set of parts.

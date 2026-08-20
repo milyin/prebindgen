@@ -112,6 +112,18 @@ pub enum Construct {
     /// [`Function`], so none of it is restated here, and
     /// whether the call is fallible is its return type.
     Call(syn::Ident),
+    /// Write the value's own fields. **They are the parts**, in the model's
+    /// order, and every one of them contributes.
+    ///
+    /// The adapter-synthesized case, where nothing is called: a `#[repr(C)]`
+    /// mirror of a struct with public fields is rebuilt as a struct literal,
+    /// with no constructor in the source crate to name. Unlike
+    /// [`Deconstruct::Fields`] it names no list, because a value cannot be
+    /// built with one of its fields missing, and which fields there are is the
+    /// model's answer.
+    ///
+    /// Inside a [`Shape::Choice`] arm the fields are that alternative's.
+    Fields,
     /// The single part named here already is the value.
     ///
     /// Boxed because a `TypeRef` is many times the size of the identifier
@@ -669,21 +681,23 @@ impl<'a> Check<'a, '_> {
         match shape {
             Shape::Atomic => Vec::new(),
             Shape::Optional { inner } | Shape::Sequence { inner } => vec![inner.clone()],
-            Shape::Product(op) => self.construct(op),
+            Shape::Product(op) => self.construct(ty, op),
             Shape::Choice { arms } => {
-                // An arm's constructor names the alternative it builds, so no
-                // field list has to be in scope for one.
                 let Some(alternatives) = self.alternatives(ty) else {
                     self.not_a_product();
                     return Vec::new();
                 };
                 let mut parts = Vec::new();
                 for arm in arms {
-                    if arm.alternative >= alternatives.len() {
+                    let Some(fields) = alternatives.get(arm.alternative) else {
                         self.out_of_range(arm.alternative, alternatives.len());
                         continue;
-                    }
-                    parts.extend(self.construct(&arm.op));
+                    };
+                    // The arm's payload stands in for the sum's own fields,
+                    // which the model gives a sum none of.
+                    let outer = self.arm_fields.replace(fields.clone());
+                    parts.extend(self.construct(ty, &arm.op));
+                    self.arm_fields = outer;
                 }
                 parts
             }
@@ -717,12 +731,19 @@ impl<'a> Check<'a, '_> {
         }
     }
 
-    fn construct(&mut self, op: &Construct) -> Vec<TypeRef> {
+    fn construct(&mut self, ty: &TypeRef, op: &Construct) -> Vec<TypeRef> {
         match op {
             Construct::Identity(inner) => vec![(**inner).clone()],
             Construct::Call(func) => match self.function(func) {
                 Some(f) => f.params.iter().map(|p| p.ty.clone()).collect(),
                 None => Vec::new(),
+            },
+            Construct::Fields => match self.fields(ty) {
+                Some(fields) => fields.into_iter().map(|f| f.ty).collect(),
+                None => {
+                    self.not_a_product();
+                    Vec::new()
+                }
             },
         }
     }

@@ -1454,6 +1454,94 @@ fn a_site_takes_the_row_the_binding_names_and_others_take_the_default() {
 }
 
 #[test]
+fn a_struct_with_no_constructor_is_built_from_its_own_fields() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Sample"),
+        id("literal"),
+        Constructing::Product(Construct::Fields),
+    );
+    let recipes = builder.build(&model).expect("table");
+    let mut adapter = Recorder::default();
+
+    let plan = compile_one(
+        &model,
+        &recipes,
+        &mut adapter,
+        site("z_put", 0),
+        "Sample",
+        Assembly::Construct,
+    );
+    // Every field contributes, in the model's order, and the same `fields` hook
+    // serves both jobs.
+    assert!(
+        plan.contains("fields Sample construct: key=field0/owned, payload=field1/owned"),
+        "{plan}"
+    );
+}
+
+#[test]
+fn an_arm_is_built_from_its_own_payload_fields() {
+    let model = model(&["pub enum Reply { Ok(u32), Err(u64) }"]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Reply"),
+        id("variants"),
+        Constructing::Choice {
+            arms: vec![
+                Arm {
+                    alternative: 0,
+                    op: Construct::Fields,
+                },
+                Arm {
+                    alternative: 1,
+                    op: Construct::Fields,
+                },
+            ],
+        },
+    );
+    let recipes = builder.build(&model).expect("table");
+    let mut adapter = Recorder::default();
+
+    let plan = compile_one(
+        &model,
+        &recipes,
+        &mut adapter,
+        site("z_put", 0),
+        "Reply",
+        Assembly::Construct,
+    );
+    assert!(
+        plan.contains("Ok#0 [fields Reply construct: 0=field0/owned]"),
+        "{plan}"
+    );
+    assert!(
+        plan.contains("Err#1 [fields Reply construct: 0=field0/owned]"),
+        "{plan}"
+    );
+    // The two arms' payloads are different types, so they are different rows.
+    assert!(adapter.calls.iter().any(|c| c.starts_with("atomic u32")));
+    assert!(adapter.calls.iter().any(|c| c.starts_with("atomic u64")));
+}
+
+#[test]
+fn building_a_type_the_model_gives_no_fields_is_refused() {
+    let model = model(&["pub struct Handle;"]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "u32"),
+        id("literal"),
+        Constructing::Product(Construct::Fields),
+    );
+    let errors = builder.build(&model).expect_err("a scalar has no fields");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::NotAProduct { .. }]),
+        "{errors:?}"
+    );
+}
+
+#[test]
 fn a_value_form_binds_the_accessors_result_and_reads_its_fields() {
     let model = model(&[
         "pub struct Handle;",
