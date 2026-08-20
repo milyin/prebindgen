@@ -444,6 +444,13 @@ pub struct CbindgenBuilder {
     /// Where the `#[prebindgen]` items come from — see
     /// `JniGenBuilder::source`.
     pub(crate) sources: prebindgen_registry::flat::FlatBuilder,
+    /// Every conversion this binding compiled, keyed by crossing.
+    ///
+    /// What the emitters ask instead of the converter table. The table can only
+    /// name **one** wire type per crossing, so it stops being able to answer as
+    /// soon as a crossing occupies several — and the answer an emitter wants
+    /// was always the adapter's own.
+    pub(crate) compiled: Option<prebindgen_registry::recipe::Compiled<crate::compile::CFrag>>,
     /// Every conversion this binding compiled.
     ///
     /// Filled once by [`Self::build_with`] and handed to `write_rust` as

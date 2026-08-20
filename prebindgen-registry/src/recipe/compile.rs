@@ -365,6 +365,12 @@ type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>
 /// nothing and outlive any of them.
 pub struct Compiled<F> {
     fragments: HashMap<FragmentKey, Rc<F>>,
+    /// Which row answered when a crossing was compiled **as a whole**, rather
+    /// than as one part of a container. Recorded by [`Compiler::crossing`],
+    /// which is the only entry point that consults the crossing's default —
+    /// so [`Compiled::fragment`] can give back that same answer instead of
+    /// choosing between the rows a crossing happens to have.
+    defaults: HashMap<(TypeKey, Assembly), RecipeId>,
     required: BTreeSet<RequirementId>,
 }
 
@@ -377,6 +383,7 @@ impl<F> Default for Compiled<F> {
     fn default() -> Self {
         Self {
             fragments: HashMap::new(),
+            defaults: HashMap::new(),
             required: BTreeSet::new(),
         }
     }
@@ -397,6 +404,27 @@ impl<F> Compiled<F> {
     /// Every helper a compiled fragment asked for, de-duplicated.
     pub fn required(&self) -> impl Iterator<Item = &RequirementId> {
         self.required.iter()
+    }
+
+    /// The fragment for one crossing, compiled **as a whole**.
+    ///
+    /// What an adapter's emitters ask once they stop reading the converter
+    /// table. The answer is the one [`Compiler::crossing`] built — the
+    /// crossing's default row — and not one of the rows that answer for this
+    /// type only as a part of some container. A caller that wants a particular
+    /// row has the row and asks through [`Self::row_fragment`].
+    ///
+    /// `None` means no site ever crossed this type in this direction.
+    pub fn fragment(&self, ty: &TypeKey, assembly: Assembly) -> Option<&F> {
+        let row = self.defaults.get(&(ty.clone(), assembly))?;
+        self.row_fragment(ty, assembly, row)
+    }
+
+    /// The fragment for one crossing and one named row.
+    pub fn row_fragment(&self, ty: &TypeKey, assembly: Assembly, row: &RecipeId) -> Option<&F> {
+        self.fragments
+            .get(&(ty.clone(), assembly, row.clone()))
+            .map(|f| &**f)
     }
 
     /// Every fragment this compilation built, in a deterministic order.
@@ -509,7 +537,13 @@ impl<'a, C: Compile> Compiler<'a, C> {
         crossing: &Crossing,
     ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
         let recipe = self.recipes.row(crossing).0;
-        self.row(adapter, crossing, &recipe)
+        let fragment = self.row(adapter, crossing, &recipe)?;
+        // The whole-crossing answer, so the emitters can ask for it back
+        // without re-deriving which row a crossing defaults to.
+        self.compiled
+            .defaults
+            .insert((crossing.spelled().key(), crossing.assembly()), recipe);
+        Ok(fragment)
     }
 
     /// The fragment for one row, built once and reused.
