@@ -39,273 +39,153 @@ fn is_unsized_spelling(ty: &prebindgen_registry::flat::TypeRef) -> bool {
 }
 
 impl Declarations {
-    /// Select the input converter for `ty`: terminals, user wrappers, then
-    /// built-in structural wrappers.
-    pub(crate) fn select_input_type(
+    /// The `Option<X>` **input** shape.
+    ///
+    /// `Option<&T>` tries the deep `OptionRef` — a borrowed handle decoded to
+    /// `Option<OwnedObject<T>>` — before the shallow `Optional`; the shape that
+    /// resolves correctly wins.
+    pub(crate) fn input_optional(
         &self,
         ty: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // What the converter YIELDS: this crossing's own reading, so a
-        // `Box<Option<T>>` crossing produces a `Box<Option<T>>` — the shape it
-        // is dispatched as does not decide what it is called. The one arm that
-        // yields something else says so with `crate::jni::trait_impl::Produced::Composed`.
+        // `Box<Option<T>>` crossing produces a `Box<Option<T>>`.
         let produced = crate::jni::trait_impl::Produced::Reading(ty);
-
-        // 1. Terminal categories (incl. the terminal user-wrapper lookup).
-        if let Some(c) = self.input_terminal(ty, registry, emit) {
-            return Some(c);
-        }
-        // 3. Built-in wrapper shapes, read one layer at a time rather than as a
-        //    whole stack: each arm handles exactly one, and hands the rest back
-        //    through `subs` to be selected on its own. Peeling further here would
-        //    claim a shape this selector does not emit.
-        if let Some(inner) = ty.optional_inner() {
-            // `Option<&T>` tries the DEEP `OptionRef` (borrowed-handle →
-            // `Option<OwnedObject<T>>`) before the shallow `Optional`; the shape
-            // that resolves correctly wins.
-            if let Some(target) = inner.borrow_target() {
-                let mutable = inner.is_exclusive_borrow();
-                if let Some(mut c) = self.input_wrapper_shape(
-                    WrapperShape::OptionRef { mutable },
-                    &produced,
-                    target,
-                    registry,
-                    emit,
-                ) {
-                    c.subs = vec![target.key()];
-                    return Some(c);
-                }
-            }
-            // An optional BORROW is the deep handler's alone. It declined —
-            // either the inner is not a handle (then the shallow handler below
-            // is right, and only for the canonical spelling) or the spelling
-            // carries a wrapper it cannot bridge. The shallow handler cannot
-            // tell those apart and would decode the jlong as a `*mut &T`, so a
-            // wrapped optional borrow stops here rather than resolving wrong.
-            if inner.borrow_target().is_some() && !ty.erased_wrappers().is_empty() {
-                // "the spelling is exactly `Option<inner>`", off the model: this
-                // rebuilt that canonical form and compared token strings, where
-                // a wrapper over it is what `erased_wrappers` reports.
-                return None;
-            }
-            if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Optional, &produced, inner, registry, emit)
-            {
-                c.subs = vec![inner.key()];
+        let inner = ty.optional_inner()?;
+        if let Some(target) = inner.borrow_target() {
+            let mutable = inner.is_exclusive_borrow();
+            if let Some(mut c) = self.input_wrapper_shape(
+                WrapperShape::OptionRef { mutable },
+                &produced,
+                target,
+                registry,
+                emit,
+            ) {
+                c.subs = vec![target.key()];
                 return Some(c);
             }
+        }
+        // An optional BORROW is the deep handler's alone. It declined — either
+        // the inner is not a handle (then the shallow handler below is right,
+        // and only for the canonical spelling) or the spelling carries a
+        // wrapper it cannot bridge. The shallow handler cannot tell those apart
+        // and would decode the jlong as a `*mut &T`, so a wrapped optional
+        // borrow stops here rather than resolving wrong.
+        if inner.borrow_target().is_some() && !ty.erased_wrappers().is_empty() {
             return None;
         }
-        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
-            if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)
-            {
-                c.subs = vec![elem.key()];
-                return Some(c);
-            }
-            return None;
-        }
-        if let prebindgen_registry::flat::TypeKind::Ref {
-            mutable,
-            inner: borrowed,
-            ..
-        } = ty.unwrapped().kind()
-        {
-            // The target through the accessor: an out-parameter's `MaybeUninit`
-            // is the slot a `T` goes in, and it is the `T` that converts.
-            let inner = ty.borrow_target().expect("a borrow");
-            // `&[T]` shared slice borrow: there is no owned `[T]` to decode, so
-            // reuse the `Vec<_>` shape — decode the Java `List<T>` into an owned
-            // `Vec<T>`; the call site borrows it (`&Vec<T>` deref-coerces to
-            // `&[T]`). Wire/Kotlin type are `List<T>`, identical to a by-value
-            // `Vec<T>` input (the writer dedupes the shared converter fn by ident,
-            // so the two can coexist). `&mut [T]` is intentionally not supported
-            // (no write-back of the decoded Vec).
-            // Two questions, and only the first is `kind`'s. That it is a run of
-            // values makes this arm a *candidate*; whether the decoded `Vec<T>`
-            // can be handed to the Rust function is a question about the
-            // **spelling**, because the generated glue is the one consumer that
-            // can tell `&Vec<T>` from `&Box<Vec<T>>` — the exact thing
-            // `TypeRef::origin` exists to carry.
-            //
-            // `&[T]` deref-coerces from `&Vec<T>` and `&Vec<T>` is already it, so
-            // both are satisfied by the decoded local. A transparent wrapper —
-            // `Box<Vec<T>>`, `Cow<'_, [T]>` — is `Sequence` all the same and is
-            // NOT: passing `&Vec<T>` there does not compile. Those fall through to
-            // the plain borrow arm below, which hands the whole spelling on as the
-            // sub, exactly as the old syntactic slice check did.
-            if !*mutable && decoded_vec_satisfies(inner) {
-                if let Some(elem) = inner.sequence_elem() {
-                    let elem_ty = emit.spell(elem);
-                    // The one place `produced` is NOT the crossing's spelling:
-                    // there is no owned `[T]` to decode into, so the converter
-                    // yields an owned `Vec<T>` and the call site borrows it.
-                    //
-                    // It is also why `produced` stays a spelling while `t1`
-                    // becomes a reading: this one is composed by the ADAPTER,
-                    // and #280 sealed minting to the model — there is no
-                    // `Vec<T>` reading for `api::lang` to make. Which is
-                    // consistent rather than awkward: `produced` is defined as
-                    // the tokens the converter yields, and every question asked
-                    // of it (`is_canonical_spelling`, the `Type::Reference`
-                    // bridgeability guards) is a spelling question.
-                    let produced = crate::jni::trait_impl::Produced::Composed(
-                        syn::parse_quote!(Vec<#elem_ty>),
-                    );
-                    if let Some(mut c) = self.input_wrapper_shape(
-                        WrapperShape::Sequence,
-                        &produced,
-                        elem,
-                        registry,
-                        emit,
-                    ) {
-                        c.subs = vec![elem.key()];
-                        return Some(c);
-                    }
-                    return None;
-                }
-            }
-            // An exclusive borrow crosses only when the borrowed value LIVES on
-            // the Rust side. A handle's input converter hands back an
-            // `OwnedObject<T>` that derefs to the object the JVM holds a
-            // pointer to, so a write through the `&mut` is still there once the
-            // wrapper returns. Every other input converter decodes a fresh
-            // value onto the Rust stack — a `data_class`'s fields, a scalar, an
-            // out-parameter's slot — and the callee's writes to that value are
-            // dropped with the wrapper's frame. Declining is what the `&mut [T]`
-            // branch above already does, for the same reason (#411).
-            //
-            // The question is asked of `borrowed` — the node written directly
-            // under the `&` — and it is asked of the DECLARATION. Two things
-            // make that the only answer that holds.
-            //
-            // `inner` is the same node with an out-parameter's `MaybeUninit`
-            // already peeled off, so asking it admits `&mut MaybeUninit<T>`,
-            // which borrows a slot rather than the object.
-            //
-            // And a converter's own metadata cannot say whether the borrowed
-            // thing is the object: `is_direct_handle` reads the projection, and
-            // a transparent bridge, a borrow, and a `convert!` composed over a
-            // handle all inherit that projection from the type underneath. Each
-            // of `&mut Box<Handle>`, `&mut &Handle` and `&mut ConvertedHandle`
-            // therefore answered yes while decoding a local the wrapper drops —
-            // the last one also loses the conversion stage `input_borrow` does
-            // not carry, so the call gets an `OwnedObject<Handle>` where the
-            // declared type was expected. `ptr_class!` is the declaration that
-            // means "the JVM holds a pointer to this object", and nothing else
-            // does.
-            //
-            // `mutable` off the `Ref` kind rather than through
-            // `is_exclusive_borrow`, which answers `false` for a
-            // `&mut MaybeUninit<T>` out-parameter — a slot whose writes are lost
-            // exactly as an exclusive borrow's are.
-            let writes_reach_the_caller = !*mutable
-                || self
-                    .types
-                    .get(&borrowed.key())
-                    .is_some_and(|cfg| cfg.is_opaque());
-            if writes_reach_the_caller {
-                let mutable = ty.is_exclusive_borrow();
-                if let Some(mut c) = self.input_wrapper_shape(
-                    WrapperShape::Borrow { mutable },
-                    &produced,
-                    inner,
-                    registry,
-                    emit,
-                ) {
-                    c.subs = vec![inner.key()];
-                    return Some(c);
-                }
-            }
-        }
-        // 4. Last resort: the spelling differs from something convertible only
-        //    by the wrappers the model erased. Nothing that resolves above
-        //    reaches here, so this adds routes rather than changing them.
-        self.input_transparent_bridge(ty, registry, emit)
+        let mut c =
+            self.input_wrapper_shape(WrapperShape::Optional, &produced, inner, registry, emit)?;
+        c.subs = vec![inner.key()];
+        Some(c)
     }
 
-    /// Select the output converter for `ty`: terminals, user wrappers, then
-    /// built-in structural wrappers.
-    pub(crate) fn select_output_type(
+    /// The `Vec<X>` / `&[X]` / `&Vec<X>` **input** shapes.
+    ///
+    /// A shared slice borrow has no owned `[T]` to decode into, so it reuses the
+    /// `Vec<_>` shape: the Java `List<T>` becomes an owned `Vec<T>` and the call
+    /// site borrows it (`&Vec<T>` deref-coerces to `&[T]`). `&mut [T]` is
+    /// deliberately not supported, because the decoded `Vec` is never written
+    /// back.
+    pub(crate) fn input_run(
         &self,
         ty: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // What the converter YIELDS. This direction used to be handed only the
-        // spelling — `convert_crossing` fetched the reading and threw it away —
-        // so it detected its layers with `option_inner_type`/`vec_inner_type`,
-        // which read the last path segment's ident. A `Box<Option<T>>` answered
-        // "neither", and got no converter at all (#270).
         let produced = crate::jni::trait_impl::Produced::Reading(ty);
-
-        // 1. Terminal categories (incl. the terminal user-wrapper lookup).
-        if let Some(c) = self.output_terminal(ty, registry, emit) {
+        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
+            let mut c =
+                self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)?;
+            c.subs = vec![elem.key()];
             return Some(c);
         }
-        // 2. `Result<T, E>`: succeeds as `T`, routes `E` to the error sink.
-        //    Read off the model, which calls this shape `TypeKind::Fallible`.
-        //    `result_parts` covers a `Result` the adapter composed itself, which
-        //    the frontend never read.
-        if let Some((ok, err)) = fallible_parts(ty, emit) {
-            if let Some(c) = self.result_peel(ty, &ok, &err, registry, emit) {
-                return Some(c);
-            }
-        }
-        // 3. Built-in wrapper shapes, dispatched on what the model says the
-        //    type IS. An `Option<&Handle>` resolves via the shallow `Optional`
-        //    whose inner converter is the `&Handle` borrow entry (no deep
-        //    output handler).
-        if let Some(inner) = ty.optional_inner() {
-            if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Optional, &produced, inner, registry, emit)
-            {
-                c.subs = vec![inner.key()];
-                return Some(c);
-            }
+        // Two questions, and only the first is `kind`'s. That it is a run of
+        // values makes this arm a *candidate*; whether the decoded `Vec<T>` can
+        // be handed to the Rust function is a question about the **spelling**,
+        // because the generated glue is the one consumer that can tell
+        // `&Vec<T>` from `&Box<Vec<T>>`.
+        let prebindgen_registry::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() else {
+            return None;
+        };
+        let inner = ty.borrow_target().expect("a borrow");
+        if *mutable || !decoded_vec_satisfies(inner) {
             return None;
         }
+        let elem = inner.sequence_elem()?;
+        let elem_ty = emit.spell(elem);
+        // The one place `produced` is NOT the crossing's spelling: there is no
+        // owned `[T]` to decode into, so the converter yields an owned `Vec<T>`
+        // and the call site borrows it.
+        let produced = crate::jni::trait_impl::Produced::Composed(syn::parse_quote!(Vec<#elem_ty>));
+        let mut c =
+            self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)?;
+        c.subs = vec![elem.key()];
+        Some(c)
+    }
+
+    /// `Result<T, E>` **output**: succeeds as `T`, routes `E` to the error sink.
+    ///
+    /// Read off the model, which calls this shape `TypeKind::Fallible`.
+    pub(crate) fn result_shape(
+        &self,
+        ty: &prebindgen_registry::flat::TypeRef,
+        registry: &impl Conversions<KotlinMeta>,
+        emit: &prebindgen_registry::Emit,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        let (ok, err) = fallible_parts(ty, emit)?;
+        self.result_peel(ty, &ok, &err, registry, emit)
+    }
+
+    /// The `Option<X>` **output** shape.
+    ///
+    /// An `Option<&Handle>` resolves via the shallow `Optional` whose inner
+    /// conversion is the `&Handle` borrow's; there is no deep output handler.
+    pub(crate) fn output_optional(
+        &self,
+        ty: &prebindgen_registry::flat::TypeRef,
+        registry: &impl Conversions<KotlinMeta>,
+        emit: &prebindgen_registry::Emit,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        let produced = crate::jni::trait_impl::Produced::Reading(ty);
+        let inner = ty.optional_inner()?;
+        let mut c =
+            self.output_wrapper_shape(WrapperShape::Optional, &produced, inner, registry, emit)?;
+        c.subs = vec![inner.key()];
+        Some(c)
+    }
+
+    /// The `Vec<X>` / `&[X]` **output** shapes.
+    ///
+    /// A shared slice borrow is a callback argument crossing native to JVM: it
+    /// builds a `List<T>` from the borrowed run. Dual of [`Self::input_run`],
+    /// and split the same way — `kind` says it is a borrow of a run of values,
+    /// and whether the generated Rust can iterate the borrow directly is a
+    /// question about the spelling.
+    pub(crate) fn output_run(
+        &self,
+        ty: &prebindgen_registry::flat::TypeRef,
+        registry: &impl Conversions<KotlinMeta>,
+        emit: &prebindgen_registry::Emit,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        let produced = crate::jni::trait_impl::Produced::Reading(ty);
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
-            if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)
-            {
-                c.subs = vec![elem.key()];
-                return Some(c);
-            }
+            let mut c =
+                self.output_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)?;
+            c.subs = vec![elem.key()];
+            return Some(c);
+        }
+        let prebindgen_registry::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() else {
+            return None;
+        };
+        let inner = ty.borrow_target().expect("a borrow");
+        if *mutable || !decoded_vec_satisfies(inner) {
             return None;
         }
-        if let prebindgen_registry::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() {
-            // The target through the accessor, as on the input side.
-            let inner = ty.borrow_target().expect("a borrow");
-            // `&[T]` shared slice (a callback argument crossing native→JVM):
-            // build a `List<T>` from the borrowed slice. Dual of the `&[T]`
-            // input branch, and the same split: `kind` says it is a borrow of a
-            // run of values; whether the generated Rust can iterate the borrow
-            // directly is a question about the SPELLING.
-            if !*mutable && decoded_vec_satisfies(inner) {
-                if let Some(elem) = inner.sequence_elem() {
-                    return self.output_slice(elem, registry, emit);
-                }
-            }
-            let mutable = ty.is_exclusive_borrow();
-            if let Some(mut c) = self.output_wrapper_shape(
-                WrapperShape::Borrow { mutable },
-                &produced,
-                inner,
-                registry,
-                emit,
-            ) {
-                c.subs = vec![inner.key()];
-                return Some(c);
-            }
-        }
-        // 4. Last resort: the spelling differs from something convertible only
-        //    by the wrappers the model erased. Dual of the input side's step 4,
-        //    and reached the same way — after every layer arm, so nothing that
-        //    resolves today changes route (#309).
-        self.output_transparent_bridge(ty, registry, emit)
+        let elem = inner.sequence_elem()?;
+        self.output_slice(elem, registry, emit)
     }
 }
 
