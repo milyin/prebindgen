@@ -41,7 +41,7 @@ mod tree;
 
 pub use self::{
     error::{ExpandDeclError, ExpandError},
-    plan::{FoldLeaf, FoldPlan, FoldShape, SlotLayout},
+    plan::{FoldLeaf, FoldPlan, FoldShape, SlotKind, SlotLayout},
     tree::{
         dependencies, select, wire_leaves, Claim, Dependencies, InChild, InChoice, InLeaf, InLink,
         InNode, InPresence, InProduct, InRun, InSlot, IntoRust, Lift, SelectError,
@@ -460,7 +460,7 @@ fn build_plan<M>(
                     // `Option` is whole-parameter presence, and what the
                     // constructor gets is the payload the layer unwrapped.
                     let payload = InSlot {
-                        slot: next_slot(&mut next, param),
+                        slot: next_slot(&mut next, param, SlotKind::PresencePayload),
                         name: param.clone(),
                     };
                     let arg = InChild {
@@ -481,7 +481,7 @@ fn build_plan<M>(
                     // Multi-arg: presence flag first, then one plain slot per
                     // constructor argument.
                     let flag = InSlot {
-                        slot: next_slot(&mut next, param),
+                        slot: next_slot(&mut next, param, SlotKind::PresenceFlag),
                         name: ident(&format!("{}_present", param)),
                     };
                     let prefix = param.to_string();
@@ -540,6 +540,8 @@ fn build_plan<M>(
             by_ref,
             leaves: wire_leaves(&tree),
             layout: next,
+            selector: tree.selector(),
+            present: tree.present(),
             tree,
         });
     }
@@ -557,6 +559,8 @@ fn build_plan<M>(
         by_ref,
         leaves: wire_leaves(&tree),
         layout: next,
+        selector: tree.selector(),
+        present: tree.present(),
         tree,
     })
 }
@@ -608,8 +612,8 @@ fn leaf_child(
 /// position are the same act, and the layout is where both live once they stop
 /// living in the tree (#447 §1). Positions are claimed in the order the wire
 /// carries them, which is the order this walk meets them.
-fn next_slot(next: &mut SlotLayout, name: &syn::Ident) -> usize {
-    next.claim(name.clone())
+fn next_slot(next: &mut SlotLayout, name: &syn::Ident, kind: SlotKind) -> usize {
+    next.claim(name.clone(), kind)
 }
 
 /// Build a construct core for `target` from its `variants`: a single
@@ -666,7 +670,7 @@ fn build_core<M>(
     // Combined — selector slot, then `Option`-wrapped per-arm inputs.
     let sel_name = ident(&format!("{}_sel", prefix));
     let selector = InSlot {
-        slot: next_slot(next, &sel_name),
+        slot: next_slot(next, &sel_name, SlotKind::Selector),
         name: sel_name,
     };
     let mut arms: Vec<InChild> = Vec::new();
@@ -709,7 +713,7 @@ fn build_core<M>(
                     target.clone()
                 };
                 let arm_name = ident(&format!("{}_{}", prefix, vi));
-                let slot = next_slot(next, &arm_name);
+                let slot = next_slot(next, &arm_name, SlotKind::Value);
                 InNode {
                     ty: target.clone(),
                     kind: TransformKind::Product {
@@ -815,7 +819,7 @@ fn build_arg<M>(
         // cannot drift apart (#447 §1).
         Ok(leaf_child(
             pty.clone(),
-            next_slot(next, &name),
+            next_slot(next, &name, SlotKind::Value),
             name,
             wrapped,
         ))

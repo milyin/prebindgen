@@ -470,12 +470,14 @@ fn iterable_emit_shape() {
         },
     };
     let mut layout = crate::expand::SlotLayout::default();
-    layout.claim(ident("kes"));
+    layout.claim(ident("kes"), crate::expand::SlotKind::Value);
     let plan = FoldPlan {
         target: tref(syn::parse_quote!(ZKeyExpr)),
         by_ref: false,
         leaves: wire_leaves(&tree),
         layout,
+        selector: tree.selector(),
+        present: tree.present(),
         tree,
     };
     let locals = vec![ident("kes")];

@@ -44,6 +44,14 @@ pub struct FoldPlan {
     /// Where each value sits on the foreign signature — the compatibility
     /// projection the tree stops carrying (#447 §1).
     pub(crate) layout: SlotLayout,
+    /// The **root** construction's dispatch position, when it has one.
+    ///
+    /// Recorded rather than searched for: a nested build has a selector of its
+    /// own, so "the first selector in the layout" is a different question and
+    /// answers the inner one.
+    pub(crate) selector: Option<usize>,
+    /// The root layer's presence flag, when presence is carried by one.
+    pub(crate) present: Option<usize>,
 }
 
 impl FoldPlan {
@@ -96,7 +104,7 @@ impl FoldPlan {
     /// `Option` slot). A separate flag avoids boxing a nullable primitive arg
     /// (e.g. `Option<i32>` → `Integer?`) on the wire.
     pub fn present(&self) -> Option<usize> {
-        self.tree.present()
+        self.present
     }
 
     /// Index into [`Self::leaves`] of the selector leaf; `None` for a single
@@ -108,7 +116,7 @@ impl FoldPlan {
     /// the node, and a second copy of which slot selects it could disagree
     /// with the node the emitter actually walks.
     pub fn selector(&self) -> Option<usize> {
-        self.tree.selector()
+        self.selector
     }
 }
 
@@ -142,28 +150,60 @@ pub struct FoldLeaf {
 /// inheriting this one.
 #[derive(Debug, Default, Clone)]
 pub struct SlotLayout {
-    names: Vec<syn::Ident>,
+    positions: Vec<(syn::Ident, SlotKind)>,
+}
+
+/// What one foreign-signature position carries.
+///
+/// The encoding of a dispatch and of presence — an `i32` tag, a `bool` flag, an
+/// `Option`-wrapped argument — is this layout's choice and not the tree's. A
+/// different adapter picks differently from the same semantic nodes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SlotKind {
+    /// A value: a constructor argument, an identity arm's own value, or the
+    /// collection a run is built from.
+    Value,
+    /// Which arm of a dispatch runs, and `-1` when a `Selector` layer above it
+    /// means absent.
+    Selector,
+    /// An explicit presence flag, for a construction whose arguments cannot
+    /// carry absence themselves.
+    PresenceFlag,
+    /// Presence riding the layer's own argument: absent is that argument's
+    /// `None`.
+    PresencePayload,
 }
 
 impl SlotLayout {
-    /// Claim the next position for `name`, returning its index.
-    pub(crate) fn claim(&mut self, name: syn::Ident) -> usize {
-        self.names.push(name);
-        self.names.len() - 1
+    /// Claim the next position, returning its index.
+    pub(crate) fn claim(&mut self, name: syn::Ident, kind: SlotKind) -> usize {
+        self.positions.push((name, kind));
+        self.positions.len() - 1
     }
 
     /// What the position at `slot` is called on the foreign signature.
     pub fn name(&self, slot: usize) -> &syn::Ident {
-        &self.names[slot]
+        &self.positions[slot].0
+    }
+
+    /// What the position at `slot` carries.
+    pub fn kind(&self, slot: usize) -> SlotKind {
+        self.positions[slot].1
+    }
+
+    /// The first position of `kind`, which for a dispatch or a presence flag is
+    /// the outermost one — positions are claimed outside in.
+    pub fn first_of(&self, kind: SlotKind) -> Option<usize> {
+        self.positions.iter().position(|(_, k)| *k == kind)
     }
 
     /// How many positions the signature has.
     pub fn len(&self) -> usize {
-        self.names.len()
+        self.positions.len()
     }
 
     /// Whether the signature has no positions at all.
     pub fn is_empty(&self) -> bool {
-        self.names.is_empty()
+        self.positions.is_empty()
     }
 }
