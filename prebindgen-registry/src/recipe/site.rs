@@ -26,6 +26,30 @@ pub struct Site {
     pub role: Role,
 }
 
+impl Site {
+    /// The site of one part of `of`'s row `recipe`.
+    ///
+    /// The one `Site` an adapter must be able to build **exactly**, because the
+    /// driver builds it too and the two have to meet: a per-part binding is
+    /// found by this key or not at all. Its `owner` is derived from the crossed
+    /// type rather than chosen, so composing one by hand is a guess — this is
+    /// the answer instead.
+    pub fn part(of: &Crossing, recipe: &RecipeId, index: usize) -> Self {
+        Self {
+            owner: of
+                .value()
+                .stripped_key()
+                .ident()
+                .unwrap_or_else(|| syn::Ident::new("_", proc_macro2::Span::call_site())),
+            role: Role::Part {
+                of: of.key(),
+                recipe: recipe.clone(),
+                index,
+            },
+        }
+    }
+}
+
 impl fmt::Display for Site {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}'s {}", self.owner, self.role)

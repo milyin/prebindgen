@@ -1355,6 +1355,58 @@ fn a_callbacks_arguments_do_the_other_job() {
 }
 
 #[test]
+fn a_callback_argument_is_a_part_of_the_callback_row_that_names_it() {
+    // The argument does the *other* job — Rust holds the value and pushes it
+    // out — but the part still belongs to the callback row, so a binding
+    // written against that row applies. Keying the site by the swapped
+    // crossing instead made every such binding silently miss.
+    let model = model(&[
+        SAMPLE,
+        "pub fn listen(on: impl Fn(Sample) + Send + Sync + 'static) {}",
+    ]);
+    let listen = model.function("listen").expect("listen");
+    let callback = listen.params[0].ty.clone();
+    let mut builder = Recipes::builder();
+    builder
+        .declare_default(ty(&model, "Sample"), id("whole"), Deconstructing::Atomic)
+        .declare(
+            ty(&model, "Sample"),
+            id("fields"),
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0)])),
+        );
+    let recipes = builder.build(&model).expect("table");
+
+    // The row this part belongs to: the callback, constructed.
+    let row = Crossing::new(callback.clone(), Assembly::Construct);
+    // Built the same way the driver builds it, which is the point of the
+    // helper: a per-part binding is found by this exact key or not at all.
+    let part = Site::part(&row, &RecipeId::derived(), 0);
+    let mut bound = Bindings::builder();
+    bound.bind(
+        part,
+        // The part's own crossing carries the swap; the site does not.
+        Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct),
+        Ask::Recipe(id("fields")),
+        Origin::Part,
+    );
+    let bindings = bound.build(&recipes).expect("bindings");
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    compiler
+        .site(&mut adapter, site("listen", 0), row)
+        .expect("compile");
+    assert!(
+        adapter
+            .calls
+            .iter()
+            .any(|c| c.starts_with("fields Sample deconstruct")),
+        "the per-part binding did not reach the callback argument: {:?}",
+        adapter.calls
+    );
+}
+
+#[test]
 fn a_callback_argument_is_overridden_by_compiling_it_as_its_own_site() {
     // A callback row is shared by every function whose callback has the same
     // signature, so a per-function answer cannot apply to it. `Role::CallbackArg`
