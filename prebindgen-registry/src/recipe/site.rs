@@ -9,7 +9,10 @@
 //! A site nobody binds uses its crossing's default row, so the common case is
 //! declared nowhere.
 
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+};
 
 use super::{Crossing, CrossingKey, RecipeError, RecipeId, Recipes};
 
@@ -33,11 +36,13 @@ impl fmt::Display for Site {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Role {
     /// One parameter of an exported function.
+    ///
+    /// Identified by position and not by name: a `Site` is a map key, so
+    /// anything on it has to be something two callers cannot spell differently.
+    /// The parameter's name is the model's, reached through `owner`.
     Param {
         /// Position in the parameter list.
         index: usize,
-        /// The parameter's name, for diagnostics.
-        name: String,
     },
     /// The value a method is called on.
     Receiver,
@@ -71,7 +76,7 @@ pub enum Role {
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Role::Param { index, name } => write!(f, "parameter {index} (`{name}`)"),
+            Role::Param { index } => write!(f, "parameter {index}"),
             Role::Receiver => f.write_str("receiver"),
             Role::Return => f.write_str("return value"),
             Role::Error => f.write_str("error arm"),
@@ -152,8 +157,9 @@ struct Binding {
 pub struct BindingsBuilder {
     asks: HashMap<Site, Binding>,
     /// Two declarations of equal precedence that disagree, reported by
-    /// [`Self::build`] rather than resolved by declaration order.
-    conflicts: Vec<(Site, Origin)>,
+    /// [`Self::build`] rather than resolved by declaration order. One entry per
+    /// site, so a site declared three ways is reported once.
+    conflicts: BTreeMap<String, (Site, Origin)>,
 }
 
 impl BindingsBuilder {
@@ -173,8 +179,11 @@ impl BindingsBuilder {
             // A weaker declaration never displaces a stronger one.
             Some(held) if held.origin < binding.origin => {}
             Some(held) if held.origin == binding.origin => {
-                if held.ask != binding.ask {
-                    self.conflicts.push((site, origin));
+                // The whole answer has to match, not only the ask: two
+                // declarations naming different crossings disagree just as much
+                // as two naming different rows.
+                if held.ask != binding.ask || held.crossing.key() != binding.crossing.key() {
+                    self.conflicts.insert(site.to_string(), (site, origin));
                 }
             }
             _ => {
@@ -192,7 +201,7 @@ impl BindingsBuilder {
     pub fn build(self, recipes: &Recipes) -> Result<Bindings, Vec<RecipeError>> {
         let mut errors: Vec<RecipeError> = self
             .conflicts
-            .into_iter()
+            .into_values()
             .map(|(site, origin)| RecipeError::Rebound { site, origin })
             .collect();
         let mut bound = HashMap::new();
@@ -257,7 +266,23 @@ impl Bindings {
     /// checking first whether one was declared.
     pub fn resolve(&self, site: &Site, crossing: &Crossing, recipes: &Recipes) -> Option<Bound> {
         match self.bound.get(site) {
-            Some(bound) => bound.clone(),
+            Some(bound) => {
+                // A site is one place, so the crossing a caller asks with must
+                // be the one the declaration bound. Getting a plausible answer
+                // back for the wrong type would hide the caller's bug.
+                debug_assert!(
+                    bound
+                        .as_ref()
+                        .is_none_or(|b| b.crossing.key() == crossing.key()),
+                    "{site} was bound as {} and is being resolved as {}",
+                    bound
+                        .as_ref()
+                        .map(|b| b.crossing.key().to_string())
+                        .unwrap_or_default(),
+                    crossing.key(),
+                );
+                bound.clone()
+            }
             None => Some(Bound {
                 site: site.clone(),
                 recipe: recipes.row(crossing).0,

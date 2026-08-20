@@ -533,10 +533,7 @@ fn a_part_is_accepted_where_the_edge_can_consume_it() {
 fn site(owner: &str, index: usize) -> Site {
     Site {
         owner: ident(owner),
-        role: Role::Param {
-            index,
-            name: format!("p{index}"),
-        },
+        role: Role::Param { index },
     }
 }
 
@@ -676,6 +673,39 @@ fn two_declarations_of_equal_precedence_may_agree_and_may_not_disagree() {
     let errors = disagreeing.build(&recipes).expect_err("two answers");
     assert!(
         matches!(errors.as_slice(), [RecipeError::Rebound { origin, .. }] if *origin == Origin::Function),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn two_declarations_of_equal_precedence_naming_different_crossings_disagree() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let mut builder = Bindings::builder();
+    builder
+        .bind(
+            site("z_put", 0),
+            Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct),
+            Ask::Default,
+            Origin::Function,
+        )
+        // Same ask, different type: still two answers for one place.
+        .bind(
+            site("z_put", 0),
+            Crossing::new(ty(&model, "u32"), Assembly::Deconstruct),
+            Ask::Default,
+            Origin::Function,
+        )
+        // A third disagreement over the same site is still one report.
+        .bind(
+            site("z_put", 0),
+            Crossing::new(ty(&model, "u64"), Assembly::Deconstruct),
+            Ask::Default,
+            Origin::Function,
+        );
+    let errors = builder.build(&recipes).expect_err("two crossings");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::Rebound { .. }]),
         "{errors:?}"
     );
 }
