@@ -1413,10 +1413,39 @@ impl JniGenBuilder {
         registry: prebindgen_registry::RegistryBuilder<KotlinMeta>,
     ) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let decls = self.decls;
-        let registry = decls
-            .declare_into(registry)?
-            .validate_with(&decls)?
-            .convert_with(|crossing, built, emit| decls.convert_crossing(crossing, built, emit))?
+        let declared = decls.declare_into(registry)?.validate_with(&decls)?;
+        // A second holding of the model: `convert_with` consumes the builder,
+        // and the table outlives that call.
+        let model = declared.flat().clone();
+        let recipes = decls.recipes(&model).map_err(|errors| {
+            prebindgen_registry::ScanError::AdapterInvariant {
+                message: errors
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            }
+        })?;
+        // JniGen overrides no site yet: every crossing takes its type's own row.
+        let bindings = prebindgen_registry::recipe::Bindings::default();
+        // The driver's state, carried between calls. The adapter borrows the
+        // partial registry view, which is lent per call and so is a different
+        // type each time; what it built is not, and outlives every one of them.
+        let mut compiled = Some(prebindgen_registry::recipe::Compiled::<
+            crate::jni::compile::JFrag,
+        >::default());
+        let registry = declared
+            .convert_with(|crossing, built, emit| {
+                let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+                    &model,
+                    &recipes,
+                    &bindings,
+                    compiled.take().expect("the state is put back every call"),
+                );
+                let conv = decls.compile_crossing(&mut compiler, crossing, built, emit);
+                compiled = Some(compiler.finish());
+                conv
+            })?
             .build()?;
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
@@ -1428,39 +1457,51 @@ impl JniGenBuilder {
 }
 
 impl Declarations {
-    /// Build the conversion for one crossing, against what is already built.
+    /// Build the conversion for one crossing by asking the table which row it
+    /// takes and the driver to compile that row.
     ///
-    /// `None` is *cannot*, never *not yet*: `crossings` hands them out
-    /// inner-first, so everything this could compose from is already in `built`.
-    fn convert_crossing(
-        &self,
+    /// `None` is *cannot*, never *not yet*: the crossings arrive inner-first,
+    /// so everything this could compose from is already in `built`.
+    fn compile_crossing<'v, R: Conversions<KotlinMeta>>(
+        &'v self,
+        compiler: &mut prebindgen_registry::recipe::Compiler<
+            '_,
+            crate::jni::compile::JCompile<'v, R>,
+        >,
         crossing: &Crossing,
-        built: &Building<'_, KotlinMeta>,
+        built: &'v R,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
-        // key the crossing IS. This used to go `key -> to_type() -> reading`,
-        // and its own comment called that "the same door, one layer out" as the
-        // round trip #263 removed from `api/core`. The door is now keyed, so
-        // there is no spelling to rebuild (#284).
+        // key the crossing IS.
         let reading = built.reading(key)?;
-        match dir {
-            Direction::Input => self.select_input_type(&reading, built, emit).or_else(|| {
-                // `impl Fn(args)` that nothing else claimed. Callback args cross
-                // in the OPPOSITE direction, which is why their required-ness
-                // rides `immediate_edges` rather than this converter's `subs`.
-                // The arguments are `TypeRef`s on the classification, so nothing
-                // is re-extracted from the signature's syntax.
-                let prebindgen_registry::flat::TypeKind::Callback { args } =
-                    reading.unwrapped().kind()
-                else {
-                    return None;
-                };
-                self.dispatch_fn_input(args, built, emit)
-            }),
-            Direction::Output => self.select_output_type(&reading, built, emit),
+        // A callback is compiled whole rather than through the table. The
+        // registry derives a row that takes one apart into its arguments and
+        // compiles each of them, and a JniGen callback argument does not always
+        // have a conversion to compile: a sealed class reaches the JVM as a
+        // selector plus the live arm's slots, through a decomposition the table
+        // does not describe yet. Stating those arms as rows is what lets the
+        // derived callback row take over, and it is a later stage than this
+        // one.
+        if matches!(dir, Direction::Input) {
+            if let prebindgen_registry::flat::TypeKind::Callback { args } =
+                reading.unwrapped().kind()
+            {
+                return self.dispatch_fn_input(args, built, emit);
+            }
         }
+        let assembly = match dir {
+            Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
+            Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
+        };
+        let mut adapter = crate::jni::compile::JCompile {
+            decls: self,
+            registry: built,
+        };
+        let crossing = prebindgen_registry::recipe::Crossing::new(reading, assembly);
+        let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
+        Some((*fragment).clone().conv)
     }
 
     pub fn declare_into(
@@ -1703,7 +1744,7 @@ fn flat_unit_enum<'r>(
 }
 
 impl Declarations {
-    fn dispatch_fn_input(
+    pub(crate) fn dispatch_fn_input(
         &self,
         args: &[prebindgen_registry::flat::TypeRef],
         registry: &impl Conversions<KotlinMeta>,

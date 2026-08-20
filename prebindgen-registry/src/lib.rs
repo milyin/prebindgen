@@ -105,6 +105,7 @@ mod emit;
 pub mod expand;
 pub mod niches;
 pub mod prebindgen;
+pub mod recipe;
 pub mod registry;
 pub(crate) mod resolve;
 #[cfg(test)]
