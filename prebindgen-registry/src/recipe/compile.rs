@@ -669,10 +669,10 @@ impl<'a, C: Compile> Compiler<'a, C> {
             let fragment = self.part(adapter, at, index, &part.ty)?;
             let site = || Site::part(at.crossing, at.recipe, index);
             let produced = fragment.yields();
-            // The type first: a part yielding the wrong Rust value is wrong
-            // however it is held. Normalized the way a crossing is keyed, so a
-            // fragment answering for `&T` or `Box<T>` satisfies a `T` part —
-            // holding it is the mode's question, immediately below.
+            // The type first: a part producing the wrong Rust value is wrong
+            // however it is held. Both sides are normalized the way a crossing
+            // is keyed, so a fragment answering for `&T` or `Box<T>` satisfies a
+            // `T` part — holding it is the mode's question, immediately below.
             let wanted = part_key(&part.ty);
             if produced.ty != wanted {
                 return Err(RecipeError::ComposedType {

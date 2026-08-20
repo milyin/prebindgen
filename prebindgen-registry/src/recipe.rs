@@ -1200,7 +1200,7 @@ impl fmt::Display for RecipeError {
                 got,
             } => write!(
                 f,
-                "part {part} of {site} needs a `{wanted}` and its recipe yields a `{got}`"
+                "part {part} of {site} needs a `{wanted}` and its fragment produces a `{got}`"
             ),
             RecipeError::Composition {
                 site,
@@ -1209,11 +1209,11 @@ impl fmt::Display for RecipeError {
                 got,
             } => write!(
                 f,
-                "part {part} of {site} needs `{wanted}` and its recipe yields `{got}`"
+                "part {part} of {site} needs `{wanted}` and its fragment produces `{got}`"
             ),
             RecipeError::Validity { site, needed, got } => write!(
                 f,
-                "{site} needs a {needed} value and its recipe yields a {got} one"
+                "{site} needs a {needed} value and its fragment produces a {got} one"
             ),
             RecipeError::CallbackDeclared { row, recipe } => write!(
                 f,
