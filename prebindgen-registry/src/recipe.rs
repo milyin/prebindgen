@@ -44,11 +44,18 @@ use std::{
 
 use crate::flat::{Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef};
 
+mod compile;
 mod site;
 #[cfg(test)]
 mod tests;
 
-pub use self::site::{Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site};
+pub use self::{
+    compile::{
+        At, Carrier, Compile, CompileError, Compiler, Cx, Frag, Part, PartSource, Parts,
+        RequirementId, Validity, Yield,
+    },
+    site::{Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site},
+};
 
 // ── The two jobs ──────────────────────────────────────────────────────────
 
@@ -1017,6 +1024,26 @@ pub enum RecipeError {
         /// The precedence they share.
         origin: Origin,
     },
+    /// A part yields something the edge it feeds cannot consume.
+    Composition {
+        /// The part's own site.
+        site: Site,
+        /// Which part of the row.
+        part: usize,
+        /// What the constructor's parameter, field or accessor requires.
+        wanted: Mode,
+        /// What the part's fragment produces.
+        got: Mode,
+    },
+    /// A site needs a value that outlives the call and got a borrowed one.
+    Validity {
+        /// Where the value crosses.
+        site: Site,
+        /// The weakest validity the site's role accepts.
+        needed: crate::recipe::Validity,
+        /// What the root fragment produces.
+        got: crate::recipe::Validity,
+    },
     /// A row was declared for a callback, which has no decision to record.
     CallbackDeclared {
         /// The callback crossing.
@@ -1085,6 +1112,19 @@ impl fmt::Display for RecipeError {
                 f,
                 "{site} is bound to two different rows by {origin}; one of them has to \
                  be written at a higher precedence"
+            ),
+            RecipeError::Composition {
+                site,
+                part,
+                wanted,
+                got,
+            } => write!(
+                f,
+                "part {part} of {site} needs `{wanted}` and its recipe yields `{got}`"
+            ),
+            RecipeError::Validity { site, needed, got } => write!(
+                f,
+                "{site} needs a {needed} value and its recipe yields a {got} one"
             ),
             RecipeError::CallbackDeclared { row, recipe } => write!(
                 f,
