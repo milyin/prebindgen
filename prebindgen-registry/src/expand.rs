@@ -43,8 +43,8 @@ pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape, SlotKind, SlotLayout},
     tree::{
-        dependencies, select, wire_leaves, Claim, Dependencies, InChild, InChoice, InLeaf, InLink,
-        InNode, InPresence, InProduct, InRun, InSlot, IntoRust, Lift, SelectError,
+        dependencies, derive_layout, select, wire_leaves, Claim, Dependencies, InChild, InChoice,
+        InLeaf, InLink, InNode, InPresence, InProduct, InRun, IntoRust, Lift, SelectError,
     },
 };
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
@@ -451,6 +451,10 @@ fn build_plan<M>(
     //    `0..n-1` = the taken arm (no separate present flag — not-taken arms'
     //    slots are null exactly as in the non-optional selector case).
     if optional {
+        // Claimed by whichever presence the layer uses: a combined dispatch
+        // reports its selector, a flag layer records its own position.
+        let mut root_selector = None;
+        let mut root_present = None;
         let presence_and_core = match variants {
             [Variant::Ctor(func)] => {
                 let sig = ctor_signature(registry, func, &target.key())?;
@@ -459,10 +463,7 @@ fn build_plan<M>(
                     // The layer's slot holds the ARGUMENT, optionally: its
                     // `Option` is whole-parameter presence, and what the
                     // constructor gets is the payload the layer unwrapped.
-                    let payload = InSlot {
-                        slot: next_slot(&mut next, param, SlotKind::PresencePayload),
-                        name: param.clone(),
-                    };
+                    next_slot(&mut next, param, SlotKind::PresencePayload);
                     let arg = InChild {
                         link: InLink { by_ref: false },
                         node: InNode {
@@ -471,19 +472,14 @@ fn build_plan<M>(
                         },
                     };
                     (
-                        InPresence::Payload {
-                            slot: payload,
-                            ty: pty.optional(),
-                        },
+                        InPresence::Payload { ty: pty.optional() },
                         ctor_node(target, func, sig.fallible, vec![arg]),
                     )
                 } else {
                     // Multi-arg: presence flag first, then one plain slot per
                     // constructor argument.
-                    let flag = InSlot {
-                        slot: next_slot(&mut next, param, SlotKind::PresenceFlag),
-                        name: ident(&format!("{}_present", param)),
-                    };
+                    let flag_name = ident(&format!("{}_present", param));
+                    root_present = Some(next_slot(&mut next, &flag_name, SlotKind::PresenceFlag));
                     let prefix = param.to_string();
                     let mut args = Vec::new();
                     for (pname, pty) in &sig.params {
@@ -510,7 +506,7 @@ fn build_plan<M>(
                         args.push(arg);
                     }
                     (
-                        InPresence::Flag(flag),
+                        InPresence::Flag,
                         ctor_node(target, func, sig.fallible, args),
                     )
                 }
@@ -519,11 +515,12 @@ fn build_plan<M>(
                 // Combined-selector dispatch under the layer.
                 visited.insert(target.key());
                 let prefix = param.to_string();
-                let core = build_core(
+                let (core, sel) = build_core(
                     exp, registry, ed, target, variants, by_ref, &prefix, &prefix, &mut next,
                     visited,
                 )?;
                 visited.remove(&target.key());
+                root_selector = sel;
                 (InPresence::Selector, core)
             }
         };
@@ -538,10 +535,10 @@ fn build_plan<M>(
         return Ok(FoldPlan {
             target: target.clone(),
             by_ref,
-            leaves: wire_leaves(&tree),
+            leaves: wire_leaves(&tree, &next),
             layout: next,
-            selector: tree.selector(),
-            present: tree.present(),
+            selector: root_selector,
+            present: root_present,
             tree,
         });
     }
@@ -550,17 +547,19 @@ fn build_plan<M>(
     // on the cycle chain so a constructor parameter of the same type is rejected.
     visited.insert(target.key());
     let prefix = param.to_string();
-    let tree = build_core(
+    let (tree, root_selector) = build_core(
         exp, registry, ed, target, variants, by_ref, &prefix, &prefix, &mut next, visited,
     )?;
     visited.remove(&target.key());
     Ok(FoldPlan {
         target: target.clone(),
         by_ref,
-        leaves: wire_leaves(&tree),
+        leaves: wire_leaves(&tree, &next),
         layout: next,
-        selector: tree.selector(),
-        present: tree.present(),
+        // Reported by the construction that claimed it, not searched for: a
+        // nested build has a selector of its own (#447 §1).
+        selector: root_selector,
+        present: None,
         tree,
     })
 }
@@ -586,20 +585,12 @@ fn ctor_node(
 
 /// One wire slot used as an argument: `wrapped` when selector presence put an
 /// `Option` around it.
-fn leaf_child(
-    ty: prebindgen_flat::flat::TypeRef,
-    slot: usize,
-    name: syn::Ident,
-    wrapped: bool,
-) -> InChild {
+fn leaf_child(ty: prebindgen_flat::flat::TypeRef, wrapped: bool) -> InChild {
     InChild {
         link: InLink { by_ref: false },
         node: InNode {
             ty,
-            kind: TransformKind::Leaf(InLeaf::Slot {
-                slot: InSlot { slot, name },
-                wrapped,
-            }),
+            kind: TransformKind::Leaf(InLeaf::Slot { wrapped }),
         },
     }
 }
@@ -641,7 +632,7 @@ fn build_core<M>(
     at: &str,
     next: &mut SlotLayout,
     visited: &mut HashSet<TypeKey>,
-) -> Result<InNode, ExpandError> {
+) -> Result<(InNode, Option<usize>), ExpandError> {
     if let [Variant::Ctor(func)] = variants {
         // Single constructor — no selector; args passed directly (not Option-wrapped).
         let sig = ctor_signature(registry, func, &target.key())?;
@@ -665,14 +656,12 @@ fn build_core<M>(
                 visited,
             )?);
         }
-        return Ok(ctor_node(target, func, sig.fallible, args));
+        // One unconditional constructor: nothing dispatches, so no selector.
+        return Ok((ctor_node(target, func, sig.fallible, args), None));
     }
     // Combined — selector slot, then `Option`-wrapped per-arm inputs.
     let sel_name = ident(&format!("{}_sel", prefix));
-    let selector = InSlot {
-        slot: next_slot(next, &sel_name, SlotKind::Selector),
-        name: sel_name,
-    };
+    let sel_slot = next_slot(next, &sel_name, SlotKind::Selector);
     let mut arms: Vec<InChild> = Vec::new();
     for (vi, v) in variants.iter().enumerate() {
         let node = match v {
@@ -713,7 +702,7 @@ fn build_core<M>(
                     target.clone()
                 };
                 let arm_name = ident(&format!("{}_{}", prefix, vi));
-                let slot = next_slot(next, &arm_name, SlotKind::Value);
+                next_slot(next, &arm_name, SlotKind::Value);
                 InNode {
                     ty: target.clone(),
                     kind: TransformKind::Product {
@@ -726,7 +715,7 @@ fn build_core<M>(
                                 Lift::Direct
                             },
                         },
-                        children: vec![leaf_child(leaf_ty, slot, arm_name, true)],
+                        children: vec![leaf_child(leaf_ty, true)],
                     },
                 }
             }
@@ -736,13 +725,16 @@ fn build_core<M>(
             node,
         });
     }
-    Ok(InNode {
-        ty: target.clone(),
-        kind: TransformKind::Choice {
-            op: InChoice { selector },
-            variants: arms,
+    Ok((
+        InNode {
+            ty: target.clone(),
+            kind: TransformKind::Choice {
+                op: InChoice { dispatch: () },
+                variants: arms,
+            },
         },
-    })
+        Some(sel_slot),
+    ))
 }
 
 /// Build one constructor-parameter input. If the parameter's (peeled) type has
@@ -803,6 +795,8 @@ fn build_arg<M>(
             visited,
         )?;
         visited.remove(&key);
+        // A nested build's own dispatch is not the root's.
+        let (node, _nested_selector) = node;
         Ok(InChild {
             link: InLink { by_ref: pby_ref },
             node,
@@ -817,12 +811,8 @@ fn build_arg<M>(
         // The node carries the PAYLOAD; the `Option` selector presence adds is
         // derived from `wrapped` wherever the wire is asked for, so the two
         // cannot drift apart (#447 §1).
-        Ok(leaf_child(
-            pty.clone(),
-            next_slot(next, &name, SlotKind::Value),
-            name,
-            wrapped,
-        ))
+        next_slot(next, &name, SlotKind::Value);
+        Ok(leaf_child(pty.clone(), wrapped))
     }
 }
 
@@ -875,6 +865,8 @@ pub fn emit_fold_tree(
     tree.lower(&mut ConstructEmitter {
         leaf_locals,
         qualify,
+        next: 0,
+        claimed: Vec::new(),
     })
     .expect("emitting a built construct cannot fail")
 }
@@ -899,6 +891,29 @@ struct ConstructEmitter<'a> {
     /// Maps a constructor ident to its call path (e.g. prefixing the source
     /// module).
     qualify: &'a dyn Fn(&syn::Ident) -> syn::Path,
+    /// The next position to claim.
+    ///
+    /// The tree no longer carries slot numbers, so this walk re-derives them —
+    /// and gets the same ones, because it claims in the order the layout was
+    /// built in (#447 §1). `descend` runs before anything below a node, which
+    /// is that order.
+    next: usize,
+    /// The position each node claimed, innermost last; a hook pops its own.
+    /// `None` for a node that claims nothing.
+    claimed: Vec<Option<usize>>,
+}
+
+impl ConstructEmitter<'_> {
+    fn claim(&mut self) -> usize {
+        let slot = self.next;
+        self.next += 1;
+        slot
+    }
+
+    /// The position the node whose hook is running claimed.
+    fn mine(&mut self) -> Option<usize> {
+        self.claimed.pop().expect("pushed on the way down")
+    }
 }
 
 impl ConstructEmitter<'_> {
@@ -917,9 +932,39 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
     type Value = syn::Expr;
     type Error = std::convert::Infallible;
 
+    /// Claim this node's position before anything below it, which is the order
+    /// the layout claimed them in.
+    ///
+    /// A `Selector` layer claims nothing of its own: the dispatch under it
+    /// carries absence too. That layer still needs the selector's position, and
+    /// takes the one its inner choice is about to claim — exact rather than a
+    /// guess, because the traversal visits that inner node next and a choice
+    /// claims its selector before its arms.
+    fn descend(
+        &mut self,
+        node: &InNode,
+        _link: Option<&InLink>,
+    ) -> Result<crate::transform::Descend<syn::Expr>, Self::Error> {
+        let claimed = match &node.kind {
+            TransformKind::Leaf(InLeaf::Slot { .. }) => Some(self.claim()),
+            TransformKind::Choice { .. } => Some(self.claim()),
+            TransformKind::Sequence { .. } => Some(self.claim()),
+            TransformKind::Optional { op, .. } => match op {
+                InPresence::Selector => Some(self.next),
+                InPresence::Flag | InPresence::Payload { .. } => Some(self.claim()),
+            },
+            TransformKind::Leaf(InLeaf::Bound) | TransformKind::Product { .. } => None,
+        };
+        self.claimed.push(claimed);
+        Ok(crate::transform::Descend::Recurse)
+    }
+
     fn leaf(&mut self, _node: &InNode, op: &InLeaf) -> Result<syn::Expr, Self::Error> {
+        let claimed = self.mine();
         let local = match op {
-            InLeaf::Slot { slot, .. } => self.leaf_locals[slot.slot].clone(),
+            InLeaf::Slot { .. } => {
+                self.leaf_locals[claimed.expect("a slot leaf claimed a position")].clone()
+            }
             InLeaf::Bound => bound_local(),
         };
         Ok(syn::parse_quote!(#local))
@@ -931,6 +976,8 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
         op: &InProduct,
         children: Lowered<'_, IntoRust, syn::Expr>,
     ) -> Result<syn::Expr, Self::Error> {
+        // A product claims no position of its own; its children claimed theirs.
+        let _ = self.mine();
         let missing = quote!(::core::result::Result::Err(::std::string::String::from(
             "constructor variant input missing"
         )));
@@ -1054,10 +1101,10 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
     fn choice(
         &mut self,
         _node: &InNode,
-        op: &InChoice,
+        _op: &InChoice,
         variants: Lowered<'_, IntoRust, syn::Expr>,
     ) -> Result<syn::Expr, Self::Error> {
-        let sel = &self.leaf_locals[op.selector.slot];
+        let sel = &self.leaf_locals[self.mine().expect("a dispatch claimed its selector")];
         let arms: Vec<TokenStream> = variants
             .iter()
             .enumerate()
@@ -1084,12 +1131,13 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
         _inner: &InNode,
         value: syn::Expr,
     ) -> Result<syn::Expr, Self::Error> {
+        let claimed = self.mine().expect("a layer claimed or borrowed a position");
         Ok(match op {
             // The dispatch's selector ALSO encodes absence — `-1` = `None`,
             // `0..n-1` = the taken arm (dispatched by the construction below;
             // an out-of-range selector still hits its `Err` default arm).
             InPresence::Selector => {
-                let sel = &self.leaf_locals[_inner.selector().expect("a selector-decided layer")];
+                let sel = &self.leaf_locals[claimed];
                 syn::parse_quote!(if #sel < 0 {
                     ::core::result::Result::Ok(::core::option::Option::None)
                 } else {
@@ -1098,8 +1146,8 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
             }
             // An explicit flag decides; the construction reads its plain
             // argument slots directly, and the flag slot is consumed only here.
-            InPresence::Flag(flag) => {
-                let present = &self.leaf_locals[flag.slot];
+            InPresence::Flag => {
+                let present = &self.leaf_locals[claimed];
                 syn::parse_quote!(if #present {
                     (#value).map(::core::option::Option::Some)
                 } else {
@@ -1109,8 +1157,8 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
             // Presence rides the layer's own `Option` slot: unwrap it, bind the
             // payload, and the single-argument construction below reads that
             // binding.
-            InPresence::Payload { slot: payload, .. } => {
-                let slot = &self.leaf_locals[payload.slot];
+            InPresence::Payload { .. } => {
+                let slot = &self.leaf_locals[claimed];
                 let bound = bound_local();
                 syn::parse_quote!(match #slot {
                     ::core::option::Option::Some(#bound) => {
@@ -1127,11 +1175,11 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &InRun,
+        _op: &InRun,
         _inner: &InNode,
         value: syn::Expr,
     ) -> Result<syn::Expr, Self::Error> {
-        let slot = &self.leaf_locals[op.slot.slot];
+        let slot = &self.leaf_locals[self.mine().expect("a run claimed its position")];
         let bound = bound_local();
         Ok(syn::parse_quote!(
             #slot

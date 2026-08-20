@@ -248,6 +248,9 @@ fn non_null(mut ty: KtType) -> KtType {
 fn variant_typed_params(
     registry: &impl Conversions<KotlinMeta>,
     arm: &InNode,
+    // The positions this arm's arguments occupy, supplied by the plan's
+    // layout — the tree no longer carries positions (#447 §1).
+    arg_slots: &[usize],
     origin: &syn::Ident,
     block: &[KtParam],
     multi: bool,
@@ -277,7 +280,8 @@ fn variant_typed_params(
         None => (vec![origin_kt.clone()], vec![false]),
     };
     let mut out = Vec::new();
-    for (m, idx) in arm.leaf_args()?.into_iter().enumerate() {
+    arm.leaf_args()?;
+    for (m, idx) in arg_slots.iter().copied().enumerate() {
         let slot = block.get(idx)?;
         let base = names.get(m).cloned().unwrap_or_else(|| slot.name.clone());
         let name = if multi && ctor.is_some() {
@@ -361,6 +365,7 @@ fn resolve_split<'a>(
     // single-leaf arms only — the arm's one nullable param doubles as the
     // presence flag (`null` = absent). Multi-leaf arms stay selector-only.
     let optional = plan.produces_option();
+    let arm_slots = plan.arm_arg_slots();
     let arms: Vec<(usize, Vec<(KtParam, usize)>)> = plan
         .tree()
         .arms()
@@ -368,14 +373,16 @@ fn resolve_split<'a>(
         .enumerate()
         .filter(|(_, a)| !optional || a.leaf_args().is_some_and(|l| l.len() == 1))
         .map(|(vi, a)| {
-            let typed = variant_typed_params(registry, a, &param, block, multi, optional)
-                .unwrap_or_else(|| {
-                    panic!(
+            let arg_slots = arm_slots[vi].clone().unwrap_or_default();
+            let typed =
+                variant_typed_params(registry, a, &arg_slots, &param, block, multi, optional)
+                    .unwrap_or_else(|| {
+                        panic!(
                         "fun!({}).split_on_param(\"{param_name}\"): an arm has a non-flat input; \
                          it cannot be overloaded",
                         f.name
                     )
-                });
+                    });
             (vi, typed)
         })
         .collect();
@@ -590,7 +597,7 @@ fn combo_label(splits: &[Split], combo: &[usize]) -> String {
 mod tests {
     use prebindgen::SourceLocation;
     use prebindgen_registry::{
-        expand::{InChild, InLeaf, InLink, InProduct, InSlot},
+        expand::{InChild, InLeaf, InLink, InProduct},
         transform::TransformKind,
     };
 
@@ -624,18 +631,11 @@ mod tests {
                 children: f
                     .params
                     .iter()
-                    .enumerate()
-                    .map(|(i, p)| InChild {
+                    .map(|p| InChild {
                         link: InLink { by_ref: false },
                         node: InNode {
                             ty: p.ty.clone(),
-                            kind: TransformKind::Leaf(InLeaf::Slot {
-                                slot: InSlot {
-                                    slot: i,
-                                    name: p.name.clone(),
-                                },
-                                wrapped: false,
-                            }),
+                            kind: TransformKind::Leaf(InLeaf::Slot { wrapped: false }),
                         },
                     })
                     .collect(),
@@ -651,6 +651,7 @@ mod tests {
         let params = variant_typed_params(
             &registry,
             &arm,
+            &[0, 1],
             &syn::parse_quote!(expected),
             &block,
             false,

@@ -200,7 +200,7 @@ fn optional_byvalue_single_ctor() {
         plan.tree
             .lower(&mut RenderIn)
             .expect("lowering cannot fail"),
-        "z_zbytes_from_vec(^)?^#0"
+        "z_zbytes_from_vec(^)?^payload"
     );
 
     let locals = vec![ident("att")];
@@ -390,10 +390,7 @@ fn optional_combined_selector_encodes_absence() {
     assert!(
         matches!(
             &args(arms[0])[1].node.kind,
-            TransformKind::Leaf(InLeaf::Slot {
-                slot: InSlot { slot: 2, .. },
-                wrapped: false
-            })
+            TransformKind::Leaf(InLeaf::Slot { wrapped: false })
         ),
         "an already-Option ctor arg passes through unwrapped"
     );
@@ -460,10 +457,6 @@ fn iterable_emit_shape() {
         ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
         kind: TransformKind::Sequence {
             op: InRun {
-                slot: InSlot {
-                    slot: 0,
-                    name: ident("kes"),
-                },
                 ty: tref(syn::parse_quote!(Vec<String>)),
             },
             inner: Box::new(core),
@@ -474,10 +467,10 @@ fn iterable_emit_shape() {
     let plan = FoldPlan {
         target: tref(syn::parse_quote!(ZKeyExpr)),
         by_ref: false,
-        leaves: wire_leaves(&tree),
+        leaves: wire_leaves(&tree, &layout),
         layout,
-        selector: tree.selector(),
-        present: tree.present(),
+        selector: None,
+        present: None,
         tree,
     };
     let locals = vec![ident("kes")];
@@ -649,13 +642,13 @@ fn recursive_input_nests_param_constructors() {
     assert!(is_build(&args[1]), "payload is a nested build");
     // key_expr's nested build is COMBINED (try_from | identity ⇒ selector).
     assert!(
-        args[0].node.selector().is_some(),
+        matches!(args[0].node.core().kind, TransformKind::Choice { .. }),
         "ZKeyExpr default input is combined"
     );
     assert_eq!(args[0].node.arms().len(), 2);
     // payload's nested build is SINGLE (no selector).
     assert!(
-        args[1].node.selector().is_none(),
+        !matches!(args[1].node.core().kind, TransformKind::Choice { .. }),
         "ZZBytes default input is single"
     );
     // Wire leaves: key-expr selector + try_from String + identity ZKeyExpr +
@@ -900,9 +893,7 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
 
     fn leaf(&mut self, _node: &InNode, op: &InLeaf) -> Result<String, Self::Error> {
         Ok(match op {
-            InLeaf::Slot { slot, wrapped } => {
-                format!("#{}{}", slot.slot, if *wrapped { "?" } else { "" })
-            }
+            InLeaf::Slot { wrapped } => format!("#{}", if *wrapped { "?" } else { "" }),
             InLeaf::Bound => "^".to_string(),
         })
     }
@@ -940,11 +931,11 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
     fn choice(
         &mut self,
         _node: &InNode,
-        op: &InChoice,
+        _op: &InChoice,
         variants: crate::transform::Lowered<'_, IntoRust, String>,
     ) -> Result<String, Self::Error> {
         let arms: Vec<String> = variants.into_iter().map(|(_, v)| v).collect();
-        Ok(format!("#{} ? {}", op.selector.slot, arms.join(" | ")))
+        Ok(format!("#sel ? {}", arms.join(" | ")))
     }
 
     fn optional(
@@ -956,19 +947,19 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
     ) -> Result<String, Self::Error> {
         Ok(match op {
             InPresence::Selector => format!("{value}?sel"),
-            InPresence::Flag(s) => format!("{value}?#{}", s.slot),
-            InPresence::Payload { slot, .. } => format!("{value}?^#{}", slot.slot),
+            InPresence::Flag => format!("{value}?#flag"),
+            InPresence::Payload { .. } => format!("{value}?^payload"),
         })
     }
 
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &InRun,
+        _op: &InRun,
         _inner: &InNode,
         value: String,
     ) -> Result<String, Self::Error> {
-        Ok(format!("[{value}]*#{}", op.slot.slot))
+        Ok(format!("[{value}]*#run"))
     }
 }
 
@@ -1033,7 +1024,7 @@ fn core_lowers_through_the_shared_visitor() {
         .expect("lowering cannot fail");
     assert_eq!(
         rendered,
-        "z_sample_new(&#0 ? z_keyexpr_try_from!(#1?) | self.clone(#2?), z_zbytes_from_vec(#3))"
+        "z_sample_new(&#sel ? z_keyexpr_try_from!(#?) | self.clone(#?), z_zbytes_from_vec(#))"
     );
 
     // The signature is COLLECTED from those same nodes: each slot's name and
@@ -1099,7 +1090,7 @@ fn selecting_a_construction_replaces_its_slots() {
         (node.ty.spell().to_string() == "ZKeyExpr").then(|| Claim::direct(node.ty.clone()))
     })
     .unwrap();
-    let leaves = crate::expand::wire_leaves(&selected);
+    let leaves = crate::expand::wire_leaves(&selected, &crate::expand::derive_layout(&selected));
     assert_eq!(
         leaves.len(),
         1,
@@ -1186,16 +1177,26 @@ fn selecting_renumbers_the_surviving_slots() {
     assert_eq!(plan.leaves().len(), 4);
     assert_eq!(plan.leaves()[3].name.to_string(), "sample_payload");
 
-    // Claiming the key expression drops slots 0..2 and the payload closes up
-    // into position 0 — keeping its name, because it is the same value.
+    // Claiming the key expression drops the three positions that built it, and
+    // the payload closes up behind the one value that replaces them.
+    //
+    // The claimed subtree takes the earliest position it replaced because the
+    // walk meets it there — not because a renumbering pass moved it. A foreign
+    // signature is a sequence, so what a caller passed fourth must still be
+    // what the wrapper reads last.
     let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
         (node.ty.spell().to_string() == "ZKeyExpr").then(|| Claim::clone_deref(node.ty.borrowed()))
     })
     .unwrap();
-    let leaves = crate::expand::wire_leaves(&selected);
-    assert_eq!(leaves.len(), 2);
-    assert_eq!(leaves[0].ty.spell().to_string(), "& ZKeyExpr");
-    assert_eq!(leaves[1].name.to_string(), "sample_payload");
+    let leaves = crate::expand::wire_leaves(&selected, &crate::expand::derive_layout(&selected));
+    assert_eq!(
+        leaves
+            .iter()
+            .map(|l| l.ty.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["& ZKeyExpr", "Vec < u8 >"],
+        "the claimed reading first, then the value that survived it"
+    );
 
     // The signature is only half the contract: the claimed node's own type says
     // it produces an owned `ZKeyExpr`, so a borrowed reading has to be cloned
@@ -1328,7 +1329,7 @@ fn a_claim_inside_a_live_choice_stays_wrapped() {
     .unwrap();
 
     assert_eq!(
-        crate::expand::wire_leaves(&selected).len(),
+        crate::expand::wire_leaves(&selected, &crate::expand::derive_layout(&selected)).len(),
         3,
         "the dispatch survives, so the selector and both arms keep their slots"
     );
@@ -1338,9 +1339,9 @@ fn a_claim_inside_a_live_choice_stays_wrapped() {
     // reaches the constructor — so the claimed leaf itself is what to check.
     fn claimed_wrapped(node: &crate::expand::InNode) -> Option<bool> {
         match &node.kind {
-            TransformKind::Leaf(crate::expand::InLeaf::Slot { slot, wrapped }) => {
-                (slot.name == "a_0").then_some(*wrapped)
-            }
+            // The FIRST arm's argument: the tree no longer names positions, so
+            // the arm is reached structurally instead.
+            TransformKind::Leaf(crate::expand::InLeaf::Slot { wrapped }) => Some(*wrapped),
             TransformKind::Leaf(_) => None,
             TransformKind::Product { children, .. } => {
                 children.iter().find_map(|c| claimed_wrapped(&c.node))
@@ -1406,7 +1407,7 @@ fn claiming_an_arm_product_keeps_the_position_optional() {
     })
     .unwrap();
 
-    let leaves = crate::expand::wire_leaves(&selected);
+    let leaves = crate::expand::wire_leaves(&selected, &crate::expand::derive_layout(&selected));
     assert_eq!(
         leaves.len(),
         3,
@@ -1486,7 +1487,7 @@ fn claiming_an_arity_layer_keeps_its_mapping() {
     })
     .unwrap();
 
-    let leaves = crate::expand::wire_leaves(&selected);
+    let leaves = crate::expand::wire_leaves(&selected, &crate::expand::derive_layout(&selected));
     assert_eq!(
         leaves.len(),
         1,
@@ -1556,10 +1557,6 @@ fn claiming_a_run_binds_one_borrowed_element() {
         ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
         kind: TransformKind::Sequence {
             op: InRun {
-                slot: InSlot {
-                    slot: 0,
-                    name: ident("kes"),
-                },
                 ty: tref(syn::parse_quote!(Vec<String>)),
             },
             inner: Box::new(InNode {
@@ -1589,7 +1586,7 @@ fn claiming_a_run_binds_one_borrowed_element() {
     .unwrap();
 
     // The layer survives, carrying the claimed reading on its slot.
-    let leaves = crate::expand::wire_leaves(&selected);
+    let leaves = crate::expand::wire_leaves(&selected, &crate::expand::derive_layout(&selected));
     assert_eq!(leaves.len(), 1);
     assert_eq!(leaves[0].ty.spell().to_string(), "& [ZKeyExpr]");
 
@@ -1637,10 +1634,6 @@ fn claiming_a_layer_with_the_wrong_shape_is_an_error() {
         ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
         kind: TransformKind::Sequence {
             op: InRun {
-                slot: InSlot {
-                    slot: 0,
-                    name: ident("kes"),
-                },
                 ty: tref(syn::parse_quote!(Vec<String>)),
             },
             inner: Box::new(InNode {
@@ -1684,10 +1677,6 @@ fn claiming_a_cow_run_binds_a_borrowed_element() {
         ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
         kind: TransformKind::Sequence {
             op: InRun {
-                slot: InSlot {
-                    slot: 0,
-                    name: ident("kes"),
-                },
                 ty: tref(syn::parse_quote!(Vec<String>)),
             },
             inner: Box::new(InNode {
@@ -1736,10 +1725,6 @@ fn claiming_an_optional_behind_a_wrapper_is_an_error() {
         ty: tref(syn::parse_quote!(Option<ZEncoding>)),
         kind: TransformKind::Optional {
             op: InPresence::Payload {
-                slot: InSlot {
-                    slot: 0,
-                    name: ident("enc"),
-                },
                 ty: tref(syn::parse_quote!(Option<String>)),
             },
             inner: Box::new(InNode {
@@ -1785,13 +1770,7 @@ fn a_claim_states_how_its_reading_is_lifted() {
                 link: InLink { by_ref: false },
                 node: InNode {
                     ty: tref(syn::parse_quote!(String)),
-                    kind: TransformKind::Leaf(InLeaf::Slot {
-                        slot: InSlot {
-                            slot: 0,
-                            name: ident("s"),
-                        },
-                        wrapped: false,
-                    }),
+                    kind: TransformKind::Leaf(InLeaf::Slot { wrapped: false }),
                 },
             }],
         },
@@ -1841,10 +1820,6 @@ fn a_cow_of_vec_run_is_refused() {
         ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
         kind: TransformKind::Sequence {
             op: InRun {
-                slot: InSlot {
-                    slot: 0,
-                    name: ident("kes"),
-                },
                 ty: tref(syn::parse_quote!(Vec<String>)),
             },
             inner: Box::new(InNode {
@@ -1903,13 +1878,7 @@ fn a_leaf_claim_lifts_before_its_constructor_reads_it() {
                 link: InLink { by_ref: false },
                 node: InNode {
                     ty: tref(target),
-                    kind: TransformKind::Leaf(InLeaf::Slot {
-                        slot: InSlot {
-                            slot: 0,
-                            name: ident("k"),
-                        },
-                        wrapped: false,
-                    }),
+                    kind: TransformKind::Leaf(InLeaf::Slot { wrapped: false }),
                 },
             }],
         },
@@ -1978,13 +1947,7 @@ fn a_non_direct_lift_onto_a_borrowed_leaf_is_an_error() {
                 link: InLink { by_ref: false },
                 node: InNode {
                     ty: tref(syn::parse_quote!(&ZKeyExpr)),
-                    kind: TransformKind::Leaf(InLeaf::Slot {
-                        slot: InSlot {
-                            slot: 0,
-                            name: ident("k"),
-                        },
-                        wrapped: false,
-                    }),
+                    kind: TransformKind::Leaf(InLeaf::Slot { wrapped: false }),
                 },
             }],
         },
@@ -2026,12 +1989,7 @@ fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
     let tree = |arg: syn::Type| InNode {
         ty: tref(syn::parse_quote!(ZKeyExpr)),
         kind: TransformKind::Choice {
-            op: InChoice {
-                selector: InSlot {
-                    slot: 0,
-                    name: ident("sel"),
-                },
-            },
+            op: InChoice { dispatch: () },
             variants: vec![InChild {
                 link: InLink { by_ref: false },
                 node: InNode {
@@ -2047,13 +2005,7 @@ fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
                                 // Stored WITH the selector's `Option`, which is
                                 // what a live arm's argument looks like.
                                 ty: tref(arg),
-                                kind: TransformKind::Leaf(InLeaf::Slot {
-                                    slot: InSlot {
-                                        slot: 1,
-                                        name: ident("a_0"),
-                                    },
-                                    wrapped: true,
-                                }),
+                                kind: TransformKind::Leaf(InLeaf::Slot { wrapped: true }),
                             },
                         }],
                     },
@@ -2149,7 +2101,7 @@ fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
     )
     .unwrap();
     assert_eq!(
-        crate::expand::wire_leaves(&selected)[1]
+        crate::expand::wire_leaves(&selected, &crate::expand::derive_layout(&selected))[1]
             .ty
             .spell()
             .to_string(),
@@ -2179,10 +2131,6 @@ fn a_direct_claim_that_is_not_the_value_is_an_error() {
         ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
         kind: TransformKind::Sequence {
             op: InRun {
-                slot: InSlot {
-                    slot: 0,
-                    name: ident("kes"),
-                },
                 ty: tref(syn::parse_quote!(Vec<String>)),
             },
             inner: Box::new(InNode {
@@ -2278,7 +2226,7 @@ fn a_gated_slots_wire_type_is_derived_from_its_payload() {
 
     // …and every reading of the wire derives the same type from them, rather
     // than carrying a second copy that could drift.
-    let leaves = crate::expand::wire_leaves(plan.tree());
+    let leaves = crate::expand::wire_leaves(plan.tree(), plan.layout());
     assert_eq!(
         leaves
             .iter()
@@ -2298,75 +2246,19 @@ fn a_gated_slots_wire_type_is_derived_from_its_payload() {
     );
 }
 
-/// #447 §1: the slot numbers in the tree are **derivable** — a walk in
-/// allocation order reproduces every one of them.
+/// #447 §1: the foreign signature lives in the layout, and only there.
 ///
-/// The check that has to hold before slot allocation can move out of the
-/// canonical tree and into adapter-local planning. If a projection walking the
-/// semantic structure yields today's numbering, the numbering is not a fact the
-/// tree has to carry; if it does not, something about the layout is not
-/// positional and the relocation would change generated signatures.
+/// The canonical tree carries constructor identity, argument order, borrowing,
+/// optionality and dispatch — and no position, name or presence encoding. Those
+/// are one flat protocol's choices; another adapter picks an object, overloads,
+/// a tagged union or a niche from the same nodes.
 ///
-/// Allocation is pre-order: a layer takes its own slot before the construction
-/// under it, and a dispatch its selector before its arms.
+/// Positions are claimed outside in, so a layer takes its own before the
+/// construction under it and a dispatch its selector before its arms. Both the
+/// leaf list and the fold emitter re-derive them by walking in that order,
+/// which is why nothing has to be stored on a node.
 #[test]
-fn slot_numbers_are_derivable_from_the_tree_walk() {
-    /// The slot names the tree carries, in the same walk order.
-    fn stored_names(node: &InNode, out: &mut Vec<String>) {
-        match &node.kind {
-            TransformKind::Leaf(InLeaf::Slot { slot, .. }) => out.push(slot.name.to_string()),
-            TransformKind::Leaf(InLeaf::Bound) => {}
-            TransformKind::Product { children, .. } => {
-                children.iter().for_each(|c| stored_names(&c.node, out))
-            }
-            TransformKind::Choice { op, variants } => {
-                out.push(op.selector.name.to_string());
-                variants.iter().for_each(|v| stored_names(&v.node, out));
-            }
-            TransformKind::Optional { op, inner } => {
-                match op {
-                    InPresence::Selector => {}
-                    InPresence::Flag(s) => out.push(s.name.to_string()),
-                    InPresence::Payload { slot, .. } => out.push(slot.name.to_string()),
-                }
-                stored_names(inner, out);
-            }
-            TransformKind::Sequence { op, inner } => {
-                out.push(op.slot.name.to_string());
-                stored_names(inner, out);
-            }
-        }
-    }
-
-    fn stored(node: &InNode, out: &mut Vec<usize>) {
-        match &node.kind {
-            TransformKind::Leaf(InLeaf::Slot { slot, .. }) => out.push(slot.slot),
-            TransformKind::Leaf(InLeaf::Bound) => {}
-            TransformKind::Product { children, .. } => {
-                children.iter().for_each(|c| stored(&c.node, out))
-            }
-            TransformKind::Choice { op, variants } => {
-                out.push(op.selector.slot);
-                variants.iter().for_each(|v| stored(&v.node, out));
-            }
-            TransformKind::Optional { op, inner } => {
-                match op {
-                    InPresence::Selector => {}
-                    InPresence::Flag(s) => out.push(s.slot),
-                    InPresence::Payload { slot, .. } => out.push(slot.slot),
-                }
-                stored(inner, out);
-            }
-            TransformKind::Sequence { op, inner } => {
-                out.push(op.slot.slot);
-                stored(inner, out);
-            }
-        }
-    }
-
-    // Three shapes that allocate differently: a dispatch (selector then arms),
-    // a single-constructor optional (the layer's own payload slot), and a
-    // multi-argument optional (an explicit flag, then one slot per argument).
+fn the_signature_lives_in_the_layout() {
     /// One shape to check: what to call it, the source it needs, the expanded
     /// parameter, and the variants it expands through.
     struct Case {
@@ -2375,6 +2267,8 @@ fn slot_numbers_are_derivable_from_the_tree_walk() {
         func: &'static str,
         param: &'static str,
         variants: Vec<Variant>,
+        /// The signature this shape should produce, in order.
+        names: Vec<&'static str>,
     }
 
     let cases = vec![
@@ -2390,6 +2284,7 @@ fn slot_numbers_are_derivable_from_the_tree_walk() {
                 Variant::Ctor(ident("z_keyexpr_try_from")),
                 Variant::Identity,
             ],
+            names: vec!["a_sel", "a_0", "a_1"],
         },
         Case {
             label: "optional payload",
@@ -2400,6 +2295,7 @@ fn slot_numbers_are_derivable_from_the_tree_walk() {
             func: "z_session_put",
             param: "encoding",
             variants: vec![Variant::Ctor(ident("z_encoding_from_string"))],
+            names: vec!["encoding"],
         },
     ];
 
@@ -2409,6 +2305,7 @@ fn slot_numbers_are_derivable_from_the_tree_walk() {
         func,
         param,
         variants,
+        names,
     } in cases
     {
         let mut reg: Registry<()> = reg_with(&items);
@@ -2432,35 +2329,44 @@ fn slot_numbers_are_derivable_from_the_tree_walk() {
             .get(&(ident(func), ident(param)))
             .unwrap_or_else(|| panic!("{label}: plan"));
 
-        let mut order = Vec::new();
-        stored(plan.tree(), &mut order);
+        // The layout names every position, in wire order.
         assert_eq!(
-            order,
-            (0..order.len()).collect::<Vec<_>>(),
-            "{label}: a pre-order walk meets the slots in numbering order, so the numbers \
-             are the walk's and need not be stored"
-        );
-        assert_eq!(
-            order.len(),
-            plan.leaves().len(),
-            "{label}: and it meets every slot the wire has"
-        );
-
-        // …and the layout beside the tree says the same thing the tree does,
-        // which is what licenses the tree to stop saying it.
-        assert_eq!(
-            plan.layout().len(),
-            plan.leaves().len(),
-            "{label}: the layout has a position per wire value"
-        );
-        let mut names = Vec::new();
-        stored_names(plan.tree(), &mut names);
-        assert_eq!(
-            names,
             (0..plan.layout().len())
                 .map(|i| plan.layout().name(i).to_string())
                 .collect::<Vec<_>>(),
-            "{label}: and calls each position what the tree calls it"
+            names,
+            "{label}: the layout is the signature"
+        );
+        // The leaf list is derived from it, so the two cannot drift.
+        assert_eq!(
+            plan.leaves()
+                .iter()
+                .map(|l| l.name.to_string())
+                .collect::<Vec<_>>(),
+            names,
+            "{label}: and the leaf list reads it"
+        );
+        // …and the tree says nothing about any of it. `InLeaf::Slot` carries
+        // only whether the position is gated; there is no number and no name to
+        // disagree with the layout.
+        fn positions_in_tree(node: &InNode) -> usize {
+            match &node.kind {
+                TransformKind::Leaf(_) => 0,
+                TransformKind::Product { children, .. } => {
+                    children.iter().map(|c| positions_in_tree(&c.node)).sum()
+                }
+                TransformKind::Choice { variants, .. } => {
+                    variants.iter().map(|v| positions_in_tree(&v.node)).sum()
+                }
+                TransformKind::Optional { inner, .. } | TransformKind::Sequence { inner, .. } => {
+                    positions_in_tree(inner)
+                }
+            }
+        }
+        assert_eq!(
+            positions_in_tree(plan.tree()),
+            0,
+            "{label}: the tree carries no wire positions"
         );
     }
 }

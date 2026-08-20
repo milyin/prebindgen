@@ -4,7 +4,7 @@
 //! The tree is the plan. A constructor call is a [product](InProduct) over its
 //! arguments, a selector dispatch is a [choice](InChoice) over its arms, the
 //! `Option<…>` and `Vec<…>` a parameter is written with are the layers over
-//! that ([`InPresence`], [`InSlot`]), and a wire value is a [leaf](InLeaf).
+//! that ([`InPresence`], [`InRun`]), and a crossing value is a [leaf](InLeaf).
 //! Recursion is the tree's, so a nested build is the same node kinds as the
 //! top-level one rather than a second type spelling the same thing.
 //!
@@ -39,38 +39,12 @@ pub type InNode = TransformNode<IntoRust>;
 /// One argument of an into-Rust product, or one arm of a choice.
 pub type InChild = TransformChild<IntoRust>;
 
-/// One wire slot: where it sits in the foreign signature and what it is called
-/// there.
-///
-/// The single description of a slot. [`wire_leaves`] turns the slots a tree
-/// names into [`FoldPlan::leaves`](super::FoldPlan::leaves), so a slot exists
-/// exactly where the node that uses it says so.
-///
-/// What a slot **carries** is not stored here: an argument slot carries its own
-/// node's [`ty`](TransformNode::ty), a selector an `i32` and a presence flag a
-/// `bool` by definition, and the two slots that carry something else — an
-/// `Option` layer's payload and a run — say so on the layer. Storing it twice
-/// would let a node and its slot disagree about one type.
-#[derive(Clone)]
-pub struct InSlot {
-    /// Position in the foreign signature, and the index of the caller's
-    /// decoded local.
-    pub slot: usize,
-    /// The slot's foreign-side parameter name.
-    pub name: syn::Ident,
-}
-
 /// Where one decoded value comes from.
-// large_enum_variant: a plan has a handful of leaves, and boxing `InSlot` to
-// even the arms out would only put an indirection between a node and the slot
-// it names (same trade-off as `DeconRecord`).
-#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum InLeaf {
     /// A wire slot of its own.
     Slot {
-        slot: InSlot,
-        /// The slot is `Option`-wrapped by **selector presence** (it belongs to
+        /// The position is `Option`-wrapped by **selector presence** (it belongs to
         /// a dispatched arm and only the taken arm's slots are filled), so a
         /// consumer unwraps it before use and treats a missing value as an
         /// error.
@@ -114,9 +88,11 @@ pub enum InProduct {
 /// own — a wire value no source wrote, contributed by this node.
 #[derive(Clone)]
 pub struct InChoice {
-    /// The `i32` slot. Arm `i` is taken when it reads `i`; under an
-    /// [`Optional`](InPresence) layer `-1` additionally means absent.
-    pub selector: InSlot,
+    /// A dispatch happens here. WHICH position signals it, and that the signal
+    /// is an `i32` at all, is the layout's choice rather than this node's
+    /// (#447 §1) — as is the convention that `-1` means absent under an
+    /// [`Optional`](InPresence) layer.
+    pub dispatch: (),
 }
 
 /// How an `Option<…>` layer decides whether its value is present. The three
@@ -131,16 +107,15 @@ pub enum InPresence {
     /// The dispatch under the layer also encodes absence: its selector reads
     /// `-1`. No slot of the layer's own.
     Selector,
-    /// An explicit `bool` slot decides, and the construction's arguments cross
-    /// plain. Used for a constructor of two or more arguments, where riding the
+    /// An explicit flag decides, and the construction's arguments cross plain.
+    /// Used for a constructor of two or more arguments, where riding the
     /// arguments' own `Option`s would box a nullable primitive on the wire.
-    Flag(InSlot),
+    Flag,
     /// The layer decodes its own `Option<…>` slot and hands the payload to the
     /// single-argument construction under it — which reads it as
     /// [`InLeaf::Bound`], having no slot of its own.
     Payload {
-        slot: InSlot,
-        /// The `Option<…>` the slot carries. Not the layer node's
+        /// The `Option<…>` the position carries. Not the layer node's
         /// [`ty`](TransformNode::ty): the node produces `Option<Target>` while
         /// the slot carries the constructor's own argument, optionally.
         ty: prebindgen_flat::flat::TypeRef,
@@ -151,8 +126,7 @@ pub enum InPresence {
 /// layer iterates.
 #[derive(Clone)]
 pub struct InRun {
-    pub slot: InSlot,
-    /// The collection the slot carries. Not the layer node's
+    /// The collection the position carries. Not the layer node's
     /// [`ty`](TransformNode::ty), for the reason
     /// [`InPresence::Payload`] gives.
     pub ty: prebindgen_flat::flat::TypeRef,
@@ -190,30 +164,6 @@ impl InNode {
         }
     }
 
-    /// The slot of the explicit presence flag, when an `Option` layer decides
-    /// presence with one — see [`InPresence::Flag`].
-    pub fn present(&self) -> Option<usize> {
-        match &self.kind {
-            TransformKind::Optional {
-                op: InPresence::Flag(s),
-                ..
-            } => Some(s.slot),
-            TransformKind::Optional { inner, .. } | TransformKind::Sequence { inner, .. } => {
-                inner.present()
-            }
-            _ => None,
-        }
-    }
-
-    /// The selector slot when the construction dispatches, `None` when it is a
-    /// single unconditional one.
-    pub fn selector(&self) -> Option<usize> {
-        match &self.core().kind {
-            TransformKind::Choice { op, .. } => Some(op.selector.slot),
-            _ => None,
-        }
-    }
-
     /// The arms of a dispatch, or the single construction on its own — the
     /// reading a consumer wants when it asks what this parameter can be built
     /// from. In selector order: arm `i` is taken when the selector reads `i`.
@@ -244,14 +194,14 @@ impl InNode {
     /// layer's payload instead of a slot: the arm then has no flat signature,
     /// which is what makes it unsplittable into a destination-language
     /// overload.
-    pub fn leaf_args(&self) -> Option<Vec<usize>> {
+    pub fn leaf_args(&self) -> Option<Vec<()>> {
         let TransformKind::Product { children, .. } = &self.kind else {
             return None;
         };
         children
             .iter()
             .map(|c| match &c.node.kind {
-                TransformKind::Leaf(InLeaf::Slot { slot, .. }) => Some(slot.slot),
+                TransformKind::Leaf(InLeaf::Slot { .. }) => Some(()),
                 _ => None,
             })
             .collect()
@@ -263,37 +213,118 @@ impl InNode {
 ///
 /// Every slot is named exactly once — a gap or a collision here means the
 /// builder handed out a position twice.
-pub fn wire_leaves(tree: &InNode) -> Vec<FoldLeaf> {
-    let mut slots: Vec<(usize, FoldLeaf)> = Vec::new();
-    tree.lower(&mut CollectSlots(&mut slots))
-        .expect("collecting wire slots cannot fail");
-    let mut out: Vec<Option<FoldLeaf>> = (0..slots.len()).map(|_| None).collect();
-    for (slot, leaf) in slots {
-        let cell = out
-            .get_mut(slot)
-            .expect("a wire slot outside the plan's own count");
-        assert!(cell.is_none(), "two wire values claim slot {slot}");
-        *cell = Some(leaf);
+/// Derive a flat layout for a tree that has none — the tree a
+/// [`select`] produced.
+///
+/// Selection replaces subtrees, so the signature it leaves is not the one the
+/// plan was built with. Rather than renumber a signature the tree no longer
+/// carries, an adapter claims positions over the selected tree: same walk,
+/// same order, and the surviving values close ranks because nothing was
+/// skipped. Names are positional here; an adapter that wants its own naming
+/// builds its own layout the same way (#447 §1).
+pub fn derive_layout(tree: &InNode) -> super::SlotLayout {
+    struct Derive(super::SlotLayout);
+    impl TransformLowerer<IntoRust> for Derive {
+        type Value = ();
+        type Error = std::convert::Infallible;
+
+        fn descend(
+            &mut self,
+            node: &InNode,
+            _link: Option<&InLink>,
+        ) -> Result<crate::transform::Descend<()>, Self::Error> {
+            let kind = match &node.kind {
+                TransformKind::Leaf(InLeaf::Slot { .. }) => Some(super::SlotKind::Value),
+                TransformKind::Choice { .. } => Some(super::SlotKind::Selector),
+                TransformKind::Sequence { .. } => Some(super::SlotKind::Value),
+                TransformKind::Optional { op, .. } => match op {
+                    InPresence::Selector => None,
+                    InPresence::Flag => Some(super::SlotKind::PresenceFlag),
+                    InPresence::Payload { .. } => Some(super::SlotKind::PresencePayload),
+                },
+                TransformKind::Leaf(InLeaf::Bound) | TransformKind::Product { .. } => None,
+            };
+            if let Some(kind) = kind {
+                let name = prebindgen_flat::types_util::ident(&format!("p{}", self.0.len()));
+                self.0.claim(name, kind);
+            }
+            Ok(crate::transform::Descend::Recurse)
+        }
+
+        fn leaf(&mut self, _n: &InNode, _o: &InLeaf) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn product(
+            &mut self,
+            _n: &InNode,
+            _o: &InProduct,
+            _c: Lowered<'_, IntoRust, ()>,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn choice(
+            &mut self,
+            _n: &InNode,
+            _o: &InChoice,
+            _v: Lowered<'_, IntoRust, ()>,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn optional(
+            &mut self,
+            _n: &InNode,
+            _o: &InPresence,
+            _i: &InNode,
+            _v: (),
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn sequence(
+            &mut self,
+            _n: &InNode,
+            _o: &InRun,
+            _i: &InNode,
+            _v: (),
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
     }
-    out.into_iter()
+    let mut derive = Derive(super::SlotLayout::default());
+    tree.lower(&mut derive)
+        .expect("deriving a layout cannot fail");
+    derive.0
+}
+
+pub fn wire_leaves(tree: &InNode, layout: &super::SlotLayout) -> Vec<FoldLeaf> {
+    let mut types: Vec<prebindgen_flat::flat::TypeRef> = Vec::new();
+    tree.lower(&mut CollectSlots(&mut types))
+        .expect("collecting wire values cannot fail");
+    assert_eq!(
+        types.len(),
+        layout.len(),
+        "the tree carries one value per position the layout claimed"
+    );
+    types
+        .into_iter()
         .enumerate()
-        .map(|(slot, leaf)| leaf.unwrap_or_else(|| panic!("wire slot {slot} is unclaimed")))
+        .map(|(slot, ty)| FoldLeaf {
+            name: layout.name(slot).clone(),
+            ty,
+        })
         .collect()
 }
 
 /// The lowerer behind [`wire_leaves`]: each node contributes the slots it uses
 /// and nothing else.
-struct CollectSlots<'a>(&'a mut Vec<(usize, FoldLeaf)>);
+struct CollectSlots<'a>(&'a mut Vec<prebindgen_flat::flat::TypeRef>);
 
 impl CollectSlots<'_> {
-    fn take(&mut self, s: &InSlot, ty: prebindgen_flat::flat::TypeRef) {
-        self.0.push((
-            s.slot,
-            FoldLeaf {
-                name: s.name.clone(),
-                ty,
-            },
-        ));
+    /// Contribute the value at the next position. Pushed on the way DOWN, so
+    /// the order is the one positions were claimed in — a dispatch's selector
+    /// precedes the arms it selects between, which a bottom-up hook would
+    /// reverse.
+    fn take(&mut self, ty: prebindgen_flat::flat::TypeRef) {
+        self.0.push(ty);
     }
 }
 
@@ -301,12 +332,39 @@ impl TransformLowerer<IntoRust> for CollectSlots<'_> {
     type Value = ();
     type Error = std::convert::Infallible;
 
-    fn leaf(&mut self, node: &InNode, op: &InLeaf) -> Result<(), Self::Error> {
-        // A bound argument reads what its layer unwrapped; that slot is the
-        // layer's, contributed there.
-        if let InLeaf::Slot { slot, wrapped } = op {
-            self.take(slot, slot_wire_ty(&node.ty, *wrapped));
+    /// Contribute on the way DOWN, so values land in the order their positions
+    /// were claimed: a layer before its construction, a dispatch's selector
+    /// before its arms.
+    fn descend(
+        &mut self,
+        node: &InNode,
+        _link: Option<&InLink>,
+    ) -> Result<crate::transform::Descend<()>, Self::Error> {
+        match &node.kind {
+            // A bound argument reads what its layer unwrapped; that position is
+            // the layer's, contributed there.
+            TransformKind::Leaf(InLeaf::Slot { wrapped }) => {
+                self.take(slot_wire_ty(&node.ty, *wrapped))
+            }
+            TransformKind::Leaf(InLeaf::Bound) | TransformKind::Product { .. } => {}
+            // The selector: composed, and placeless by construction.
+            TransformKind::Choice { .. } => self.take(prebindgen_flat::flat::TypeRef::scalar(
+                prebindgen_flat::flat::ScalarKind::I32,
+            )),
+            TransformKind::Sequence { op, .. } => self.take(op.ty.clone()),
+            TransformKind::Optional { op, .. } => match op {
+                InPresence::Selector => {}
+                // A presence flag no source wrote — placeless by construction.
+                InPresence::Flag => self.take(prebindgen_flat::flat::TypeRef::scalar(
+                    prebindgen_flat::flat::ScalarKind::Bool,
+                )),
+                InPresence::Payload { ty, .. } => self.take(ty.clone()),
+            },
         }
+        Ok(crate::transform::Descend::Recurse)
+    }
+
+    fn leaf(&mut self, _node: &InNode, _op: &InLeaf) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -322,44 +380,29 @@ impl TransformLowerer<IntoRust> for CollectSlots<'_> {
     fn choice(
         &mut self,
         _node: &InNode,
-        op: &InChoice,
+        _op: &InChoice,
         _variants: Lowered<'_, IntoRust, ()>,
     ) -> Result<(), Self::Error> {
-        // The selector: composed, and placeless by construction.
-        self.take(
-            &op.selector,
-            prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
-        );
         Ok(())
     }
 
     fn optional(
         &mut self,
         _node: &InNode,
-        op: &InPresence,
+        _op: &InPresence,
         _inner: &InNode,
         _value: (),
     ) -> Result<(), Self::Error> {
-        match op {
-            InPresence::Selector => {}
-            // A presence flag no source wrote — placeless by construction.
-            InPresence::Flag(s) => self.take(
-                s,
-                prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::Bool),
-            ),
-            InPresence::Payload { slot, ty } => self.take(slot, ty.clone()),
-        }
         Ok(())
     }
 
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &InRun,
+        _op: &InRun,
         _inner: &InNode,
         _value: (),
     ) -> Result<(), Self::Error> {
-        self.take(&op.slot, op.ty.clone());
         Ok(())
     }
 }
@@ -466,7 +509,7 @@ impl TransformLowerer<IntoRust> for CollectDeps {
         match op {
             // Absence rides the dispatch's own selector.
             InPresence::Selector => {}
-            InPresence::Flag(_) => out
+            InPresence::Flag => out
                 .intrinsic
                 .push(Self::scalar(prebindgen_flat::flat::ScalarKind::Bool)),
             InPresence::Payload { ty, .. } => out.required.push(ty.clone()),
@@ -618,7 +661,6 @@ pub fn select(
     claim: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<Claim>,
 ) -> Result<InNode, SelectError> {
     tree.lower(&mut Select { claim })
-        .map(|selected| renumber(&selected))
 }
 
 /// The lowerer behind [`select`]: it rebuilds the tree, replacing a claimed
@@ -809,34 +851,25 @@ impl Select<'_> {
     /// selector-wrapped arguments, so they contribute `false`; that is also the
     /// answer when the claim swallows the whole choice, which then sits under
     /// no selector at all.
-    fn first_slot(node: &InNode) -> Option<(InSlot, bool)> {
+    fn first_slot(node: &InNode) -> Option<bool> {
         match &node.kind {
-            TransformKind::Leaf(InLeaf::Slot { slot, wrapped }) => Some((slot.clone(), *wrapped)),
+            TransformKind::Leaf(InLeaf::Slot { wrapped }) => Some(*wrapped),
             TransformKind::Leaf(InLeaf::Bound) => None,
-            TransformKind::Product { children, .. } => children
-                .iter()
-                .filter_map(|c| Self::first_slot(&c.node))
-                .min_by_key(|(s, _)| s.slot),
-            TransformKind::Choice { op, variants } => variants
-                .iter()
-                .filter_map(|v| Self::first_slot(&v.node))
-                .chain(std::iter::once((op.selector.clone(), false)))
-                .min_by_key(|(s, _)| s.slot),
-            TransformKind::Optional { op, inner } => {
-                let own = match op {
-                    InPresence::Selector => None,
-                    InPresence::Flag(s) => Some((s.clone(), false)),
-                    InPresence::Payload { slot, .. } => Some((slot.clone(), false)),
-                };
-                Self::first_slot(inner)
-                    .into_iter()
-                    .chain(own)
-                    .min_by_key(|(s, _)| s.slot)
+            // The FIRST position the subtree occupies, in claim order — which
+            // is this walk's order, so the earliest is simply the first found.
+            TransformKind::Product { children, .. } => {
+                children.iter().find_map(|c| Self::first_slot(&c.node))
             }
-            TransformKind::Sequence { op, inner } => Self::first_slot(inner)
-                .into_iter()
-                .chain(std::iter::once((op.slot.clone(), false)))
-                .min_by_key(|(s, _)| s.slot),
+            // A dispatch claims its selector before its arms, and a selector is
+            // never a selector-wrapped argument.
+            TransformKind::Choice { .. } => Some(false),
+            TransformKind::Optional { op, inner } => match op {
+                // The layer claims nothing; the dispatch under it does.
+                InPresence::Selector => Self::first_slot(inner),
+                // A flag and a payload are structural, so neither is wrapped.
+                InPresence::Flag | InPresence::Payload { .. } => Some(false),
+            },
+            TransformKind::Sequence { .. } => Some(false),
         }
     }
 }
@@ -857,7 +890,7 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         else {
             return Ok(crate::transform::Descend::Recurse);
         };
-        let Some((slot, wrapped)) = Self::first_slot(node) else {
+        let Some(wrapped) = Self::first_slot(node) else {
             return Err(SelectError::BoundOnlySubtree {
                 claimed: node.ty.key().to_string(),
             });
@@ -942,10 +975,7 @@ impl TransformLowerer<IntoRust> for Select<'_> {
             // is `wrapped`'s to add, and stating it here as well is the
             // disagreement the invariant removes.
             ty: selected.clone(),
-            kind: TransformKind::Leaf(InLeaf::Slot {
-                slot: slot.clone(),
-                wrapped,
-            }),
+            kind: TransformKind::Leaf(InLeaf::Slot { wrapped }),
         };
         // An identity over one value the enclosing node binds, typed with what
         // the node owes rather than what the claim reads: under a layer it
@@ -1006,7 +1036,6 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                 ty: node.ty.clone(),
                 kind: TransformKind::Optional {
                     op: InPresence::Payload {
-                        slot,
                         ty: selected.clone(),
                     },
                     inner: Box::new(identity_over(bound_leaf())),
@@ -1016,7 +1045,6 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                 ty: node.ty.clone(),
                 kind: TransformKind::Sequence {
                     op: InRun {
-                        slot,
                         ty: selected.clone(),
                     },
                     inner: Box::new(identity_over(bound_leaf())),
@@ -1031,10 +1059,7 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         Ok(InNode {
             ty: node.ty.clone(),
             kind: TransformKind::Leaf(match op {
-                InLeaf::Slot { slot, wrapped } => InLeaf::Slot {
-                    slot: slot.clone(),
-                    wrapped: *wrapped,
-                },
+                InLeaf::Slot { wrapped } => InLeaf::Slot { wrapped: *wrapped },
                 InLeaf::Bound => InLeaf::Bound,
             }),
         })
@@ -1112,110 +1137,4 @@ fn rebuilt(children: Lowered<'_, IntoRust, InNode>) -> Vec<InChild> {
             node,
         })
         .collect()
-}
-
-/// Close the gaps a selection leaves: the surviving slots keep their order and
-/// take positions `0..n`.
-///
-/// Order rather than identity, because the foreign signature is a sequence —
-/// what a caller passes second must still be what the wrapper reads second.
-fn renumber(tree: &InNode) -> InNode {
-    let mut old: Vec<usize> = Vec::new();
-    collect_slots(tree, &mut old);
-    old.sort_unstable();
-    let dense: std::collections::HashMap<usize, usize> = old
-        .into_iter()
-        .enumerate()
-        .map(|(new, o)| (o, new))
-        .collect();
-    rewrite_slots(tree, &dense)
-}
-
-fn collect_slots(node: &InNode, out: &mut Vec<usize>) {
-    match &node.kind {
-        TransformKind::Leaf(InLeaf::Slot { slot, .. }) => out.push(slot.slot),
-        TransformKind::Leaf(InLeaf::Bound) => {}
-        TransformKind::Product { children, .. } => {
-            for c in children {
-                collect_slots(&c.node, out);
-            }
-        }
-        TransformKind::Choice { op, variants } => {
-            out.push(op.selector.slot);
-            for v in variants {
-                collect_slots(&v.node, out);
-            }
-        }
-        TransformKind::Optional { op, inner } => {
-            match op {
-                InPresence::Selector => {}
-                InPresence::Flag(s) => out.push(s.slot),
-                InPresence::Payload { slot, .. } => out.push(slot.slot),
-            }
-            collect_slots(inner, out);
-        }
-        TransformKind::Sequence { op, inner } => {
-            out.push(op.slot.slot);
-            collect_slots(inner, out);
-        }
-    }
-}
-
-fn rewrite_slots(node: &InNode, dense: &std::collections::HashMap<usize, usize>) -> InNode {
-    let at = |s: &InSlot| InSlot {
-        slot: dense[&s.slot],
-        name: s.name.clone(),
-    };
-    InNode {
-        ty: node.ty.clone(),
-        kind: match &node.kind {
-            TransformKind::Leaf(InLeaf::Slot { slot, wrapped }) => {
-                TransformKind::Leaf(InLeaf::Slot {
-                    slot: at(slot),
-                    wrapped: *wrapped,
-                })
-            }
-            TransformKind::Leaf(InLeaf::Bound) => TransformKind::Leaf(InLeaf::Bound),
-            TransformKind::Product { op, children } => TransformKind::Product {
-                op: op.clone(),
-                children: children
-                    .iter()
-                    .map(|c| InChild {
-                        link: c.link.clone(),
-                        node: rewrite_slots(&c.node, dense),
-                    })
-                    .collect(),
-            },
-            TransformKind::Choice { op, variants } => TransformKind::Choice {
-                op: InChoice {
-                    selector: at(&op.selector),
-                },
-                variants: variants
-                    .iter()
-                    .map(|v| InChild {
-                        link: v.link.clone(),
-                        node: rewrite_slots(&v.node, dense),
-                    })
-                    .collect(),
-            },
-            TransformKind::Optional { op, inner } => TransformKind::Optional {
-                op: match op {
-                    InPresence::Selector => InPresence::Selector,
-                    InPresence::Flag(s) => InPresence::Flag(at(s)),
-                    InPresence::Payload { slot, ty } => InPresence::Payload {
-                        slot: at(slot),
-                        ty: ty.clone(),
-                    },
-                },
-                inner: Box::new(rewrite_slots(inner, dense)),
-            },
-            TransformKind::Sequence { op, inner } => TransformKind::Sequence {
-                op: InRun {
-                    slot: at(&op.slot),
-                    ty: op.ty.clone(),
-                },
-                inner: Box::new(rewrite_slots(inner, dense)),
-            },
-        },
-    }
 }

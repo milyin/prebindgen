@@ -115,6 +115,31 @@ impl FoldPlan {
     /// Read off [`Self::tree`] rather than stored beside it: the dispatch is
     /// the node, and a second copy of which slot selects it could disagree
     /// with the node the emitter actually walks.
+    /// The positions each dispatch arm's arguments occupy.
+    ///
+    /// `None` for an arm that builds one of its arguments from further
+    /// positions: such an arm has no flat signature, which is what makes it
+    /// unsplittable into a destination-language overload.
+    ///
+    /// Derived, because positions are the layout's and not the tree's: they are
+    /// claimed in walk order, so the selector comes first and each arm's
+    /// arguments follow in turn (#447 §1).
+    pub fn arm_arg_slots(&self) -> Vec<Option<Vec<usize>>> {
+        let mut next = self.selector.map_or(0, |s| s + 1);
+        self.tree
+            .arms()
+            .iter()
+            .map(|arm| {
+                let claimed = crate::expand::derive_layout(arm).len();
+                let slots = arm
+                    .leaf_args()
+                    .map(|flat| (next..next + flat.len()).collect::<Vec<_>>());
+                next += claimed;
+                slots
+            })
+            .collect()
+    }
+
     pub fn selector(&self) -> Option<usize> {
         self.selector
     }
