@@ -30,10 +30,11 @@
 //! Nesting needs no rule of its own: a row names one layer, and the layer
 //! inside it is a crossing with a row of its own.
 //!
-//! A callback has no row at all. Taking one apart into the values that pass
-//! through it is the only thing any adapter can do with it, so there is no
-//! decision to record and [`RecipesBuilder::build`] refuses a declaration for
-//! one.
+//! A callback derives [`Row::Callback`], which nothing can declare. Taking one
+//! apart into the values that pass through it is the only thing any adapter can
+//! do with it, so there is no decision to record: [`RecipesBuilder::build`]
+//! refuses a declaration for one, and the derived row's parts are the
+//! callback's arguments, which do the other job.
 
 use std::{
     borrow::Cow,
