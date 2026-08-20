@@ -147,6 +147,7 @@ impl Declarations {
 impl Default for Declarations {
     fn default() -> Self {
         Self {
+            compiled_fns: Vec::new(),
             package: String::new(),
             fun_name_mangle: None,
             ptr_class_name_mangle: None,

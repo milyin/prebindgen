@@ -569,6 +569,13 @@ pub struct Declarations {
     /// ([`JniGenBuilder::convert_input_body`] / [`JniGenBuilder::convert_output_body`]),
     /// keeping declarations order-independent and origin-qualified.
     pub(crate) convert_decls: Vec<ConvertDecl>,
+    /// Every conversion this binding compiled, in emission order.
+    ///
+    /// Filled once by `JniGenBuilder::build_with` and read by
+    /// `Prebindgen::converter_items`. It is what reaches the generated file, so
+    /// a fragment no longer has to be expressible as one `ConverterImpl` to be
+    /// emitted — only to be looked up.
+    pub(crate) compiled_fns: Vec<syn::ItemFn>,
 
     /// When `true` (default), generated wrappers wrap each call that
     /// touches an opaque handle in the per-call `withSortedHandleLocks`

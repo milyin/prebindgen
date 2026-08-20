@@ -1621,7 +1621,7 @@ impl CbindgenBuilder {
 
     /// [`Self::build`] over a registry described elsewhere — the test seam.
     pub(crate) fn build_with(
-        self,
+        mut self,
         registry: prebindgen_registry::RegistryBuilder<()>,
     ) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
         let declared = self.declare_into(registry)?.validate_with(&self)?;
@@ -1657,6 +1657,13 @@ impl CbindgenBuilder {
                 conv
             })?
             .build()?;
+        // What the compilation produced, kept for emission. The converter table
+        // stays the lookup index; this is what reaches the file.
+        self.compiled_fns = compiled
+            .fragments()
+            .into_iter()
+            .map(|f| f.function.clone())
+            .collect();
         self.validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         Ok(Cbindgen {
@@ -1964,6 +1971,10 @@ impl Prebindgen for CbindgenBuilder {
     // with non-portable initializers valid in the generated file. (cbindgen
     // cannot evaluate a path initializer, so aliased consts don't surface
     // as `#define`s in the C header.)
+    fn converter_items(&self, _registry: &Registry<()>) -> Option<Vec<syn::ItemFn>> {
+        Some(self.compiled_fns.clone())
+    }
+
     fn source_module(&self) -> Option<&syn::Path> {
         self.source_module.as_ref()
     }

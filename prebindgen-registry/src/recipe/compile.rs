@@ -344,9 +344,14 @@ type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>
 /// and so cannot keep one [`Compiler`], but the fragments it built borrow
 /// nothing and outlive any of them.
 pub struct Compiled<F> {
-    fragments: HashMap<(TypeKey, Assembly, RecipeId), Rc<F>>,
+    fragments: HashMap<FragmentKey, Rc<F>>,
     required: BTreeSet<RequirementId>,
 }
+
+/// What a fragment is memoised under: the type **as the site spelled it**, the
+/// job, and which row answered. See the module docs on why the spelling and not
+/// the row's own identity.
+type FragmentKey = (TypeKey, Assembly, RecipeId);
 
 impl<F> Default for Compiled<F> {
     fn default() -> Self {
@@ -372,6 +377,21 @@ impl<F> Compiled<F> {
     /// Every helper a compiled fragment asked for, de-duplicated.
     pub fn required(&self) -> impl Iterator<Item = &RequirementId> {
         self.required.iter()
+    }
+
+    /// Every fragment this compilation built, in a deterministic order.
+    ///
+    /// What an adapter emits from once it stops routing its conversions back
+    /// through the converter table — see
+    /// [`Prebindgen::converter_items`](crate::Prebindgen::converter_items). The
+    /// order is by crossing key and then by row name, so a file written from
+    /// this is stable across runs.
+    pub fn fragments(&self) -> Vec<&F> {
+        let mut keyed: Vec<(&FragmentKey, &Rc<F>)> = self.fragments.iter().collect();
+        keyed.sort_by(|a, b| {
+            (a.0 .0.as_str(), a.0 .1, &a.0 .2).cmp(&(b.0 .0.as_str(), b.0 .1, &b.0 .2))
+        });
+        keyed.into_iter().map(|(_, f)| &**f).collect()
     }
 }
 

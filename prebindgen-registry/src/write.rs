@@ -81,8 +81,14 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     //    everything below can reference them.
     items.extend(ext.prerequisites(registry, &emit));
 
-    // 1. Auto-generated converter wrappers (sorted by ident, deduped).
-    for (_, item_fn) in collect_converter_items(registry) {
+    // 1. Auto-generated converter wrappers (sorted by ident, deduped). From
+    //    the adapter when it tracks its own, else off the converter table —
+    //    see `Prebindgen::converter_items` for why that seam exists.
+    let converters = match ext.converter_items(registry) {
+        Some(from_adapter) => dedup_by_name(from_adapter),
+        None => collect_converter_items(registry),
+    };
+    for (_, item_fn) in converters {
         items.push(syn::Item::Fn(item_fn));
     }
 
@@ -172,6 +178,18 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
 ///
 /// Private: an internal step of [`write_rust`], not part of the
 /// adapter-facing surface this module exposes.
+/// Sort by name and keep the first of each, which is what the converter table
+/// does for the entries it holds — one function per name reaches the file
+/// however many crossings produced it.
+fn dedup_by_name(functions: Vec<syn::ItemFn>) -> Vec<(syn::Ident, syn::ItemFn)> {
+    let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
+    for function in functions {
+        let name = function.sig.ident.clone();
+        by_name.entry(name.to_string()).or_insert((name, function));
+    }
+    by_name.into_values().collect()
+}
+
 fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, syn::ItemFn)> {
     let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
     let mut collect = |entry: &TypeEntry<M>| {
