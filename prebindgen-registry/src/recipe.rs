@@ -44,8 +44,11 @@ use std::{
 
 use crate::flat::{Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef};
 
+mod site;
 #[cfg(test)]
 mod tests;
+
+pub use self::site::{Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site};
 
 // ── The two jobs ──────────────────────────────────────────────────────────
 
@@ -998,6 +1001,22 @@ pub enum RecipeError {
         /// Which of the crossing's rows was declared.
         recipe: RecipeId,
     },
+    /// A site asked for a row that was never declared.
+    UnknownRow {
+        /// Where the value crosses.
+        site: Site,
+        /// The crossing that has no such row.
+        crossing: CrossingKey,
+        /// The name the site asked for.
+        recipe: RecipeId,
+    },
+    /// Two declarations of equal precedence bound one site to different rows.
+    Rebound {
+        /// The site both named.
+        site: Site,
+        /// The precedence they share.
+        origin: Origin,
+    },
     /// A row was declared for a callback, which has no decision to record.
     CallbackDeclared {
         /// The callback crossing.
@@ -1053,6 +1072,19 @@ impl fmt::Display for RecipeError {
             RecipeError::NotAProduct { row, recipe } => write!(
                 f,
                 "row `{recipe}` takes {row} apart, and the model gives that type no parts"
+            ),
+            RecipeError::UnknownRow {
+                site,
+                crossing,
+                recipe,
+            } => write!(
+                f,
+                "{site} asks for row `{recipe}`, which {crossing} does not have"
+            ),
+            RecipeError::Rebound { site, origin } => write!(
+                f,
+                "{site} is bound to two different rows by {origin}; one of them has to \
+                 be written at a higher precedence"
             ),
             RecipeError::CallbackDeclared { row, recipe } => write!(
                 f,
