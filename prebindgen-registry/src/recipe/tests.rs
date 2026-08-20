@@ -527,3 +527,272 @@ fn a_part_is_accepted_where_the_edge_can_consume_it() {
     assert!(Mode::Exclusive.satisfies(Mode::Exclusive));
     assert!(!Mode::Exclusive.satisfies(Mode::Shared));
 }
+
+// ── Sites and row selection ───────────────────────────────────────────────
+
+fn site(owner: &str, index: usize) -> Site {
+    Site {
+        owner: ident(owner),
+        role: Role::Param { index },
+    }
+}
+
+/// A table where `Sample` has two deconstructing rows, `whole` being the
+/// default — the shape every selection test below needs.
+fn two_rows(model: &Flat) -> Recipes {
+    let mut builder = Recipes::builder();
+    builder
+        .declare_default(ty(model, "Sample"), id("whole"), Deconstructing::Atomic)
+        .declare(
+            ty(model, "Sample"),
+            id("fields"),
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
+        );
+    builder.build(model).expect("table")
+}
+
+#[test]
+fn a_site_nobody_bound_takes_the_default_row() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let bindings = Bindings::default();
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+
+    let bound = bindings
+        .resolve(&site("z_put", 0), &crossing, &recipes)
+        .expect("a site nobody bound still crosses");
+    assert_eq!(bound.recipe, id("whole"));
+    assert_eq!(bound.origin, Origin::Adapter);
+    assert!(!bindings.is_declared(&site("z_put", 0)));
+}
+
+#[test]
+fn an_undeclared_crossing_resolves_to_its_derived_row() {
+    let model = model(&[SAMPLE]);
+    let recipes = Recipes::default();
+    let bindings = Bindings::default();
+    let crossing = Crossing::new(ty(&model, "Vec<Sample>"), Assembly::Deconstruct);
+
+    let bound = bindings
+        .resolve(&site("z_put", 0), &crossing, &recipes)
+        .expect("the derived row");
+    assert_eq!(bound.recipe, RecipeId::derived());
+}
+
+#[test]
+fn a_site_takes_the_row_it_names() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+    let mut builder = Bindings::builder();
+    builder.bind(
+        site("z_put", 0),
+        crossing.clone(),
+        Ask::Recipe(id("fields")),
+        Origin::Function,
+    );
+    let bindings = builder.build(&recipes).expect("bindings");
+
+    let bound = bindings
+        .resolve(&site("z_put", 0), &crossing, &recipes)
+        .expect("bound");
+    assert_eq!(bound.recipe, id("fields"));
+    assert_eq!(bound.origin, Origin::Function);
+    // Every other site of the same crossing still takes the default.
+    let other = bindings
+        .resolve(&site("z_get", 0), &crossing, &recipes)
+        .expect("bound");
+    assert_eq!(other.recipe, id("whole"));
+}
+
+#[test]
+fn the_higher_precedence_declaration_wins_whichever_was_written_first() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+
+    for order in [
+        [Origin::Type, Origin::Function],
+        [Origin::Function, Origin::Type],
+    ] {
+        let mut builder = Bindings::builder();
+        for origin in order {
+            let ask = match origin {
+                Origin::Function => Ask::Recipe(id("fields")),
+                _ => Ask::Recipe(id("whole")),
+            };
+            builder.bind(site("z_put", 0), crossing.clone(), ask, origin);
+        }
+        let bindings = builder.build(&recipes).expect("bindings");
+        let bound = bindings
+            .resolve(&site("z_put", 0), &crossing, &recipes)
+            .expect("bound");
+        assert_eq!(bound.recipe, id("fields"), "written {order:?}");
+        assert_eq!(bound.origin, Origin::Function, "written {order:?}");
+    }
+}
+
+#[test]
+fn two_declarations_of_equal_precedence_may_agree_and_may_not_disagree() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+
+    let mut agreeing = Bindings::builder();
+    agreeing
+        .bind(
+            site("z_put", 0),
+            crossing.clone(),
+            Ask::Recipe(id("fields")),
+            Origin::Function,
+        )
+        .bind(
+            site("z_put", 0),
+            crossing.clone(),
+            Ask::Recipe(id("fields")),
+            Origin::Function,
+        );
+    agreeing
+        .build(&recipes)
+        .expect("saying it twice is not a conflict");
+
+    let mut disagreeing = Bindings::builder();
+    disagreeing
+        .bind(
+            site("z_put", 0),
+            crossing.clone(),
+            Ask::Recipe(id("fields")),
+            Origin::Function,
+        )
+        .bind(
+            site("z_put", 0),
+            crossing,
+            Ask::Recipe(id("whole")),
+            Origin::Function,
+        );
+    let errors = disagreeing.build(&recipes).expect_err("two answers");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::Rebound { origin, .. }] if *origin == Origin::Function),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn two_declarations_of_equal_precedence_naming_different_crossings_disagree() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let mut builder = Bindings::builder();
+    builder
+        .bind(
+            site("z_put", 0),
+            Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct),
+            Ask::Default,
+            Origin::Function,
+        )
+        // Same ask, different type: still two answers for one place.
+        .bind(
+            site("z_put", 0),
+            Crossing::new(ty(&model, "u32"), Assembly::Deconstruct),
+            Ask::Default,
+            Origin::Function,
+        )
+        // A third disagreement over the same site is still one report.
+        .bind(
+            site("z_put", 0),
+            Crossing::new(ty(&model, "u64"), Assembly::Deconstruct),
+            Ask::Default,
+            Origin::Function,
+        );
+    let errors = builder.build(&recipes).expect_err("two crossings");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::Rebound { .. }]),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_site_naming_a_row_the_crossing_lacks_is_refused() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+    let mut builder = Bindings::builder();
+    builder.bind(
+        site("z_put", 0),
+        crossing,
+        Ask::Recipe(id("jobject")),
+        Origin::Function,
+    );
+    let errors = builder.build(&recipes).expect_err("no such row");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::UnknownRow { recipe, .. }] if recipe == &id("jobject")),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn an_omitted_site_contributes_nothing() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+    let mut builder = Bindings::builder();
+    builder.bind(site("z_put", 0), crossing.clone(), Ask::Omit, Origin::Part);
+    let bindings = builder.build(&recipes).expect("bindings");
+
+    assert!(bindings.is_declared(&site("z_put", 0)));
+    assert!(bindings
+        .resolve(&site("z_put", 0), &crossing, &recipes)
+        .is_none());
+}
+
+#[test]
+fn asking_for_the_default_records_which_row_that_was() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+    let mut builder = Bindings::builder();
+    builder.bind(
+        site("z_put", 0),
+        crossing.clone(),
+        Ask::Default,
+        Origin::Type,
+    );
+    let bindings = builder.build(&recipes).expect("bindings");
+
+    let bound = bindings
+        .resolve(&site("z_put", 0), &crossing, &recipes)
+        .expect("bound");
+    assert_eq!(bound.recipe, id("whole"));
+    assert_eq!(bound.origin, Origin::Type);
+}
+
+#[test]
+fn one_site_is_one_role_of_one_owner() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+    let ret = Site {
+        owner: ident("z_put"),
+        role: Role::Return,
+    };
+    let mut builder = Bindings::builder();
+    builder.bind(
+        ret.clone(),
+        crossing.clone(),
+        Ask::Recipe(id("fields")),
+        Origin::Function,
+    );
+    let bindings = builder.build(&recipes).expect("bindings");
+
+    assert_eq!(
+        bindings.resolve(&ret, &crossing, &recipes).unwrap().recipe,
+        id("fields")
+    );
+    // The same function's parameter 0 is a different site.
+    assert_eq!(
+        bindings
+            .resolve(&site("z_put", 0), &crossing, &recipes)
+            .unwrap()
+            .recipe,
+        id("whole")
+    );
+}
