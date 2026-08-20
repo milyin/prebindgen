@@ -696,6 +696,7 @@ pub struct JniGenBuilder {
 // ── Sibling submodules (carved from the former monolithic file) ─────────
 mod builder;
 mod classify;
+mod compile;
 mod config;
 mod decl;
 mod emit;
@@ -703,6 +704,7 @@ mod equality;
 mod iface;
 mod prim;
 mod prim_array;
+mod rows;
 mod selector;
 #[cfg(test)]
 mod tests;
