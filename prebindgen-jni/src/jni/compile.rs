@@ -34,20 +34,48 @@ impl Carrier for JFrag {
 
 impl JFrag {
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
-        let mode = at.crossing.mode();
+        let validity = validity_of(&conv, at.crossing.assembly());
         Self {
             conv,
             yields: Yield {
                 ty: at.crossing.value().stripped_key(),
-                mode,
-                // A borrow is only usable while what it was reached through is
-                // alive; anything else the JVM may keep.
-                validity: match mode {
-                    Mode::Owned => Validity::SelfSufficient,
-                    Mode::Shared | Mode::Exclusive => Validity::Borrowed,
-                },
+                mode: at.crossing.mode(),
+                validity,
             },
         }
+    }
+}
+
+/// How long what this conversion produces stays usable.
+///
+/// A property of the **conversion**, not of how the crossing was spelled. The
+/// two disagree and the spelling is the wrong one to read: a `&T` output over a
+/// declared opaque handle clones its referent into a fresh `Box`-handle, and a
+/// `&str` output copies into a JVM string, so both are self-sufficient although
+/// the crossing is a borrow.
+fn validity_of(conv: &ConverterImpl<KotlinMeta>, assembly: Assembly) -> Validity {
+    match assembly {
+        // Rust to the JVM. Every JNI wire value is a `jlong` the Rust side
+        // handed over or a JVM object the JVM now owns; nothing on this wire
+        // points into the Rust value it came from.
+        Assembly::Deconstruct => Validity::SelfSufficient,
+        // The JVM to Rust: what the converter's own function hands back. A
+        // decode that yields a borrow is valid only for the call, which is
+        // exactly right at a parameter and refused at a return.
+        Assembly::Construct => match &conv.function.sig.output {
+            syn::ReturnType::Type(_, ty) if produces_borrow(ty) => Validity::Borrowed,
+            _ => Validity::SelfSufficient,
+        },
+    }
+}
+
+/// Whether a converter's return type hands back a borrow — `&T`, or a
+/// `Result<&T, E>` whose success arm is one.
+fn produces_borrow(ty: &syn::Type) -> bool {
+    match ty {
+        syn::Type::Reference(_) => true,
+        _ => prebindgen_registry::types_util::result_parts(ty)
+            .is_some_and(|(ok, _)| matches!(ok, syn::Type::Reference(_))),
     }
 }
 

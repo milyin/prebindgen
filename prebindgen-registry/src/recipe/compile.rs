@@ -69,6 +69,16 @@ pub enum Validity {
     Borrowed,
 }
 
+impl Validity {
+    /// Whether a value of this validity can be used where `needed` is required.
+    ///
+    /// Only one direction fails: something the foreign side will keep cannot be
+    /// borrowed from a value the call is about to drop.
+    pub fn satisfies(self, needed: Validity) -> bool {
+        needed == Validity::Borrowed || self == Validity::SelfSufficient
+    }
+}
+
 impl fmt::Display for Validity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
@@ -428,7 +438,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let root = self.row(adapter, &bound.crossing, &bound.recipe)?;
         let needed = tolerated(&bound.site.role);
         let got = root.yields().validity;
-        if needed == Validity::SelfSufficient && got == Validity::Borrowed {
+        if !got.satisfies(needed) {
             return Err(RecipeError::Validity {
                 site: bound.site,
                 needed,
@@ -657,13 +667,28 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let mut built = Vec::new();
         for (index, part) in parts.iter().enumerate() {
             let fragment = self.part(adapter, at, index, &part.ty)?;
-            let got = fragment.yields().mode;
-            if !got.satisfies(part.mode) {
+            let site = || Site::part(at.crossing, at.recipe, index);
+            let produced = fragment.yields();
+            // The type first: a part yielding the wrong Rust value is wrong
+            // however it is held. Normalized the way a crossing is keyed, so a
+            // fragment answering for `&T` or `Box<T>` satisfies a `T` part —
+            // holding it is the mode's question, immediately below.
+            let wanted = part_key(&part.ty);
+            if produced.ty != wanted {
+                return Err(RecipeError::ComposedType {
+                    site: site(),
+                    part: index,
+                    wanted,
+                    got: produced.ty,
+                }
+                .into());
+            }
+            if !produced.mode.satisfies(part.mode) {
                 return Err(RecipeError::Composition {
-                    site: Site::part(at.crossing, at.recipe, index),
+                    site: site(),
                     part: index,
                     wanted: part.mode,
-                    got,
+                    got: produced.mode,
                 }
                 .into());
             }
@@ -884,6 +909,16 @@ impl<'a, C: Compile> Compiler<'a, C> {
             _ => None,
         }
     }
+}
+
+/// A part's type as a fragment must answer for it.
+///
+/// The same normalization [`Crossing::key`] uses, so the two cannot disagree
+/// about what a fragment for a given part is called: a part spelled `&T` or
+/// `Box<T>` is answered by a fragment yielding `T`, and whether that fragment
+/// may be *held* the way the part needs is [`Mode`]'s question.
+fn part_key(ty: &TypeRef) -> TypeKey {
+    ty.borrow_target().unwrap_or(ty).stripped_key()
 }
 
 /// A field's name, or its position when the struct is positional.

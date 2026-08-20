@@ -799,7 +799,7 @@ fn one_site_is_one_role_of_one_owner() {
 
 // ── Compiling rows into fragments ─────────────────────────────────────────
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::flat::Alternative;
 
@@ -827,6 +827,10 @@ struct Recorder {
     shared: HashSet<String>,
     /// Crossings whose fragment is valid only while its source is alive.
     borrowed: HashSet<String>,
+    /// Crossings whose fragment claims to produce a different Rust type — an
+    /// adapter answering for the wrong value, which nothing in the shape of a
+    /// recipe can prevent.
+    mistyped: HashMap<String, TypeKey>,
 }
 
 impl Recorder {
@@ -836,7 +840,11 @@ impl Recorder {
         Note {
             text,
             yields: Yield {
-                ty: at.crossing.value().stripped_key(),
+                ty: self
+                    .mistyped
+                    .get(&name)
+                    .cloned()
+                    .unwrap_or_else(|| at.crossing.value().stripped_key()),
                 mode: if self.shared.contains(&name) {
                     Mode::Shared
                 } else {
@@ -1488,6 +1496,144 @@ fn a_part_that_only_lends_cannot_feed_an_edge_that_consumes() {
         ),
         "{error:?}"
     );
+}
+
+#[test]
+fn a_part_producing_the_wrong_rust_type_is_refused() {
+    let model = model(&[
+        SAMPLE,
+        "pub fn sample_new(key: u32, payload: u64) -> Sample {}",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Sample"),
+        id("fields"),
+        Constructing::Product(Construct::Call(ident("sample_new"))),
+    );
+    let recipes = builder.build(&model).expect("table");
+    let bindings = Bindings::default();
+    let mut adapter = Recorder::default();
+    // `payload` is a `u64`, and the adapter's fragment answers with a `u32`.
+    // Nothing about the recipe's shape can catch that: the recipe names the
+    // constructor and the model supplies the part types, so the only place the
+    // two can disagree is what the adapter says it produces.
+    adapter
+        .mistyped
+        .insert("u64".to_owned(), ty(&model, "u32").stripped_key());
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let error = compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "Sample"), Assembly::Construct),
+        )
+        .expect_err("the part produces the wrong type");
+    assert!(
+        matches!(
+            recipe_error(&error),
+            RecipeError::ComposedType { part: 1, wanted, got, .. }
+                if wanted.as_str() == "u64" && got.as_str() == "u32"
+        ),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn a_part_answering_through_a_borrow_or_a_box_still_matches_its_type() {
+    // The type check normalizes the way a crossing is keyed, so a fragment
+    // yielding `T` answers a part spelled `&T` — whether it may be *held* that
+    // way is the mode check, which is separate and runs second.
+    let model = model(&[
+        SAMPLE,
+        "pub fn sample_of(key: &u32, payload: Box<u64>) -> Sample {}",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Sample"),
+        id("fields"),
+        Constructing::Product(Construct::Call(ident("sample_of"))),
+    );
+    let recipes = builder.build(&model).expect("table");
+    let bindings = Bindings::default();
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    compiler
+        .site(
+            &mut adapter,
+            site("z_put", 0),
+            Crossing::new(ty(&model, "Sample"), Assembly::Construct),
+        )
+        .expect("a borrow and a Box are answered by the bare type's fragment");
+}
+
+#[test]
+fn a_constructor_that_builds_another_type_is_refused() {
+    let model = model(&[
+        SAMPLE,
+        "pub struct Other { pub n: u32 }",
+        "pub fn make_other(key: u32) -> Other {}",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Sample"),
+        id("fields"),
+        Constructing::Product(Construct::Call(ident("make_other"))),
+    );
+    let errors = builder
+        .build(&model)
+        .expect_err("make_other builds an Other");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::NotAConstructor { func, .. }] if func == "make_other"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_fallible_constructor_builds_its_success_arm() {
+    // Where a construction's fallibility is read from is the return type, so
+    // `Result<Sample, E>` builds a `Sample` and nothing states it twice.
+    let model = model(&[
+        SAMPLE,
+        "pub struct Error { pub code: u32 }",
+        "pub fn sample_try(key: u32) -> Result<Sample, Error> {}",
+        "pub fn other_try(key: u32) -> Result<u32, Error> {}",
+    ]);
+    let mut good = Recipes::builder();
+    good.declare(
+        ty(&model, "Sample"),
+        id("fields"),
+        Constructing::Product(Construct::Call(ident("sample_try"))),
+    );
+    good.build(&model)
+        .expect("Result<Sample, _> builds a Sample");
+
+    let mut bad = Recipes::builder();
+    bad.declare(
+        ty(&model, "Sample"),
+        id("fields"),
+        Constructing::Product(Construct::Call(ident("other_try"))),
+    );
+    let errors = bad.build(&model).expect_err("Result<u32, _> does not");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::NotAConstructor { .. }]),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_constructor_reached_through_a_borrow_or_a_box_is_accepted() {
+    let model = model(&[SAMPLE, "pub fn sample_boxed(key: u32) -> Box<Sample> {}"]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Sample"),
+        id("fields"),
+        Constructing::Product(Construct::Call(ident("sample_boxed"))),
+    );
+    builder
+        .build(&model)
+        .expect("a Box<Sample> builds a Sample");
 }
 
 #[test]
