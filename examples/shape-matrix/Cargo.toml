@@ -1,0 +1,18 @@
+[package]
+name = "shape-matrix"
+version = { workspace = true }
+edition = { workspace = true }
+publish = false
+
+[dependencies]
+prebindgen = { workspace = true }
+prebindgen-flat = { workspace = true }
+prebindgen-registry = { workspace = true }
+prebindgen-c = { workspace = true }
+prebindgen-jni = { workspace = true }
+syn = { workspace = true }
+quote = { workspace = true }
+tempfile = { workspace = true }
+# The C side's second half: the same version `examples/example-cbindgen`
+# pins, so a header this crate judges is the header that example produces.
+cbindgen = "=0.29.4"

@@ -21,6 +21,10 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # The Kotlin compiler `examples/shape-matrix` runs. Pinned: a cell's state is
+  # a compiler's answer, so the committed report is only reproducible against a
+  # named one.
+  KOTLIN_VERSION: 2.4.10
 
 jobs:
   build:
@@ -51,6 +55,20 @@ jobs:
 
     - name: Install Rust toolchain
       run: rustup component add rustfmt clippy
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+    - name: Install the Kotlin compiler
+      # `examples/shape-matrix` compiles the Kotlin it generates, so the report
+      # it commits differs on a machine without kotlinc — every JNI cell stops a
+      # rung short. Both jobs that run the matrix therefore install it: `build`
+      # through `cargo test`, `covertest` through the regen check.
+      run: |
+        curl -sSLo /tmp/kotlin-compiler.zip \
+          https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip
+        unzip -q /tmp/kotlin-compiler.zip -d /opt
+        echo /opt/kotlinc/bin >> "$GITHUB_PATH"
 
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- --deny warnings
@@ -142,6 +160,16 @@ jobs:
       with:
         distribution: temurin
         java-version: 21
+    - name: Install the Kotlin compiler
+      # `examples/shape-matrix` compiles the Kotlin it generates, so the report
+      # it commits differs on a machine without kotlinc — every JNI cell stops a
+      # rung short. Both jobs that run the matrix therefore install it: `build`
+      # through `cargo test`, `covertest` through the regen check.
+      run: |
+        curl -sSLo /tmp/kotlin-compiler.zip \
+          https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip
+        unzip -q /tmp/kotlin-compiler.zip -d /opt
+        echo /opt/kotlinc/bin >> "$GITHUB_PATH"
     - name: Regen check (golden diff of committed generated bindings)
       run: ./examples/regen-check.sh
     - name: Run covertest-kotlin assert harness

@@ -1,0 +1,339 @@
+# The shape matrix — branch map
+
+Integration branch for the coverage work tracked by
+[#198](https://github.com/milyin/prebindgen/issues/198), itself part of
+[#399](https://github.com/milyin/prebindgen/issues/399).
+
+**This document is where step state is edited.** The umbrella PR's body mirrors
+it — change the doc, then re-sync the body, never the other way round.
+
+Child PRs target **`shape-coverage`**, not `main`.
+
+## The problem
+
+Which Rust shapes survive the trip to C or to Kotlin — `Option<&T>`,
+`Vec<Option<T>>`, a payload-carrying enum inside a struct — is knowable today
+only by reading the generators, or by writing the Rust and finding out. So a user
+discovers a gap by hitting it, a reviewer cannot tell whether a change closed a
+hole or moved it, and a regression that quietly drops a shape looks like nothing
+at all: no test fails, because no test knew the shape was supported.
+
+The answer is a **generated table**: one row per (shape, position, target), the
+answer produced by running the real generators, never by a hand-maintained list
+of what is supposed to work. There is deliberately no second authority on
+legality anywhere in this work — a second opinion can disagree with the first,
+and then neither is trustworthy.
+
+## Why a branch
+
+Unlike the abandoned #187, the steps here **are** independently landable: each
+one leaves the tree green and has a concrete consumer, and step 1 is already
+useful on its own.
+
+The branch is not here to hide half-migrated states. It is here to keep one
+reviewable thread for a change whose value is cumulative: *"every cell's state is
+evidence rather than assertion"* is a property of the whole, and it is easy to
+lose one PR at a time. Any step could go straight to `main` if it became urgent;
+re-pointing it costs a base change.
+
+`main` is merged **into** this branch whenever it moves, so the final merge is
+not a rewrite.
+
+## Steps
+
+| # | Step | State |
+|---|---|---|
+| 1 | The enumerator, both targets, committed report + regen gate | **landed** ([#400](https://github.com/milyin/prebindgen/pull/400)) |
+| 2 | Receipts: rustc accepts the emitted Rust | **landed** ([#403](https://github.com/milyin/prebindgen/pull/403)) |
+| 2b | Kotlin emitted, and cbindgen asked for the header | **landed** ([#405](https://github.com/milyin/prebindgen/pull/405)) |
+| 2c | The runtime — C side, in pure Rust | **landed** ([#409](https://github.com/milyin/prebindgen/pull/409)) |
+| 2d | The Kotlin compiler | **landed** |
+| 2e | The JVM runtime | not started — needs a cdylib per cell and a harness to enter it |
+| 7 | The callback-argument position | **landed** |
+| 3 | The guarantee ratchet — a floor per cell | **landed** ([#406](https://github.com/milyin/prebindgen/pull/406)) |
+| 4 | The call axis | **landed** ([#407](https://github.com/milyin/prebindgen/pull/407)) |
+| 5 | The declaration-policy axis | **landed** for the JNI vocabulary ([#408](https://github.com/milyin/prebindgen/pull/408)); C's own declarators blocked |
+| 6 | Plan-level invariants | blocked |
+
+### 1. The enumerator — landed
+
+`examples/shape-matrix` enumerates (shape × position × target), synthesizes a
+fixture per cell, runs it through the real `prebindgen-c` and `prebindgen-jni`,
+and writes `REPORT.md`. Two gates hold it honest, both of the same shape — a
+closed vocabulary matched exhaustively, plus a test that the vocabulary is
+exercised:
+
+* **the type axis** — `tag_of` over `prebindgen_flat::flat::TypeKind`, so a new
+  accepted Rust form stops the crate compiling until it has a fixture;
+* **the declaration axis** — `kind_of` over `prebindgen_jni::ClassDecl`, so a
+  fifth class kind does the same.
+
+Three of the four report states exist: `rejected`, `plan`, and a third the issue
+did not anticipate — **`panic`**, for a shape the generator refuses *without* a
+diagnosis. That is [#191](https://github.com/milyin/prebindgen/issues/191)'s
+evidence, per cell.
+
+`REPORT.md` is committed and diffed by `examples/regen-check.sh`, which CI
+already runs. That is the primary regression gate, and it is not decoration: the
+generators both decide legality **and** write the report, so "the build fails
+until new cells are classified" would be vacuous on its own — a regression that
+flips a working cell to `rejected` would be recorded as a successful
+classification.
+
+### 2. Receipts — rustc — landed
+
+Every cell that produced Rust is compiled, and the state is a **receipt**: the
+cell is written to its own file, the crate is checked in one pass, and each
+diagnostic is attributed back by the file rustc names. Nothing maps a cell to a
+fixture by hand — that mapping is what let #175's test pass without creating its
+own precondition.
+
+Compiler messages stay out of the committed report: they vary by toolchain, and
+the report has to be identical on every one that builds it.
+
+Turning the compiler on immediately found ten cells whose generated Rust does not
+compile, and three defects in this harness — each of which had been reporting a
+confident wrong answer. That is the argument for this step in one sentence:
+`plan` was worth less than it looked.
+
+### 2b. Both halves, and the header — landed
+
+Two stages cells were passing without reaching. **JNI produced no Kotlin at all**
+— the driver wrote the Rust and stopped, so a passing cell had shown the half a
+Kotlin caller never sees. And **C stopped at rustc**, which is the wrong finish
+line: what a C consumer gets is a header, and a signature rustc accepts can be
+one cbindgen skips or cannot name.
+
+The header receipt is that the wrapper is *declared*, not that cbindgen returned
+`Ok` — it returns `Ok` for a header declaring nothing.
+
+The ladders differ by target now, and the report says so rather than levelling to
+the shorter one: `header` for C, `rustc` for JNI.
+
+### 2c. The runtime, C side — landed
+
+The C target's `extern "C"` wrappers are ordinary Rust functions, so running them
+needs no C toolchain and no CI change: it is a `cargo test`. Three cases settle
+what the call axis could not — the alias guard fires, spares, and runs *before*
+ownership moves, the last proven by reclaiming the resource afterwards, which
+would be a double free if a converter had run.
+
+Two shapes of C binding are now in the corpus because the difference is
+load-bearing: a `()`-returning one **aborts** on rejection (a panic cannot cross
+`extern "C"`), while a fallible one reports through the error out-param. Only the
+second is observable in-process, and only the second is what a real C API does.
+
+### 2d. The Kotlin compiler — landed
+
+2b made every JNI cell **write** its Kotlin and checked only that it was not
+empty. This compiles it, which is the same step 2 took on the Rust side and
+carries the same argument: a generator that produced a file and a generator that
+produced a program are different claims.
+
+JNI's ladder now ends at `kotlin`, the counterpart of C's `header` — what a
+Kotlin caller is handed is classes, not a header — and `rustc` becomes what it
+already was for C: where a cell stopped without reaching its target's last
+stage.
+
+**Each cell's Kotlin is its own package**, `io.prebindgen.matrix.<cell id>`, set
+on the generator rather than patched into the emitted text. Every cell declares
+the same classes — `JNINative`, `NativeHandle`, its own surface — so one package
+would be a hundred redeclarations, and compiling cells one at a time would cost
+a JVM start each. One `kotlinc` over the whole corpus takes about as long as two
+separate ones. The package is also the directory a diagnostic is attributed by,
+so the receipt rule holds: nothing maps a message to a cell by hand.
+
+**This is the infrastructure commitment**, and it is smaller than it looked: the
+two CI jobs that run the matrix — `build` through `cargo test`, `covertest`
+through the regen check — install a pinned `kotlinc`. Pinned because a cell's
+state is a compiler's answer, so the committed report is reproducible only
+against a named one.
+
+Not having the compiler is **not** a verdict: the stage reports that it could not
+run, every cell stays a rung short, and the resulting large diff is what a
+regeneration without it looks like. That is deliberately loud rather than quiet.
+
+It found four cells whose Kotlin does not compile beside Rust that does — [#429](https://github.com/milyin/prebindgen/issues/429)
+and [#430](https://github.com/milyin/prebindgen/issues/430).
+
+### 2e. The JVM runtime
+
+Still open, and the one part of this sequence with no shortcut. A JNI wrapper is
+entered from a JVM: reaching it needs each cell built as a cdylib, loaded, and
+called through its `JNINative` — where the C side's wrappers were ordinary Rust
+functions a `cargo test` could call.
+
+What it would settle is the claim neither compiler makes: that the two halves
+agree about a signature. A Kotlin `external fun` and a Rust `#[no_mangle]`
+symbol are checked against each other by nothing until a JVM looks one up.
+
+### 7. The callback-argument position — landed
+
+The four positions were parameter, return, struct field and enum payload. A
+value also crosses as a **callback argument**, in the other direction: the
+generated code encodes it and hands it to a C closure or a Kotlin `run`, so the
+encoder, the wire and the declaration that names it are all different code from
+the four.
+
+#428 came through that hole, and it is the mirror image of #413 — the same
+composite, lowered structurally in one direction and left to a marker in the
+other. The matrix found one and not the other.
+
+A fixture is the same synthesized function taking `impl Fn(<shape>)` instead of
+returning it, and the fixture's signature IS the declaration the C builder is
+handed, because that builder keys its closure struct on the whole `impl Fn(..)`
+type. The JNI adapter needs no declaration at all: a `fun!` whose parameter is
+an `impl Fn(..)` is enough. Every stage above — rustc, cbindgen, the Kotlin
+compiler, the ratchet — applies unchanged.
+
+One shape is excused, for a reason about Rust rather than about a generator:
+`impl Fn(impl Fn(..))` does not parse. A test pins that as the *only* excuse, so
+an excuse cannot grow to cover a shape a generator merely refuses — that would
+turn a rejection into a blank.
+
+**It found two defects immediately**, both invisible to every other axis:
+
+* [#437](https://github.com/milyin/prebindgen/issues/437) — C builds an array
+  for a `Vec` callback argument and never emits the helper that does it, because
+  the prerequisite gate reads a function's **return type** only. Six cells.
+* [#438](https://github.com/milyin/prebindgen/issues/438) — JNI's callback
+  adapter skips a value's `Option` and collection layers. That is
+  [#429](https://github.com/milyin/prebindgen/issues/429) exactly, in the one
+  direction #432 did not fix, because the two emitters each carry their own copy
+  of the rule.
+
+### 3. The guarantee ratchet — landed
+
+A floor per cell, in a committed `GUARANTEES.md`: the level it has been seen to
+reach. Rising is free; falling fails a test naming the cell and both levels.
+
+This is the gate the report cannot be. A byte-identity diff shows a cell getting
+worse in the same shade as one getting better, so it catches a regression only if
+a reviewer reads the diff and knows which direction is which. A floor does not
+need a reviewer.
+
+**Raising is automatic (`--update-guarantees`); lowering is a hand edit.** Giving
+up on a shape that used to work should cost a visible line in a diff, not a
+silently regenerated artifact.
+
+The `must execute` level the issue also asks for waits on step 2c — there is no
+runtime state for a floor to stand on yet.
+
+### 4. The call axis — landed
+
+Aliasing is a property of a **call**, not of a value: two parameters can name the
+same resource, and both generators emit a preflight under a rule about the whole
+parameter set. Eight call shapes now run through the same driver, compile check,
+header stage and ratchet — pairs that must be guarded, a pair that must not be
+(two shared borrows of one resource are legal), and pairs in different domains.
+
+All eight are expressible in both targets, so the axis found nothing today. What
+it buys is that a call shape becoming inexpressible now falls below a floor.
+
+**Three claims it does not make**, all of which need running code and belong to
+the runtime stage: that the guard rejects the aliased call, that it spares the
+same pointers appearing in an **inactive** enum alternative, and that it runs
+*before* ownership moves — provable by an invalid tag in a later argument, after
+an earlier one would already have been consumed. None of these is asserted
+against emitted text: a grep establishes that the text contains a guard, which is
+not the property anyone cares about.
+
+### 5. The declaration-policy axis — landed for the JNI vocabulary
+
+The same Rust, in the same position, with its declared type declared as something
+else. Twelve curated cases, each printing the varied answer beside the canonical
+one.
+
+Three rows where the policy decides the answer: `Vec<Rec>` as a parameter crosses
+by value and is refused as handles; `Option<Rec>` as a C parameter emits broken
+Rust by value and works as a handle, so that defect belongs to the by-value path;
+and a fieldless enum returned as a handle is refused at compile time because the
+tagged-pointer representation needs alignment ≥ 2.
+
+That last one exposed a gap in this report's vocabulary rather than in the
+generator: a *deliberate* compile-time refusal and genuinely broken output both
+read as `bad rust`. The legend now says so and points at #191, whose subject is
+exactly a refusal arriving later than declaration time.
+
+**C's own declarators remain blocked** on the build-API rework
+([#192](https://github.com/milyin/prebindgen/issues/192)). The four kinds varied
+here are the JNI adapter's closed vocabulary, which is what makes them
+enumerable; C is measured through the same four by translation, so its rows are
+real but its coverage is not — `repr_c_struct`, `opaque_data_struct`, `callback`
+and the rest have nothing to enumerate against.
+
+### 6. Plan-level invariants
+
+Every enum tag maps to exactly one alternative; every owned output is reached by
+exactly one release path; every consumed input reaches exactly one commit or
+rollback; the three views of one JNI function flatten to identical descriptors.
+Written once against a small read-only interface each adapter's plan implements —
+a shared way to *ask* questions is safe where a shared type for *storing* answers
+is not.
+
+Blocked on the plans existing at all
+([#192](https://github.com/milyin/prebindgen/issues/192),
+[#193](https://github.com/milyin/prebindgen/issues/193)).
+
+## What it has found
+
+The table is not the deliverable; the tickets are. Every one is fixed:
+
+| Issue | Finding | Fixed by |
+|---|---|---|
+| [#410](https://github.com/milyin/prebindgen/issues/410) | JNI emits an unqualified `Cow` into the consumer's scope | [#423](https://github.com/milyin/prebindgen/pull/423) |
+| [#411](https://github.com/milyin/prebindgen/issues/411) | JNI decodes an exclusive-borrow parameter as a shared or plain value | [#426](https://github.com/milyin/prebindgen/pull/426) |
+| [#412](https://github.com/milyin/prebindgen/issues/412) | C moves out of a raw pointer for an `Option<T>` by-value parameter | [#425](https://github.com/milyin/prebindgen/pull/425) |
+| [#413](https://github.com/milyin/prebindgen/issues/413) | C returns of borrowed elements: `&[T]` drops the value, `Vec<&T>` maps over an `unsafe fn` | [#427](https://github.com/milyin/prebindgen/pull/427) |
+| [#414](https://github.com/milyin/prebindgen/issues/414) | C qualifies std `Option` into the source module, and leaves the declared type bare | [#424](https://github.com/milyin/prebindgen/pull/424) |
+| [#429](https://github.com/milyin/prebindgen/issues/429) | JNI's sum-payload builder converts the wire value as if it were the leaf | [#432](https://github.com/milyin/prebindgen/pull/432) |
+| [#430](https://github.com/milyin/prebindgen/issues/430) | JNI's `data_class` factory builds a handle through the constructor #404 made private | [#431](https://github.com/milyin/prebindgen/pull/431) |
+| [#433](https://github.com/milyin/prebindgen/issues/433) | JNI declares a boxed slot for an `Option<handle>` payload the encoder writes as a primitive | [#434](https://github.com/milyin/prebindgen/pull/434) |
+| [#428](https://github.com/milyin/prebindgen/issues/428) | C calls the composite marker for an `Option<&T>` **callback argument** | [#435](https://github.com/milyin/prebindgen/pull/435) |
+| [#191](https://github.com/milyin/prebindgen/issues/191) | a third of C's refusals and a fifth of JNI's arrive as panics — a measured number, not a defect | open |
+
+The report now has **one** cell short of the top of its target's ladder:
+`unit_enum__ret_as_ptr__jni`, where a fieldless enum declared as a handle trips
+the generated alignment assertion — a two-variant enum is 1-aligned and bit 0 is
+the closed tag. The refusal is correct and the vocabulary is what is wrong: it
+arrives as a compile error in the consumer's build rather than as a rejection at
+declaration time, which is #191's subject and what step 5 already recorded.
+
+### What the findings say about the harness
+
+Two of the nine were found by a cell (#410, #414). Four were found by a *stage*
+added later over cells that were already passing — #411 and #412 by the compiler,
+#429/#430 by the Kotlin compiler. That is the case for building stages rather
+than more cells.
+
+The last two were found by **neither**, and both say the same thing about this
+crate's coverage:
+
+* **#433** came from a JVM run, not from a compiler. A Kotlin `external fun` and
+  a Rust `#[no_mangle]` symbol are checked against each other by nothing until a
+  JVM looks one up, which is exactly what step 2e is for and why it is the next
+  step rather than an optional one.
+* **#428** came from writing a fixture by hand. A **callback argument** was not
+  one of the four positions this crate enumerated, so the C column read 0 broken
+  cells for two merges while that defect was live — and it is the mirror image of
+  #413, which the matrix *did* find in return position. A position the corpus
+  omits is a hole the whole table cannot see, whatever its other axes do.
+
+  That position is step 7, and it landed. It found
+  [#437](https://github.com/milyin/prebindgen/issues/437) and
+  [#438](https://github.com/milyin/prebindgen/issues/438) on its first run —
+  the second of which is #429 in the direction #432 did not reach.
+
+## Exits
+
+Each step states which of the two it is, up front:
+
+* **answer-preserving** — `REPORT.md` gains or loses no cell state. A refactor of
+  a measuring instrument must not move the measurements, and step 1's follow-up
+  commit is the pattern: 11 insertions, 0 changed cells.
+* **answers move** — the diff **is** the review. Each moved cell is named in the
+  PR body with the cause, because a moved cell is either a capability change or a
+  regression, and no one can tell which from the diff alone.
+
+A blanket "the report never changes" would be false on contact and would train
+reviewers to wave the diff through.
