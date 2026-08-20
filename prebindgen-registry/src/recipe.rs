@@ -192,6 +192,33 @@ pub enum Mode {
 }
 
 impl Mode {
+    /// How a value of mode `self` is held when it is reached **through** a
+    /// container held as `outer`.
+    ///
+    /// Both layers decide it, and neither alone: reading through a shared
+    /// `&Option<T>` can only ever lend its value, however the value is spelled,
+    /// and a `Vec<&T>` hands its elements over while what it hands over is a
+    /// borrow. Composing them is what a nested reading needs and what asking
+    /// either layer on its own gets wrong in both directions — refusing the one
+    /// correct fragment, or accepting one the hook cannot be fed.
+    ///
+    /// | held through | this mode | reached as |
+    /// |---|---|---|
+    /// | owned | any | itself — the container gives its contents up |
+    /// | `&` | any | `&` — a shared view yields nothing stronger |
+    /// | `&mut` | `&` | `&` — an exclusive view of a shared reference is still shared |
+    /// | `&mut` | owned or `&mut` | `&mut` |
+    pub fn through(self, outer: Mode) -> Mode {
+        match outer {
+            Mode::Owned => self,
+            Mode::Shared => Mode::Shared,
+            Mode::Exclusive => match self {
+                Mode::Shared => Mode::Shared,
+                Mode::Owned | Mode::Exclusive => Mode::Exclusive,
+            },
+        }
+    }
+
     /// Whether a part yielded in this mode can be consumed where `wanted` is
     /// required. An edge declared `&T` accepts a borrow or an owned value; one
     /// declared `T` accepts only an owned value.
