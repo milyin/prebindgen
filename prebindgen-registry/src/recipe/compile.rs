@@ -293,6 +293,26 @@ pub trait Compile {
         result: Option<&Self::Fragment>,
     ) -> Frag<Self>;
 
+    /// The weakest validity this role accepts in **this** target.
+    ///
+    /// Not the registry's to decide, because it follows from the target's
+    /// ownership model. C hands out a `*const T` for a zero-copy accessor and
+    /// its contract says the caller neither frees nor outlives it, so a
+    /// borrowed return is correct there. The JVM keeps what it is given, so
+    /// JniGen clones instead and a borrowed return would be a use-after-free.
+    ///
+    /// The default is the strict reading: anything the foreign side may keep
+    /// past the call must be self-sufficient, and only a position that lives
+    /// for the duration of the call may borrow.
+    fn tolerates(&self, role: &Role) -> Validity {
+        match role {
+            Role::Return | Role::Error | Role::Const => Validity::SelfSufficient,
+            Role::Param { .. } | Role::Receiver | Role::CallbackArg { .. } | Role::Part { .. } => {
+                Validity::Borrowed
+            }
+        }
+    }
+
     /// Wrap the site's root fragment into a plan — the signature, the call, the
     /// cleanup.
     ///
@@ -457,7 +477,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             return Ok(None);
         };
         let root = self.row(adapter, &bound.crossing, &bound.recipe)?;
-        let needed = tolerated(&bound.site.role);
+        let needed = adapter.tolerates(&bound.site.role);
         let got = root.yields().validity;
         if !got.satisfies(needed) {
             return Err(RecipeError::Validity {
@@ -1034,17 +1054,4 @@ fn element_mode(crossing: &Crossing, elem: &TypeRef) -> Mode {
     // up and what it gives up is a borrow; a `&[&mut T]` yields `&&mut T` and
     // so cannot hand over the `&mut T` its element is spelled as.
     mode_of(elem).through(lent_as)
-}
-
-/// The weakest validity a role accepts.
-///
-/// A value the foreign side stores has to outlive the call; an argument valid
-/// only for the duration of one may be borrowed.
-fn tolerated(role: &Role) -> Validity {
-    match role {
-        Role::Return | Role::Error | Role::Const => Validity::SelfSufficient,
-        Role::Param { .. } | Role::Receiver | Role::CallbackArg { .. } | Role::Part { .. } => {
-            Validity::Borrowed
-        }
-    }
 }

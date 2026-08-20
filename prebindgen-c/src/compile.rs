@@ -12,7 +12,7 @@
 
 use prebindgen_registry::{
     flat::{Alternative, Function},
-    recipe::{At, Carrier, Compile, Cx, Frag, Mode, Parts, Validity, Yield},
+    recipe::{At, Carrier, Compile, Cx, Frag, Mode, Parts, Role, Validity, Yield},
 };
 
 use super::*;
@@ -687,6 +687,18 @@ impl<R: Conversions<()>> Compile for CCompile<'_, R> {
         };
         let conv = self.gen.dispatch_fn_input(args, self.registry);
         self.wrap(at, "undeclared callback signature", conv)
+    }
+
+    /// C hands out borrows deliberately, so a returned one is not an error.
+    ///
+    /// A zero-copy accessor — `fn(&Sample) -> &ZBytes` — crosses as
+    /// `*const zbytes_t`, and C's own contract is that a `const` pointer is
+    /// non-owning: the caller neither frees it nor outlives the value it points
+    /// into. That is the target's ownership model rather than a weaker check,
+    /// and it is why the default strict reading belongs to the JVM and not
+    /// here.
+    fn tolerates(&self, _role: &Role) -> Validity {
+        Validity::Borrowed
     }
 
     fn plan(&mut self, _cx: &mut Cx<'_>, _bound: &Bound, _root: &CFrag) -> Result<(), String> {
