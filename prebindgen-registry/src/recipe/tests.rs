@@ -1355,6 +1355,51 @@ fn a_callbacks_arguments_do_the_other_job() {
 }
 
 #[test]
+fn a_callback_argument_is_overridden_by_compiling_it_as_its_own_site() {
+    // A callback row is shared by every function whose callback has the same
+    // signature, so a per-function answer cannot apply to it. `Role::CallbackArg`
+    // is a root role: an adapter compiles that position itself.
+    let model = model(&[
+        SAMPLE,
+        "pub fn listen(on: impl Fn(Sample) + Send + Sync + 'static) {}",
+    ]);
+    let mut builder = Recipes::builder();
+    builder
+        .declare_default(ty(&model, "Sample"), id("whole"), Deconstructing::Atomic)
+        .declare(
+            ty(&model, "Sample"),
+            id("fields"),
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0)])),
+        );
+    let recipes = builder.build(&model).expect("table");
+
+    let arg = Site {
+        owner: ident("listen"),
+        role: Role::CallbackArg { param: 0, arg: 0 },
+    };
+    let mut bound = Bindings::builder();
+    bound.bind(
+        arg.clone(),
+        Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct),
+        Ask::Recipe(id("fields")),
+        Origin::Function,
+    );
+    let bindings = bound.build(&recipes).expect("bindings");
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let plan = compiler
+        .site(
+            &mut adapter,
+            arg,
+            Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct),
+        )
+        .expect("compile")
+        .expect("not omitted");
+    assert!(plan.contains("fields Sample deconstruct"), "{plan}");
+}
+
+#[test]
 fn a_part_that_only_lends_cannot_feed_an_edge_that_consumes() {
     let model = model(&[
         SAMPLE,

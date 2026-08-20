@@ -440,7 +440,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
     /// The fragment for one part of the row being compiled.
     ///
     /// Which row the part takes is the site machinery's answer, asked at
-    /// [`Role::Part`] — per row, because that is what compilation is per.
+    /// [`Role::Part`] — keyed by the row, because that is what compilation is
+    /// per. A root role such as [`Role::CallbackArg`] names a place in one
+    /// exported function, so it cannot answer for a row every function with
+    /// that signature shares; an adapter that wants a per-function answer
+    /// compiles that position as its own root site through [`Self::site`].
     fn part(&mut self, adapter: &mut C, at: At<'_>, index: usize, ty: &TypeRef) -> Built<C> {
         let crossing = Crossing::new(ty.clone(), at.crossing.assembly());
         let site = Site {
@@ -857,17 +861,20 @@ fn mode_of(ty: &TypeRef) -> Mode {
     }
 }
 
-/// Whether iterating a run yields owned values or borrows.
+/// Whether iterating a run yields owned values, shared borrows or exclusive
+/// ones.
 ///
 /// The collection's business, not the recipe's: `Vec<T>` gives its elements up,
-/// while `&[T]` and `Cow<'_, [T]>` lend them.
+/// `&[T]` and `Cow<'_, [T]>` lend them, and `&mut [T]` lends them exclusively.
 fn element_mode(crossing: &Crossing) -> Mode {
-    if crossing.mode() != Mode::Owned {
-        return Mode::Shared;
-    }
-    match crossing.value().unwrapped().kind() {
-        TypeKind::Slice(_) => Mode::Shared,
-        _ => Mode::Owned,
+    match crossing.mode() {
+        // A run reached through a borrow lends its elements the same way it was
+        // reached: `&mut Vec<T>` yields `&mut T`, not `&T`.
+        borrowed @ (Mode::Shared | Mode::Exclusive) => borrowed,
+        Mode::Owned => match crossing.value().unwrapped().kind() {
+            TypeKind::Slice(_) => Mode::Shared,
+            _ => Mode::Owned,
+        },
     }
 }
 
