@@ -73,15 +73,25 @@ impl CbindgenBuilder {
     /// different words helps nobody.
     pub(crate) fn recipes(&self, model: &Flat) -> Result<Recipes, Vec<RecipeError>> {
         let mut rows = Recipes::builder();
-        // The crossings a payload row will also land on. `Crossing::key` peels
-        // `Box`, so a `Box<Blob>` payload shares `Blob`'s crossing — which is
-        // right for lookup, and means the handle's own row has to say it is
-        // what a site gets when it names neither.
-        let shared: std::collections::HashSet<TypeKey> = self
+        // The crossings a second row will also land on, so the loop below knows
+        // to make the whole-value one the default rather than leaving two rows
+        // with no answer between them.
+        //
+        // Two sources. A payload row shares a crossing with its handle's own,
+        // because `Crossing::key` peels `Box` — right for lookup, and it means
+        // `Blob` and `Box<Blob>` are one crossing. And `bool` and `String` each
+        // get a field row unconditionally, which collides with a whole-value
+        // row a binding declared itself.
+        let mut shared: std::collections::HashSet<TypeKey> = self
             .boxed_payloads(model)
             .iter()
             .map(|t| t.borrow_target().unwrap_or(t).stripped_key())
             .collect();
+        for builtin in [syn::parse_quote!(bool), syn::parse_quote!(String)] {
+            if let Ok(ty) = model.classify(&builtin) {
+                shared.insert(ty.key());
+            }
+        }
         // Every per-type policy, and every `convert!`-declared conversion. The
         // second matters as much as the first: a conversion may be declared on
         // a type the registry would otherwise read as an arity layer, and
@@ -177,27 +187,35 @@ impl CbindgenBuilder {
                 .declare(ty, payload(), Constructing::Atomic);
         }
 
-        // `bool`'s second row. Declared for every binding rather than only
-        // where a struct has such a field: a row for a crossing nobody uses is
-        // inert, and the alternative is walking every declared struct twice to
-        // find out.
+        // The field rows. Declared for every binding rather than only where a
+        // struct has such a field: a row for a crossing nobody uses is inert,
+        // and the alternative is walking every declared struct twice to find
+        // out.
+        //
+        // **Always**, whether or not the type's whole-value row was declared
+        // above. The two are independent readings — the hand-written walks kept
+        // them so — and a binding may declare the whole-value one itself:
+        // `convert!` refuses a builtin, but `opaque_ptr(String)` is accepted and
+        // `out_terminal` has an arm for it. Suppressing the field row there
+        // stranded every string field, because `bindings` asks each one for it.
         let boolean = model
             .classify(&syn::parse_quote!(bool))
             .expect("bool is a scalar the model always classifies");
-        rows.declare_default(boolean.clone(), whole(), Deconstructing::Atomic)
-            .declare(boolean.clone(), in_field(), Deconstructing::Atomic)
-            .declare_default(boolean.clone(), whole(), Constructing::Atomic)
+        // A whole-value row the loop already filed stays as it is and only has
+        // to become the default; otherwise it is declared here.
+        if !declared_keys.contains(&boolean.key()) {
+            rows.declare_default(boolean.clone(), whole(), Deconstructing::Atomic)
+                .declare_default(boolean.clone(), whole(), Constructing::Atomic);
+        }
+        rows.declare(boolean.clone(), in_field(), Deconstructing::Atomic)
             .declare(boolean, in_field(), Constructing::Atomic);
-        // `String`'s second row, unless the binding already declared one for it
-        // — a `convert!(String => ..)` states the whole-value reading itself,
-        // and the loop above has already filed it.
         if let Ok(string) = model.classify(&syn::parse_quote!(String)) {
+            // Output only ever has one reading, so `String` gets a second row in
+            // the constructing direction alone.
             if !declared_keys.contains(&string.key()) {
-                // Output only ever has one reading, so `String` gets a second
-                // row in the constructing direction alone.
-                rows.declare_default(string.clone(), whole(), Constructing::Atomic)
-                    .declare(string, in_field(), Constructing::Atomic);
+                rows.declare_default(string.clone(), whole(), Constructing::Atomic);
             }
+            rows.declare(string, in_field(), Constructing::Atomic);
         }
 
         rows.build(model)
