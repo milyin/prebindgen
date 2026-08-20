@@ -382,8 +382,9 @@ impl<F> Compiled<F> {
     /// Every fragment this compilation built, in a deterministic order.
     ///
     /// What an adapter emits from once it stops routing its conversions back
-    /// through the converter table — see
-    /// [`Prebindgen::converter_items`](crate::Prebindgen::converter_items). The
+    /// through the converter table — handed to
+    /// [`write_rust`](crate::write::write_rust) as
+    /// [`Conversions::Compiled`](crate::write::Conversions::Compiled). The
     /// order is by crossing key and then by row name, so a file written from
     /// this is stable across runs.
     pub fn fragments(&self) -> Vec<&F> {

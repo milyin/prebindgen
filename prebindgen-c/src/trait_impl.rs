@@ -1971,10 +1971,6 @@ impl Prebindgen for CbindgenBuilder {
     // with non-portable initializers valid in the generated file. (cbindgen
     // cannot evaluate a path initializer, so aliased consts don't surface
     // as `#define`s in the C header.)
-    fn converter_items(&self, _registry: &Registry<()>) -> Option<Vec<syn::ItemFn>> {
-        Some(self.compiled_fns.clone())
-    }
-
     fn source_module(&self) -> Option<&syn::Path> {
         self.source_module.as_ref()
     }

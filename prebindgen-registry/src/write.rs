@@ -25,6 +25,24 @@ use crate::{
     registry::{Registry, TypeEntry, TypeKey},
 };
 
+/// Where the generated conversions come from.
+///
+/// The converter table is the **lookup** index either way; this says only what
+/// reaches the file. An adapter that compiles its own fragments hands them over
+/// directly, and is then free to emit a conversion the table cannot hold —
+/// several functions for one crossing, or one occupying more than a single wire
+/// value, which is what a `ConverterImpl`'s single `destination` cannot name.
+pub enum Conversions<'a> {
+    /// What the adapter's compilation produced, in the order it produced it.
+    ///
+    /// Sorted and de-duplicated by function name here, so the order decides
+    /// which of two same-named functions wins and not where any of them lands.
+    Compiled(&'a [syn::ItemFn]),
+    /// Read them off the converter table, where they lived when a conversion
+    /// could only ever be one `ConverterImpl` per crossing.
+    Table,
+}
+
 /// Errors surfaced by the file-emission phase.
 ///
 /// Binding validation is NOT here — it runs once in
@@ -64,6 +82,7 @@ impl std::error::Error for WriteError {}
 pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     registry: &Registry<E::Metadata>,
     ext: &E,
+    conversions: Conversions<'_>,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
     // Validation already ran ONCE in the generator's `build` — a built generator
@@ -81,14 +100,11 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     //    everything below can reference them.
     items.extend(ext.prerequisites(registry, &emit));
 
-    // 1. Auto-generated converter wrappers (sorted by ident, deduped). From
-    //    the adapter when it tracks its own, else off the converter table —
-    //    see `Prebindgen::converter_items` for why that seam exists.
-    let converters = match ext.converter_items(registry) {
-        Some(from_adapter) => dedup_by_name(from_adapter),
-        None => collect_converter_items(registry),
-    };
-    for (_, item_fn) in converters {
+    // 1. Auto-generated converter wrappers (sorted by ident, deduped).
+    for (_, item_fn) in match conversions {
+        Conversions::Compiled(functions) => dedup_by_name(functions.to_vec()),
+        Conversions::Table => collect_converter_items(registry),
+    } {
         items.push(syn::Item::Fn(item_fn));
     }
 

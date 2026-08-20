@@ -260,22 +260,6 @@ pub trait Prebindgen {
     /// [`Self::on_const`]: with a source module available, a named const
     /// re-emits as a path-alias to the source item instead of copying its
     /// initializer tokens. Default: `None`.
-    /// The converter functions this binding emits, if the adapter tracks them
-    /// itself.
-    ///
-    /// `None` — the default — means "read them off the converter table", which
-    /// is where they lived when a conversion could only ever be one
-    /// [`ConverterImpl`] per crossing. An adapter that compiles its own
-    /// fragments answers here instead, and is then free to emit a conversion
-    /// the table cannot hold: several functions for one crossing, or one that
-    /// occupies more than a single wire value.
-    ///
-    /// The table stays the **lookup** index either way. This says only who
-    /// decides what reaches the file.
-    fn converter_items(&self, _registry: &Registry<Self::Metadata>) -> Option<Vec<syn::ItemFn>> {
-        None
-    }
-
     fn source_module(&self) -> Option<&syn::Path> {
         None
     }

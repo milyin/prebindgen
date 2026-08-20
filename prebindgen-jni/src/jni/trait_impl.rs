@@ -1822,13 +1822,6 @@ impl Prebindgen for Declarations {
     /// typed-handle / `JNIWrappers` signature.
     type Metadata = KotlinMeta;
 
-    fn converter_items(
-        &self,
-        _registry: &prebindgen_registry::Registry<KotlinMeta>,
-    ) -> Option<Vec<syn::ItemFn>> {
-        Some(self.compiled_fns.clone())
-    }
-
     // ── Structural type resolution ──────────────────────────────────────
     // Try the terminal categories, then the `Result` peel, then the built-in
     // wrapper shapes — peel
