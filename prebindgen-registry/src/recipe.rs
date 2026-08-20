@@ -219,15 +219,22 @@ impl Mode {
         }
     }
 
-    /// Whether a part yielded in this mode can be consumed where `wanted` is
-    /// required. An edge declared `&T` accepts a borrow or an owned value; one
-    /// declared `T` accepts only an owned value.
+    /// Whether a part produced in this mode can be consumed where `wanted` is
+    /// required.
+    ///
+    /// **Owning it is enough for anything**: a value handed over can be
+    /// consumed, lent, or lent mutably, so an owned production serves every
+    /// edge. A borrow serves only its own kind — a `&T` cannot be consumed and
+    /// cannot be written through, and a `&mut T` is not what an edge asking for
+    /// `&T` was written against.
+    ///
+    /// The rule fires only where an adapter's fragment **disagrees** with how
+    /// its crossing is spelled, since both sides are otherwise read off the same
+    /// type. `prebindgen-jni`'s borrowed opaque output is the live example: it
+    /// clones its referent into a fresh handle, so it produces owned where the
+    /// crossing says `&T`.
     pub fn satisfies(self, wanted: Mode) -> bool {
-        match wanted {
-            Mode::Owned => self == Mode::Owned,
-            Mode::Shared => self != Mode::Exclusive,
-            Mode::Exclusive => self == Mode::Exclusive,
-        }
+        self == Mode::Owned || self == wanted
     }
 }
 
