@@ -497,15 +497,26 @@ impl<'a, C: Compile> Compiler<'a, C> {
     /// that signature shares; an adapter that wants a per-function answer
     /// compiles that position as its own root site through [`Self::site`].
     fn part(&mut self, adapter: &mut C, at: At<'_>, index: usize, ty: &TypeRef) -> Built<C> {
-        let crossing = Crossing::new(ty.clone(), at.crossing.assembly());
-        let site = Site {
-            owner: owner_of(at.crossing),
-            role: Role::Part {
-                of: at.crossing.key(),
-                recipe: at.recipe.clone(),
-                index,
-            },
-        };
+        self.part_doing(adapter, at, at.crossing.assembly(), index, ty)
+    }
+
+    /// [`Self::part`] where the part does a different job from the row.
+    ///
+    /// Only a callback: it is constructed, and the values passing through it
+    /// are deconstructed. The **site** is still the row's own — a part is
+    /// identified by the row that names it and its index, and a binding written
+    /// against that row has to match here — so only the part's `Crossing`
+    /// carries the swap.
+    fn part_doing(
+        &mut self,
+        adapter: &mut C,
+        at: At<'_>,
+        assembly: Assembly,
+        index: usize,
+        ty: &TypeRef,
+    ) -> Built<C> {
+        let crossing = Crossing::new(ty.clone(), assembly);
+        let site = Site::part(at.crossing, at.recipe, index);
         match self.bindings.resolve(&site, &crossing, self.recipes) {
             Some(bound) => self.row(adapter, &bound.crossing, &bound.recipe),
             None => Err(RecipeError::UnknownRow {
@@ -622,15 +633,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
             .unwrap_or_default()
             .to_vec();
         // The one place the two jobs swap: Rust holds these values and pushes
-        // them out through the call.
-        let swapped = Crossing::new(at.crossing.spelled().clone(), assembly.swap());
-        let inner = At {
-            crossing: &swapped,
-            recipe: at.recipe,
-        };
+        // them out through the call. The swap is the argument's, not the site's
+        // — the parts still belong to the callback row that names them.
         let mut built = Vec::new();
         for (index, arg) in args.iter().enumerate() {
-            built.push(self.part(adapter, inner, index, arg)?);
+            built.push(self.part_doing(adapter, at, assembly.swap(), index, arg)?);
         }
         let refs: Vec<&C::Fragment> = built.iter().map(|f| &**f).collect();
         let mut cx = self.cx();
@@ -653,14 +660,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             let got = fragment.yields().mode;
             if !got.satisfies(part.mode) {
                 return Err(RecipeError::Composition {
-                    site: Site {
-                        owner: owner_of(at.crossing),
-                        role: Role::Part {
-                            of: at.crossing.key(),
-                            recipe: at.recipe.clone(),
-                            index,
-                        },
-                    },
+                    site: Site::part(at.crossing, at.recipe, index),
                     part: index,
                     wanted: part.mode,
                     got,
@@ -940,13 +940,4 @@ fn tolerated(role: &Role) -> Validity {
             Validity::Borrowed
         }
     }
-}
-
-/// The name a part's site is filed under: the crossed type.
-fn owner_of(crossing: &Crossing) -> syn::Ident {
-    crossing
-        .value()
-        .stripped_key()
-        .ident()
-        .unwrap_or_else(|| syn::Ident::new("_", proc_macro2::Span::call_site()))
 }
