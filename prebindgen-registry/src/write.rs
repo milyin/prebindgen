@@ -25,6 +25,24 @@ use crate::{
     registry::{Registry, TypeEntry, TypeKey},
 };
 
+/// Where the generated conversions come from.
+///
+/// The converter table is the **lookup** index either way; this says only what
+/// reaches the file. An adapter that compiles its own fragments hands them over
+/// directly, and is then free to emit a conversion the table cannot hold —
+/// several functions for one crossing, or one occupying more than a single wire
+/// value, which is what a `ConverterImpl`'s single `destination` cannot name.
+pub enum Conversions<'a> {
+    /// What the adapter's compilation produced, in the order it produced it.
+    ///
+    /// Sorted and de-duplicated by function name here, so the order decides
+    /// which of two same-named functions wins and not where any of them lands.
+    Compiled(&'a [syn::ItemFn]),
+    /// Read them off the converter table, where they lived when a conversion
+    /// could only ever be one `ConverterImpl` per crossing.
+    Table,
+}
+
 /// Errors surfaced by the file-emission phase.
 ///
 /// Binding validation is NOT here — it runs once in
@@ -64,6 +82,7 @@ impl std::error::Error for WriteError {}
 pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     registry: &Registry<E::Metadata>,
     ext: &E,
+    conversions: Conversions<'_>,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
     // Validation already ran ONCE in the generator's `build` — a built generator
@@ -82,7 +101,10 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     items.extend(ext.prerequisites(registry, &emit));
 
     // 1. Auto-generated converter wrappers (sorted by ident, deduped).
-    for (_, item_fn) in collect_converter_items(registry) {
+    for (_, item_fn) in match conversions {
+        Conversions::Compiled(functions) => dedup_by_name(functions.to_vec()),
+        Conversions::Table => collect_converter_items(registry),
+    } {
         items.push(syn::Item::Fn(item_fn));
     }
 
@@ -172,6 +194,18 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
 ///
 /// Private: an internal step of [`write_rust`], not part of the
 /// adapter-facing surface this module exposes.
+/// Sort by name and keep the first of each, which is what the converter table
+/// does for the entries it holds — one function per name reaches the file
+/// however many crossings produced it.
+fn dedup_by_name(functions: Vec<syn::ItemFn>) -> Vec<(syn::Ident, syn::ItemFn)> {
+    let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
+    for function in functions {
+        let name = function.sig.ident.clone();
+        by_name.entry(name.to_string()).or_insert((name, function));
+    }
+    by_name.into_values().collect()
+}
+
 fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, syn::ItemFn)> {
     let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
     let mut collect = |entry: &TypeEntry<M>| {

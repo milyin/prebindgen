@@ -293,6 +293,26 @@ pub trait Compile {
         result: Option<&Self::Fragment>,
     ) -> Frag<Self>;
 
+    /// The weakest validity this role accepts in **this** target.
+    ///
+    /// Not the registry's to decide, because it follows from the target's
+    /// ownership model. C hands out a `*const T` for a zero-copy accessor and
+    /// its contract says the caller neither frees nor outlives it, so a
+    /// borrowed return is correct there. The JVM keeps what it is given, so
+    /// JniGen clones instead and a borrowed return would be a use-after-free.
+    ///
+    /// The default is the strict reading: anything the foreign side may keep
+    /// past the call must be self-sufficient, and only a position that lives
+    /// for the duration of the call may borrow.
+    fn tolerates(&self, role: &Role) -> Validity {
+        match role {
+            Role::Return | Role::Error | Role::Const => Validity::SelfSufficient,
+            Role::Param { .. } | Role::Receiver | Role::CallbackArg { .. } | Role::Part { .. } => {
+                Validity::Borrowed
+            }
+        }
+    }
+
     /// Wrap the site's root fragment into a plan — the signature, the call, the
     /// cleanup.
     ///
@@ -344,9 +364,14 @@ type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>
 /// and so cannot keep one [`Compiler`], but the fragments it built borrow
 /// nothing and outlive any of them.
 pub struct Compiled<F> {
-    fragments: HashMap<(TypeKey, Assembly, RecipeId), Rc<F>>,
+    fragments: HashMap<FragmentKey, Rc<F>>,
     required: BTreeSet<RequirementId>,
 }
+
+/// What a fragment is memoised under: the type **as the site spelled it**, the
+/// job, and which row answered. See the module docs on why the spelling and not
+/// the row's own identity.
+type FragmentKey = (TypeKey, Assembly, RecipeId);
 
 impl<F> Default for Compiled<F> {
     fn default() -> Self {
@@ -372,6 +397,22 @@ impl<F> Compiled<F> {
     /// Every helper a compiled fragment asked for, de-duplicated.
     pub fn required(&self) -> impl Iterator<Item = &RequirementId> {
         self.required.iter()
+    }
+
+    /// Every fragment this compilation built, in a deterministic order.
+    ///
+    /// What an adapter emits from once it stops routing its conversions back
+    /// through the converter table — handed to
+    /// [`write_rust`](crate::write::write_rust) as
+    /// [`Conversions::Compiled`](crate::write::Conversions::Compiled). The
+    /// order is by crossing key and then by row name, so a file written from
+    /// this is stable across runs.
+    pub fn fragments(&self) -> Vec<&F> {
+        let mut keyed: Vec<(&FragmentKey, &Rc<F>)> = self.fragments.iter().collect();
+        keyed.sort_by(|a, b| {
+            (a.0 .0.as_str(), a.0 .1, &a.0 .2).cmp(&(b.0 .0.as_str(), b.0 .1, &b.0 .2))
+        });
+        keyed.into_iter().map(|(_, f)| &**f).collect()
     }
 }
 
@@ -436,7 +477,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             return Ok(None);
         };
         let root = self.row(adapter, &bound.crossing, &bound.recipe)?;
-        let needed = tolerated(&bound.site.role);
+        let needed = adapter.tolerates(&bound.site.role);
         let got = root.yields().validity;
         if !got.satisfies(needed) {
             return Err(RecipeError::Validity {
@@ -525,8 +566,24 @@ impl<'a, C: Compile> Compiler<'a, C> {
         ty: &TypeRef,
         wanted: Mode,
     ) -> Built<C> {
+        self.part_of(adapter, at, assembly, None, index, ty, wanted)
+    }
+
+    /// [`Self::part`] for a part inside a [`Shape::Choice`] arm, which numbers
+    /// its parts from zero like every other arm.
+    #[allow(clippy::too_many_arguments)]
+    fn part_of(
+        &mut self,
+        adapter: &mut C,
+        at: At<'_>,
+        assembly: Assembly,
+        arm: Option<usize>,
+        index: usize,
+        ty: &TypeRef,
+        wanted: Mode,
+    ) -> Built<C> {
         let crossing = Crossing::new(ty.clone(), assembly);
-        let site = Site::part(at.crossing, at.recipe, index);
+        let site = Site::arm_part(at.crossing, at.recipe, arm, index);
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRow {
                 site,
@@ -575,7 +632,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Sequence { inner } => self.sequence(adapter, at, inner),
             Shape::Product(op) => {
                 let (kind, parts) = self.construct_parts(at, op, None)?;
-                self.product(adapter, at, kind, parts)
+                self.product(adapter, at, None, kind, parts)
             }
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
@@ -583,7 +640,8 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     let alternative = self.alternative(at, arm.alternative)?;
                     let (kind, parts) =
                         self.construct_parts(at, &arm.op, Some(&alternative.fields))?;
-                    built.push((alternative, self.product(adapter, at, kind, parts)?));
+                    let at_arm = Some(arm.alternative);
+                    built.push((alternative, self.product(adapter, at, at_arm, kind, parts)?));
                 }
                 self.choice(adapter, at, built)
             }
@@ -602,7 +660,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Sequence { inner } => self.sequence(adapter, at, inner),
             Shape::Product(op) => {
                 let (kind, parts) = self.deconstruct_parts(at, op, None)?;
-                self.product(adapter, at, kind, parts)
+                self.product(adapter, at, None, kind, parts)
             }
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
@@ -610,7 +668,8 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     let alternative = self.alternative(at, arm.alternative)?;
                     let (kind, parts) =
                         self.deconstruct_parts(at, &arm.op, Some(&alternative.fields))?;
-                    built.push((alternative, self.product(adapter, at, kind, parts)?));
+                    let at_arm = Some(arm.alternative);
+                    built.push((alternative, self.product(adapter, at, at_arm, kind, parts)?));
                 }
                 self.choice(adapter, at, built)
             }
@@ -695,6 +754,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
+        arm: Option<usize>,
         kind: ProductKind<'p>,
         parts: Vec<Part<'p>>,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
@@ -703,10 +763,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
             // `part.mode` rather than the type's own spelling: a product edge
             // states what it needs — a constructor parameter, a field, an
             // accessor's receiver — and `part` checks against that.
-            built.push(self.part(
+            built.push(self.part_of(
                 adapter,
                 at,
                 at.crossing.assembly(),
+                arm,
                 index,
                 &part.ty,
                 part.mode,
@@ -993,17 +1054,4 @@ fn element_mode(crossing: &Crossing, elem: &TypeRef) -> Mode {
     // up and what it gives up is a borrow; a `&[&mut T]` yields `&&mut T` and
     // so cannot hand over the `&mut T` its element is spelled as.
     mode_of(elem).through(lent_as)
-}
-
-/// The weakest validity a role accepts.
-///
-/// A value the foreign side stores has to outlive the call; an argument valid
-/// only for the duration of one may be borrowed.
-fn tolerated(role: &Role) -> Validity {
-    match role {
-        Role::Return | Role::Error | Role::Const => Validity::SelfSufficient,
-        Role::Param { .. } | Role::Receiver | Role::CallbackArg { .. } | Role::Part { .. } => {
-            Validity::Borrowed
-        }
-    }
 }

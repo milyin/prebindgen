@@ -359,6 +359,7 @@ impl Cbindgen {
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.gen,
+            prebindgen_registry::write::Conversions::Compiled(&self.gen.compiled_fns),
             out_path,
         )?)
     }
@@ -443,6 +444,15 @@ pub struct CbindgenBuilder {
     /// Where the `#[prebindgen]` items come from — see
     /// `JniGenBuilder::source`.
     pub(crate) sources: prebindgen_registry::flat::FlatBuilder,
+    /// Every conversion this binding compiled.
+    ///
+    /// Filled once by [`Self::build_with`] and handed to `write_rust` as
+    /// `Conversions::Compiled`. It is what reaches the generated file,
+    /// so a fragment no longer has to be expressible as one `ConverterImpl` to
+    /// be emitted — only to be looked up. The writer sorts and de-duplicates by
+    /// function name, so the order here decides which of two same-named
+    /// functions wins and not where any of them lands.
+    pub(crate) compiled_fns: Vec<syn::ItemFn>,
 }
 
 /// A mangler over a single name component (Rust short name, base, or fn ident).

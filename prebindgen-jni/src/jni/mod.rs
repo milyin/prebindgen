@@ -478,6 +478,7 @@ impl JniGen {
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.decls,
+            prebindgen_registry::write::Conversions::Compiled(&self.decls.compiled_fns),
             out_path,
         )?)
     }
@@ -569,6 +570,15 @@ pub struct Declarations {
     /// ([`JniGenBuilder::convert_input_body`] / [`JniGenBuilder::convert_output_body`]),
     /// keeping declarations order-independent and origin-qualified.
     pub(crate) convert_decls: Vec<ConvertDecl>,
+    /// Every conversion this binding compiled.
+    ///
+    /// Filled once by `JniGenBuilder::build_with` and handed to `write_rust` as
+    /// `Conversions::Compiled`. It is what reaches the generated file, so
+    /// a fragment no longer has to be expressible as one `ConverterImpl` to be
+    /// emitted — only to be looked up. The writer sorts and de-duplicates by
+    /// function name, so the order here decides which of two same-named
+    /// functions wins and not where any of them lands.
+    pub(crate) compiled_fns: Vec<syn::ItemFn>,
 
     /// When `true` (default), generated wrappers wrap each call that
     /// touches an opaque handle in the per-call `withSortedHandleLocks`
