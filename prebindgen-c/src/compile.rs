@@ -114,6 +114,32 @@ pub(crate) struct CCompile<'a, R> {
     pub(crate) registry: &'a R,
 }
 
+/// Whether the mirror's declared field wire and the conversion's are the same
+/// C type.
+///
+/// Compared **modulo pointer constness**, because the mirror declares one
+/// field and the two directions read it differently: a `String` field is
+/// `*mut c_char` in the struct C owns and frees, and the decode takes the same
+/// memory as `*const`. That is one wire and two readings of it, not two wires,
+/// and C says so with a cast rather than a second field.
+fn same_wire(declared: &syn::Type, produced: &syn::Type) -> bool {
+    fn strip(t: &syn::Type) -> syn::Type {
+        match t {
+            syn::Type::Ptr(p) => {
+                let inner = strip(&p.elem);
+                syn::parse_quote!(*const #inner)
+            }
+            other => other.clone(),
+        }
+    }
+    TypeKey::from_type(&strip(declared)) == TypeKey::from_type(&strip(produced))
+}
+
+/// Whether a generated converter can fail, read off its own return type.
+fn fallible(function: &syn::ItemFn) -> bool {
+    matches!(&function.sig.output, syn::ReturnType::Type(_, t) if is_result(t))
+}
+
 /// A refusal naming the crossing that could not be answered.
 fn refuse(at: At<'_>, why: &str) -> String {
     format!("Cbindgen: {} ({why})", at.crossing.key())
@@ -135,12 +161,28 @@ impl<R: Conversions<()>> Compile for CCompile<'_, R> {
 
     fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
+        // The field row, where a value crosses differently **inside a
+        // `data_struct`'s mirror** than it does on its own. Two types have one:
+        // `bool`, whose field shares a mirror with the decode that normalises
+        // it, and `String`, whose field decodes a null pointer leniently so one
+        // field cannot make a whole struct's decode fallible.
+        if *at.recipe == crate::rows::in_field() {
+            let conv = match at.crossing.assembly() {
+                Assembly::Construct => self
+                    .gen
+                    .in_bool(ty)
+                    .or_else(|| self.gen.in_string_field(ty)),
+                // Only `bool` reads differently on the way out; a `String`
+                // field is allocated exactly as a `String` return is.
+                Assembly::Deconstruct => self.gen.out_bool_field(ty),
+            };
+            return self.wrap(at, "no field reading for this type", conv);
+        }
         let conv = match at.crossing.assembly() {
             Assembly::Construct => self
                 .gen
                 .in_custom(ty, self.registry, cx.emit())
                 .or_else(|| self.gen.in_opaque_handle(ty))
-                .or_else(|| self.gen.in_data_struct(ty, self.registry))
                 .or_else(|| self.gen.in_value_opaque(ty, self.registry))
                 .or_else(|| self.gen.in_enum(ty, self.registry))
                 .or_else(|| self.gen.in_tagged_union(ty, self.registry, cx.emit()))
@@ -225,8 +267,116 @@ impl<R: Conversions<()>> Compile for CCompile<'_, R> {
         Err(refuse(at, "Cbindgen declares no value-form rows"))
     }
 
-    fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, _parts: Parts<'_, Self>) -> Frag<Self> {
-        Err(refuse(at, "Cbindgen states no product rows yet"))
+    fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
+        let ty = at.crossing.spelled();
+        let key = ty.key();
+        let c_struct = self.gen.c_type_ident(&key);
+        let src = self.gen.src_ty_of(&key);
+        // Each part converts itself. The three statements of a field's wire —
+        // this conversion, its twin in the other direction, and the mirror's
+        // own field list — collapse to one: the part's fragment says it, and
+        // `data_field_wire` is checked against it rather than re-deriving it.
+        for (part, frag) in parts {
+            let declared = self.gen.data_field_wire(&part.ty);
+            if declared
+                .as_ref()
+                .is_some_and(|w| !same_wire(w, &frag.destination))
+            {
+                return Err(refuse(
+                    at,
+                    &format!(
+                        "field `{}` crosses as `{}` and its mirror declares `{}`",
+                        part.name,
+                        frag.destination.to_token_stream(),
+                        declared.to_token_stream(),
+                    ),
+                ));
+            }
+        }
+        let names: Vec<syn::Ident> = parts
+            .iter()
+            .map(|(p, _)| format_ident!("{}", p.name))
+            .collect();
+        let calls: Vec<TokenStream> = parts
+            .iter()
+            .zip(&names)
+            .map(|((_, frag), fname)| {
+                let conv = &frag.function.sig.ident;
+                let call = quote!(#conv(v.#fname));
+                if fallible(&frag.function) {
+                    quote!(#call?)
+                } else {
+                    call
+                }
+            })
+            .collect();
+        let any_fallible = parts.iter().any(|(_, f)| fallible(&f.function));
+        let subs: Vec<TypeKey> = parts.iter().map(|(p, _)| p.ty.key()).collect();
+
+        match at.crossing.assembly() {
+            Assembly::Construct => {
+                let name = CbindgenBuilder::in_name_of(&key);
+                let function: syn::ItemFn = if any_fallible {
+                    syn::parse_quote!(
+                        #[allow(non_snake_case, unused_variables, dead_code)]
+                        pub(crate) unsafe fn #name(
+                            v: #c_struct,
+                        ) -> ::core::result::Result<#src, ::std::string::String> {
+                            ::core::result::Result::Ok(#src { #(#names: #calls),* })
+                        }
+                    )
+                } else {
+                    syn::parse_quote!(
+                        #[allow(non_snake_case, unused_variables, dead_code)]
+                        pub(crate) unsafe fn #name(v: #c_struct) -> #src {
+                            #src { #(#names: #calls),* }
+                        }
+                    )
+                };
+                Ok(CFrag::from_converter(
+                    at,
+                    ConverterImpl {
+                        subs,
+                        destination: syn::parse_quote!(#c_struct),
+                        function,
+                        pre_stages: vec![],
+                        niches: Niches::empty(),
+                        metadata: (),
+                    },
+                ))
+            }
+            Assembly::Deconstruct => {
+                let name = CbindgenBuilder::out_name_of(&key);
+                let function: syn::ItemFn = if any_fallible {
+                    syn::parse_quote!(
+                        #[allow(non_snake_case, unused_variables, dead_code)]
+                        pub(crate) fn #name(
+                            v: #src,
+                        ) -> ::core::result::Result<#c_struct, ::std::string::String> {
+                            ::core::result::Result::Ok(#c_struct { #(#names: #calls),* })
+                        }
+                    )
+                } else {
+                    syn::parse_quote!(
+                        #[allow(non_snake_case, unused_variables, dead_code)]
+                        pub(crate) fn #name(v: #src) -> #c_struct {
+                            #c_struct { #(#names: #calls),* }
+                        }
+                    )
+                };
+                Ok(CFrag::from_converter(
+                    at,
+                    ConverterImpl {
+                        subs,
+                        destination: syn::parse_quote!(#c_struct),
+                        function,
+                        pre_stages: vec![],
+                        niches: Niches::empty(),
+                        metadata: (),
+                    },
+                ))
+            }
+        }
     }
 
     fn choice(

@@ -89,22 +89,54 @@ fn an_enum_has_no_parts() {
 }
 
 #[test]
-fn a_data_struct_and_a_tagged_union_still_cross_whole() {
-    // Both plainly have parts, and both are one row with none today: the field
-    // walk lives inside one generated function per direction, which is exactly
-    // what `Atomic` says. Stating the parts is what deletes those walks.
+fn a_data_struct_is_its_fields() {
+    // Many parts, one wire value: each field converts itself and the converted
+    // fields are reassembled into one C struct. That pair is what #450 keeps
+    // apart, and the struct is where C shows both halves at once.
     let model = model();
-    let gen = Cbindgen::builder()
-        .data_struct(syn::parse_quote!(Sample))
-        .tagged_union(syn::parse_quote!(Reply));
+    let gen = Cbindgen::builder().data_struct(syn::parse_quote!(Sample));
     assert_eq!(
         rows_of(&gen, &model, "Sample"),
-        "construct whole:atomic, deconstruct whole:atomic"
+        "construct parts:product, deconstruct parts:product"
     );
+}
+
+#[test]
+fn a_tagged_union_still_crosses_whole() {
+    // It plainly has arms, and is still one row with no parts: `in_tagged_union`
+    // walks an arm's payload inside one generated function, which is exactly
+    // what `Atomic` says. Stating those arms is the next stage.
+    let model = model();
+    let gen = Cbindgen::builder().tagged_union(syn::parse_quote!(Reply));
     assert_eq!(
         rows_of(&gen, &model, "Reply"),
         "construct whole:atomic, deconstruct whole:atomic"
     );
+}
+
+#[test]
+fn a_value_read_two_ways_inside_a_struct_has_two_rows() {
+    // `bool` and `String` cross differently inside a `data_struct`'s mirror
+    // than they do on their own, which is two rows of one crossing with the
+    // site picking — the table's own answer to one crossing with two wires.
+    let model = model();
+    let gen = Cbindgen::builder().data_struct(syn::parse_quote!(Sample));
+    let recipes = gen.recipes(&model).expect("rows");
+
+    for (spelling, assembly, expected) in [
+        ("bool", Assembly::Construct, 2),
+        ("bool", Assembly::Deconstruct, 2),
+        // A `String` reads differently only on the way in.
+        ("String", Assembly::Construct, 2),
+        ("String", Assembly::Deconstruct, 0),
+    ] {
+        let key = Crossing::new(ty(&model, spelling), assembly).key();
+        assert_eq!(recipes.rows(&key).len(), expected, "{spelling} {assembly}");
+    }
+    // The default is the whole-value reading in every case; the field reading
+    // is reached only by a part that asks for it.
+    let key = Crossing::new(ty(&model, "bool"), Assembly::Construct).key();
+    assert_eq!(recipes.default_of(&key).unwrap().as_str(), "whole");
 }
 
 #[test]

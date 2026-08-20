@@ -43,77 +43,6 @@ impl CbindgenBuilder {
         })
     }
 
-    /// Data struct: decode each field from its C wire — infallible.
-    pub(crate) fn in_data_struct(
-        &self,
-        ty: &TypeRef,
-        r: &impl Conversions<()>,
-    ) -> Option<ConverterImpl<()>> {
-        let key = ty.key();
-        if !self.data.contains_key(&key) {
-            return None;
-        }
-        let fields = self.struct_fields(r, &ty.key())?;
-        let name = Self::in_name_of(&ty.key());
-        let c_struct = self.c_type_ident(&ty.key());
-        let src = self.src_ty_of(&ty.key());
-        let mut inits: Vec<TokenStream> = Vec::new();
-        let mut subs: Vec<TypeKey> = Vec::new();
-        let mut fallible = false;
-        for (fname, fty) in &fields {
-            if r_is_string(fty) {
-                inits.push(quote!(#fname: if v.#fname.is_null() {
-                    ::std::string::String::new()
-                } else {
-                    ::std::ffi::CStr::from_ptr(v.#fname).to_string_lossy().into_owned()
-                }));
-            } else if self.tagged_unions.contains_key(&fty.key()) {
-                // A sum field crosses by value as its mirror; its own converter
-                // validates the tag and rebuilds the live arm, which is what
-                // makes this whole decode fallible.
-                let conv = Self::in_name_of(&fty.key());
-                subs.push(fty.key());
-                fallible = true;
-                inits.push(quote!(#fname: #conv(v.#fname)?));
-            } else if r_is_bool(fty) {
-                // #170 instance 2: the field's wire is `MaybeUninit<bool>`, so
-                // the byte C wrote is normalised here — a Rust `bool` never
-                // holds it unchecked.
-                let read = bool_in_expr(quote!(v.#fname));
-                inits.push(quote!(#fname: #read));
-            } else {
-                inits.push(quote!(#fname: v.#fname));
-            }
-        }
-        // Only a union field can fail; a struct of strings and scalars keeps
-        // its infallible signature (and its callers keep theirs).
-        let function: syn::ItemFn = if fallible {
-            syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(
-                    v: #c_struct,
-                ) -> ::core::result::Result<#src, ::std::string::String> {
-                    ::core::result::Result::Ok(#src { #(#inits),* })
-                }
-            )
-        } else {
-            syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(v: #c_struct) -> #src {
-                    #src { #(#inits),* }
-                }
-            )
-        };
-        Some(ConverterImpl {
-            subs,
-            destination: syn::parse_quote!(#c_struct),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
-    }
-
     /// The mirror field idents to null in a by-value consume's gravestone write-back,
     /// for a `repr_c_struct` (`generate_mirror`) whose owned-pointer fields are all
     /// **nullable** (`Option<Box<T>>`). `Some(idents)` (possibly empty — a pure
@@ -405,6 +334,78 @@ impl CbindgenBuilder {
             #[allow(non_snake_case, unused_variables, dead_code)]
             pub(crate) unsafe fn #name(v: #wire) -> bool {
                 #read
+            }
+        );
+        Some(ConverterImpl {
+            subs: vec![],
+            destination: wire,
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+
+    /// `String` **input from a `data_struct`'s mirror**: a null `char *`
+    /// decodes to an empty string rather than refusing.
+    ///
+    /// The second reading a `String` has, and the reason it needs a row of its
+    /// own. A `String` **parameter** is a pointer the caller chose to pass, so
+    /// a null one is a caller error and [`Self::in_string`] says so. A `String`
+    /// **field** shares a struct with every other field, and refusing it would
+    /// make the whole struct's decode fallible — so a function taking such a
+    /// struct by value would need a `Result` return or `.panic()`, for a field
+    /// it may not even read.
+    ///
+    /// Lossy on invalid UTF-8 for the same reason. This is the reading the
+    /// hand-written field walk had; stating it as a row is what makes it
+    /// visible rather than buried.
+    pub(crate) fn in_string_field(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+        if !r_is_string(ty) {
+            return None;
+        }
+        let name = format_ident!("{}_field", Self::in_name_of(&ty.key()));
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name(
+                v: *const ::core::ffi::c_char,
+            ) -> ::std::string::String {
+                if v.is_null() {
+                    ::std::string::String::new()
+                } else {
+                    ::std::ffi::CStr::from_ptr(v).to_string_lossy().into_owned()
+                }
+            }
+        );
+        Some(ConverterImpl {
+            subs: vec![],
+            destination: syn::parse_quote!(*const ::core::ffi::c_char),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+
+    /// `bool` **output into a `data_struct`'s mirror**: the mirror's field is
+    /// [`bool_wire`], so the plain Rust `bool` is wrapped rather than passed
+    /// through.
+    ///
+    /// The twin of [`Self::in_bool`], and the reason `bool` has a second row: a
+    /// `bool` **return** is always already one of two values and crosses as
+    /// itself, while a field shares one mirror with the decode that has to
+    /// normalise it.
+    pub(crate) fn out_bool_field(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+        if !r_is_bool(ty) {
+            return None;
+        }
+        let name = format_ident!("{}_field", Self::out_name_of(&ty.key()));
+        let wire = bool_wire();
+        let wrap = bool_out_expr(quote!(v));
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) fn #name(v: bool) -> #wire {
+                #wrap
             }
         );
         Some(ConverterImpl {
@@ -1637,8 +1638,15 @@ impl CbindgenBuilder {
                     .join("; "),
             }
         })?;
-        // Cbindgen overrides no site: every crossing takes its type's own row.
-        let bindings = prebindgen_registry::recipe::Bindings::default();
+        let bindings = self.bindings(&model, &recipes).map_err(|errors| {
+            prebindgen_registry::ScanError::AdapterInvariant {
+                message: errors
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            }
+        })?;
         // The driver's state, carried between calls. The adapter borrows the
         // partial registry view, which is lent per call and so is a different
         // type each time; what it built is not, and outlives every one of them.
@@ -2156,45 +2164,6 @@ impl CbindgenBuilder {
             return Some(ConverterImpl {
                 subs: vec![],
                 destination: syn::parse_quote!(*mut ::core::ffi::c_char),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // Data struct output: encode each field into its C wire (`String` →
-        // malloc'd `char*` raw block, freed by the `free_memory_function`).
-        if self.data.contains_key(&key) {
-            let fields = self.struct_fields(_r, &ty.key())?;
-            let name = Self::out_name_of(&ty.key());
-            let c_struct = self.c_type_ident(&ty.key());
-            let src = self.src_ty_of(&ty.key());
-            let mut inits: Vec<TokenStream> = Vec::new();
-            let mut subs: Vec<TypeKey> = Vec::new();
-            for (fname, fty) in &fields {
-                if r_is_string(fty) {
-                    inits.push(quote!(#fname: __cbg_alloc_cstr(v.#fname)));
-                } else if self.tagged_unions.contains_key(&fty.key()) {
-                    let conv = Self::out_name_of(&fty.key());
-                    subs.push(fty.key());
-                    inits.push(quote!(#fname: #conv(v.#fname)));
-                } else if r_is_bool(fty) {
-                    let wrap = bool_out_expr(quote!(v.#fname));
-                    inits.push(quote!(#fname: #wrap));
-                } else {
-                    inits.push(quote!(#fname: v.#fname));
-                }
-            }
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src) -> #c_struct {
-                    #c_struct { #(#inits),* }
-                }
-            );
-            return Some(ConverterImpl {
-                subs,
-                destination: syn::parse_quote!(#c_struct),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
