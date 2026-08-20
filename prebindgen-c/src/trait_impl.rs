@@ -1624,10 +1624,38 @@ impl CbindgenBuilder {
         self,
         registry: prebindgen_registry::RegistryBuilder<()>,
     ) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
-        let registry = self
-            .declare_into(registry)?
-            .validate_with(&self)?
-            .convert_with(|crossing, built, emit| self.convert_crossing(crossing, built, emit))?
+        let declared = self.declare_into(registry)?.validate_with(&self)?;
+        // A second holding of the model: `convert_with` consumes the builder,
+        // and the table outlives that call.
+        let model = declared.flat().clone();
+        let recipes = self.recipes(&model).map_err(|errors| {
+            prebindgen_registry::ScanError::AdapterInvariant {
+                message: errors
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            }
+        })?;
+        // Cbindgen overrides no site: every crossing takes its type's own row.
+        let bindings = prebindgen_registry::recipe::Bindings::default();
+        // The driver's state, carried between calls. The adapter borrows the
+        // partial registry view, which is lent per call and so is a different
+        // type each time; what it built is not, and outlives every one of them.
+        let mut compiled =
+            prebindgen_registry::recipe::Compiled::<crate::compile::CFrag>::default();
+        let registry = declared
+            .convert_with(|crossing, built, _emit| {
+                let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+                    &model,
+                    &recipes,
+                    &bindings,
+                    std::mem::take(&mut compiled),
+                );
+                let conv = self.compile_crossing(&mut compiler, crossing, built);
+                compiled = compiler.finish();
+                conv
+            })?
             .build()?;
         self.validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
@@ -1637,29 +1665,33 @@ impl CbindgenBuilder {
         })
     }
 
-    /// Build the conversion for one crossing — see `JniGenBuilder::convert_crossing`.
-    fn convert_crossing(
-        &self,
+    /// Build the conversion for one crossing by asking the table which row it
+    /// takes and the driver to compile that row.
+    ///
+    /// `None` records a gap, exactly as the chain of guesses this replaced did:
+    /// whether the gap matters is the registry's call, and its report names the
+    /// crossing.
+    fn compile_crossing<'v, R: Conversions<()>>(
+        &'v self,
+        compiler: &mut prebindgen_registry::recipe::Compiler<'_, crate::compile::CCompile<'v, R>>,
         crossing: &Crossing,
-        built: &Building<'_, ()>,
-        emit: &prebindgen_registry::Emit,
+        built: &'v R,
     ) -> Option<ConverterImpl<()>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
-        // key the crossing IS — the same migration the JNI adapter's twin made in #284,
-        // in place of `key -> to_type() -> spelling` (#291). Every crossing
-        // `convert_with` hands out comes from a type table, so it has a cell.
-        // The selectors take the reading now, so nothing here spells it.
+        // key the crossing IS.
         let ty = built.reading(key)?;
-        match dir {
-            Direction::Input => self.select_input_type(&ty, built, emit).or_else(|| {
-                // The callback's arguments off the model's own `Callback` kind,
-                // where `extract_fn_trait_args` re-read the parameter's bounds.
-                let args = ty.callback_args()?;
-                self.dispatch_fn_input(args, built)
-            }),
-            Direction::Output => self.select_output_type(&ty, built, emit),
-        }
+        let assembly = match dir {
+            Direction::Input => Assembly::Construct,
+            Direction::Output => Assembly::Deconstruct,
+        };
+        let mut adapter = crate::compile::CCompile {
+            gen: self,
+            registry: built,
+        };
+        let crossing = prebindgen_registry::recipe::Crossing::new(ty, assembly);
+        let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
+        Some((*fragment).clone().into_converter())
     }
 
     pub fn declare_into(
@@ -1683,7 +1715,7 @@ impl CbindgenBuilder {
 }
 
 impl CbindgenBuilder {
-    fn dispatch_fn_input(
+    pub(crate) fn dispatch_fn_input(
         &self,
         args: &[TypeRef],
         registry: &impl Conversions<()>,
@@ -2226,18 +2258,17 @@ impl CbindgenBuilder {
 /// peels `ty`'s outermost layer and composes the inner's converter; `subs`
 /// lists the immediate inner(s) it looked up.
 impl CbindgenBuilder {
-    /// `Option<X>` and reference (`&`/`&mut`/`&[E]`/`&str`) **input** shapes.
-    pub(crate) fn in_wrappers(
+    /// `Option<X>` **input**: a single nullable C param, NULL = `None`.
+    ///
+    /// The inner `X` is reused wholesale — its own fragment, an `&T` borrow's
+    /// for instance, does the non-null decode — so `Option<&ZConfig>` binds the
+    /// *reference* conversion, never the owned one.
+    pub(crate) fn in_option(
         &self,
-        ty: &TypeRef,
-        r: &impl Conversions<()>,
+        inner: &TypeRef,
+        entry: &crate::compile::CFrag,
     ) -> Option<ConverterImpl<()>> {
-        // `Option<X>` input: a single nullable C param, NULL = `None`. The inner
-        // `X` is reused wholesale (its own converter — e.g. an `&T` borrow — does
-        // the non-null decode), so `Option<&ZConfig>` binds the *reference*
-        // converter, never the owned one.
-        if let Some(inner) = ty.optional_inner() {
-            let entry = r.input_entry(inner)?;
+        {
             let inner_wire = entry.destination.clone();
             let inner_conv = entry.function.sig.ident.clone();
             let (inner_ok, fallible): (syn::Type, bool) = match &entry.function.sig.output {
@@ -2342,16 +2373,61 @@ impl CbindgenBuilder {
                     }
                 )
             };
-            return Some(ConverterImpl {
+            Some(ConverterImpl {
                 subs: vec![inner.key()],
                 destination: wire,
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
                 metadata: (),
-            });
+            })
         }
+    }
 
+    /// `&[E]` slice **input**: marker only — the two-param (`*const E_wire`,
+    /// `usize`) lowering is done structurally in `emit_inputs`.
+    pub(crate) fn in_slice(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+        let e = r_shared_slice_elem(ty)?;
+        // #170, the slice instance. The two-param lowering builds the
+        // `&[E]` zero-copy from C's own block, so there is nowhere to
+        // normalise the bytes: `&[bool]` would materialise every
+        // element's restricted domain at once. `MaybeUninit<bool>` is
+        // not a fix here — the callee wants `&[bool]`, and rebuilding
+        // the block would silently drop the zero-copy contract this
+        // path exists for. Rejected until a raw-wire lowering exists.
+        if r_is_bool(e) {
+            panic!(
+                "Cbindgen: `&[bool]` cannot cross IN from C. A `bool` slice is \
+                 reinterpreted zero-copy from the caller's block, so a byte outside \
+                 `{{0, 1}}` would become a Rust `bool` with no chance to normalise it \
+                 (#170). Take the flags as an integer slice, or wrap them in a declared \
+                 `opaque_ptr` handle."
+            );
+        }
+        let wire: syn::Type = if let Some(e_ty) = scalar_ty(e) {
+            syn::parse_quote!(*const #e_ty)
+        } else {
+            let counterpart = self.value_opaque_ty_of(&e.key())?.clone();
+            syn::parse_quote!(*const #counterpart)
+        };
+        let name = format_ident!("__cbg_inmark_slice_{}", sanitize(&e.key()));
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, dead_code, unused)]
+            pub(crate) fn #name() {}
+        );
+        Some(ConverterImpl {
+            subs: vec![e.key()],
+            destination: wire,
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+
+    /// `&str`, `&mut T` and `&T` **input** shapes: a borrow reached through the
+    /// pointer the C caller supplied.
+    pub(crate) fn in_borrow(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
         // `mutable` off the `Ref` itself, NOT `is_exclusive_borrow`: that
         // reading deliberately answers `false` for `&mut MaybeUninit<_>` — an
         // out-param slot is not an exclusive borrow OF A VALUE — and these arms
@@ -2368,63 +2444,6 @@ impl CbindgenBuilder {
         // or its source path, both of which the model answers.
         let elem = rf_inner;
 
-        // `&[E]` slice: marker only — the two-param (`*const E_wire`, `usize`)
-        // lowering is done structurally in `emit_inputs`. A scalar `E` crosses as
-        // itself (`*const E`); a declared inline-opaque by-value `E` (e.g. a
-        // `repr_c_struct`) crosses as `*const E_counterpart` reinterpreted to
-        // `&[E]` zero-copy. `subs` marks `E`'s input required so its mirror /
-        // prerequisites are emitted.
-        if !*rf_mut {
-            if let Some(e) = r_shared_slice_elem(ty) {
-                // #170, the slice instance. The two-param lowering builds the
-                // `&[E]` zero-copy from C's own block, so there is nowhere to
-                // normalise the bytes: `&[bool]` would materialise every
-                // element's restricted domain at once. `MaybeUninit<bool>` is
-                // not a fix here — the callee wants `&[bool]`, and rebuilding
-                // the block would silently drop the zero-copy contract this
-                // path exists for. Rejected until a raw-wire lowering exists.
-                if r_is_bool(e) {
-                    panic!(
-                        "Cbindgen: `&[bool]` cannot cross IN from C. A `bool` slice is \
-                         reinterpreted zero-copy from the caller's block, so a byte outside \
-                         `{{0, 1}}` would become a Rust `bool` with no chance to normalise it \
-                         (#170). Take the flags as an integer slice, or wrap them in a declared \
-                         `opaque_ptr` handle."
-                    );
-                }
-                if let Some(e_ty) = scalar_ty(e) {
-                    let name = format_ident!("__cbg_inmark_slice_{}", sanitize(&e.key()));
-                    let function: syn::ItemFn = syn::parse_quote!(
-                        #[allow(non_snake_case, dead_code, unused)]
-                        pub(crate) fn #name() {}
-                    );
-                    return Some(ConverterImpl {
-                        subs: vec![e.key()],
-                        destination: syn::parse_quote!(*const #e_ty),
-                        function,
-                        pre_stages: vec![],
-                        niches: Niches::empty(),
-                        metadata: (),
-                    });
-                }
-                if let Some(counterpart) = self.value_opaque_ty_of(&e.key()) {
-                    let counterpart = counterpart.clone();
-                    let name = format_ident!("__cbg_inmark_slice_{}", sanitize(&e.key()));
-                    let function: syn::ItemFn = syn::parse_quote!(
-                        #[allow(non_snake_case, dead_code, unused)]
-                        pub(crate) fn #name() {}
-                    );
-                    return Some(ConverterImpl {
-                        subs: vec![e.key()],
-                        destination: syn::parse_quote!(*const #counterpart),
-                        function,
-                        pre_stages: vec![],
-                        niches: Niches::empty(),
-                        metadata: (),
-                    });
-                }
-            }
-        }
         // `&str`: borrow a UTF-8 C string directly from the caller.
         if !*rf_mut && r_is_str(rf_inner) {
             let name = Self::in_name_of(&ty.key());
@@ -2559,80 +2578,55 @@ impl CbindgenBuilder {
         })
     }
 
-    /// `Option<X>`/`Vec<X>`/`&T`/`Result<T,E>` **output** shapes. The composite
-    /// markers (`Option`/`Vec`/`Result`) carry a `()` destination — the real
-    /// lowering is structural in `emit_function_wrapper` — and exist only to
-    /// resolve the entry and make the inner(s) required.
-    pub(crate) fn out_wrappers(
-        &self,
-        ty: &TypeRef,
-        r: &impl Conversions<()>,
-    ) -> Option<ConverterImpl<()>> {
-        // `Option<T>` / `Vec<T>` marker.
-        if let Some(inner) = ty.optional_inner().or_else(|| ty.sequence_elem()) {
-            r.output_entry(inner)?;
-            let kind = if ty.optional_inner().is_some() {
-                "option"
-            } else {
-                "vec"
-            };
-            let name = format_ident!("__cbg_outmark_{}_{}", kind, sanitize(&inner.key()));
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, dead_code, unused)]
-                pub(crate) fn #name() {}
-            );
-            return Some(ConverterImpl {
-                subs: vec![inner.key()],
-                destination: syn::parse_quote!(()),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+    /// The `Option<X>` / `Vec<X>` / `Cow<'_, [X]>` **output** marker.
+    ///
+    /// Carries a `()` destination: the real lowering is structural in
+    /// `emit_function_wrapper`, and this exists so the shape resolves and its
+    /// inner is marked reachable.
+    pub(crate) fn out_arity_marker(&self, kind: &str, inner: &TypeRef) -> ConverterImpl<()> {
+        let name = format_ident!("__cbg_outmark_{}_{}", kind, sanitize(&inner.key()));
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, dead_code, unused)]
+            pub(crate) fn #name() {}
+        );
+        ConverterImpl {
+            subs: vec![inner.key()],
+            destination: syn::parse_quote!(()),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
         }
-        // `Cow<'_, [T]>` marker. The actual C ABI shape is structural in
-        // `lower_shape`/`encode_value`, like `Vec<T>`.
-        if let Some(inner) = r_cow_slice_elem(ty) {
-            r.output_entry(inner)?;
-            let name = format_ident!("__cbg_outmark_cow_slice_{}", sanitize(&inner.key()));
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, dead_code, unused)]
-                pub(crate) fn #name() {}
-            );
-            return Some(ConverterImpl {
-                subs: vec![inner.key()],
-                destination: syn::parse_quote!(()),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-        // `&[E]` shared slice borrow (a callback argument): marker only — the real
-        // two-component `(*const E_wire, size_t)` lowering of the closure `call`
-        // param is structural in `prereq_callback_structs` / `dispatch_fn_input`.
-        // `subs: [E]` forces E's output (its `payload_t` mirror / scalar) so the
-        // closure wire element type exists; `destination` is unused for the slice
-        // (the callback emitter reads the element wire directly).
-        if let Some(elem) = self
+    }
+
+    /// The `&[E]` shared-slice **output** marker — a callback argument.
+    ///
+    /// The real two-component `(*const E_wire, size_t)` lowering of the closure
+    /// `call` parameter is structural in `prereq_callback_structs` /
+    /// `dispatch_fn_input`; `subs: [E]` forces E's output so the closure wire
+    /// element type exists.
+    pub(crate) fn out_slice_marker(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+        let elem = self
             .r_value_opaque_slice_elem(ty)
-            .or_else(|| r_scalar_slice_elem(ty))
-        {
-            r.output_entry(elem)?;
-            let name = format_ident!("__cbg_outmark_slice_{}", sanitize(&elem.key()));
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, dead_code, unused)]
-                pub(crate) fn #name() {}
-            );
-            return Some(ConverterImpl {
-                subs: vec![elem.key()],
-                destination: syn::parse_quote!(()),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
+            .or_else(|| r_scalar_slice_elem(ty))?;
+        let name = format_ident!("__cbg_outmark_slice_{}", sanitize(&elem.key()));
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, dead_code, unused)]
+            pub(crate) fn #name() {}
+        );
+        Some(ConverterImpl {
+            subs: vec![elem.key()],
+            destination: syn::parse_quote!(()),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+
+    /// The `&T` shared borrow and the `Result<T, E>` marker — the two **output**
+    /// shapes that are neither terminal nor a run.
+    pub(crate) fn out_borrow_or_result(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
         // `&T` shared borrow of an opaque/value-opaque type → non-owning `*const`.
         if let TypeKind::Ref { mutable, inner, .. } = ty.kind() {
             if !*mutable {
@@ -2664,23 +2658,20 @@ impl CbindgenBuilder {
         }
         // `Result<T, E>` marker — real lowering (bool + out-param + error-param)
         // is in `on_function`.
-        if ty.fallible_parts().is_some() {
-            let (ok, err) = ty.fallible_parts()?;
-            let name = format_ident!("__cbg_result_{}", sanitize(&ty.key()));
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, dead_code, unused)]
-                pub(crate) fn #name() {}
-            );
-            return Some(ConverterImpl {
-                subs: vec![ok.key(), err.key()],
-                destination: syn::parse_quote!(()),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-        None
+        let (ok, err) = ty.fallible_parts()?;
+        let name = format_ident!("__cbg_result_{}", sanitize(&ty.key()));
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, dead_code, unused)]
+            pub(crate) fn #name() {}
+        );
+        Some(ConverterImpl {
+            subs: vec![ok.key(), err.key()],
+            destination: syn::parse_quote!(()),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
     }
 }
 

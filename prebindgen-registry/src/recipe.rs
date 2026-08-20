@@ -51,7 +51,7 @@ mod tests;
 
 pub use self::{
     compile::{
-        At, Carrier, Compile, CompileError, Compiler, Cx, Frag, Part, PartSource, Parts,
+        At, Carrier, Compile, CompileError, Compiled, Compiler, Cx, Frag, Part, PartSource, Parts,
         RequirementId, Validity, Yield,
     },
     site::{Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site},

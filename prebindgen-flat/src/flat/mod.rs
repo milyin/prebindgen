@@ -458,7 +458,13 @@ impl FlatBuilder {
 /// Resolving here rather than in the adapters is the point of #211: a dangling
 /// name used to surface much later as an unresolved-converter error, from
 /// whichever adapter happened to look first.
-#[derive(Debug, Default)]
+///
+/// `Clone` because the model outlives whatever consumed it: `Registry::builder`
+/// takes a `Flat` by value, and an adapter that also needs one — to state a
+/// binding's rows against, or to drive its own walk — holds a second. The
+/// clone is deep in the elements and shared in their locations, so two models
+/// answer identically and neither can drift.
+#[derive(Clone, Debug, Default)]
 pub struct Flat {
     /// Source order, so iteration reports items as the sources were fed.
     elements: Vec<Element>,

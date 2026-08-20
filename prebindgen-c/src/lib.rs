@@ -109,6 +109,7 @@ pub(crate) use prebindgen_registry::types_util::{
 use prebindgen_registry::{
     decl::{ConvertDecl, ConvertSpec},
     flat::{extract_fn_trait_args, Field, Origin, ScalarKind, TypeKind, TypeRef},
+    recipe::{Assembly, Bound},
     Conversions, ConverterImpl, Direction, NicheSlot, Niches, Prebindgen, Registry, TypeKey,
 };
 use proc_macro2::TokenStream;
@@ -450,9 +451,10 @@ type Mangle1 = Box<dyn Fn(&str) -> String>;
 type MangleN = Box<dyn Fn(&[String]) -> String>;
 
 mod builder;
+mod compile;
 mod convert;
 mod emit;
-mod selector;
+mod rows;
 #[cfg(test)]
 mod test_util;
 #[cfg(test)]
