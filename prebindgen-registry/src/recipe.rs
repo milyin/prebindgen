@@ -735,7 +735,17 @@ impl<'a> Check<'a, '_> {
         match op {
             Construct::Identity(inner) => vec![(**inner).clone()],
             Construct::Call(func) => match self.function(func) {
-                Some(f) => f.params.iter().map(|p| p.ty.clone()).collect(),
+                Some(f) => {
+                    let parts = f.params.iter().map(|p| p.ty.clone()).collect();
+                    if !constructor_of(f, ty) {
+                        self.push(RecipeError::NotAConstructor {
+                            row: self.row.clone(),
+                            recipe: self.recipe.clone(),
+                            func: func.clone(),
+                        });
+                    }
+                    parts
+                }
                 None => Vec::new(),
             },
             Construct::Fields => match self.fields(ty) {
@@ -848,6 +858,22 @@ fn accessor_of(f: &Function, ty: &TypeRef) -> bool {
         return false;
     };
     value_key(&first.ty) == value_key(ty)
+}
+
+/// Whether `f` builds a value of `ty` — `fn(..) -> T`, or `fn(..) -> Result<T, E>`
+/// for a construction that can fail.
+///
+/// The constructing twin of [`accessor_of`]. A recipe names the function and the
+/// model supplies everything else, so the one thing left to check is that the
+/// function it names produces the type the row is filed under.
+fn constructor_of(f: &Function, ty: &TypeRef) -> bool {
+    // A fallible constructor is recognised by its return type, which is the same
+    // place the parts' fallibility is read from — the recipe never states it.
+    let built = match f.ret.fallible_parts() {
+        Some((ok, _err)) => ok,
+        None => &f.ret,
+    };
+    value_key(built) == value_key(ty)
 }
 
 /// The type's identity with a borrow and any transparent wrapper gone — what
@@ -1000,6 +1026,19 @@ pub enum RecipeError {
         /// The name that resolved to nothing.
         func: syn::Ident,
     },
+    /// A constructor was named where what it returns is not the row's type.
+    ///
+    /// The constructing twin of [`NotAnAccessor`](Self::NotAnAccessor). A
+    /// `Result<T, E>` return counts as building a `T`, because that is where a
+    /// construction's fallibility is read from.
+    NotAConstructor {
+        /// The crossing the recipe answers.
+        row: CrossingKey,
+        /// Which of the crossing's rows named it.
+        recipe: RecipeId,
+        /// The function whose return type does not match.
+        func: syn::Ident,
+    },
     /// An accessor was named where its first parameter is not the row's type.
     NotAnAccessor {
         /// The crossing the recipe answers.
@@ -1044,6 +1083,21 @@ pub enum RecipeError {
         site: Site,
         /// The precedence they share.
         origin: Origin,
+    },
+    /// A part yields a different Rust type from the one its edge needs.
+    ///
+    /// The type half of the composition contract; [`Composition`](Self::Composition)
+    /// is the ownership half. Both are checked at every part, this one first: a
+    /// part producing the wrong value is wrong however it is held.
+    ComposedType {
+        /// The part's own site.
+        site: Site,
+        /// Which part of the row.
+        part: usize,
+        /// What the constructor's parameter, field or accessor requires.
+        wanted: TypeKey,
+        /// What the part's fragment says it produces.
+        got: TypeKey,
     },
     /// A part yields something the edge it feeds cannot consume.
     Composition {
@@ -1103,6 +1157,11 @@ impl fmt::Display for RecipeError {
                 "row `{recipe}` of {row} names `{func}`, which no #[prebindgen] \
                  source declares"
             ),
+            RecipeError::NotAConstructor { row, recipe, func } => write!(
+                f,
+                "row `{recipe}` of {row} builds the value with `{func}`, which does \
+                 not return that type"
+            ),
             RecipeError::NotAnAccessor { row, recipe, func } => write!(
                 f,
                 "row `{recipe}` of {row} reaches a part through `{func}`, whose \
@@ -1134,6 +1193,15 @@ impl fmt::Display for RecipeError {
                 "{site} is bound to two different rows by {origin}; one of them has to \
                  be written at a higher precedence"
             ),
+            RecipeError::ComposedType {
+                site,
+                part,
+                wanted,
+                got,
+            } => write!(
+                f,
+                "part {part} of {site} needs a `{wanted}` and its fragment produces a `{got}`"
+            ),
             RecipeError::Composition {
                 site,
                 part,
@@ -1141,11 +1209,11 @@ impl fmt::Display for RecipeError {
                 got,
             } => write!(
                 f,
-                "part {part} of {site} needs `{wanted}` and its recipe yields `{got}`"
+                "part {part} of {site} needs `{wanted}` and its fragment produces `{got}`"
             ),
             RecipeError::Validity { site, needed, got } => write!(
                 f,
-                "{site} needs a {needed} value and its recipe yields a {got} one"
+                "{site} needs a {needed} value and its fragment produces a {got} one"
             ),
             RecipeError::CallbackDeclared { row, recipe } => write!(
                 f,

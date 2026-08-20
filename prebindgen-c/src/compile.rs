@@ -42,22 +42,16 @@ impl Carrier for CFrag {
 impl CFrag {
     /// One of the adapter's existing converter builders, as a fragment.
     fn from_converter(at: At<'_>, conv: ConverterImpl<()>) -> Self {
-        let crossing = at.crossing;
-        let mode = crossing.mode();
+        let validity = validity_of(&conv, at.crossing.assembly());
         Self {
             destination: conv.destination,
             function: conv.function,
             niches: conv.niches,
             subs: conv.subs,
             yields: Yield {
-                ty: crossing.value().stripped_key(),
-                mode,
-                // A borrow is only usable while what it was reached through is
-                // alive; anything else the C side may keep.
-                validity: match mode {
-                    Mode::Owned => Validity::SelfSufficient,
-                    Mode::Shared | Mode::Exclusive => Validity::Borrowed,
-                },
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity,
             },
         }
     }
@@ -72,6 +66,42 @@ impl CFrag {
             pre_stages: vec![],
             metadata: (),
         }
+    }
+}
+
+/// How long what this conversion produces stays usable.
+///
+/// A property of the **conversion**, not of how the crossing was spelled.
+/// Reading the spelling is wrong in both directions: a conversion may clone or
+/// allocate out of a borrow, and — the case C actually has — a conversion may
+/// hand C a pointer *into* a Rust value from a crossing that looks owned.
+fn validity_of(conv: &ConverterImpl<()>, assembly: Assembly) -> Validity {
+    match assembly {
+        // Rust to C. A `*const T` is the zero-copy borrow: `out_borrow_or_result`
+        // casts the Rust value's own address, and `repr_c_struct`'s reinterpret
+        // does the same, so the pointer dies with the value it points into. A
+        // `*mut` is a handle C now owns (`Box::into_raw`) or a block C must free
+        // (`__cbg_alloc_cstr`), and every by-value wire is a copy.
+        Assembly::Deconstruct => match &conv.destination {
+            syn::Type::Ptr(p) if p.mutability.is_none() => Validity::Borrowed,
+            _ => Validity::SelfSufficient,
+        },
+        // C to Rust: what the converter's own function hands back. A decode
+        // yielding `&'a T` borrows the caller's memory, which is right at a
+        // parameter and refused at a return.
+        Assembly::Construct => match &conv.function.sig.output {
+            syn::ReturnType::Type(_, ty) if produces_borrow(ty) => Validity::Borrowed,
+            _ => Validity::SelfSufficient,
+        },
+    }
+}
+
+/// Whether a converter's return type hands back a borrow — `&T`, or a
+/// `Result<&T, E>` whose success arm is one.
+fn produces_borrow(ty: &syn::Type) -> bool {
+    match ty {
+        syn::Type::Reference(_) => true,
+        _ => result_parts(ty).is_some_and(|(ok, _)| matches!(ok, syn::Type::Reference(_))),
     }
 }
 
