@@ -478,6 +478,7 @@ impl JniGen {
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.decls,
+            prebindgen_registry::write::Conversions::Compiled(&self.decls.compiled_fns),
             out_path,
         )?)
     }
@@ -571,8 +572,8 @@ pub struct Declarations {
     pub(crate) convert_decls: Vec<ConvertDecl>,
     /// Every conversion this binding compiled.
     ///
-    /// Filled once by `JniGenBuilder::build_with` and read by
-    /// `Prebindgen::converter_items`. It is what reaches the generated file, so
+    /// Filled once by `JniGenBuilder::build_with` and handed to `write_rust` as
+    /// `Conversions::Compiled`. It is what reaches the generated file, so
     /// a fragment no longer has to be expressible as one `ConverterImpl` to be
     /// emitted — only to be looked up. The writer sorts and de-duplicates by
     /// function name, so the order here decides which of two same-named
