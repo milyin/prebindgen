@@ -1643,17 +1643,17 @@ impl CbindgenBuilder {
         // partial registry view, which is lent per call and so is a different
         // type each time; what it built is not, and outlives every one of them.
         let mut compiled =
-            Some(prebindgen_registry::recipe::Compiled::<crate::compile::CFrag>::default());
+            prebindgen_registry::recipe::Compiled::<crate::compile::CFrag>::default();
         let registry = declared
             .convert_with(|crossing, built, _emit| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     &recipes,
                     &bindings,
-                    compiled.take().expect("the state is put back every call"),
+                    std::mem::take(&mut compiled),
                 );
                 let conv = self.compile_crossing(&mut compiler, crossing, built);
-                compiled = Some(compiler.finish());
+                compiled = compiler.finish();
                 conv
             })?
             .build()?;

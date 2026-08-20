@@ -49,7 +49,7 @@ impl CbindgenBuilder {
         declared.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
         declared.dedup_by(|a, b| a.0 == b.0);
 
-        for (key, origin) in declared {
+        for (_key, origin) in declared {
             // The declarator's own tokens, re-parsed: a declared type may be
             // an alias the model holds as an `Extern`, which carries no reading
             // of its own to borrow.
@@ -59,7 +59,6 @@ impl CbindgenBuilder {
             let Ok(ty) = model.classify(&spelled) else {
                 continue;
             };
-            let _ = &key;
             // Every declared C shape is one row with no parts today, including
             // the two that plainly have some: `in_data_struct` walks a struct's
             // fields inside one generated function, and `in_tagged_union` walks
