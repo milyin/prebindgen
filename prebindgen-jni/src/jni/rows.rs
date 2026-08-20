@@ -13,6 +13,8 @@
 //! then a borrow, then a transparent bridge — is a lookup for the declared
 //! half, and the derived half is the registry's.
 
+use std::collections::BTreeMap;
+
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
     recipe::{Constructing, Deconstructing, RecipeError, RecipeId, Recipes},
@@ -102,17 +104,22 @@ impl Declarations {
         // something says otherwise, and this is JniGen saying otherwise for
         // every array the model holds. Nothing is enumerated twice: a row for
         // a crossing nobody uses is inert.
-        let mut arrays: Vec<TypeRef> = model
+        // Keyed by identity in a `BTreeMap`, so each array type is keyed once
+        // and the declaration order is the key order — no sort, no second pass
+        // rebuilding a key it already has, and nothing cloned before the entry
+        // turns out to be new.
+        let mut arrays: BTreeMap<TypeKey, &TypeRef> = BTreeMap::new();
+        for ty in model
             .elements()
             .flat_map(element_types)
-            .flat_map(|ty| ty.walk().into_iter().cloned().collect::<Vec<_>>())
+            .flat_map(|ty| ty.walk())
             .filter(|ty| matches!(ty.kind(), prebindgen_registry::flat::TypeKind::Array { .. }))
-            .collect();
-        arrays.sort_by_key(|ty| ty.key().as_str().to_owned());
-        arrays.dedup_by_key(|ty| ty.key().as_str().to_owned());
-        for ty in arrays {
+        {
+            arrays.entry(ty.key()).or_insert(ty);
+        }
+        for ty in arrays.into_values() {
             rows.declare(ty.clone(), whole(), Deconstructing::Atomic)
-                .declare(ty, whole(), Constructing::Atomic);
+                .declare(ty.clone(), whole(), Constructing::Atomic);
         }
 
         rows.build(model)
