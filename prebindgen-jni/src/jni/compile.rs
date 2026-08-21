@@ -348,7 +348,7 @@ impl OutWire {
     /// call — so it is cloned out of the value that holds it.
     ///
     /// The last step being a field read is the whole question, and it is what
-    /// `LeafSource::Field` meant: a value form's field leaf reads a field off
+    /// `LeafSource::Reach` meant: a value form's field leaf reads a field off
     /// what the accessor returned, and an accessor leaf ends at the call.
     pub(crate) fn is_field_read(&self) -> bool {
         matches!(

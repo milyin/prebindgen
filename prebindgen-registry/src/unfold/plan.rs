@@ -176,19 +176,17 @@ pub fn steps_are_movable(steps: &[PathStep]) -> bool {
 /// How a leaf's [`UnfoldLeaf::path`] is reached from the decomposed value.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub enum LeafSource {
-    /// The path is a chain of `#[prebindgen]` **accessor functions**:
-    /// `source_module::f(&value)`, composing nested accessors. Nesting steps
-    /// that return `Option` make the leaf nullable. This is the form produced
-    /// by `.deconstructor_record*` / `.fun_accessor` declarations.
+    /// The value is **reached off** the decomposed value: an accessor chain, a
+    /// field chain, or the two mixed, which is what
+    /// [`UnfoldLeaf::path`] spells.
+    ///
+    /// One variant rather than two. `Accessor` and `Field` were separate while
+    /// an adapter branched on which it was; none does — the difference is
+    /// whether the path ENDS in a field read, which the path itself says. Two
+    /// spellings of one fact are two things to keep in step, and this is the
+    /// one that had no reader left.
     #[default]
-    Accessor,
-    /// The path is a chain of **struct field idents** reached by field access
-    /// and cloned: `value.a.b.clone()`. Produced by the synthesized
-    /// decomposition of a by-value `data_class` (see
-    /// [`ValueDecon`](crate::unfold::ValueDecon)); the value's own
-    /// fields cross as decoupled leaves and the foreign side reassembles the
-    /// object (so no Java object is built on the Rust side).
-    Field,
+    Reach,
     /// The **synthesized selector** of a decomposed sum: an `i32` naming which
     /// alternative is live. It is not read off the value at all — the emitter
     /// assigns it per `match` arm — so it has no path. Emitted once, ahead of
@@ -205,14 +203,14 @@ pub enum LeafSource {
     /// — never from an adapter composing one out of a name.
     SumTag,
     /// A payload field of ONE alternative of a decomposed sum, reached through
-    /// a **variant pattern** rather than an accessor chain or a field chain:
-    /// the emitter binds `member` inside `variant`'s `match` arm. The leaf is
-    /// live only when [`UnfoldLeaf::group`] equals the value's tag; in every
-    /// other arm its slot carries the wire default.
+    /// a **variant pattern** rather than a path: the emitter binds `member`
+    /// inside `variant`'s `match` arm. The leaf is live only when
+    /// [`UnfoldLeaf::group`] equals the value's tag; in every other arm its
+    /// slot carries the wire default.
     ///
-    /// This is the selector [`Accessor`](Self::Accessor) and
-    /// [`Field`](Self::Field) deliberately lack — both are deterministic
-    /// products, every record contributing unconditionally.
+    /// This is the selector [`Reach`](Self::Reach) deliberately lacks — a
+    /// reached value is a deterministic product, every one of them
+    /// contributing unconditionally.
     VariantField {
         /// The variant's ident as declared in the source enum.
         variant: syn::Ident,

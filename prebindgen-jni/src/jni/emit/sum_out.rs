@@ -63,7 +63,7 @@ pub(crate) fn synth_sum_leaves(
                         member,
                     }
                 }
-                crate::jni::compile::OutFrom::Place => LeafSource::Field,
+                crate::jni::compile::OutFrom::Place => LeafSource::Reach,
             },
             group: w.group,
         })
