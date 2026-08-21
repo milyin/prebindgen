@@ -890,7 +890,7 @@ fn subject_package(ext: &Declarations, subject: &prebindgen_registry::flat::Type
 /// [`plan_leaf_names`], typed + raw views per leaf.
 fn plan_leaf_params(
     ext: &Declarations,
-    leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
+    leaves: &[crate::jni::compile::OutWire],
 ) -> Option<Vec<IfaceParam>> {
     // Decomposition leaf names are author-supplied, literal, and unique by
     // construction (enforced in `core::unfold`) — no dedup/casing here.
@@ -910,14 +910,13 @@ fn plan_leaf_params(
 fn plan_leaf_param(
     ext: &Declarations,
     name: String,
-    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
+    leaf: &crate::jni::compile::OutWire,
 ) -> Option<IfaceParam> {
-    use prebindgen_registry::unfold::LeafSource;
     // The sum selector has no converter behind it — it is a plain `Int` the
     // emitter assigns per `match` arm. Nullable when the sum sits under a
     // conditional value form: null is the absent case, which the tag's own
     // variants cannot express.
-    if leaf.source == LeafSource::SumTag {
+    if leaf.is_tag() {
         let ty = KtType::int();
         let ty = if leaf.nullable { ty.nullable() } else { ty };
         return Some(IfaceParam::same(name, ty));
@@ -1325,9 +1324,10 @@ fn fixed_reassembly(
             Vec::new(),
         );
     }
-    let params = plan_leaf_params(ext, leaves).unwrap_or_default();
+    let wires = crate::jni::compile::OutWire::from_leaves(leaves);
+    let params = plan_leaf_params(ext, &wires).unwrap_or_default();
     let mut imports: BTreeSet<String> = BTreeSet::new();
-    let (_, when) = ext.sum_reconstruct(registry, source, leaves, &params, &slots, &mut imports);
+    let (_, when) = ext.sum_reconstruct(registry, source, &wires, &params, &slots, &mut imports);
     (when, imports.into_iter().collect())
 }
 
@@ -1397,7 +1397,8 @@ pub(crate) fn callback_iface_spec(
             .get(&t.key())
             .filter(|p| !super::render::is_iterable_fold(&p.shape));
         if let Some(plan) = plan {
-            let leaf_names = plan_leaf_names(&plan.leaves);
+            let leaf_names =
+                plan_leaf_names(&crate::jni::compile::OutWire::from_leaves(&plan.leaves));
             for (n, l) in leaf_names.iter().zip(plan.leaves.iter()) {
                 leaf_tys.push(LeafDesc::Plan(n.clone(), l.clone()));
             }
@@ -1516,7 +1517,9 @@ pub(crate) fn callback_iface_spec(
     for (k, desc) in leaf_tys.iter().enumerate() {
         let name = names[k].clone();
         let param = match desc {
-            LeafDesc::Plan(_, leaf) => plan_leaf_param(ext, name, leaf)?,
+            LeafDesc::Plan(_, leaf) => {
+                plan_leaf_param(ext, name, &crate::jni::compile::OutWire::from_leaf(leaf))?
+            }
             LeafDesc::Whole {
                 ty,
                 nullable,
@@ -1587,7 +1590,10 @@ pub(crate) fn builder_iface_spec(
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans().get(decon)?;
-    let params = plan_leaf_params(ext, &spec.leaves)?;
+    let params = plan_leaf_params(
+        ext,
+        &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
+    )?;
     let name = format!(
         "{}Builder",
         decon_base_name(&subject_short(&spec.source), Some(decon))
@@ -1614,7 +1620,10 @@ pub(crate) fn folder_iface_spec(
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans().get(decon)?;
     let mut params: Vec<IfaceParam> = vec![IfaceParam::same("acc".to_string(), KtType::var_("A"))];
-    params.extend(plan_leaf_params(ext, &spec.leaves)?);
+    params.extend(plan_leaf_params(
+        ext,
+        &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
+    )?);
     let name = format!(
         "{}Folder",
         decon_base_name(&subject_short(&spec.source), Some(decon))
@@ -1746,7 +1755,10 @@ pub(crate) fn error_handler_iface_spec(
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans().get(decon)?;
-    let params: Vec<IfaceParam> = plan_leaf_params(ext, &spec.leaves)?;
+    let params: Vec<IfaceParam> = plan_leaf_params(
+        ext,
+        &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
+    )?;
     let name = format!(
         "{}Handler",
         decon_base_name(&subject_short(&spec.source), Some(decon))
