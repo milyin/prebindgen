@@ -23,7 +23,7 @@
 
 use kotlin_codegen::{KtCode, KtDecl, KtFun, KtFunInterface, KtFunSig, KtParam, KtType, KtVis};
 use prebindgen_registry::{
-    unfold::{dedup_names, DeconId, LeafSource, UnfoldPlan},
+    unfold::{dedup_names, DeconId, UnfoldPlan},
     Conversions,
 };
 
@@ -1396,13 +1396,10 @@ pub(crate) fn callback_iface_spec(
             .get(&t.key())
             .filter(|p| !super::render::is_iterable_fold(&p.shape));
         if let Some(plan) = plan {
-            let leaf_names =
-                plan_leaf_names(&crate::jni::compile::OutWire::from_leaves(&plan.leaves));
-            for (n, l) in leaf_names.iter().zip(plan.leaves.iter()) {
-                leaf_tys.push(LeafDesc::Plan(
-                    n.clone(),
-                    crate::jni::compile::OutWire::from_leaf(l),
-                ));
+            let wires = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
+            let leaf_names = plan_leaf_names(&wires);
+            for (n, l) in leaf_names.iter().zip(wires.iter()) {
+                leaf_tys.push(LeafDesc::Plan(n.clone(), l.clone()));
             }
             if plan.fixed_builder {
                 any_fixed = true;
@@ -1410,19 +1407,14 @@ pub(crate) fn callback_iface_spec(
                 // answer to "is this a borrow", not a syn match.
                 let core = t.borrow_target().unwrap_or(t);
                 let fqn = ext.kotlin_fqn(&core.key())?;
-                let (reassemble, imports) = fixed_reassembly(
-                    ext,
-                    registry,
-                    &core.key(),
-                    &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
-                    &fqn,
-                );
+                let (reassemble, imports) =
+                    fixed_reassembly(ext, registry, &core.key(), &wires, &fqn);
                 groups.push(GroupDesc {
                     name: whole_value_name(t, i),
                     typed: Some(KtType::cls(fqn.to_string())),
                     reassemble: Some(reassemble),
                     imports,
-                    leaf_count: plan.leaves.len(),
+                    leaf_count: wires.len(),
                     close: crate::jni::struct_plan::type_close_strategy(ext, registry, core, 0),
                 });
             } else {
@@ -1433,24 +1425,27 @@ pub(crate) fn callback_iface_spec(
                 // `when` over the tag. Handing those slots over raw would defeat
                 // the `sealed_class!` the sum was declared as.
                 let mut k = 0usize;
-                while k < plan.leaves.len() {
-                    let leaf = &plan.leaves[k];
-                    let seg = if leaf.source == LeafSource::SumTag {
-                        (k + 1..plan.leaves.len())
-                            .take_while(|&j| plan.leaves[j].group.is_some())
+                while k < wires.len() {
+                    let leaf = &wires[k];
+                    // A sum's segment is its selector and every slot that
+                    // follows carrying a group — the same span
+                    // `encode_plan_leaves` walks, asked the same way.
+                    let seg = if leaf.is_tag() {
+                        (k + 1..wires.len())
+                            .take_while(|&j| wires[j].group.is_some())
                             .last()
                             .map_or(k + 1, |j| j + 1)
                     } else {
                         k + 1
                     };
-                    if leaf.source == LeafSource::SumTag {
+                    if leaf.is_tag() {
                         any_fixed = true;
                         let fqn = ext.kotlin_fqn(&leaf.out_ty.key())?;
                         let (reassemble, imports) = fixed_reassembly(
                             ext,
                             registry,
                             &leaf.out_ty.key(),
-                            &crate::jni::compile::OutWire::from_leaves(&plan.leaves[k..seg]),
+                            &wires[k..seg],
                             &fqn,
                         );
                         groups.push(GroupDesc {
