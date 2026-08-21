@@ -306,10 +306,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         self.wrap(at, "no C representation for this run", conv)
     }
 
-    fn identity(&mut self, _cx: &mut Cx<'_>, at: At<'_>, _inner: &CFrag) -> Frag<Self> {
-        Err(refuse(at, "Cbindgen declares no identity rows"))
-    }
-
     fn construct(
         &mut self,
         _cx: &mut Cx<'_>,

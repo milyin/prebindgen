@@ -932,11 +932,6 @@ impl Compile for Recorder {
         self.hook(at, "construct", detail)
     }
 
-    fn identity(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
-        let detail = inner.text.clone();
-        self.hook(at, "identity", detail)
-    }
-
     fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
         let detail = part_names::<Self>(parts);
         self.hook(at, "fields", detail)
@@ -969,12 +964,11 @@ impl Compile for Recorder {
 
     fn callback(
         &mut self,
-        cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_>,
         at: At<'_>,
         args: &[&Note],
         result: Option<&Note>,
     ) -> Frag<Self> {
-        cx.require(RequirementId::new("callback-shim"));
         let detail = format!(
             "({}) -> {:?}",
             args.iter()
@@ -1516,13 +1510,6 @@ fn a_callbacks_arguments_do_the_other_job() {
         adapter.calls
     );
     assert!(adapter.calls[1].contains("callback"), "{:?}", adapter.calls);
-    assert_eq!(
-        compiler
-            .required()
-            .map(|r| r.to_string())
-            .collect::<Vec<_>>(),
-        vec!["callback-shim".to_string()]
-    );
 }
 
 #[test]
@@ -1964,9 +1951,6 @@ fn what_a_role_tolerates_is_the_adapters_own_answer() {
             args: Parts<'_, Self>,
         ) -> Frag<Self> {
             self.0.construct(cx, at, func, args)
-        }
-        fn identity(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
-            self.0.identity(cx, at, inner)
         }
         fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
             self.0.fields(cx, at, parts)

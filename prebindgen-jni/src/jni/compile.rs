@@ -378,10 +378,6 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         self.wrap(at, "no JNI representation for this run", conv)
     }
 
-    fn identity(&mut self, _cx: &mut Cx<'_>, at: At<'_>, _inner: &JFrag) -> Frag<Self> {
-        Err(refuse(at, "JniGen declares no identity rows"))
-    }
-
     fn construct(
         &mut self,
         _cx: &mut Cx<'_>,

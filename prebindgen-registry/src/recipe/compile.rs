@@ -27,11 +27,7 @@
 //! one, and rebuilding a `Box` are three different pieces of Rust. Sharing the
 //! row is the declaration's business; sharing the code is not.
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    fmt,
-    rc::Rc,
-};
+use std::{collections::HashMap, fmt, rc::Rc};
 
 use super::{
     Assembly, Bindings, Bound, Construct, Crossing, Deconstruct, Mode, Reach, RecipeError,
@@ -97,37 +93,12 @@ pub struct At<'a> {
     pub recipe: &'a RecipeId,
 }
 
-/// An adapter-minted name for a helper the generated prelude must carry.
-///
-/// The registry only de-duplicates these; what one names is the adapter's.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RequirementId(String);
-
-impl RequirementId {
-    /// Name one helper.
-    pub fn new(name: impl Into<String>) -> Self {
-        Self(name.into())
-    }
-
-    /// The name as written.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for RequirementId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
 /// What every hook receives: the read-only view of the model and the table,
 /// plus the one thing a hook may ask the registry to record.
 pub struct Cx<'a> {
     model: &'a Flat,
     recipes: &'a Recipes,
     emit: &'a Emit,
-    required: &'a mut BTreeSet<RequirementId>,
 }
 
 impl Cx<'_> {
@@ -156,11 +127,6 @@ impl Cx<'_> {
     /// row.
     pub fn rows(&self, crossing: &Crossing) -> Vec<&RecipeId> {
         self.recipes.rows(&crossing.key())
-    }
-
-    /// A helper the compiled fragment calls, so the generated prelude emits it.
-    pub fn require(&mut self, req: RequirementId) {
-        self.required.insert(req);
     }
 }
 
@@ -253,9 +219,6 @@ pub trait Compile {
         func: &Function,
         args: Parts<'_, Self>,
     ) -> Frag<Self>;
-
-    /// The single part is the value.
-    fn identity(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &Self::Fragment) -> Frag<Self>;
 
     /// Read the parts off the value where it stands.
     fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self>;
@@ -371,7 +334,6 @@ pub struct Compiled<F> {
     /// so [`Compiled::fragment`] can give back that same answer instead of
     /// choosing between the rows a crossing happens to have.
     defaults: HashMap<(TypeKey, Assembly), RecipeId>,
-    required: BTreeSet<RequirementId>,
 }
 
 /// What a fragment is memoised under: the type **as the site spelled it**, the
@@ -384,7 +346,6 @@ impl<F> Default for Compiled<F> {
         Self {
             fragments: HashMap::new(),
             defaults: HashMap::new(),
-            required: BTreeSet::new(),
         }
     }
 }
@@ -396,7 +357,6 @@ impl<F> Clone for Compiled<F> {
         Self {
             fragments: self.fragments.clone(),
             defaults: self.defaults.clone(),
-            required: self.required.clone(),
         }
     }
 }
@@ -411,11 +371,6 @@ impl<F> Compiled<F> {
     /// Whether nothing has been compiled yet.
     pub fn is_empty(&self) -> bool {
         self.fragments.is_empty()
-    }
-
-    /// Every helper a compiled fragment asked for, de-duplicated.
-    pub fn required(&self) -> impl Iterator<Item = &RequirementId> {
-        self.required.iter()
     }
 
     /// The fragment for one crossing, compiled **as a whole**.
@@ -512,11 +467,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
         self.compiled
     }
 
-    /// Every helper a compiled fragment asked for, de-duplicated.
-    pub fn required(&self) -> impl Iterator<Item = &RequirementId> {
-        self.compiled.required.iter()
-    }
-
     /// How many fragments have been built, which is what makes the
     /// per-crossing promise observable.
     pub fn compiled_fragments(&self) -> usize {
@@ -551,7 +501,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.compiled.required,
         };
         adapter
             .plan(&mut cx, &bound, &root)
@@ -862,14 +811,9 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.compiled.required,
         };
         match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
-            ProductKind::Identity => {
-                let (_, inner) = &paired[0];
-                adapter.identity(&mut cx, at, inner)
-            }
             ProductKind::Fields => adapter.fields(&mut cx, at, &paired),
             ProductKind::ValueForm(func) => adapter.value_form(&mut cx, at, func, &paired),
         }
@@ -887,7 +831,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.compiled.required,
         };
         adapter
             .choice(&mut cx, at, &paired)
@@ -901,7 +844,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.compiled.required,
         }
     }
 
@@ -929,15 +871,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     .collect();
                 Ok((ProductKind::Fields, parts))
             }
-            Construct::Identity(inner) => Ok((
-                ProductKind::Identity,
-                vec![Part {
-                    from: PartSource::Argument { index: 0 },
-                    mode: mode_of(inner),
-                    ty: (**inner).clone(),
-                    name: "value".to_owned(),
-                }],
-            )),
             Construct::Call(name) => {
                 let func = self.function(at, name)?;
                 let parts = func
@@ -1095,7 +1028,6 @@ fn field_name(field: &Field, index: usize) -> String {
 /// Which of the four product hooks composes a set of parts.
 enum ProductKind<'a> {
     Construct(&'a Function),
-    Identity,
     Fields,
     ValueForm(&'a Function),
 }
