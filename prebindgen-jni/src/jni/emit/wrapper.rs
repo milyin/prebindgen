@@ -342,7 +342,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         let (ze_stmts, ze_args) = encode_plan_leaves(
             ext,
             registry,
-            ep,
+            crate::jni::emit::Delivered::of(ep),
             &eze_idents,
             &quote!(__de),
             &ze_fail,
