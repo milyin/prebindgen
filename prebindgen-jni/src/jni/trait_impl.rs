@@ -1425,15 +1425,15 @@ impl JniGenBuilder {
         })?;
         // A `data_class` field that is itself one takes the `parts` row rather
         // than its own default — see `Declarations::bindings`.
-        let bindings = decls.bindings(&model, &recipes).map_err(|errors| {
-            prebindgen_registry::ScanError::AdapterInvariant {
+        let bindings = decls
+            .bindings(&model, &declared, &recipes)
+            .map_err(|errors| prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors
                     .iter()
                     .map(|e| e.to_string())
                     .collect::<Vec<_>>()
                     .join("; "),
-            }
-        })?;
+            })?;
         // Both tables go on `decls`, because compiling a **site** happens after
         // this function has returned: the sites are `fn_plan`'s to enumerate,
         // and `Compiler::resume` needs these two beside the model.
