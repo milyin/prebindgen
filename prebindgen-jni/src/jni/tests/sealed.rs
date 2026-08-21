@@ -2575,7 +2575,7 @@ fn a_data_class_states_what_it_hands_out() {
 /// A decomposed return is a **site** asking for its type's `parts` row, and it
 /// composes to what the expansion plan delivers.
 ///
-/// The registry needed nothing new to express this: `Ask::Recipe` already lets
+/// The registry needed nothing new to express this: `Ask::Row` already lets
 /// a site name a row, and a `parts` fragment already occupies several wires.
 /// The two facts stages 3 and 4 established, meeting.
 #[test]

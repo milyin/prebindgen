@@ -8,7 +8,7 @@
 
 use prebindgen_registry::{
     flat::{Alternative, Function, TypeKind, TypeRef},
-    recipe::{Assembly, At, Bound, Carrier, Compile, Cx, Frag, Mode, Part, Parts, Validity, Yield},
+    row::{Assembly, At, Bound, Carrier, Compile, Cx, Frag, Mode, Part, Parts, Validity, Yield},
     Conversions,
 };
 
@@ -1838,7 +1838,7 @@ fn field_step(ident: &syn::Ident) -> prebindgen_registry::unfold::PathStep {
 /// The model field one part reads, or `None` for a part that is not a field.
 fn part_field<'a>(part: &Part<'a>) -> Option<&'a prebindgen_registry::flat::Field> {
     match part.from {
-        prebindgen_registry::recipe::PartSource::Field { field, .. } => Some(field),
+        prebindgen_registry::row::PartSource::Field { field, .. } => Some(field),
         _ => None,
     }
 }

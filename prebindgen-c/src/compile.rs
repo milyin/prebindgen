@@ -12,7 +12,7 @@
 
 use prebindgen_registry::{
     flat::{Alternative, Function},
-    recipe::{At, Carrier, Compile, Cx, Frag, Mode, Parts, Role, Validity, Yield},
+    row::{At, Carrier, Compile, Cx, Frag, Mode, Parts, Role, Validity, Yield},
 };
 
 use super::*;

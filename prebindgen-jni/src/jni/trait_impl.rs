@@ -1454,7 +1454,7 @@ impl JniGenBuilder {
         let mut refusals: Vec<String> = Vec::new();
         let registry = declared
             .convert_with(|crossing, built, emit| {
-                let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+                let mut compiler = prebindgen_registry::row::Compiler::resume(
                     &model,
                     decls.recipe_table(),
                     decls.site_bindings(),
@@ -1474,10 +1474,10 @@ impl JniGenBuilder {
                     decls.compiled.borrow_mut().record(
                         key.clone(),
                         match dir {
-                            Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
-                            Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
+                            Direction::Input => prebindgen_registry::row::Assembly::Construct,
+                            Direction::Output => prebindgen_registry::row::Assembly::Deconstruct,
                         },
-                        prebindgen_registry::recipe::RecipeId::new("callback"),
+                        prebindgen_registry::row::RowId::new("callback"),
                         crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
                     );
                 }
@@ -1566,9 +1566,9 @@ impl JniGenBuilder {
             if part_types.iter().any(|ty| decls.out_frag(ty).is_none()) {
                 continue;
             }
-            let crossing = prebindgen_registry::recipe::Crossing::new(
+            let crossing = prebindgen_registry::row::Crossing::new(
                 ty,
-                prebindgen_registry::recipe::Assembly::Deconstruct,
+                prebindgen_registry::row::Assembly::Deconstruct,
             );
             // A type with nothing to hand out states no `parts` row — an empty
             // struct, or an enum with no alternatives. Asking for one by name
@@ -1581,7 +1581,7 @@ impl JniGenBuilder {
             {
                 continue;
             }
-            let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+            let mut compiler = prebindgen_registry::row::Compiler::resume(
                 &model,
                 decls.recipe_table(),
                 decls.site_bindings(),
@@ -1632,10 +1632,7 @@ impl Declarations {
 
     fn compile_crossing<'v, R: Conversions>(
         &'v self,
-        compiler: &mut prebindgen_registry::recipe::Compiler<
-            '_,
-            crate::jni::compile::JCompile<'v, R>,
-        >,
+        compiler: &mut prebindgen_registry::row::Compiler<'_, crate::jni::compile::JCompile<'v, R>>,
         crossing: &Crossing,
         built: &'v R,
         emit: &prebindgen_registry::Emit,
@@ -1661,8 +1658,8 @@ impl Declarations {
             }
         }
         let assembly = match dir {
-            Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
-            Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
+            Direction::Input => prebindgen_registry::row::Assembly::Construct,
+            Direction::Output => prebindgen_registry::row::Assembly::Deconstruct,
         };
         let mut adapter = crate::jni::compile::JCompile {
             decls: self,
@@ -1670,7 +1667,7 @@ impl Declarations {
             declared_return: None,
             site: None,
         };
-        let crossing = prebindgen_registry::recipe::Crossing::new(reading, assembly);
+        let crossing = prebindgen_registry::row::Crossing::new(reading, assembly);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
         // A `data_class` also states a row that says what it is made of, and
         // compiling it here is what holds the composition to every binding this
@@ -1685,7 +1682,7 @@ impl Declarations {
         // where it was declared. `row_of` refuses an absent name rather than
         // answering with the default, which is what makes that condition the
         // one that has to match.
-        if assembly == prebindgen_registry::recipe::Assembly::Construct
+        if assembly == prebindgen_registry::row::Assembly::Construct
             && matches!(
                 self.types
                     .get(&crossing.value().stripped_key())
@@ -3288,12 +3285,12 @@ impl Declarations {
             .collect()
     }
     /// The row table this binding was built against.
-    pub(crate) fn recipe_table(&self) -> &prebindgen_registry::recipe::Recipes {
+    pub(crate) fn recipe_table(&self) -> &prebindgen_registry::row::Rows {
         &self.tables.as_ref().expect("built").recipes
     }
 
     /// Which row each site takes.
-    pub(crate) fn site_bindings(&self) -> &prebindgen_registry::recipe::Bindings {
+    pub(crate) fn site_bindings(&self) -> &prebindgen_registry::row::Bindings {
         &self.tables.as_ref().expect("built").bindings
     }
 

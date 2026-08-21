@@ -234,8 +234,8 @@ pub(crate) enum DeclaredKind {
 /// What compiling a site needs beyond the model: which rows exist, and which
 /// row each site takes.
 pub(crate) struct Tables {
-    pub(crate) recipes: prebindgen_registry::recipe::Recipes,
-    pub(crate) bindings: prebindgen_registry::recipe::Bindings,
+    pub(crate) recipes: prebindgen_registry::row::Rows,
+    pub(crate) bindings: prebindgen_registry::row::Bindings,
 }
 
 /// All configuration the structured builder accumulates for one
@@ -553,7 +553,7 @@ impl JniGen {
     /// that compares — a `TypeRef` has no equality and a `syn::Member` prints
     /// differently by variant, so both sides go through the same rendering.
     pub(crate) fn out_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
-        use prebindgen_registry::recipe::Assembly;
+        use prebindgen_registry::row::Assembly;
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let ty: syn::Type = syn::parse_quote!(#ident);
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
@@ -683,7 +683,7 @@ impl JniGen {
     /// and `Compiled::row_fragment` must then answer `None` rather than hand
     /// back whatever the crossing compiled by default.
     pub(crate) fn has_parts_row_for_test(&self, short: &str, out: bool) -> bool {
-        use prebindgen_registry::recipe::Assembly;
+        use prebindgen_registry::row::Assembly;
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let assembly = match out {
             true => Assembly::Deconstruct,
@@ -705,7 +705,7 @@ impl JniGen {
         &self,
         spelling: &str,
     ) -> Option<Vec<crate::jni::compile::Wire>> {
-        use prebindgen_registry::recipe::Assembly;
+        use prebindgen_registry::row::Assembly;
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let key = reading.key();
@@ -864,7 +864,7 @@ pub struct Declarations {
     /// order that filled the converter table, so a fragment is there exactly
     /// when a table entry would have been.
     pub(crate) compiled: std::rc::Rc<
-        std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>>,
+        std::cell::RefCell<prebindgen_registry::row::Compiled<crate::jni::compile::JFrag>>,
     >,
     /// The row table and the site bindings this binding was built against.
     ///

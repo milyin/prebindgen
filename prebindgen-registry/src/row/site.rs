@@ -1,6 +1,6 @@
 //! Which row a given place in the generated API uses.
 //!
-//! [`Recipes`] says what rows a crossing has; this says which of them the
+//! [`Rows`] says what rows a crossing has; this says which of them the
 //! second parameter of `z_put`, or the `Err` arm of a return, or one part of
 //! another row actually takes. A declaration states that through
 //! [`BindingsBuilder::bind`], and [`Bindings::resolve`] answers it for one
@@ -14,7 +14,7 @@ use std::{
     fmt,
 };
 
-use super::{Crossing, CrossingKey, RecipeError, RecipeId, Recipes};
+use super::{Crossing, CrossingKey, RowError, RowId, Rows};
 
 /// One place in the generated API where a value crosses.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -34,7 +34,7 @@ impl Site {
     /// found by this key or not at all. Its `owner` is derived from the crossed
     /// type rather than chosen, so composing one by hand is a guess — this is
     /// the answer instead.
-    pub fn part(of: &Crossing, recipe: &RecipeId, index: usize) -> Self {
+    pub fn part(of: &Crossing, recipe: &RowId, index: usize) -> Self {
         Self::arm_part(of, recipe, None, index)
     }
 
@@ -43,7 +43,7 @@ impl Site {
     /// [`Self::part`] with the alternative stated. A part of a
     /// [`Shape::Choice`](super::Shape::Choice) row needs it, because every arm
     /// numbers its parts from zero.
-    pub fn arm_part(of: &Crossing, recipe: &RecipeId, arm: Option<usize>, index: usize) -> Self {
+    pub fn arm_part(of: &Crossing, recipe: &RowId, arm: Option<usize>, index: usize) -> Self {
         Self {
             owner: of
                 .value()
@@ -108,7 +108,7 @@ pub enum Role {
         /// The crossing whose row names this part.
         of: CrossingKey,
         /// Which of that crossing's rows.
-        recipe: RecipeId,
+        recipe: RowId,
         /// Which alternative, for a part inside a [`Shape::Choice`](super::Shape::Choice)
         /// arm; `None` for a product's own part.
         ///
@@ -155,7 +155,7 @@ pub enum Ask {
     /// The crossing's default row.
     Default,
     /// This named row of the crossing.
-    Recipe(RecipeId),
+    Row(RowId),
     /// This site contributes nothing.
     Omit,
 }
@@ -198,7 +198,7 @@ pub struct Bound {
     /// What crosses, and which way.
     pub crossing: Crossing,
     /// Which of the crossing's rows this site takes.
-    pub recipe: RecipeId,
+    pub recipe: RowId,
     /// Which declaration won, so a diagnostic can say why this row applies.
     pub origin: Origin,
 }
@@ -255,12 +255,12 @@ impl BindingsBuilder {
     ///
     /// The one check here is that a site naming a row asks for one the crossing
     /// has. Whether a crossing with several rows says which of them is the
-    /// default is [`RecipesBuilder::build`](super::RecipesBuilder::build)'s.
-    pub fn build(self, recipes: &Recipes) -> Result<Bindings, Vec<RecipeError>> {
-        let mut errors: Vec<RecipeError> = self
+    /// default is [`RowsBuilder::build`](super::RowsBuilder::build)'s.
+    pub fn build(self, recipes: &Rows) -> Result<Bindings, Vec<RowError>> {
+        let mut errors: Vec<RowError> = self
             .conflicts
             .into_values()
-            .map(|(site, origin)| RecipeError::Rebound { site, origin })
+            .map(|(site, origin)| RowError::Rebound { site, origin })
             .collect();
         let mut bound = HashMap::new();
         for (site, binding) in self.asks {
@@ -271,9 +271,9 @@ impl BindingsBuilder {
                     continue;
                 }
                 Ask::Default => recipes.row(&binding.crossing).0,
-                Ask::Recipe(id) => {
+                Ask::Row(id) => {
                     if recipes.get(&key, id).is_none() {
-                        errors.push(RecipeError::UnknownRow {
+                        errors.push(RowError::UnknownRow {
                             site,
                             crossing: key,
                             recipe: id.clone(),
@@ -322,7 +322,7 @@ impl Bindings {
     /// bound takes its crossing's default row, attributed to
     /// [`Origin::Adapter`], so an adapter asks here for every site rather than
     /// checking first whether one was declared.
-    pub fn resolve(&self, site: &Site, crossing: &Crossing, recipes: &Recipes) -> Option<Bound> {
+    pub fn resolve(&self, site: &Site, crossing: &Crossing, recipes: &Rows) -> Option<Bound> {
         match self.bound.get(site) {
             Some(bound) => {
                 // A site is one place, so the crossing a caller asks with must

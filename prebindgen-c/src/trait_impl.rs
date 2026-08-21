@@ -1,4 +1,4 @@
-use prebindgen_registry::{recipe::Assembly, Building, Conversions, Crossing, RegistryBuilder};
+use prebindgen_registry::{row::Assembly, Building, Conversions, Crossing, RegistryBuilder};
 
 use super::{builder::callback_fn_type, *};
 
@@ -392,13 +392,13 @@ impl CbindgenBuilder {
     /// from the converter table, and moving that is a change of its own.
     fn check_sites<'v>(
         &'v self,
-        compiler: &mut prebindgen_registry::recipe::Compiler<
+        compiler: &mut prebindgen_registry::row::Compiler<
             '_,
             crate::compile::CCompile<'v, Registry>,
         >,
         registry: &'v Registry,
     ) -> Result<(), String> {
-        use prebindgen_registry::recipe::{Assembly, Crossing, Role, Site};
+        use prebindgen_registry::row::{Assembly, Crossing, Role, Site};
 
         let mut adapter = crate::compile::CCompile {
             gen: self,
@@ -458,10 +458,7 @@ impl CbindgenBuilder {
         &self,
         key: &TypeKey,
         registry: &impl Conversions,
-        parts: &[(
-            prebindgen_registry::recipe::Part<'_>,
-            &crate::compile::CFrag,
-        )],
+        parts: &[(prebindgen_registry::row::Part<'_>, &crate::compile::CFrag)],
     ) -> Option<String> {
         let variant = match registry.flat().declared_type(&key.ident()?)? {
             prebindgen_registry::flat::Type::Variant(v) => v,
@@ -1529,7 +1526,7 @@ impl CbindgenBuilder {
         // call, so it is cloned — a map of `Rc`s.
         let registry = declared
             .convert_with(|crossing, built, _emit| {
-                let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+                let mut compiler = prebindgen_registry::row::Compiler::resume(
                     &model,
                     &recipes,
                     &bindings,
@@ -1550,7 +1547,7 @@ impl CbindgenBuilder {
         // target's answer: see `CCompile::tolerates` for why C accepts a
         // borrowed return where the JVM must not.
         {
-            let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+            let mut compiler = prebindgen_registry::row::Compiler::resume(
                 &model,
                 &recipes,
                 &bindings,
@@ -1584,7 +1581,7 @@ impl CbindgenBuilder {
     /// crossing.
     fn compile_crossing<'v, R: Conversions>(
         &'v self,
-        compiler: &mut prebindgen_registry::recipe::Compiler<'_, crate::compile::CCompile<'v, R>>,
+        compiler: &mut prebindgen_registry::row::Compiler<'_, crate::compile::CCompile<'v, R>>,
         crossing: &Crossing,
         built: &'v R,
     ) -> Option<ConverterImpl> {
@@ -1600,7 +1597,7 @@ impl CbindgenBuilder {
             gen: self,
             registry: built,
         };
-        let crossing = prebindgen_registry::recipe::Crossing::new(ty, assembly);
+        let crossing = prebindgen_registry::row::Crossing::new(ty, assembly);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
         Some((*fragment).clone().into_converter())
     }

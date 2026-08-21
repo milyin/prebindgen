@@ -1,6 +1,6 @@
 //! Turning rows into whatever an adapter emits from.
 //!
-//! [`Recipes`] says how a value gets across in terms of its parts; an adapter
+//! [`Rows`] says how a value gets across in terms of its parts; an adapter
 //! says what that costs on the wire. Its answer for one row is a **fragment**,
 //! a type the adapter defines and this module never looks inside. A fragment is
 //! not a wire value: it may occupy none, one or several, and the count is never
@@ -30,8 +30,8 @@
 use std::{collections::HashMap, fmt, rc::Rc};
 
 use super::{
-    Assembly, Bindings, Bound, Construct, Crossing, Deconstruct, Mode, Reach, RecipeError,
-    RecipeId, Recipes, Role, Row, Shape, Site,
+    Assembly, Bindings, Bound, Construct, Crossing, Deconstruct, Mode, Reach, Role, Row, RowError,
+    RowId, Rows, Shape, Site,
 };
 use crate::{
     flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef},
@@ -90,7 +90,7 @@ pub struct At<'a> {
     /// The crossing the row answers.
     pub crossing: &'a Crossing,
     /// Which of that crossing's rows.
-    pub recipe: &'a RecipeId,
+    pub recipe: &'a RowId,
 }
 
 /// What every hook receives: a read-only view of the model and the table, and
@@ -101,7 +101,7 @@ pub struct At<'a> {
 /// [`Carrier::yields`].
 pub struct Cx<'a> {
     model: &'a Flat,
-    recipes: &'a Recipes,
+    recipes: &'a Rows,
     emit: &'a Emit,
 }
 
@@ -120,7 +120,7 @@ impl Cx<'_> {
     }
 
     /// The table, for asking about a crossing without demanding it.
-    pub fn recipes(&self) -> &Recipes {
+    pub fn recipes(&self) -> &Rows {
         self.recipes
     }
 
@@ -129,7 +129,7 @@ impl Cx<'_> {
     /// Demands nothing, so an adapter may ask about an alternative it will not
     /// take. Empty for a crossing nobody declared, which still has a derived
     /// row.
-    pub fn rows(&self, crossing: &Crossing) -> Vec<&RecipeId> {
+    pub fn rows(&self, crossing: &Crossing) -> Vec<&RowId> {
         self.recipes.rows(&crossing.key())
     }
 }
@@ -300,9 +300,9 @@ pub enum CompileError<E> {
     Adapter(E),
     /// The table and the model disagree with what a site asked for.
     ///
-    /// Boxed: a `RecipeError` names a site and a crossing, which makes it much
+    /// Boxed: a `RowError` names a site and a crossing, which makes it much
     /// the larger of the two variants, and this is the rare one.
-    Recipe(Box<RecipeError>),
+    Recipe(Box<RowError>),
 }
 
 impl<E: fmt::Display> fmt::Display for CompileError<E> {
@@ -316,8 +316,8 @@ impl<E: fmt::Display> fmt::Display for CompileError<E> {
 
 impl<E: fmt::Debug + fmt::Display> std::error::Error for CompileError<E> {}
 
-impl<E> From<RecipeError> for CompileError<E> {
-    fn from(e: RecipeError) -> Self {
+impl<E> From<RowError> for CompileError<E> {
+    fn from(e: RowError) -> Self {
         CompileError::Recipe(Box::new(e))
     }
 }
@@ -337,13 +337,13 @@ pub struct Compiled<F> {
     /// which is the only entry point that consults the crossing's default —
     /// so [`Compiled::fragment`] can give back that same answer instead of
     /// choosing between the rows a crossing happens to have.
-    defaults: HashMap<(TypeKey, Assembly), RecipeId>,
+    defaults: HashMap<(TypeKey, Assembly), RowId>,
 }
 
 /// What a fragment is memoised under: the type **as the site spelled it**, the
 /// job, and which row answered. See the module docs on why the spelling and not
 /// the row's own identity.
-type FragmentKey = (TypeKey, Assembly, RecipeId);
+type FragmentKey = (TypeKey, Assembly, RowId);
 
 impl<F> Default for Compiled<F> {
     fn default() -> Self {
@@ -404,7 +404,7 @@ impl<F> Compiled<F> {
     /// [`Self::fragment`] would have no answer to give. Recording it keeps the
     /// adapter's emitters on one lookup instead of a per-site fall-back to
     /// whatever else knows.
-    pub fn record(&mut self, ty: TypeKey, assembly: Assembly, row: RecipeId, fragment: F) {
+    pub fn record(&mut self, ty: TypeKey, assembly: Assembly, row: RowId, fragment: F) {
         self.fragments.insert(
             (ty.clone(), assembly, row.clone()),
             std::rc::Rc::new(fragment),
@@ -413,7 +413,7 @@ impl<F> Compiled<F> {
     }
 
     /// The fragment for one crossing and one named row.
-    pub fn row_fragment(&self, ty: &TypeKey, assembly: Assembly, row: &RecipeId) -> Option<Rc<F>> {
+    pub fn row_fragment(&self, ty: &TypeKey, assembly: Assembly, row: &RowId) -> Option<Rc<F>> {
         self.fragments
             .get(&(ty.clone(), assembly, row.clone()))
             .cloned()
@@ -438,7 +438,7 @@ impl<F> Compiled<F> {
 /// Drives an adapter over the table: one fragment per row, one plan per site.
 pub struct Compiler<'a, C: Compile> {
     model: &'a Flat,
-    recipes: &'a Recipes,
+    recipes: &'a Rows,
     bindings: &'a Bindings,
     compiled: Compiled<C::Fragment>,
     emit: Emit,
@@ -446,14 +446,14 @@ pub struct Compiler<'a, C: Compile> {
 
 impl<'a, C: Compile> Compiler<'a, C> {
     /// Drive `adapter` over this table.
-    pub fn new(model: &'a Flat, recipes: &'a Recipes, bindings: &'a Bindings) -> Self {
+    pub fn new(model: &'a Flat, recipes: &'a Rows, bindings: &'a Bindings) -> Self {
         Self::resume(model, recipes, bindings, Compiled::default())
     }
 
     /// [`Self::new`], carrying on from what an earlier run built.
     pub fn resume(
         model: &'a Flat,
-        recipes: &'a Recipes,
+        recipes: &'a Rows,
         bindings: &'a Bindings,
         compiled: Compiled<C::Fragment>,
     ) -> Self {
@@ -494,7 +494,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let needed = adapter.tolerates(&bound.site.role);
         let got = root.yields().validity;
         if !got.satisfies(needed) {
-            return Err(RecipeError::Validity {
+            return Err(RowError::Validity {
                 site: bound.site,
                 needed,
                 got,
@@ -536,7 +536,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
     /// So a caller can ask whether a crossing has a row before compiling it by
     /// name — the check [`Self::row_of`] enforces, available ahead of the
     /// error rather than only through it.
-    pub fn recipes(&self) -> &Recipes {
+    pub fn recipes(&self) -> &Rows {
         self.recipes
     }
 
@@ -561,10 +561,10 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         crossing: &Crossing,
-        recipe: &RecipeId,
+        recipe: &RowId,
     ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
         if self.recipes.get(&crossing.key(), recipe).is_none() {
-            return Err(RecipeError::NoSuchRow {
+            return Err(RowError::NoSuchRow {
                 crossing: crossing.key(),
                 recipe: recipe.clone(),
             }
@@ -574,7 +574,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
     }
 
     /// The fragment for one row, built once and reused.
-    fn row(&mut self, adapter: &mut C, crossing: &Crossing, recipe: &RecipeId) -> Built<C> {
+    fn row(&mut self, adapter: &mut C, crossing: &Crossing, recipe: &RowId) -> Built<C> {
         // Keyed by the spelling, not by the row's identity: one row can answer
         // for `T`, `&T` and `Box<T>`, and each of the three needs its own Rust.
         let key = (
@@ -591,7 +591,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
         };
         let at = At { crossing, recipe };
         let fragment = match &row {
-            Row::Callback(assembly) => self.callback(adapter, at, *assembly)?,
             Row::Constructing(shape) => self.constructing(adapter, at, shape)?,
             Row::Deconstructing(shape) => self.deconstructing(adapter, at, shape)?,
         };
@@ -646,10 +645,10 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let crossing = Crossing::new(ty.clone(), assembly);
         let site = Site::arm_part(at.crossing, at.recipe, arm, index);
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
-            return Err(RecipeError::UnknownRow {
+            return Err(RowError::UnknownRow {
                 site,
                 crossing: crossing.key(),
-                recipe: super::RecipeId::new("<omitted>"),
+                recipe: super::RowId::new("<omitted>"),
             }
             .into());
         };
@@ -661,7 +660,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let produced = fragment.yields();
         let expected = part_key(ty);
         if produced.ty != expected {
-            return Err(RecipeError::ComposedType {
+            return Err(RowError::ComposedType {
                 site,
                 part: index,
                 wanted: expected,
@@ -670,7 +669,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             .into());
         }
         if !produced.mode.satisfies(wanted) {
-            return Err(RecipeError::Composition {
+            return Err(RowError::Composition {
                 site,
                 part: index,
                 wanted,
@@ -689,8 +688,9 @@ impl<'a, C: Compile> Compiler<'a, C> {
     ) -> Result<C::Fragment, CompileError<C::Error>> {
         match shape {
             Shape::Atomic => self.atomic(adapter, at),
-            Shape::Optional { inner } => self.optional(adapter, at, inner),
-            Shape::Sequence { inner } => self.sequence(adapter, at, inner),
+            Shape::Optional => self.optional(adapter, at),
+            Shape::Sequence => self.sequence(adapter, at),
+            Shape::Invoke => self.invoke(adapter, at),
             Shape::Product(op) => {
                 let (kind, parts) = self.construct_parts(at, op, None)?;
                 self.product(adapter, at, None, kind, parts)
@@ -717,8 +717,9 @@ impl<'a, C: Compile> Compiler<'a, C> {
     ) -> Result<C::Fragment, CompileError<C::Error>> {
         match shape {
             Shape::Atomic => self.atomic(adapter, at),
-            Shape::Optional { inner } => self.optional(adapter, at, inner),
-            Shape::Sequence { inner } => self.sequence(adapter, at, inner),
+            Shape::Optional => self.optional(adapter, at),
+            Shape::Sequence => self.sequence(adapter, at),
+            Shape::Invoke => self.invoke(adapter, at),
             Shape::Product(op) => {
                 let (kind, parts) = self.deconstruct_parts(at, op, None)?;
                 self.product(adapter, at, None, kind, parts)
@@ -752,8 +753,13 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
-        inner: &TypeRef,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
+        // The payload is the crossing's own — `Option<T>` gives `T` — so the
+        // row states no inner type and there is none to disagree with.
+        let Some(inner) = at.crossing.value().optional_inner().cloned() else {
+            return Err(wrong_shape(at, "Optional", "an `Option`"));
+        };
+        let inner = &inner;
         // Both layers: an `Option<&T>` holds a borrow, and a `&Option<T>` can
         // only lend whatever it holds. Reading either alone is wrong in a
         // different direction — `&Option<T>` would demand an owned `T` that
@@ -771,8 +777,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
-        inner: &TypeRef,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
+        // The element is the crossing's own, for the reason `optional` gives.
+        let Some(inner) = super::sequence_elem(at.crossing.value()).cloned() else {
+            return Err(wrong_shape(at, "Sequence", "a `Vec`, slice or array"));
+        };
+        let inner = &inner;
         // A run's element is held the way the collection lends it, which is
         // what the adapter is told and so what its fragment must satisfy.
         let elements = element_mode(at.crossing, inner);
@@ -783,18 +793,15 @@ impl<'a, C: Compile> Compiler<'a, C> {
             .map_err(CompileError::Adapter)
     }
 
-    fn callback(
+    fn invoke(
         &mut self,
         adapter: &mut C,
         at: At<'_>,
-        assembly: Assembly,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
-        let args: Vec<TypeRef> = at
-            .crossing
-            .value()
-            .callback_args()
-            .unwrap_or_default()
-            .to_vec();
+        let assembly = at.crossing.assembly();
+        let Some(args) = at.crossing.value().callback_args().map(<[_]>::to_vec) else {
+            return Err(wrong_shape(at, "Invoke", "a callback type"));
+        };
         // The one place the two jobs swap: Rust holds these values and pushes
         // them out through the call. The swap is the argument's, not the site's
         // — the parts still belong to the callback row that names them.
@@ -955,7 +962,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 Reach::Omit => {}
                 Reach::Field(index) => {
                     let field = fields.get(*index).ok_or_else(|| {
-                        CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                        CompileError::Recipe(Box::new(RowError::OutOfRange {
                             row: at.crossing.key(),
                             recipe: at.recipe.clone(),
                             index: *index,
@@ -992,7 +999,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         name: &syn::Ident,
     ) -> Result<&'a Function, CompileError<C::Error>> {
         self.model.function(name).ok_or_else(|| {
-            CompileError::Recipe(Box::new(RecipeError::UnknownFunction {
+            CompileError::Recipe(Box::new(RowError::UnknownFunction {
                 row: at.crossing.key(),
                 recipe: at.recipe.clone(),
                 func: name.clone(),
@@ -1010,7 +1017,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             _ => &[],
         };
         alternatives.get(index).ok_or_else(|| {
-            CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+            CompileError::Recipe(Box::new(RowError::OutOfRange {
                 row: at.crossing.key(),
                 recipe: at.recipe.clone(),
                 index,
@@ -1081,6 +1088,20 @@ fn mode_of(ty: &TypeRef) -> Mode {
 ///
 /// And whether the element **is** a borrow: a `Vec<&T>` gives its elements up,
 /// and what it gives up is a reference. So an element spelled `&T` is held as a
+/// A shape declared for a type that cannot take it.
+///
+/// The arity shapes and `Invoke` read what they need off the crossing rather
+/// than stating it, so a row declaring one on the wrong type is caught here.
+fn wrong_shape<E>(at: At<'_>, shape: &'static str, wanted: &'static str) -> CompileError<E> {
+    RowError::WrongShape {
+        row: at.crossing.key(),
+        recipe: at.recipe.clone(),
+        shape,
+        wanted,
+    }
+    .into()
+}
+
 /// borrow however the collection hands it over, and reading only the collection
 /// would call that element owned.
 fn element_mode(crossing: &Crossing, elem: &TypeRef) -> Mode {

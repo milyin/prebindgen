@@ -615,7 +615,7 @@ fn classify_leaf(
     expanded: bool,
     source_param: &syn::Ident,
 ) -> Result<PlanLeaf, PlanError> {
-    use prebindgen_registry::recipe::{Assembly, Compiler, Crossing, Role, Site};
+    use prebindgen_registry::row::{Assembly, Compiler, Crossing, Role, Site};
     // `impl Fn(args)` never reaches the compiler, for the reason
     // `JniGen::compile_crossing` gives: a callback is answered whole, because a
     // JniGen callback ARGUMENT does not always have a conversion of its own —
@@ -679,9 +679,9 @@ fn classify_leaf(
         Ok(None) => Err(PlanError::Unresolved {
             ty: Box::new(reading.clone()),
         }),
-        Err(prebindgen_registry::recipe::CompileError::Adapter(
-            crate::jni::compile::JErr::Plan(e),
-        )) => Err(*e),
+        Err(prebindgen_registry::row::CompileError::Adapter(crate::jni::compile::JErr::Plan(
+            e,
+        ))) => Err(*e),
         // A refusal or a table disagreement, which reach this path only for a
         // type with no conversion — the same failure the entry lookup reported.
         Err(_) => Err(if expanded {
@@ -709,7 +709,7 @@ fn return_site(
     target: &TypeRef,
     declared: Option<TypeRef>,
 ) -> Option<crate::jni::compile::JPlan> {
-    use prebindgen_registry::recipe::{Assembly, Compiler, Crossing, Role, Site};
+    use prebindgen_registry::row::{Assembly, Compiler, Crossing, Role, Site};
     let mut compiler = Compiler::resume(
         registry.flat(),
         ext.recipe_table(),

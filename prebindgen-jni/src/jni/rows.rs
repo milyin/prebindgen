@@ -4,7 +4,7 @@
 //! A build script writes `ptr_class!`, `data_class!`, `enum_class!` or
 //! `sealed_class!`, each naming the Kotlin type one Rust type becomes, and
 //! `convert!` for a conversion the binding supplies itself. This turns those
-//! into rows in a [`Recipes`] table: the shared statement of **which parts** a
+//! into rows in a [`Rows`] table: the shared statement of **which parts** a
 //! value gets across in, with nothing about the JNI wire in it.
 //!
 //! One row per declared type and job, and every crossing nobody declared takes
@@ -17,9 +17,8 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
-    recipe::{
-        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeId,
-        Recipes,
+    row::{
+        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RowError, RowId, Rows,
     },
 };
 
@@ -175,7 +174,7 @@ impl Declarations {
             // synthesis treats `Box<T>` as a spelling of its own and stops
             // there; a recipe keys a crossing by the value that crosses, so
             // `Box<ZSample>` inside `ZSample`'s own value form is that row
-            // reaching itself. Refused here rather than by `Recipes::build`,
+            // reaching itself. Refused here rather than by `Rows::build`,
             // which would refuse the whole binding over a shape the leaf
             // synthesis handles.
             if st.fields[index].ty.stripped_key() == ty.stripped_key() {
@@ -239,8 +238,8 @@ fn fields_of<'a>(model: &'a Flat, ty: &TypeRef) -> &'a [prebindgen_registry::fla
 }
 
 /// The row a type with no parts takes: the adapter emits the conversion itself.
-fn whole() -> RecipeId {
-    RecipeId::new("whole")
+fn whole() -> RowId {
+    RowId::new("whole")
 }
 
 /// The row a `data_class` takes when it crosses **as its fields**.
@@ -249,8 +248,8 @@ fn whole() -> RecipeId {
 /// compiled only where something asks for it by name — which is what lets the
 /// composed wire list be checked against the walk it will replace before
 /// anything depends on it.
-pub(crate) fn parts() -> RecipeId {
-    RecipeId::new("parts")
+pub(crate) fn parts() -> RowId {
+    RowId::new("parts")
 }
 
 impl Declarations {
@@ -263,8 +262,8 @@ impl Declarations {
         &self,
         model: &Flat,
         registry: &impl prebindgen_registry::Conversions,
-    ) -> Result<Recipes, Vec<RecipeError>> {
-        let mut rows = Recipes::builder();
+    ) -> Result<Rows, Vec<RowError>> {
+        let mut rows = Rows::builder();
         // Every Kotlin class declaration, and every `convert!`-declared
         // conversion. The second matters as much as the first: a conversion may
         // be declared on a type the registry would otherwise read as an arity
@@ -438,11 +437,9 @@ impl Declarations {
         &self,
         model: &Flat,
         registry: &impl prebindgen_registry::Conversions,
-        recipes: &prebindgen_registry::recipe::Recipes,
-    ) -> Result<prebindgen_registry::recipe::Bindings, Vec<RecipeError>> {
-        use prebindgen_registry::recipe::{
-            Ask, Assembly, Bindings, Crossing, Origin, RecipeId, Site,
-        };
+        recipes: &prebindgen_registry::row::Rows,
+    ) -> Result<prebindgen_registry::row::Bindings, Vec<RowError>> {
+        use prebindgen_registry::row::{Ask, Assembly, Bindings, Crossing, Origin, RowId, Site};
 
         let mut bound = Bindings::builder();
         let mut declared: Vec<TypeKey> = self
@@ -483,11 +480,11 @@ impl Declarations {
             bound.bind(
                 Site::part(
                     &Crossing::new(outer.clone(), Assembly::Construct),
-                    &RecipeId::derived(),
+                    &RowId::derived(),
                     0,
                 ),
                 Crossing::new(inner.clone(), Assembly::Construct),
-                Ask::Recipe(parts()),
+                Ask::Row(parts()),
                 Origin::Part,
             );
         }
@@ -523,7 +520,7 @@ impl Declarations {
                         bound.bind(
                             Site::part(of, &parts(), index),
                             Crossing::new(field.ty.clone(), assembly),
-                            Ask::Recipe(parts()),
+                            Ask::Row(parts()),
                             Origin::Part,
                         );
                     }
@@ -533,7 +530,7 @@ impl Declarations {
         // Every function whose return the binding takes apart, bound to the
         // `parts` row of its return type.
         //
-        // This is what a site naming several values is: `Ask::Recipe` already
+        // This is what a site naming several values is: `Ask::Row` already
         // lets a site pick a row, and a `parts` fragment already occupies
         // several wires — the two facts stages 3 and 4 established, meeting.
         // The registry needs nothing new to express a decomposed return.
@@ -565,10 +562,10 @@ impl Declarations {
             bound.bind(
                 Site {
                     owner: f.name.clone(),
-                    role: prebindgen_registry::recipe::Role::Return,
+                    role: prebindgen_registry::row::Role::Return,
                 },
                 crossing,
-                Ask::Recipe(parts()),
+                Ask::Row(parts()),
                 Origin::Adapter,
             );
         }

@@ -109,7 +109,7 @@ pub(crate) use prebindgen_registry::types_util::{
 use prebindgen_registry::{
     decl::{ConvertDecl, ConvertSpec},
     flat::{extract_fn_trait_args, Field, Origin, ScalarKind, TypeKind, TypeRef},
-    recipe::{Assembly, Bound},
+    row::{Assembly, Bound},
     Conversions, ConverterImpl, Direction, NicheSlot, Niches, Prebindgen, Registry, TypeKey,
 };
 use proc_macro2::TokenStream;
@@ -457,9 +457,8 @@ pub struct CbindgenBuilder {
     /// type crosses as. A conversion for one type is built out of the
     /// conversions for its inners, which the resolver compiles first, so a
     /// fragment is there exactly when a table entry would have been.
-    pub(crate) compiled: std::rc::Rc<
-        std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::compile::CFrag>>,
-    >,
+    pub(crate) compiled:
+        std::rc::Rc<std::cell::RefCell<prebindgen_registry::row::Compiled<crate::compile::CFrag>>>,
     /// Every conversion this binding compiled.
     ///
     /// Filled once by [`Self::build_with`] and handed to `write_rust` directly. It is what

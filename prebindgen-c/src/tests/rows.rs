@@ -1,6 +1,6 @@
 //! What Cbindgen's per-type declarations become as registry rows.
 
-use prebindgen_registry::recipe::{Assembly, Crossing, Row, Shape};
+use prebindgen_registry::row::{Assembly, Crossing, Row, Shape};
 
 use super::*;
 
@@ -34,7 +34,6 @@ fn ty(model: &prebindgen_registry::Flat, spelling: &str) -> TypeRef {
 
 fn shape(row: &Row) -> String {
     match row {
-        Row::Callback(_) => "callback".to_owned(),
         Row::Constructing(s) => format!("{:?}", Named(s)),
         Row::Deconstructing(s) => format!("{:?}", Named(s)),
     }
@@ -47,8 +46,9 @@ impl<OP> std::fmt::Debug for Named<'_, OP> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self.0 {
             Shape::Atomic => "atomic",
-            Shape::Optional { .. } => "optional",
-            Shape::Sequence { .. } => "sequence",
+            Shape::Optional => "optional",
+            Shape::Sequence => "sequence",
+            Shape::Invoke => "invoke",
             Shape::Product(_) => "product",
             Shape::Choice { arms } => return write!(f, "choice({})", arms.len()),
         })

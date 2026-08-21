@@ -2,7 +2,7 @@
 //!
 //! A build script writes `.opaque_ptr()`, `.data_struct()`, `.enum_type()`,
 //! `.tagged_union()` or `.repr_c_struct()`, each saying what C shape one Rust
-//! type takes. This turns those into rows in a [`Recipes`] table: the shared
+//! type takes. This turns those into rows in a [`Rows`] table: the shared
 //! statement of **which parts** a value gets across in, with nothing about the
 //! C wire in it.
 //!
@@ -14,22 +14,22 @@
 
 use prebindgen_registry::{
     flat::{Flat, Type, TypeRef},
-    recipe::{
-        Arm, Assembly, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError,
-        RecipeId, Recipes,
+    row::{
+        Arm, Assembly, Construct, Constructing, Deconstruct, Deconstructing, Reach, RowError,
+        RowId, Rows,
     },
 };
 
 use super::*;
 
 /// The row a type with no parts takes: the adapter emits the conversion itself.
-fn whole() -> RecipeId {
-    RecipeId::new("whole")
+fn whole() -> RowId {
+    RowId::new("whole")
 }
 
 /// The row a type crossing field by field takes.
-pub(crate) fn parts() -> RecipeId {
-    RecipeId::new("parts")
+pub(crate) fn parts() -> RowId {
+    RowId::new("parts")
 }
 
 /// The row a value takes as a **tagged union's payload**, where it rides
@@ -44,15 +44,15 @@ pub(crate) fn parts() -> RecipeId {
 /// `Box`: `Box<Blob>` and `Blob` share one crossing and are told apart by the
 /// site that picks between their rows, and by the fragment, which is keyed by
 /// the spelling.
-pub(crate) fn payload() -> RecipeId {
-    RecipeId::new("payload")
+pub(crate) fn payload() -> RowId {
+    RowId::new("payload")
 }
 
 /// The row a value takes **inside a `data_struct`'s mirror**, where its wire
 /// differs from the one it takes on its own.
 ///
 /// One crossing read two ways is two rows, and the site picks — which is what
-/// `declare_default` and `Ask::Recipe` exist for. Two types need it.
+/// `declare_default` and `Ask::Row` exist for. Two types need it.
 ///
 /// `bool`: a field arrives from C by value and may hold any byte until it is
 /// normalised, so it crosses as `MaybeUninit<bool>`, while a `bool` returned
@@ -61,8 +61,8 @@ pub(crate) fn payload() -> RecipeId {
 /// `String`: a field decodes a null pointer to an empty string, where a
 /// `String` parameter refuses one. Both readings were in the hand-written field
 /// walk; the row is what makes the difference visible.
-pub(crate) fn in_field() -> RecipeId {
-    RecipeId::new("field")
+pub(crate) fn in_field() -> RowId {
+    RowId::new("field")
 }
 
 impl CbindgenBuilder {
@@ -71,8 +71,8 @@ impl CbindgenBuilder {
     /// A type declared but absent from the model is skipped rather than
     /// refused: the scan already reports it, and reporting it twice in
     /// different words helps nobody.
-    pub(crate) fn recipes(&self, model: &Flat) -> Result<Recipes, Vec<RecipeError>> {
-        let mut rows = Recipes::builder();
+    pub(crate) fn recipes(&self, model: &Flat) -> Result<Rows, Vec<RowError>> {
+        let mut rows = Rows::builder();
         // The crossings a second row will also land on, so the loop below knows
         // to make the whole-value one the default rather than leaving two rows
         // with no answer between them.
@@ -245,7 +245,7 @@ impl CbindgenBuilder {
 
     /// `bool` and `String` read as they do inside a struct; a `Box`-over-handle
     /// needs [`payload`], the one reading neither of the other two covers.
-    fn payload_reading(&self, fty: &TypeRef) -> Option<(RecipeId, &'static [Assembly])> {
+    fn payload_reading(&self, fty: &TypeRef) -> Option<(RowId, &'static [Assembly])> {
         use prebindgen_registry::flat::{ScalarKind, TypeKind};
         if self.declared_opaque_payload_inner(fty).is_some() || r_boxed_inner(fty).is_some() {
             return Some((payload(), &[Assembly::Construct, Assembly::Deconstruct]));
@@ -266,14 +266,12 @@ impl CbindgenBuilder {
     pub(crate) fn bindings(
         &self,
         model: &Flat,
-        recipes: &Recipes,
-    ) -> Result<prebindgen_registry::recipe::Bindings, Vec<RecipeError>> {
-        // `recipe::Origin` is which declaration asked; `flat::Origin` is a
+        recipes: &Rows,
+    ) -> Result<prebindgen_registry::row::Bindings, Vec<RowError>> {
+        // `row::Origin` is which declaration asked; `flat::Origin` is a
         // captured item's own syntax. Both are in play here, so the one that
         // arrives by glob keeps its name.
-        use prebindgen_registry::recipe::{
-            Ask, Assembly, Bindings, Crossing, Origin as Asked, Site,
-        };
+        use prebindgen_registry::row::{Ask, Assembly, Bindings, Crossing, Origin as Asked, Site};
 
         let mut bound = Bindings::builder();
         // A union's payload reads like a struct's field for `bool` and
@@ -302,7 +300,7 @@ impl CbindgenBuilder {
                         bound.bind(
                             Site::arm_part(&of, &parts(), Some(arm), index),
                             Crossing::new(field.ty.clone(), assembly),
-                            Ask::Recipe(row.clone()),
+                            Ask::Row(row.clone()),
                             Asked::Part,
                         );
                     }
@@ -348,7 +346,7 @@ impl CbindgenBuilder {
                     bound.bind(
                         Site::part(&of, &parts(), index),
                         Crossing::new(field.ty.clone(), assembly),
-                        Ask::Recipe(in_field()),
+                        Ask::Row(in_field()),
                         Asked::Part,
                     );
                 }
