@@ -1820,13 +1820,6 @@ impl Declarations {
 }
 
 impl Prebindgen for Declarations {
-    /// Cross-language extras every JNI converter carries — currently the
-    /// Kotlin value-context type name. Filled by the rank-N handlers at the
-    /// same point they build the wire/body, carried in
-    /// [`prebindgen_registry::ConverterImpl::metadata`], and read back by the
-    /// Kotlin emitter to drive every wrapper / typed-handle / `JNIWrappers`
-    /// signature.
-
     // ── Structural type resolution ──────────────────────────────────────
     // Try the terminal categories, then the `Result` peel, then the built-in
     // wrapper shapes — peel
