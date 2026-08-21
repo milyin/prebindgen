@@ -198,18 +198,20 @@ impl Declarations {
     /// single `JObject` — that is the whole point of the opt-in — so binding
     /// its parts would flatten a boundary the declaration drew.
     fn field_crosses_as_its_fields(&self, ty: &TypeRef) -> bool {
-        self.types
-            .get(&ty.stripped_key())
-            .is_some_and(|c| match c.kind {
-                DeclaredKind::Data => !c.jobject_input,
-                // A `sealed_class` field crosses as a tag plus every alternative's
-                // slots. Whether it *can* is the adapter's answer at compile time,
-                // not a declaration: a payload with no slot form leaves the sum
-                // object-shaped, which is the fragment `Compile::choice` hands
-                // back. So the site asks, and the row answers.
-                DeclaredKind::Sealed(_) => true,
-                _ => false,
-            })
+        // The field's own key, not the stripped one: a `Box<Leaf>` field
+        // crosses as one value through `Box<Leaf>`'s conversion, and only a
+        // parameter spelled that way is peeled back to the class. Binding the
+        // stripped key here would flatten a field the rebuild has no node for.
+        self.types.get(&ty.key()).is_some_and(|c| match c.kind {
+            DeclaredKind::Data => !c.jobject_input,
+            // A `sealed_class` field crosses as a tag plus every alternative's
+            // slots. Whether it *can* is the adapter's answer at compile time,
+            // not a declaration: a payload with no slot form leaves the sum
+            // object-shaped, which is the fragment `Compile::choice` hands
+            // back. So the site asks, and the row answers.
+            DeclaredKind::Sealed(_) => true,
+            _ => false,
+        })
     }
 
     pub(crate) fn bindings(

@@ -115,9 +115,6 @@ pub(crate) enum Access {
 }
 
 /// The Kotlin property chain, rooted at the object a site destructures.
-///
-/// Only the equivalence check calls it until the emitters take the row.
-#[cfg(test)]
 pub(crate) fn reached(base: &str, walk: &[Nav]) -> String {
     let mut out = base.to_string();
     for nav in walk {
@@ -137,10 +134,6 @@ impl Access {
     }
 
     /// The Kotlin expression, rooted at the object this site destructures.
-    ///
-    /// Only the equivalence check calls it until the emitters take the row —
-    /// the same `#[cfg(test)]` the wire's other readers carry.
-    #[cfg(test)]
     pub(crate) fn render(&self, base: &str) -> String {
         match self {
             Access::Read { walk, tail } => format!("{}{tail}", reached(base, walk)),
@@ -730,6 +723,22 @@ impl crate::jni::Declarations {
     pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<Conv> {
         self.frag(ty, Assembly::Deconstruct)
     }
+
+    /// Every wire the Kotlin → Rust crossing of `ty` occupies, or `None` when
+    /// it occupies the single one its conversion names.
+    ///
+    /// A declared class states its composition under the `parts` row; an
+    /// optional over one has no row of its own and composes on the row the
+    /// registry derived, which is that crossing's default.
+    pub(crate) fn wires_of(&self, ty: &TypeRef) -> Option<Vec<Wire>> {
+        let key = ty.key();
+        let compiled = self.compiled.borrow();
+        compiled
+            .row_fragment(&key, Assembly::Construct, &crate::jni::rows::parts())
+            .or_else(|| compiled.fragment(&key, Assembly::Construct))?
+            .wires
+            .clone()
+    }
 }
 
 /// A fragment's conversion, read without copying it.
@@ -748,9 +757,7 @@ impl std::ops::Deref for Conv {
     }
 }
 
-/// Facts a wire states about itself, which the emitters read once they take
-/// the `parts` row. Only the equivalence check calls them until then.
-#[cfg(test)]
+/// Facts a wire states about itself, which the emitters read off the row.
 impl Wire {
     /// The wire-facing function this value crosses through.
     pub(crate) fn conv(&self) -> Option<&syn::Ident> {
@@ -770,18 +777,18 @@ impl Wire {
             .as_ref()
             .is_some_and(|e| !e.pre_stages.is_empty())
     }
-}
 
-/// Facts a wire states about itself, which the emitters read once they take
-/// the `parts` row. Only the equivalence check calls them until then.
-#[cfg(test)]
-impl Wire {
-    /// The struct field this value fills, which the Rust-side rebuild binds by
-    /// name.
+    /// Whether this value is a gate rather than something that crosses.
     ///
-    /// The last segment of the path, because a path **is** the chain of fields
-    /// that reached the value.
-    ///
+    /// A presence flag is the one wire with neither a conversion nor a handle
+    /// behind it that is still an ordinary read. A tag has neither either, and
+    /// is told apart by being read through a `when`.
+    pub(crate) fn is_present_flag(&self) -> bool {
+        self.entry.is_none()
+            && self.handle_target.is_none()
+            && matches!(self.access, Access::Read { .. })
+    }
+
     /// The struct field this value fills or gates.
     pub(crate) fn field(&self) -> Option<&str> {
         self.field.as_deref()
@@ -863,24 +870,31 @@ impl<R: Conversions> JCompile<'_, R> {
         let mut kt_ty = crate::jni::emit::wire_kotlin_type(&frag.conv);
         let projection = frag.conv.metadata.projection.as_ref();
         let mut absent = None;
+        let mut tail = String::new();
         if projection.map(|p| &p.kind) == Some(&ProjectionKind::Unsigned64) {
             walk.push(Nav {
                 field: "toLong()".to_string(),
                 gated: optional,
             });
             // An unsigned projection carves its absent value out of the
-            // representation's own range, so a closed gate substitutes that
-            // rather than the wire's zero.
-            absent = Some(
-                projection
-                    .and_then(|p| p.niche_sentinels.first().cloned())
-                    .unwrap_or_else(|| "0L".to_string()),
-            );
+            // representation's own range, so what stands in for absence is that
+            // sentinel rather than the wire's zero. The field's own optional
+            // reaches it here; an ancestor's gate reaches it through `absent`.
+            let sentinel = projection
+                .and_then(|p| p.niche_sentinels.first().cloned())
+                .unwrap_or_else(|| "0L".to_string());
+            match optional {
+                true => tail = format!(" ?: {sentinel}"),
+                false => absent = Some(sentinel),
+            }
         } else if self.decls.is_kotlin_enum_reading(&part.ty) {
             walk.push(Nav {
                 field: "value".to_string(),
                 gated: optional,
             });
+            if optional {
+                tail = " ?: 0".to_string();
+            }
         }
         if optional && crate::jni::emit::is_jobject_shaped_wire(&frag.conv.destination) {
             if !kt_ty.ends_with('?') {
@@ -894,10 +908,7 @@ impl<R: Conversions> JCompile<'_, R> {
             ty: frag.conv.destination.clone(),
             kt_ty,
             path: part.name.clone(),
-            access: Access::Read {
-                walk,
-                tail: String::new(),
-            },
+            access: Access::Read { walk, tail },
             entry: Some(frag.conv.clone()),
             handle_target: None,
             handle_nullable: false,
