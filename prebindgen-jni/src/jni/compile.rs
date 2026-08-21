@@ -28,6 +28,14 @@ pub(crate) enum JPlan {
     /// A return that crosses as one value: what it converts through, and what
     /// the Kotlin surface declares.
     Return(Box<crate::jni::fn_plan::ValueOutputPlan>),
+    /// A return the binding takes apart: the values it hands out, in the order
+    /// the builder receives them.
+    ///
+    /// Read only by the equivalence fixture until the encode side takes it —
+    /// `reach_leaf_flat` and `encode_plan_leaves` still read the plan, because
+    /// where the Rust side reaches a value is the plan's and not the wire's.
+    #[cfg_attr(not(test), allow(dead_code))]
+    Decomposed(Vec<OutWire>),
 }
 
 impl JPlan {
@@ -35,7 +43,7 @@ impl JPlan {
     pub(crate) fn param(self) -> Option<crate::jni::fn_plan::PlanLeaf> {
         match self {
             JPlan::Param(leaf) => Some(*leaf),
-            JPlan::Return(_) => None,
+            _ => None,
         }
     }
 
@@ -43,7 +51,16 @@ impl JPlan {
     pub(crate) fn returned(self) -> Option<crate::jni::fn_plan::ValueOutputPlan> {
         match self {
             JPlan::Return(plan) => Some(*plan),
-            JPlan::Param(_) => None,
+            _ => None,
+        }
+    }
+
+    /// The values a decomposed return hands out, or `None` if it is not one.
+    #[cfg(test)]
+    pub(crate) fn decomposed(self) -> Option<Vec<OutWire>> {
+        match self {
+            JPlan::Decomposed(wires) => Some(wires),
+            _ => None,
         }
     }
 }
@@ -921,7 +938,16 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             .as_ref()
             .ok_or_else(|| JErr::Refused("JniGen: a site compiled with no site context".into()))?;
         let site = match site {
-            PlanSite::Return => return Ok(JPlan::Return(Box::new(self.return_plan(bound, root)))),
+            PlanSite::Return => {
+                // A fragment that occupies several wires IS the decomposed
+                // return: the site asked for the `parts` row and got what that
+                // row states. Nothing else distinguishes the two cases, and
+                // nothing needs to.
+                return Ok(match &root.out_wires {
+                    Some(wires) => JPlan::Decomposed(wires.clone()),
+                    None => JPlan::Return(Box::new(self.return_plan(bound, root))),
+                });
+            }
             PlanSite::Param(site) => site,
         };
         let (ident, expanded) = (&site.ident, site.expanded);

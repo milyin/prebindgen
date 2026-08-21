@@ -708,7 +708,7 @@ fn return_site(
     func: &syn::Ident,
     target: &TypeRef,
     declared: Option<TypeRef>,
-) -> Option<ValueOutputPlan> {
+) -> Option<crate::jni::compile::JPlan> {
     use prebindgen_registry::recipe::{Assembly, Compiler, Crossing, Role, Site};
     let mut compiler = Compiler::resume(
         registry.flat(),
@@ -729,7 +729,27 @@ fn return_site(
     let crossing = Crossing::new(target.clone(), Assembly::Deconstruct);
     let planned = compiler.site(&mut adapter, site, crossing);
     *ext.compiled.borrow_mut() = compiler.finish();
-    planned.ok().flatten().and_then(|p| p.returned())
+    planned.ok().flatten()
+}
+
+/// The values one function's decomposed return hands out, compiled through
+/// `Compiler::site`.
+///
+/// Test support until the encode side takes it: this is the whole of what a
+/// decomposed return site produces, and holding it to the expansion plan is
+/// what says the two agree before anything depends on it.
+#[cfg(test)]
+pub(crate) fn decomposed_return_for_test(
+    ext: &Declarations,
+    registry: &Registry,
+    func: &syn::Ident,
+) -> Option<Vec<crate::jni::compile::OutWire>> {
+    let f = registry.flat().function(func)?;
+    let ret = f.ret.borrow_target().unwrap_or(&f.ret);
+    let ret = ret.optional_inner().unwrap_or(ret);
+    let ret = ret.sequence_elem().unwrap_or(ret);
+    let ret = ret.borrow_target().unwrap_or(ret);
+    return_site(ext, registry, func, ret, None).and_then(|p| p.decomposed())
 }
 
 /// Lower the output side. Mirrors the historical derivations exactly:
@@ -832,6 +852,7 @@ fn build_output(
         &target,
         is_convert.then(|| target_ty.clone()),
     )
+    .and_then(|p| p.returned())
     .ok_or_else(|| PlanError::UnresolvedOutput {
         ty: Box::new(target.clone()),
     })?;

@@ -100,6 +100,31 @@ fn out_alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Deconstruct>> {
 }
 
 impl Declarations {
+    /// How many values this type hands out, or 0 if it hands out none.
+    ///
+    /// Model and declaration only, like the compositions it asks — so a
+    /// declaration-time caller may ask it, which is what binding a return site
+    /// needs.
+    fn out_wire_count(
+        &self,
+        registry: &impl prebindgen_registry::Conversions,
+        ty: &TypeRef,
+    ) -> usize {
+        let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
+            return 0;
+        };
+        let Some(ident) = id.ident() else { return 0 };
+        match registry.flat().declared_type(&ident) {
+            Some(prebindgen_registry::flat::Type::Variant(_)) => self
+                .sum_out_wires(registry, &ident, ty)
+                .map_or(0, |w| w.len()),
+            Some(prebindgen_registry::flat::Type::Struct(_)) => {
+                self.struct_out_wires(registry, ty).map_or(0, |w| w.len())
+            }
+            _ => 0,
+        }
+    }
+
     /// The accessor a type's value form names, and one reach per field of the
     /// struct it returns.
     ///
@@ -404,6 +429,7 @@ impl Declarations {
     pub(crate) fn bindings(
         &self,
         model: &Flat,
+        registry: &impl prebindgen_registry::Conversions,
         recipes: &prebindgen_registry::recipe::Recipes,
     ) -> Result<prebindgen_registry::recipe::Bindings, Vec<RecipeError>> {
         use prebindgen_registry::recipe::{
@@ -496,6 +522,49 @@ impl Declarations {
                 }
             }
         }
+        // Every function whose return the binding takes apart, bound to the
+        // `parts` row of its return type.
+        //
+        // This is what a site naming several values is: `Ask::Recipe` already
+        // lets a site pick a row, and a `parts` fragment already occupies
+        // several wires — the two facts stages 3 and 4 established, meeting.
+        // The registry needs nothing new to express a decomposed return.
+        for f in model.functions() {
+            // The value that crosses, through the layers a decomposition looks
+            // through: a `&T` return decomposes T, and so does an `Option<T>`
+            // or a `Vec<T>` — the shape rides the delivery, not the row.
+            let ret = f.ret.borrow_target().unwrap_or(&f.ret);
+            let ret = ret.optional_inner().unwrap_or(ret);
+            let ret = ret.sequence_elem().unwrap_or(ret);
+            let ret = ret.borrow_target().unwrap_or(ret);
+            let crossing = Crossing::new(ret.clone(), Assembly::Deconstruct);
+            // Only where the type states one. A `sealed_class` always does; a
+            // `data_class` states one unless a field of it declines, and a
+            // return whose type states none crosses whole.
+            if recipes.get(&crossing.key(), &parts()).is_none() {
+                continue;
+            }
+            // And only where it is genuinely several. A decomposition that
+            // yields ONE value takes `Delivery::Return`: the wrapper hands that
+            // value back through its own conversion rather than through a
+            // builder, so the return site's crossing is the value's, not this
+            // type's. Asked of the composition, which is model and declaration
+            // only and so answerable here — the same property that let one
+            // composition serve both sides of `resolve`.
+            if self.out_wire_count(registry, ret) < 2 {
+                continue;
+            }
+            bound.bind(
+                Site {
+                    owner: f.name.clone(),
+                    role: prebindgen_registry::recipe::Role::Return,
+                },
+                crossing,
+                Ask::Recipe(parts()),
+                Origin::Adapter,
+            );
+        }
+
         bound.build(recipes)
     }
 }

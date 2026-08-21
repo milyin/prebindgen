@@ -2571,3 +2571,82 @@ fn a_data_class_states_what_it_hands_out() {
         "a handle field sends the whole object down the whole-value path",
     );
 }
+
+/// A decomposed return is a **site** asking for its type's `parts` row, and it
+/// composes to what the expansion plan delivers.
+///
+/// The registry needed nothing new to express this: `Ask::Recipe` already lets
+/// a site name a row, and a `parts` fragment already occupies several wires.
+/// The two facts stages 3 and 4 established, meeting.
+#[test]
+fn a_decomposed_return_is_a_site_asking_for_the_parts_row() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                    Range { low: i64, high: i64 },
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_one(which: i32) -> Reading {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_maybe(which: i32) -> Option<Reading> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(prebindgen_registry::fun!(read_one))
+                .fun(prebindgen_registry::fun!(read_maybe)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let expected = vec![
+        "tag: Reading <- tag @None",
+        "exact_v0: i64 <- Exact.v0 @Some(1)",
+        "range_low: i64 <- Range.low @Some(2)",
+        "range_high: i64 <- Range.high @Some(2)",
+    ];
+    assert_eq!(
+        gen.return_site_lines_for_test("read_one")
+            .expect("read_one's return is a site"),
+        expected,
+        "the site composes the sum's parts",
+    );
+    // The shape rides the delivery, not the row: an `Option<Reading>` return
+    // hands out the same values, and the optional is what the builder's
+    // nullability says.
+    assert_eq!(
+        gen.return_site_lines_for_test("read_maybe")
+            .expect("read_maybe's return is a site"),
+        expected,
+        "an optional return decomposes the same type",
+    );
+    // And it is what the expansion plan delivers, which is what the emitters
+    // read today.
+    assert_eq!(
+        gen.return_site_lines_for_test("read_one"),
+        gen.plan_lines_for_test("read_one"),
+        "the site and the expansion plan disagree",
+    );
+}

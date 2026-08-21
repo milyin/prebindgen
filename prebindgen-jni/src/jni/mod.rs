@@ -475,6 +475,30 @@ pub(crate) type NamedWire = (
     Option<String>,
 );
 
+/// How the Rust side reaches one plan leaf, in the form a wire renders it —
+/// the accessor call every leaf hangs off is the site's, not the value's, so it
+/// is dropped to line the two up.
+#[cfg(test)]
+fn leaf_reach(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> String {
+    use prebindgen_registry::unfold::{LeafSource, PathStep};
+    match &leaf.source {
+        LeafSource::SumTag => "tag".to_string(),
+        LeafSource::VariantField { variant, member } => format!(
+            "{variant}.{}",
+            crate::jni::struct_plan::sum_field_prop_name(member)
+        ),
+        _ => leaf
+            .path
+            .iter()
+            .filter_map(|step| match step {
+                PathStep::Field { ident, .. } => Some(ident.to_string()),
+                PathStep::Call { .. } => None,
+            })
+            .collect::<Vec<_>>()
+            .join("."),
+    }
+}
+
 #[cfg(test)]
 impl JniGen {
     /// What one crossing occupies on the wire, named the way a parameter
@@ -566,7 +590,6 @@ impl JniGen {
     /// replace — `synth_sum_leaves` for a `sealed_class`,
     /// `synth_value_struct_leaves` for a `data_class`.
     pub(crate) fn walk_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
-        use prebindgen_registry::unfold::{LeafSource, PathStep};
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let leaves = match self.registry.flat().declared_type(&ident)? {
             prebindgen_registry::flat::Type::Variant(sum) => {
@@ -581,24 +604,50 @@ impl JniGen {
             leaves
                 .iter()
                 .map(|l| {
-                    let from = match &l.source {
-                        LeafSource::SumTag => "tag".to_string(),
-                        LeafSource::VariantField { variant, member } => format!(
-                            "{variant}.{}",
-                            crate::jni::struct_plan::sum_field_prop_name(member)
-                        ),
-                        LeafSource::Field => l
-                            .path
+                    format!(
+                        "{}: {} <- {} @{:?}",
+                        l.name,
+                        l.out_ty.key(),
+                        leaf_reach(l),
+                        l.group
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    /// What the return **site** of one function composes to, as the row states
+    /// it — rendered exactly as [`Self::out_lines_for_test`] renders a type's
+    /// row, so a site and a type can be compared.
+    ///
+    /// The decomposed-return path through `Compiler::site`: the site asks for
+    /// the `parts` row of its return type and gets the several values that row
+    /// states.
+    pub(crate) fn return_site_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
+        let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
+        let wires =
+            crate::jni::fn_plan::decomposed_return_for_test(&self.decls, &self.registry, &ident)?;
+        Some(
+            wires
+                .iter()
+                .map(|w| {
+                    let from = match &w.from {
+                        crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Field { path } => path
                             .iter()
-                            .map(|step| match step {
-                                PathStep::Field { ident, .. } => ident.to_string(),
-                                other => format!("{other:?}"),
-                            })
+                            .map(|p| p.to_string())
                             .collect::<Vec<_>>()
                             .join("."),
-                        other => format!("{other:?}"),
+                        crate::jni::compile::OutFrom::Payload { variant, member } => format!(
+                            "{}.{}",
+                            variant
+                                .as_ref()
+                                .map(|v| v.to_string())
+                                .unwrap_or_else(|| "?".to_string()),
+                            crate::jni::struct_plan::sum_field_prop_name(member)
+                        ),
                     };
-                    format!("{}: {} <- {from} @{:?}", l.name, l.out_ty.key(), l.group)
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
                 })
                 .collect(),
         )
@@ -611,25 +660,19 @@ impl JniGen {
     /// rather than from a JniGen-side synthesis, so the comparison goes through
     /// a plan rather than through a leaf list.
     pub(crate) fn plan_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
-        use prebindgen_registry::unfold::PathStep;
         let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
         let plan = prebindgen_registry::Conversions::unfold_plans(&self.registry).get(&ident)?;
         Some(
             plan.leaves
                 .iter()
                 .map(|l| {
-                    // The accessor call every leaf hangs off is the site's, not
-                    // the wire's, so it is dropped to line the two up.
-                    let from = l
-                        .path
-                        .iter()
-                        .filter_map(|step| match step {
-                            PathStep::Field { ident, .. } => Some(ident.to_string()),
-                            PathStep::Call { .. } => None,
-                        })
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    format!("{}: {} <- {from} @{:?}", l.name, l.out_ty.key(), l.group)
+                    format!(
+                        "{}: {} <- {} @{:?}",
+                        l.name,
+                        l.out_ty.key(),
+                        leaf_reach(l),
+                        l.group
+                    )
                 })
                 .collect(),
         )
