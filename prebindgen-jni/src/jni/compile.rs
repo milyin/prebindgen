@@ -306,18 +306,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             // non-nullable slot still has to hold something when the value is
             // absent — the flag is what tells Rust to ignore it.
             wires.extend(inner_wires.iter().map(|w| Wire {
-                access: format!(
-                    "?{}{}",
-                    w.access,
-                    crate::jni::emit::kt_leaf_default(
-                        crate::jni::wire_access::jni_field_access(&w.ty)
-                            .map(|(sig, _, _)| sig)
-                            .unwrap_or(""),
-                        w.kt_ty.ends_with('?'),
-                    )
-                    .map(|d| format!(" ?: {d}"))
-                    .unwrap_or_default()
-                ),
+                access: format!("?{}{}", w.access, absent_default(w)),
                 // Anything under the gate can be absent, however the field
                 // itself was spelled.
                 handle_nullable: w.handle_target.is_some() || w.handle_nullable,
@@ -549,4 +538,28 @@ fn is_handle(frag: &JFrag) -> bool {
         .projection
         .as_ref()
         .is_some_and(|p| p.kind == crate::jni::ProjectionKind::Handle)
+}
+
+/// What a non-nullable slot holds while its gate is closed, as an elvis tail.
+///
+/// Empty for the two cases that need none. A **presence flag** is a `!= null`
+/// comparison: it is already non-null, and a Kotlin elvis on a non-null operand
+/// does not compile. A wire that **already carries one** got it from a gate
+/// further in — the expression yields a value from there on, so an outer gate
+/// has nothing left to substitute for.
+fn absent_default(w: &Wire) -> String {
+    if w.conv.is_none() && w.handle_target.is_none() {
+        return String::new();
+    }
+    if w.access.contains(" ?: ") {
+        return String::new();
+    }
+    crate::jni::emit::kt_leaf_default(
+        crate::jni::wire_access::jni_field_access(&w.ty)
+            .map(|(sig, _, _)| sig)
+            .unwrap_or(""),
+        w.kt_ty.ends_with('?'),
+    )
+    .map(|d| format!(" ?: {d}"))
+    .unwrap_or_default()
 }

@@ -2182,3 +2182,68 @@ fn a_data_class_crosses_as_its_fields_and_a_nested_one_as_its_own() {
         "a nested data class contributes its own wires, under its field's path"
     );
 }
+
+/// Two gates deep, the inner one supplies the absent value and the outer one
+/// must not supply a second.
+///
+/// `Outer { mid: Option<Mid> }` where `Mid { inner: Option<Leaf> }`: reaching
+/// `Leaf.id` passes through both. The value slot reads
+/// `o.mid?.inner?.id ?: 0L` — one elvis, from the innermost gate — and the
+/// presence flags read as plain comparisons, which are already non-null and
+/// which Kotlin refuses to elvis at all.
+#[test]
+fn a_gate_inside_a_gate_supplies_one_absent_value() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Leaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Mid {
+                    pub inner: Option<Leaf>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Outer {
+                    pub mid: Option<Mid>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn outer_use(o: Option<Outer>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Leaf))
+                .class(crate::data_class!(Mid))
+                .class(crate::data_class!(Outer))
+                .fun(prebindgen_registry::fun!(outer_use)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    for (name, param) in [("Outer", "o"), ("Mid", "m")] {
+        let (composed, walked) = gen
+            .parts_vs_walk_for_test(name, param)
+            .unwrap_or_else(|| panic!("{name} states a parts row and the walk plans it"));
+        assert_eq!(composed, walked, "the row and the walk disagree on {name}");
+    }
+}
