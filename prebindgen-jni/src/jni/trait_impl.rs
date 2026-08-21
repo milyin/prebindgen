@@ -1579,6 +1579,7 @@ impl JniGenBuilder {
             let mut adapter = crate::jni::compile::JCompile {
                 decls: &decls,
                 registry: &registry,
+                declared_return: None,
                 site: None,
             };
             if let Err(e) = compiler.row_of(&mut adapter, &crossing, &crate::jni::rows::parts()) {
@@ -1655,6 +1656,7 @@ impl Declarations {
         let mut adapter = crate::jni::compile::JCompile {
             decls: self,
             registry: built,
+            declared_return: None,
             site: None,
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(reading, assembly);

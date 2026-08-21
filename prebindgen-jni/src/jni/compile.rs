@@ -17,6 +17,37 @@ use super::{
     *,
 };
 
+/// The JNI adapter's answer for one site.
+///
+/// Both variants are boxed. A `PlanLeaf` embeds whole sub-plans and runs to
+/// ~856 bytes, a `ValueOutputPlan` to ~608, and every site pays the larger of
+/// the two — the same reason `FnOutputPlan::Value` boxes its own payload.
+pub(crate) enum JPlan {
+    /// One parameter, in the seven-way wire layout the emitters branch on.
+    Param(Box<crate::jni::fn_plan::PlanLeaf>),
+    /// A return that crosses as one value: what it converts through, and what
+    /// the Kotlin surface declares.
+    Return(Box<crate::jni::fn_plan::ValueOutputPlan>),
+}
+
+impl JPlan {
+    /// This plan as a parameter's, or `None` if it is a return's.
+    pub(crate) fn param(self) -> Option<crate::jni::fn_plan::PlanLeaf> {
+        match self {
+            JPlan::Param(leaf) => Some(*leaf),
+            JPlan::Return(_) => None,
+        }
+    }
+
+    /// This plan as a return's, or `None` if it is a parameter's.
+    pub(crate) fn returned(self) -> Option<crate::jni::fn_plan::ValueOutputPlan> {
+        match self {
+            JPlan::Return(plan) => Some(*plan),
+            JPlan::Param(_) => None,
+        }
+    }
+}
+
 /// The JNI adapter's answer for one crossing.
 ///
 /// What a `ConverterImpl` was, minus the bookkeeping the table now does.
@@ -446,6 +477,13 @@ fn produces_borrow(ty: &syn::Type) -> bool {
 pub(crate) struct JCompile<'a, R> {
     pub(crate) decls: &'a Declarations,
     pub(crate) registry: &'a R,
+    /// The return as the signature declares it, when that differs from the
+    /// crossing being compiled.
+    ///
+    /// A `Return`-delivery convert crosses the value its decomposition
+    /// produced, while the Kotlin surface is classified over what the function
+    /// says it returns. `None` when the two are the same.
+    pub(crate) declared_return: Option<TypeRef>,
     /// Which site is being planned, when one is.
     ///
     /// `None` while compiling a row: a row answers for a crossing wherever it
@@ -455,7 +493,18 @@ pub(crate) struct JCompile<'a, R> {
 }
 
 /// What [`Compile::plan`] needs about a site that the crossing does not say.
-pub(crate) struct PlanSite {
+pub(crate) enum PlanSite {
+    /// One parameter of an exported function.
+    Param(ParamSite),
+    /// What the function returns, as one value.
+    ///
+    /// A **decomposed** return is not this: it has no single crossing, which is
+    /// what decomposing it means, so it never reaches `Compiler::site` at all.
+    Return,
+}
+
+/// What planning a parameter needs beyond its crossing.
+pub(crate) struct ParamSite {
     /// The parameter ident the wrapper binds this value to.
     pub(crate) ident: syn::Ident,
     /// Whether this leaf is one of a constructor expansion's arguments rather
@@ -564,8 +613,8 @@ impl<R: Conversions> JCompile<'_, R> {
 
 impl<R: Conversions> Compile for JCompile<'_, R> {
     type Fragment = JFrag;
-    /// One parameter of one exported function, classified.
-    type Plan = crate::jni::fn_plan::PlanLeaf;
+    /// One site of one exported function, classified.
+    type Plan = JPlan;
     type Error = JErr;
 
     fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
@@ -865,12 +914,16 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     /// where the site is a real parameter and not a constructor expansion's
     /// leaf, and the diagnostic for an unresolved leaf names the parameter that
     /// expanded.
-    fn plan(&mut self, _cx: &mut Cx<'_>, bound: &Bound, root: &JFrag) -> Result<PlanLeaf, JErr> {
+    fn plan(&mut self, _cx: &mut Cx<'_>, bound: &Bound, root: &JFrag) -> Result<JPlan, JErr> {
         use crate::jni::fn_plan::{plan_error, InputKind, PlanLeaf};
         let site = self
             .site
             .as_ref()
             .ok_or_else(|| JErr::Refused("JniGen: a site compiled with no site context".into()))?;
+        let site = match site {
+            PlanSite::Return => return Ok(JPlan::Return(Box::new(self.return_plan(bound, root)))),
+            PlanSite::Param(site) => site,
+        };
         let (ident, expanded) = (&site.ident, site.expanded);
         let reading = bound.crossing.spelled();
         let registry = self.registry;
@@ -933,7 +986,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             None => kt_meta.clone(),
         };
 
-        Ok(PlanLeaf {
+        Ok(JPlan::Param(Box::new(PlanLeaf {
             reading: reading.clone(),
             kt_name,
             kt_public,
@@ -941,7 +994,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             optional,
             as_enum_value,
             kind,
-        })
+        })))
     }
 }
 
@@ -1200,6 +1253,29 @@ impl<R: Conversions> JCompile<'_, R> {
         frag.out_wires = Some(wires);
         frag.composed_only = true;
         frag
+    }
+
+    /// A return that crosses as one value.
+    ///
+    /// The site's own fragment is the conversion — the registry built it before
+    /// calling this, which is the whole point of the hook. What the plan adds
+    /// is the Kotlin surface, which is classified over the **declared** return
+    /// rather than over the crossing: an error peel rides the conversion's
+    /// `value_rust_type`, so the full `Result<T, E>` is what the surface reads.
+    fn return_plan(&self, bound: &Bound, root: &JFrag) -> crate::jni::fn_plan::ValueOutputPlan {
+        let declared = self
+            .declared_return
+            .as_ref()
+            .unwrap_or_else(|| bound.crossing.spelled());
+        let (surface, enums) = crate::jni::fn_plan::ReturnSurface::classify(self.decls, declared);
+        crate::jni::fn_plan::ValueOutputPlan {
+            is_convert: self.declared_return.is_some(),
+            target_ty: bound.crossing.spelled().clone(),
+            wire_ty: root.conv.destination.clone(),
+            surface,
+            is_enum: enums.is_enum,
+            is_option_enum: enums.is_option_enum,
+        }
     }
 
     /// The values a `data_class` hands out, composed by

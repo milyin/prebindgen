@@ -652,10 +652,13 @@ fn classify_leaf(
     let mut adapter = crate::jni::compile::JCompile {
         decls: ext,
         registry,
-        site: Some(crate::jni::compile::PlanSite {
-            ident: ident.clone(),
-            expanded,
-        }),
+        declared_return: None,
+        site: Some(crate::jni::compile::PlanSite::Param(
+            crate::jni::compile::ParamSite {
+                ident: ident.clone(),
+                expanded,
+            },
+        )),
     };
     // The site names the parameter it is, and the position is the source
     // parameter's rather than a running count: a constructor expansion
@@ -669,7 +672,9 @@ fn classify_leaf(
     let planned = compiler.site(&mut adapter, site, crossing);
     *ext.compiled.borrow_mut() = compiler.finish();
     match planned {
-        Ok(Some(leaf)) => Ok(leaf),
+        Ok(Some(plan)) => plan.param().ok_or_else(|| PlanError::Unresolved {
+            ty: Box::new(reading.clone()),
+        }),
         // A site the bindings omitted, which JniGen never declares.
         Ok(None) => Err(PlanError::Unresolved {
             ty: Box::new(reading.clone()),
@@ -690,6 +695,41 @@ fn classify_leaf(
             }
         }),
     }
+}
+
+/// Compile the return of `func` as one site.
+///
+/// `declared` is what the signature says the function returns, when that
+/// differs from the value that crosses — a `Return`-delivery convert crosses
+/// what its decomposition produced. `None` when the two are the same.
+fn return_site(
+    ext: &Declarations,
+    registry: &Registry,
+    func: &syn::Ident,
+    target: &TypeRef,
+    declared: Option<TypeRef>,
+) -> Option<ValueOutputPlan> {
+    use prebindgen_registry::recipe::{Assembly, Compiler, Crossing, Role, Site};
+    let mut compiler = Compiler::resume(
+        registry.flat(),
+        ext.recipe_table(),
+        ext.site_bindings(),
+        ext.compiled.borrow().clone(),
+    );
+    let mut adapter = crate::jni::compile::JCompile {
+        decls: ext,
+        registry,
+        declared_return: declared,
+        site: Some(crate::jni::compile::PlanSite::Return),
+    };
+    let site = Site {
+        owner: func.clone(),
+        role: Role::Return,
+    };
+    let crossing = Crossing::new(target.clone(), Assembly::Deconstruct);
+    let planned = compiler.site(&mut adapter, site, crossing);
+    *ext.compiled.borrow_mut() = compiler.finish();
+    planned.ok().flatten().and_then(|p| p.returned())
 }
 
 /// Lower the output side. Mirrors the historical derivations exactly:
@@ -774,24 +814,34 @@ fn build_output(
             ty: target_ty.key(),
         });
     };
-    let Some(entry) = ext.out_frag(&target) else {
-        return Err(PlanError::UnresolvedOutput {
-            ty: Box::new(target),
-        });
-    };
-    let wire_ty = entry.destination.clone();
-
-    // The Kotlin surface classifies the DECLARED return — `convert_out_ty`
-    // for a convert, else the signature's own output. (Not `target_ty`: the
-    // Kotlin error peel rides the entry's `value_rust_type`, so the full
-    // `Result<T, E>` type is looked up as written.)
-    let ret_decl = if is_convert { target_ty } else { &f.ret };
-    let (surface, enums) = ReturnSurface::classify(ext, ret_decl);
-    let EnumSurface {
+    // The site's own row, compiled through the hook. `Compiler::site` is what
+    // makes this a site rather than a lookup: it picks the row, builds the
+    // fragment, checks the value's validity against what a return tolerates —
+    // the JVM keeps what it is given, so a borrowed one is refused here rather
+    // than emitted — and hands the fragment to `Compile::plan`.
+    //
+    // The Kotlin surface classifies the DECLARED return: `convert_out_ty` for a
+    // convert, else the signature's own output. Not `target_ty` — the Kotlin
+    // error peel rides the conversion's `value_rust_type`, so the full
+    // `Result<T, E>` is what the surface reads, and that is the one fact the
+    // crossing cannot carry.
+    let plan = return_site(
+        ext,
+        registry,
+        ident,
+        &target,
+        is_convert.then(|| target_ty.clone()),
+    )
+    .ok_or_else(|| PlanError::UnresolvedOutput {
+        ty: Box::new(target.clone()),
+    })?;
+    let ValueOutputPlan {
+        wire_ty,
+        surface,
         is_enum,
         is_option_enum,
-    } = enums;
-
+        ..
+    } = plan;
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
         is_convert,
         target_ty: target_ty.clone(),
