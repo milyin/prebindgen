@@ -359,7 +359,7 @@ impl Cbindgen {
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.gen,
-            prebindgen_registry::write::Conversions::Compiled(&self.gen.compiled_fns),
+            &self.gen.compiled_fns,
             out_path,
         )?)
     }

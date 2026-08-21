@@ -478,7 +478,7 @@ impl JniGen {
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.decls,
-            prebindgen_registry::write::Conversions::Compiled(&self.decls.compiled_fns),
+            &self.decls.compiled_fns,
             out_path,
         )?)
     }
