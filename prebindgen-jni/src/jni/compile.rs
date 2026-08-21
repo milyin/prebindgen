@@ -81,6 +81,15 @@ pub(crate) struct Wire {
     /// Whether that handle access can be null — the field is optional, or an
     /// optional ancestor gates it.
     pub(crate) handle_nullable: bool,
+    /// Whether the conversion carries Rust-side stages beyond its wire-facing
+    /// function — a `convert!` with a semantic step, say `jlong -> u64 ->
+    /// Duration`.
+    ///
+    /// Read where a caller may only call the wire-facing function and would
+    /// otherwise bind the representation where the value is wanted: the `Vec`
+    /// build helper declines such an element rather than emit a call that does
+    /// not compile.
+    pub(crate) staged: bool,
 }
 
 impl Carrier for JFrag {
@@ -301,6 +310,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 conv: None,
                 handle_target: None,
                 handle_nullable: false,
+                staged: false,
             }];
             // Everything under the gate is reached through it, and a
             // non-nullable slot still has to hold something when the value is
@@ -397,6 +407,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                             .as_ref()
                             .map(|t| format!(".{}{t}", field_kt(part))),
                         handle_nullable: w.handle_nullable,
+                        staged: w.staged,
                     }
                 })),
                 // A part whose conversion projects a handle crosses as that
@@ -410,6 +421,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     conv: None,
                     handle_target: Some(format!(".{}", field_kt(part))),
                     handle_nullable: part.ty.optional_inner().is_some(),
+                    staged: false,
                 }),
                 None => wires.push(Wire {
                     ty: frag.conv.destination.clone(),
@@ -419,6 +431,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     conv: Some(frag.conv.function.sig.ident.clone()),
                     handle_target: None,
                     handle_nullable: false,
+                    staged: !frag.conv.pre_stages.is_empty(),
                 }),
             }
         }
@@ -519,6 +532,31 @@ impl std::ops::Deref for Conv {
 
     fn deref(&self) -> &Self::Target {
         &self.0.conv
+    }
+}
+
+/// Facts a wire states about itself, which the emitters read once they take
+/// the `parts` row. Only the equivalence check calls them until then.
+#[cfg(test)]
+impl Wire {
+    /// Whether this value is a gate rather than a value: read on the Rust side
+    /// to decide whether the rest of the group means anything.
+    pub(crate) fn is_present_flag(&self) -> bool {
+        self.conv.is_none() && self.handle_target.is_none()
+    }
+
+    /// The struct field this value fills, which the Rust-side rebuild binds by
+    /// name.
+    ///
+    /// The last segment of the path, because a path **is** the chain of fields
+    /// that reached the value. `None` for a presence flag: its `present`
+    /// segment is synthetic, and the gate fills no field — it says whether the
+    /// fields beside it mean anything.
+    pub(crate) fn field(&self) -> Option<&str> {
+        if self.is_present_flag() {
+            return None;
+        }
+        self.path.rsplit('.').next()
     }
 }
 
