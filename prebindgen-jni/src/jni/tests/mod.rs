@@ -62,22 +62,45 @@ fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> TypeEntry<KotlinMe
 
 // BLOCKED: `Registry::insert_crossing` is `pub(crate)` in `prebindgen::core` —
 // see the `niches` module gate above.
-fn install_input(
+/// Put one conversion where both a registry query and an adapter lookup can
+/// find it: in the registry the test builds, and in `decls` as the fragment a
+/// compiled binding would have filed. Helpers under test read the second.
+fn install(
     reg: &mut Registry<KotlinMeta>,
+    decls: &Declarations,
+    direction: Direction,
     ty_str: &str,
-    _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
     let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
-    reg.insert_crossing(Direction::Input, &ty, true, Some(e));
+    let key = TypeKey::from_type(&ty);
+    let assembly = match direction {
+        Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
+        Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
+    };
+    decls.compiled.borrow_mut().record(
+        key.clone(),
+        assembly,
+        prebindgen_registry::recipe::RecipeId::new("whole"),
+        crate::jni::compile::JFrag::by_hand(key, e.as_converter()),
+    );
+    reg.insert_crossing(direction, &ty, true, Some(e));
+}
+
+fn install_input(
+    reg: &mut Registry<KotlinMeta>,
+    decls: &Declarations,
+    ty_str: &str,
+    e: TypeEntry<KotlinMeta>,
+) {
+    install(reg, decls, Direction::Input, ty_str, e);
 }
 
 fn install_output(
     reg: &mut Registry<KotlinMeta>,
+    decls: &Declarations,
     ty_str: &str,
-    _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
-    let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
-    reg.insert_crossing(Direction::Output, &ty, true, Some(e));
+    install(reg, decls, Direction::Output, ty_str, e);
 }

@@ -537,7 +537,7 @@ impl JniFunctionPlan {
             params,
             output,
         };
-        let slots = result.jvm_parameter_slots(registry, f);
+        let slots = result.jvm_parameter_slots(ext, registry, f);
         if slots > 255 {
             return Err(PlanError::JvmParameterLimit { slots });
         }
@@ -555,6 +555,7 @@ impl JniFunctionPlan {
 
     fn jvm_parameter_slots(
         &self,
+        ext: &Declarations,
         registry: &Registry<KotlinMeta>,
         f: &prebindgen_registry::flat::Function,
     ) -> usize {
@@ -571,8 +572,8 @@ impl JniFunctionPlan {
                 InputKind::OptionScalar(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
                 InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
                 InputKind::Callback { .. } => 1,
-                InputKind::Unsigned64 { .. } | InputKind::Plain => registry
-                    .input_entry(&leaf.reading)
+                InputKind::Unsigned64 { .. } | InputKind::Plain => ext
+                    .in_frag(&leaf.reading)
                     .and_then(|entry| JniPrim::from_wire(&entry.destination))
                     .map_or(1, |prim| match prim {
                         JniPrim::Long | JniPrim::Double => 2,

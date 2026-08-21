@@ -890,7 +890,6 @@ fn subject_package(ext: &Declarations, subject: &prebindgen_registry::flat::Type
 /// [`plan_leaf_names`], typed + raw views per leaf.
 fn plan_leaf_params(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
     leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
 ) -> Option<Vec<IfaceParam>> {
     // Decomposition leaf names are author-supplied, literal, and unique by
@@ -898,7 +897,7 @@ fn plan_leaf_params(
     let names = plan_leaf_names(leaves);
     let mut out = Vec::with_capacity(leaves.len());
     for (name, leaf) in names.into_iter().zip(leaves.iter()) {
-        out.push(plan_leaf_param(ext, registry, name, leaf)?);
+        out.push(plan_leaf_param(ext, name, leaf)?);
     }
     Some(out)
 }
@@ -910,7 +909,6 @@ fn plan_leaf_params(
 /// not just where the plan happens to be walked as a whole.
 fn plan_leaf_param(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
     name: String,
     leaf: &prebindgen_registry::unfold::UnfoldLeaf,
 ) -> Option<IfaceParam> {
@@ -931,7 +929,7 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, &leaf.out_ty);
+    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(ext, &leaf.out_ty);
     leaf_iface_param(
         ext,
         name,
@@ -1331,7 +1329,7 @@ fn fixed_reassembly(
             Vec::new(),
         );
     }
-    let params = plan_leaf_params(ext, registry, leaves).unwrap_or_default();
+    let params = plan_leaf_params(ext, leaves).unwrap_or_default();
     let mut imports: BTreeSet<String> = BTreeSet::new();
     let (_, when) = ext.sum_reconstruct(registry, source, leaves, &params, &slots, &mut imports);
     (when, imports.into_iter().collect())
@@ -1522,7 +1520,7 @@ pub(crate) fn callback_iface_spec(
     for (k, desc) in leaf_tys.iter().enumerate() {
         let name = names[k].clone();
         let param = match desc {
-            LeafDesc::Plan(_, leaf) => plan_leaf_param(ext, registry, name, leaf)?,
+            LeafDesc::Plan(_, leaf) => plan_leaf_param(ext, name, leaf)?,
             LeafDesc::Whole {
                 ty,
                 nullable,
@@ -1593,7 +1591,7 @@ pub(crate) fn builder_iface_spec(
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans().get(decon)?;
-    let params = plan_leaf_params(ext, registry, &spec.leaves)?;
+    let params = plan_leaf_params(ext, &spec.leaves)?;
     let name = format!(
         "{}Builder",
         decon_base_name(&subject_short(&spec.source), Some(decon))
@@ -1620,7 +1618,7 @@ pub(crate) fn folder_iface_spec(
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans().get(decon)?;
     let mut params: Vec<IfaceParam> = vec![IfaceParam::same("acc".to_string(), KtType::var_("A"))];
-    params.extend(plan_leaf_params(ext, registry, &spec.leaves)?);
+    params.extend(plan_leaf_params(ext, &spec.leaves)?);
     let name = format!(
         "{}Folder",
         decon_base_name(&subject_short(&spec.source), Some(decon))
@@ -1752,7 +1750,7 @@ pub(crate) fn error_handler_iface_spec(
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans().get(decon)?;
-    let params: Vec<IfaceParam> = plan_leaf_params(ext, registry, &spec.leaves)?;
+    let params: Vec<IfaceParam> = plan_leaf_params(ext, &spec.leaves)?;
     let name = format!(
         "{}Handler",
         decon_base_name(&subject_short(&spec.source), Some(decon))

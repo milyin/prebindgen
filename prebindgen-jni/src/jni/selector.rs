@@ -47,7 +47,6 @@ impl Declarations {
     pub(crate) fn input_optional(
         &self,
         ty: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // What the converter YIELDS: this crossing's own reading, so a
@@ -60,7 +59,6 @@ impl Declarations {
                 WrapperShape::OptionRef { mutable },
                 &produced,
                 target,
-                registry,
                 emit,
             ) {
                 c.subs = vec![target.key()];
@@ -76,8 +74,7 @@ impl Declarations {
         if inner.borrow_target().is_some() && !ty.erased_wrappers().is_empty() {
             return None;
         }
-        let mut c =
-            self.input_wrapper_shape(WrapperShape::Optional, &produced, inner, registry, emit)?;
+        let mut c = self.input_wrapper_shape(WrapperShape::Optional, &produced, inner, emit)?;
         c.subs = vec![inner.key()];
         Some(c)
     }
@@ -92,13 +89,11 @@ impl Declarations {
     pub(crate) fn input_run(
         &self,
         ty: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let produced = crate::jni::trait_impl::Produced::Reading(ty);
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
-            let mut c =
-                self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)?;
+            let mut c = self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, emit)?;
             c.subs = vec![elem.key()];
             return Some(c);
         }
@@ -120,8 +115,7 @@ impl Declarations {
         // owned `[T]` to decode into, so the converter yields an owned `Vec<T>`
         // and the call site borrows it.
         let produced = crate::jni::trait_impl::Produced::Composed(syn::parse_quote!(Vec<#elem_ty>));
-        let mut c =
-            self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)?;
+        let mut c = self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, emit)?;
         c.subs = vec![elem.key()];
         Some(c)
     }
@@ -146,13 +140,11 @@ impl Declarations {
     pub(crate) fn output_optional(
         &self,
         ty: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let produced = crate::jni::trait_impl::Produced::Reading(ty);
         let inner = ty.optional_inner()?;
-        let mut c =
-            self.output_wrapper_shape(WrapperShape::Optional, &produced, inner, registry, emit)?;
+        let mut c = self.output_wrapper_shape(WrapperShape::Optional, &produced, inner, emit)?;
         c.subs = vec![inner.key()];
         Some(c)
     }
@@ -167,13 +159,11 @@ impl Declarations {
     pub(crate) fn output_run(
         &self,
         ty: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let produced = crate::jni::trait_impl::Produced::Reading(ty);
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
-            let mut c =
-                self.output_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)?;
+            let mut c = self.output_wrapper_shape(WrapperShape::Sequence, &produced, elem, emit)?;
             c.subs = vec![elem.key()];
             return Some(c);
         }

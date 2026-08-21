@@ -450,7 +450,16 @@ pub struct CbindgenBuilder {
     /// name **one** wire type per crossing, so it stops being able to answer as
     /// soon as a crossing occupies several — and the answer an emitter wants
     /// was always the adapter's own.
-    pub(crate) compiled: Option<prebindgen_registry::recipe::Compiled<crate::compile::CFrag>>,
+    ///
+    /// Shared and interior-mutable because the emitters that run *during*
+    /// compilation read it too: `dispatch_fn_input` builds a callback's closure
+    /// struct out of `lower_shape` and `encode_value`, and those ask what a
+    /// type crosses as. A conversion for one type is built out of the
+    /// conversions for its inners, which the resolver compiles first, so a
+    /// fragment is there exactly when a table entry would have been.
+    pub(crate) compiled: std::rc::Rc<
+        std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::compile::CFrag>>,
+    >,
     /// Every conversion this binding compiled.
     ///
     /// Filled once by [`Self::build_with`] and handed to `write_rust` as
@@ -639,9 +648,12 @@ fn marker_destination(ty: &syn::Type) -> bool {
 /// `out_wrappers` gives that destination to a `Result` too, and no arm lowers
 /// one — so a destination test answers `yes` for a shape nothing can emit, and
 /// the caller ends up calling the marker it was trying to avoid (#428 review).
-fn r_is_lowered_composite(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
-    let composite = t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some();
-    composite && r_shape_is_lowerable(t, registry)
+impl CbindgenBuilder {
+    fn is_lowered_composite(&self, t: &TypeRef) -> bool {
+        let composite =
+            t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some();
+        composite && self.shape_is_lowerable(t)
+    }
 }
 
 /// Whether this node already has a wire of its own: a real converter rather
@@ -651,10 +663,11 @@ fn r_is_lowered_composite(t: &TypeRef, registry: &impl Conversions<()>) -> bool 
 /// conversion answers here — and the shape lowering has to agree with the
 /// converter table at **every** level, not only the outermost, or the two
 /// describe different ABIs for the same argument (#428 review).
-fn r_has_own_wire(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
-    registry
-        .output_entry(t)
-        .is_some_and(|e| !marker_destination(&e.destination))
+impl CbindgenBuilder {
+    fn has_own_wire(&self, t: &TypeRef) -> bool {
+        self.out_frag(t)
+            .is_some_and(|e| !marker_destination(&e.destination))
+    }
 }
 
 /// Whether [`Cbindgen::lower_shape`] decomposes `t` **all the way down**.
@@ -670,20 +683,22 @@ fn r_has_own_wire(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
 /// Enumerating the wrapper kinds instead missed `Vec<&'static [u8]>`, whose
 /// element is a plain borrow by every shape test and a shared-slice marker in
 /// the table (#428 review).
-fn r_shape_is_lowerable(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
-    // A node with a wire of its own IS the bottom: `lower_shape` stops there
-    // too, so the recursion must not walk past it into a shape that node no
-    // longer describes.
-    if r_has_own_wire(t, registry) {
-        return true;
+impl CbindgenBuilder {
+    fn shape_is_lowerable(&self, t: &TypeRef) -> bool {
+        // A node with a wire of its own IS the bottom: `lower_shape` stops
+        // there too, so the recursion must not walk past it into a shape that
+        // node no longer describes.
+        if self.has_own_wire(t) {
+            return true;
+        }
+        if let Some(inner) = t.optional_inner() {
+            return self.shape_is_lowerable(inner);
+        }
+        // A run's element must lower to one wire of its own — the same rule
+        // `lower_shape` asserts when it builds the `(ptr, len)` pair.
+        let leaf = r_vec_elem(t).or_else(|| r_cow_slice_elem(t)).unwrap_or(t);
+        self.has_own_wire(leaf)
     }
-    if let Some(inner) = t.optional_inner() {
-        return r_shape_is_lowerable(inner, registry);
-    }
-    // A run's element must lower to one wire of its own — the same rule
-    // `lower_shape` asserts when it builds the `(ptr, len)` pair.
-    let leaf = r_vec_elem(t).or_else(|| r_cow_slice_elem(t)).unwrap_or(t);
-    r_has_own_wire(leaf, registry)
 }
 
 /// The element of a `Vec<E>`.

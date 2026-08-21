@@ -2307,8 +2307,8 @@ fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
     assert_eq!(
         compiled
             .fragment(&key, Assembly::Deconstruct)
-            .map(|n| n.text.as_str()),
-        Some("atomic Sample deconstruct: Sample"),
+            .map(|n| n.text.clone()),
+        Some("atomic Sample deconstruct: Sample".to_string()),
     );
     // … and a caller holding a row still reaches that row.
     assert!(compiled

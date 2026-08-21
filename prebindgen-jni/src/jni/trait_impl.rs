@@ -1220,7 +1220,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
@@ -1289,7 +1288,7 @@ impl Declarations {
         if shape == WrapperShape::Optional {
             let outer_ty = produced.key();
             let build = build_from_canonical(produced, quote::quote!(__v))?;
-            let (wire, inner_body, niches) = option_input(t1, registry, emit)?;
+            let (wire, inner_body, niches) = option_input(t1, self, emit)?;
             // `option_input` yields the canonical `Option<T>`; the converter
             // yields the spelling.
             let body: syn::Expr = syn::parse_quote!({
@@ -1307,7 +1306,7 @@ impl Declarations {
             // an inner niche, the wire stays identical to the inner's
             // destination and `None` is the niche slot sentinel; the boxed
             // fallback widens the wire to `JObject`.
-            let nullable_kind = nullable_kind_for(&wire, t1, registry);
+            let nullable_kind = nullable_kind_for(&wire, t1, self);
             let projection = self
                 .in_frag(t1)
                 .and_then(|e| e.metadata.projection.clone())
@@ -2577,7 +2576,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
@@ -2586,7 +2584,7 @@ impl Declarations {
         self.input_borrow(shape, produced, t1)
             .or_else(|| self.input_option_ref(shape, produced, t1, emit))
             .or_else(|| self.input_vec(shape, produced, t1, emit))
-            .or_else(|| self.input_option(shape, produced, t1, registry, emit))
+            .or_else(|| self.input_option(shape, produced, t1, emit))
     }
 
     // ── Output converters ────────────────────────────────────────────
@@ -2779,7 +2777,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
@@ -2831,7 +2828,7 @@ impl Declarations {
             // Bridgeable first: an unsupported representation must not resolve
             // and then emit code the consumer cannot compile.
             let read = read_as_canonical(produced)?;
-            let (wire, inner_body, niches) = option_output(t1, registry)?;
+            let (wire, inner_body, niches) = option_output(t1, self)?;
             let body: syn::Expr = syn::parse_quote!({
                 let v: #canonical = #read;
                 #inner_body
@@ -2845,7 +2842,7 @@ impl Declarations {
             // [`nullable_kind_for`]): niche-fulfilled keeps the inner wire
             // and treats the slot value as `None`; boxed widens to `JObject`
             // and uses JVM null.
-            let nullable_kind = nullable_kind_for_output(&wire, t1, registry);
+            let nullable_kind = nullable_kind_for_output(&wire, t1, self);
             let projection = self
                 .out_frag(t1)
                 .and_then(|e| e.metadata.projection.clone())

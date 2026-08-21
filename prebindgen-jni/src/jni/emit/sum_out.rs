@@ -106,11 +106,11 @@ pub(crate) struct Slot {
 }
 
 pub(crate) fn leaf_slot(
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
     leaf: &prebindgen_registry::unfold::UnfoldLeaf,
 ) -> Slot {
     use prebindgen_registry::unfold::LeafSource;
-    if !leaf_is_prim(registry, leaf) {
+    if !leaf_is_prim(ext, leaf) {
         return Slot {
             prim: false,
             ty: quote!(jni::objects::JObject),
@@ -122,8 +122,8 @@ pub(crate) fn leaf_slot(
     let (sig, letter) = if leaf.source == LeafSource::SumTag {
         ("I", format_ident!("i"))
     } else {
-        let wire = registry
-            .output_entry(&leaf.out_ty)
+        let wire = ext
+            .out_frag(&leaf.out_ty)
             .expect("leaf_is_prim implies a resolved output entry")
             .destination
             .clone();
@@ -200,7 +200,7 @@ pub(crate) fn encode_sum_group(
     let module = ext.fn_module(registry, &ident);
     let source: syn::Path = syn::parse_quote!(#module::#ident);
 
-    let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(registry, l)).collect();
+    let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(ext, l)).collect();
 
     let arg_exprs: Vec<TokenStream> = leaves
         .iter()
@@ -281,7 +281,7 @@ pub(crate) fn encode_sum_group(
                 .zip(&binds)
                 .map(|(&idx, bind)| {
                     encode_group_leaf(
-                        registry,
+                        ext,
                         &leaves[idx],
                         &obj_idents[idx],
                         slots[idx].prim,
@@ -338,14 +338,14 @@ pub(crate) fn encode_sum_group(
 /// payload and a struct field of the same type reach their converter the same
 /// way.
 fn encode_group_leaf(
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
     leaf: &prebindgen_registry::unfold::UnfoldLeaf,
     obj_ident: &syn::Ident,
     prim: bool,
     bind: &syn::Ident,
     fail: &dyn Fn(TokenStream) -> TokenStream,
 ) -> TokenStream {
-    let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
+    let out_entry = ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
         panic!(
             "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
             leaf.name,
