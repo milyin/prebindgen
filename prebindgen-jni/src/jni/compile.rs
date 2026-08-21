@@ -43,9 +43,14 @@ pub(crate) struct JFrag {
 pub(crate) struct Wire {
     /// The JNI type this value crosses as.
     pub(crate) ty: syn::Type,
-    /// The path through the value that reached it — `tag`, `summary.count` —
-    /// which is what a JNI parameter name and a Kotlin accessor are both
-    /// mangled from.
+    /// The Kotlin type of the same value, as an `external fun` writes it.
+    pub(crate) kt_ty: String,
+    /// The path through the value that reached it — `tag`, `summary.count`.
+    ///
+    /// **Relative**, because a fragment answers for a crossing and a name
+    /// belongs to a site: the same `Holder` is `hTag` in one signature and
+    /// `otherTag` in the next, so the parameter it hangs off is the caller's to
+    /// prepend.
     pub(crate) path: String,
 }
 
@@ -321,10 +326,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             match &frag.wires {
                 Some(inner) => wires.extend(inner.iter().map(|w| Wire {
                     ty: w.ty.clone(),
+                    kt_ty: w.kt_ty.clone(),
                     path: format!("{}.{}", part.name, w.path),
                 })),
                 None => wires.push(Wire {
                     ty: frag.conv.destination.clone(),
+                    kt_ty: crate::jni::emit::wire_kotlin_type(&frag.conv),
                     path: part.name.clone(),
                 }),
             }

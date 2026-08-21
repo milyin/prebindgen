@@ -1000,7 +1000,7 @@ fn flat_error(root: &TypeKey, path: &str, reason: impl Into<String>) -> FlatInpu
     }
 }
 
-fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<KotlinMeta>) -> String {
+pub(crate) fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<KotlinMeta>) -> String {
     if let Some(p) = JniPrim::from_wire(&entry.destination) {
         return p.kotlin_type().to_string();
     }
