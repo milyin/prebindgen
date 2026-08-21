@@ -880,7 +880,7 @@ pub(crate) fn encode_plan_leaves(
     let mut arg_exprs: Vec<TokenStream> = Vec::with_capacity(n);
     for (idx, leaf) in plan.leaves.iter().enumerate() {
         let obj_ident = &obj_idents[idx];
-        if leaf_is_prim(registry, leaf) {
+        if leaf_is_prim(ext, leaf) {
             arg_exprs.push(quote!(#obj_ident));
         } else {
             arg_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
@@ -1031,7 +1031,7 @@ pub(crate) fn encode_plan_leaves(
                 let ids: Vec<&syn::Ident> = obj_idents[seg.clone()].iter().collect();
                 let slots: Vec<Slot> = plan.leaves[seg.clone()]
                     .iter()
-                    .map(|l| leaf_slot(registry, l))
+                    .map(|l| leaf_slot(ext, l))
                     .collect();
                 let tys = slots.iter().map(|s| &s.ty);
                 let defaults = slots.iter().map(|s| &s.default);
@@ -1404,7 +1404,7 @@ pub(crate) fn encode_plan_leaves(
         // value with the leaf's output converter and casts to JObject.
         let wire = out_entry.destination.clone();
         let enc_ident = format_ident!("__enc{}", idx);
-        if leaf_is_prim(registry, leaf) {
+        if leaf_is_prim(ext, leaf) {
             let letter = jni_field_access(&wire)
                 .expect("leaf_is_prim guarantees a primitive wire")
                 .1;
@@ -1447,12 +1447,10 @@ pub(crate) fn encode_plan_leaves(
             })
             .collect();
         let ids: Vec<&syn::Ident> = idxs.iter().map(|&k| &obj_idents[k]).collect();
-        let tys = idxs
-            .iter()
-            .map(|&k| leaf_slot(registry, &plan.leaves[k]).ty);
+        let tys = idxs.iter().map(|&k| leaf_slot(ext, &plan.leaves[k]).ty);
         let defaults = idxs
             .iter()
-            .map(|&k| leaf_slot(registry, &plan.leaves[k]).default);
+            .map(|&k| leaf_slot(ext, &plan.leaves[k]).default);
         // Matched BY VALUE: the local is this arm's alone (every leaf under the
         // hoist is in it), so a consuming value form's fields move out here
         // exactly as they do at an unconditional one.
@@ -1472,7 +1470,7 @@ pub(crate) fn encode_plan_leaves(
 /// [`crate::jni::iface`] derives for the same leaf — a
 /// nullable primitive boxes (object chunk), object wires pass as objects.
 pub(crate) fn leaf_is_prim(
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
     leaf: &prebindgen_registry::unfold::UnfoldLeaf,
 ) -> bool {
     // The synthesized sum selector is a `jint` by definition — it is assigned,
@@ -1489,7 +1487,7 @@ pub(crate) fn leaf_is_prim(
     if leaf.nullable {
         return false;
     }
-    leaf_ty_is_prim(registry, &leaf.out_ty)
+    leaf_ty_is_prim(ext, &leaf.out_ty)
 }
 
 /// The wire half of [`leaf_is_prim`]: does a leaf of this type occupy a **raw
@@ -1497,10 +1495,10 @@ pub(crate) fn leaf_is_prim(
 /// about a leaf whose own `nullable` flag it is in the middle of computing (an
 /// inert sum group slot).
 pub(crate) fn leaf_ty_is_prim(
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
     out_ty: &prebindgen_registry::flat::TypeRef,
 ) -> bool {
-    let Some(entry) = registry.output_entry(out_ty) else {
+    let Some(entry) = ext.out_frag(out_ty) else {
         return false;
     };
     // No projection (plain primitive/enum wire) — or an opaque HANDLE, whose

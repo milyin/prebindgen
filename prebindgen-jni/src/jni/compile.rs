@@ -153,7 +153,6 @@ impl<R: Conversions<KotlinMeta>> JCompile<'_, R> {
                 WrapperShape::Borrow { mutable },
                 &produced,
                 inner,
-                self.registry,
                 emit,
             )?;
             c.subs = vec![inner.key()];
@@ -164,7 +163,6 @@ impl<R: Conversions<KotlinMeta>> JCompile<'_, R> {
                 WrapperShape::Borrow { mutable },
                 &produced,
                 inner,
-                self.registry,
                 emit,
             )?;
             c.subs = vec![inner.key()];
@@ -221,11 +219,11 @@ impl<R: Conversions<KotlinMeta>> Compile for JCompile<'_, R> {
             Assembly::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
-                .or_else(|| self.decls.input_optional(ty, self.registry, emit)),
+                .or_else(|| self.decls.input_optional(ty, emit)),
             Assembly::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
-                .or_else(|| self.decls.output_optional(ty, self.registry, emit)),
+                .or_else(|| self.decls.output_optional(ty, emit)),
         };
         self.wrap(at, "no JNI representation for this optional", conv)
     }
@@ -243,13 +241,13 @@ impl<R: Conversions<KotlinMeta>> Compile for JCompile<'_, R> {
             Assembly::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
-                .or_else(|| self.decls.input_run(ty, self.registry, emit))
+                .or_else(|| self.decls.input_run(ty, emit))
                 .or_else(|| self.borrow(ty, emit, true))
                 .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit)),
             Assembly::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
-                .or_else(|| self.decls.output_run(ty, self.registry, emit))
+                .or_else(|| self.decls.output_run(ty, emit))
                 .or_else(|| self.borrow(ty, emit, false))
                 .or_else(|| {
                     self.decls

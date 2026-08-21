@@ -247,13 +247,13 @@ pub(crate) fn composed_inner_output(
 /// fails and the resolver falls through to other rank-1 attempts.
 pub(crate) fn option_input(
     t1: &prebindgen_registry::flat::TypeRef,
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
     emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry.input_entry(t1)?;
+    let inner_entry = ext.in_frag(t1)?;
     let t1_spelled = emit.spell(t1);
     let inner_wire = inner_entry.destination.clone();
-    let inner_decode = composed_inner_input(&inner_entry.as_converter(), quote!(v));
+    let inner_decode = composed_inner_input(&inner_entry, quote!(v));
 
     // 1. Niche path.
     if let Some((slot, rest)) = inner_entry.niches.clone().carve() {
@@ -288,7 +288,7 @@ pub(crate) fn option_input(
         let unbox_sig = jni_unbox_sig(&inner_wire);
         let getter = jni_unbox_getter(&inner_wire);
         let getter_id = format_ident!("{}", getter);
-        let inner_decode = composed_inner_input(&inner_entry.as_converter(), quote!(&__unboxed));
+        let inner_decode = composed_inner_input(&inner_entry, quote!(&__unboxed));
         let body: syn::Expr = syn::parse_quote!({
             if !v.is_null() {
                 let __unboxed: #inner_wire = env
@@ -315,11 +315,11 @@ pub(crate) fn option_input(
 /// Build `Option<T>`'s output converter — symmetric to [`option_input`].
 pub(crate) fn option_output(
     t1: &prebindgen_registry::flat::TypeRef,
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry.output_entry(t1)?;
+    let inner_entry = ext.out_frag(t1)?;
     let inner_wire = inner_entry.destination.clone();
-    let inner_encode = composed_inner_output(&inner_entry.as_converter(), quote!(value));
+    let inner_encode = composed_inner_output(&inner_entry, quote!(value));
 
     // 1. Niche path.
     if let Some((slot, rest)) = inner_entry.niches.clone().carve() {
@@ -335,7 +335,7 @@ pub(crate) fn option_output(
 
     // 2. Boxed-primitive fallback (cached box class + `valueOf` method ID).
     if let Some(helper) = box_helper_for_wire(&inner_wire) {
-        let inner_encode = composed_inner_output(&inner_entry.as_converter(), quote!(value));
+        let inner_encode = composed_inner_output(&inner_entry, quote!(value));
         let body: syn::Expr = syn::parse_quote!({
             match v {
                 Some(value) => {
@@ -479,15 +479,12 @@ pub(crate) fn enum_output_body(
 pub(crate) fn nullable_kind_for(
     outer_wire: &syn::Type,
     inner_ty: &prebindgen_registry::flat::TypeRef,
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
 ) -> NullableKind {
-    let inner_dest = registry
-        .input_entry(inner_ty)
-        .map(|e| e.destination.clone())
-        .expect(
-            "nullable_kind_for: Option<_> input handler reached here only after option_input \
+    let inner_dest = ext.in_frag(inner_ty).map(|e| e.destination.clone()).expect(
+        "nullable_kind_for: Option<_> input handler reached here only after option_input \
              returned Some, so the inner's input entry must exist",
-        );
+    );
     if outer_wire == &inner_dest {
         NullableKind::Niche
     } else {
@@ -498,10 +495,10 @@ pub(crate) fn nullable_kind_for(
 pub(crate) fn nullable_kind_for_output(
     outer_wire: &syn::Type,
     inner_ty: &prebindgen_registry::flat::TypeRef,
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
 ) -> NullableKind {
-    let inner_dest = registry
-        .output_entry(inner_ty)
+    let inner_dest = ext
+        .out_frag(inner_ty)
         .map(|e| e.destination.clone())
         .expect(
             "nullable_kind_for_output: Option<_> output handler reached here only after \

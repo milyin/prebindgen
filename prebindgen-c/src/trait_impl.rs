@@ -9,17 +9,20 @@ use super::{builder::callback_fn_type, *};
 /// wire values; the converter table's single `destination` cannot.
 impl CbindgenBuilder {
     /// The fragment for `ty` crossing in the given direction, if one compiled.
-    pub(crate) fn frag(&self, ty: &TypeRef, assembly: Assembly) -> Option<&crate::compile::CFrag> {
-        self.compiled.as_ref()?.fragment(&ty.key(), assembly)
+    pub(crate) fn frag(&self, ty: &TypeRef, assembly: Assembly) -> Option<crate::compile::CFrag> {
+        self.compiled
+            .borrow()
+            .fragment(&ty.key(), assembly)
+            .cloned()
     }
 
     /// The fragment that builds a Rust `ty` out of C parts.
-    pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<&crate::compile::CFrag> {
+    pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<crate::compile::CFrag> {
         self.frag(ty, Assembly::Construct)
     }
 
     /// The fragment that takes a Rust `ty` apart into C parts.
-    pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<&crate::compile::CFrag> {
+    pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<crate::compile::CFrag> {
         self.frag(ty, Assembly::Deconstruct)
     }
 }
@@ -1417,7 +1420,7 @@ impl CbindgenBuilder {
                 // leaves its slot unwritten, and the wrapper must not build a
                 // Rust value to fill it with. `#[repr(transparent)]` keeps both
                 // the C ABI and the header spelling.
-                if marker_destination(&wire) && r_is_lowered_composite(&reading, registry) {
+                if marker_destination(&wire) && self.is_lowered_composite(&reading) {
                     for field in self.lower_shape(&reading, registry).fields {
                         let w = field.wire;
                         arg_wires.push(syn::parse_quote!(::core::mem::MaybeUninit<#w>));
@@ -1516,21 +1519,22 @@ impl CbindgenBuilder {
                     .join("; "),
             }
         })?;
-        // The driver's state, carried between calls. The adapter borrows the
-        // partial registry view, which is lent per call and so is a different
-        // type each time; what it built is not, and outlives every one of them.
-        let mut compiled =
-            prebindgen_registry::recipe::Compiled::<crate::compile::CFrag>::default();
+        // The driver's state lives on `self` rather than here, because the
+        // adapter reads it **while** it compiles: `dispatch_fn_input` builds a
+        // callback's closure struct out of `lower_shape` and `encode_value`,
+        // both of which ask what a type crosses as. Handing the compiler the
+        // store by `mem::take` would empty it for exactly the span of that
+        // call, so it is cloned — a map of `Rc`s.
         let registry = declared
             .convert_with(|crossing, built, _emit| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     &recipes,
                     &bindings,
-                    std::mem::take(&mut compiled),
+                    self.compiled.borrow().clone(),
                 );
                 let conv = self.compile_crossing(&mut compiler, crossing, built);
-                compiled = compiler.finish();
+                *self.compiled.borrow_mut() = compiler.finish();
                 conv
             })?
             .build()?;
@@ -1542,19 +1546,23 @@ impl CbindgenBuilder {
         // borrowed return where the JVM must not.
         {
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
-                &model, &recipes, &bindings, compiled,
+                &model,
+                &recipes,
+                &bindings,
+                self.compiled.borrow().clone(),
             );
             self.check_sites(&mut compiler, &registry)
                 .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
-            compiled = compiler.finish();
+            *self.compiled.borrow_mut() = compiler.finish();
         }
         // What the compilation produced, kept for emission and for lookup.
-        self.compiled_fns = compiled
+        self.compiled_fns = self
+            .compiled
+            .borrow()
             .fragments()
             .into_iter()
             .map(|f| f.function.clone())
             .collect();
-        self.compiled = Some(compiled);
         self.validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         Ok(Cbindgen {
@@ -1649,7 +1657,7 @@ impl CbindgenBuilder {
                 call_args.push(quote!(#ai.len()));
                 continue;
             }
-            let entry = registry.output_entry(arg)?;
+            let entry = self.out_frag(arg)?;
             let conv = entry.function.sig.ident.clone();
             let opaque = entry.destination.clone();
             let fallible = matches!(
@@ -1680,7 +1688,7 @@ impl CbindgenBuilder {
             // converter call can produce.
             if !is_takeable
                 && marker_destination(&entry.destination)
-                && !r_is_lowered_composite(arg, registry)
+                && !self.is_lowered_composite(arg)
             {
                 panic!(
                     "Cbindgen: callback argument `{}` has no C ABI — it resolves to a marker \
@@ -1699,7 +1707,7 @@ impl CbindgenBuilder {
             // (#428 review).
             let composite = !is_takeable
                 && marker_destination(&entry.destination)
-                && r_is_lowered_composite(arg, registry);
+                && self.is_lowered_composite(arg);
             if composite {
                 let shape = self.lower_shape(arg, registry);
                 closure_params.push(quote!(#ai: #src));

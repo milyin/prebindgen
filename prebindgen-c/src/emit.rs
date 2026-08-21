@@ -493,8 +493,7 @@ impl CbindgenBuilder {
         // the `ReturnType::Default` arm this used to write.
 
         let has_fallible_input = f.params.iter().any(|p| {
-            registry
-                .input_entry(&p.ty)
+            self.in_frag(&p.ty)
                 .map(|e| returns_result(&e.function.sig.output))
                 .unwrap_or(false)
         });
@@ -508,7 +507,7 @@ impl CbindgenBuilder {
             None => (&f.ret, None),
         };
         let err_ty: Option<syn::Type> = err_reading.map(|t| spelled(t, emit));
-        let has_fallible_output = Self::output_is_fallible(value_ty, registry);
+        let has_fallible_output = self.output_is_fallible(value_ty);
 
         // Error wiring: the error type must be declared via `.error()`.
         let err_bits = err_ty.as_ref().map(|err_ty| {
@@ -716,14 +715,14 @@ impl CbindgenBuilder {
         // own; decomposing it anyway would describe a different ABI from the one
         // the converter table hands out, and the two must agree (#428 review).
         // The base case below already does this for a type with no shape arm.
-        if !r_has_own_wire(ty, registry) {
+        if !self.has_own_wire(ty) {
             // `Vec<T>` → `T_wire* + size_t`. The element must lower to a single C
             // value (one converter); a composite element is unsupported.
             // `TypeKind::Vec` and not `sequence_elem`: that reading peels the
             // erased wrappers first, so a `Cow<'_, [u8]>` would answer here and
             // take the `Vec` lowering instead of its own arm below.
             if let TypeKind::Vec(elem) = ty.kind() {
-                let entry = registry.output_entry(elem).unwrap_or_else(|| {
+                let entry = self.out_frag(elem).unwrap_or_else(|| {
                     panic!(
                         "Cbindgen: `Vec` element `{}` has no output converter",
                         elem.key()
@@ -767,7 +766,7 @@ impl CbindgenBuilder {
             // lowering, so the wrapper returned nothing and called the marker with
             // an argument it does not take (#413).
             if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
-                let entry = registry.output_entry(elem).unwrap_or_else(|| {
+                let entry = self.out_frag(elem).unwrap_or_else(|| {
                     panic!(
                         "Cbindgen: `Cow` slice element `{}` has no output converter",
                         elem.key()
@@ -813,7 +812,7 @@ impl CbindgenBuilder {
         // Base value: one wire component from its rank-0/1 converter. Custom
         // conversions may declare scalar niches; otherwise a pointer wire
         // (String, opaque handle, `&'static`) carries a free NULL niche.
-        let entry = registry.output_entry(ty).unwrap_or_else(|| {
+        let entry = self.out_frag(ty).unwrap_or_else(|| {
             panic!(
                 "Cbindgen::on_function: type `{}` has no output converter",
                 ty.key()
@@ -848,9 +847,9 @@ impl CbindgenBuilder {
         // The peer of `lower_shape`'s guard: a node with a wire of its own is
         // encoded by its own converter, whatever its shape. The two walk the
         // same value and must stop at the same places (#428 review).
-        if !r_has_own_wire(ty, registry) {
+        if !self.has_own_wire(ty) {
             if let TypeKind::Vec(elem) = ty.kind() {
-                let entry = registry.output_entry(elem).expect("Vec element converter");
+                let entry = self.out_frag(elem).expect("Vec element converter");
                 let elem_conv = entry.function.sig.ident.clone();
                 let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
                 let elem_wire = entry.destination.clone();
@@ -878,9 +877,7 @@ impl CbindgenBuilder {
                 }
             }
             if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
-                let entry = registry
-                    .output_entry(elem)
-                    .expect("slice element converter");
+                let entry = self.out_frag(elem).expect("slice element converter");
                 let elem_conv = entry.function.sig.ident.clone();
                 let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
                 let elem_wire = entry.destination.clone();
@@ -935,7 +932,7 @@ impl CbindgenBuilder {
             }
         }
         // Base value: run its output converter into the single target.
-        let entry = registry.output_entry(ty).expect("base value converter");
+        let entry = self.out_frag(ty).expect("base value converter");
         let conv = entry.function.sig.ident.clone();
         let t0 = &targets[0];
         if returns_result(&entry.function.sig.output) {
@@ -946,7 +943,7 @@ impl CbindgenBuilder {
         }
     }
 
-    fn output_is_fallible(ty: &TypeRef, registry: &impl Conversions<()>) -> bool {
+    fn output_is_fallible(&self, ty: &TypeRef) -> bool {
         // The third walk over the same value, and it stops where the other two
         // do: a node with a wire of its own is encoded by its own converter, so
         // whether the encode can fail is THAT converter's answer. Peeling past
@@ -954,7 +951,7 @@ impl CbindgenBuilder {
         // binding needs `.panic()`, so the two disagreeing is a wrapper that
         // aborts where nothing opted in, or an opt-in demanded for a conversion
         // that cannot fail (#428 review).
-        if !r_has_own_wire(ty, registry) {
+        if !self.has_own_wire(ty) {
             let vec_elem = match ty.kind() {
                 TypeKind::Vec(e) => Some(&**e),
                 _ => None,
@@ -965,11 +962,10 @@ impl CbindgenBuilder {
                 .or_else(|| r_cow_slice_elem(ty))
                 .or_else(|| r_scalar_slice_elem(ty))
             {
-                return Self::output_is_fallible(inner, registry);
+                return self.output_is_fallible(inner);
             }
         }
-        registry
-            .output_entry(ty)
+        self.out_frag(ty)
             .is_some_and(|entry| returns_result(&entry.function.sig.output))
     }
 
