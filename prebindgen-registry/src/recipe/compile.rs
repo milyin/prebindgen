@@ -578,6 +578,23 @@ impl<'a, C: Compile> Compiler<'a, C> {
         Ok(fragment)
     }
 
+    /// The fragment for one crossing under a **named** row, rather than the one
+    /// the crossing defaults to.
+    ///
+    /// For an adapter that states more than one row for a type and wants both:
+    /// the default answers every site, and this compiles the other so it can be
+    /// checked, or read through
+    /// [`Compiled::row_fragment`](Compiled::row_fragment), before any site
+    /// takes it.
+    pub fn row_of(
+        &mut self,
+        adapter: &mut C,
+        crossing: &Crossing,
+        recipe: &RecipeId,
+    ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
+        self.row(adapter, crossing, recipe)
+    }
+
     /// The fragment for one row, built once and reused.
     fn row(&mut self, adapter: &mut C, crossing: &Crossing, recipe: &RecipeId) -> Built<C> {
         // Keyed by the spelling, not by the row's identity: one row can answer

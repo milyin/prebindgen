@@ -451,6 +451,39 @@ pub struct JniGen {
     registry: prebindgen_registry::Registry,
 }
 
+#[cfg(test)]
+impl JniGen {
+    /// The wires a `data_class` composes into, by short type name.
+    ///
+    /// Test support: the `parts` row is compiled for every declared
+    /// `data_class` but taken by no site yet, so this is the only way to see
+    /// what it composed.
+    pub(crate) fn parts_wires_for_test(
+        &self,
+        short: &str,
+    ) -> Option<Vec<crate::jni::compile::Wire>> {
+        let key = self
+            .decls
+            .compiled
+            .borrow()
+            .fragments()
+            .iter()
+            .find_map(|f| {
+                (f.wires.is_some() && f.yields.ty.as_str() == short).then(|| f.yields.ty.clone())
+            })?;
+        self.decls
+            .compiled
+            .borrow()
+            .row_fragment(
+                &key,
+                prebindgen_registry::recipe::Assembly::Construct,
+                &crate::jni::rows::parts(),
+            )?
+            .wires
+            .clone()
+    }
+}
+
 // Opaque — exists so `Result<JniGen, _>::expect_err` works in tests.
 impl std::fmt::Debug for JniGen {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

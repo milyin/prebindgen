@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
-    recipe::{Constructing, Deconstructing, RecipeError, RecipeId, Recipes},
+    recipe::{Construct, Constructing, Deconstructing, RecipeError, RecipeId, Recipes},
 };
 
 use super::*;
@@ -49,6 +49,16 @@ fn element_types(element: &prebindgen_registry::Element) -> Vec<&TypeRef> {
 /// The row a type with no parts takes: the adapter emits the conversion itself.
 fn whole() -> RecipeId {
     RecipeId::new("whole")
+}
+
+/// The row a `data_class` takes when it crosses **as its fields**.
+///
+/// Not the default yet. `whole()` still answers for every site, and this one is
+/// compiled only where something asks for it by name — which is what lets the
+/// composed wire list be checked against the walk it will replace before
+/// anything depends on it.
+pub(crate) fn parts() -> RecipeId {
+    RecipeId::new("parts")
 }
 
 impl Declarations {
@@ -94,8 +104,19 @@ impl Declarations {
             // the adapter emits the conversion itself, and how many wire values
             // that costs is its own business — so it describes the adapter as it
             // stands rather than as it will be.
-            rows.declare(ty.clone(), whole(), Deconstructing::Atomic)
-                .declare(ty, whole(), Constructing::Atomic);
+            rows.declare(ty.clone(), whole(), Deconstructing::Atomic);
+            // A `data_class` also has a row that says what it is made of, so
+            // its constructing side names which of the two a site takes by
+            // default. See [`parts`] for why that is still `whole`.
+            if matches!(
+                self.types.get(&ty.key()).map(|c| &c.kind),
+                Some(DeclaredKind::Data)
+            ) {
+                rows.declare_default(ty.clone(), whole(), Constructing::Atomic)
+                    .declare(ty, parts(), Constructing::Product(Construct::Fields));
+            } else {
+                rows.declare(ty, whole(), Constructing::Atomic);
+            }
         }
 
         // A fixed-size array of JNI primitives is one Kotlin `ByteArray` or
@@ -123,5 +144,60 @@ impl Declarations {
         }
 
         rows.build(model)
+    }
+}
+
+impl Declarations {
+    /// Which row each part of a `data_class` takes.
+    ///
+    /// A field that is itself a `data_class` crosses as **its** fields too, so
+    /// the part site asks for [`parts`] rather than letting the field take its
+    /// own default. That is the one thing a site can say that a row cannot: the
+    /// same crossing is read one way on its own and another inside a product.
+    ///
+    /// Without it a nested class contributes a single wire and the flattening
+    /// stops one layer down.
+    pub(crate) fn bindings(
+        &self,
+        model: &Flat,
+        recipes: &prebindgen_registry::recipe::Recipes,
+    ) -> Result<prebindgen_registry::recipe::Bindings, Vec<RecipeError>> {
+        use prebindgen_registry::recipe::{Ask, Assembly, Bindings, Crossing, Origin, Site};
+
+        let mut bound = Bindings::builder();
+        let mut declared: Vec<TypeKey> = self
+            .types
+            .iter()
+            .filter(|(_, c)| matches!(c.kind, DeclaredKind::Data))
+            .map(|(k, _)| k.clone())
+            .collect();
+        declared.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+
+        for key in declared {
+            let Some(ident) = key.ident() else { continue };
+            let Some(prebindgen_registry::flat::Type::Struct(s)) = model.declared_type(&ident)
+            else {
+                continue;
+            };
+            let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
+                continue;
+            };
+            let of = Crossing::new(ty, Assembly::Construct);
+            for (index, field) in s.fields.iter().enumerate() {
+                if !matches!(
+                    self.types.get(&field.ty.stripped_key()).map(|c| &c.kind),
+                    Some(DeclaredKind::Data)
+                ) {
+                    continue;
+                }
+                bound.bind(
+                    Site::part(&of, &parts(), index),
+                    Crossing::new(field.ty.clone(), Assembly::Construct),
+                    Ask::Recipe(parts()),
+                    Origin::Part,
+                );
+            }
+        }
+        bound.build(recipes)
     }
 }

@@ -24,6 +24,29 @@ use super::{
 pub(crate) struct JFrag {
     pub(crate) conv: ConverterImpl<KotlinMeta>,
     pub(crate) yields: Yield,
+    /// The wire values this crossing occupies, when it occupies more than the
+    /// one `conv.destination` names.
+    ///
+    /// A JniGen `data_class` parameter arrives as **several** JNI parameters —
+    /// `Option<Holder>` is `(hPresent, hTag, hSummary)` — so a single
+    /// destination cannot say what it costs. `None` is the ordinary case: one
+    /// wire, and `conv.destination` is it.
+    ///
+    /// Composed by [`Compile::fields`] from the parts' own wires, which is what
+    /// makes a nested `data_class` field contribute its own several rather than
+    /// one.
+    pub(crate) wires: Option<Vec<Wire>>,
+}
+
+/// One wire value of a crossing that occupies several.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Wire {
+    /// The JNI type this value crosses as.
+    pub(crate) ty: syn::Type,
+    /// The path through the value that reached it — `tag`, `summary.count` —
+    /// which is what a JNI parameter name and a Kotlin accessor are both
+    /// mangled from.
+    pub(crate) path: String,
 }
 
 impl Carrier for JFrag {
@@ -44,6 +67,7 @@ impl JFrag {
     pub(crate) fn by_hand(ty: TypeKey, conv: ConverterImpl<KotlinMeta>) -> Self {
         Self {
             conv,
+            wires: None,
             yields: Yield {
                 ty,
                 mode: Mode::Owned,
@@ -56,6 +80,7 @@ impl JFrag {
         let validity = validity_of(&conv, at.crossing.assembly());
         Self {
             conv,
+            wires: None,
             yields: Yield {
                 ty: at.crossing.value().stripped_key(),
                 mode: at.crossing.mode(),
@@ -281,8 +306,52 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         Err(refuse(at, "JniGen states no value-form rows yet"))
     }
 
-    fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, _parts: Parts<'_, Self>) -> Frag<Self> {
-        Err(refuse(at, "JniGen states no product rows yet"))
+    fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
+        if at.crossing.assembly() != Assembly::Construct {
+            return Err(refuse(
+                at,
+                "JniGen states no deconstructing product rows yet",
+            ));
+        }
+        // A `data_class` crosses as its fields, and a field that is itself one
+        // contributes its own several — which is the recursion, stated once
+        // here rather than walked by hand.
+        let mut wires: Vec<Wire> = Vec::new();
+        for (part, frag) in parts {
+            match &frag.wires {
+                Some(inner) => wires.extend(inner.iter().map(|w| Wire {
+                    ty: w.ty.clone(),
+                    path: format!("{}.{}", part.name, w.path),
+                })),
+                None => wires.push(Wire {
+                    ty: frag.conv.destination.clone(),
+                    path: part.name.clone(),
+                }),
+            }
+        }
+        // Only the wire list is composed here. The conversion that reads these
+        // several values and rebuilds the struct is what the emitter switch
+        // brings; until then this row is compiled but never taken, so it
+        // carries a marker rather than a conversion it would have to invent.
+        // `prebindgen-c` does the same for a union arm, and for the same
+        // reason: a product's parts do not always assemble into a function of
+        // their own.
+        let mut frag = JFrag::new(
+            at,
+            ConverterImpl {
+                destination: syn::parse_quote!(()),
+                function: syn::parse_quote!(
+                    #[allow(dead_code)]
+                    fn __jni_parts() {}
+                ),
+                pre_stages: Vec::new(),
+                niches: Niches::empty(),
+                metadata: KotlinMeta::default(),
+                subs: parts.iter().map(|(p, _)| p.ty.key()).collect(),
+            },
+        );
+        frag.wires = Some(wires);
+        Ok(frag)
     }
 
     fn choice(

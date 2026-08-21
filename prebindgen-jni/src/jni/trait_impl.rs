@@ -1423,8 +1423,17 @@ impl JniGenBuilder {
                     .join("; "),
             }
         })?;
-        // JniGen overrides no site yet: every crossing takes its type's own row.
-        let bindings = prebindgen_registry::recipe::Bindings::default();
+        // A `data_class` field that is itself one takes the `parts` row rather
+        // than its own default — see `Declarations::bindings`.
+        let bindings = decls.bindings(&model, &recipes).map_err(|errors| {
+            prebindgen_registry::ScanError::AdapterInvariant {
+                message: errors
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            }
+        })?;
         // The driver's state lives on `decls` rather than here, because the
         // adapter reads it **while** it compiles: a conversion for one type is
         // built out of the conversions for its inners, which are compiled
@@ -1477,6 +1486,12 @@ impl JniGenBuilder {
             .borrow()
             .fragments()
             .into_iter()
+            // A fragment that carries only a wire list has no conversion to
+            // emit: the `parts` row states what a `data_class` is made of, and
+            // the function that reads those several values and rebuilds the
+            // struct is what the emitter switch brings. Its marker would
+            // otherwise reach the file.
+            .filter(|f| f.wires.is_none())
             // A JNI conversion already emits more than one function: a
             // `convert!` with a fallible or binding-local step carries it as a
             // pre-stage, and every one of them has to reach the file. This is
@@ -1555,6 +1570,31 @@ impl Declarations {
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(reading, assembly);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
+        // A `data_class` also states a row that says what it is made of, and
+        // compiling it here is what holds the composition to every binding this
+        // crate builds rather than to one fixture. Nothing reads the result
+        // yet: `whole` is still the row every site takes, so a failure here is
+        // a failure to compose parts that already cross individually.
+        if assembly == prebindgen_registry::recipe::Assembly::Construct
+            && matches!(
+                self.types.get(&crossing.value().key()).map(|c| &c.kind),
+                Some(DeclaredKind::Data)
+            )
+        {
+            // A refusal is a bug in the composition, not a gap in the binding:
+            // every part of a `data_class` is a crossing that already resolved
+            // on its own, so there is nothing here that can legitimately be
+            // missing. Panicking says so where returning `None` would report an
+            // unresolved crossing and blame the declaration.
+            compiler
+                .row_of(&mut adapter, &crossing, &crate::jni::rows::parts())
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "JniGen: `{}` crosses as its fields, but composing them failed: {e:?}",
+                        crossing.spelled().key()
+                    )
+                });
+        }
         Some((*fragment).clone().conv)
     }
 
