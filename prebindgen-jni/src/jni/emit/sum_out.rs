@@ -25,68 +25,49 @@ use super::*;
 /// variant fragment from its property.
 pub(crate) const SUM_TAG_LEAF: &str = "tag";
 
-/// Synthesize the leaves of one `sealed_class`-declared sum: the
-/// [`LeafSource::SumTag`] selector followed by one
+/// The leaves of one `sealed_class`-declared sum, as the expansion plans want
+/// them: the [`LeafSource::SumTag`] selector followed by one
 /// [`LeafSource::VariantField`] leaf per payload field, in tag order, each
 /// carrying its variant's tag as its [`group`](UnfoldLeaf::group).
 ///
-/// Runs BEFORE `resolve` (like
-/// [`synth_value_struct_leaves`](super::synth_value_struct_leaves)), so it may
-/// only read the declaration (`sum_cfg`) and the enum's syntax — never the
-/// converter tables. Every payload's own `out_ty` is registered as a required
-/// output by the core wiring, so a payload that cannot cross fails naming
-/// itself.
-///
-/// Slot names come from the same [`sum_slot_fragment`] / [`sum_field_prop_name`]
-/// pair the sealed-interface emitter and the struct-field bridge use, so a
-/// `variant!(V).name(...)` rename carries through to the builder's parameter
-/// names too.
+/// The list is `Declarations::sum_out_wires`', mapped. Runs BEFORE `resolve`,
+/// which is exactly why it shares that composition rather than walking the
+/// enum a second time: a `variant!(V).name(..)` rename and the slot naming have
+/// to reach the builder's parameter names and the row identically, and two
+/// walks agreeing was a property nothing checked.
 pub(crate) fn synth_sum_leaves(
     ext: &Declarations,
-    sum_cfg: &SumConfig,
+    registry: &impl Conversions,
+    ident: &syn::Ident,
     sum: &prebindgen_registry::flat::Variant,
 ) -> Vec<prebindgen_registry::unfold::UnfoldLeaf> {
     use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
-
-    // The selector rides ahead of the groups it chooses between, and carries
-    // **which sum** it selects over as its `out_ty` — that is how the emitter
-    // finds the enum to `match` when the sum is a field rather than the whole
-    // returned value. Nothing looks up a converter for it (`has_converter()` is
-    // false for a `SumTag`): there is no value to convert, the emitter assigns
-    // the tag literal per arm. Its wire is a `jint` by definition.
-    let mut leaves = vec![UnfoldLeaf {
-        name: SUM_TAG_LEAF.to_string(),
-        path: Vec::new(),
-        // The tag names WHICH sum it selects over, and no source wrote that as
-        // a standalone type — so the DECLARATION answers, rather than this
-        // emitter minting a reading from the name. Nothing resolves a converter
-        // for it (`has_converter()` is false), but the emitter reads it back to
-        // find the enum to `match`.
-        out_ty: sum.type_ref().clone(),
-        identity: false,
-        nullable: false,
-        source: LeafSource::SumTag,
-        group: None,
-    }];
-    for alt in &sum.alternatives {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
-        for field in &alt.fields {
-            let prop = sum_field_prop_name(&field.member());
-            leaves.push(UnfoldLeaf {
-                name: sum_slot_fragment(&kotlin_name, &prop),
-                path: Vec::new(),
-                out_ty: field.ty.clone(),
-                identity: false,
-                nullable: false,
-                source: LeafSource::VariantField {
-                    variant: alt.name.clone(),
-                    member: field.member(),
-                },
-                group: Some(sum_tag(alt)),
-            });
-        }
-    }
-    leaves
+    ext.sum_out_wires(registry, ident, sum.type_ref())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|w| UnfoldLeaf {
+            name: w.name,
+            path: Vec::new(),
+            out_ty: w.out_ty,
+            identity: false,
+            nullable: w.nullable,
+            source: match w.from {
+                // Nothing looks up a converter for the selector
+                // (`has_converter()` is false for a `SumTag`): there is no
+                // value to convert, the emitter assigns the tag literal per
+                // arm. Its wire is a `jint` by definition.
+                crate::jni::compile::OutFrom::Tag => LeafSource::SumTag,
+                crate::jni::compile::OutFrom::Payload { variant, member } => {
+                    LeafSource::VariantField {
+                        variant: variant.expect("a composed payload names its alternative"),
+                        member,
+                    }
+                }
+                crate::jni::compile::OutFrom::Field { .. } => LeafSource::Field,
+            },
+            group: w.group,
+        })
+        .collect()
 }
 
 /// The wire slot one leaf occupies when its value is only computed in SOME arm

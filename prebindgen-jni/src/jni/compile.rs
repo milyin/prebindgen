@@ -1343,45 +1343,18 @@ impl<R: Conversions> JCompile<'_, R> {
         let TypeKind::Named { id, .. } = at.crossing.value().unwrapped().kind() else {
             return Err(refuse(at, "a choice row over a type that is not named"));
         };
-        let sum_cfg = id
+        let ident = id
             .ident()
-            .and_then(|ident| self.decls.types.get(&TypeKey::from_ident(&ident)))
-            .and_then(|cfg| cfg.sum())
+            .ok_or_else(|| refuse(at, "a choice row over a type that is not one identifier"))?;
+        // The composition is the declaration's and the model's, so the same
+        // answer serves the leaf synthesis that runs before `resolve`. The arm
+        // fragments the driver built are not read at all — a sum hands its
+        // payloads out through their own conversions, and which those are is
+        // the emitter's question rather than this row's.
+        let wires = self
+            .decls
+            .sum_out_wires(self.registry, &ident, at.crossing.value())
             .ok_or_else(|| refuse(at, "a choice row over an undeclared sum"))?;
-
-        // The selector rides ahead of the groups it chooses between, and
-        // carries **which sum** it selects over — nothing converts it, so
-        // naming the sum is the only use its type has, and it is the one an
-        // emitter needs to find the enum to match.
-        let mut wires = vec![OutWire {
-            name: crate::jni::emit::SUM_TAG_LEAF.to_string(),
-            out_ty: at.crossing.value().clone(),
-            group: None,
-            from: OutFrom::Tag,
-            nullable: false,
-        }];
-        for (alt, frag) in arms {
-            let kotlin = self.decls.sum_variant_class_name(sum_cfg, &alt.name);
-            let group = Some(crate::jni::struct_plan::sum_tag(alt));
-            for w in frag.out_wires.as_ref().into_iter().flatten() {
-                let OutFrom::Payload { member, .. } = &w.from else {
-                    return Err(refuse(
-                        at,
-                        "an arm that states something other than payloads",
-                    ));
-                };
-                wires.push(OutWire {
-                    name: crate::jni::struct_plan::sum_slot_fragment(&kotlin, &w.name),
-                    out_ty: w.out_ty.clone(),
-                    group,
-                    from: OutFrom::Payload {
-                        variant: Some(alt.name.clone()),
-                        member: member.clone(),
-                    },
-                    nullable: w.nullable,
-                });
-            }
-        }
         let mut frag = JFrag::new(at, self.parts_marker(parts_subs(arms)));
         frag.out_wires = Some(wires);
         frag.composed_only = true;
@@ -1579,6 +1552,63 @@ impl<R: Conversions> JCompile<'_, R> {
                 whole_gate: false,
             },
         ])
+    }
+}
+
+impl Declarations {
+    /// The values a `sealed_class` hands out: the selector, then one group of
+    /// slots per alternative, laid beside the others.
+    ///
+    /// Model and declaration only — no conversion is read. That is what lets
+    /// one answer serve on both sides of `resolve`: the leaf synthesis feeding
+    /// `Decompositions` runs before it, the row composes after it, and a fact
+    /// derived twice is a fact that can differ.
+    ///
+    /// `None` for a type the model does not hold as a data-carrying enum, or
+    /// one no `sealed_class!` declares — neither has a decomposition to state.
+    pub(crate) fn sum_out_wires(
+        &self,
+        registry: &impl Conversions,
+        ident: &syn::Ident,
+        sum_ty: &TypeRef,
+    ) -> Option<Vec<OutWire>> {
+        let prebindgen_registry::flat::Type::Variant(sum) = registry.flat().declared_type(ident)?
+        else {
+            return None;
+        };
+        let cfg = self.types.get(&TypeKey::from_ident(ident))?.sum()?;
+
+        // The selector rides ahead of the groups it chooses between, and
+        // carries **which sum** it selects over — nothing converts it, so
+        // naming the sum is the only use its type has, and it is the one an
+        // emitter needs: which enum to match over.
+        let mut wires = vec![OutWire {
+            name: crate::jni::emit::SUM_TAG_LEAF.to_string(),
+            out_ty: sum_ty.clone(),
+            group: None,
+            from: OutFrom::Tag,
+            nullable: false,
+        }];
+        for alt in &sum.alternatives {
+            let kotlin = self.sum_variant_class_name(cfg, &alt.name);
+            for field in &alt.fields {
+                let member = field.member();
+                wires.push(OutWire {
+                    name: crate::jni::struct_plan::sum_slot_fragment(
+                        &kotlin,
+                        &crate::jni::struct_plan::sum_field_prop_name(&member),
+                    ),
+                    out_ty: field.ty.clone(),
+                    group: Some(crate::jni::struct_plan::sum_tag(alt)),
+                    from: OutFrom::Payload {
+                        variant: Some(alt.name.clone()),
+                        member,
+                    },
+                    nullable: false,
+                });
+            }
+        }
+        Some(wires)
     }
 }
 
