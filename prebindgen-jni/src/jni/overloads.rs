@@ -122,7 +122,7 @@ fn arm_erased_sig(
             Some(f) => f
                 .params
                 .iter()
-                .map(|p| rust_type_erased(ext, registry, &p.ty))
+                .map(|p| rust_type_erased(ext, &p.ty))
                 .collect(),
             None => Vec::new(),
         },
@@ -133,7 +133,7 @@ fn arm_erased_sig(
         // form is the identity's own canonical spelling — which is all a
         // declaration has to be told apart by.
         None => vec![match registry.reading(target) {
-            Some(reading) => rust_type_erased(ext, registry, &reading),
+            Some(reading) => rust_type_erased(ext, &reading),
             None => ErasedJvmType::raw(target.as_str().to_string()),
         }],
     }
@@ -145,11 +145,7 @@ fn arm_erased_sig(
 /// there. Falls back to the token string for a
 /// type with no resolved surface. References are peeled first (`&T` erases
 /// like `T`).
-fn rust_type_erased(
-    ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
-    ty: &prebindgen_registry::flat::TypeRef,
-) -> ErasedJvmType {
+fn rust_type_erased(ext: &Declarations, ty: &prebindgen_registry::flat::TypeRef) -> ErasedJvmType {
     // The spelling's own outermost borrow, as `TypeKind::Ref` — not
     // `borrow_target`, which reaches through the erased wrappers (#S31).
     let peeled = match ty.kind() {
@@ -162,8 +158,8 @@ fn rust_type_erased(
             return erase_kt_type(&[], &KtType::cls(fqn));
         }
     }
-    if let Some(kt) = registry
-        .input_entry(peeled)
+    if let Some(kt) = ext
+        .in_frag(peeled)
         .and_then(|e| e.metadata.kotlin_name.clone())
     {
         return erase_kt_type(&[], &kt);

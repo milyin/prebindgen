@@ -33,6 +33,25 @@ impl Carrier for JFrag {
 }
 
 impl JFrag {
+    /// A conversion this adapter built without the compiler.
+    ///
+    /// A callback crossing is the only one: `JniGen::compile_crossing` answers
+    /// it with `dispatch_fn_input` rather than through a row, so there is no
+    /// `At` to take a crossing's own mode from. It is an owned, self-sufficient
+    /// value — a callback is delivered as a JVM object the wrapper holds — and
+    /// nothing composes a callback as an inner, so no row ever reads this
+    /// `Yield`. Goes with the derived callback row.
+    pub(crate) fn by_hand(ty: TypeKey, conv: ConverterImpl<KotlinMeta>) -> Self {
+        Self {
+            conv,
+            yields: Yield {
+                ty,
+                mode: Mode::Owned,
+                validity: Validity::SelfSufficient,
+            },
+        }
+    }
+
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
         let validity = validity_of(&conv, at.crossing.assembly());
         Self {
@@ -294,5 +313,44 @@ impl<R: Conversions<KotlinMeta>> Compile for JCompile<'_, R> {
 
     fn plan(&mut self, _cx: &mut Cx<'_>, _bound: &Bound, _root: &JFrag) -> Result<(), String> {
         Ok(())
+    }
+}
+
+/// What an emitter asks instead of the converter table.
+///
+/// Each hands back the fragment's `ConverterImpl`, which is what a table entry
+/// was, so a call site reads the same fields it always did — from this
+/// adapter's own answer rather than from the shared index. Cloned rather than
+/// borrowed because [`Declarations::compiled`] is read while it is still being
+/// filled; a conversion is built once per crossing, so the clone is not on any
+/// hot path.
+///
+/// `None` means nothing has compiled that crossing. During compilation that is
+/// the deferral the resolver already understands — it retries — and after it,
+/// the only crossing without a fragment is a callback, which
+/// `JniGen::compile_crossing` answers without the compiler.
+impl crate::jni::Declarations {
+    /// The conversion for `ty` in the given direction, from the fragments
+    /// compiled so far.
+    pub(crate) fn frag(
+        &self,
+        ty: &TypeRef,
+        assembly: Assembly,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        Some(
+            self.compiled
+                .borrow()
+                .fragment(&ty.key(), assembly)?
+                .conv
+                .clone(),
+        )
+    }
+
+    pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<ConverterImpl<KotlinMeta>> {
+        self.frag(ty, Assembly::Construct)
+    }
+
+    pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<ConverterImpl<KotlinMeta>> {
+        self.frag(ty, Assembly::Deconstruct)
     }
 }

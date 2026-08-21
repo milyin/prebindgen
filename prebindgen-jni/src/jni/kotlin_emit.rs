@@ -728,7 +728,7 @@ impl Declarations {
             let mut vcloses: Vec<String> = Vec::new();
             for field in &alt.fields {
                 let prop = sum_field_prop_name(&field.member());
-                let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
+                let ty = self.sum_payload_kt_type(&sum.name, &alt.name, &prop, field);
                 if let Some(strategy) = payload_close(field) {
                     vcloses.push(render_handle_close(&strategy, &prop));
                 }
@@ -795,7 +795,7 @@ impl Declarations {
             let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
             for field in &alt.fields {
                 let prop = sum_field_prop_name(&field.member());
-                let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
+                let ty = self.sum_payload_kt_type(&sum.name, &alt.name, &prop, field);
                 factory = factory.param(KtParam::new(sum_slot_fragment(&vname, &prop), ty));
             }
         }
@@ -905,7 +905,6 @@ impl Declarations {
     ///   ABI mismatch at runtime.
     fn sum_payload_kt_type(
         &self,
-        registry: &Registry<KotlinMeta>,
         sum_name: &syn::Ident,
         variant: &syn::Ident,
         prop: &str,
@@ -917,7 +916,7 @@ impl Declarations {
         // below, which is a diagnostic and needs no emission capability.
         let field_ty = &field.ty;
         let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
-        let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
+        let out = self.out_frag(&field.ty).unwrap_or_else(|| {
             panic!(
                 "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
                  cannot be derived — register converters for the payload type before \
@@ -957,7 +956,7 @@ impl Declarations {
         // boxed value, a present flag, a niche) rather than in the type name.
         // Comparing the rendered types would reject that legitimate shape —
         // which is what an `Option<enum>` payload does.
-        if let Some(inp) = registry.input_entry(&field.ty) {
+        if let Some(inp) = self.in_frag(&field.ty) {
             if let (Some(in_ty), (Some(a), Some(b))) = (
                 inp.metadata.kotlin_name.clone(),
                 (
@@ -1597,7 +1596,7 @@ impl Declarations {
                 .zip(params)
                 .zip(names)
                 .filter(|((l, _), _)| l.group == Some(group))
-                .map(|((l, p), n)| self.sum_ctor_arg(registry, l, p, n, imports))
+                .map(|((l, p), n)| self.sum_ctor_arg(l, p, n, imports))
                 .collect();
             // Kotlin has no `B()` / `B {}` distinction to keep: a payload-less
             // alternative is a `data object`, named bare. The Rust side is where
@@ -1641,7 +1640,6 @@ impl Declarations {
     /// `!!` would turn a legitimately absent value into an exception.
     fn sum_ctor_arg(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
         leaf: &prebindgen_registry::unfold::UnfoldLeaf,
         param: &crate::jni::IfaceParam,
         name: &str,
@@ -1655,7 +1653,6 @@ impl Declarations {
             name.to_string()
         };
         self.carry_layers(
-            registry,
             &param.wrap,
             param.raw.is_nullable(),
             &leaf.out_ty,
@@ -1686,7 +1683,6 @@ impl Declarations {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn carry_layers(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
         wrap: &crate::jni::WrapKind,
         slot_nullable: bool,
         ty: &prebindgen_registry::flat::TypeRef,
@@ -1696,16 +1692,7 @@ impl Declarations {
         imports: &mut BTreeSet<String>,
     ) -> String {
         if let Some(inner) = ty.optional_inner() {
-            return self.carry_layers(
-                registry,
-                wrap,
-                slot_nullable,
-                inner,
-                recv,
-                true,
-                depth,
-                imports,
-            );
+            return self.carry_layers(wrap, slot_nullable, inner, recv, true, depth, imports);
         }
         if let Some(elem) = ty.sequence_elem() {
             let bound = if depth == 0 {
@@ -1714,7 +1701,6 @@ impl Declarations {
                 format!("__e{depth}")
             };
             let body = self.carry_layers(
-                registry,
                 wrap,
                 slot_nullable,
                 elem,
@@ -1744,8 +1730,8 @@ impl Declarations {
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
         if self.is_kotlin_enum_reading(ty) {
-            let name = registry
-                .output_entry(ty)
+            let name = self
+                .out_frag(ty)
                 .and_then(|e| e.metadata.kotlin_name.clone())
                 .and_then(|t| t.leaf_name().map(str::to_string))
                 .unwrap_or_else(|| {

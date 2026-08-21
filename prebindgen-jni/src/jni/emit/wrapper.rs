@@ -231,8 +231,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // registry borrows for the future build-once stage.
     let output_entry = match &plan.output {
         FnOutputPlan::Value(v) => Some(
-            registry
-                .output_entry(&v.target_ty)
+            ext.out_frag(&v.target_ty)
                 .expect("output entry validated at plan build"),
         ),
         FnOutputPlan::Unfold(_) => None,
@@ -692,8 +691,8 @@ fn emit_input_param(
                 prebindgen_registry::flat::TypeKind::Ref { .. }
             ) =>
         {
-            let entry = registry
-                .input_entry(arg_ty)
+            let entry = ext
+                .in_frag(arg_ty)
                 .expect("plan classified Handle ⇒ entry present");
             let wire_ident = if matches!(&entry.destination, syn::Type::Ptr(_)) {
                 format_ident!("{}_ptr", arg_ident)
@@ -726,7 +725,7 @@ fn emit_input_param(
             // without the round trip. The panic now CALLS the shared message
             // instead of restating it, which is what `PlanError::message`'s doc
             // has always claimed and hand-duplication did not deliver.
-            let entry = registry.input_entry(&leaf.reading).unwrap_or_else(|| {
+            let entry = ext.in_frag(&leaf.reading).unwrap_or_else(|| {
                 panic!(
                     "{}",
                     PlanError::Unresolved {
@@ -735,7 +734,7 @@ fn emit_input_param(
                     .message(original_ident)
                 )
             });
-            emit_plain_decode(entry, arg_ident, arg_ty, on_err)
+            emit_plain_decode(&entry, arg_ident, arg_ty, on_err)
         }
     }
 }
@@ -744,7 +743,7 @@ fn emit_input_param(
 /// wire param + staged decode prelude + the call argument (`&decoded` /
 /// `.as_deref()` per the source param's Rust shape).
 fn emit_plain_decode(
-    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
     arg_ident: &syn::Ident,
     arg_ty: &prebindgen_registry::flat::TypeRef,
     on_err: &TokenStream,
@@ -897,7 +896,7 @@ pub(crate) fn emit_expanded_param(
         let lookup_entry = || {
             // The leaf's own reading goes straight to the entry: spelling it and
             // looking the same reading back up is the round trip #286 removed.
-            registry.input_entry(&leaf.ty).unwrap_or_else(|| {
+            ext.in_frag(&leaf.ty).unwrap_or_else(|| {
                 // Shared wording, not restated — see the sibling backstop above.
                 panic!(
                     "{}",

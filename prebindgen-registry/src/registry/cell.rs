@@ -83,6 +83,27 @@ impl<M> TypeEntry<M> {
         }
     }
 
+    /// This entry as the conversion an adapter built.
+    ///
+    /// The two types differ only in `subs`, which an entry keys and a
+    /// conversion spells. An emitter reading a compiled fragment gets a
+    /// [`ConverterImpl`](crate::ConverterImpl), so a helper it shares with a
+    /// caller that still holds a table entry speaks that type, and the entry
+    /// converts.
+    pub fn as_converter(&self) -> crate::ConverterImpl<M>
+    where
+        M: Clone,
+    {
+        crate::ConverterImpl {
+            destination: self.destination.clone(),
+            function: self.function.clone(),
+            pre_stages: self.pre_stages.clone(),
+            niches: self.niches.clone(),
+            metadata: self.metadata.clone(),
+            subs: Vec::new(),
+        }
+    }
+
     /// Identifier of the wire-facing converter function.
     pub fn converter_ident(&self) -> &syn::Ident {
         &self.function.sig.ident

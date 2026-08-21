@@ -45,7 +45,7 @@ pub(crate) fn struct_input_body(
         // fixed-point loop will retry on the next iteration. The field's own
         // reading straight to its entry — the `reading_of` hop only ever
         // recovered what the field already carried.
-        let field_entry = registry.input_entry(&field.ty)?;
+        let field_entry = ext.in_frag(&field.ty)?;
         // The optional layer off the MODEL, asked once and reused: every site
         // below that wants "is this field optional" reads this, so they cannot
         // disagree with each other the way four independent path-segment tests
@@ -56,7 +56,7 @@ pub(crate) fn struct_input_body(
         let field_wire = field_entry.destination.clone();
         // The field's COMPLETE decode, stages included — a `convert!` type
         // reaches its Rust value through them (`jlong -> u64 -> Duration`).
-        let field_conv = composed_entry_decode(field_entry, &raw_ident, &fname_ident);
+        let field_conv = composed_entry_decode(&field_entry, &raw_ident, &fname_ident);
 
         // Projection fields — mirror of `struct_output_body`'s kind branch:
         //  * Handle: read the JNINativeHandle object from the JVM slot,
@@ -115,11 +115,8 @@ pub(crate) fn struct_input_body(
                             proj.strategy,
                             FoldStrategy::Optional(NullableKind::Niche, _)
                         );
-                        let inner_conv = composed_entry_decode(
-                            registry.input_entry(inner)?,
-                            &raw_ident,
-                            &fname_ident,
-                        );
+                        let inner_conv =
+                            composed_entry_decode(&ext.in_frag(inner)?, &raw_ident, &fname_ident);
                         let tmp_ident = format_ident!("__{}_jobj", fname_ident);
                         let decode = if niche {
                             // The Kotlin data-class property is still `ULong?`
@@ -182,7 +179,7 @@ pub(crate) fn struct_input_body(
             {
                 let sig = format!("L{};", fqn.replace('.', "/"));
                 let inner_conv =
-                    composed_entry_decode(registry.input_entry(inner)?, &raw_ident, &fname_ident);
+                    composed_entry_decode(&ext.in_frag(inner)?, &raw_ident, &fname_ident);
                 let tmp_ident = format_ident!("__{}_jobj", fname_ident);
                 let decode = if field_optional {
                     quote! {
@@ -240,8 +237,8 @@ pub(crate) fn struct_input_body(
                 // Kotlin class for a nested data-class field (Option-stripped
                 // — a nullable field keeps the same descriptor), `List` for a
                 // `Vec` field.
-                let sig = registry
-                    .input_entry(inner)
+                let sig = ext
+                    .in_frag(inner)
                     .and_then(|e| jni_field_access(&e.destination))
                     .and_then(|(sig, _, is_obj)| {
                         if is_obj {
@@ -352,7 +349,6 @@ pub(crate) fn sum_input_body(
             let err_prefix = format!("{enum_name}.{kotlin_name}.{prop}: {{}}");
             let (pre, value) = read_kotlin_property(
                 ext,
-                registry,
                 &quote!(__obj),
                 &prop,
                 &field.ty,
@@ -415,7 +411,6 @@ pub(crate) fn sum_input_body(
 #[allow(clippy::too_many_arguments)]
 fn read_kotlin_property(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
     receiver: &TokenStream,
     prop: &str,
     reading: &TypeRef,
@@ -427,7 +422,7 @@ fn read_kotlin_property(
     // below asked of it once — `option_inner_type` compared the last path
     // segment, so a payload spelled `Box<Option<T>>` answered "not optional"
     // four separate times here (#289).
-    let entry = registry.input_entry(reading)?;
+    let entry = ext.in_frag(reading)?;
     let ty = emit.spell(reading);
     let optional = reading.optional_inner().is_some();
     let inner = reading.optional_inner().unwrap_or(reading);
@@ -438,7 +433,7 @@ fn read_kotlin_property(
     // stages that follow (`jlong → u64 → Duration`). Stage bindings are named
     // off `bind`, so two payloads of the same type in one variant do not
     // collide.
-    let conv = composed_property_decode(entry, bind);
+    let conv = composed_property_decode(&entry, bind);
 
     // A handle property is a `NativeHandle` object whose raw pointer comes
     // from `peek()`; an enum property is the Kotlin enum class, decoded
@@ -509,7 +504,7 @@ fn read_kotlin_property(
         // Under `Option`, JVM null is `None` and the INNER converter decodes
         // the discriminant; the outer converter would expect a boxed Integer.
         let decode = if optional {
-            let inner_conv = composed_entry_decode(registry.input_entry(inner)?, &raw, bind);
+            let inner_conv = composed_entry_decode(&ext.in_frag(inner)?, &raw, bind);
             quote! {
                 let #bind = if #obj.is_null() {
                     ::core::option::Option::None
@@ -614,7 +609,7 @@ fn read_kotlin_property(
 /// derive from `stage_base`, so two values of the same type in one scope get
 /// distinct names.
 fn composed_entry_decode(
-    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
     raw: &syn::Ident,
     stage_base: &syn::Ident,
 ) -> TokenStream {
@@ -641,7 +636,7 @@ fn composed_entry_decode(
 /// [`composed_entry_decode`] for a sealed-class property, whose raw binding is
 /// `<bind>_raw` by construction.
 fn composed_property_decode(
-    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
     bind: &syn::Ident,
 ) -> TokenStream {
     composed_entry_decode(entry, &format_ident!("{}_raw", bind), bind)
@@ -695,7 +690,7 @@ pub(crate) struct FlatLeaf {
     pub is_present_flag: bool,
     /// Complete converter entry for an ordinary value leaf. Present flags and
     /// direct owned-handle leaves have no entry here.
-    pub entry: Option<prebindgen_registry::TypeEntry<KotlinMeta>>,
+    pub entry: Option<prebindgen_registry::ConverterImpl<KotlinMeta>>,
     /// A nested owned handle crosses as a raw pointer under the same Kotlin
     /// locking/consume scaffold as a top-level handle. This stores the typed
     /// property access tail (`.child.handle` / `?.handle`) used to collect it.
@@ -1005,7 +1000,7 @@ fn flat_error(root: &TypeKey, path: &str, reason: impl Into<String>) -> FlatInpu
     }
 }
 
-fn wire_kotlin_type(entry: &prebindgen_registry::TypeEntry<KotlinMeta>) -> String {
+fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<KotlinMeta>) -> String {
     if let Some(p) = JniPrim::from_wire(&entry.destination) {
         return p.kotlin_type().to_string();
     }
@@ -1088,7 +1083,7 @@ fn build_flat_sum_field(
     }
     struct PlannedLeaf {
         native: String,
-        entry: prebindgen_registry::TypeEntry<KotlinMeta>,
+        entry: prebindgen_registry::ConverterImpl<KotlinMeta>,
         access_tail: String,
         nullable_wire: bool,
     }
@@ -1098,7 +1093,7 @@ fn build_flat_sum_field(
         let mut fields = Vec::new();
         for field in &alt.fields {
             // The payload's own reading straight to its entry.
-            let entry = registry.input_entry(&field.ty)?;
+            let entry = ext.in_frag(&field.ty)?;
             // A projection payload (handle) carries ownership
             // and locking rules the tag-gated group does not model yet.
             if entry.metadata.projection.is_some() {
@@ -1250,7 +1245,7 @@ fn push_value_leaf(
     leaves: &mut Vec<FlatLeaf>,
     native: &str,
     field: syn::Ident,
-    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
     access: String,
     nullable_wire: bool,
 ) -> usize {
@@ -1356,7 +1351,7 @@ pub(crate) fn build_flat_input_plan(
     // param's Kotlin type (compared by short name, since metadata carries the
     // FQN) must equal the struct's data-class name.
     // The parameter's own reading straight to its entry — no spell-and-look-back.
-    let Some(entry) = registry.input_entry(arg) else {
+    let Some(entry) = ext.in_frag(arg) else {
         return Ok(None);
     };
     if entry.metadata.projection.is_some() {
@@ -1526,7 +1521,7 @@ fn build_flat_struct_node(
         let path = child_native.clone();
         // The field's own reading straight to its entry — the `reading_of` hop
         // only ever recovered what the field already carried.
-        let Some(fentry) = registry.input_entry(&field.ty) else {
+        let Some(fentry) = ext.in_frag(&field.ty) else {
             return Err(flat_error(
                 root,
                 &path,
@@ -1538,7 +1533,7 @@ fn build_flat_struct_node(
         // `(present, value)` representation at every recursion depth.
         if let Some(inner_reading) = field.ty.optional_inner() {
             if inner_reading.borrow_target().is_none() {
-                if let Some(inner) = registry.input_entry(inner_reading) {
+                if let Some(inner) = ext.in_frag(inner_reading) {
                     if let Some(prim) = JniPrim::from_wire(&inner.destination) {
                         if inner.niches.clone().carve().is_none()
                             && inner.metadata.projection.is_none()
@@ -1559,7 +1554,7 @@ fn build_flat_struct_node(
                                 leaves,
                                 &format!("{child_native}_value"),
                                 fident.clone(),
-                                inner,
+                                &inner,
                                 value_access,
                                 false,
                             );
@@ -1589,7 +1584,7 @@ fn build_flat_struct_node(
             if proj.kind == ProjectionKind::Unsigned64 {
                 if let Some(inner_reading) = field.ty.optional_inner() {
                     if JniPrim::from_wire(&fentry.destination).is_none() {
-                        let inner = registry.input_entry(inner_reading).ok_or_else(|| {
+                        let inner = ext.in_frag(inner_reading).ok_or_else(|| {
                             flat_error(
                                 root,
                                 &path,
@@ -1609,7 +1604,7 @@ fn build_flat_struct_node(
                             leaves,
                             &format!("{child_native}_value"),
                             fident.clone(),
-                            inner,
+                            &inner,
                             format!("{field_ref}?.toLong() ?: 0L"),
                             false,
                         );
@@ -1670,7 +1665,7 @@ fn build_flat_struct_node(
                         leaves,
                         &child_native,
                         fident.clone(),
-                        fentry,
+                        &fentry,
                         access,
                         false,
                     );
@@ -1717,7 +1712,7 @@ fn build_flat_struct_node(
             leaves,
             &child_native,
             fident.clone(),
-            fentry,
+            &fentry,
             access,
             (field_is_option || nullable_context) && is_jobject_shaped_wire(&fentry.destination),
         );
@@ -1772,7 +1767,7 @@ pub(crate) fn render_flat_input_decode(
 }
 
 fn render_entry_decode(
-    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
     wire_ident: &syn::Ident,
     out_ident: &syn::Ident,
     on_err: &TokenStream,
@@ -2097,7 +2092,6 @@ pub(crate) struct OptionScalarInputPlan {
 /// unboxed / ABI-clean) and opaque/value projections are left untouched.
 pub(crate) fn build_option_scalar_input_plan(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
     arg: &TypeRef,
 ) -> Option<OptionScalarInputPlan> {
@@ -2114,7 +2108,7 @@ pub(crate) fn build_option_scalar_input_plan(
         return None;
     }
     // The layer's own reading straight to its entry — no spell-and-look-back.
-    let inner_entry = registry.input_entry(inner)?;
+    let inner_entry = ext.in_frag(inner)?;
     let value_wire = inner_entry.destination.clone();
     // Only the boxed-primitive fallback shape: primitive wire, no niche,
     // no projection, no composed pre-stages.

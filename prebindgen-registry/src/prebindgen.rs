@@ -116,6 +116,33 @@ pub struct ConverterImpl<M = ()> {
     pub subs: Vec<crate::registry::TypeKey>,
 }
 
+/// The same reads [`TypeEntry`](crate::TypeEntry) offers, on the conversion an
+/// adapter built. A `TypeEntry` is this type with its inners keyed, so an
+/// emitter reading a compiled fragment asks it the same questions.
+impl<M> ConverterImpl<M> {
+    /// Identifier of the wire-facing converter function.
+    pub fn converter_ident(&self) -> &syn::Ident {
+        &self.function.sig.ident
+    }
+
+    /// Wire type this conversion carries on success.
+    pub fn wire_type(&self) -> &syn::Type {
+        &self.destination
+    }
+
+    /// Rust-side stages in input execution order, after the wire-facing
+    /// converter has decoded the wire value.
+    pub fn input_stage_order(&self) -> impl Iterator<Item = (usize, &Stage<M>)> {
+        self.pre_stages.iter().enumerate().rev()
+    }
+
+    /// Rust-side stages in output execution order, before the wire-facing
+    /// converter encodes the final wire value.
+    pub fn output_stage_order(&self) -> impl Iterator<Item = (usize, &Stage<M>)> {
+        self.pre_stages.iter().enumerate()
+    }
+}
+
 /// The single extension point of the pipeline: implement this trait once per
 /// **destination language** (C/cbindgen, JNI/Kotlin, Swift, Python, …) to teach
 /// the language-agnostic [`Registry`] how that language represents Rust types

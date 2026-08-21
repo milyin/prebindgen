@@ -185,7 +185,7 @@ impl Declarations {
             return None;
         }
         let elem = inner.sequence_elem()?;
-        self.output_slice(elem, registry, emit)
+        self.output_slice(elem, emit)
     }
 }
 

@@ -64,7 +64,7 @@ pub(crate) struct ConvChain {
 
 impl ConvChain {
     /// Read the chain off a resolved output entry.
-    fn of(entry: &prebindgen_registry::TypeEntry<KotlinMeta>) -> Self {
+    fn of(entry: &prebindgen_registry::ConverterImpl<KotlinMeta>) -> Self {
         ConvChain {
             stages: entry
                 .output_stage_order()
@@ -301,8 +301,8 @@ pub(crate) fn classify_field(
         );
     }
 
-    let field_entry = registry.output_entry(reading)?;
-    let conv = ConvChain::of(field_entry);
+    let field_entry = ext.out_frag(reading)?;
+    let conv = ConvChain::of(&field_entry);
 
     {
         // Projection leaf (opaque handle / `ULong`).
@@ -338,7 +338,7 @@ pub(crate) fn classify_field(
                     Some(PlanFieldKind::Enum { conv, kotlin })
                 }
                 Some(inner) => {
-                    let kotlin = registry.output_entry(inner)?.metadata.kotlin_name.clone()?;
+                    let kotlin = ext.out_frag(inner)?.metadata.kotlin_name.clone()?;
                     Some(PlanFieldKind::OptionEnum { conv, kotlin })
                 }
             };
@@ -385,8 +385,8 @@ pub(crate) fn classify_field(
                 // Option-stripped off the MODEL: `optional_inner` is the
                 // layer's own reading, so there is nothing to re-look-up.
                 let slot = optional_inner.unwrap_or(reading);
-                let descriptor = registry
-                    .output_entry(slot)
+                let descriptor = ext
+                    .out_frag(slot)
                     .and_then(|e| jni_field_access(&e.destination))
                     .and_then(|(sig, _, is_obj)| {
                         if is_obj {
@@ -639,10 +639,7 @@ pub(crate) fn type_close_strategy(
     // something: a `ULong` owns nothing, and a borrowed handle is not ours to
     // release. Asked of the whole reading, so the `Option`/`Vec` folds the
     // projection carries come back in its own strategy.
-    if let Some(proj) = registry
-        .output_entry(ty)
-        .and_then(|e| e.metadata.projection.as_ref())
-    {
+    if let Some(proj) = ext.out_frag(ty).and_then(|e| e.metadata.projection.clone()) {
         return (matches!(proj.kind, ProjectionKind::Handle) && proj.owned)
             .then(|| proj.strategy.clone());
     }
