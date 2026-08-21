@@ -61,7 +61,7 @@ fn build(fns: &[&str]) -> String {
 /// one `Consume` or `ExclusiveBorrow`** *and* **any other active access in the
 /// same resource domain** — which is deliberately wider than "two or more
 /// consumed parameters", the reading that would have skipped the two mixed
-/// rows below.
+/// recipes below.
 #[test]
 fn preflight_is_emitted_exactly_for_the_predicate() {
     for (src, want) in [

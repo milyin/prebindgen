@@ -1,6 +1,6 @@
 //! Map a JNI wire type to its `(jvm_signature_chunk, JValue accessor,
 //! is_object)` triple — shared between the struct-strategy decoder/encoder
-//! and the callback strategy. The primitive rows are per-aspect views over
+//! and the callback strategy. The primitive recipes are per-aspect views over
 //! [`JniPrim`](super::JniPrim); only the object wires are local.
 
 use quote::format_ident;

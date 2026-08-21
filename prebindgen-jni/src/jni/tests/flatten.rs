@@ -2104,7 +2104,7 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
     );
 }
 
-/// A `data_class` states a row saying what it is made of, and a field that is
+/// A `data_class` states a recipe saying what it is made of, and a field that is
 /// itself one contributes its own wires rather than a single value.
 ///
 /// The composition every binding compiles (see `JniGen::compile_crossing`),
@@ -2156,7 +2156,7 @@ fn a_data_class_crosses_as_its_fields_and_a_nested_one_as_its_own() {
 
     let wires = gen
         .parts_wires_for_test("Holder")
-        .expect("Holder states a parts row");
+        .expect("Holder states a parts recipe");
     let described: Vec<String> = wires
         .iter()
         .map(|w| {
@@ -2297,13 +2297,13 @@ fn a_nullable_primitive_field_crosses_as_a_pair() {
     );
     // Neither half of the pair names a field of its own; the field they were
     // decoupled from is what both answer with.
-    let wires = gen.parts_wires_for_test("Scal").expect("row");
+    let wires = gen.parts_wires_for_test("Scal").expect("recipe");
     assert_eq!(wires[0].field(), Some("n"));
     assert_eq!(wires[1].field(), Some("n"));
 }
 
 /// A `sealed_class` field crosses as a tag plus every alternative's slots, and
-/// the row says so where the walk did.
+/// the recipe says so where the walk did.
 ///
 /// The shape covertest carries: `Observation` holds a required `Reading` and an
 /// optional one, whose alternatives between them cover a scalar payload, a
@@ -2394,13 +2394,13 @@ fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
     );
 }
 
-/// Every spelling the walk flattens states the same row.
+/// Every spelling the walk flattens states the same recipe.
 ///
 /// `build_flat_input_plan` accepts a `data_class` parameter through five
 /// spellings — bare, `&`, `Option`, `Box`, and `Box<Option<…>>` — and all five
 /// appear in `covertest-kotlin` or `perftest-kotlin`. A borrow and a transparent
-/// wrapper find the class's own `parts` row, because a crossing is keyed by the
-/// value that crosses; an optional has no such row and composes on the one the
+/// wrapper find the class's own `parts` recipe, because a crossing is keyed by the
+/// value that crosses; an optional has no such recipe and composes on the one the
 /// registry derives for it, which is why `Declarations::bindings` binds its
 /// part.
 #[test]
@@ -2515,7 +2515,7 @@ fn every_spelling_the_walk_flattens_states_the_same_row() {
     }
 }
 
-/// Every field shape the walk reads specially, held to the row.
+/// Every field shape the walk reads specially, held to the recipe.
 ///
 /// A `data_class` field is not always one property read: an `enum_class`
 /// property holds the enum object where the wire holds its discriminant, an

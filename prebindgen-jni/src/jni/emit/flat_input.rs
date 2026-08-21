@@ -667,7 +667,7 @@ pub(crate) struct FlatLeaf {
     pub kt_name: String,
     /// The path through the value that reached this wire, as the fragment
     /// states it — `tag`, `summary.count`, `reading.exact_v0`. What the rebuild
-    /// names a leaf by, so the tree it builds and the row it builds from cannot
+    /// names a leaf by, so the tree it builds and the recipe it builds from cannot
     /// disagree about which value is which.
     pub path: String,
     /// The wire itself.
@@ -903,7 +903,7 @@ impl RebuildTarget {
 /// as `Ref` and interpreting `kind` before asking would discard the `Box`.
 ///
 /// The only refusal left is a wrapper the adapter cannot **build** — `Cow`, by
-/// policy rather than by impossibility (see its `WRAPPER_OPS` row). A wrapped
+/// policy rather than by impossibility (see its `WRAPPER_OPS` recipe). A wrapped
 /// spelling that declines here keeps the general converter path, which is
 /// correct if less direct.
 fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
@@ -1047,7 +1047,7 @@ pub(crate) fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<Kotlin
     }
 }
 
-/// The rebuild for a **data-carrying enum** field the row flattened into a tag
+/// The rebuild for a **data-carrying enum** field the recipe flattened into a tag
 /// plus one slot group per alternative.
 ///
 /// Which of the two happened is the fragment's decision, not this walk's:
@@ -1072,7 +1072,7 @@ fn build_flat_sum_field(
         flat_error(
             root,
             native_prefix,
-            "the row states fewer wires than the model",
+            "the recipe states fewer wires than the model",
         )
     };
     // The NAME off the classification, and then the ELEMENT — `enum_item`
@@ -1087,7 +1087,7 @@ fn build_flat_sum_field(
         return Err(flat_error(
             root,
             native_prefix,
-            "a sum row over a type that is not one",
+            "a sum recipe over a type that is not one",
         ));
     };
 
@@ -1120,7 +1120,7 @@ fn build_flat_sum_field(
     })
 }
 
-/// The plan's leaves, read in the order the row states them.
+/// The plan's leaves, read in the order the recipe states them.
 ///
 /// A cursor rather than a lookup, because a path is not a key: a nested
 /// `data_class` with a field called `value` reaches the same path a decoupled
@@ -1217,7 +1217,7 @@ pub(crate) fn build_flat_input_plan(
     }
     drop(entry);
 
-    // 2. The parameters this crossing occupies, as the row states them. What
+    // 2. The parameters this crossing occupies, as the recipe states them. What
     //    used to be walked and named here is composed once per crossing, so
     //    the only thing left for the site to say is which parameter each wire
     //    hangs off.
@@ -1227,7 +1227,7 @@ pub(crate) fn build_flat_input_plan(
     let leaves: Vec<FlatLeaf> = wires.iter().map(|w| FlatLeaf::of(param_name, w)).collect();
 
     // 3. The tree the Rust side rebuilds through, over those same wires in the
-    //    order the row states them.
+    //    order the recipe states them.
     let mut stack = Vec::new();
     let mut cursor = Leaves {
         leaves: &leaves,
@@ -1257,14 +1257,14 @@ pub(crate) fn build_flat_input_plan(
     }))
 }
 
-/// The rebuild tree for one struct, over the wires the row states for it.
+/// The rebuild tree for one struct, over the wires the recipe states for it.
 ///
 /// Takes the **element**, not the `syn::ItemStruct` it was parsed from (#289):
 /// `flat::Field::ty` is already a `TypeRef`, so every peel below is the model's
 /// answer rather than a last-path-segment test on tokens that had a reading one
 /// level up.
 ///
-/// How many wires a field occupies is the row's answer, read off the cursor;
+/// How many wires a field occupies is the recipe's answer, read off the cursor;
 /// which of the composite shapes it took is the model's, read off the field's
 /// type. The walk that used to decide both made the second decision twice — once
 /// to compose and once to rebuild — and two answers are two things to keep in
@@ -1297,7 +1297,7 @@ fn build_flat_struct_node(
         ));
     }
     stack.push(node_key);
-    let missing = |at: &str| flat_error(root, at, "the row states fewer wires than the model");
+    let missing = |at: &str| flat_error(root, at, "the recipe states fewer wires than the model");
     let present_ident = if optional {
         let gate = leaves.take().ok_or_else(|| missing(native_prefix))?;
         Some(leaves.leaves[gate].native_ident.clone())
@@ -1328,8 +1328,8 @@ fn build_flat_struct_node(
         let wrappers = field.ty.erased_wrappers();
 
         // One wire for the whole field: the ordinary case, and the one an
-        // opaque-handle field takes — the row says which by carrying a handle
-        // target on that wire. Also where a sum or a nested class the row left
+        // opaque-handle field takes — the recipe says which by carrying a handle
+        // target on that wire. Also where a sum or a nested class the recipe left
         // whole ends up.
         if leaves.is_whole(&path) {
             let index = leaves.take().ok_or_else(|| missing(&child_native))?;

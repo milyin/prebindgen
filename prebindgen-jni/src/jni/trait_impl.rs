@@ -734,10 +734,10 @@ pub(crate) enum WrapperShape {
 /// model's. `Box<T>` *is* `T` to every destination language — but undoing it in
 /// Rust is `*b`, undoing a `Cow` is `into_owned()`, and undoing an `Rc` is not
 /// possible at all. There is no trait spanning those, so the operations live
-/// here, one row per wrapper, instead of as a special case per converter.
+/// here, one recipe per wrapper, instead of as a special case per converter.
 ///
-/// **Adding a wrapper is adding a row.** Put its name in
-/// `TRANSPARENT_WRAPPERS` (the model decides what it erases) and a row here
+/// **Adding a wrapper is adding a recipe.** Put its name in
+/// `TRANSPARENT_WRAPPERS` (the model decides what it erases) and a recipe here
 /// (the adapter decides what it can rebuild); `every_erased_wrapper_has_ops`
 /// fails if the two disagree, so a wrapper cannot become transparent without
 /// this file having an answer for it.
@@ -758,7 +758,7 @@ struct WrapperOps {
     build: Option<fn(TokenStream) -> TokenStream>,
 }
 
-/// The operations table. One row per wrapper the model erases.
+/// The operations table. One recipe per wrapper the model erases.
 const WRAPPER_OPS: &[WrapperOps] = &[
     WrapperOps {
         name: "Box",
@@ -770,7 +770,7 @@ const WRAPPER_OPS: &[WrapperOps] = &[
         name: "Cow",
         // Reading would be `into_owned()`, which needs `B: ToOwned` — not
         // implied by anything the model knows about the payload. Refused until
-        // something needs it; that is one row, not a redesign.
+        // something needs it; that is one recipe, not a redesign.
         read: None,
         // Building is a DIFFERENT question, and it is refused for a different
         // reason — the two `None`s here are not one fact repeated.
@@ -974,7 +974,7 @@ pub(crate) fn read_through_erased_wrappers(
 /// canonical shape, and each layer wraps what the previous one produced.
 ///
 /// `None` when any layer has no [`WrapperOps::build`] — `Cow`, by policy rather
-/// than by impossibility; see its row. A caller that gets `None` has a crossing
+/// than by impossibility; see its recipe. A caller that gets `None` has a crossing
 /// it cannot serve and must decline or report it, never emit the bare value.
 ///
 /// **This answers for one layer's spelling.** It restores the wrappers standing
@@ -1423,7 +1423,7 @@ impl JniGenBuilder {
                     .join("; "),
             }
         })?;
-        // A `data_class` field that is itself one takes the `parts` row rather
+        // A `data_class` field that is itself one takes the `parts` recipe rather
         // than its own default — see `Declarations::bindings`.
         let bindings = decls
             .bindings(&model, &declared, &recipes)
@@ -1446,7 +1446,7 @@ impl JniGenBuilder {
         // A callback is still answered without the compiler — see
         // `compile_crossing` — so no fragment carries its conversion and the
         // fragment list alone would not reach the file. Collected here rather
-        // than papered over: this list empties when the derived callback row
+        // than papered over: this list empties when the derived callback recipe
         // takes over.
         let mut uncompiled: Vec<syn::ItemFn> = Vec::new();
         // Compositions that refused. See `compile_crossing`: these are adapter
@@ -1454,7 +1454,7 @@ impl JniGenBuilder {
         let mut refusals: Vec<String> = Vec::new();
         let registry = declared
             .convert_with(|crossing, built, emit| {
-                let mut compiler = prebindgen_registry::row::Compiler::resume(
+                let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     decls.recipe_table(),
                     decls.site_bindings(),
@@ -1467,17 +1467,17 @@ impl JniGenBuilder {
                     (conv.as_ref(), decls.is_callback_crossing(crossing, built))
                 {
                     uncompiled.push(c.function.clone());
-                    // File it as this crossing's fragment even though no row
+                    // File it as this crossing's fragment even though no recipe
                     // built it, so every emitter has one lookup rather than a
                     // fall-back for the one crossing kind the compiler skips.
                     let (dir, key) = crossing;
                     decls.compiled.borrow_mut().record(
                         key.clone(),
                         match dir {
-                            Direction::Input => prebindgen_registry::row::Assembly::Construct,
-                            Direction::Output => prebindgen_registry::row::Assembly::Deconstruct,
+                            Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
+                            Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
                         },
-                        prebindgen_registry::row::RowId::new("callback"),
+                        prebindgen_registry::recipe::RecipeId::new("callback"),
                         crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
                     );
                 }
@@ -1501,7 +1501,7 @@ impl JniGenBuilder {
             .fragments()
             .into_iter()
             // A composed-only fragment has no conversion to emit: the `parts`
-            // row states what a `data_class` is made of, and the function that
+            // recipe states what a `data_class` is made of, and the function that
             // reads those several values and rebuilds the struct is what the
             // emitter switch brings. Its marker would otherwise reach the file.
             // Deliberately not "has wires" — an `Option<data_class>` has both a
@@ -1566,22 +1566,22 @@ impl JniGenBuilder {
             if part_types.iter().any(|ty| decls.out_frag(ty).is_none()) {
                 continue;
             }
-            let crossing = prebindgen_registry::row::Crossing::new(
+            let crossing = prebindgen_registry::recipe::Crossing::new(
                 ty,
-                prebindgen_registry::row::Assembly::Deconstruct,
+                prebindgen_registry::recipe::Assembly::Deconstruct,
             );
-            // A type with nothing to hand out states no `parts` row — an empty
+            // A type with nothing to hand out states no `parts` recipe — an empty
             // struct, or an enum with no alternatives. Asking for one by name
             // is refused now rather than answered with the default, so the
             // condition that declared it is the condition asked here.
             if decls
                 .recipe_table()
-                .get(&crossing.key(), &crate::jni::rows::parts())
+                .get(&crossing.key(), &crate::jni::recipes::parts())
                 .is_none()
             {
                 continue;
             }
-            let mut compiler = prebindgen_registry::row::Compiler::resume(
+            let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                 &model,
                 decls.recipe_table(),
                 decls.site_bindings(),
@@ -1593,7 +1593,9 @@ impl JniGenBuilder {
                 declared_return: None,
                 site: None,
             };
-            if let Err(e) = compiler.row_of(&mut adapter, &crossing, &crate::jni::rows::parts()) {
+            if let Err(e) =
+                compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
+            {
                 refusals.push(format!(
                     "`{key}` hands out its parts, but composing them failed: {e:?}"
                 ));
@@ -1612,8 +1614,8 @@ impl JniGenBuilder {
 }
 
 impl Declarations {
-    /// Build the conversion for one crossing by asking the table which row it
-    /// takes and the driver to compile that row.
+    /// Build the conversion for one crossing by asking the table which recipe it
+    /// takes and the driver to compile that recipe.
     ///
     /// `None` is *cannot*, never *not yet*: the crossings arrive inner-first,
     /// so everything this could compose from is already in `built`.
@@ -1632,7 +1634,10 @@ impl Declarations {
 
     fn compile_crossing<'v, R: Conversions>(
         &'v self,
-        compiler: &mut prebindgen_registry::row::Compiler<'_, crate::jni::compile::JCompile<'v, R>>,
+        compiler: &mut prebindgen_registry::recipe::Compiler<
+            '_,
+            crate::jni::compile::JCompile<'v, R>,
+        >,
         crossing: &Crossing,
         built: &'v R,
         emit: &prebindgen_registry::Emit,
@@ -1643,12 +1648,12 @@ impl Declarations {
         // key the crossing IS.
         let reading = built.reading(key)?;
         // A callback is compiled whole rather than through the table. The
-        // registry derives a row that takes one apart into its arguments and
+        // registry derives a recipe that takes one apart into its arguments and
         // compiles each of them, and a JniGen callback argument does not always
         // have a conversion to compile: a sealed class reaches the JVM as a
         // selector plus the live arm's slots, through a decomposition the table
-        // does not describe yet. Stating those arms as rows is what lets the
-        // derived callback row take over, and it is a later stage than this
+        // does not describe yet. Stating those arms as recipes is what lets the
+        // derived callback recipe take over, and it is a later stage than this
         // one.
         if matches!(dir, Direction::Input) {
             if let prebindgen_registry::flat::TypeKind::Callback { args } =
@@ -1658,8 +1663,8 @@ impl Declarations {
             }
         }
         let assembly = match dir {
-            Direction::Input => prebindgen_registry::row::Assembly::Construct,
-            Direction::Output => prebindgen_registry::row::Assembly::Deconstruct,
+            Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
+            Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
         };
         let mut adapter = crate::jni::compile::JCompile {
             decls: self,
@@ -1667,22 +1672,22 @@ impl Declarations {
             declared_return: None,
             site: None,
         };
-        let crossing = prebindgen_registry::row::Crossing::new(reading, assembly);
+        let crossing = prebindgen_registry::recipe::Crossing::new(reading, assembly);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
-        // A `data_class` also states a row that says what it is made of, and
+        // A `data_class` also states a recipe that says what it is made of, and
         // compiling it here is what holds the composition to every binding this
         // crate builds rather than to one fixture. Nothing reads the result
-        // yet: `whole` is still the row every site takes, so a failure here is
+        // yet: `whole` is still the recipe every site takes, so a failure here is
         // a failure to compose parts that already cross individually.
         // The **stripped** key, so `Box<Payload>` and `&Payload` compile the
-        // row too: all three spellings find one row and each gets its own
+        // recipe too: all three spellings find one recipe and each gets its own
         // fragment, which is what a site taking a wrapped spelling reads.
-        // A `data_class` with no fields states no `parts` row — there is
-        // nothing for it to be made of — so the row is asked for by name only
-        // where it was declared. `row_of` refuses an absent name rather than
+        // A `data_class` with no fields states no `parts` recipe — there is
+        // nothing for it to be made of — so the recipe is asked for by name only
+        // where it was declared. `recipe_of` refuses an absent name rather than
         // answering with the default, which is what makes that condition the
         // one that has to match.
-        if assembly == prebindgen_registry::row::Assembly::Construct
+        if assembly == prebindgen_registry::recipe::Assembly::Construct
             && matches!(
                 self.types
                     .get(&crossing.value().stripped_key())
@@ -1691,7 +1696,7 @@ impl Declarations {
             )
             && compiler
                 .recipes()
-                .get(&crossing.key(), &crate::jni::rows::parts())
+                .get(&crossing.key(), &crate::jni::recipes::parts())
                 .is_some()
         {
             // A refusal is a bug in the composition, not a gap in the binding:
@@ -1701,7 +1706,9 @@ impl Declarations {
             // the declaration, so the reason is collected and surfaced as an
             // adapter invariant — beside whatever else the walk found, and
             // through the same `Result` every other refusal takes.
-            if let Err(e) = compiler.row_of(&mut adapter, &crossing, &crate::jni::rows::parts()) {
+            if let Err(e) =
+                compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
+            {
                 refusals.push(format!(
                     "`{}` crosses as its fields, but composing them failed: {e:?}",
                     crossing.spelled().key()
@@ -3284,13 +3291,13 @@ impl Declarations {
             .map(|(k, c)| (k.clone(), c.rust_type.clone()))
             .collect()
     }
-    /// The row table this binding was built against.
-    pub(crate) fn recipe_table(&self) -> &prebindgen_registry::row::Rows {
+    /// The recipe table this binding was built against.
+    pub(crate) fn recipe_table(&self) -> &prebindgen_registry::recipe::Recipes {
         &self.tables.as_ref().expect("built").recipes
     }
 
-    /// Which row each site takes.
-    pub(crate) fn site_bindings(&self) -> &prebindgen_registry::row::Bindings {
+    /// Which recipe each site takes.
+    pub(crate) fn site_bindings(&self) -> &prebindgen_registry::recipe::Bindings {
         &self.tables.as_ref().expect("built").bindings
     }
 
@@ -3371,16 +3378,16 @@ impl Declarations {
 mod wrapper_ops_tests {
     use super::*;
 
-    /// Every wrapper the model erases has a row here.
+    /// Every wrapper the model erases has a recipe here.
     ///
     /// The two lists answer different questions — the model's is "what do I
     /// erase", this file's is "what can I rebuild" — and they are allowed to
     /// disagree about *capability* (`Cow` is erased and cannot be read through).
     /// They are not allowed to disagree about *membership*: a wrapper that
-    /// becomes transparent without a row here would be silently unbridgeable
+    /// becomes transparent without a recipe here would be silently unbridgeable
     /// everywhere, which looks exactly like a type the binding got wrong.
     ///
-    /// So adding `Rc` is: one entry in `TRANSPARENT_WRAPPERS`, one row in
+    /// So adding `Rc` is: one entry in `TRANSPARENT_WRAPPERS`, one recipe in
     /// `WRAPPER_OPS` (`read: None` — an `Rc`'s payload cannot be moved out —
     /// and `build: Some(Rc::new)`). This test is what says so out loud instead
     /// of leaving the second step to be discovered.
@@ -3393,7 +3400,7 @@ mod wrapper_ops_tests {
             .collect();
         assert!(
             missing.is_empty(),
-            "the model erases {missing:?}, and this adapter has no `WrapperOps` row for them — \
+            "the model erases {missing:?}, and this adapter has no `WrapperOps` recipe for them — \
              add one (`read`/`build` may be `None` when the representation does not allow it, \
              which refuses the shape instead of mis-generating it)"
         );
@@ -3410,7 +3417,7 @@ mod wrapper_ops_tests {
             .collect();
         assert!(
             stray.is_empty(),
-            "`WRAPPER_OPS` rows for non-erased {stray:?}"
+            "`WRAPPER_OPS` recipes for non-erased {stray:?}"
         );
     }
 
@@ -3448,7 +3455,7 @@ mod wrapper_ops_tests {
     }
 
     /// `Cow` declines a rebuild, and the two directions decline for **different
-    /// reasons** — which is why the row carries two `None`s rather than one
+    /// reasons** — which is why the recipe carries two `None`s rather than one
     /// capability flag.
     ///
     /// Reading is impossible (`E0507`: a `Cow` payload cannot be moved through

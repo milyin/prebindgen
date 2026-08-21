@@ -3336,12 +3336,12 @@ fn nullability_ignores_how_rust_spells_the_optional() {
     );
 }
 
-/// A value form states a row saying what it hands out, and it says what the
+/// A value form states a recipe saying what it hands out, and it says what the
 /// expansion plan it will replace says.
 ///
 /// `expand_return!(Vault).fields(fields!(vault_to_struct))` calls the accessor
 /// once and hands out the fields of the struct it returns, named as the
-/// declaration names them — a `.name(..)` rename included, which is why the row
+/// declaration names them — a `.name(..)` rename included, which is why the recipe
 /// asks the declaration rather than deriving a Kotlin property a second time.
 #[test]
 fn a_value_form_states_what_it_hands_out() {
@@ -3398,13 +3398,13 @@ fn a_value_form_states_what_it_hands_out() {
 
     assert_eq!(
         gen.out_lines_for_test("Vault")
-            .expect("Vault states a value-form row"),
+            .expect("Vault states a value-form recipe"),
         vec!["seq: i64 <- seq @None", "tag: String <- label @None"],
-        "the row hands out the value form's fields, named as declared",
+        "the recipe hands out the value form's fields, named as declared",
     );
     assert_eq!(
         gen.out_lines_for_test("Vault"),
         gen.plan_lines_for_test("vault_new"),
-        "the row and the expansion plan disagree",
+        "the recipe and the expansion plan disagree",
     );
 }

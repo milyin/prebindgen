@@ -231,11 +231,11 @@ pub(crate) enum DeclaredKind {
     Data,
 }
 
-/// What compiling a site needs beyond the model: which rows exist, and which
-/// row each site takes.
+/// What compiling a site needs beyond the model: which recipes exist, and which
+/// recipe each site takes.
 pub(crate) struct Tables {
-    pub(crate) recipes: prebindgen_registry::row::Rows,
-    pub(crate) bindings: prebindgen_registry::row::Bindings,
+    pub(crate) recipes: prebindgen_registry::recipe::Recipes,
+    pub(crate) bindings: prebindgen_registry::recipe::Bindings,
 }
 
 /// All configuration the structured builder accumulates for one
@@ -545,7 +545,7 @@ impl JniGen {
         )
     }
 
-    /// What a declared type hands out, as the row states it: one line per
+    /// What a declared type hands out, as the recipe states it: one line per
     /// value, naming it, the alternative it belongs to, and how the Rust side
     /// reaches it.
     ///
@@ -553,16 +553,16 @@ impl JniGen {
     /// that compares — a `TypeRef` has no equality and a `syn::Member` prints
     /// differently by variant, so both sides go through the same rendering.
     pub(crate) fn out_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
-        use prebindgen_registry::row::Assembly;
+        use prebindgen_registry::recipe::Assembly;
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let ty: syn::Type = syn::parse_quote!(#ident);
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let compiled = self.decls.compiled.borrow();
         let wires = compiled
-            .row_fragment(
+            .recipe_fragment(
                 &reading.key(),
                 Assembly::Deconstruct,
-                &crate::jni::rows::parts(),
+                &crate::jni::recipes::parts(),
             )?
             .out_wires
             .clone()?;
@@ -588,7 +588,7 @@ impl JniGen {
         )
     }
 
-    /// The same list, taken from the leaf synthesis the row is meant to
+    /// The same list, taken from the leaf synthesis the recipe is meant to
     /// replace — `synth_sum_leaves` for a `sealed_class`,
     /// `synth_value_struct_leaves` for a `data_class`.
     pub(crate) fn walk_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
@@ -618,12 +618,12 @@ impl JniGen {
         )
     }
 
-    /// What the return **site** of one function composes to, as the row states
+    /// What the return **site** of one function composes to, as the recipe states
     /// it — rendered exactly as [`Self::out_lines_for_test`] renders a type's
-    /// row, so a site and a type can be compared.
+    /// recipe, so a site and a type can be compared.
     ///
     /// The decomposed-return path through `Compiler::site`: the site asks for
-    /// the `parts` row of its return type and gets the several values that row
+    /// the `parts` recipe of its return type and gets the several values that recipe
     /// states.
     pub(crate) fn return_site_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
         let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
@@ -652,7 +652,7 @@ impl JniGen {
     }
 
     /// The leaves the registry's own expansion plans for one function, in the
-    /// form [`Self::out_lines_for_test`] renders a row in.
+    /// form [`Self::out_lines_for_test`] renders a recipe in.
     ///
     /// The walk side of a value form: its leaves come from `unfold::flatten`
     /// rather than from a JniGen-side synthesis, so the comparison goes through
@@ -676,14 +676,14 @@ impl JniGen {
         )
     }
 
-    /// Whether a declared type states a `parts` row at all, in the given
+    /// Whether a declared type states a `parts` recipe at all, in the given
     /// direction — asked of the compiled fragments the way an emitter asks.
     ///
-    /// Test support. A type with nothing to be made of declares no such row,
-    /// and `Compiled::row_fragment` must then answer `None` rather than hand
+    /// Test support. A type with nothing to be made of declares no such recipe,
+    /// and `Compiled::recipe_fragment` must then answer `None` rather than hand
     /// back whatever the crossing compiled by default.
     pub(crate) fn has_parts_row_for_test(&self, short: &str, out: bool) -> bool {
-        use prebindgen_registry::row::Assembly;
+        use prebindgen_registry::recipe::Assembly;
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let assembly = match out {
             true => Assembly::Deconstruct,
@@ -692,10 +692,10 @@ impl JniGen {
         self.decls
             .compiled
             .borrow()
-            .row_fragment(
+            .recipe_fragment(
                 &TypeKey::from_ident(&ident),
                 assembly,
-                &crate::jni::rows::parts(),
+                &crate::jni::recipes::parts(),
             )
             .is_some()
     }
@@ -705,16 +705,16 @@ impl JniGen {
         &self,
         spelling: &str,
     ) -> Option<Vec<crate::jni::compile::Wire>> {
-        use prebindgen_registry::row::Assembly;
+        use prebindgen_registry::recipe::Assembly;
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let key = reading.key();
         let compiled = self.decls.compiled.borrow();
         // A declared class states its composition under `parts`; an optional
-        // over one has no row of its own and composes on the row the registry
+        // over one has no recipe of its own and composes on the recipe the registry
         // derived, which is the crossing's default.
         compiled
-            .row_fragment(&key, Assembly::Construct, &crate::jni::rows::parts())
+            .recipe_fragment(&key, Assembly::Construct, &crate::jni::recipes::parts())
             .or_else(|| compiled.fragment(&key, Assembly::Construct))?
             .wires
             .clone()
@@ -864,9 +864,9 @@ pub struct Declarations {
     /// order that filled the converter table, so a fragment is there exactly
     /// when a table entry would have been.
     pub(crate) compiled: std::rc::Rc<
-        std::cell::RefCell<prebindgen_registry::row::Compiled<crate::jni::compile::JFrag>>,
+        std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>>,
     >,
-    /// The row table and the site bindings this binding was built against.
+    /// The recipe table and the site bindings this binding was built against.
     ///
     /// Kept beside the fragment store for the same reason it is: a plan is
     /// compiled per **site**, and the sites are `fn_plan`'s to enumerate — a
@@ -1013,7 +1013,7 @@ mod equality;
 mod iface;
 mod prim;
 mod prim_array;
-mod rows;
+mod recipes;
 mod selector;
 #[cfg(test)]
 mod tests;

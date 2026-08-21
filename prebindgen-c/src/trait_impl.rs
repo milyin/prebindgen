@@ -1,4 +1,4 @@
-use prebindgen_registry::{row::Assembly, Building, Conversions, Crossing, RegistryBuilder};
+use prebindgen_registry::{recipe::Assembly, Building, Conversions, Crossing, RegistryBuilder};
 
 use super::{builder::callback_fn_type, *};
 
@@ -375,7 +375,7 @@ impl CbindgenBuilder {
 
     /// Compile every site of every exported function.
     ///
-    /// The second half of #450 reaching real positions. A **row** is what a
+    /// The second half of #450 reaching real positions. A **recipe** is what a
     /// type's conversion is, and both adapters have compiled those since
     /// #455/#457; a **site** is one position in the generated API, and this is
     /// where they start being asked about.
@@ -392,13 +392,13 @@ impl CbindgenBuilder {
     /// from the converter table, and moving that is a change of its own.
     fn check_sites<'v>(
         &'v self,
-        compiler: &mut prebindgen_registry::row::Compiler<
+        compiler: &mut prebindgen_registry::recipe::Compiler<
             '_,
             crate::compile::CCompile<'v, Registry>,
         >,
         registry: &'v Registry,
     ) -> Result<(), String> {
-        use prebindgen_registry::row::{Assembly, Crossing, Role, Site};
+        use prebindgen_registry::recipe::{Assembly, Crossing, Role, Site};
 
         let mut adapter = crate::compile::CCompile {
             gen: self,
@@ -458,7 +458,10 @@ impl CbindgenBuilder {
         &self,
         key: &TypeKey,
         registry: &impl Conversions,
-        parts: &[(prebindgen_registry::row::Part<'_>, &crate::compile::CFrag)],
+        parts: &[(
+            prebindgen_registry::recipe::Part<'_>,
+            &crate::compile::CFrag,
+        )],
     ) -> Option<String> {
         let variant = match registry.flat().declared_type(&key.ident()?)? {
             prebindgen_registry::flat::Type::Variant(v) => v,
@@ -604,7 +607,7 @@ impl CbindgenBuilder {
     /// `String` **input from a `data_struct`'s mirror**: a null `char *`
     /// decodes to an empty string rather than refusing.
     ///
-    /// The second reading a `String` has, and the reason it needs a row of its
+    /// The second reading a `String` has, and the reason it needs a recipe of its
     /// own. A `String` **parameter** is a pointer the caller chose to pass, so
     /// a null one is a caller error and [`Self::in_string`] says so. A `String`
     /// **field** shares a struct with every other field, and refusing it would
@@ -613,7 +616,7 @@ impl CbindgenBuilder {
     /// it may not even read.
     ///
     /// Lossy on invalid UTF-8 for the same reason. This is the reading the
-    /// hand-written field walk had; stating it as a row is what makes it
+    /// hand-written field walk had; stating it as a recipe is what makes it
     /// visible rather than buried.
     pub(crate) fn in_string_field(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         if !r_is_string(ty) {
@@ -646,7 +649,7 @@ impl CbindgenBuilder {
     /// [`bool_wire`], so the plain Rust `bool` is wrapped rather than passed
     /// through.
     ///
-    /// The twin of [`Self::in_bool`], and the reason `bool` has a second row: a
+    /// The twin of [`Self::in_bool`], and the reason `bool` has a second recipe: a
     /// `bool` **return** is always already one of two values and crosses as
     /// itself, while a field shares one mirror with the decode that has to
     /// normalise it.
@@ -1526,7 +1529,7 @@ impl CbindgenBuilder {
         // call, so it is cloned — a map of `Rc`s.
         let registry = declared
             .convert_with(|crossing, built, _emit| {
-                let mut compiler = prebindgen_registry::row::Compiler::resume(
+                let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     &recipes,
                     &bindings,
@@ -1547,7 +1550,7 @@ impl CbindgenBuilder {
         // target's answer: see `CCompile::tolerates` for why C accepts a
         // borrowed return where the JVM must not.
         {
-            let mut compiler = prebindgen_registry::row::Compiler::resume(
+            let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                 &model,
                 &recipes,
                 &bindings,
@@ -1573,15 +1576,15 @@ impl CbindgenBuilder {
         })
     }
 
-    /// Build the conversion for one crossing by asking the table which row it
-    /// takes and the driver to compile that row.
+    /// Build the conversion for one crossing by asking the table which recipe it
+    /// takes and the driver to compile that recipe.
     ///
     /// `None` records a gap, exactly as the chain of guesses this replaced did:
     /// whether the gap matters is the registry's call, and its report names the
     /// crossing.
     fn compile_crossing<'v, R: Conversions>(
         &'v self,
-        compiler: &mut prebindgen_registry::row::Compiler<'_, crate::compile::CCompile<'v, R>>,
+        compiler: &mut prebindgen_registry::recipe::Compiler<'_, crate::compile::CCompile<'v, R>>,
         crossing: &Crossing,
         built: &'v R,
     ) -> Option<ConverterImpl> {
@@ -1597,7 +1600,7 @@ impl CbindgenBuilder {
             gen: self,
             registry: built,
         };
-        let crossing = prebindgen_registry::row::Crossing::new(ty, assembly);
+        let crossing = prebindgen_registry::recipe::Crossing::new(ty, assembly);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
         Some((*fragment).clone().into_converter())
     }

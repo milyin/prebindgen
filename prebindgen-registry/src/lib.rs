@@ -104,9 +104,9 @@ mod emit;
 pub mod expand;
 pub mod niches;
 pub mod prebindgen;
+pub mod recipe;
 pub mod registry;
 pub(crate) mod resolve;
-pub mod row;
 #[cfg(test)]
 pub(crate) mod test_util;
 pub mod unfold;

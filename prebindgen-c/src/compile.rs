@@ -1,6 +1,6 @@
 //! What one crossing costs on the C wire.
 //!
-//! [`crate::rows`] states which parts a value gets across in; this says what
+//! [`crate::recipes`] states which parts a value gets across in; this says what
 //! each of those parts looks like in C. The registry drives the walk over the
 //! table and hands every hook the fragments its parts already produced, so
 //! nothing here looks a converter up and nothing here recurses.
@@ -8,11 +8,11 @@
 //! A [`CFrag`] is what a `ConverterImpl` was, minus the bookkeeping the table
 //! now does: no `subs` walk to keep the registry's reachability right by hand,
 //! no `pre_stages` chain, and no guessing which of nine categories a type falls
-//! into — the row already said.
+//! into — the recipe already said.
 
 use prebindgen_registry::{
     flat::{Alternative, Function},
-    row::{At, Carrier, Compile, Cx, Frag, Mode, Parts, Role, Validity, Yield},
+    recipe::{At, Carrier, Compile, Cx, Frag, Mode, Parts, Role, Validity, Yield},
 };
 
 use super::*;
@@ -210,7 +210,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
 
     fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
-        // The field row, where a value crosses differently **inside a
+        // The field recipe, where a value crosses differently **inside a
         // `data_struct`'s mirror** than it does on its own. Two types have one:
         // `bool`, whose field shares a mirror with the decode that normalises
         // it, and `String`, whose field decodes a null pointer leniently so one
@@ -219,18 +219,18 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         // owns, and that is the only place C crosses one — a handle parameter
         // is spelled `Blob` and reclaimed from its own pointer.
         //
-        // Keyed by the **spelling** rather than by a row of its own: a row is
+        // Keyed by the **spelling** rather than by a recipe of its own: a recipe is
         // filed under `Crossing::key`, which strips `Box`, so `Box<Blob>` and
-        // `Blob` share one row and could not be told apart there. A fragment is
+        // `Blob` share one recipe and could not be told apart there. A fragment is
         // keyed by the spelling, which is exactly the distinction needed.
-        if *at.recipe == crate::rows::payload() {
+        if *at.recipe == crate::recipes::payload() {
             let conv = match at.crossing.assembly() {
                 Assembly::Construct => self.gen.in_boxed_payload(ty),
                 Assembly::Deconstruct => self.gen.out_boxed_payload(ty),
             };
             return self.wrap(at, "no payload reading for this handle", conv);
         }
-        if *at.recipe == crate::rows::in_field() {
+        if *at.recipe == crate::recipes::in_field() {
             let conv = match at.crossing.assembly() {
                 Assembly::Construct => self
                     .gen
@@ -273,7 +273,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         let Some(elem) = at.crossing.value().optional_inner() else {
             return Err(refuse(
                 at,
-                "an optional row over a type that is not optional",
+                "an optional recipe over a type that is not optional",
             ));
         };
         let conv = match at.crossing.assembly() {
@@ -313,7 +313,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         _func: &Function,
         _args: Parts<'_, Self>,
     ) -> Frag<Self> {
-        Err(refuse(at, "Cbindgen declares no constructor rows"))
+        Err(refuse(at, "Cbindgen declares no constructor recipes"))
     }
 
     fn value_form(
@@ -323,7 +323,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         _func: &Function,
         _parts: Parts<'_, Self>,
     ) -> Frag<Self> {
-        Err(refuse(at, "Cbindgen declares no value-form rows"))
+        Err(refuse(at, "Cbindgen declares no value-form recipes"))
     }
 
     fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
@@ -614,7 +614,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             // A C-supplied mirror may hold any discriminant, so the tag is
             // checked before the value is assumed initialised. Neither the tag
             // nor the check is a crossing — the adapter invents both, which is
-            // why no row mentions them.
+            // why no recipe mentions them.
             let guard = self.gen.tag_guard(
                 &cname,
                 arms.len(),
@@ -679,7 +679,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         _result: Option<&CFrag>,
     ) -> Frag<Self> {
         let Some(args) = at.crossing.value().callback_args() else {
-            return Err(refuse(at, "a callback row over a type that is not one"));
+            return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
         let conv = self.gen.dispatch_fn_input(args, self.registry);
         self.wrap(at, "undeclared callback signature", conv)

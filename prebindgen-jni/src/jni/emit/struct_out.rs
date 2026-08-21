@@ -71,7 +71,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// The list is [`Declarations::struct_out_wires`]', mapped. Runs BEFORE
 /// `resolve`, which is exactly why it shares that composition rather than
 /// walking the struct a second time: the leaf names reach the foreign
-/// `fromParts` parameters and the row identically, and two walks agreeing was a
+/// `fromParts` parameters and the recipe identically, and two walks agreeing was a
 /// property nothing checked.
 ///
 /// `None` — the type keeps the whole-value `fromParts` path — when a field needs

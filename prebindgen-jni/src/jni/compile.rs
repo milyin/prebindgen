@@ -1,6 +1,6 @@
 //! What one crossing costs on the JNI wire.
 //!
-//! [`super::rows`] states which parts a value gets across in; this says what
+//! [`super::recipes`] states which parts a value gets across in; this says what
 //! each of those parts looks like across the Java Native Interface. The
 //! registry drives the walk over the table and hands every hook the fragment
 //! its inner crossing already produced, so nothing here decides which arity
@@ -8,7 +8,7 @@
 
 use prebindgen_registry::{
     flat::{Alternative, Function, TypeKind, TypeRef},
-    row::{Assembly, At, Bound, Carrier, Compile, Cx, Frag, Mode, Part, Parts, Validity, Yield},
+    recipe::{Assembly, At, Bound, Carrier, Compile, Cx, Frag, Mode, Part, Parts, Validity, Yield},
     Conversions,
 };
 
@@ -96,7 +96,7 @@ pub(crate) struct JFrag {
     /// This fragment states a wire list and nothing else — no conversion of its
     /// own, so nothing of it reaches the generated file.
     ///
-    /// Only the `parts` row is this. A crossing may legitimately carry **both**
+    /// Only the `parts` recipe is this. A crossing may legitimately carry **both**
     /// a wire list and a real conversion: an `Option<data_class>` composes a
     /// presence flag ahead of the inner's wires and still has the optional's
     /// own conversion to emit, so "has wires" is the wrong test for what to
@@ -292,7 +292,7 @@ pub(crate) struct OutWire {
     /// Whether this value is the whole crossed object rather than a part of it
     /// — the move-or-clone handle a decomposition delivers beside its fields.
     ///
-    /// Never true in a composition: a row states what a value is **made of**,
+    /// Never true in a composition: a recipe states what a value is **made of**,
     /// and the value itself is not one of its own parts. A declaration is what
     /// asks for one, through `.field_self()`.
     pub(crate) identity: bool,
@@ -307,9 +307,9 @@ pub(crate) struct OutWire {
 }
 
 impl OutWire {
-    /// One leaf of an expansion plan, in the row's vocabulary.
+    /// One leaf of an expansion plan, in the recipe's vocabulary.
     ///
-    /// The shim that lets the sum emitters speak rows before every plan is one:
+    /// The shim that lets the sum emitters speak recipes before every plan is one:
     /// what they read of a leaf is exactly what a wire states, so the switch is
     /// per call site rather than all at once.
     pub(crate) fn from_leaf(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> Self {
@@ -333,7 +333,7 @@ impl OutWire {
         }
     }
 
-    /// A whole plan's leaves in the row's vocabulary.
+    /// A whole plan's leaves in the recipe's vocabulary.
     pub(crate) fn from_leaves(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) -> Vec<Self> {
         leaves.iter().map(Self::from_leaf).collect()
     }
@@ -459,11 +459,11 @@ impl JFrag {
     /// A conversion this adapter built without the compiler.
     ///
     /// A callback crossing is the only one: `JniGen::compile_crossing` answers
-    /// it with `dispatch_fn_input` rather than through a row, so there is no
+    /// it with `dispatch_fn_input` rather than through a recipe, so there is no
     /// `At` to take a crossing's own mode from. It is an owned, self-sufficient
     /// value — a callback is delivered as a JVM object the wrapper holds — and
-    /// nothing composes a callback as an inner, so no row ever reads this
-    /// `Yield`. Goes with the derived callback row.
+    /// nothing composes a callback as an inner, so no recipe ever reads this
+    /// `Yield`. Goes with the derived callback recipe.
     pub(crate) fn by_hand(ty: TypeKey, conv: ConverterImpl<KotlinMeta>) -> Self {
         Self {
             conv,
@@ -540,7 +540,7 @@ pub(crate) struct JCompile<'a, R> {
     pub(crate) declared_return: Option<TypeRef>,
     /// Which site is being planned, when one is.
     ///
-    /// `None` while compiling a row: a row answers for a crossing wherever it
+    /// `None` while compiling a recipe: a recipe answers for a crossing wherever it
     /// appears, so nothing about a site may reach it. Set only for the one hook
     /// the registry calls per site.
     pub(crate) site: Option<PlanSite>,
@@ -800,7 +800,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         _func: &Function,
         _args: Parts<'_, Self>,
     ) -> Frag<Self> {
-        Err(refuse(at, "JniGen declares no constructor rows"))
+        Err(refuse(at, "JniGen declares no constructor recipes"))
     }
 
     fn value_form(
@@ -815,7 +815,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         }
         Err(refuse(
             at,
-            "JniGen states no constructing value-form rows yet",
+            "JniGen states no constructing value-form recipes yet",
         ))
     }
 
@@ -894,7 +894,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         }
         // Only the wire list is composed here. The conversion that reads these
         // several values and rebuilds the struct is what the emitter switch
-        // brings; until then this row is compiled but never taken, so it
+        // brings; until then this recipe is compiled but never taken, so it
         // carries a marker rather than a conversion it would have to invent.
         // `prebindgen-c` does the same for a union arm, and for the same
         // reason: a product's parts do not always assemble into a function of
@@ -929,10 +929,10 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 Ok(frag)
             }
             // A payload this adapter has no slot for — a nested object, a
-            // handle — leaves the whole sum object-shaped, which is the row it
+            // handle — leaves the whole sum object-shaped, which is the recipe it
             // already had. Stated as a fragment with no wires rather than as a
             // refusal: the site that asked composes it as one value, exactly as
-            // it did before a `parts` row existed.
+            // it did before a `parts` recipe existed.
             None => {
                 let conv = self
                     .decls
@@ -952,7 +952,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let TypeKind::Callback { args } = ty.unwrapped().kind() else {
-            return Err(refuse(at, "a callback row over a type that is not one"));
+            return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
         let conv = self.decls.dispatch_fn_input(args, self.registry, cx.emit());
         self.wrap(at, "undeclared callback signature", conv)
@@ -977,8 +977,8 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let site = match site {
             PlanSite::Return => {
                 // A fragment that occupies several wires IS the decomposed
-                // return: the site asked for the `parts` row and got what that
-                // row states. Nothing else distinguishes the two cases, and
+                // return: the site asked for the `parts` recipe and got what that
+                // recipe states. Nothing else distinguishes the two cases, and
                 // nothing needs to.
                 return Ok(match &root.out_wires {
                     Some(wires) => JPlan::Decomposed(wires.clone()),
@@ -1092,14 +1092,14 @@ impl crate::jni::Declarations {
     /// Every wire the Kotlin → Rust crossing of `ty` occupies, or `None` when
     /// it occupies the single one its conversion names.
     ///
-    /// A declared class states its composition under the `parts` row; an
-    /// optional over one has no row of its own and composes on the row the
+    /// A declared class states its composition under the `parts` recipe; an
+    /// optional over one has no recipe of its own and composes on the recipe the
     /// registry derived, which is that crossing's default.
     pub(crate) fn wires_of(&self, ty: &TypeRef) -> Option<Vec<Wire>> {
         let key = ty.key();
         let compiled = self.compiled.borrow();
         compiled
-            .row_fragment(&key, Assembly::Construct, &crate::jni::rows::parts())
+            .recipe_fragment(&key, Assembly::Construct, &crate::jni::recipes::parts())
             .or_else(|| compiled.fragment(&key, Assembly::Construct))?
             .wires
             .clone()
@@ -1122,7 +1122,7 @@ impl std::ops::Deref for Conv {
     }
 }
 
-/// Facts a wire states about itself, which the emitters read off the row.
+/// Facts a wire states about itself, which the emitters read off the recipe.
 impl Wire {
     /// The wire-facing function this value crosses through.
     pub(crate) fn conv(&self) -> Option<&syn::Ident> {
@@ -1161,9 +1161,9 @@ impl Wire {
 }
 
 impl<R: Conversions> JCompile<'_, R> {
-    /// The conversion a composed-only row carries: none.
+    /// The conversion a composed-only recipe carries: none.
     ///
-    /// The `parts` and arm rows state what a value is made of and nothing
+    /// The `parts` and arm recipes state what a value is made of and nothing
     /// about how it is rebuilt, so there is no function to name. `subs` is
     /// still real — it is what the registry walks for reachability.
     /// `prebindgen-c` does the same for a union arm, and for the same reason.
@@ -1432,20 +1432,20 @@ impl<R: Conversions> JCompile<'_, R> {
     /// `match` on the Rust side rather than N conditionals.
     fn selected_out(&self, at: At<'_>, arms: &[(&Alternative, &JFrag)]) -> Frag<Self> {
         let TypeKind::Named { id, .. } = at.crossing.value().unwrapped().kind() else {
-            return Err(refuse(at, "a choice row over a type that is not named"));
+            return Err(refuse(at, "a choice recipe over a type that is not named"));
         };
         let ident = id
             .ident()
-            .ok_or_else(|| refuse(at, "a choice row over a type that is not one identifier"))?;
+            .ok_or_else(|| refuse(at, "a choice recipe over a type that is not one identifier"))?;
         // The composition is the declaration's and the model's, so the same
         // answer serves the leaf synthesis that runs before `resolve`. The arm
         // fragments the driver built are not read at all — a sum hands its
         // payloads out through their own conversions, and which those are is
-        // the emitter's question rather than this row's.
+        // the emitter's question rather than this recipe's.
         let wires = self
             .decls
             .sum_out_wires(self.registry, &ident, at.crossing.value())
-            .ok_or_else(|| refuse(at, "a choice row over an undeclared sum"))?;
+            .ok_or_else(|| refuse(at, "a choice recipe over an undeclared sum"))?;
         let mut frag = JFrag::new(at, self.parts_marker(parts_subs(arms)));
         frag.out_wires = Some(wires);
         frag.composed_only = true;
@@ -1651,14 +1651,14 @@ impl Declarations {
     /// itself one contributes its own under the parent's name and chain.
     ///
     /// Model and declaration only, like [`Self::sum_out_wires`] — so the same
-    /// answer serves the leaf synthesis that runs before `resolve` and the row
+    /// answer serves the leaf synthesis that runs before `resolve` and the recipe
     /// that composes after it.
     ///
     /// `None` is this adapter declining, and it declines for the **whole**
     /// value rather than per field. A handle, an `enum_class`, a sum, or a
     /// `data_class` behind an `Option` or a `Vec` is delivered with a transform
     /// the decoupled form does not carry, and one such field sends the whole
-    /// object down the whole-value `fromParts` path — so a row that decomposed
+    /// object down the whole-value `fromParts` path — so a recipe that decomposed
     /// the rest of it would describe a shape nothing emits.
     pub(crate) fn struct_out_wires(
         &self,
@@ -1771,7 +1771,7 @@ impl Declarations {
     ///
     /// Model and declaration only — no conversion is read. That is what lets
     /// one answer serve on both sides of `resolve`: the leaf synthesis feeding
-    /// `Decompositions` runs before it, the row composes after it, and a fact
+    /// `Decompositions` runs before it, the recipe composes after it, and a fact
     /// derived twice is a fact that can differ.
     ///
     /// `None` for a type the model does not hold as a data-carrying enum, or
@@ -1838,7 +1838,7 @@ fn field_step(ident: &syn::Ident) -> prebindgen_registry::unfold::PathStep {
 /// The model field one part reads, or `None` for a part that is not a field.
 fn part_field<'a>(part: &Part<'a>) -> Option<&'a prebindgen_registry::flat::Field> {
     match part.from {
-        prebindgen_registry::row::PartSource::Field { field, .. } => Some(field),
+        prebindgen_registry::recipe::PartSource::Field { field, .. } => Some(field),
         _ => None,
     }
 }

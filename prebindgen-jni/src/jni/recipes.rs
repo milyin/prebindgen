@@ -1,14 +1,14 @@
-//! JniGen's Kotlin class declarations, lowered into the registry's row
+//! JniGen's Kotlin class declarations, lowered into the registry's recipe
 //! vocabulary.
 //!
 //! A build script writes `ptr_class!`, `data_class!`, `enum_class!` or
 //! `sealed_class!`, each naming the Kotlin type one Rust type becomes, and
 //! `convert!` for a conversion the binding supplies itself. This turns those
-//! into rows in a [`Rows`] table: the shared statement of **which parts** a
+//! into recipes in a [`Recipes`] table: the shared statement of **which parts** a
 //! value gets across in, with nothing about the JNI wire in it.
 //!
-//! One row per declared type and job, and every crossing nobody declared takes
-//! the row the registry derives from its kind. The chain of guesses this
+//! One recipe per declared type and job, and every crossing nobody declared takes
+//! the recipe the registry derives from its kind. The chain of guesses this
 //! replaced — try a terminal, then a `Result`, then an optional, then a run,
 //! then a borrow, then a transparent bridge — is a lookup for the declared
 //! half, and the derived half is the registry's.
@@ -17,8 +17,9 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
-    row::{
-        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RowError, RowId, Rows,
+    recipe::{
+        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeId,
+        Recipes,
     },
 };
 
@@ -53,7 +54,7 @@ fn element_types(element: &prebindgen_registry::Element) -> Vec<&TypeRef> {
 ///
 /// Empty for anything the model does not hold as a data-carrying enum, which
 /// includes a `sealed_class!` declared over a type the scan dropped — the scan
-/// reports that, and a row over no arms would report it a second time.
+/// reports that, and a recipe over no arms would report it a second time.
 fn alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Construct>> {
     let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
         return Vec::new();
@@ -130,7 +131,7 @@ impl Declarations {
     /// `None` unless the declaration is exactly one `.fields(fields!(f))` whose
     /// every field is a plain leaf. A record that states its own decomposition
     /// — a per-field `expand_return!` override, an inlined nested class, a sum
-    /// laid out as a selector and its groups — is a shape this row does not
+    /// laid out as a selector and its groups — is a shape this recipe does not
     /// state yet, and stating half of one would describe a boundary nothing
     /// emits.
     fn value_form_of(
@@ -173,8 +174,8 @@ impl Declarations {
             // A field that reaches the type being taken apart. The leaf
             // synthesis treats `Box<T>` as a spelling of its own and stops
             // there; a recipe keys a crossing by the value that crosses, so
-            // `Box<ZSample>` inside `ZSample`'s own value form is that row
-            // reaching itself. Refused here rather than by `Rows::build`,
+            // `Box<ZSample>` inside `ZSample`'s own value form is that recipe
+            // reaching itself. Refused here rather than by `Recipes::build`,
             // which would refuse the whole binding over a shape the leaf
             // synthesis handles.
             if st.fields[index].ty.stripped_key() == ty.stripped_key() {
@@ -191,8 +192,8 @@ impl Declarations {
     ///
     /// The declaration's answer, so a `.name(..)` rename carries through to the
     /// builder parameter. `None` for a type with no value form, or one whose
-    /// records this row does not state — the same test [`Self::value_form_of`]
-    /// makes when it declares the row.
+    /// records this recipe does not state — the same test [`Self::value_form_of`]
+    /// makes when it declares the recipe.
     pub(crate) fn value_form_names(
         &self,
         registry: &impl prebindgen_registry::Conversions,
@@ -220,7 +221,7 @@ impl Declarations {
 ///
 /// Empty for anything the model does not hold as a struct, which includes a
 /// `data_class!` over a type the scan dropped — the scan reports that, and a
-/// row over no fields would report it a second time.
+/// recipe over no fields would report it a second time.
 fn out_fields(model: &Flat, ty: &TypeRef) -> Vec<Reach> {
     (0..fields_of(model, ty).len()).map(Reach::Field).collect()
 }
@@ -237,23 +238,23 @@ fn fields_of<'a>(model: &'a Flat, ty: &TypeRef) -> &'a [prebindgen_registry::fla
     }
 }
 
-/// The row a type with no parts takes: the adapter emits the conversion itself.
-fn whole() -> RowId {
-    RowId::new("whole")
+/// The recipe a type with no parts takes: the adapter emits the conversion itself.
+fn whole() -> RecipeId {
+    RecipeId::new("whole")
 }
 
-/// The row a `data_class` takes when it crosses **as its fields**.
+/// The recipe a `data_class` takes when it crosses **as its fields**.
 ///
 /// Not the default yet. `whole()` still answers for every site, and this one is
 /// compiled only where something asks for it by name — which is what lets the
 /// composed wire list be checked against the walk it will replace before
 /// anything depends on it.
-pub(crate) fn parts() -> RowId {
-    RowId::new("parts")
+pub(crate) fn parts() -> RecipeId {
+    RecipeId::new("parts")
 }
 
 impl Declarations {
-    /// Every row this binding's declarations state.
+    /// Every recipe this binding's declarations state.
     ///
     /// A type declared but absent from the model is skipped rather than
     /// refused: the scan already reports it, and reporting it twice in
@@ -262,8 +263,8 @@ impl Declarations {
         &self,
         model: &Flat,
         registry: &impl prebindgen_registry::Conversions,
-    ) -> Result<Rows, Vec<RowError>> {
-        let mut rows = Rows::builder();
+    ) -> Result<Recipes, Vec<RecipeError>> {
+        let mut recipes = Recipes::builder();
         // Every Kotlin class declaration, and every `convert!`-declared
         // conversion. The second matters as much as the first: a conversion may
         // be declared on a type the registry would otherwise read as an arity
@@ -291,25 +292,25 @@ impl Declarations {
             let Ok(ty) = model.classify(&spelled) else {
                 continue;
             };
-            // Every declared Kotlin shape is one row with no parts today,
+            // Every declared Kotlin shape is one recipe with no parts today,
             // including the two that plainly have some: a `data_class` arrives
             // as separate JNI parameters and is rebuilt inside one generated
             // function, and a `sealed_class` is a selector plus the live arm's
-            // slots inside another. `Atomic` is what a row says about that —
+            // slots inside another. `Atomic` is what a recipe says about that —
             // the adapter emits the conversion itself, and how many wire values
             // that costs is its own business — so it describes the adapter as it
             // stands rather than as it will be.
             // A `sealed_class` hands its value out as a tag plus every
             // alternative's payloads, laid side by side — the deconstructing
-            // twin of the constructing row below, and the direction that
+            // twin of the constructing recipe below, and the direction that
             // actually has no alternative: a sum has no whole-value output
             // conversion, because a tag plus groups is not one wire.
             match self.types.get(&ty.key()).map(|c| &c.kind) {
                 Some(DeclaredKind::Sealed(_)) => {
                     let arms = out_alternatives(model, &ty);
-                    rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+                    recipes.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
                     if !arms.is_empty() {
-                        rows.declare(ty.clone(), parts(), Deconstructing::Choice { arms });
+                        recipes.declare(ty.clone(), parts(), Deconstructing::Choice { arms });
                     }
                 }
                 // A `data_class` hands its value out as its fields too, so the
@@ -317,9 +318,9 @@ impl Declarations {
                 // the Rust side.
                 Some(DeclaredKind::Data) => {
                     let reaches = out_fields(model, &ty);
-                    rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+                    recipes.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
                     if !reaches.is_empty() {
-                        rows.declare(
+                        recipes.declare(
                             ty.clone(),
                             parts(),
                             Deconstructing::Product(Deconstruct::Fields(reaches)),
@@ -327,7 +328,7 @@ impl Declarations {
                     }
                 }
                 _ => {
-                    rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+                    recipes.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
                 }
             }
             // A value form: `expand_return!(T).fields(fields!(f))` calls `f`
@@ -335,7 +336,7 @@ impl Declarations {
             // declaration shape that names its own accessor, and the reason
             // `Deconstruct::ValueForm` exists.
             if let Some((func, reaches)) = self.value_form_of(model, registry, &ty) {
-                rows.declare(
+                recipes.declare(
                     ty.clone(),
                     parts(),
                     Deconstructing::Product(Deconstruct::ValueForm {
@@ -344,31 +345,32 @@ impl Declarations {
                     }),
                 );
             }
-            // A `data_class` also has a row that says what it is made of, so
+            // A `data_class` also has a recipe that says what it is made of, so
             // its constructing side names which of the two a site takes by
             // default. See [`parts`] for why that is still `whole`.
             match self.types.get(&ty.key()).map(|c| &c.kind) {
                 // A struct with no fields is nothing to be made of, so it
-                // states no `parts` row — the same condition the deconstructing
-                // side applies, and the reason `row_of` may be asked for the
-                // row by name.
+                // states no `parts` recipe — the same condition the deconstructing
+                // side applies, and the reason `recipe_of` may be asked for the
+                // recipe by name.
                 Some(DeclaredKind::Data) if !fields_of(model, &ty).is_empty() => {
-                    rows.declare_default(ty.clone(), whole(), Constructing::Atomic)
+                    recipes
+                        .declare_default(ty.clone(), whole(), Constructing::Atomic)
                         .declare(ty, parts(), Constructing::Product(Construct::Fields));
                 }
                 // A `sealed_class` has one too, and it is a choice rather than
                 // a product: exactly one alternative is live, every one of them
                 // still crosses, and the tag says which. The arms are the
-                // model's — a row states which parts, never what they are.
+                // model's — a recipe states which parts, never what they are.
                 Some(DeclaredKind::Sealed(_)) => {
                     let arms = alternatives(model, &ty);
-                    rows.declare_default(ty.clone(), whole(), Constructing::Atomic);
+                    recipes.declare_default(ty.clone(), whole(), Constructing::Atomic);
                     if !arms.is_empty() {
-                        rows.declare(ty, parts(), Constructing::Choice { arms });
+                        recipes.declare(ty, parts(), Constructing::Choice { arms });
                     }
                 }
                 _ => {
-                    rows.declare(ty, whole(), Constructing::Atomic);
+                    recipes.declare(ty, whole(), Constructing::Atomic);
                 }
             }
         }
@@ -377,7 +379,7 @@ impl Declarations {
         // `LongArray`, bulk-copied with nothing boxed — one wire value, not a
         // run this adapter walks. The registry reads `[T; N]` as a run unless
         // something says otherwise, and this is JniGen saying otherwise for
-        // every array the model holds. Nothing is enumerated twice: a row for
+        // every array the model holds. Nothing is enumerated twice: a recipe for
         // a crossing nobody uses is inert.
         // Keyed by identity in a `BTreeMap`, so each array type is keyed once
         // and the declaration order is the key order — no sort, no second pass
@@ -393,20 +395,21 @@ impl Declarations {
             arrays.entry(ty.key()).or_insert(ty);
         }
         for ty in arrays.into_values() {
-            rows.declare(ty.clone(), whole(), Deconstructing::Atomic)
+            recipes
+                .declare(ty.clone(), whole(), Deconstructing::Atomic)
                 .declare(ty.clone(), whole(), Constructing::Atomic);
         }
 
-        rows.build(model)
+        recipes.build(model)
     }
 }
 
 impl Declarations {
-    /// Which row each part of a `data_class` takes.
+    /// Which recipe each part of a `data_class` takes.
     ///
     /// A field that is itself a `data_class` crosses as **its** fields too, so
     /// the part site asks for [`parts`] rather than letting the field take its
-    /// own default. That is the one thing a site can say that a row cannot: the
+    /// own default. That is the one thing a site can say that a recipe cannot: the
     /// same crossing is read one way on its own and another inside a product.
     ///
     /// Without it a nested class contributes a single wire and the flattening
@@ -427,7 +430,7 @@ impl Declarations {
             // slots. Whether it *can* is the adapter's answer at compile time,
             // not a declaration: a payload with no slot form leaves the sum
             // object-shaped, which is the fragment `Compile::choice` hands
-            // back. So the site asks, and the row answers.
+            // back. So the site asks, and the recipe answers.
             DeclaredKind::Sealed(_) => true,
             _ => false,
         })
@@ -437,9 +440,11 @@ impl Declarations {
         &self,
         model: &Flat,
         registry: &impl prebindgen_registry::Conversions,
-        recipes: &prebindgen_registry::row::Rows,
-    ) -> Result<prebindgen_registry::row::Bindings, Vec<RowError>> {
-        use prebindgen_registry::row::{Ask, Assembly, Bindings, Crossing, Origin, RowId, Site};
+        recipes: &prebindgen_registry::recipe::Recipes,
+    ) -> Result<prebindgen_registry::recipe::Bindings, Vec<RecipeError>> {
+        use prebindgen_registry::recipe::{
+            Ask, Assembly, Bindings, Crossing, Origin, RecipeId, Site,
+        };
 
         let mut bound = Bindings::builder();
         let mut declared: Vec<TypeKey> = self
@@ -457,7 +462,7 @@ impl Declarations {
         // both spellings.
         //
         // Enumerated from the model rather than from the declarations, for the
-        // same reason the array rows are: what has to be bound is what the
+        // same reason the array recipes are: what has to be bound is what the
         // model names, and a declaration says nothing about where its type is
         // used.
         let mut optionals: BTreeMap<TypeKey, (&TypeRef, &TypeRef)> = BTreeMap::new();
@@ -474,17 +479,17 @@ impl Declarations {
             }
         }
         for (outer, inner) in optionals.into_values() {
-            // The optional keeps the row the registry derived from its shape —
-            // it has no `parts` row of its own — and it is the value one layer
+            // The optional keeps the recipe the registry derived from its shape —
+            // it has no `parts` recipe of its own — and it is the value one layer
             // in that crosses as its parts.
             bound.bind(
                 Site::part(
                     &Crossing::new(outer.clone(), Assembly::Construct),
-                    &RowId::derived(),
+                    &RecipeId::derived(),
                     0,
                 ),
                 Crossing::new(inner.clone(), Assembly::Construct),
-                Ask::Row(parts()),
+                Ask::Recipe(parts()),
                 Origin::Part,
             );
         }
@@ -502,7 +507,7 @@ impl Declarations {
             let handing_out = Crossing::new(ty, Assembly::Deconstruct);
             for (index, field) in s.fields.iter().enumerate() {
                 // An `Option<D>` field reaches D through the optional's own
-                // row, so the part bound here is the optional and the inner is
+                // recipe, so the part bound here is the optional and the inner is
                 // bound below.
                 let target = field.ty.optional_inner().unwrap_or(&field.ty);
                 if !self.field_crosses_as_its_fields(target) {
@@ -511,7 +516,7 @@ impl Declarations {
                 // An `Option<D>` field reaches D through the optional's own
                 // part site, which the model-wide scan above already bound. What
                 // is left is the field that IS the class: its part takes the
-                // `parts` row, in both directions.
+                // `parts` recipe, in both directions.
                 if field.ty.optional_inner().is_none() {
                     for (of, assembly) in [
                         (&building, Assembly::Construct),
@@ -520,7 +525,7 @@ impl Declarations {
                         bound.bind(
                             Site::part(of, &parts(), index),
                             Crossing::new(field.ty.clone(), assembly),
-                            Ask::Row(parts()),
+                            Ask::Recipe(parts()),
                             Origin::Part,
                         );
                     }
@@ -528,16 +533,16 @@ impl Declarations {
             }
         }
         // Every function whose return the binding takes apart, bound to the
-        // `parts` row of its return type.
+        // `parts` recipe of its return type.
         //
-        // This is what a site naming several values is: `Ask::Row` already
-        // lets a site pick a row, and a `parts` fragment already occupies
+        // This is what a site naming several values is: `Ask::Recipe` already
+        // lets a site pick a recipe, and a `parts` fragment already occupies
         // several wires — the two facts stages 3 and 4 established, meeting.
         // The registry needs nothing new to express a decomposed return.
         for f in model.functions() {
             // The value that crosses, through the layers a decomposition looks
             // through: a `&T` return decomposes T, and so does an `Option<T>`
-            // or a `Vec<T>` — the shape rides the delivery, not the row.
+            // or a `Vec<T>` — the shape rides the delivery, not the recipe.
             let ret = f.ret.borrow_target().unwrap_or(&f.ret);
             let ret = ret.optional_inner().unwrap_or(ret);
             let ret = ret.sequence_elem().unwrap_or(ret);
@@ -562,10 +567,10 @@ impl Declarations {
             bound.bind(
                 Site {
                     owner: f.name.clone(),
-                    role: prebindgen_registry::row::Role::Return,
+                    role: prebindgen_registry::recipe::Role::Return,
                 },
                 crossing,
-                Ask::Row(parts()),
+                Ask::Recipe(parts()),
                 Origin::Adapter,
             );
         }

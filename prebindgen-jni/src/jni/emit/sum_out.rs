@@ -33,7 +33,7 @@ pub(crate) const SUM_TAG_LEAF: &str = "tag";
 /// The list is `Declarations::sum_out_wires`', mapped. Runs BEFORE `resolve`,
 /// which is exactly why it shares that composition rather than walking the
 /// enum a second time: a `variant!(V).name(..)` rename and the slot naming have
-/// to reach the builder's parameter names and the row identically, and two
+/// to reach the builder's parameter names and the recipe identically, and two
 /// walks agreeing was a property nothing checked.
 pub(crate) fn synth_sum_leaves(
     ext: &Declarations,

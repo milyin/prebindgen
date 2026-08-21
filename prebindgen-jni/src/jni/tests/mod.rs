@@ -74,13 +74,13 @@ fn install(
     let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
     let key = TypeKey::from_type(&ty);
     let assembly = match direction {
-        Direction::Input => prebindgen_registry::row::Assembly::Construct,
-        Direction::Output => prebindgen_registry::row::Assembly::Deconstruct,
+        Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
+        Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
     };
     decls.compiled.borrow_mut().record(
         key.clone(),
         assembly,
-        prebindgen_registry::row::RowId::new("whole"),
+        prebindgen_registry::recipe::RecipeId::new("whole"),
         crate::jni::compile::JFrag::by_hand(key, e.clone()),
     );
     reg.insert_crossing(direction, &ty, true, Some(Answer::over(e.subs)));

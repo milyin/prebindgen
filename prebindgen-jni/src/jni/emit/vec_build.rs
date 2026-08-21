@@ -139,7 +139,7 @@ pub(crate) fn vec_build_elem(
         }
         // `Cow` still declines, and by its own policy rather than this path's:
         // `Cow::Owned` is well-typed, and refusing it is what keeps a binding
-        // from silently removing the borrow path. See its `WRAPPER_OPS` row.
+        // from silently removing the borrow path. See its `WRAPPER_OPS` recipe.
         build_through_wrappers(&elem_wrappers, quote!(__probe))?;
     }
     // Canonical from here down: the flatten plan, the trio's storage and its
