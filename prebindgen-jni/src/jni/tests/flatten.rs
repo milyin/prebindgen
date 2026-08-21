@@ -2154,14 +2154,6 @@ fn a_data_class_crosses_as_its_fields_and_a_nested_one_as_its_own() {
         );
     let gen = jni.build_with(registry).expect("resolve");
 
-    let (composed, walked) = gen
-        .parts_vs_walk_for_test("Holder", "h")
-        .expect("Holder states a parts row and the walk plans it");
-    // The row says exactly what the walk it will replace says — names, types
-    // and order — which is what makes pointing the emitters at the fragment a
-    // move rather than a rewrite.
-    assert_eq!(composed, walked, "the row and the walk disagree");
-
     let wires = gen
         .parts_wires_for_test("Holder")
         .expect("Holder states a parts row");
@@ -2240,12 +2232,21 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
                 .fun(prebindgen_registry::fun!(outer_use)),
         );
     let gen = jni.build_with(registry).expect("resolve");
-    for (name, param) in [("Outer", "o"), ("Mid", "m")] {
-        let (composed, walked) = gen
-            .parts_vs_walk_for_test(name, param)
-            .unwrap_or_else(|| panic!("{name} states a parts row and the walk plans it"));
-        assert_eq!(composed, walked, "the row and the walk disagree on {name}");
-    }
+    assert_eq!(
+        wire_lines(&gen, "Outer", "o"),
+        vec![
+            "oMidPresent: Boolean = o.mid != null",
+            "oMidInnerPresent: Boolean = o.mid?.inner != null",
+            "oMidInnerId: Long = o.mid?.inner?.id ?: 0L",
+        ],
+    );
+    assert_eq!(
+        wire_lines(&gen, "Mid", "m"),
+        vec![
+            "mInnerPresent: Boolean = m.inner != null",
+            "mInnerId: Long = m.inner?.id ?: 0L",
+        ],
+    );
 }
 
 /// A nullable primitive keeps the allocation-free `(present, value)` pair
@@ -2286,8 +2287,19 @@ fn a_nullable_primitive_field_crosses_as_a_pair() {
                 .fun(prebindgen_registry::fun!(scal_use)),
         );
     let gen = jni.build_with(registry).expect("resolve");
-    let (composed, walked) = gen.parts_vs_walk_for_test("Scal", "s").expect("plan");
-    assert_eq!(composed, walked, "the row and the walk disagree");
+    assert_eq!(
+        wire_lines(&gen, "Scal", "s"),
+        vec![
+            "sNPresent: Boolean = s.n != null",
+            "sNValue: Long = s.n ?: 0L",
+            "sK: Long = s.k",
+        ],
+    );
+    // Neither half of the pair names a field of its own; the field they were
+    // decoupled from is what both answer with.
+    let wires = gen.parts_wires_for_test("Scal").expect("row");
+    assert_eq!(wires[0].field(), Some("n"));
+    assert_eq!(wires[1].field(), Some("n"));
 }
 
 /// A `sealed_class` field crosses as a tag plus every alternative's slots, and
@@ -2355,43 +2367,30 @@ fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
         );
     let gen = jni.build_with(registry).expect("resolve");
 
-    let (composed, walked) = gen
-        .parts_vs_walk_for_test("Observation", "o")
-        .expect("Observation states a parts row and the walk plans it");
-    assert_eq!(composed, walked, "the row and the walk disagree");
-
-    // What the two agree on, stated once so a change to both at the same time
-    // still has to be meant: the required field is a tag and six slots, the
-    // optional one adds a presence flag and a `null` arm.
-    let accesses: Vec<String> = composed.iter().map(|w| w.2.clone()).collect();
-    assert!(
-        accesses.contains(&"(o.reading as? io.test.jni.Reading.Exact)?.v0 ?: 0L".to_string()),
-        "{accesses:#?}"
-    );
-    assert!(
-        accesses
-            .contains(&"(o.reading as? io.test.jni.Reading.Tagged)?.v1?.value ?: 0".to_string()),
-        "a Kotlin enum payload is read through its discriminant: {accesses:#?}"
-    );
-    assert!(
-        accesses.contains(&"(o.reading as? io.test.jni.Reading.Tagged)?.v0".to_string()),
-        "a string payload rides a JVM null rather than a literal: {accesses:#?}"
-    );
-    assert!(
-        accesses.contains(&"o.fallback != null".to_string()),
-        "{accesses:#?}"
-    );
-    assert!(
-        accesses
-            .iter()
-            .any(|a| a.starts_with("when (o.fallback) { null -> 0;")),
-        "an optional sum gates on null in its own arm: {accesses:#?}"
-    );
-    assert!(
-        accesses
-            .iter()
-            .any(|a| a.starts_with("when (o.reading) { is io.test.jni.Reading.Missing -> 0;")),
-        "a required sum has no null arm: {accesses:#?}"
+    // The whole signature, in the order the three coordinated sites read it.
+    // Between them the alternatives cover a scalar payload, a two-field
+    // payload, a string payload that rides a JVM `null` rather than a literal,
+    // and a Kotlin enum payload read through its discriminant.
+    assert_eq!(
+        wire_lines(&gen, "Observation", "o"),
+        vec![
+            "oId: Long = o.id",
+            "oReadingTag: Int = when (o.reading) { is io.test.jni.Reading.Missing -> 0; is io.test.jni.Reading.Exact -> 1; is io.test.jni.Reading.Range -> 2; is io.test.jni.Reading.Tagged -> 3 }",
+            "oReadingExactV0: Long = (o.reading as? io.test.jni.Reading.Exact)?.v0 ?: 0L",
+            "oReadingRangeLow: Long = (o.reading as? io.test.jni.Reading.Range)?.low ?: 0L",
+            "oReadingRangeHigh: Long = (o.reading as? io.test.jni.Reading.Range)?.high ?: 0L",
+            "oReadingTaggedV0: String? = (o.reading as? io.test.jni.Reading.Tagged)?.v0",
+            "oReadingTaggedV1: Int = (o.reading as? io.test.jni.Reading.Tagged)?.v1?.value ?: 0",
+            // The optional field adds the gate, and its `when` adds the arm the
+            // required one has no need of.
+            "oFallbackPresent: Boolean = o.fallback != null",
+            "oFallbackTag: Int = when (o.fallback) { null -> 0; is io.test.jni.Reading.Missing -> 0; is io.test.jni.Reading.Exact -> 1; is io.test.jni.Reading.Range -> 2; is io.test.jni.Reading.Tagged -> 3 }",
+            "oFallbackExactV0: Long = (o.fallback as? io.test.jni.Reading.Exact)?.v0 ?: 0L",
+            "oFallbackRangeLow: Long = (o.fallback as? io.test.jni.Reading.Range)?.low ?: 0L",
+            "oFallbackRangeHigh: Long = (o.fallback as? io.test.jni.Reading.Range)?.high ?: 0L",
+            "oFallbackTaggedV0: String? = (o.fallback as? io.test.jni.Reading.Tagged)?.v0",
+            "oFallbackTaggedV1: Int = (o.fallback as? io.test.jni.Reading.Tagged)?.v1?.value ?: 0",
+        ],
     );
 }
 
@@ -2491,23 +2490,29 @@ fn every_spelling_the_walk_flattens_states_the_same_row() {
         "Box<Holder>",
         "Box<Option<Holder>>",
     ] {
-        let (composed, walked) = gen
-            .parts_vs_walk_for_test(spelling, "h")
-            .unwrap_or_else(|| panic!("{spelling} states a row and the walk plans it"));
-        assert_eq!(
-            composed, walked,
-            "the row and the walk disagree on {spelling}"
-        );
+        let optional = spelling.contains("Option");
+        let mut expected = vec![
+            "hTag: Long = h.tag",
+            "hSummaryCount: Long = h.summary.count",
+            "hSummaryTotal: Double = h.summary.total",
+            "hNotePresent: Boolean = h.note != null",
+            "hNoteValue: Long = h.note ?: 0L",
+        ];
+        // The two optional spellings carry one wire more, and every read below
+        // that gate is a safe call.
+        let gated = vec![
+            "hPresent: Boolean = h != null",
+            "hTag: Long = h?.tag ?: 0L",
+            "hSummaryCount: Long = h?.summary?.count ?: 0L",
+            "hSummaryTotal: Double = h?.summary?.total ?: 0.0",
+            "hNotePresent: Boolean = h?.note != null",
+            "hNoteValue: Long = h?.note ?: 0L",
+        ];
+        if optional {
+            expected = gated;
+        }
+        assert_eq!(wire_lines(&gen, spelling, "h"), expected, "{spelling}");
     }
-
-    // The optional spellings carry a presence flag the bare ones do not, so
-    // "they all agree with the walk" is not the same claim as "they are all
-    // the same list".
-    let bare = gen.parts_wires_for_test("Holder").expect("bare row");
-    let opt = gen
-        .parts_wires_for_test("Option<Holder>")
-        .expect("optional row");
-    assert_eq!(opt.len(), bare.len() + 1, "the gate is one more wire");
 }
 
 /// Every field shape the walk reads specially, held to the row.
@@ -2603,10 +2608,68 @@ fn every_field_shape_the_walk_reads_specially_states_the_same_row() {
                 .fun(prebindgen_registry::fun!(bits_opt)),
         );
     let gen = jni.build_with(registry).expect("resolve");
-    for spelling in ["Bits", "Option<Bits>"] {
-        let (composed, walked) = gen
-            .parts_vs_walk_for_test(spelling, "b")
-            .unwrap_or_else(|| panic!("{spelling}"));
-        assert_eq!(composed, walked, "disagree on {spelling}");
-    }
+    assert_eq!(
+        wire_lines(&gen, "Bits", "b"),
+        vec![
+            "bPri: Int = b.pri.value",
+            "bMaybePriPresent: Boolean = b.maybePri != null",
+            "bMaybePriValue: Int = b.maybePri?.value ?: 0",
+            "bBig: Long = b.big.toLong()",
+            "bMaybeBigPresent: Boolean = b.maybeBig != null",
+            "bMaybeBigValue: Long = b.maybeBig?.toLong() ?: 0L",
+            "bName: String = b.name",
+            "bMaybeName: String? = b.maybeName",
+            "bFlag: Boolean = b.flag",
+            "bMaybeFlagPresent: Boolean = b.maybeFlag != null",
+            "bMaybeFlagValue: Boolean = b.maybeFlag ?: false",
+            "bBytes: ByteArray = b.bytes",
+            "bOpaque: Long = b.opaque",
+            "bMaybeOpaque: Long = b.maybeOpaque",
+            "bNestedK: Long = b.nested.k",
+            "bNestedS: String = b.nested.s",
+            "bMaybeNestedPresent: Boolean = b.maybeNested != null",
+            "bMaybeNestedK: Long = b.maybeNested?.k ?: 0L",
+            "bMaybeNestedS: String? = b.maybeNested?.s ?: \"\"",
+        ],
+    );
+    // The same fields one layer down, where a gate above turns every read into
+    // a safe call and states what a non-nullable slot carries meanwhile.
+    assert_eq!(
+        wire_lines(&gen, "Option<Bits>", "b"),
+        vec![
+            "bPresent: Boolean = b != null",
+            "bPri: Int = b?.pri?.value ?: 0",
+            "bMaybePriPresent: Boolean = b?.maybePri != null",
+            "bMaybePriValue: Int = b?.maybePri?.value ?: 0",
+            "bBig: Long = b?.big?.toLong() ?: 0L",
+            "bMaybeBigPresent: Boolean = b?.maybeBig != null",
+            "bMaybeBigValue: Long = b?.maybeBig?.toLong() ?: 0L",
+            "bName: String? = b?.name ?: \"\"",
+            "bMaybeName: String? = b?.maybeName",
+            "bFlag: Boolean = b?.flag ?: false",
+            "bMaybeFlagPresent: Boolean = b?.maybeFlag != null",
+            "bMaybeFlagValue: Boolean = b?.maybeFlag ?: false",
+            "bBytes: ByteArray? = b?.bytes ?: ByteArray(0)",
+            "bOpaque: Long = b?.opaque",
+            "bMaybeOpaque: Long = b?.maybeOpaque",
+            "bNestedK: Long = b?.nested?.k ?: 0L",
+            "bNestedS: String? = b?.nested?.s ?: \"\"",
+            "bMaybeNestedPresent: Boolean = b?.maybeNested != null",
+            "bMaybeNestedK: Long = b?.maybeNested?.k ?: 0L",
+            "bMaybeNestedS: String? = b?.maybeNested?.s ?: \"\"",
+        ],
+    );
+}
+
+/// One line per JNI parameter a crossing occupies: the name a site gives it,
+/// its Kotlin type, and the Kotlin expression that fills it.
+///
+/// What the three coordinated sites read, in the order they read it — so a
+/// fixture states the whole signature rather than one fact about it.
+fn wire_lines(gen: &crate::jni::JniGen, spelling: &str, param: &str) -> Vec<String> {
+    gen.named_wires_for_test(spelling, param)
+        .unwrap_or_else(|| panic!("{spelling} states no composition"))
+        .into_iter()
+        .map(|(name, kt_ty, access, ..)| format!("{name}: {kt_ty} = {access}"))
+        .collect()
 }

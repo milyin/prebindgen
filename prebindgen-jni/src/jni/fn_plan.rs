@@ -564,7 +564,7 @@ impl JniFunctionPlan {
                 InputKind::FlattenStruct(plan) => plan
                     .leaves
                     .iter()
-                    .map(|l| kotlin_jvm_slots(&l.kt_wire_ty))
+                    .map(|l| kotlin_jvm_slots(l.kt_wire_ty()))
                     .sum(),
                 InputKind::OptionScalar(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
                 InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,

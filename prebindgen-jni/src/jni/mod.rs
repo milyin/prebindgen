@@ -470,72 +470,45 @@ pub(crate) type NamedWire = (
 
 #[cfg(test)]
 impl JniGen {
-    /// The composed wires and the walk's leaves for one `data_class`, named
-    /// the way a parameter would name them.
+    /// What one crossing occupies on the wire, named the way a parameter
+    /// names it.
     ///
-    /// Test support, and the check that lets the emitter switch happen: the
-    /// `parts` row is meant to say exactly what `build_flat_input_plan` says,
-    /// so this puts the two side by side for a real binding rather than
-    /// asserting a hand-written expectation.
-    pub(crate) fn parts_vs_walk_for_test(
+    /// Test support: the composition is what the emitters read, and this is it
+    /// in the form the three coordinated sites see — the JNI parameter name,
+    /// its Kotlin type, the Kotlin expression that fills it, the conversion it
+    /// crosses through, where the lock scaffold finds a nested handle and
+    /// whether that can be null, whether the conversion carries Rust-side
+    /// stages, and the struct field it fills.
+    pub(crate) fn named_wires_for_test(
         &self,
         spelling: &str,
         param: &str,
-    ) -> Option<(Vec<NamedWire>, Vec<NamedWire>)> {
-        let wires = self.parts_wires_for_test(spelling)?;
-        let composed = wires
-            .iter()
-            .map(|w| {
-                let name =
-                    crate::util::snake_to_camel(&format!("{param}_{}", w.path.replace('.', "_")));
-                (
-                    name,
-                    w.kt_ty.clone(),
-                    w.access.render(param),
-                    w.conv().map(|c| c.to_string()),
-                    w.handle_target
-                        .as_ref()
-                        .map(|t| crate::jni::compile::reached(param, t)),
-                    w.handle_nullable,
-                    w.staged(),
-                    w.field().map(str::to_string),
-                )
-            })
-            .collect();
-
-        let ty: syn::Type = syn::parse_str(spelling).ok()?;
-        let arg = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
-        let plan = crate::jni::emit::build_flat_input_plan(
-            &self.decls,
-            &self.registry,
-            &syn::Ident::new(param, proc_macro2::Span::call_site()),
-            &arg,
+    ) -> Option<Vec<NamedWire>> {
+        Some(
+            self.parts_wires_for_test(spelling)?
+                .iter()
+                .map(|w| {
+                    (
+                        crate::util::snake_to_camel(&format!(
+                            "{param}_{}",
+                            w.path.replace('.', "_")
+                        )),
+                        w.kt_ty.clone(),
+                        w.access.render(param),
+                        w.conv().map(|c| c.to_string()),
+                        w.handle_target
+                            .as_ref()
+                            .map(|t| crate::jni::compile::reached(param, t)),
+                        w.handle_nullable,
+                        w.staged(),
+                        w.field().map(str::to_string),
+                    )
+                })
+                .collect(),
         )
-        .ok()??;
-        let walked = plan
-            .leaves
-            .iter()
-            .map(|l| {
-                (
-                    l.kt_name.clone(),
-                    l.kt_wire_ty.clone(),
-                    l.kt_access(param),
-                    l.conv.as_ref().map(|c| c.to_string()),
-                    l.kt_handle_target(param),
-                    l.handle_nullable,
-                    l.entry.as_ref().is_some_and(|e| !e.pre_stages.is_empty()),
-                    l.field.as_ref().map(|f| f.to_string()),
-                )
-            })
-            .collect();
-        Some((composed, walked))
     }
 
-    /// The wires a `data_class` composes into, by short type name.
-    ///
-    /// Test support: the `parts` row is compiled for every declared
-    /// `data_class` but taken by no site yet, so this is the only way to see
-    /// what it composed.
+    /// The wires a crossing composes into, by spelling.
     pub(crate) fn parts_wires_for_test(
         &self,
         spelling: &str,

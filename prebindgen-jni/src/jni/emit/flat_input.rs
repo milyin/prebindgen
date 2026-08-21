@@ -649,80 +649,97 @@ fn composed_property_decode(
 /// One flattened leaf of a struct **input** param. The mirror of
 /// [`EncSlot`] for the input direction: instead of reading the field with
 /// `env.get_field(...)` out of a single `JObject`, the leaf crosses the JNI
-/// boundary as its own wrapper parameter. Carries every fact the three
-/// coordinated sites (native wrapper signature, `JNINative` extern decl,
-/// Kotlin call-site destructure) need so they cannot drift in order, type, or
+/// boundary as its own wrapper parameter, and the three coordinated sites — the
+/// native wrapper signature, the `JNINative` extern declaration and the Kotlin
+/// call-site destructure — read it so they cannot drift in order, type, or
 /// nullability.
+///
+/// One JNI parameter a flattened `data_class` occupies, as the site names it.
+///
+/// A projection of the fragment's [`Wire`](crate::jni::compile::Wire) and
+/// nothing more: the wire says what crosses and how Kotlin reaches it, and this
+/// pairs that with the one thing a wire cannot know — the parameter name the
+/// site hangs it off.
 pub(crate) struct FlatLeaf {
     /// Native wrapper parameter ident — also the decode source.
     pub native_ident: syn::Ident,
-    /// Native wire type (lifetime-annotated for object wires).
-    pub native_wire_ty: TokenStream,
     /// Kotlin `external fun` parameter name (camelCase).
     pub kt_name: String,
-    /// Kotlin `external fun` parameter type (incl. a trailing `?`).
-    pub kt_wire_ty: String,
-    /// Call-site destructure expression **tail** — everything after the
-    /// object expression (`.field ?: 0`, `?.seq != null`, ` != null`). The
-    /// full access is composed per site via [`Self::kt_access`], so the plan
-    /// itself stays independent of the call form (`payload`, `this`, `__e`).
-    pub kt_access_tail: String,
-    /// Text placed **before** the object expression, so the access is a
-    /// template (`prefix + base + tail`) rather than a suffix.
-    ///
-    /// Empty for every ordinary leaf, whose access really is a suffix. A
-    /// tag-gated variant slot is not: it needs
-    /// `(<base>.field as? Reading.Exact)?.v0 ?: 0L`, where the base sits in
-    /// the middle. Both [`Self::kt_access`] and the handle-target composition
-    /// go through it, because a variant slot can equally be a handle — and a
-    /// handle target that ignored the prefix would silently lock and consume
-    /// the wrong expression.
-    pub kt_access_prefix: String,
-    /// Per-field input converter ident (`None` for the synthetic present flag).
-    pub conv: Option<syn::Ident>,
-    /// Struct field this leaf populates. `None` for the struct-level present
-    /// flag of an `Option<struct>` param. `Some` for ordinary field leaves AND
-    /// for a per-field present flag (Phase 5 `Option<primitive>` field).
-    pub field: Option<syn::Ident>,
-    /// `true` for a synthetic `…Present: Boolean` gate leaf: the struct-level
-    /// gate of an `Option<struct>` param (`field == None`) or a per-field gate
-    /// of an `Option<primitive>`/`Option<enum>` field (`field == Some`).
-    pub is_present_flag: bool,
-    /// Complete converter entry for an ordinary value leaf. Present flags and
-    /// direct owned-handle leaves have no entry here.
-    pub entry: Option<prebindgen_registry::ConverterImpl<KotlinMeta>>,
-    /// A nested owned handle crosses as a raw pointer under the same Kotlin
-    /// locking/consume scaffold as a top-level handle. This stores the typed
-    /// property access tail (`.child.handle` / `?.handle`) used to collect it.
-    pub handle_target_tail: Option<String>,
-    /// Whether the handle access can be null, either because the field itself
-    /// is optional or because an optional ancestor gates it.
-    pub handle_nullable: bool,
+    /// The path through the value that reached this wire, as the fragment
+    /// states it — `tag`, `summary.count`, `reading.exact_v0`. What the rebuild
+    /// names a leaf by, so the tree it builds and the row it builds from cannot
+    /// disagree about which value is which.
+    pub path: String,
+    /// The wire itself.
+    pub wire: crate::jni::compile::Wire,
 }
 
 impl FlatLeaf {
+    /// This wire as one parameter of the site named `param`.
+    fn of(param: &syn::Ident, wire: &crate::jni::compile::Wire) -> Self {
+        let native = format!("{param}_{}", wire.path.replace('.', "_"));
+        Self {
+            native_ident: format_ident!("{native}"),
+            kt_name: snake_to_camel(&native),
+            path: wire.path.clone(),
+            wire: wire.clone(),
+        }
+    }
+
+    /// Native wire type, lifetime-annotated for object wires.
+    pub fn native_wire_ty(&self) -> TokenStream {
+        annotate_jobject_with_lifetime(&self.wire.ty, "a").to_token_stream()
+    }
+
+    /// Kotlin `external fun` parameter type (incl. a trailing `?`).
+    pub fn kt_wire_ty(&self) -> &str {
+        &self.wire.kt_ty
+    }
+
+    /// Per-field input converter ident (`None` for a synthetic gate or tag).
+    pub fn conv(&self) -> Option<&syn::Ident> {
+        self.wire.conv()
+    }
+
+    /// The complete conversion, stages included, or `None` for a gate or tag.
+    pub fn entry(&self) -> Option<&prebindgen_registry::ConverterImpl<KotlinMeta>> {
+        self.wire.entry.as_ref()
+    }
+
+    /// Whether this is a synthetic `…Present: Boolean` gate.
+    pub fn is_present_flag(&self) -> bool {
+        self.wire.is_present_flag()
+    }
+
+    /// Whether the handle access can be null, either because the field itself
+    /// is optional or because an optional ancestor gates it.
+    pub fn handle_nullable(&self) -> bool {
+        self.wire.handle_nullable
+    }
+
     /// Kotlin call-site destructure expression feeding this leaf, rooted at
     /// `base` — the object expression at this call site (the camelCase param
     /// name, `this` for a promoted receiver, `__e` for the vec-build loop
     /// variable).
     pub fn kt_access(&self, base: &str) -> String {
-        format!("{}{base}{}", self.kt_access_prefix, self.kt_access_tail)
+        self.wire.access.render(base)
     }
 
     /// The Kotlin expression yielding the handle this leaf carries, rooted at
     /// `base` — the thing the lock scaffold locks and `markConsumed()`s.
-    /// `None` when the leaf is not a handle. Composed through the same
-    /// template as [`Self::kt_access`].
+    /// `None` when the leaf is not a handle.
     pub fn kt_handle_target(&self, base: &str) -> Option<String> {
-        let tail = self.handle_target_tail.as_ref()?;
-        Some(format!("{}{base}{tail}", self.kt_access_prefix))
+        self.wire
+            .handle_target
+            .as_ref()
+            .map(|walk| crate::jni::compile::reached(base, walk))
     }
 
     /// Native call argument for this leaf. Handle pointers are bound under
     /// the unified lock scaffold; every other leaf is read directly from the
     /// Kotlin object graph.
     pub fn kt_call_arg(&self, base: &str) -> String {
-        if self.handle_target_tail.is_some() {
+        if self.wire.handle_target.is_some() {
             format!("{}_ptr", self.kt_name)
         } else {
             self.kt_access(base)
@@ -1030,20 +1047,15 @@ pub(crate) fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<Kotlin
     }
 }
 
-/// Plan a **data-carrying enum** field as a tag leaf plus one leaf group per
-/// variant, so the sum crosses flattened instead of as one `JObject` per call.
+/// The rebuild for a **data-carrying enum** field the row flattened into a tag
+/// plus one slot group per alternative.
 ///
-/// Returns `None` when some payload cannot be expressed as a flat leaf — a
-/// handle, say, whose ownership the group-gated form does not yet model. That
-/// is deliberately a **graceful degradation, not a rejection**: the caller
-/// falls through to the ordinary value leaf, and the sum crosses as a whole
-/// object through its own converter, exactly as it did before this path
-/// existed. Refusing instead would turn a working binding into a build error
-/// for a shape the generator can already handle.
-///
-/// Kotlin references are emitted **fully qualified** (`is io.x.Reading.Exact`)
-/// so the call site needs no import bookkeeping — these expressions are raw
-/// text spliced into a wrapper whose import set this plan does not own.
+/// Which of the two happened is the fragment's decision, not this walk's:
+/// `Compile::choice` composes the groups where every payload has a slot form
+/// and hands back a single-wire fragment where one does not — a handle, say,
+/// whose ownership the group-gated form does not model. So the caller asks
+/// whether the field is whole before reaching here, and every alternative's
+/// payloads are present when it does.
 #[allow(clippy::too_many_arguments)]
 fn build_flat_sum_field(
     ext: &Declarations,
@@ -1052,255 +1064,92 @@ fn build_flat_sum_field(
     field: syn::Ident,
     optional: bool,
     native_prefix: &str,
-    field_ref: &str,
-    nullable_access: bool,
     field_reading: &TypeRef,
-    leaves: &mut Vec<FlatLeaf>,
-) -> Option<FlatFieldNode> {
-    let rust_ty = field_reading;
-
+    root: &TypeKey,
+    leaves: &mut Leaves<'_>,
+) -> Result<FlatFieldNode, FlatInputError> {
+    let missing = || {
+        flat_error(
+            root,
+            native_prefix,
+            "the row states fewer wires than the model",
+        )
+    };
     // The NAME off the classification, and then the ELEMENT — `enum_item`
     // hands back only the `syn::ItemEnum`, deliberately, so a consumer that
     // acts on the Variant/Enum distinction asks `declared_type` (#289).
     let ident = match sum_reading.unwrapped().kind() {
         flat::TypeKind::Named { id, .. } => id.ident(),
         _ => None,
-    }?;
-    let flat::Type::Variant(sum) = registry.flat().declared_type(&ident)? else {
-        return None;
+    }
+    .ok_or_else(missing)?;
+    let Some(flat::Type::Variant(sum)) = registry.flat().declared_type(&ident) else {
+        return Err(flat_error(
+            root,
+            native_prefix,
+            "a sum row over a type that is not one",
+        ));
     };
-    let cfg = ext.types.get(&TypeKey::from_ident(&ident))?;
-    let sum_cfg = cfg.sum()?;
-    let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
 
-    // Plan every group first: a single unflattenable payload means the whole
-    // sum stays object-shaped, so nothing may be pushed until all of them are
-    // known good.
-    struct Planned {
-        rust_ident: syn::Ident,
-        kotlin: String,
-        fields: Vec<(syn::Member, PlannedLeaf)>,
-    }
-    struct PlannedLeaf {
-        native: String,
-        entry: prebindgen_registry::ConverterImpl<KotlinMeta>,
-        access_tail: String,
-        nullable_wire: bool,
-    }
-    let mut planned: Vec<Planned> = Vec::new();
+    let present_leaf = match optional {
+        true => Some(leaves.take().ok_or_else(missing)?),
+        false => None,
+    };
+    let tag_leaf = leaves.take().ok_or_else(missing)?;
+    let mut variants = Vec::new();
     for alt in &sum.alternatives {
-        let kotlin = ext.sum_variant_class_name(sum_cfg, &alt.name);
         let mut fields = Vec::new();
-        for field in &alt.fields {
-            // The payload's own reading straight to its entry.
-            let entry = ext.in_frag(&field.ty)?;
-            // A projection payload (handle) carries ownership
-            // and locking rules the tag-gated group does not model yet.
-            if entry.metadata.projection.is_some() {
-                return None;
-            }
-            // Nested objects would need their own recursive group; today only
-            // leaf-shaped payloads flatten.
-            let prim = JniPrim::from_wire(&entry.destination);
-            let is_string_like = matches!(&entry.destination, syn::Type::Path(tp)
-                if tp.path.segments.last().is_some_and(|s| s.ident == "JString"));
-            if prim.is_none() && !is_string_like {
-                return None;
-            }
-            let member = field.member();
-            let prop = crate::jni::struct_plan::sum_field_prop_name(&member);
-            let slot = crate::jni::struct_plan::sum_slot_fragment(&kotlin, &prop);
-            // `(<base>.field as? io.x.E.V)?.prop` — inert groups yield null,
-            // so a primitive slot takes its zero and an object slot stays
-            // nullable. The Rust side only converts the live group.
-            //
-            // An `enum_class` payload is a Kotlin enum object whose wire is
-            // the `jint` discriminant, so the access reads `.value` — without
-            // it the slot would be `Priority?` where the wire wants `Int`.
-            let read = if ext.is_kotlin_enum_reading(&field.ty) {
-                format!("{prop}?.value")
-            } else {
-                prop.clone()
-            };
-            let cast = format!("{field_ref} as? {iface_fqn}.{kotlin})?.{read}");
-            let (access_tail, nullable_wire) = match &prim {
-                Some(p) => (format!("{cast} ?: {}", p.kotlin_zero()), false),
-                None => (cast, true),
-            };
-            fields.push((
-                member,
-                PlannedLeaf {
-                    native: format!("{native_prefix}_{slot}"),
-                    entry: entry.clone(),
-                    access_tail,
-                    nullable_wire,
-                },
-            ));
+        for f in &alt.fields {
+            fields.push((f.member(), leaves.take().ok_or_else(missing)?));
         }
-        planned.push(Planned {
+        variants.push(FlatSumVariant {
             rust_ident: alt.name.clone(),
-            kotlin,
             fields,
         });
     }
 
-    // Everything flattens — now push the leaves, tag first.
-    let present_leaf = optional.then(|| {
-        push_present_leaf(
-            leaves,
-            &format!("{native_prefix}_present"),
-            format!("{field_ref} != null"),
-            Some(field.clone()),
-        )
-    });
-
-    // The tag is computed once per call site by matching the value against
-    // its own variant classes. A nullable access adds the `null` arm the
-    // present flag already gates on.
-    let mut arms: Vec<String> = Vec::new();
-    if nullable_access || optional {
-        arms.push("null -> 0".to_string());
-    }
-    for (tag, p) in planned.iter().enumerate() {
-        arms.push(format!("is {iface_fqn}.{} -> {tag}", p.kotlin));
-    }
-    let tag_leaf = leaves.len();
-    leaves.push(FlatLeaf {
-        native_ident: format_ident!("{}__tag", native_prefix),
-        native_wire_ty: quote!(jni::sys::jint),
-        kt_name: snake_to_camel(&format!("{native_prefix}__tag")),
-        kt_wire_ty: "Int".to_string(),
-        kt_access_tail: format!("{field_ref}) {{ {} }}", arms.join("; ")),
-        kt_access_prefix: "when (".to_string(),
-        conv: None,
-        field: Some(field.clone()),
-        is_present_flag: false,
-        entry: None,
-        handle_target_tail: None,
-        handle_nullable: false,
-    });
-
-    let variants = planned
-        .into_iter()
-        .map(|p| FlatSumVariant {
-            rust_ident: p.rust_ident,
-            fields: p
-                .fields
-                .into_iter()
-                .map(|(member, l)| {
-                    let idx = push_value_leaf(
-                        leaves,
-                        &l.native,
-                        field.clone(),
-                        &l.entry,
-                        l.access_tail,
-                        l.nullable_wire,
-                    );
-                    // The access is a cast expression, so the base sits in the
-                    // middle rather than at the front.
-                    leaves[idx].kt_access_prefix = "(".to_string();
-                    (member, idx)
-                })
-                .collect(),
-        })
-        .collect();
-
     let module = ext.fn_module(registry, &ident);
-    Some(FlatFieldNode::Sum {
+    Ok(FlatFieldNode::Sum {
         wrappers: field_reading.erased_wrappers(),
         field,
         tag_leaf,
         present_leaf,
         source: syn::parse_quote!(#module::#ident),
         variants,
-        rust_ty: Box::new(rust_ty.clone()),
+        rust_ty: Box::new(field_reading.clone()),
     })
 }
 
-fn push_present_leaf(
-    leaves: &mut Vec<FlatLeaf>,
-    native: &str,
-    access: String,
-    field: Option<syn::Ident>,
-) -> usize {
-    let index = leaves.len();
-    leaves.push(FlatLeaf {
-        native_ident: format_ident!("{native}"),
-        native_wire_ty: quote!(jni::sys::jboolean),
-        kt_name: snake_to_camel(native),
-        kt_wire_ty: "Boolean".to_string(),
-        kt_access_tail: access,
-        kt_access_prefix: String::new(),
-        conv: None,
-        field,
-        is_present_flag: true,
-        entry: None,
-        handle_target_tail: None,
-        handle_nullable: false,
-    });
-    index
+/// The plan's leaves, read in the order the row states them.
+///
+/// A cursor rather than a lookup, because a path is not a key: a nested
+/// `data_class` with a field called `value` reaches the same path a decoupled
+/// pair's slot does, and one called `present` reaches the same path as the gate
+/// over its own struct. What is unambiguous is the **order** — the composition
+/// emits a gate before what it gates, fields in the model's order, and a sum's
+/// tag before its arms' slots — which is the order this walk visits them in.
+struct Leaves<'a> {
+    leaves: &'a [FlatLeaf],
+    next: usize,
 }
 
-fn push_value_leaf(
-    leaves: &mut Vec<FlatLeaf>,
-    native: &str,
-    field: syn::Ident,
-    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
-    access: String,
-    nullable_wire: bool,
-) -> usize {
-    let wire = &entry.destination;
-    let mut kt_wire_ty = wire_kotlin_type(entry);
-    if nullable_wire && !kt_wire_ty.ends_with('?') {
-        kt_wire_ty.push('?');
+impl Leaves<'_> {
+    /// The next leaf, consumed.
+    fn take(&mut self) -> Option<usize> {
+        let index = self.next;
+        (index < self.leaves.len()).then(|| {
+            self.next += 1;
+            index
+        })
     }
-    let index = leaves.len();
-    leaves.push(FlatLeaf {
-        native_ident: format_ident!("{native}"),
-        native_wire_ty: annotate_jobject_with_lifetime(wire, "a").to_token_stream(),
-        kt_name: snake_to_camel(native),
-        kt_wire_ty,
-        kt_access_tail: access,
-        kt_access_prefix: String::new(),
-        conv: Some(entry.function.sig.ident.clone()),
-        field: Some(field),
-        is_present_flag: false,
-        entry: Some(entry.clone()),
-        handle_target_tail: None,
-        handle_nullable: false,
-    });
-    index
+
+    /// Whether the next leaf is the whole of what `path` reaches, rather than
+    /// the first of several.
+    fn is_whole(&self, path: &str) -> bool {
+        self.leaves.get(self.next).is_some_and(|l| l.path == path)
+    }
 }
 
-fn push_handle_leaf(
-    leaves: &mut Vec<FlatLeaf>,
-    native: &str,
-    field: syn::Ident,
-    target: String,
-    nullable: bool,
-) -> usize {
-    let index = leaves.len();
-    leaves.push(FlatLeaf {
-        native_ident: format_ident!("{native}"),
-        native_wire_ty: quote!(jni::sys::jlong),
-        kt_name: snake_to_camel(native),
-        kt_wire_ty: "Long".to_string(),
-        kt_access_tail: target.clone(),
-        kt_access_prefix: String::new(),
-        conv: None,
-        field: Some(field),
-        is_present_flag: false,
-        entry: None,
-        handle_target_tail: Some(target),
-        handle_nullable: nullable,
-    });
-    index
-}
-
-/// Build the one shared recursive Kotlin→Rust plan. `Ok(None)` means the
-/// parameter is not an unmarked declared data class (including the explicit
-/// `.jobject_input()` opt-in); an unmarked data class either returns a complete
-/// plan or a validation error — never a silent object fallback.
 pub(crate) fn build_flat_input_plan(
     ext: &Declarations,
     registry: &Registry,
@@ -1316,8 +1165,7 @@ pub(crate) fn build_flat_input_plan(
     // `impl Into<S>` is NOT peeled here, and cannot be: the model refuses
     // `impl Trait` that is not the callback form (`DisallowedImplTrait`), so a
     // parameter spelled that way never becomes a reading and never reaches this
-    // function. The former `impl_into_target` call was already unreachable from
-    // every caller — see the sibling helper's doc.
+    // function.
     // The name off the classification, not off the last path segment: `Box<S>`
     // IS `S` here, and taking the spelling apart would answer about the wrapper.
     let flat::TypeKind::Named { id, .. } = inner.unwrapped().kind() else {
@@ -1333,10 +1181,7 @@ pub(crate) fn build_flat_input_plan(
     };
     // The DECLARATION is keyed by the type, not by the spelling: a
     // `Box<Payload>` parameter is a `Payload` to Kotlin and must find
-    // `Payload`'s data-class declaration. Keying by spelling looked up
-    // `Box < Payload >`, found nothing, and silently dropped the parameter to
-    // the general converter — the flatten lowering was unreachable for every
-    // wrapped core.
+    // `Payload`'s data-class declaration.
     let key = inner.stripped_key();
     let Some(cfg) = ext.types.get(&key) else {
         return Ok(None);
@@ -1350,7 +1195,6 @@ pub(crate) fn build_flat_input_plan(
     // surfaces as `"Any"` Dispatch or a foreign source type). The resolved
     // param's Kotlin type (compared by short name, since metadata carries the
     // FQN) must equal the struct's data-class name.
-    // The parameter's own reading straight to its entry — no spell-and-look-back.
     let Some(entry) = ext.in_frag(arg) else {
         return Ok(None);
     };
@@ -1371,8 +1215,24 @@ pub(crate) fn build_flat_input_plan(
     if entry_short != Some(dc_short.as_str()) {
         return Ok(None);
     }
-    let mut leaves: Vec<FlatLeaf> = Vec::new();
+    drop(entry);
+
+    // 2. The parameters this crossing occupies, as the row states them. What
+    //    used to be walked and named here is composed once per crossing, so
+    //    the only thing left for the site to say is which parameter each wire
+    //    hangs off.
+    let Some(wires) = ext.wires_of(arg) else {
+        return Ok(None);
+    };
+    let leaves: Vec<FlatLeaf> = wires.iter().map(|w| FlatLeaf::of(param_name, w)).collect();
+
+    // 3. The tree the Rust side rebuilds through, over those same wires in the
+    //    order the row states them.
     let mut stack = Vec::new();
+    let mut cursor = Leaves {
+        leaves: &leaves,
+        next: 0,
+    };
     let root = build_flat_struct_node(
         ext,
         registry,
@@ -1380,10 +1240,9 @@ pub(crate) fn build_flat_input_plan(
         optional,
         &param_name.to_string(),
         "",
-        optional,
         &key,
         &mut stack,
-        &mut leaves,
+        &mut cursor,
     )?;
     let contains_nested = root
         .fields
@@ -1398,29 +1257,29 @@ pub(crate) fn build_flat_input_plan(
     }))
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The rebuild tree for one struct, over the wires the row states for it.
+///
 /// Takes the **element**, not the `syn::ItemStruct` it was parsed from (#289):
 /// `flat::Field::ty` is already a `TypeRef`, so every peel below is the model's
 /// answer rather than a last-path-segment test on tokens that had a reading one
 /// level up.
 ///
-/// That matters here and not only on principle. `option_inner_type` reads the
-/// last path segment, so a field spelled `Box<Option<T>>` answered "not
-/// optional" and crossed as one boxed object; the model says `Optional` and it
-/// takes the decoupled `(present, value)` pair like its bare twin. The emitter
-/// then has to put the `Box` back — which is why this migration could not land
-/// before the rebuild did.
+/// How many wires a field occupies is the row's answer, read off the cursor;
+/// which of the composite shapes it took is the model's, read off the field's
+/// type. The walk that used to decide both made the second decision twice — once
+/// to compose and once to rebuild — and two answers are two things to keep in
+/// step.
+#[allow(clippy::too_many_arguments)]
 fn build_flat_struct_node(
     ext: &Declarations,
     registry: &Registry,
     st: &flat::Struct,
     optional: bool,
     native_prefix: &str,
-    access_prefix: &str,
-    nullable_context: bool,
+    path_prefix: &str,
     root: &TypeKey,
     stack: &mut Vec<TypeKey>,
-    leaves: &mut Vec<FlatLeaf>,
+    leaves: &mut Leaves<'_>,
 ) -> Result<FlatStructNode, FlatInputError> {
     let node_key = TypeKey::from_ident(&st.name);
     if stack.contains(&node_key) {
@@ -1438,10 +1297,10 @@ fn build_flat_struct_node(
         ));
     }
     stack.push(node_key);
+    let missing = |at: &str| flat_error(root, at, "the row states fewer wires than the model");
     let present_ident = if optional {
-        let native = format!("{native_prefix}_present");
-        push_present_leaf(leaves, &native, format!("{access_prefix} != null"), None);
-        Some(format_ident!("{native}"))
+        let gate = leaves.take().ok_or_else(|| missing(native_prefix))?;
+        Some(leaves.leaves[gate].native_ident.clone())
     } else {
         None
     };
@@ -1458,54 +1317,81 @@ fn build_flat_struct_node(
                 "only named-field structs can flatten",
             ));
         };
-        let fcamel = kotlin_property_name(&fident);
-        let child_native = format!("{native_prefix}_{}", fident);
-        let field_ref = if nullable_context {
-            format!("{access_prefix}?.{fcamel}")
-        } else {
-            format!("{access_prefix}.{fcamel}")
-        };
+        let path = format!("{path_prefix}{fident}");
+        let child_native = format!("{native_prefix}_{fident}");
         // The optional layer off the MODEL, asked once and reused: every site
         // below that wants "is this field optional" reads this, so they cannot
         // disagree with each other the way seven independent path-segment tests
         // could (#273).
         let field_optional = field.ty.optional_inner().is_some();
         let nested = field.ty.optional_inner().unwrap_or(&field.ty);
-        // A data-carrying enum flattens into a tag plus one group per variant.
-        // `None` means some payload is not leaf-shaped — fall through and let
-        // it cross as one object through its own converter.
-        if matches!(ext.type_kind(registry, &nested.key()), TypeKind::Sum) {
-            if let Some(node) = build_flat_sum_field(
-                ext,
-                registry,
-                nested,
-                fident.clone(),
-                field_optional,
-                &child_native,
-                &field_ref,
-                nullable_context,
-                &field.ty,
-                leaves,
-            ) {
-                fields.push(node);
-                continue;
+        let wrappers = field.ty.erased_wrappers();
+
+        // One wire for the whole field: the ordinary case, and the one an
+        // opaque-handle field takes — the row says which by carrying a handle
+        // target on that wire. Also where a sum or a nested class the row left
+        // whole ends up.
+        if leaves.is_whole(&path) {
+            let index = leaves.take().ok_or_else(|| missing(&child_native))?;
+            let direct_handle = leaves.leaves[index]
+                .wire
+                .handle_target
+                .is_some()
+                .then(|| Box::new(nested.clone()));
+            if direct_handle.is_some()
+                && matches!(
+                    ext.in_frag(&field.ty).and_then(|e| e
+                        .metadata
+                        .projection
+                        .as_ref()
+                        .map(|p| p.strategy.clone())),
+                    Some(FoldStrategy::Iterable(_))
+                )
+            {
+                return Err(flat_error(
+                    root,
+                    &child_native,
+                    "collections of handles retain their collection boundary",
+                ));
             }
+            fields.push(FlatFieldNode::Value {
+                field: fident,
+                value_leaf: index,
+                present_leaf: None,
+                optional_handle: direct_handle.is_some() && field_optional,
+                direct_handle,
+                rust_ty: Box::new(field.ty.clone()),
+                wrappers,
+            });
+            continue;
         }
-        if let TypeKind::DataStruct {
-            st: child,
-            cfg: Some(cfg),
-        } = ext.type_kind(registry, &nested.key())
-        {
-            if cfg.name_spec.is_some() && !cfg.special_decl() && !cfg.jobject_input {
-                let child_optional = field_optional;
+
+        // Several wires, and the field's own type says which shape they take.
+        match ext.type_kind(registry, &nested.key()) {
+            TypeKind::Sum => {
+                fields.push(build_flat_sum_field(
+                    ext,
+                    registry,
+                    nested,
+                    fident,
+                    field_optional,
+                    &child_native,
+                    &field.ty,
+                    root,
+                    leaves,
+                )?);
+            }
+            TypeKind::DataStruct {
+                st: child,
+                cfg: Some(_),
+            } => {
                 let node = build_flat_struct_node(
                     ext,
                     registry,
                     child,
-                    child_optional,
+                    field_optional,
                     &child_native,
-                    &field_ref,
-                    nullable_context || child_optional,
+                    &format!("{path}."),
                     root,
                     stack,
                     leaves,
@@ -1514,217 +1400,23 @@ fn build_flat_struct_node(
                     field: fident,
                     node: Box::new(node),
                 });
-                continue;
+            }
+            // A gate beside a raw slot: the allocation-free pair a nullable
+            // primitive, enum or unsigned representation crosses as.
+            _ => {
+                let present = leaves.take().ok_or_else(|| missing(&child_native))?;
+                let value = leaves.take().ok_or_else(|| missing(&child_native))?;
+                fields.push(FlatFieldNode::Value {
+                    field: fident,
+                    value_leaf: value,
+                    present_leaf: Some(present),
+                    direct_handle: None,
+                    optional_handle: false,
+                    rust_ty: Box::new(field.ty.clone()),
+                    wrappers,
+                });
             }
         }
-
-        let path = child_native.clone();
-        // The field's own reading straight to its entry — the `reading_of` hop
-        // only ever recovered what the field already carried.
-        let Some(fentry) = ext.in_frag(&field.ty) else {
-            return Err(flat_error(
-                root,
-                &path,
-                format!("field type `{}` has no input converter", field.ty.key()),
-            ));
-        };
-
-        // Nullable primitive/enum with no niche: keep the allocation-free
-        // `(present, value)` representation at every recursion depth.
-        if let Some(inner_reading) = field.ty.optional_inner() {
-            if inner_reading.borrow_target().is_none() {
-                if let Some(inner) = ext.in_frag(inner_reading) {
-                    if let Some(prim) = JniPrim::from_wire(&inner.destination) {
-                        if inner.niches.clone().carve().is_none()
-                            && inner.metadata.projection.is_none()
-                            && inner.pre_stages.is_empty()
-                        {
-                            let present_index = push_present_leaf(
-                                leaves,
-                                &format!("{child_native}_present"),
-                                format!("{field_ref} != null"),
-                                Some(fident.clone()),
-                            );
-                            let value_access = if ext.is_kotlin_enum_reading(inner_reading) {
-                                format!("{field_ref}?.value ?: {}", prim.kotlin_zero())
-                            } else {
-                                format!("{field_ref} ?: {}", prim.kotlin_zero())
-                            };
-                            let value_index = push_value_leaf(
-                                leaves,
-                                &format!("{child_native}_value"),
-                                fident.clone(),
-                                &inner,
-                                value_access,
-                                false,
-                            );
-                            fields.push(FlatFieldNode::Value {
-                                field: fident,
-                                value_leaf: value_index,
-                                present_leaf: Some(present_index),
-                                direct_handle: None,
-                                optional_handle: false,
-                                rust_ty: Box::new(field.ty.clone()),
-                                wrappers: field.ty.erased_wrappers(),
-                            });
-                            continue;
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some(proj) = &fentry.metadata.projection {
-            // `Option<u64>` has no natural niche and its ordinary converter is
-            // object-shaped. Preserve the allocation-free field ABI by
-            // splitting it into presence + raw `jlong`, just like optional
-            // signed primitives. Bounded custom representations whose range
-            // provides a niche already have a primitive destination and stay
-            // a single leaf below.
-            if proj.kind == ProjectionKind::Unsigned64 {
-                if let Some(inner_reading) = field.ty.optional_inner() {
-                    if JniPrim::from_wire(&fentry.destination).is_none() {
-                        let inner = ext.in_frag(inner_reading).ok_or_else(|| {
-                            flat_error(
-                                root,
-                                &path,
-                                format!(
-                                    "unsigned field representation `{}` has no input converter",
-                                    inner_reading.key()
-                                ),
-                            )
-                        })?;
-                        let present_index = push_present_leaf(
-                            leaves,
-                            &format!("{child_native}_present"),
-                            format!("{field_ref} != null"),
-                            Some(fident.clone()),
-                        );
-                        let value_index = push_value_leaf(
-                            leaves,
-                            &format!("{child_native}_value"),
-                            fident.clone(),
-                            &inner,
-                            format!("{field_ref}?.toLong() ?: 0L"),
-                            false,
-                        );
-                        fields.push(FlatFieldNode::Value {
-                            field: fident,
-                            value_leaf: value_index,
-                            present_leaf: Some(present_index),
-                            direct_handle: None,
-                            optional_handle: false,
-                            rust_ty: Box::new(field.ty.clone()),
-                            wrappers: field.ty.erased_wrappers(),
-                        });
-                        continue;
-                    }
-                }
-            }
-            match proj.kind {
-                ProjectionKind::Handle => {
-                    if matches!(proj.strategy, FoldStrategy::Iterable(_)) {
-                        return Err(flat_error(
-                            root,
-                            &path,
-                            "collections of handles retain their collection boundary",
-                        ));
-                    }
-                    let optional_handle = field_optional;
-                    let value_index = push_handle_leaf(
-                        leaves,
-                        &child_native,
-                        fident.clone(),
-                        field_ref,
-                        nullable_context || optional_handle,
-                    );
-                    fields.push(FlatFieldNode::Value {
-                        field: fident,
-                        value_leaf: value_index,
-                        present_leaf: None,
-                        direct_handle: Some(Box::new(nested.clone())),
-                        optional_handle,
-                        rust_ty: Box::new(field.ty.clone()),
-                        wrappers: field.ty.erased_wrappers(),
-                    });
-                    continue;
-                }
-                ProjectionKind::Unsigned64 => {
-                    let is_opt = field_optional;
-                    let access = if is_opt || nullable_context {
-                        let sentinel = proj
-                            .niche_sentinels
-                            .first()
-                            .cloned()
-                            .unwrap_or_else(|| "0L".to_string());
-                        format!("{field_ref}?.toLong() ?: {sentinel}")
-                    } else {
-                        format!("{field_ref}.toLong()")
-                    };
-                    let value_index = push_value_leaf(
-                        leaves,
-                        &child_native,
-                        fident.clone(),
-                        &fentry,
-                        access,
-                        false,
-                    );
-                    fields.push(FlatFieldNode::Value {
-                        field: fident,
-                        value_leaf: value_index,
-                        present_leaf: None,
-                        direct_handle: None,
-                        optional_handle: false,
-                        rust_ty: Box::new(field.ty.clone()),
-                        wrappers: field.ty.erased_wrappers(),
-                    });
-                    continue;
-                }
-            }
-        }
-
-        let field_is_option = field_optional;
-        // The enum branch is self-contained: when it coalesces (`?.value ?: 0`)
-        // it already yields a non-null `Int`, so block (B) below must not append
-        // a second default (which produced the dead `?: 0 ?: 0`, issue #144).
-        let mut enum_coalesced = false;
-        // The enum probe off the MODEL (`enum_probe` peels the same `&`/`Option`
-        // layers `flat_probe_inner` peeled off tokens), so a `Box<Priority>`
-        // field answers as a `Priority` does.
-        let mut access = if ext.is_kotlin_enum_reading(&field.ty) {
-            if field_is_option || nullable_context {
-                enum_coalesced = true;
-                format!("{field_ref}?.value ?: 0")
-            } else {
-                format!("{field_ref}.value")
-            }
-        } else {
-            field_ref.clone()
-        };
-        if nullable_context && !field_is_option && !enum_coalesced {
-            if let Some((sig, _, _)) = jni_field_access(&fentry.destination) {
-                if let Some(default) = kt_leaf_default(sig, false) {
-                    access = format!("{access} ?: {default}");
-                }
-            }
-        }
-        let value_index = push_value_leaf(
-            leaves,
-            &child_native,
-            fident.clone(),
-            &fentry,
-            access,
-            (field_is_option || nullable_context) && is_jobject_shaped_wire(&fentry.destination),
-        );
-        fields.push(FlatFieldNode::Value {
-            field: fident,
-            value_leaf: value_index,
-            present_leaf: None,
-            direct_handle: None,
-            optional_handle: false,
-            rust_ty: Box::new(field.ty.clone()),
-            wrappers: field.ty.erased_wrappers(),
-        });
     }
     stack.pop();
     Ok(FlatStructNode {
@@ -1856,7 +1548,7 @@ fn render_flat_struct_node(
                     let mut inits: Vec<TokenStream> = Vec::new();
                     for (member, leaf_idx) in &v.fields {
                         let leaf = &plan.leaves[*leaf_idx];
-                        let entry = leaf.entry.as_ref().expect("sum payload leaf has an entry");
+                        let entry = leaf.entry().expect("sum payload leaf has an entry");
                         let wire = &leaf.native_ident;
                         let bind = format_ident!("{}_{}", tmp, wire);
                         pre.extend(render_entry_decode(entry, wire, &bind, on_err));
@@ -1964,10 +1656,7 @@ fn render_flat_struct_node(
                         });
                     }
                 } else {
-                    let entry = leaf
-                        .entry
-                        .as_ref()
-                        .expect("ordinary leaf has converter entry");
+                    let entry = leaf.entry().expect("ordinary leaf has converter entry");
                     if let Some(present_index) = present_leaf {
                         let present = &plan.leaves[*present_index].native_ident;
                         let inner_tmp = format_ident!("{}_value", tmp);
