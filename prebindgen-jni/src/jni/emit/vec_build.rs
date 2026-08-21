@@ -156,9 +156,10 @@ pub(crate) fn vec_build_elem(
     // silently changing the Vec helper ABI.
     if plan.contains_nested
         || plan.leaves.iter().any(|l| {
-            l.is_present_flag
-                || l.handle_target_tail.is_some()
-                || l.entry.as_ref().is_none_or(|e| !e.pre_stages.is_empty())
+            l.is_present_flag()
+                || l.wire.handle_target.is_some()
+                || l.entry().is_none()
+                || l.wire.staged()
         })
     {
         return None;
@@ -225,9 +226,10 @@ pub(crate) fn vec_build_helpers(
         .flatten()?;
     if plan.contains_nested
         || plan.leaves.iter().any(|l| {
-            l.is_present_flag
-                || l.handle_target_tail.is_some()
-                || l.entry.as_ref().is_none_or(|e| !e.pre_stages.is_empty())
+            l.is_present_flag()
+                || l.wire.handle_target.is_some()
+                || l.entry().is_none()
+                || l.wire.staged()
         })
     {
         return None;
@@ -320,19 +322,19 @@ pub(crate) fn build_vec_build_helper_items(
             .plan
             .leaves
             .iter()
-            .filter(|l| !l.is_present_flag)
+            .filter(|l| !l.is_present_flag())
             .map(|l| {
                 let id = &l.native_ident;
-                let ty = &l.native_wire_ty;
+                let ty = &l.native_wire_ty();
                 quote!(#id: #ty)
             })
             .collect();
         let mut decodes: Vec<TokenStream> = Vec::new();
         let mut inits: Vec<TokenStream> = Vec::new();
-        for l in h.plan.leaves.iter().filter(|l| !l.is_present_flag) {
-            let conv = l.conv.as_ref().expect("non-present leaf has a converter");
+        for l in h.plan.leaves.iter().filter(|l| !l.is_present_flag()) {
+            let conv = l.conv().expect("non-present leaf has a converter");
             let wid = &l.native_ident;
-            let fid = l.field.clone().expect("non-present leaf has a field");
+            let fid = format_ident!("{}", l.wire.field().expect("non-present leaf has a field"));
             let tmp = format_ident!("__e_{}", fid);
             decodes.push(quote!(
                 let #tmp = match #conv(&mut env, &#wid) {

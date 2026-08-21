@@ -529,7 +529,7 @@ pub(crate) fn render_extern_decl(
                 for l in &plan.leaves {
                     params.push(KtParam::new(
                         l.kt_name.clone(),
-                        KtType::cls(l.kt_wire_ty.clone()),
+                        KtType::cls(l.kt_wire_ty().to_string()),
                     ));
                 }
             }
@@ -1280,7 +1280,7 @@ fn classify_params(
                     .plan
                     .leaves
                     .iter()
-                    .filter(|l| !l.is_present_flag)
+                    .filter(|l| !l.is_present_flag())
                     .map(|l| l.kt_access("__e"))
                     .collect();
                 ParamMode::VecBuild {
@@ -1318,7 +1318,7 @@ fn classify_params(
                         // come from", and deriving it twice is how the two
                         // drift apart.
                         let target = leaf.kt_handle_target(&name)?;
-                        let consume_null = if leaf.handle_nullable {
+                        let consume_null = if leaf.handle_nullable() {
                             format!("{target}?.markConsumed()")
                         } else {
                             format!("{target}.markConsumed()")
@@ -1327,7 +1327,7 @@ fn classify_params(
                             name: leaf.kt_name.clone(),
                             target,
                             consume_null: Some(consume_null),
-                            nullable: leaf.handle_nullable,
+                            nullable: leaf.handle_nullable(),
                             // A flattened leaf carries no Kotlin class name of
                             // its own, so its domain is unknown and it compares
                             // against every other handle — the fail-safe

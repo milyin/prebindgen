@@ -1978,10 +1978,10 @@ impl Declarations {
             let mut push = KtFun::new(push_m)
                 .external()
                 .param(KtParam::new("handle", KtType::long()));
-            for leaf in h.plan.leaves.iter().filter(|l| !l.is_present_flag) {
+            for leaf in h.plan.leaves.iter().filter(|l| !l.is_present_flag()) {
                 push = push.param(KtParam::new(
                     leaf.kt_name.clone(),
-                    KtType::cls(leaf.kt_wire_ty.clone()),
+                    KtType::cls(leaf.kt_wire_ty().to_string()),
                 ));
             }
             externs.push(push);

@@ -1025,16 +1025,27 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
-    // The `parts` row has to agree with the walk on the two boundaries this
-    // fixture draws, not just on plain fields: `object` is declared
-    // `.jobject_input()` and stays ONE value, and `maybe` is an
-    // `Option<data_class>`, which is a presence flag plus the inner's wires.
-    // Composing either wrongly is invisible until an emitter reads the row,
-    // which is why it is asserted here rather than after the switch.
-    let (composed, walked) = generation
-        .parts_vs_walk_for_test("Hybrid", "h")
-        .expect("Hybrid states a parts row and the walk plans it");
-    assert_eq!(composed, walked, "the row and the walk disagree");
+    // The two boundaries this fixture draws, stated as the row states them:
+    // `object` is declared `.jobject_input()` and stays ONE value, and `maybe`
+    // is an `Option<data_class>`, which is a presence flag plus the inner's
+    // wires.
+    let hybrid: Vec<String> = generation
+        .named_wires_for_test("Hybrid", "h")
+        .expect("Hybrid states a composition")
+        .into_iter()
+        .map(|(name, kt_ty, access, ..)| format!("{name}: {kt_ty} = {access}"))
+        .collect();
+    assert_eq!(
+        hybrid,
+        vec![
+            "hFlatId: Long = h.flat.id",
+            "hMaybePresent: Boolean = h.maybe != null",
+            "hMaybeId: Long = h.maybe?.id ?: 0L",
+            // The `.jobject_input()` child stays one value, and its own fields
+            // never reach the signature.
+            "hObject: io.test.jni.ObjectChild = h.object_",
+        ],
+    );
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -1865,10 +1876,17 @@ fn an_optional_handle_field_mints_through_the_factory() {
     // lock-and-consume scaffold reads. Asserted here because `Bag`'s field is
     // an `Option<Handle>`, where the access is nullable and the pointer still
     // is not.
-    let (composed, walked) = generation
-        .parts_vs_walk_for_test("Bag", "b")
-        .expect("Bag states a parts row and the walk plans it");
-    assert_eq!(composed, walked, "the row and the walk disagree");
+    let bag = generation
+        .named_wires_for_test("Bag", "b")
+        .expect("Bag states a composition");
+    assert_eq!(
+        bag.iter()
+            .map(|(name, kt_ty, access, _, target, nullable, ..)| format!(
+                "{name}: {kt_ty} = {access} @ {target:?} null={nullable}"
+            ))
+            .collect::<Vec<_>>(),
+        vec!["bHandle: Long = b.handle @ Some(\"b.handle\") null=true"],
+    );
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
         .unwrap()

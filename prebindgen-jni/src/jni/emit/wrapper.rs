@@ -554,7 +554,7 @@ fn emit_input_param(
         InputKind::FlattenStruct(plan) => {
             for leaf in &plan.leaves {
                 let pid = &leaf.native_ident;
-                let pty = &leaf.native_wire_ty;
+                let pty = &leaf.native_wire_ty();
                 wire_params.push(quote!(#pid: #pty));
             }
             let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err, emit);
@@ -916,7 +916,7 @@ pub(crate) fn emit_expanded_param(
         if let InputKind::FlattenStruct(flat) = &classified.kind {
             for flat_leaf in &flat.leaves {
                 let ident = &flat_leaf.native_ident;
-                let wire = &flat_leaf.native_wire_ty;
+                let wire = &flat_leaf.native_wire_ty();
                 wire_params.push(quote!(#ident: #wire));
             }
             let (decode, _) = render_flat_input_decode(flat, &local, on_err, emit);
