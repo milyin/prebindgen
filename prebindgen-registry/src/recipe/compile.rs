@@ -93,8 +93,12 @@ pub struct At<'a> {
     pub recipe: &'a RecipeId,
 }
 
-/// What every hook receives: the read-only view of the model and the table,
-/// plus the one thing a hook may ask the registry to record.
+/// What every hook receives: a read-only view of the model and the table, and
+/// the capability to emit Rust.
+///
+/// A hook asks the registry nothing and records nothing in it. What it produces
+/// is its fragment, and what the registry reads of that is
+/// [`Carrier::yields`].
 pub struct Cx<'a> {
     model: &'a Flat,
     recipes: &'a Recipes,
