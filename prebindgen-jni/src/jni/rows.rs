@@ -17,7 +17,10 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
-    recipe::{Arm, Construct, Constructing, Deconstructing, RecipeError, RecipeId, Recipes},
+    recipe::{
+        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeId,
+        Recipes,
+    },
 };
 
 use super::*;
@@ -66,6 +69,32 @@ fn alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Construct>> {
         .map(|alt| Arm {
             alternative: alt.index,
             op: Construct::Fields,
+        })
+        .collect()
+}
+
+/// One arm per alternative of a declared sum, each taken apart into its own
+/// payload fields.
+///
+/// The deconstructing twin of [`alternatives`]. Separate because the two jobs
+/// name different operations — building an alternative is `Construct::Fields`,
+/// reading one is `Deconstruct::Fields` over the reaches that get there — and
+/// a shared helper would have to be generic over an operation neither side
+/// chooses.
+fn out_alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Deconstruct>> {
+    let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
+        return Vec::new();
+    };
+    let Some(prebindgen_registry::flat::Type::Variant(v)) =
+        id.ident().and_then(|ident| model.declared_type(&ident))
+    else {
+        return Vec::new();
+    };
+    v.alternatives
+        .iter()
+        .map(|alt| Arm {
+            alternative: alt.index,
+            op: Deconstruct::Fields((0..alt.fields.len()).map(Reach::Field).collect()),
         })
         .collect()
 }
@@ -128,7 +157,23 @@ impl Declarations {
             // the adapter emits the conversion itself, and how many wire values
             // that costs is its own business — so it describes the adapter as it
             // stands rather than as it will be.
-            rows.declare(ty.clone(), whole(), Deconstructing::Atomic);
+            // A `sealed_class` hands its value out as a tag plus every
+            // alternative's payloads, laid side by side — the deconstructing
+            // twin of the constructing row below, and the direction that
+            // actually has no alternative: a sum has no whole-value output
+            // conversion, because a tag plus groups is not one wire.
+            match self.types.get(&ty.key()).map(|c| &c.kind) {
+                Some(DeclaredKind::Sealed(_)) => {
+                    let arms = out_alternatives(model, &ty);
+                    rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+                    if !arms.is_empty() {
+                        rows.declare(ty.clone(), parts(), Deconstructing::Choice { arms });
+                    }
+                }
+                _ => {
+                    rows.declare(ty.clone(), whole(), Deconstructing::Atomic);
+                }
+            }
             // A `data_class` also has a row that says what it is made of, so
             // its constructing side names which of the two a site takes by
             // default. See [`parts`] for why that is still `whole`.

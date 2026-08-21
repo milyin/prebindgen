@@ -2388,3 +2388,80 @@ fn a_types_close_answer_matches_its_plans() {
         "the fixture must cover reaching a handle four ways AND not reaching one"
     );
 }
+
+/// A `sealed_class` states a row saying what it hands out, and it says exactly
+/// what the leaf synthesis it will replace says.
+///
+/// One `jint` naming which alternative is live, then one group of values per
+/// alternative laid beside the others — names, types, groups and the pattern
+/// binding each is reached through. The fixture carries a unit alternative
+/// (which contributes nothing), a positional payload, a two-field payload and a
+/// named-field payload, so the slot naming is exercised in every form it takes.
+#[test]
+fn a_sealed_class_states_what_it_hands_out() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                    Range { low: i64, high: i64 },
+                    Tagged(String, Priority),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_one(which: i32) -> Reading {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::sealed_class!(Reading))
+                .fun(prebindgen_registry::fun!(read_one)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let composed = gen
+        .sum_out_lines_for_test("Reading")
+        .expect("Reading states a deconstructing parts row");
+    assert_eq!(
+        composed,
+        vec![
+            "tag: Reading <- tag @None",
+            "exact_v0: i64 <- Exact.v0 @Some(1)",
+            "range_low: i64 <- Range.low @Some(2)",
+            "range_high: i64 <- Range.high @Some(2)",
+            "tagged_v0: String <- Tagged.v0 @Some(3)",
+            "tagged_v1: Priority <- Tagged.v1 @Some(3)",
+        ],
+        "the row states the tag, then one group per alternative",
+    );
+    // And it is the same list the synthesis it replaces produces, which is what
+    // makes pointing the emitters at the fragment a move rather than a rewrite.
+    assert_eq!(
+        composed,
+        gen.sum_walk_lines_for_test("Reading").expect("the walk"),
+        "the row and the leaf synthesis disagree",
+    );
+}

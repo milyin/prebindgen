@@ -1519,6 +1519,68 @@ impl JniGenBuilder {
         decls
             .validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
+        // A `sealed_class`'s deconstructing composition, last of all.
+        //
+        // After `validate_resolved`, so a binding whose payload simply has no
+        // output conversion gets the diagnostic that names the payload rather
+        // than this one, which can only say that composing failed. What is left
+        // for this to catch is a composition that fails over parts which did
+        // resolve — a bug here rather than a gap in the binding.
+        // Driven here rather than from `compile_crossing`
+        // because a sum has **no** deconstructing crossing to be driven from: it
+        // is boundary-only, so nothing ever asks for its whole-value output
+        // conversion and the walk never reaches it. Nothing reads the result
+        // yet; compiling it is what holds the composition to every binding this
+        // crate builds rather than to one fixture.
+        for key in decls.declared_sums() {
+            let Some(ident) = key.ident() else { continue };
+            let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
+                continue;
+            };
+            // Only a sum every payload of which already crosses. One that does
+            // not is a gap in the binding, and the writers report it against
+            // the payload — `Reading.Exact.v0 has no OUTPUT converter` — where
+            // this could only say that composing failed.
+            let Some(prebindgen_registry::flat::Type::Variant(sum)) = model.declared_type(&ident)
+            else {
+                continue;
+            };
+            if sum
+                .alternatives
+                .iter()
+                .flat_map(|alt| &alt.fields)
+                .any(|f| decls.out_frag(&f.ty).is_none())
+            {
+                continue;
+            }
+            let crossing = prebindgen_registry::recipe::Crossing::new(
+                ty,
+                prebindgen_registry::recipe::Assembly::Deconstruct,
+            );
+            let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+                &model,
+                &recipes,
+                &bindings,
+                decls.compiled.borrow().clone(),
+            );
+            let mut adapter = crate::jni::compile::JCompile {
+                decls: &decls,
+                registry: &registry,
+            };
+            if let Err(e) = compiler.row_of(&mut adapter, &crossing, &crate::jni::rows::parts()) {
+                refusals.push(format!(
+                    "`{key}` hands out its alternatives, but composing them failed: {e:?}"
+                ));
+            }
+            let done = compiler.finish();
+            *decls.compiled.borrow_mut() = done;
+        }
+        if !refusals.is_empty() {
+            return Err(prebindgen_registry::ScanError::AdapterInvariant {
+                message: refusals.join("; "),
+            }
+            .into());
+        }
         Ok(JniGen { decls, registry })
     }
 }
@@ -3189,6 +3251,21 @@ impl Declarations {
             .map(|(k, c)| (k.clone(), c.rust_type.clone()))
             .collect()
     }
+    /// Every type declared `sealed_class!`, in a stable order.
+    ///
+    /// Sorted, because what reads it drives compilation and a refusal has to
+    /// name the same type run to run.
+    pub(crate) fn declared_sums(&self) -> Vec<TypeKey> {
+        let mut keys: Vec<TypeKey> = self
+            .types
+            .iter()
+            .filter(|(_, c)| matches!(c.kind, DeclaredKind::Sealed(_)))
+            .map(|(k, _)| k.clone())
+            .collect();
+        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        keys
+    }
+
     /// Types acknowledged-but-undeclared via [`JniGenBuilder::ignore`].
     pub(crate) fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
         self.ignored_class_types.clone()
