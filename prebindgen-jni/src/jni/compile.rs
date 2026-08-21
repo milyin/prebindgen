@@ -8,7 +8,7 @@
 
 use prebindgen_registry::{
     flat::{Alternative, Function, TypeKind, TypeRef},
-    recipe::{Assembly, At, Bound, Carrier, Compile, Cx, Frag, Mode, Parts, Validity, Yield},
+    recipe::{Assembly, At, Bound, Carrier, Compile, Cx, Frag, Mode, Part, Parts, Validity, Yield},
     Conversions,
 };
 
@@ -71,6 +71,16 @@ pub(crate) struct Wire {
     /// The conversion this value crosses through, or `None` for a presence flag
     /// — which is read on the Rust side and converts nothing.
     pub(crate) conv: Option<syn::Ident>,
+    /// For a nested owned handle: where Kotlin finds the handle **object**, as
+    /// against the `Long` this wire carries.
+    ///
+    /// A nested handle crosses under the same lock-and-consume scaffold as a
+    /// top-level one, and that scaffold needs the object, not its pointer. The
+    /// wire itself is filled from a local the scaffold binds.
+    pub(crate) handle_target: Option<String>,
+    /// Whether that handle access can be null — the field is optional, or an
+    /// optional ancestor gates it.
+    pub(crate) handle_nullable: bool,
 }
 
 impl Carrier for JFrag {
@@ -289,6 +299,8 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 // The gate reads the object itself, not through it.
                 access: " != null".to_string(),
                 conv: None,
+                handle_target: None,
+                handle_nullable: false,
             }];
             // Everything under the gate is reached through it, and a
             // non-nullable slot still has to hold something when the value is
@@ -306,6 +318,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     .map(|d| format!(" ?: {d}"))
                     .unwrap_or_default()
                 ),
+                // Anything under the gate can be absent, however the field
+                // itself was spelled.
+                handle_nullable: w.handle_target.is_some() || w.handle_nullable,
                 ..w.clone()
             }));
             frag.wires = Some(wires);
@@ -379,34 +394,42 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let mut wires: Vec<Wire> = Vec::new();
         for (part, frag) in parts {
             match &frag.wires {
-                Some(inner) => wires.extend(inner.iter().map(|w| Wire {
-                    ty: w.ty.clone(),
-                    kt_ty: w.kt_ty.clone(),
-                    path: format!("{}.{}", part.name, w.path),
-                    // The field this part reads, then however the part's own
-                    // wire reaches on from there.
-                    access: format!(
-                        ".{}{}",
-                        crate::jni::render::kotlin_property_name(&syn::Ident::new(
-                            &part.name,
-                            proc_macro2::Span::call_site(),
-                        )),
-                        w.access
-                    ),
-                    conv: w.conv.clone(),
+                Some(inner) => wires.extend(inner.iter().map(|w| {
+                    Wire {
+                        ty: w.ty.clone(),
+                        kt_ty: w.kt_ty.clone(),
+                        path: format!("{}.{}", part.name, w.path),
+                        // The field this part reads, then however the part's own
+                        // wire reaches on from there.
+                        access: format!(".{}{}", field_kt(part), w.access),
+                        conv: w.conv.clone(),
+                        handle_target: w
+                            .handle_target
+                            .as_ref()
+                            .map(|t| format!(".{}{t}", field_kt(part))),
+                        handle_nullable: w.handle_nullable,
+                    }
                 })),
+                // A part whose conversion projects a handle crosses as that
+                // handle's `Long`, and Kotlin reaches the object it has to lock
+                // through the same access.
+                None if is_handle(frag) => wires.push(Wire {
+                    ty: syn::parse_quote!(jni::sys::jlong),
+                    kt_ty: "Long".to_string(),
+                    path: part.name.clone(),
+                    access: format!(".{}", field_kt(part)),
+                    conv: None,
+                    handle_target: Some(format!(".{}", field_kt(part))),
+                    handle_nullable: part.ty.optional_inner().is_some(),
+                }),
                 None => wires.push(Wire {
                     ty: frag.conv.destination.clone(),
                     kt_ty: crate::jni::emit::wire_kotlin_type(&frag.conv),
                     path: part.name.clone(),
-                    access: format!(
-                        ".{}",
-                        crate::jni::render::kotlin_property_name(&syn::Ident::new(
-                            &part.name,
-                            proc_macro2::Span::call_site(),
-                        ))
-                    ),
+                    access: format!(".{}", field_kt(part)),
                     conv: Some(frag.conv.function.sig.ident.clone()),
+                    handle_target: None,
+                    handle_nullable: false,
                 }),
             }
         }
@@ -508,4 +531,22 @@ impl std::ops::Deref for Conv {
     fn deref(&self) -> &Self::Target {
         &self.0.conv
     }
+}
+
+/// The Kotlin property name for one part of a product, sanitized — `object` is
+/// a keyword, and only the emitter's own mangler knows that.
+fn field_kt(part: &Part<'_>) -> String {
+    crate::jni::render::kotlin_property_name(&syn::Ident::new(
+        &part.name,
+        proc_macro2::Span::call_site(),
+    ))
+}
+
+/// Whether this conversion delivers a Kotlin typed handle rather than a value.
+fn is_handle(frag: &JFrag) -> bool {
+    frag.conv
+        .metadata
+        .projection
+        .as_ref()
+        .is_some_and(|p| p.kind == crate::jni::ProjectionKind::Handle)
 }

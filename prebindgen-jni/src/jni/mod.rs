@@ -452,9 +452,11 @@ pub struct JniGen {
 }
 
 /// One JNI parameter as a signature writes it: name, Kotlin type, the Kotlin
-/// expression that fills it, and the conversion it crosses through.
+/// expression that fills it, the conversion it crosses through, and — for a
+/// nested owned handle — where Kotlin finds the object to lock and whether that
+/// access can be null.
 #[cfg(test)]
-pub(crate) type NamedWire = (String, String, String, Option<String>);
+pub(crate) type NamedWire = (String, String, String, Option<String>, Option<String>, bool);
 
 #[cfg(test)]
 impl JniGen {
@@ -481,6 +483,8 @@ impl JniGen {
                     w.kt_ty.clone(),
                     format!("{param}{}", w.access),
                     w.conv.as_ref().map(|c| c.to_string()),
+                    w.handle_target.as_ref().map(|t| format!("{param}{t}")),
+                    w.handle_nullable,
                 )
             })
             .collect();
@@ -504,6 +508,8 @@ impl JniGen {
                     l.kt_wire_ty.clone(),
                     l.kt_access(param),
                     l.conv.as_ref().map(|c| c.to_string()),
+                    l.kt_handle_target(param),
+                    l.handle_nullable,
                 )
             })
             .collect();
