@@ -2274,3 +2274,46 @@ fn a_value_form_binds_the_accessors_result_and_reads_its_fields() {
         "{plan}"
     );
 }
+
+#[test]
+fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
+    let model = model(&[SAMPLE]);
+    let sample = ty(&model, "Sample");
+    // `fields` sorts before `whole`, so a lookup that ranked the rows by name
+    // rather than asking which one the crossing defaults to would answer with
+    // the wrong one.
+    let recipes = two_rows(&model);
+    let crossing = Crossing::new(sample.clone(), Assembly::Deconstruct);
+    let mut builder = Bindings::builder();
+    builder.bind(
+        site("z_put", 0),
+        crossing.clone(),
+        Ask::Recipe(id("fields")),
+        Origin::Function,
+    );
+    let bindings = builder.build(&recipes).expect("bindings");
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    // One site takes `fields`; the crossing on its own takes its default.
+    compiler
+        .site(&mut adapter, site("z_put", 0), crossing.clone())
+        .expect("site");
+    compiler.crossing(&mut adapter, &crossing).expect("whole");
+    let compiled = compiler.finish();
+
+    let key = sample.key();
+    // An emitter asks by crossing and gets the default …
+    assert_eq!(
+        compiled
+            .fragment(&key, Assembly::Deconstruct)
+            .map(|n| n.text.as_str()),
+        Some("atomic Sample deconstruct: Sample"),
+    );
+    // … and a caller holding a row still reaches that row.
+    assert!(compiled
+        .row_fragment(&key, Assembly::Deconstruct, &id("fields"))
+        .is_some());
+    // The other direction was never crossed, so there is no answer to give.
+    assert!(compiled.fragment(&key, Assembly::Construct).is_none());
+}

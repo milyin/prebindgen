@@ -1,6 +1,28 @@
-use prebindgen_registry::{Building, Conversions, Crossing, RegistryBuilder};
+use prebindgen_registry::{recipe::Assembly, Building, Conversions, Crossing, RegistryBuilder};
 
 use super::{builder::callback_fn_type, *};
+
+/// What an emitter asks instead of the converter table.
+///
+/// [`CbindgenBuilder::compiled`] holds every fragment this binding compiled,
+/// keyed by crossing. A fragment answers for a crossing that occupies several
+/// wire values; the converter table's single `destination` cannot.
+impl CbindgenBuilder {
+    /// The fragment for `ty` crossing in the given direction, if one compiled.
+    pub(crate) fn frag(&self, ty: &TypeRef, assembly: Assembly) -> Option<&crate::compile::CFrag> {
+        self.compiled.as_ref()?.fragment(&ty.key(), assembly)
+    }
+
+    /// The fragment that builds a Rust `ty` out of C parts.
+    pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<&crate::compile::CFrag> {
+        self.frag(ty, Assembly::Construct)
+    }
+
+    /// The fragment that takes a Rust `ty` apart into C parts.
+    pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<&crate::compile::CFrag> {
+        self.frag(ty, Assembly::Deconstruct)
+    }
+}
 
 /// Per-category **input** terminal converter builders. Each returns
 /// `Some(ConverterImpl)` only for the type category it claims (and `None`
@@ -770,8 +792,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let c_struct = self.c_type_ident(&reading.key());
@@ -808,8 +829,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let Some(fields) = self.struct_fields(registry, &reading.key()) else {
@@ -853,8 +873,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let src = self.src_ty_of(&reading.key());
@@ -1060,8 +1079,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let Some(e) = unit_enum(registry, &reading.key()) else {
@@ -1111,8 +1129,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let Some(e) = payload_enum(registry, &reading.key()) else {
@@ -1129,7 +1146,7 @@ impl CbindgenBuilder {
                 let wires: Vec<syn::Type> = a
                     .fields
                     .iter()
-                    .map(|f| self.payload_wire_of(&reading.key(), vident, f, registry))
+                    .map(|f| self.payload_wire_of(&reading.key(), vident, f))
                     .collect();
                 // `Alternative::spell` writes the delimiters the source wrote,
                 // which is what the three-armed `syn::Fields` match was doing —
@@ -1221,27 +1238,20 @@ impl CbindgenBuilder {
 
     /// The wire of one payload field, or a generation error naming the
     /// offending variant field and the supported set.
-    fn payload_wire_of(
-        &self,
-        key: &TypeKey,
-        variant: &syn::Ident,
-        field: &Field,
-        registry: &Registry<()>,
-    ) -> syn::Type {
-        self.payload_field_wire(&field.ty, registry)
-            .unwrap_or_else(|reason| {
-                panic!(
-                    "Cbindgen::tagged_union: payload `{}::{}{}` of type `{}` cannot cross: {}",
-                    type_short(key),
-                    variant,
-                    match &field.name {
-                        Some(n) => format!(".{n}"),
-                        None => String::new(),
-                    },
-                    field.ty,
-                    reason,
-                )
-            })
+    fn payload_wire_of(&self, key: &TypeKey, variant: &syn::Ident, field: &Field) -> syn::Type {
+        self.payload_field_wire(&field.ty).unwrap_or_else(|reason| {
+            panic!(
+                "Cbindgen::tagged_union: payload `{}::{}{}` of type `{}` cannot cross: {}",
+                type_short(key),
+                variant,
+                match &field.name {
+                    Some(n) => format!(".{n}"),
+                    None => String::new(),
+                },
+                field.ty,
+                reason,
+            )
+        })
     }
 
     /// Release one owning payload slot held behind `binding` (a `&mut` to the
@@ -1364,7 +1374,7 @@ impl CbindgenBuilder {
             // declared-but-unused signature.
             if registry
                 .reading_of(&callback_fn_type(&args))
-                .and_then(|tr| registry.input_entry(&tr))
+                .and_then(|tr| self.in_frag(&tr))
                 .is_none()
             {
                 continue;
@@ -1385,8 +1395,8 @@ impl CbindgenBuilder {
                         a.to_token_stream()
                     )
                 });
-                let wire = registry
-                    .output_entry(&reading)
+                let wire = self
+                    .out_frag(&reading)
                     .unwrap_or_else(|| {
                         panic!(
                             "Cbindgen: callback arg `{}` has no output converter (declare it \
@@ -1538,13 +1548,13 @@ impl CbindgenBuilder {
                 .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
             compiled = compiler.finish();
         }
-        // What the compilation produced, kept for emission. The converter table
-        // stays the lookup index; this is what reaches the file.
+        // What the compilation produced, kept for emission and for lookup.
         self.compiled_fns = compiled
             .fragments()
             .into_iter()
             .map(|f| f.function.clone())
             .collect();
+        self.compiled = Some(compiled);
         self.validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         Ok(Cbindgen {

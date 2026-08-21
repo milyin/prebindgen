@@ -12,7 +12,7 @@ impl CbindgenBuilder {
         // `opaque_ptr` (then it crosses as `string_t *`, freed by `string_drop`).
         if registry
             .reading_of(&string_ty)
-            .and_then(|tr| registry.output_entry(&tr))
+            .and_then(|tr| self.out_frag(&tr))
             .is_some()
             && !self.opaque.contains_key(&TypeKey::from_type(&string_ty))
         {
@@ -22,7 +22,7 @@ impl CbindgenBuilder {
         if self.opaque_errors.keys().any(|key| {
             registry
                 .reading(key)
-                .and_then(|tr| registry.output_entry(&tr))
+                .and_then(|tr| self.out_frag(&tr))
                 .is_some()
         }) {
             return true;
@@ -33,7 +33,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 return false;
             };
-            registry.output_entry(&reading).is_some()
+            self.out_frag(&reading).is_some()
                 && self
                     .enum_alternatives(registry, key)
                     .map(|alts| {
@@ -49,7 +49,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 return false;
             };
-            registry.output_entry(&reading).is_some()
+            self.out_frag(&reading).is_some()
                 && self
                     .struct_fields(registry, key)
                     .map(|fields| fields.iter().any(|(_, fty)| r_is_string(fty)))
@@ -135,11 +135,7 @@ impl CbindgenBuilder {
         Ok(())
     }
 
-    pub(super) fn payload_field_wire(
-        &self,
-        fty: &TypeRef,
-        registry: &impl Conversions<()>,
-    ) -> Result<syn::Type, String> {
+    pub(super) fn payload_field_wire(&self, fty: &TypeRef) -> Result<syn::Type, String> {
         // `String` is the one type whose two directions disagree on the wire
         // (`*const c_char` in, `*mut c_char` out), so the union field fixes the
         // OWNING form and the per-arm expressions convert by hand.
@@ -214,7 +210,7 @@ impl CbindgenBuilder {
         // legitimately differ (a `String`'s const-ness above), which is why a
         // disagreement is `None` — a rejection naming the payload — rather
         // than a silent pick of one side.
-        let out_entry = registry.output_entry(fty).ok_or_else(|| {
+        let out_entry = self.out_frag(fty).ok_or_else(|| {
             "no resolved OUTPUT converter — a payload crosses as its converter's destination, so \
              it must be a scalar, a `String`, or a type this binding declares (`enum_type`, \
              `data_struct`, `opaque_ptr`, or a `convert!` conversion)"
@@ -231,7 +227,7 @@ impl CbindgenBuilder {
             );
         }
         let out = out_entry.destination.clone();
-        if let Some(inp) = registry.input_entry(fty) {
+        if let Some(inp) = self.in_frag(fty) {
             if TypeKey::from_type(&inp.destination) != TypeKey::from_type(&out) {
                 return Err(format!(
                     "its input and output converters disagree on the wire (`{}` in, `{}` out) \
@@ -333,14 +329,14 @@ impl CbindgenBuilder {
     /// cannot be freed through a symbol that was never emitted. `false` for
     /// anything that is not a declared tagged union.
     pub(super) fn tagged_union_has_drop(&self, fty: &TypeRef, registry: &Registry<()>) -> bool {
-        if !self.tagged_unions.contains_key(&fty.key()) || registry.output_entry(fty).is_none() {
+        if !self.tagged_unions.contains_key(&fty.key()) || self.out_frag(fty).is_none() {
             return false;
         }
         self.enum_alternatives(registry, &fty.key())
             .unwrap_or_default()
             .iter()
             .flat_map(|a| a.fields.iter())
-            .any(|f| match self.payload_field_wire(&f.ty, registry) {
+            .any(|f| match self.payload_field_wire(&f.ty) {
                 // A rejected payload is reported from the emission site, which
                 // panics before any of this matters.
                 Err(_) => false,
@@ -527,7 +523,7 @@ impl CbindgenBuilder {
             );
             let entry = registry
                 .reading_of(err_ty)
-                .and_then(|tr| registry.output_entry(&tr))
+                .and_then(|tr| self.out_frag(&tr))
                 .unwrap_or_else(|| {
                     panic!(
                         "Cbindgen::on_function: error type `{}` of `{}` has no output converter",
@@ -1160,7 +1156,7 @@ impl CbindgenBuilder {
 
             let entry = registry
                 .reading_of(arg_ty)
-                .and_then(|tr| registry.input_entry(&tr))
+                .and_then(|tr| self.in_frag(&tr))
                 .unwrap_or_else(|| {
                     panic!(
                         "Cbindgen::on_function: input type `{}` of `{}` has no input converter",

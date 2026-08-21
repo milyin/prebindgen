@@ -397,7 +397,7 @@ impl<R: Conversions<()>> Compile for CCompile<'_, R> {
                     // to the value's own conversion.
                     match (
                         at.crossing.assembly(),
-                        self.gen.payload_field_wire(&part.ty, self.registry),
+                        self.gen.payload_field_wire(&part.ty),
                     ) {
                         (Assembly::Deconstruct, Ok(w)) if held_uninit(&w, &frag.destination) => {
                             quote!(::core::mem::MaybeUninit::new(#call))
