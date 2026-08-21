@@ -81,6 +81,24 @@ pub(crate) struct Wire {
     /// Whether that handle access can be null — the field is optional, or an
     /// optional ancestor gates it.
     pub(crate) handle_nullable: bool,
+    /// Whether the conversion carries Rust-side stages beyond its wire-facing
+    /// function — a `convert!` with a semantic step, say `jlong -> u64 ->
+    /// Duration`.
+    ///
+    /// Read where a caller may only call the wire-facing function and would
+    /// otherwise bind the representation where the value is wanted: the `Vec`
+    /// build helper declines such an element rather than emit a call that does
+    /// not compile.
+    pub(crate) staged: bool,
+    /// The struct field this value fills or gates, once a product says which.
+    ///
+    /// `None` until then, and permanently `None` for a gate over a whole value:
+    /// such a gate says whether the fields beside it mean anything and fills
+    /// none itself. A gate over a decoupled scalar is the other case — it gates
+    /// exactly one field, and answers with it.
+    pub(crate) field: Option<String>,
+    /// Whether this wire gates a whole value rather than one field.
+    pub(crate) whole_gate: bool,
 }
 
 impl Carrier for JFrag {
@@ -291,6 +309,17 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // a niche in any one of them — which of `(tag, summary)` would carry
         // the absence? So the presence is its own wire, ahead of the rest: the
         // `hMaybePresent` in `(hMaybePresent, hMaybeId)`.
+        // A nullable primitive or enum with no niche keeps the
+        // allocation-free `(present, value)` pair rather than boxing: the gate
+        // is read on the Rust side and the slot carries the raw value. The
+        // value crosses through the INNER's conversion, not the optional's —
+        // there is no boxed `Option` on this wire to decode.
+        if at.crossing.assembly() == Assembly::Construct && inner.wires.is_none() {
+            if let Some(pair) = self.decoupled_optional(at, inner) {
+                frag.wires = Some(pair);
+                return Ok(frag);
+            }
+        }
         if let (Assembly::Construct, Some(inner_wires)) = (at.crossing.assembly(), &inner.wires) {
             let mut wires = vec![Wire {
                 ty: syn::parse_quote!(jni::sys::jboolean),
@@ -301,6 +330,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 conv: None,
                 handle_target: None,
                 handle_nullable: false,
+                staged: false,
+                field: None,
+                whole_gate: true,
             }];
             // Everything under the gate is reached through it, and a
             // non-nullable slot still has to hold something when the value is
@@ -397,6 +429,15 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                             .as_ref()
                             .map(|t| format!(".{}{t}", field_kt(part))),
                         handle_nullable: w.handle_nullable,
+                        staged: w.staged,
+                        // A part's wires name their own fields once they are
+                        // inside a product; what a decoupled optional left
+                        // open, the part it belongs to closes.
+                        field: w
+                            .field
+                            .clone()
+                            .or_else(|| (!w.whole_gate).then(|| part.name.clone())),
+                        whole_gate: w.whole_gate,
                     }
                 })),
                 // A part whose conversion projects a handle crosses as that
@@ -410,6 +451,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     conv: None,
                     handle_target: Some(format!(".{}", field_kt(part))),
                     handle_nullable: part.ty.optional_inner().is_some(),
+                    staged: false,
+                    field: Some(part.name.clone()),
+                    whole_gate: false,
                 }),
                 None => wires.push(Wire {
                     ty: frag.conv.destination.clone(),
@@ -419,6 +463,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     conv: Some(frag.conv.function.sig.ident.clone()),
                     handle_target: None,
                     handle_nullable: false,
+                    staged: !frag.conv.pre_stages.is_empty(),
+                    field: Some(part.name.clone()),
+                    whole_gate: false,
                 }),
             }
         }
@@ -519,6 +566,77 @@ impl std::ops::Deref for Conv {
 
     fn deref(&self) -> &Self::Target {
         &self.0.conv
+    }
+}
+
+/// Facts a wire states about itself, which the emitters read once they take
+/// the `parts` row. Only the equivalence check calls them until then.
+#[cfg(test)]
+impl Wire {
+    /// The struct field this value fills, which the Rust-side rebuild binds by
+    /// name.
+    ///
+    /// The last segment of the path, because a path **is** the chain of fields
+    /// that reached the value.
+    ///
+    /// The struct field this value fills or gates.
+    pub(crate) fn field(&self) -> Option<&str> {
+        self.field.as_deref()
+    }
+}
+
+impl<R: Conversions> JCompile<'_, R> {
+    /// The `(present, value)` pair a nullable primitive or enum crosses as, or
+    /// `None` if this optional boxes instead.
+    ///
+    /// The conditions are the ones the walk applies: the inner is not a borrow,
+    /// its wire is a JNI primitive, and it has nothing that would already carry
+    /// the absence — no carved niche, no projection, no Rust-side stages.
+    fn decoupled_optional(&self, at: At<'_>, inner: &JFrag) -> Option<Vec<Wire>> {
+        let inner_reading = at.crossing.value().optional_inner()?;
+        if inner_reading.borrow_target().is_some() {
+            return None;
+        }
+        let c = &inner.conv;
+        let prim = crate::jni::JniPrim::from_wire(&c.destination)?;
+        if c.niches.clone().carve().is_some()
+            || c.metadata.projection.is_some()
+            || !c.pre_stages.is_empty()
+        {
+            return None;
+        }
+        // A Kotlin enum's slot is its `value`, reached through the same gate.
+        let value_access = if self.decls.is_kotlin_enum_reading(inner_reading) {
+            format!("?.value ?: {}", prim.kotlin_zero())
+        } else {
+            format!(" ?: {}", prim.kotlin_zero())
+        };
+        Some(vec![
+            Wire {
+                ty: syn::parse_quote!(jni::sys::jboolean),
+                kt_ty: "Boolean".to_string(),
+                path: "present".to_string(),
+                access: " != null".to_string(),
+                conv: None,
+                handle_target: None,
+                handle_nullable: false,
+                staged: false,
+                field: None,
+                whole_gate: false,
+            },
+            Wire {
+                ty: c.destination.clone(),
+                kt_ty: crate::jni::emit::wire_kotlin_type(c),
+                path: "value".to_string(),
+                access: value_access,
+                conv: Some(c.function.sig.ident.clone()),
+                handle_target: None,
+                handle_nullable: false,
+                staged: false,
+                field: None,
+                whole_gate: false,
+            },
+        ])
     }
 }
 
