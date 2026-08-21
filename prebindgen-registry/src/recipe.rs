@@ -52,7 +52,7 @@ mod tests;
 pub use self::{
     compile::{
         At, Carrier, Compile, CompileError, Compiled, Compiler, Cx, Frag, Part, PartSource, Parts,
-        RequirementId, Validity, Yield,
+        Validity, Yield,
     },
     site::{Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site},
 };
@@ -124,12 +124,6 @@ pub enum Construct {
     ///
     /// Inside a [`Shape::Choice`] arm the fields are that alternative's.
     Fields,
-    /// The single part named here already is the value.
-    ///
-    /// Boxed because a `TypeRef` is many times the size of the identifier
-    /// [`Call`](Self::Call) carries, and a call is the common form. The same
-    /// trade-off the model makes for an array's extent.
-    Identity(Box<TypeRef>),
 }
 
 impl Operation for Construct {
@@ -767,7 +761,6 @@ impl<'a> Check<'a, '_> {
 
     fn construct(&mut self, ty: &TypeRef, op: &Construct) -> Vec<TypeRef> {
         match op {
-            Construct::Identity(inner) => vec![(**inner).clone()],
             Construct::Call(func) => match self.function(func) {
                 Some(f) => {
                     let parts = f.params.iter().map(|p| p.ty.clone()).collect();
