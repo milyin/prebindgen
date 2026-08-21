@@ -1479,7 +1479,7 @@ impl Declarations {
         let (iface_short, when) = self.sum_reconstruct(
             registry,
             &plan.source.key(),
-            &plan.leaves,
+            &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
             &spec.params,
             &names,
             &mut imports,
@@ -1522,7 +1522,7 @@ impl Declarations {
         let (iface_short, when) = self.sum_reconstruct(
             registry,
             &plan.source.key(),
-            &plan.leaves,
+            &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
             &spec.params[1..],
             &names[1..],
             &mut imports,
@@ -1565,7 +1565,7 @@ impl Declarations {
         // `TypeKey::from_type` or `bare_path_ident`, and a key that is one
         // identifier IS the ident — the same reduction `type_kind` made.
         key: &TypeKey,
-        leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
+        leaves: &[crate::jni::compile::OutWire],
         params: &[crate::jni::IfaceParam],
         names: &[String],
         imports: &mut BTreeSet<String>,
@@ -1640,7 +1640,7 @@ impl Declarations {
     /// `!!` would turn a legitimately absent value into an exception.
     fn sum_ctor_arg(
         &self,
-        leaf: &prebindgen_registry::unfold::UnfoldLeaf,
+        leaf: &crate::jni::compile::OutWire,
         param: &crate::jni::IfaceParam,
         name: &str,
         imports: &mut BTreeSet<String>,

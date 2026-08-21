@@ -2209,7 +2209,7 @@ pub(crate) fn unfold_leaf_kt(
 /// `core::unfold`).
 ///
 /// [`UnfoldLeaf::name`]: prebindgen_registry::unfold::UnfoldLeaf::name
-pub(crate) fn plan_leaf_names(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) -> Vec<String> {
+pub(crate) fn plan_leaf_names(leaves: &[crate::jni::compile::OutWire]) -> Vec<String> {
     leaves.iter().map(|leaf| leaf.name.clone()).collect()
 }
 

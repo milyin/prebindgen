@@ -260,6 +260,11 @@ impl OutWire {
         }
     }
 
+    /// A whole plan's leaves in the row's vocabulary.
+    pub(crate) fn from_leaves(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) -> Vec<Self> {
+        leaves.iter().map(Self::from_leaf).collect()
+    }
+
     /// Whether this value is the synthesized selector.
     pub(crate) fn is_tag(&self) -> bool {
         matches!(self.from, OutFrom::Tag)
