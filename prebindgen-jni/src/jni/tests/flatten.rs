@@ -2154,6 +2154,14 @@ fn a_data_class_crosses_as_its_fields_and_a_nested_one_as_its_own() {
         );
     let gen = jni.build_with(registry).expect("resolve");
 
+    let (composed, walked) = gen
+        .parts_vs_walk_for_test("Holder", "h")
+        .expect("Holder states a parts row and the walk plans it");
+    // The row says exactly what the walk it will replace says — names, types
+    // and order — which is what makes pointing the emitters at the fragment a
+    // move rather than a rewrite.
+    assert_eq!(composed, walked, "the row and the walk disagree");
+
     let wires = gen
         .parts_wires_for_test("Holder")
         .expect("Holder states a parts row");

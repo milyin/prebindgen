@@ -451,8 +451,52 @@ pub struct JniGen {
     registry: prebindgen_registry::Registry,
 }
 
+/// One JNI parameter as a signature writes it: its name and its Kotlin type.
+#[cfg(test)]
+pub(crate) type NamedWire = (String, String);
+
 #[cfg(test)]
 impl JniGen {
+    /// The composed wires and the walk's leaves for one `data_class`, named
+    /// the way a parameter would name them.
+    ///
+    /// Test support, and the check that lets the emitter switch happen: the
+    /// `parts` row is meant to say exactly what `build_flat_input_plan` says,
+    /// so this puts the two side by side for a real binding rather than
+    /// asserting a hand-written expectation.
+    pub(crate) fn parts_vs_walk_for_test(
+        &self,
+        short: &str,
+        param: &str,
+    ) -> Option<(Vec<NamedWire>, Vec<NamedWire>)> {
+        let wires = self.parts_wires_for_test(short)?;
+        let composed = wires
+            .iter()
+            .map(|w| {
+                let name =
+                    crate::util::snake_to_camel(&format!("{param}_{}", w.path.replace('.', "_")));
+                (name, w.kt_ty.clone())
+            })
+            .collect();
+
+        let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
+        let ty: syn::Type = syn::parse_quote!(#ident);
+        let arg = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let plan = crate::jni::emit::build_flat_input_plan(
+            &self.decls,
+            &self.registry,
+            &syn::Ident::new(param, proc_macro2::Span::call_site()),
+            &arg,
+        )
+        .ok()??;
+        let walked = plan
+            .leaves
+            .iter()
+            .map(|l| (l.kt_name.clone(), l.kt_wire_ty.clone()))
+            .collect();
+        Some((composed, walked))
+    }
+
     /// The wires a `data_class` composes into, by short type name.
     ///
     /// Test support: the `parts` row is compiled for every declared

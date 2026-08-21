@@ -1496,12 +1496,13 @@ impl JniGenBuilder {
             .borrow()
             .fragments()
             .into_iter()
-            // A fragment that carries only a wire list has no conversion to
-            // emit: the `parts` row states what a `data_class` is made of, and
-            // the function that reads those several values and rebuilds the
-            // struct is what the emitter switch brings. Its marker would
-            // otherwise reach the file.
-            .filter(|f| f.wires.is_none())
+            // A composed-only fragment has no conversion to emit: the `parts`
+            // row states what a `data_class` is made of, and the function that
+            // reads those several values and rebuilds the struct is what the
+            // emitter switch brings. Its marker would otherwise reach the file.
+            // Deliberately not "has wires" — an `Option<data_class>` has both a
+            // wire list and a conversion of its own.
+            .filter(|f| !f.composed_only)
             // A JNI conversion already emits more than one function: a
             // `convert!` with a fallible or binding-local step carries it as a
             // pre-stage, and every one of them has to reach the file. This is

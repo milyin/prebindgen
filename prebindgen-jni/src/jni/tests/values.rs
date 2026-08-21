@@ -1025,6 +1025,16 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    // The `parts` row has to agree with the walk on the two boundaries this
+    // fixture draws, not just on plain fields: `object` is declared
+    // `.jobject_input()` and stays ONE value, and `maybe` is an
+    // `Option<data_class>`, which is a presence flag plus the inner's wires.
+    // Composing either wrongly is invisible until an emitter reads the row,
+    // which is why it is asserted here rather than after the switch.
+    let (composed, walked) = generation
+        .parts_vs_walk_for_test("Hybrid", "h")
+        .expect("Hybrid states a parts row and the walk plans it");
+    assert_eq!(composed, walked, "the row and the walk disagree");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))

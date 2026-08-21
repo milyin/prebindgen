@@ -157,12 +157,25 @@ impl Declarations {
     ///
     /// Without it a nested class contributes a single wire and the flattening
     /// stops one layer down.
+    /// Whether a `data_class` field is itself flattened, or stays one value.
+    ///
+    /// A `data_class` declared `.jobject_input()` crosses Kotlin → Rust as a
+    /// single `JObject` — that is the whole point of the opt-in — so binding
+    /// its parts would flatten a boundary the declaration drew.
+    fn field_crosses_as_its_fields(&self, ty: &TypeRef) -> bool {
+        self.types
+            .get(&ty.stripped_key())
+            .is_some_and(|c| matches!(c.kind, DeclaredKind::Data) && !c.jobject_input)
+    }
+
     pub(crate) fn bindings(
         &self,
         model: &Flat,
         recipes: &prebindgen_registry::recipe::Recipes,
     ) -> Result<prebindgen_registry::recipe::Bindings, Vec<RecipeError>> {
-        use prebindgen_registry::recipe::{Ask, Assembly, Bindings, Crossing, Origin, Site};
+        use prebindgen_registry::recipe::{
+            Ask, Assembly, Bindings, Crossing, Origin, RecipeId, Site,
+        };
 
         let mut bound = Bindings::builder();
         let mut declared: Vec<TypeKey> = self
@@ -184,18 +197,36 @@ impl Declarations {
             };
             let of = Crossing::new(ty, Assembly::Construct);
             for (index, field) in s.fields.iter().enumerate() {
-                if !matches!(
-                    self.types.get(&field.ty.stripped_key()).map(|c| &c.kind),
-                    Some(DeclaredKind::Data)
-                ) {
+                // An `Option<D>` field reaches D through the optional's own
+                // row, so the part bound here is the optional and the inner is
+                // bound below.
+                let target = field.ty.optional_inner().unwrap_or(&field.ty);
+                if !self.field_crosses_as_its_fields(target) {
                     continue;
                 }
-                bound.bind(
-                    Site::part(&of, &parts(), index),
-                    Crossing::new(field.ty.clone(), Assembly::Construct),
-                    Ask::Recipe(parts()),
-                    Origin::Part,
-                );
+                match field.ty.optional_inner() {
+                    // The field IS the class: its part takes the `parts` row.
+                    None => bound.bind(
+                        Site::part(&of, &parts(), index),
+                        Crossing::new(field.ty.clone(), Assembly::Construct),
+                        Ask::Recipe(parts()),
+                        Origin::Part,
+                    ),
+                    // The field is an `Option<D>`. That crossing keeps the row
+                    // the registry derived from its shape — it has no `parts`
+                    // row of its own — and it is D, one layer in, that takes
+                    // `parts`.
+                    Some(_) => bound.bind(
+                        Site::part(
+                            &Crossing::new(field.ty.clone(), Assembly::Construct),
+                            &RecipeId::derived(),
+                            0,
+                        ),
+                        Crossing::new(target.clone(), Assembly::Construct),
+                        Ask::Recipe(parts()),
+                        Origin::Part,
+                    ),
+                };
             }
         }
         bound.build(recipes)
