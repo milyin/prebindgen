@@ -573,7 +573,7 @@ impl JniGen {
                 crate::jni::synth_sum_leaves(&self.decls, &self.registry, &ident, sum)
             }
             prebindgen_registry::flat::Type::Struct(s) => {
-                crate::jni::synth_value_struct_leaves(&self.decls, &self.registry, s, &[], "", 0)?
+                crate::jni::synth_value_struct_leaves(&self.decls, &self.registry, s)?
             }
             _ => return None,
         };

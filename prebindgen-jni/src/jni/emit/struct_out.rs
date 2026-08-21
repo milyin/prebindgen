@@ -64,100 +64,50 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
     }
 }
 
-/// Synthesize the [`LeafSource::Field`](prebindgen_registry::unfold::LeafSource)
-/// leaves of a by-value `data_class` for the fixed-builder output/callback path
-/// — the pre-resolve analog of [`flatten_struct_encode`] (which runs at emit
-/// time). Each named field becomes one field-access leaf
-/// (`name`, `path = [..field idents]`, `out_ty = <field type>`); a non-optional
-/// nested data-class field recurses (inlined), so the whole graph crosses as
-/// decoupled leaves the foreign side reassembles.
+/// The [`LeafSource::Field`](prebindgen_registry::unfold::LeafSource) leaves of
+/// a by-value `data_class`, as the fixed-builder output and callback paths want
+/// them.
 ///
-/// Returns `None` (⇒ the type keeps the whole-value `fromParts` path) when a
-/// field needs a transform this fixed builder can't yet forward verbatim — a
-/// **projection** (opaque handle), an **enum**, or a nested
-/// data-class behind `Option` / `Vec`. (Those are handled by the slower
-/// [`struct_output_body`] until the synthesizer is widened to wrap them.)
+/// The list is [`Declarations::struct_out_wires`]', mapped. Runs BEFORE
+/// `resolve`, which is exactly why it shares that composition rather than
+/// walking the struct a second time: the leaf names reach the foreign
+/// `fromParts` parameters and the row identically, and two walks agreeing was a
+/// property nothing checked.
 ///
-/// Classification reads only `ext.types` (`opaque`/`enum_cfg`) and the parsed
-/// model (`registry.flat()`) — both populated before `resolve` — never the
-/// output converter table (not yet built at this stage).
+/// `None` — the type keeps the whole-value `fromParts` path — when a field needs
+/// a transform this fixed builder cannot forward verbatim. See
+/// [`Declarations::struct_out_wires`] for which fields those are and why one of
+/// them declines the whole value.
 pub(crate) fn synth_value_struct_leaves(
     ext: &Declarations,
     registry: &impl Conversions,
     s: &prebindgen_registry::flat::Struct,
-    path_prefix: &[prebindgen_registry::unfold::PathStep],
-    name_prefix: &str,
-    depth: usize,
 ) -> Option<Vec<prebindgen_registry::unfold::UnfoldLeaf>> {
     use prebindgen_registry::unfold::{LeafSource, PathStep, UnfoldLeaf};
-    if depth > 16 {
-        return None;
-    }
-    // Named by construction — a tuple struct is an `Extern`, not a `Struct`.
-    let mut leaves: Vec<UnfoldLeaf> = Vec::new();
-    for field in &s.fields {
-        let fname = field.name.as_ref()?.clone();
-        let camel = mangle_kotlin_ident(&kt_snake_to_camel(&fname.to_string()));
-        let leaf_name = if name_prefix.is_empty() {
-            camel
-        } else {
-            format!("{name_prefix}__{camel}")
-        };
-        let mut path = path_prefix.to_vec();
-        // The synthesizer declines `Option`-wrapped nesting below, so an
-        // intermediate step is never optional; a TERMINAL `Option` field is not
-        // a nesting step either (its own converter carries the nullability).
-        path.push(PathStep::field(fname, false));
-
-        // A projection field (opaque handle) or an enum field
-        // is delivered with a transform the fixed builder can't forward yet.
-        // A nested data-class field (a *declared* plain struct) inlines when
-        // non-optional (recurse); `Option`/`Vec`-wrapped nesting is deferred
-        // to the whole-value path.
-        // Both layer questions off the field's own reading: `Optional` to look
-        // through, `Vec` to defer — the kinds, not a last path segment.
-        let probe = field.ty.optional_inner().unwrap_or(&field.ty);
-        let nested = match ext.type_kind(registry, &probe.key()) {
-            // A sum joins the kinds this fixed builder cannot forward: it has
-            // no single leaf and no converter of its own — it crosses as a tag
-            // plus one group per variant, which only the whole-value
-            // `fromParts` path (`PlanFieldKind::Sum`) can lay out. Falling
-            // through to the simple-leaf arm below would silently synthesize a
-            // leaf whose `out_ty` is the sum and then REQUIRE an output
-            // converter for it, failing the resolve with the sum named rather
-            // than the unsupported position.
-            TypeKind::Handle | TypeKind::Enum | TypeKind::Sum => return None,
-            TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.clone()),
-            _ => None,
-        };
-        if let Some(child) = nested {
-            if field.ty.optional_inner().is_some()
-                || matches!(field.ty.kind(), prebindgen_registry::flat::TypeKind::Vec(_))
-            {
-                return None;
-            }
-            let child_leaves =
-                synth_value_struct_leaves(ext, registry, &child, &path, &leaf_name, depth + 1)?;
-            leaves.extend(child_leaves);
-            continue;
-        }
-
-        // Simple leaf: scalar / String / Option<Box<String>> / ByteArray / Vec.
-        // The field's own output converter (resolved later) encodes it; the
-        // foreign `fromParts` forwards it verbatim. Nullability is carried by
-        // the converter (e.g. `Option<Box<String>>` → `String?`), so the leaf
-        // itself isn't path-nullable.
-        leaves.push(UnfoldLeaf {
-            name: leaf_name,
-            path,
-            out_ty: field.ty.clone(),
-            identity: false,
-            nullable: false,
-            source: LeafSource::Field,
-            group: None,
-        });
-    }
-    Some(leaves)
+    Some(
+        ext.struct_out_wires_of(registry, &s.name)?
+            .into_iter()
+            .map(|w| UnfoldLeaf {
+                name: w.name,
+                // The synthesizer declines `Option`-wrapped nesting, so an
+                // intermediate step is never optional; a TERMINAL `Option`
+                // field is not a nesting step either, its own converter
+                // carrying the nullability.
+                path: match w.from {
+                    crate::jni::compile::OutFrom::Field { path } => path
+                        .into_iter()
+                        .map(|ident| PathStep::field(ident, false))
+                        .collect(),
+                    _ => Vec::new(),
+                },
+                out_ty: w.out_ty,
+                identity: false,
+                nullable: w.nullable,
+                source: LeafSource::Field,
+                group: w.group,
+            })
+            .collect(),
+    )
 }
 
 /// Recursively flatten a struct's output encode into a list of leaf wire
