@@ -36,6 +36,15 @@ pub(crate) struct JFrag {
     /// makes a nested `data_class` field contribute its own several rather than
     /// one.
     pub(crate) wires: Option<Vec<Wire>>,
+    /// This fragment states a wire list and nothing else — no conversion of its
+    /// own, so nothing of it reaches the generated file.
+    ///
+    /// Only the `parts` row is this. A crossing may legitimately carry **both**
+    /// a wire list and a real conversion: an `Option<data_class>` composes a
+    /// presence flag ahead of the inner's wires and still has the optional's
+    /// own conversion to emit, so "has wires" is the wrong test for what to
+    /// leave out of the file.
+    pub(crate) composed_only: bool,
 }
 
 /// One wire value of a crossing that occupies several.
@@ -73,6 +82,7 @@ impl JFrag {
         Self {
             conv,
             wires: None,
+            composed_only: false,
             yields: Yield {
                 ty,
                 mode: Mode::Owned,
@@ -86,6 +96,7 @@ impl JFrag {
         Self {
             conv,
             wires: None,
+            composed_only: false,
             yields: Yield {
                 ty: at.crossing.value().stripped_key(),
                 mode: at.crossing.mode(),
@@ -239,7 +250,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         self.wrap(at, "no JNI representation for this type", conv)
     }
 
-    fn optional(&mut self, cx: &mut Cx<'_>, at: At<'_>, _inner: &JFrag) -> Frag<Self> {
+    fn optional(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &JFrag) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let emit = cx.emit();
         // A declared terminal outranks the arity the registry derived, exactly
@@ -255,7 +266,21 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 .output_terminal(ty, self.registry, emit)
                 .or_else(|| self.decls.output_optional(ty, emit)),
         };
-        self.wrap(at, "no JNI representation for this optional", conv)
+        let mut frag = self.wrap(at, "no JNI representation for this optional", conv)?;
+        // An optional over something that crosses as several values cannot ride
+        // a niche in any one of them — which of `(tag, summary)` would carry
+        // the absence? So the presence is its own wire, ahead of the rest: the
+        // `hMaybePresent` in `(hMaybePresent, hMaybeId)`.
+        if let (Assembly::Construct, Some(inner_wires)) = (at.crossing.assembly(), &inner.wires) {
+            let mut wires = vec![Wire {
+                ty: syn::parse_quote!(jni::sys::jboolean),
+                kt_ty: "Boolean".to_string(),
+                path: "present".to_string(),
+            }];
+            wires.extend(inner_wires.iter().cloned());
+            frag.wires = Some(wires);
+        }
+        Ok(frag)
     }
 
     fn sequence(
@@ -358,6 +383,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             },
         );
         frag.wires = Some(wires);
+        frag.composed_only = true;
         Ok(frag)
     }
 
