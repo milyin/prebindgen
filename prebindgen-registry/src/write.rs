@@ -1,10 +1,13 @@
 //! Rust file emission for the resolved `Registry`.
 //!
-//! `write_rust` collects every resolved input/output converter (each entry
-//! already carries its full `ItemFn`), every per-item `on_<kind>` output,
-//! and every anonymous const; concatenates them; and hands them to
-//! `Destination::write` (which does prettyplease formatting and
-//! resolves the path against `OUT_DIR`).
+//! `write_rust` takes the conversions the adapter compiled, as a slice of
+//! `ItemFn`; adds every per-item `on_<kind>` output and every anonymous const;
+//! concatenates them; and hands them to `Destination::write` (which does
+//! prettyplease formatting and resolves the path against `OUT_DIR`).
+//!
+//! The conversions arrive from the adapter rather than being collected from the
+//! registry, which is what lets one crossing contribute more than one function
+//! — or one that occupies more than a single wire value.
 //!
 //! This module is `pub`, so **every `pub` item in it is public API of the
 //! crate**. That is meant to be exactly two — [`write_rust`] and

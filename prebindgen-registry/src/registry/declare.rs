@@ -30,7 +30,7 @@ pub struct RegistryBuilder<M> {
     /// Conversions handed over so far, applied at [`Self::build`].
     built: HashMap<Crossing, TypeEntry<M>>,
     /// The scan runs once, on demand: it needs every declaration, and
-    /// [`Self::crossings`] / [`Self::convert_with`] / [`Self::build`] each need
+    /// [`Self::convert_with`] and [`Self::build`] each need
     /// it to have run. `Some` holds the derived demand, in order.
     order: Option<Vec<Crossing>>,
 }
