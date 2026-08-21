@@ -1,10 +1,13 @@
 //! Rust file emission for the resolved `Registry`.
 //!
-//! `write_rust` collects every resolved input/output converter (each entry
-//! already carries its full `ItemFn`), every per-item `on_<kind>` output,
-//! and every anonymous const; concatenates them; and hands them to
-//! `Destination::write` (which does prettyplease formatting and
-//! resolves the path against `OUT_DIR`).
+//! `write_rust` takes the conversions the adapter compiled, as a slice of
+//! `ItemFn`; adds every per-item `on_<kind>` output and every anonymous const;
+//! concatenates them; and hands them to `Destination::write` (which does
+//! prettyplease formatting and resolves the path against `OUT_DIR`).
+//!
+//! The conversions arrive from the adapter rather than being collected from the
+//! registry, which is what lets one crossing contribute more than one function
+//! — or one that occupies more than a single wire value.
 //!
 //! This module is `pub`, so **every `pub` item in it is public API of the
 //! crate**. That is meant to be exactly two — [`write_rust`] and
@@ -22,26 +25,8 @@ use proc_macro2::TokenStream;
 use crate::{
     destination::Destination,
     prebindgen::Prebindgen,
-    registry::{Registry, TypeEntry, TypeKey},
+    registry::{Registry, TypeKey},
 };
-
-/// Where the generated conversions come from.
-///
-/// The converter table is the **lookup** index either way; this says only what
-/// reaches the file. An adapter that compiles its own fragments hands them over
-/// directly, and is then free to emit a conversion the table cannot hold —
-/// several functions for one crossing, or one occupying more than a single wire
-/// value, which is what a `ConverterImpl`'s single `destination` cannot name.
-pub enum Conversions<'a> {
-    /// What the adapter's compilation produced, in the order it produced it.
-    ///
-    /// Sorted and de-duplicated by function name here, so the order decides
-    /// which of two same-named functions wins and not where any of them lands.
-    Compiled(&'a [syn::ItemFn]),
-    /// Read them off the converter table, where they lived when a conversion
-    /// could only ever be one `ConverterImpl` per crossing.
-    Table,
-}
 
 /// Errors surfaced by the file-emission phase.
 ///
@@ -77,12 +62,19 @@ impl std::error::Error for WriteError {}
 
 /// Emit the resolved registry to a Rust file.
 ///
+/// `conversions` is what the adapter's compilation produced. It is sorted and
+/// de-duplicated by function name here, so the order decides which of two
+/// same-named functions wins and not where any of them lands. Handing them
+/// over directly is what frees an adapter to emit a conversion the converter
+/// table could not hold — several functions for one crossing, or one occupying
+/// more than a single wire value.
+///
 /// `out_path` may be relative (resolved against `OUT_DIR` by prebindgen) or
 /// absolute. Returns the path actually written.
 pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     registry: &Registry<E::Metadata>,
     ext: &E,
-    conversions: Conversions<'_>,
+    conversions: &[syn::ItemFn],
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
     // Validation already ran ONCE in the generator's `build` — a built generator
@@ -101,10 +93,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     items.extend(ext.prerequisites(registry, &emit));
 
     // 1. Auto-generated converter wrappers (sorted by ident, deduped).
-    for (_, item_fn) in match conversions {
-        Conversions::Compiled(functions) => dedup_by_name(functions.to_vec()),
-        Conversions::Table => collect_converter_items(registry),
-    } {
+    for (_, item_fn) in dedup_by_name(conversions.to_vec()) {
         items.push(syn::Item::Fn(item_fn));
     }
 
@@ -187,57 +176,6 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     Ok(dest.write(out_path))
 }
 
-/// Walk both type tables, dedupe each entry's stored `function` AND each
-/// of its [`crate::prebindgen::Stage`] functions by name, sort
-/// for determinism. Names are read directly off `function.sig.ident` —
-/// the adapter owns the naming.
-///
-/// Private: an internal step of [`write_rust`], not part of the
-/// adapter-facing surface this module exposes.
-/// Sort by name and keep the first of each, which is what the converter table
-/// does for the entries it holds — one function per name reaches the file
-/// however many crossings produced it.
-fn dedup_by_name(functions: Vec<syn::ItemFn>) -> Vec<(syn::Ident, syn::ItemFn)> {
-    let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
-    for function in functions {
-        let name = function.sig.ident.clone();
-        by_name.entry(name.to_string()).or_insert((name, function));
-    }
-    by_name.into_values().collect()
-}
-
-fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, syn::ItemFn)> {
-    let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
-    let mut collect = |entry: &TypeEntry<M>| {
-        let name = entry.function.sig.ident.clone();
-        by_name
-            .entry(name.to_string())
-            .or_insert_with(|| (name, entry.function.clone()));
-        for stage in &entry.pre_stages {
-            let sname = stage.function.sig.ident.clone();
-            by_name
-                .entry(sname.to_string())
-                .or_insert_with(|| (sname, stage.function.clone()));
-        }
-    };
-    walk_resolved(&registry.input_types, |_, entry| collect(entry));
-    walk_resolved(&registry.output_types, |_, entry| collect(entry));
-    by_name.into_values().collect()
-}
-
-fn walk_resolved<M, F: FnMut(&TypeKey, &TypeEntry<M>)>(
-    table: &std::collections::HashMap<TypeKey, crate::registry::TypeCell<M>>,
-    mut f: F,
-) {
-    let mut keys: Vec<&TypeKey> = table.keys().collect();
-    keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-    for key in keys {
-        if let Some(entry) = table.get(key).and_then(|c| c.entry.as_ref()) {
-            f(key, entry);
-        }
-    }
-}
-
 /// Name-sorted, because emission order is part of the generated file and the
 /// model is in source order. Was `sorted_items_by_ident` over the registry's
 /// maps; same ordering, read from the one index.
@@ -272,3 +210,14 @@ fn parse_items_from_tokens<I: IntoIterator<Item = TokenStream>>(
 
 #[cfg(test)]
 mod tests;
+
+/// Sort by name and keep the first of each: one function per name reaches the
+/// file however many crossings produced it.
+fn dedup_by_name(functions: Vec<syn::ItemFn>) -> Vec<(syn::Ident, syn::ItemFn)> {
+    let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
+    for function in functions {
+        let name = function.sig.ident.clone();
+        by_name.entry(name.to_string()).or_insert((name, function));
+    }
+    by_name.into_values().collect()
+}

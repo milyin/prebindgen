@@ -5,10 +5,10 @@
 //! items they depend on (`prerequisites`), a cross-cutting rewrite
 //! (`post_process_item`) and two invariant checks.
 //!
-//! **Conversion is not here.** A generator builds those itself, against the
-//! demand `RegistryBuilder::crossings` hands it, and gives them back through
-//! `RegistryBuilder::convert_with` — so there is no `on_input_type`, no deferral, and no
-//! fixed-point loop retrying until it converges.
+//! **Conversion is not here.** A generator builds those itself, one per
+//! crossing, inside `RegistryBuilder::convert_with` — so there is no
+//! `on_input_type`, no deferral, and no fixed-point loop retrying until it
+//! converges.
 //!
 //! [`ConverterImpl::function`] is the **complete** Rust function for a
 //! converter — signature, body, attributes, lifetimes. The generator owns 100%
@@ -158,9 +158,8 @@ impl<M> ConverterImpl<M> {
 /// What used to be here and is not any more: which items to build, how
 /// composites decompose, and the wire form of each type. A generator states the
 /// first two into the builder (`RegistryBuilder::export`,
-/// `RegistryBuilder::decompose`)
-/// and answers the third by filling `RegistryBuilder::crossings` — so nothing in
-/// core calls back to ask. Moving emission out too is what would delete this
+/// `RegistryBuilder::decompose`) and answers the third inside
+/// `RegistryBuilder::convert_with` — so nothing in core calls back to ask. Moving emission out too is what would delete this
 /// trait entirely (prebindgen#251 phase E).
 ///
 /// Anything language-specific the rest of the pipeline must carry — a JNI

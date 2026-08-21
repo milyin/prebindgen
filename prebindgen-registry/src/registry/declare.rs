@@ -30,7 +30,7 @@ pub struct RegistryBuilder<M> {
     /// Conversions handed over so far, applied at [`Self::build`].
     built: HashMap<Crossing, TypeEntry<M>>,
     /// The scan runs once, on demand: it needs every declaration, and
-    /// [`Self::crossings`] / [`Self::convert_with`] / [`Self::build`] each need
+    /// [`Self::convert_with`] and [`Self::build`] each need
     /// it to have run. `Some` holds the derived demand, in order.
     order: Option<Vec<Crossing>>,
 }
@@ -173,7 +173,7 @@ impl<M> RegistryBuilder<M> {
 
     /// `from`'s conversion needs `on`'s to exist first.
     ///
-    /// [`Self::crossings`] derives its order from the type structure, which
+    /// [`Self::convert_with`] derives its order from the type structure, which
     /// covers almost everything: an `Option<T>` visibly contains a `T`. It
     /// cannot see a dependency the *declaration* creates — a `convert!` whose
     /// body chains through a helper function's parameter type, say, where
@@ -347,16 +347,6 @@ impl<M> RegistryBuilder<M> {
         Ok(self)
     }
 
-    /// Every crossing this binding needs a conversion for, **inner types
-    /// first** — see [`Self::crossings`] for what the order guarantees.
-    ///
-    /// Take this when you want to drive the loop yourself and hand the result
-    /// back through [`Self::conversions`]. [`Self::convert_with`] is the same
-    /// walk with the loop written for you.
-    pub fn crossings(&mut self) -> Result<Vec<Crossing>, WriteRustError> {
-        Ok(self.derive()?.to_vec())
-    }
-
     /// Build a conversion for each crossing, in dependency order.
     ///
     /// `f` is called once per crossing with the conversions already built, so
@@ -364,10 +354,9 @@ impl<M> RegistryBuilder<M> {
     /// `None` records a gap — whether that gap matters is decided by
     /// [`Self::build`], not here.
     ///
-    /// This is a convenience over [`Self::crossings`] + [`Self::conversions`],
-    /// not a second mechanism: it is the same list, walked in the same order.
-    /// Nothing about it lets the registry choose when to call back — the
-    /// closure is yours, and the walk is finished before this returns.
+    /// The one way to supply them. Nothing about it lets the registry choose
+    /// when to call back — the closure is yours, and the walk is finished
+    /// before this returns.
     pub fn convert_with<F>(mut self, mut f: F) -> Result<Self, WriteRustError>
     where
         F: FnMut(
@@ -390,16 +379,6 @@ impl<M> RegistryBuilder<M> {
             }
         }
         Ok(self)
-    }
-
-    /// Hand over conversions built elsewhere — the bulk peer of
-    /// [`Self::convert_with`], for a generator that walked
-    /// [`Self::crossings`] itself.
-    ///
-    /// Accumulates, so it composes with `convert_with` and with itself.
-    pub fn conversions(mut self, conversions: HashMap<Crossing, TypeEntry<M>>) -> Self {
-        self.built.extend(conversions);
-        self
     }
 
     /// The scanned registry, with no conversions applied and no completeness
