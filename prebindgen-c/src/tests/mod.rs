@@ -17,7 +17,7 @@ mod rows;
 mod structs;
 mod tagged_unions;
 
-fn write(cbindgen: CbindgenBuilder, registry: RegistryBuilder<()>, tag: &str) -> String {
+fn write(cbindgen: CbindgenBuilder, registry: RegistryBuilder, tag: &str) -> String {
     let dir = unique_test_dir(&format!("cbindgen_{tag}"));
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join(format!("{tag}.rs"));

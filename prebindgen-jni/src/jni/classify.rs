@@ -54,7 +54,7 @@ impl Declarations {
     /// wrapper folding is the resolver's business, not this table's.
     pub(crate) fn type_kind<'r, 'c>(
         &'c self,
-        registry: &'r impl Conversions<KotlinMeta>,
+        registry: &'r impl Conversions,
         bare: &TypeKey,
     ) -> TypeKind<'r, 'c> {
         let cfg = self.types.get(bare);

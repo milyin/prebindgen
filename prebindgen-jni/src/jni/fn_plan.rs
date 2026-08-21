@@ -352,10 +352,7 @@ impl PlanError {
 /// missing.
 ///
 /// [`Prebindgen::validate_resolved`]: prebindgen_registry::Prebindgen::validate_resolved
-pub(crate) fn validate_bindings(
-    ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
-) -> Result<(), String> {
+pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Result<(), String> {
     let mut errors: Vec<String> = Vec::new();
 
     if let Err(e) = ext.validate_split_declarations(registry) {
@@ -471,7 +468,7 @@ impl Declarations {
     /// regen check (a plan change alters generated code).
     pub(crate) fn fn_plan(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         f: &prebindgen_registry::flat::Function,
     ) -> Result<std::rc::Rc<JniFunctionPlan>, PlanError> {
         if let Some(hit) = self.fn_plans.borrow().get(&f.name).cloned() {
@@ -491,7 +488,7 @@ impl JniFunctionPlan {
     /// built ONCE per function and shared; this is the underlying derivation.
     pub fn build(
         ext: &Declarations,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         f: &prebindgen_registry::flat::Function,
     ) -> Result<Self, PlanError> {
         let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.name.to_string()));
@@ -556,7 +553,7 @@ impl JniFunctionPlan {
     fn jvm_parameter_slots(
         &self,
         ext: &Declarations,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         f: &prebindgen_registry::flat::Function,
     ) -> usize {
         // `JNINative` is a Kotlin object, so its external methods are instance
@@ -607,7 +604,7 @@ fn kotlin_jvm_slots(ty: &str) -> usize {
 /// expansions and reuse the same Rust/Kotlin lowering as ordinary parameters.
 fn classify_leaf(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     ident: &syn::Ident,
     reading: &TypeRef,
     expanded: bool,
@@ -719,7 +716,7 @@ fn classify_leaf(
 /// (render_extern_decl's `ret_decl` reconstruction).
 fn build_output(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     f: &prebindgen_registry::flat::Function,
 ) -> Result<FnOutputPlan, PlanError> {
     use prebindgen_registry::unfold::{Delivery, UnfoldShape};

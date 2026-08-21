@@ -82,7 +82,7 @@ impl Declarations {
     /// was resolved first.
     pub(crate) fn write_kotlin(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
         // Validation already ran once in `RegistryBuilder::build` — this emitter
@@ -536,7 +536,7 @@ impl Declarations {
     /// uniform.
     pub(crate) fn write_enum_classes(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
     ) -> Result<Vec<KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
@@ -595,7 +595,7 @@ impl Declarations {
     /// and each declarator rejects the other's.
     pub(crate) fn write_sealed_classes(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
     ) -> Result<Vec<KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
@@ -667,7 +667,7 @@ impl Declarations {
     /// identically.
     fn build_sealed_class(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         class_name: &str,
         sum: &prebindgen_registry::flat::Variant,
         sum_cfg: &SumConfig,
@@ -997,7 +997,7 @@ impl Declarations {
     /// types, so wrappers and data-class declarations stay in sync. A
     /// compatibility-alias fragment is appended when any data class is
     /// renamed relative to its Rust ident.
-    pub(crate) fn write_data_classes(&self, registry: &Registry<KotlinMeta>) -> Vec<KtFile> {
+    pub(crate) fn write_data_classes(&self, registry: &Registry) -> Vec<KtFile> {
         let mut written = Vec::new();
         let mut aliases: Vec<(String, String)> = Vec::new();
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -1136,7 +1136,7 @@ impl Declarations {
     /// from the declaration's representative plan (`registry.decon_plans`) —
     /// the same source the native emitters read, so all sites agree by
     /// construction (no dedup, no signature reconciliation).
-    pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<KtFile> {
+    pub(crate) fn write_callback_ifaces(&self, registry: &Registry) -> Vec<KtFile> {
         use prebindgen_registry::unfold::{DeconId, Delivery};
 
         // Distinct interface identities in use — [`SpecKey`] (`Ord`, so
@@ -1362,7 +1362,7 @@ impl Declarations {
     /// positionally with `fromParts`.
     fn value_struct_builder_singleton(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
     ) -> KtDecl {
@@ -1409,7 +1409,7 @@ impl Declarations {
     /// `[acc, leaf0, …]`; `fromParts` takes the element leaves (all but `acc`).
     fn value_struct_folder_singleton(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
     ) -> KtDecl {
@@ -1469,7 +1469,7 @@ impl Declarations {
     /// `factory_field`, so it is emitted here directly.
     fn sum_builder_singleton(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
     ) -> KtDecl {
@@ -1512,7 +1512,7 @@ impl Declarations {
     /// `[acc, tag, group-slots…]`, so the reassembly reads all but `acc`.
     fn sum_folder_singleton(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
     ) -> KtDecl {
@@ -1560,7 +1560,7 @@ impl Declarations {
     /// its variant-constructor argument by [`Self::sum_ctor_arg`].
     pub(crate) fn sum_reconstruct(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         // The sum's **identity**: every use of `source` here was
         // `TypeKey::from_type` or `bare_path_ident`, and a key that is one
         // identifier IS the ident — the same reduction `type_kind` made.
@@ -1785,7 +1785,7 @@ impl Declarations {
 
     pub(crate) fn write_jni_package(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         subpackage: &str,
         pkg_cfg: &crate::jni::PackageConfig,
     ) -> KtFile {
@@ -1900,7 +1900,7 @@ impl Declarations {
     /// inside an `init { … }` block here (e.g. a reference to the consumer's
     /// own loader object). Unset, the holder stays free of any loading logic
     /// and the wrapper layer is responsible for loading.
-    pub(crate) fn write_jni_native(&self, registry: &Registry<KotlinMeta>) -> KtFile {
+    pub(crate) fn write_jni_native(&self, registry: &Registry) -> KtFile {
         let class_name = self.jni_native_class_name();
         let declared = self.declared_functions();
 
@@ -2044,7 +2044,7 @@ impl Declarations {
     /// promoted method's signature).
     pub(crate) fn write_typed_handles(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         handles: &[TypedHandle<'_>],
     ) -> Vec<KtFile> {
         let mut written = Vec::new();

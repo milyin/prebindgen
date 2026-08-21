@@ -1403,7 +1403,7 @@ fn gc_managed_handle_lifecycle() {
 /// #52 shared fixture: a `ZSummary` ptr class, its `(count, total)` builder, a
 /// splittable 2-variant type-level `expand_param!`, and functions taking one or
 /// two `ZSummary` params. `extra` fns are appended before indexing.
-fn split_fixture(extra: &[&str]) -> RegistryBuilder<KotlinMeta> {
+fn split_fixture(extra: &[&str]) -> RegistryBuilder {
     let loc = myflat_loc();
     let base: &[&str] = &[
         "pub fn z_summary_new(count: i64, total: f64) -> ZSummary { unimplemented!() }",

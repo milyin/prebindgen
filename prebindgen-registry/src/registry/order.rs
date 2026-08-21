@@ -8,7 +8,7 @@ use std::collections::HashSet;
 
 use super::*;
 
-impl<M> Registry<M> {
+impl Registry {
     /// Every crossing this binding needs a conversion for, **inner types
     /// first**.
     ///

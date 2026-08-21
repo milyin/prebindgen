@@ -171,8 +171,8 @@ fn validate_declarations(exp: &Expansions) -> Result<(), ExpandError> {
 ///
 /// Runs inside the builder's scan, before any conversion is built, so
 /// leaf converters resolve through the normal rank machinery.
-pub(crate) fn apply<M>(
-    registry: &mut Registry<M>,
+pub(crate) fn apply(
+    registry: &mut Registry,
     exp: &Expansions,
     declared_fns: &std::collections::HashSet<syn::Ident>,
     accessor_fns: &std::collections::HashSet<syn::Ident>,
@@ -272,8 +272,8 @@ pub(crate) fn apply<M>(
 /// `spell()` and digging the parameter out of `sig.inputs` — what these
 /// three sites used to do — re-derives a fact the model was already handing over,
 /// which is `origin` used for reasoning rather than for emission.
-fn param_reading<M>(
-    registry: &Registry<M>,
+fn param_reading(
+    registry: &Registry,
     func: &syn::Ident,
     param: &syn::Ident,
 ) -> Result<prebindgen_flat::flat::TypeRef, ExpandError> {
@@ -289,8 +289,8 @@ fn param_reading<M>(
 }
 
 /// Build + store the fold plan for one `.construct` declaration.
-fn process_expand<M>(
-    registry: &mut Registry<M>,
+fn process_expand(
+    registry: &mut Registry,
     exp: &Expansions,
     ed: &ExpandDecl,
 ) -> Result<(), ExpandError> {
@@ -326,9 +326,9 @@ fn process_expand<M>(
 /// Pick the constructor (its variants) for one `.expand`/`.expand_with`
 /// declaration. A constructor is keyed by its declared `target`; `TopLevel`
 /// requires it to be unique for the parameter's target type.
-fn resolve_constructor<M>(
+fn resolve_constructor(
     exp: &Expansions,
-    _registry: &Registry<M>,
+    _registry: &Registry,
     target_key: &TypeKey,
     ed: &ExpandDecl,
 ) -> Result<Vec<Variant>, ExpandError> {
@@ -359,8 +359,8 @@ fn resolve_constructor<M>(
 /// supposed to build, so the check cannot be the thing a new declarator forgets
 /// (#223). The comparison is [`check_declared_target`], shared with the output
 /// side's accessor lookup.
-fn ctor_signature<M>(
-    registry: &Registry<M>,
+fn ctor_signature(
+    registry: &Registry,
     func: &syn::Ident,
     expected: &TypeKey,
 ) -> Result<CtorSig, ExpandError> {
@@ -399,9 +399,9 @@ struct CtorSig {
 /// selector-dispatched — so a "single" constructor and a 1-variant combined emit
 /// identical code.
 #[allow(clippy::too_many_arguments)]
-fn build_plan<M>(
+fn build_plan(
     exp: &Expansions,
-    registry: &Registry<M>,
+    registry: &Registry,
     ed: &ExpandDecl,
     optional: bool,
     by_ref: bool,
@@ -549,9 +549,9 @@ fn build_plan<M>(
 /// [`FoldArg::Build`] (recursive input). Used by both the top-level [`build_plan`]
 /// and each nested build. `prefix` disambiguates leaf names across the tree.
 #[allow(clippy::too_many_arguments)]
-fn build_core<M>(
+fn build_core(
     exp: &Expansions,
-    registry: &Registry<M>,
+    registry: &Registry,
     ed: &ExpandDecl,
     target: &prebindgen_flat::flat::TypeRef,
     variants: &[Variant],
@@ -647,9 +647,9 @@ fn build_core<M>(
 /// its own default constructor, recurse into a nested [`FoldArg::Build`]
 /// (recursive input); otherwise it is a flat wire [`FoldArg::Leaf`].
 #[allow(clippy::too_many_arguments)]
-fn build_arg<M>(
+fn build_arg(
     exp: &Expansions,
-    registry: &Registry<M>,
+    registry: &Registry,
     ed: &ExpandDecl,
     pty: &prebindgen_flat::flat::TypeRef,
     name: syn::Ident,

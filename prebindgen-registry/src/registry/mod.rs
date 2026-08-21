@@ -25,10 +25,9 @@
 //!
 //! # What a conversion is
 //!
-//! A [`TypeEntry`]: a `destination` (the wire type), a wire-facing `function`,
-//! and `pre_stages` — the Rust-side stages that compose with it. **A chain, not a
-//! function**, which is how composition works: `Option<Handle>`'s chain embeds
-//! `Handle`'s.
+//! The adapter's business. It keeps the conversion itself; what it hands back
+//! is an [`Answer`], naming the crossings this one delegates to. That is what
+//! reachability walks, and it is all the registry needs to know.
 //!
 //! A composite need not cross whole. `Option<T>` may cross as a `T` carrying a
 //! niche value, as a `(bool, T)` pair, or as leaves delivered separately — which,
@@ -162,10 +161,7 @@ use std::collections::{HashMap, HashSet};
 use prebindgen::SourceLocation;
 use prebindgen_flat::{flat::Origin, types_util::bare_path_ident};
 
-use crate::{
-    niches::Niches,
-    prebindgen::{Prebindgen, Stage},
-};
+use crate::prebindgen::Prebindgen;
 
 mod cell;
 pub(crate) use self::cell::TypeCell;
@@ -182,7 +178,7 @@ mod view;
 pub use prebindgen_flat::flat::{TypeKey, TypeKeyParseError};
 
 pub use self::{
-    cell::{Direction, TypeEntry},
+    cell::{Answer, Direction},
     declare::RegistryBuilder,
     error::{DuplicateNameError, NotExpressibleEntry, ScanError, WriteRustError},
     view::{Building, Conversions, Crossing},
@@ -190,13 +186,11 @@ pub use self::{
 
 /// Single owner of everything parsed from the prebindgen source stream.
 ///
-/// The metadata parameter `M` is the language adapter's per-converter
-/// extra type, supplied via
-/// [`crate::prebindgen::Prebindgen::Metadata`]. Each
-/// [`TypeEntry`] carries one `M` copied in by the resolver from the
-/// [`crate::prebindgen::ConverterImpl`] that produced it.
-/// Adapters that don't carry extras leave `M = ()`.
-pub struct Registry<M = ()> {
+/// Carries no adapter metadata. It used to be generic over one, so a converter's
+/// language-specific extras could be stored beside it and read back; an adapter
+/// keeps its own conversions now, so both the storage and the parameter are
+/// gone.
+pub struct Registry {
     /// The parsed model these maps project. Held rather than discarded, so a
     /// later stage can ask it what a name means through the registry it already
     /// has — see [`Self::flat`].
@@ -217,8 +211,8 @@ pub struct Registry<M = ()> {
     /// [`Conversions::conversion`] — which is what makes direction a parameter
     /// rather than half of a field name, and what stops anyone observing a cell
     /// before `RegistryBuilder::build` has graded it.
-    pub(crate) input_types: HashMap<TypeKey, TypeCell<M>>,
-    pub(crate) output_types: HashMap<TypeKey, TypeCell<M>>,
+    pub(crate) input_types: HashMap<TypeKey, TypeCell>,
+    pub(crate) output_types: HashMap<TypeKey, TypeCell>,
 
     /// Resolved constructor-expansion plans, keyed by `(function, parameter)`.
     /// Filled by [`crate::expand::apply`] before resolution; read
@@ -259,13 +253,13 @@ pub struct Registry<M = ()> {
 
 // Opaque — exists so `Result<Registry, _>::expect_err` works in tests, the way
 // `Generation`'s did before the generators took ownership of the built object.
-impl<M> std::fmt::Debug for Registry<M> {
+impl std::fmt::Debug for Registry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Registry(..)")
     }
 }
 
-impl<M> Registry<M> {
+impl Registry {
     /// An empty registry: no model, no items, no types.
     ///
     /// **Not public.** A `Registry` is a projection of a [`Flat`](prebindgen_flat::Flat), and one built
@@ -293,11 +287,11 @@ impl<M> Registry<M> {
         self.type_table(dir).get(key).map(|cell| cell.root)
     }
 
-    /// Whether `key`'s cell in `dir` has a resolved converter.
+    /// Whether `key`'s cell in `dir` has been answered.
     ///
-    /// Test support, `testing`-gated. The public [`Self::input_entry`] /
-    /// [`Self::output_entry`] answer this from a reading; a fixture that built
-    /// the type itself holds only its identity.
+    /// Test support, `testing`-gated: a fixture that built the type itself
+    /// holds only its identity, and this is the one question about a cell that
+    /// does not need a reading.
     #[cfg(any(test, feature = "testing"))]
     pub fn has_entry_for_test(&self, dir: Direction, key: &TypeKey) -> Option<bool> {
         self.type_table(dir)

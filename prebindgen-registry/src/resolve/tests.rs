@@ -1,5 +1,5 @@
 use super::*;
-use crate::registry::TypeEntry;
+use crate::registry::Answer;
 
 /// Regression: when a required type is itself unresolved AND has fields
 /// that are also unresolved, the diagnostic must list both. Previously
@@ -15,7 +15,7 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
     // gets a cell that is NOT a root — exactly the case the BFS is here to
     // catch. Driven through the real scan rather than simulated, so the state
     // under test is one the pipeline can actually produce.
-    let mut reg: Registry<()> =
+    let mut reg: Registry =
         crate::test_util::scanned_with(&["pub struct Outer { pub inner: ZKeyExpr }"]);
     let outer = reg
         .intern(
@@ -51,11 +51,11 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
 /// that the resolved converter doesn't actually depend on.
 #[test]
 fn final_invariant_stops_at_resolved_nodes() {
-    use crate::registry::{Direction, Registry, TypeEntry};
+    use crate::registry::{Answer, Direction, Registry};
 
     // Through the real scan, so the state under test is one the pipeline can
     // actually produce: `Unrelated` is a field type nothing declares.
-    let mut reg: Registry<()> = crate::test_util::scanned_with(&[
+    let mut reg: Registry = crate::test_util::scanned_with(&[
         "pub struct Outer { pub inner: Inner }",
         "pub struct Inner { pub unused: Unrelated }",
     ]);
@@ -72,16 +72,7 @@ fn final_invariant_stops_at_resolved_nodes() {
         Direction::Input,
         &inner_ty,
         false,
-        Some(TypeEntry {
-            destination: syn::parse_quote!(i64),
-            function: syn::parse_quote!(
-                fn __dummy() {}
-            ),
-            pre_stages: vec![],
-            subs: vec![],
-            niches: crate::niches::Niches::empty(),
-            metadata: (),
-        }),
+        Some(Answer::over(vec![])),
     );
 
     reg.insert_crossing(Direction::Input, &unrelated_ty, false, None);
@@ -112,7 +103,7 @@ fn final_invariant_stops_at_resolved_nodes() {
 fn a_type_reachable_only_through_subs_must_still_resolve() {
     use crate::registry::{Registry, TypeKey};
 
-    let mut reg: Registry<()> = Registry::empty();
+    let mut reg: Registry = Registry::empty();
     let outer: syn::Type = syn::parse_quote!(Outer);
     let mid: syn::Type = syn::parse_quote!(Mid);
 
@@ -122,16 +113,7 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
         Direction::Input,
         &outer,
         true,
-        Some(TypeEntry {
-            destination: syn::parse_quote!(i64),
-            function: syn::parse_quote!(
-                fn __outer() {}
-            ),
-            pre_stages: vec![],
-            subs: vec![TypeKey::from_type(&mid)],
-            niches: crate::niches::Niches::empty(),
-            metadata: (),
-        }),
+        Some(Answer::over(vec![TypeKey::from_type(&mid)])),
     );
     // `Mid` is present, unresolved, and NOT a root.
     reg.insert_crossing(Direction::Input, &mid, false, None);

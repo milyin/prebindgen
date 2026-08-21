@@ -448,7 +448,7 @@ pub struct JniGen {
     /// would be a comment rather than a type.
     decls: Declarations,
     /// Every crossing this binding needs, each with its conversion.
-    registry: prebindgen_registry::Registry<KotlinMeta>,
+    registry: prebindgen_registry::Registry,
 }
 
 // Opaque — exists so `Result<JniGen, _>::expect_err` works in tests.
@@ -484,7 +484,7 @@ impl JniGen {
     }
 
     /// The resolved registry — conversions, decompositions, and the model.
-    pub fn registry(&self) -> &prebindgen_registry::Registry<KotlinMeta> {
+    pub fn registry(&self) -> &prebindgen_registry::Registry {
         &self.registry
     }
 

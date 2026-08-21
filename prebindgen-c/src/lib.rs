@@ -334,7 +334,7 @@ impl AliasAccess {
 /// emission over a complete registry.
 pub struct Cbindgen {
     pub(crate) gen: CbindgenBuilder,
-    pub(crate) registry: prebindgen_registry::Registry<()>,
+    pub(crate) registry: prebindgen_registry::Registry,
 }
 
 // Opaque — exists so `Result<Cbindgen, _>::expect_err` works in tests.
@@ -365,7 +365,7 @@ impl Cbindgen {
     }
 
     /// The resolved registry — conversions, decompositions, and the model.
-    pub fn registry(&self) -> &prebindgen_registry::Registry<()> {
+    pub fn registry(&self) -> &prebindgen_registry::Registry {
         &self.registry
     }
 
@@ -524,7 +524,7 @@ fn type_short(key: &TypeKey) -> String {
 /// `enum_shape` over a `syn::ItemEnum` to re-derive what the first had thrown
 /// away.
 fn payload_enum<'r>(
-    registry: &'r impl Conversions<()>,
+    registry: &'r impl Conversions,
     key: &TypeKey,
 ) -> Option<&'r prebindgen_registry::flat::Variant> {
     match registry.flat().declared_type(&key.ident()?)? {
@@ -551,7 +551,7 @@ fn payload_enum<'r>(
 /// was `enum_item` + `assert_unit_enum`, the second running `enum_shape` over a
 /// `syn::ItemEnum` to re-derive what the first had already thrown away.
 fn unit_enum<'r>(
-    registry: &'r impl Conversions<()>,
+    registry: &'r impl Conversions,
     key: &TypeKey,
 ) -> Option<&'r prebindgen_registry::flat::Enum> {
     match registry.flat().declared_type(&key.ident()?)? {

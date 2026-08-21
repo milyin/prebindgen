@@ -291,7 +291,7 @@ fn reopened_ptr_class_keeps_gc_managed() {
         )]
     };
     let gc_managed_of = |first: crate::PtrClassDecl, second: crate::PtrClassDecl| {
-        let registry: RegistryBuilder<KotlinMeta> =
+        let registry: RegistryBuilder =
             crate::test_util::reg_from_items(declare_referenced(items())).expect("index items");
         let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
@@ -349,7 +349,7 @@ fn a_type_gets_one_class_declarator() {
         ]
     };
     let declare = |first: crate::ClassDecl, second: crate::ClassDecl| {
-        let registry: RegistryBuilder<KotlinMeta> =
+        let registry: RegistryBuilder =
             crate::test_util::reg_from_items(declare_referenced(items())).expect("index items");
         let _ = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")

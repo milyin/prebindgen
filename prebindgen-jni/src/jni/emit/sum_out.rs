@@ -164,7 +164,7 @@ pub(crate) fn is_sum_leaves(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) 
 /// every arm and only one arm computes it.
 pub(crate) fn encode_sum_group(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
     obj_idents: &[syn::Ident],
     matched: TokenStream,

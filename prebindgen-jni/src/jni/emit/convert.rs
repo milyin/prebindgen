@@ -410,7 +410,7 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 /// `use` statements. Pairs with output body below.
 pub(crate) fn enum_input_body(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     e: &prebindgen_registry::flat::Enum,
 ) -> (syn::Type, syn::Expr) {
     let ident = &e.name;

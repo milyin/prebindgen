@@ -19,7 +19,7 @@ use crate::jni::trait_impl::{build_through_erased_wrappers, build_through_wrappe
 pub(crate) fn struct_input_body(
     ext: &Declarations,
     s: &flat::Struct,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.name.to_string();
@@ -321,7 +321,7 @@ pub(crate) fn struct_input_body(
 pub(crate) fn sum_input_body(
     ext: &Declarations,
     v: &flat::Variant,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     let key = TypeKey::from_ident(&v.name);
@@ -598,7 +598,7 @@ fn read_kotlin_property(
 ///
 /// The mirror of [`ConvChain::call`](super::super::struct_plan::ConvChain) on
 /// the output side, and of the structural wrappers' own chain composition:
-/// stopping at [`TypeEntry::converter_ident`] would bind the *representation*
+/// stopping at [`ConverterImpl::converter_ident`] would bind the *representation*
 /// (`u64`) where the Rust value (`Duration`) is required, which does not
 /// compile.
 ///
@@ -1047,7 +1047,7 @@ fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<KotlinMeta>) -> S
 #[allow(clippy::too_many_arguments)]
 fn build_flat_sum_field(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     sum_reading: &TypeRef,
     field: syn::Ident,
     optional: bool,
@@ -1303,7 +1303,7 @@ fn push_handle_leaf(
 /// plan or a validation error — never a silent object fallback.
 pub(crate) fn build_flat_input_plan(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     param_name: &syn::Ident,
     arg: &TypeRef,
 ) -> Result<Option<FlatInputPlan>, FlatInputError> {
@@ -1412,7 +1412,7 @@ pub(crate) fn build_flat_input_plan(
 /// before the rebuild did.
 fn build_flat_struct_node(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     st: &flat::Struct,
     optional: bool,
     native_prefix: &str,

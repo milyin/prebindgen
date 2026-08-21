@@ -32,7 +32,7 @@ use super::*;
 /// [`UnfoldShape::Optional`]: prebindgen_registry::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     plan: &prebindgen_registry::unfold::UnfoldPlan,
     iface: Option<&IfaceSpec>,
     call_expr: &TokenStream,
@@ -859,7 +859,7 @@ fn reach_leaf(
 /// `signal_error` with default ze values).
 pub(crate) fn encode_plan_leaves(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     plan: &prebindgen_registry::unfold::UnfoldPlan,
     obj_idents: &[syn::Ident],
     value: &TokenStream,

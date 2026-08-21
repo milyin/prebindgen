@@ -50,10 +50,7 @@ impl Declarations {
     /// artifact is written).
     ///
     /// [`validate_resolved`]: prebindgen_registry::Prebindgen::validate_resolved
-    pub(crate) fn validate_split_declarations(
-        &self,
-        registry: &Registry<KotlinMeta>,
-    ) -> Result<(), String> {
+    pub(crate) fn validate_split_declarations(&self, registry: &Registry) -> Result<(), String> {
         let type_level = self
             .param_expand_decls
             .iter()
@@ -113,7 +110,7 @@ impl Declarations {
 /// ambiguity check and the whole-artifact overload table agree on erasure.
 fn arm_erased_sig(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     target: &TypeKey,
     ctor: Option<&syn::Ident>,
 ) -> Vec<ErasedJvmType> {
@@ -246,7 +243,7 @@ fn non_null(mut ty: KtType) -> KtType {
 /// for an `Option<…>` parameter `null` encodes absence (nullable-arm rule).
 /// Returns `None` if any input is not a flat leaf.
 fn variant_typed_params(
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     variant: &prebindgen_registry::expand::FoldVariant,
     origin: &syn::Ident,
     block: &[KtParam],
@@ -315,7 +312,7 @@ fn find_block(params: &[KtParam], leaf_names: &[String]) -> Option<usize> {
 /// validating the parameter is expandable, multi-variant, and in-scope (all
 /// hard errors — the user explicitly asked to split it).
 fn resolve_split<'a>(
-    registry: &'a Registry<KotlinMeta>,
+    registry: &'a Registry,
     f: &prebindgen_registry::flat::Function,
     sel_fun: &KtFun,
     param_name: &str,
@@ -405,7 +402,7 @@ fn resolve_split<'a>(
 pub(crate) fn render_param_overloads(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     sel_fun: &KtFun,
 ) -> Vec<KtFun> {
     // Requested split params for this function, in signature order.

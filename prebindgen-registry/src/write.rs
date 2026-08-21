@@ -72,7 +72,7 @@ impl std::error::Error for WriteError {}
 /// `out_path` may be relative (resolved against `OUT_DIR` by prebindgen) or
 /// absolute. Returns the path actually written.
 pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
-    registry: &Registry<E::Metadata>,
+    registry: &Registry,
     ext: &E,
     conversions: &[syn::ItemFn],
     out_path: P,

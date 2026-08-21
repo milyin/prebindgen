@@ -25,17 +25,17 @@ use super::*;
 /// The result is read-only. Nothing can add a crossing to a `Registry`, which
 /// is what makes "every crossing has a conversion" a fact about the type rather
 /// than a phase you have to be careful about.
-pub struct RegistryBuilder<M> {
-    registry: Registry<M>,
+pub struct RegistryBuilder {
+    registry: Registry,
     /// Conversions handed over so far, applied at [`Self::build`].
-    built: HashMap<Crossing, TypeEntry<M>>,
+    built: HashMap<Crossing, Answer>,
     /// The scan runs once, on demand: it needs every declaration, and
     /// [`Self::convert_with`] and [`Self::build`] each need
     /// it to have run. `Some` holds the derived demand, in order.
     order: Option<Vec<Crossing>>,
 }
 
-impl<M> Registry<M> {
+impl Registry {
     /// Start describing a binding over this model.
     ///
     /// A `Flat` is what a registry projects, and reading captured prebindgen
@@ -50,7 +50,7 @@ impl<M> Registry<M> {
     /// let flat = Flat::builder().source("source_ffi").build()?;
     /// // Annotated only because nothing here resolves: in a build script `M` is
     /// // fixed by the adapter passed to `resolve`, so no call site names it.
-    /// let registry: Registry<()> = Registry::builder(flat)?.build()?;
+    /// let registry: Registry = Registry::builder(flat)?.build()?;
     /// assert!(registry.flat().function("test_function").is_some());
     /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
@@ -70,7 +70,7 @@ impl<M> Registry<M> {
     /// a source crate that needs migrating sees one list instead of one rebuild
     /// per item. This is independent of what any binding declares: an
     /// inexpressible item is a hard error whether or not it is ever named.
-    pub fn builder(flat: prebindgen_flat::flat::Flat) -> Result<RegistryBuilder<M>, ScanError> {
+    pub fn builder(flat: prebindgen_flat::flat::Flat) -> Result<RegistryBuilder, ScanError> {
         let entries: Vec<NotExpressibleEntry> = flat
             .unsupported()
             .map(|u| NotExpressibleEntry {
@@ -93,7 +93,7 @@ impl<M> Registry<M> {
     }
 }
 
-impl<M> RegistryBuilder<M> {
+impl RegistryBuilder {
     // ── configure: what this binding builds ───────────────────────────
     //
     // Pushed in by the generator before `resolve`. The registry never asks —
@@ -263,7 +263,7 @@ impl<M> RegistryBuilder<M> {
     }
 }
 
-impl<M> RegistryBuilder<M> {
+impl RegistryBuilder {
     /// The model being described. Complete from the first call: everything that
     /// adds to it ([`Self::local_function`]) is a declaration, not a derivation.
     pub fn flat(&self) -> &prebindgen_flat::flat::Flat {
@@ -322,13 +322,9 @@ impl<M> RegistryBuilder<M> {
     }
 
     /// What a conversion — or a validation — is written against right now: the
-    /// model, the full crossing population, and whatever has been built so far.
-    fn view(&self) -> Building<'_, M> {
-        Building::new(
-            &self.registry,
-            &self.built,
-            self.order.as_deref().unwrap_or_default(),
-        )
+    /// model and the full crossing population.
+    fn view(&self) -> Building<'_> {
+        Building::new(&self.registry, self.order.as_deref().unwrap_or_default())
     }
 
     /// Check this binding against a generator's own invariants, now that the
@@ -336,10 +332,7 @@ impl<M> RegistryBuilder<M> {
     ///
     /// Earliest it can run: a missing declaration has already hard-errored, so
     /// a check here sees only items that exist.
-    pub fn validate_with<E>(mut self, adapter: &E) -> Result<Self, WriteRustError>
-    where
-        E: Prebindgen<Metadata = M>,
-    {
+    pub fn validate_with<E: Prebindgen>(mut self, adapter: &E) -> Result<Self, WriteRustError> {
         self.derive()?;
         adapter
             .validate(&self.view())
@@ -349,21 +342,21 @@ impl<M> RegistryBuilder<M> {
 
     /// Build a conversion for each crossing, in dependency order.
     ///
-    /// `f` is called once per crossing with the conversions already built, so
-    /// by the time it sees `Option<Handle>` it can look up `Handle`. Returning
-    /// `None` records a gap — whether that gap matters is decided by
-    /// [`Self::build`], not here.
+    /// `f` is called once per crossing, and answers with an [`Answer`] rather
+    /// than the conversion itself: the conversion belongs to the adapter, which
+    /// emits from it and looks it up, and what the registry needs back is which
+    /// other crossings this one is built out of. Returning `None` records a gap
+    /// — whether that gap matters is decided by [`Self::build`], not here.
+    ///
+    /// The walk is inner types first, so by the time `f` sees `Option<Handle>`
+    /// it has already answered `Handle`.
     ///
     /// The one way to supply them. Nothing about it lets the registry choose
     /// when to call back — the closure is yours, and the walk is finished
     /// before this returns.
     pub fn convert_with<F>(mut self, mut f: F) -> Result<Self, WriteRustError>
     where
-        F: FnMut(
-            &Crossing,
-            &Building<'_, M>,
-            &crate::Emit,
-        ) -> Option<crate::prebindgen::ConverterImpl<M>>,
+        F: FnMut(&Crossing, &Building<'_>, &crate::Emit) -> Option<Answer>,
     {
         // A converter IS generated Rust — `ConverterImpl::function` is a
         // complete `syn::ItemFn` the adapter writes — so this closure is an
@@ -372,10 +365,8 @@ impl<M> RegistryBuilder<M> {
         let emit = crate::Emit::new();
         let order = self.derive()?.to_vec();
         for crossing in &order {
-            let conv = f(crossing, &self.view(), &emit);
-            if let Some(c) = conv {
-                self.built
-                    .insert(crossing.clone(), TypeEntry::from_converter(c));
+            if let Some(answer) = f(crossing, &self.view(), &emit) {
+                self.built.insert(crossing.clone(), answer);
             }
         }
         Ok(self)
@@ -388,7 +379,7 @@ impl<M> RegistryBuilder<M> {
     /// "answerable", which is exactly what the split exists to keep out of
     /// everyone else's hands.
     #[cfg(test)]
-    pub(crate) fn scanned(mut self) -> Result<Registry<M>, ScanError> {
+    pub(crate) fn scanned(mut self) -> Result<Registry, ScanError> {
         // Narrower than `build`'s error on purpose: the scan is the only phase
         // this runs, so a test matching on `ScanError` says what it means.
         match self.derive() {
@@ -404,7 +395,7 @@ impl<M> RegistryBuilder<M> {
     /// A crossing with no conversion is not itself a failure — the scan
     /// over-approximates on purpose. What fails is a crossing *reachable from
     /// an export* with none, and the error names every one at once.
-    pub fn build(mut self) -> Result<Registry<M>, WriteRustError> {
+    pub fn build(mut self) -> Result<Registry, WriteRustError> {
         self.derive()?;
         for ((dir, key), entry) in self.built {
             if let Some(cell) = self.registry.type_table_mut(dir).get_mut(&key) {
@@ -416,28 +407,17 @@ impl<M> RegistryBuilder<M> {
     }
 }
 
-/// A builder answers the same questions a finished registry does — with one
-/// difference that is the whole point of the split: [`conversion`] sees only
-/// what has been handed over *so far*.
-///
-/// That is what a generator writing a conversion needs (its inners, already
-/// built) and it is all it should be able to see. Everything else — the model,
-/// the decompositions — is complete from the moment it is declared.
-///
-/// [`conversion`]: Conversions::conversion
-impl<M> Conversions<M> for RegistryBuilder<M> {
+/// A builder answers the same questions a finished registry does. It used to
+/// answer one fewer — it lent out conversions handed over *so far*, so a
+/// generator writing one could see its inners and nothing else. An adapter
+/// keeps its own conversions now, so that read is gone and the rest — the
+/// model, the decompositions — is complete from the moment it is declared.
+impl Conversions for RegistryBuilder {
     fn reading(&self, key: &TypeKey) -> Option<prebindgen_flat::flat::TypeRef> {
         self.registry.reading(key)
     }
     fn flat(&self) -> &prebindgen_flat::flat::Flat {
         &self.registry.flat
-    }
-    fn conversion(
-        &self,
-        dir: Direction,
-        reading: &prebindgen_flat::flat::TypeRef,
-    ) -> Option<&TypeEntry<M>> {
-        self.built.get(&(dir, reading.key()))
     }
     fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
         self.order
