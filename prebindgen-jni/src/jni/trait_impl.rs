@@ -1793,8 +1793,7 @@ impl Declarations {
             if !is_data_class {
                 continue;
             }
-            if let Some(leaves) =
-                crate::jni::synth_value_struct_leaves(self, registry, item_struct, &[], "", 0)
+            if let Some(leaves) = crate::jni::synth_value_struct_leaves(self, registry, item_struct)
             {
                 if !leaves.is_empty() {
                     out.push(prebindgen_registry::unfold::ValueDecon {

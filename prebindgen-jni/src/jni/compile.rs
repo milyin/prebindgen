@@ -1197,85 +1197,28 @@ impl<R: Conversions> JCompile<'_, R> {
         frag
     }
 
-    /// The values a `data_class` hands out: its fields, and a field that is
-    /// itself one contributes its own.
+    /// The values a `data_class` hands out, composed by
+    /// [`Declarations::struct_out_wires`].
     ///
-    /// A fragment with **no** out-wires is this adapter declining, and it
-    /// declines for the whole value rather than per field. A handle, an
-    /// `enum_class`, a sum or a `data_class` behind an `Option` or a `Vec` is
-    /// delivered with a transform the decoupled form does not carry, and one
-    /// such field sends the whole object down the whole-value `fromParts` path
-    /// — so a row that decomposed the rest of it would describe a shape nothing
-    /// emits.
+    /// The part fragments are not read. Whether a field nests is the model's
+    /// answer and the declaration's, which is what lets the same composition
+    /// run before `resolve` — see that method for why that matters.
     fn out_product(&self, at: At<'_>, parts: Parts<'_, Self>) -> JFrag {
-        let declined = JFrag::new(at, self.parts_marker(Vec::new()));
-        let mut wires = Vec::new();
-        for (part, frag) in parts {
-            let Some(field) = part_field(part) else {
-                return declined;
-            };
-            let ident = match &field.name {
-                Some(name) => name.clone(),
-                None => return declined,
-            };
-            // The same name the leaf synthesis gives it: the Kotlin property,
-            // and nested names joined by the reserved `__` separator.
-            let name =
-                crate::jni::mangle_kotlin_ident(&crate::jni::kt_snake_to_camel(&ident.to_string()));
-            // The layer questions off the field's own reading — `Optional` to
-            // look through, `Vec` to decline — never a last path segment.
-            let probe = part.ty.optional_inner().unwrap_or(&part.ty);
-            if matches!(
-                self.decls.type_kind(self.registry, &probe.key()),
-                crate::jni::classify::TypeKind::Handle
-                    | crate::jni::classify::TypeKind::Enum
-                    | crate::jni::classify::TypeKind::Sum
-            ) {
-                return declined;
+        match self
+            .decls
+            .struct_out_wires(self.registry, at.crossing.value())
+        {
+            Some(wires) => {
+                let mut frag = JFrag::new(
+                    at,
+                    self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
+                );
+                frag.out_wires = Some(wires);
+                frag.composed_only = true;
+                frag
             }
-            match &frag.out_wires {
-                // A nested `data_class`, which contributes its own values under
-                // this field's name and chain. Only unwrapped: behind an
-                // `Option` or a `Vec` there is no chain to reach through.
-                Some(inner) => {
-                    if part.ty.optional_inner().is_some()
-                        || matches!(part.ty.kind(), TypeKind::Vec(_))
-                    {
-                        return declined;
-                    }
-                    for w in inner {
-                        let OutFrom::Field { path } = &w.from else {
-                            return declined;
-                        };
-                        wires.push(OutWire {
-                            name: format!("{name}__{}", w.name),
-                            out_ty: w.out_ty.clone(),
-                            group: None,
-                            from: OutFrom::Field {
-                                path: std::iter::once(ident.clone())
-                                    .chain(path.iter().cloned())
-                                    .collect(),
-                            },
-                            nullable: false,
-                        });
-                    }
-                }
-                None => wires.push(OutWire {
-                    name,
-                    out_ty: part.ty.clone(),
-                    group: None,
-                    from: OutFrom::Field { path: vec![ident] },
-                    nullable: false,
-                }),
-            }
+            None => JFrag::new(at, self.parts_marker(Vec::new())),
         }
-        let mut frag = JFrag::new(
-            at,
-            self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
-        );
-        frag.out_wires = Some(wires);
-        frag.composed_only = true;
-        frag
     }
 
     /// The values a **value form** hands out: call the accessor once, then read
@@ -1556,6 +1499,123 @@ impl<R: Conversions> JCompile<'_, R> {
 }
 
 impl Declarations {
+    /// The values a `data_class` hands out: its fields, and a field that is
+    /// itself one contributes its own under the parent's name and chain.
+    ///
+    /// Model and declaration only, like [`Self::sum_out_wires`] — so the same
+    /// answer serves the leaf synthesis that runs before `resolve` and the row
+    /// that composes after it.
+    ///
+    /// `None` is this adapter declining, and it declines for the **whole**
+    /// value rather than per field. A handle, an `enum_class`, a sum, or a
+    /// `data_class` behind an `Option` or a `Vec` is delivered with a transform
+    /// the decoupled form does not carry, and one such field sends the whole
+    /// object down the whole-value `fromParts` path — so a row that decomposed
+    /// the rest of it would describe a shape nothing emits.
+    pub(crate) fn struct_out_wires(
+        &self,
+        registry: &impl Conversions,
+        ty: &TypeRef,
+    ) -> Option<Vec<OutWire>> {
+        let TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
+            return None;
+        };
+        self.struct_out_wires_at(registry, &id.ident()?, &[], "", 0)
+    }
+
+    /// One level of [`Self::struct_out_wires`]'s walk. `path` and `name_prefix`
+    /// accumulate through inlined nested classes, whose names join with the
+    /// reserved `__` separator.
+    /// [`Self::struct_out_wires`] by the struct's own name, for a caller that
+    /// has the element rather than a reading of it.
+    pub(crate) fn struct_out_wires_of(
+        &self,
+        registry: &impl Conversions,
+        ident: &syn::Ident,
+    ) -> Option<Vec<OutWire>> {
+        self.struct_out_wires_at(registry, ident, &[], "", 0)
+    }
+
+    fn struct_out_wires_at(
+        &self,
+        registry: &impl Conversions,
+        ident: &syn::Ident,
+        path: &[syn::Ident],
+        name_prefix: &str,
+        depth: usize,
+    ) -> Option<Vec<OutWire>> {
+        if depth > 16 {
+            return None;
+        }
+        let prebindgen_registry::flat::Type::Struct(st) = registry.flat().declared_type(ident)?
+        else {
+            return None;
+        };
+        let mut wires = Vec::new();
+        for field in &st.fields {
+            // Named by construction — a tuple struct is an `Extern`, not a
+            // `Struct` — so a positional field means the model and this walk
+            // disagree, and declining is the safe answer.
+            let fname = field.name.as_ref()?;
+            let name =
+                crate::jni::mangle_kotlin_ident(&crate::jni::kt_snake_to_camel(&fname.to_string()));
+            let name = match name_prefix.is_empty() {
+                true => name,
+                false => format!("{name_prefix}__{name}"),
+            };
+            let mut field_path = path.to_vec();
+            field_path.push(fname.clone());
+
+            // The layer questions off the field's own reading — `Optional` to
+            // look through, `Vec` to decline — never a last path segment.
+            let probe = field.ty.optional_inner().unwrap_or(&field.ty);
+            match self.type_kind(registry, &probe.key()) {
+                crate::jni::classify::TypeKind::Handle
+                | crate::jni::classify::TypeKind::Enum
+                | crate::jni::classify::TypeKind::Sum => return None,
+                // A nested `data_class` inlines when it is reached directly.
+                // Behind an `Option` or a `Vec` there is no chain to reach
+                // through, so the whole value stays object-shaped.
+                crate::jni::classify::TypeKind::DataStruct {
+                    st: _,
+                    cfg: Some(_),
+                } => {
+                    if field.ty.optional_inner().is_some()
+                        || matches!(field.ty.kind(), TypeKind::Vec(_))
+                    {
+                        return None;
+                    }
+                    let child = match probe.unwrapped().kind() {
+                        TypeKind::Named { id, .. } => id.ident()?,
+                        _ => return None,
+                    };
+                    wires.extend(self.struct_out_wires_at(
+                        registry,
+                        &child,
+                        &field_path,
+                        &name,
+                        depth + 1,
+                    )?);
+                    continue;
+                }
+                _ => {}
+            }
+
+            // A simple value: the field's own output conversion encodes it, and
+            // the foreign `fromParts` forwards it verbatim. Nullability rides
+            // that conversion — `Option<Box<String>>` is a `String?` — so the
+            // value itself is not path-nullable.
+            wires.push(OutWire {
+                name,
+                out_ty: field.ty.clone(),
+                group: None,
+                from: OutFrom::Field { path: field_path },
+                nullable: false,
+            });
+        }
+        Some(wires)
+    }
+
     /// The values a `sealed_class` hands out: the selector, then one group of
     /// slots per alternative, laid beside the others.
     ///
