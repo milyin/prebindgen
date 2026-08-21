@@ -572,7 +572,7 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
-                        crate::jni::compile::OutFrom::Reach { path } => reach_of(path),
+                        crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
                             variant
@@ -635,7 +635,7 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
-                        crate::jni::compile::OutFrom::Reach { path } => reach_of(path),
+                        crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
                             variant

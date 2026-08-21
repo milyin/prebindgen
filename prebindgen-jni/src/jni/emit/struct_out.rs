@@ -89,10 +89,7 @@ pub(crate) fn synth_value_struct_leaves(
             .into_iter()
             .map(|w| UnfoldLeaf {
                 name: w.name,
-                path: match w.from {
-                    crate::jni::compile::OutFrom::Reach { path } => path,
-                    _ => Vec::new(),
-                },
+                path: w.reach,
                 out_ty: w.out_ty,
                 identity: false,
                 nullable: w.nullable,
