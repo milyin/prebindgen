@@ -451,9 +451,10 @@ pub struct JniGen {
     registry: prebindgen_registry::Registry,
 }
 
-/// One JNI parameter as a signature writes it: its name and its Kotlin type.
+/// One JNI parameter as a signature writes it: name, Kotlin type, the Kotlin
+/// expression that fills it, and the conversion it crosses through.
 #[cfg(test)]
-pub(crate) type NamedWire = (String, String);
+pub(crate) type NamedWire = (String, String, String, Option<String>);
 
 #[cfg(test)]
 impl JniGen {
@@ -475,7 +476,12 @@ impl JniGen {
             .map(|w| {
                 let name =
                     crate::util::snake_to_camel(&format!("{param}_{}", w.path.replace('.', "_")));
-                (name, w.kt_ty.clone())
+                (
+                    name,
+                    w.kt_ty.clone(),
+                    format!("{param}{}", w.access),
+                    w.conv.as_ref().map(|c| c.to_string()),
+                )
             })
             .collect();
 
@@ -492,7 +498,14 @@ impl JniGen {
         let walked = plan
             .leaves
             .iter()
-            .map(|l| (l.kt_name.clone(), l.kt_wire_ty.clone()))
+            .map(|l| {
+                (
+                    l.kt_name.clone(),
+                    l.kt_wire_ty.clone(),
+                    l.kt_access(param),
+                    l.conv.as_ref().map(|c| c.to_string()),
+                )
+            })
             .collect();
         Some((composed, walked))
     }

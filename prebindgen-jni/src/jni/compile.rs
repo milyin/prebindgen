@@ -61,6 +61,16 @@ pub(crate) struct Wire {
     /// `otherTag` in the next, so the parameter it hangs off is the caller's to
     /// prepend.
     pub(crate) path: String,
+    /// How Kotlin reaches this value from the object it is destructuring,
+    /// relative to that object — `.flat.id`, `.maybe?.id ?: 0L`, ` != null`.
+    ///
+    /// Relative for the same reason `path` is: the site supplies the base, so
+    /// the same wire reads `h.flat.id` in one call and `this.flat.id` in the
+    /// next.
+    pub(crate) access: String,
+    /// The conversion this value crosses through, or `None` for a presence flag
+    /// — which is read on the Rust side and converts nothing.
+    pub(crate) conv: Option<syn::Ident>,
 }
 
 impl Carrier for JFrag {
@@ -276,8 +286,28 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 ty: syn::parse_quote!(jni::sys::jboolean),
                 kt_ty: "Boolean".to_string(),
                 path: "present".to_string(),
+                // The gate reads the object itself, not through it.
+                access: " != null".to_string(),
+                conv: None,
             }];
-            wires.extend(inner_wires.iter().cloned());
+            // Everything under the gate is reached through it, and a
+            // non-nullable slot still has to hold something when the value is
+            // absent — the flag is what tells Rust to ignore it.
+            wires.extend(inner_wires.iter().map(|w| Wire {
+                access: format!(
+                    "?{}{}",
+                    w.access,
+                    crate::jni::emit::kt_leaf_default(
+                        crate::jni::wire_access::jni_field_access(&w.ty)
+                            .map(|(sig, _, _)| sig)
+                            .unwrap_or(""),
+                        w.kt_ty.ends_with('?'),
+                    )
+                    .map(|d| format!(" ?: {d}"))
+                    .unwrap_or_default()
+                ),
+                ..w.clone()
+            }));
             frag.wires = Some(wires);
         }
         Ok(frag)
@@ -353,11 +383,30 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     ty: w.ty.clone(),
                     kt_ty: w.kt_ty.clone(),
                     path: format!("{}.{}", part.name, w.path),
+                    // The field this part reads, then however the part's own
+                    // wire reaches on from there.
+                    access: format!(
+                        ".{}{}",
+                        crate::jni::render::kotlin_property_name(&syn::Ident::new(
+                            &part.name,
+                            proc_macro2::Span::call_site(),
+                        )),
+                        w.access
+                    ),
+                    conv: w.conv.clone(),
                 })),
                 None => wires.push(Wire {
                     ty: frag.conv.destination.clone(),
                     kt_ty: crate::jni::emit::wire_kotlin_type(&frag.conv),
                     path: part.name.clone(),
+                    access: format!(
+                        ".{}",
+                        crate::jni::render::kotlin_property_name(&syn::Ident::new(
+                            &part.name,
+                            proc_macro2::Span::call_site(),
+                        ))
+                    ),
+                    conv: Some(frag.conv.function.sig.ident.clone()),
                 }),
             }
         }
