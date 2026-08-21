@@ -190,7 +190,7 @@ pub(crate) type StructFactory = (Vec<(String, KtType)>, String, bool);
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flatten_struct_factory(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     s: &prebindgen_registry::flat::Struct,
     prefix: &str,
     class_name: &str,

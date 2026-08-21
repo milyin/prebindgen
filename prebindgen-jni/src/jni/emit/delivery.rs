@@ -32,7 +32,7 @@ use super::*;
 /// [`UnfoldShape::Optional`]: prebindgen_registry::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     plan: &prebindgen_registry::unfold::UnfoldPlan,
     iface: Option<&IfaceSpec>,
     call_expr: &TokenStream,
@@ -62,7 +62,15 @@ pub(crate) fn emit_unfold_delivery(
     // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
     // yielding the per-leaf typed jvalue arg expressions.
     let encode_leaves = |value: &TokenStream| -> (TokenStream, Vec<TokenStream>) {
-        encode_plan_leaves(ext, registry, plan, &obj_idents, value, &fail, emit)
+        encode_plan_leaves(
+            ext,
+            registry,
+            Delivered::of(plan),
+            &obj_idents,
+            value,
+            &fail,
+            emit,
+        )
     };
 
     // Cached-interface call statics for the builder / folder `run`.
@@ -146,7 +154,7 @@ pub(crate) fn emit_unfold_delivery(
             // declares the matching typed param).
             let out_entry = registry
                 .reading(&element.key())
-                .and_then(|tr| registry.output_entry(&tr))
+                .and_then(|tr| ext.out_frag(&tr))
                 .unwrap_or_else(|| {
                     panic!(
                         "emit_unfold_delivery: Vec element `{}` has no registered output converter",
@@ -447,13 +455,12 @@ fn project_leading_fields(
 /// [`Delivery::Return`]: prebindgen_registry::unfold::Delivery::Return
 pub(crate) fn reach_leaf_flat(
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
+    leaf: &crate::jni::compile::OutWire,
     path: &[PathStep],
     base: TokenStream,
     base_is_ref: bool,
     consuming: bool,
 ) -> TokenStream {
-    use prebindgen_registry::unfold::LeafSource;
     // An optional step BEFORE the last one needs a `match` whose `None` arm has
     // somewhere to go. This derivation has none — it yields a plain Rust value,
     // not a `JObject` that could be null — so the shape is refused here rather
@@ -466,8 +473,9 @@ pub(crate) fn reach_leaf_flat(
     // conditional one, which is the case that cannot compose (an `Option<T>`
     // local with a field read hung off it). The full path is what the shape
     // question is about.
+    let own_path = leaf.reach();
     assert!(
-        !leaf.path.iter().rev().skip(1).any(PathStep::is_optional),
+        !own_path.iter().rev().skip(1).any(PathStep::is_optional),
         "jnigen unfold: leaf `{}` reaches through an optional step but is \
          delivered as a single return value, which has no `None` arm — this \
          shape needs callback delivery",
@@ -508,10 +516,41 @@ pub(crate) fn reach_leaf_flat(
     }
     let (e, lead) = project_leading_fields(&base, base_is_ref, path);
     let e = fold_steps(qualify, &path[lead..], e, false);
-    if leaf.source == LeafSource::Field {
+    if leaf.is_field_read() {
         quote!((#e).clone())
     } else {
         e
+    }
+}
+
+/// One delivery site, as the encoder sees it: what it hands out, and the value
+/// forms it evaluates once on the way.
+///
+/// Not an `UnfoldPlan`. A plan carries the delivery's shape as well — whether
+/// it folds, whether it is optional, what the builder's generic is — and none
+/// of that reaches this encoder, which writes only the statements that fill the
+/// slots. Naming exactly what it reads is what lets the caller assemble one
+/// from a row.
+pub(crate) struct Delivered<'a> {
+    /// The values handed out, in the order the builder receives them.
+    pub(crate) wires: Vec<crate::jni::compile::OutWire>,
+    /// The value forms to evaluate once and bind to a local, outermost first.
+    ///
+    /// Per **site** rather than per value: two values reached through one
+    /// accessor share its call, and that is the whole point of a hoist.
+    pub(crate) hoists: &'a [prebindgen_registry::unfold::Hoist],
+    /// Whether the delivered value is reached through a borrow.
+    pub(crate) by_ref: bool,
+}
+
+impl<'a> Delivered<'a> {
+    /// The site one expansion plan describes.
+    pub(crate) fn of(plan: &'a prebindgen_registry::unfold::UnfoldPlan) -> Self {
+        Self {
+            wires: crate::jni::compile::OutWire::from_leaves(&plan.leaves),
+            hoists: &plan.hoists,
+            by_ref: plan.by_ref,
+        }
     }
 }
 
@@ -859,18 +898,22 @@ fn reach_leaf(
 /// `signal_error` with default ze values).
 pub(crate) fn encode_plan_leaves(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
-    plan: &prebindgen_registry::unfold::UnfoldPlan,
+    registry: &impl Conversions,
+    site: Delivered<'_>,
     obj_idents: &[syn::Ident],
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
     emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, Vec<TokenStream>) {
+    let Delivered {
+        wires,
+        hoists,
+        by_ref,
+    } = site;
     // Per-fn origin qualification: each accessor call is prefixed with the
     // module of the crate that defines it (multi-source bindings).
     let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
-    let by_ref = plan.by_ref;
-    let n = plan.leaves.len();
+    let n = wires.len();
 
     // Typed `jvalue` argument expression per leaf, in leaf order: a non-null
     // primitive-wire leaf passes its raw primitive (`__objN` IS the jvalue);
@@ -878,16 +921,16 @@ pub(crate) fn encode_plan_leaves(
     // slot. Matches the descriptor [`crate::jni::iface`]
     // derives for the same leaf (primitive chunk vs object chunk).
     let mut arg_exprs: Vec<TokenStream> = Vec::with_capacity(n);
-    for (idx, leaf) in plan.leaves.iter().enumerate() {
+    for (idx, leaf) in wires.iter().enumerate() {
         let obj_ident = &obj_idents[idx];
-        if leaf_is_prim(registry, leaf) {
+        if leaf_is_prim(ext, leaf) {
             arg_exprs.push(quote!(#obj_ident));
         } else {
             arg_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
         }
     }
 
-    let hoisted = bind_hoists(&qualify, &plan.hoists, value, by_ref);
+    let hoisted = bind_hoists(&qualify, hoists, value, by_ref);
     let mut stmts = hoisted.stmts.clone();
 
     // Reach a leaf off the innermost value form it sits under, with that
@@ -898,16 +941,16 @@ pub(crate) fn encode_plan_leaves(
     // A leaf under a CONDITIONAL value form reaches off the name that form's
     // `Some` arm binds — a borrow of the struct, so nothing moves out of it —
     // and its statements are collected into that arm rather than emitted here.
-    let rebase =
-        |leaf: &prebindgen_registry::unfold::UnfoldLeaf| -> (TokenStream, bool, Vec<PathStep>, bool) {
-            if let Some((i, _, bind, rest)) = hoisted.conditional(&leaf.path) {
-                return (quote!(#bind), false, rest, hoisted.consumed(i));
-            }
-            match hoisted.rebase(&leaf.path) {
-                Some((local, rest, consuming)) => (quote!(#local), false, rest, consuming),
-                None => (value.clone(), by_ref, leaf.path.clone(), false),
-            }
-        };
+    let rebase = |leaf: &crate::jni::compile::OutWire| -> (TokenStream, bool, Vec<PathStep>, bool) {
+        let path = leaf.reach();
+        if let Some((i, _, bind, rest)) = hoisted.conditional(path) {
+            return (quote!(#bind), false, rest, hoisted.consumed(i));
+        }
+        match hoisted.rebase(path) {
+            Some((local, rest, consuming)) => (quote!(#local), false, rest, consuming),
+            None => (value.clone(), by_ref, path.to_vec(), false),
+        }
+    };
 
     // A decomposed **sum** is the one shape whose leaves are not independent:
     // only one group is live per value, so its whole segment — the selector
@@ -916,10 +959,10 @@ pub(crate) fn encode_plan_leaves(
     // the returned value is the degenerate case of one segment covering
     // everything, while a value form contributes one per sum-typed field.
     let sum_segments: Vec<std::ops::Range<usize>> = (0..n)
-        .filter(|&i| plan.leaves[i].source == prebindgen_registry::unfold::LeafSource::SumTag)
+        .filter(|&i| wires[i].is_tag())
         .map(|start| {
             let end = (start + 1..n)
-                .take_while(|&i| plan.leaves[i].group.is_some())
+                .take_while(|&i| wires[i].group.is_some())
                 .last()
                 .map_or(start + 1, |i| i + 1);
             start..end
@@ -933,20 +976,19 @@ pub(crate) fn encode_plan_leaves(
     // conditional form may carry a sum field and that segment has to land in
     // the arm too: emitted ahead of it, its `match` would reach a binding the
     // arm has not introduced yet.
-    let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = plan
-        .hoists
+    let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = hoists
         .iter()
         .enumerate()
         .filter_map(|(i, _)| {
-            plan.leaves
+            wires
                 .iter()
-                .any(|l| hoisted.conditional(&l.path).is_some_and(|(j, ..)| j == i))
+                .any(|w| hoisted.conditional(w.reach()).is_some_and(|(j, ..)| j == i))
                 .then_some((i, TokenStream::new()))
         })
         .collect();
 
     for seg in &sum_segments {
-        let leaf = &plan.leaves[seg.start];
+        let leaf = &wires[seg.start];
         let (base, base_is_ref, path, _) = rebase(leaf);
         // The value to `match` on. The selector's own path reaches the sum
         // (empty when the sum IS the value), and a step on it MAY be optional:
@@ -1019,7 +1061,7 @@ pub(crate) fn encode_plan_leaves(
         let (group_stmts, group_args) = encode_sum_group(
             ext,
             registry,
-            &plan.leaves[seg.clone()],
+            &wires[seg.clone()],
             &obj_idents[seg.clone()],
             matched,
             fail,
@@ -1029,9 +1071,9 @@ pub(crate) fn encode_plan_leaves(
             None => group_stmts,
             Some((k, opt_e, bind)) => {
                 let ids: Vec<&syn::Ident> = obj_idents[seg.clone()].iter().collect();
-                let slots: Vec<Slot> = plan.leaves[seg.clone()]
+                let slots: Vec<Slot> = wires[seg.clone()]
                     .iter()
-                    .map(|l| leaf_slot(registry, l))
+                    .map(|l| leaf_slot(ext, l))
                     .collect();
                 let tys = slots.iter().map(|s| &s.ty);
                 let defaults = slots.iter().map(|s| &s.default);
@@ -1063,7 +1105,7 @@ pub(crate) fn encode_plan_leaves(
         };
         // The whole segment — its slot declarations and its `match` — is
         // routed like any other leaf under the same form.
-        match hoisted.conditional(&leaf.path) {
+        match hoisted.conditional(leaf.reach()) {
             Some((i, ..)) => cond_stmts
                 .get_mut(&i)
                 .expect("a conditional leaf's hoist has a bucket")
@@ -1077,23 +1119,23 @@ pub(crate) fn encode_plan_leaves(
 
     let in_sum = |i: usize| sum_segments.iter().any(|s| s.contains(&i));
     let mut order: Vec<usize> = (0..n)
-        .filter(|&i| !plan.leaves[i].identity && !in_sum(i))
+        .filter(|&i| !wires[i].identity && !in_sum(i))
         .collect();
-    order.extend((0..n).filter(|&i| plan.leaves[i].identity && !in_sum(i)));
+    order.extend((0..n).filter(|&i| wires[i].identity && !in_sum(i)));
 
     for idx in order {
-        let leaf = &plan.leaves[idx];
+        let leaf = &wires[idx];
         let obj_ident = &obj_idents[idx];
         // Route this leaf's statements: into its conditional arm, or straight
         // out. Shadows `stmts` for the rest of the body, so every `extend`
         // below lands in the right place without knowing which case it is in.
-        let stmts: &mut TokenStream = match hoisted.conditional(&leaf.path) {
+        let stmts: &mut TokenStream = match hoisted.conditional(leaf.reach()) {
             Some((i, ..)) => cond_stmts.get_mut(&i).expect("collected above"),
             None => &mut stmts,
         };
         let (value, by_ref, path, consuming) = rebase(leaf);
         let value = &value;
-        let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
+        let out_entry = ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
             panic!(
                 "jnigen unfold: leaf `{}` has no registered output converter",
                 leaf.out_ty.key()
@@ -1352,25 +1394,25 @@ pub(crate) fn encode_plan_leaves(
         // String, …) carries any nullability, so there is no path `Option` to
         // unwrap. `reach(body)` dispatches on the source and feeds the reached
         // Rust expression to `body`.
-        use prebindgen_registry::unfold::LeafSource;
+        //
+        // Which of the two it is, asked of the wire: a field read ends its
+        // reach in a field step, an accessor's ends at the call. That is what
+        // `LeafSource` said, and saying it off the reach keeps one answer.
         let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
-            match &leaf.source {
-                LeafSource::Accessor => {
-                    reach_leaf(&qualify, &path, value.clone(), by_ref, false, 0, body)
-                }
+            match leaf.is_field_read() {
+                false => reach_leaf(&qualify, &path, value.clone(), by_ref, false, 0, body),
                 // Under a CONSUMING value form the leaf owns its field, so it
                 // is **moved** out; the whole point of consuming is that this
                 // clone disappears. Each field is read by exactly one leaf, so
                 // the partial moves are disjoint — but nothing may then borrow
                 // the local as a whole, which is why the reach below projects
                 // the field directly rather than through `&(&local)`.
-                LeafSource::Field if consuming && path.iter().all(PathStep::is_plain_field) => {
+                true if path.iter().all(PathStep::is_plain_field) => {
                     let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
-                    body(quote!(#value #(.#segs)*))
-                }
-                LeafSource::Field if path.iter().all(PathStep::is_plain_field) => {
-                    let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
-                    body(quote!(#value #(.#segs)*.clone()))
+                    match consuming {
+                        true => body(quote!(#value #(.#segs)*)),
+                        false => body(quote!(#value #(.#segs)*.clone())),
+                    }
                 }
                 // A `.fields()` leaf reaches its field through the value-form
                 // accessor, so the path can be mixed: compose it like an
@@ -1378,7 +1420,7 @@ pub(crate) fn encode_plan_leaves(
                 // converter takes the field type as written (`Option` and all)
                 // — and clone the reached borrow, which is what a field leaf
                 // delivers.
-                LeafSource::Field => reach_leaf(
+                true => reach_leaf(
                     &qualify,
                     &path,
                     value.clone(),
@@ -1386,13 +1428,6 @@ pub(crate) fn encode_plan_leaves(
                     false,
                     0,
                     &|reached| body(quote!((#reached).clone())),
-                ),
-                // Group leaves never reach this walk: a plan carrying them is
-                // routed to `encode_sum_leaves` at the top of this function,
-                // because a variant payload has no path — it is bound by a
-                // `match` arm.
-                LeafSource::SumTag | LeafSource::VariantField { .. } => unreachable!(
-                    "sum leaves are encoded by `encode_sum_leaves`, not reached by path"
                 ),
             }
         };
@@ -1404,7 +1439,7 @@ pub(crate) fn encode_plan_leaves(
         // value with the leaf's output converter and casts to JObject.
         let wire = out_entry.destination.clone();
         let enc_ident = format_ident!("__enc{}", idx);
-        if leaf_is_prim(registry, leaf) {
+        if leaf_is_prim(ext, leaf) {
             let letter = jni_field_access(&wire)
                 .expect("leaf_is_prim guarantees a primitive wire")
                 .1;
@@ -1442,17 +1477,13 @@ pub(crate) fn encode_plan_leaves(
         let idxs: Vec<usize> = (0..n)
             .filter(|&k| {
                 hoisted
-                    .conditional(&plan.leaves[k].path)
+                    .conditional(wires[k].reach())
                     .is_some_and(|(j, ..)| j == i)
             })
             .collect();
         let ids: Vec<&syn::Ident> = idxs.iter().map(|&k| &obj_idents[k]).collect();
-        let tys = idxs
-            .iter()
-            .map(|&k| leaf_slot(registry, &plan.leaves[k]).ty);
-        let defaults = idxs
-            .iter()
-            .map(|&k| leaf_slot(registry, &plan.leaves[k]).default);
+        let tys = idxs.iter().map(|&k| leaf_slot(ext, &wires[k]).ty);
+        let defaults = idxs.iter().map(|&k| leaf_slot(ext, &wires[k]).default);
         // Matched BY VALUE: the local is this arm's alone (every leaf under the
         // hoist is in it), so a consuming value form's fields move out here
         // exactly as they do at an unconditional one.
@@ -1471,10 +1502,7 @@ pub(crate) fn encode_plan_leaves(
 /// primitive JNI wire. Must agree with the descriptor chunk
 /// [`crate::jni::iface`] derives for the same leaf — a
 /// nullable primitive boxes (object chunk), object wires pass as objects.
-pub(crate) fn leaf_is_prim(
-    registry: &impl Conversions<KotlinMeta>,
-    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
-) -> bool {
+pub(crate) fn leaf_is_prim(ext: &Declarations, leaf: &crate::jni::compile::OutWire) -> bool {
     // The synthesized sum selector is a `jint` by definition — it is assigned,
     // never converted, so it has no output entry to read a wire from and must
     // not be made to depend on one resolving.
@@ -1483,13 +1511,13 @@ pub(crate) fn leaf_is_prim(
     // the absent case needs a representation the tag's own variants do not
     // provide. A raw `jint` has none — zero is a real variant — so the selector
     // boxes like any other nullable leaf and JVM null means "no value here".
-    if leaf.source == prebindgen_registry::unfold::LeafSource::SumTag {
+    if leaf.is_tag() {
         return !leaf.nullable;
     }
     if leaf.nullable {
         return false;
     }
-    leaf_ty_is_prim(registry, &leaf.out_ty)
+    leaf_ty_is_prim(ext, &leaf.out_ty)
 }
 
 /// The wire half of [`leaf_is_prim`]: does a leaf of this type occupy a **raw
@@ -1497,10 +1525,10 @@ pub(crate) fn leaf_is_prim(
 /// about a leaf whose own `nullable` flag it is in the middle of computing (an
 /// inert sum group slot).
 pub(crate) fn leaf_ty_is_prim(
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
     out_ty: &prebindgen_registry::flat::TypeRef,
 ) -> bool {
-    let Some(entry) = registry.output_entry(out_ty) else {
+    let Some(entry) = ext.out_frag(out_ty) else {
         return false;
     };
     // No projection (plain primitive/enum wire) — or an opaque HANDLE, whose
@@ -1582,9 +1610,17 @@ mod tests {
                 syn::parse_quote!(Owned),
                 path.clone(),
                 true,
-                LeafSource::Accessor,
+                LeafSource::Reach,
             );
-            let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+            let got = reach_leaf_flat(
+                &qualify,
+                &crate::jni::compile::OutWire::from_leaf(&l),
+                &path,
+                quote!(__src),
+                false,
+                false,
+            )
+            .to_string();
             assert!(
                 !got.contains('&') && !got.contains("clone"),
                 "a movable place is moved, not borrowed or cloned — got `{got}`"
@@ -1601,9 +1637,17 @@ mod tests {
             syn::parse_quote!(&Owned),
             path.clone(),
             true,
-            LeafSource::Accessor,
+            LeafSource::Reach,
         );
-        let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+        let got = reach_leaf_flat(
+            &qualify,
+            &crate::jni::compile::OutWire::from_leaf(&l),
+            &path,
+            quote!(__src),
+            false,
+            false,
+        )
+        .to_string();
         assert!(
             got.contains('&'),
             "a borrowed out_ty keeps its borrow — got `{got}`"
@@ -1625,9 +1669,17 @@ mod tests {
             syn::parse_quote!(Owned),
             path.clone(),
             false,
-            LeafSource::Field,
+            LeafSource::Reach,
         );
-        let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+        let got = reach_leaf_flat(
+            &qualify,
+            &crate::jni::compile::OutWire::from_leaf(&l),
+            &path,
+            quote!(__src),
+            false,
+            false,
+        )
+        .to_string();
         assert!(
             got.contains("clone"),
             "a non-consuming field leaf clones rather than moves — got `{got}`"
@@ -1647,10 +1699,17 @@ mod tests {
             PathStep::call(syn::parse_quote!(get_it), true, false),
             PathStep::field(syn::parse_quote!(a), false),
         ];
-        let l = leaf(syn::parse_quote!(Owned), full, false, LeafSource::Accessor);
+        let l = leaf(syn::parse_quote!(Owned), full, false, LeafSource::Reach);
         // The suffix a rebase would hand over — the optional call is gone from
         // it, and used to take the guard with it.
         let rest = vec![PathStep::field(syn::parse_quote!(a), false)];
-        let _ = reach_leaf_flat(&qualify, &l, &rest, quote!(__vf0), false, false);
+        let _ = reach_leaf_flat(
+            &qualify,
+            &crate::jni::compile::OutWire::from_leaf(&l),
+            &rest,
+            quote!(__vf0),
+            false,
+            false,
+        );
     }
 }

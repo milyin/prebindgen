@@ -11,11 +11,7 @@ use super::*;
 /// `validate_symbols`) now runs inside `resolve`, so an invalid binding fails
 /// here and no `JniGen` is produced (nothing can be written). On success,
 /// a real `write_rust` confirms the valid binding also emits.
-fn resolve_result(
-    tag: &str,
-    registry: RegistryBuilder<KotlinMeta>,
-    jni: JniGenBuilder,
-) -> Result<(), String> {
+fn resolve_result(tag: &str, registry: RegistryBuilder, jni: JniGenBuilder) -> Result<(), String> {
     match jni.build_with(registry) {
         Ok(gen) => {
             let dir = unique_test_dir(tag);
@@ -29,7 +25,7 @@ fn resolve_result(
     }
 }
 
-fn one_fn(src: &str) -> RegistryBuilder<KotlinMeta> {
+fn one_fn(src: &str) -> RegistryBuilder {
     let f: syn::ItemFn = syn::parse_str(src).unwrap();
     crate::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), myflat_loc())]))
         .expect("index")

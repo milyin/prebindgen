@@ -1403,7 +1403,7 @@ fn gc_managed_handle_lifecycle() {
 /// #52 shared fixture: a `ZSummary` ptr class, its `(count, total)` builder, a
 /// splittable 2-variant type-level `expand_param!`, and functions taking one or
 /// two `ZSummary` params. `extra` fns are appended before indexing.
-fn split_fixture(extra: &[&str]) -> RegistryBuilder<KotlinMeta> {
+fn split_fixture(extra: &[&str]) -> RegistryBuilder {
     let loc = myflat_loc();
     let base: &[&str] = &[
         "pub fn z_summary_new(count: i64, total: f64) -> ZSummary { unimplemented!() }",
@@ -2102,4 +2102,574 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
         ac.contains("funzThingGet(onError:JniErrorHandler<ZThing?>):ZThing?"),
         "{all}"
     );
+}
+
+/// A `data_class` states a row saying what it is made of, and a field that is
+/// itself one contributes its own wires rather than a single value.
+///
+/// The composition every binding compiles (see `JniGen::compile_crossing`),
+/// asserted here on the shape that makes the recursion visible: `Holder` is a
+/// scalar plus a nested `Summary`, so it crosses as three JNI values and not
+/// as two.
+#[test]
+fn a_data_class_crosses_as_its_fields_and_a_nested_one_as_its_own() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Summary {
+                    pub count: i64,
+                    pub total: f64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub tag: i64,
+                    pub summary: Summary,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_tag(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Summary))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(holder_tag)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let wires = gen
+        .parts_wires_for_test("Holder")
+        .expect("Holder states a parts row");
+    let described: Vec<String> = wires
+        .iter()
+        .map(|w| {
+            let ty = &w.ty;
+            format!("{}: {}", w.path, quote::quote!(#ty))
+        })
+        .collect();
+    assert_eq!(
+        described,
+        vec![
+            "tag: jni :: sys :: jlong",
+            "summary.count: jni :: sys :: jlong",
+            "summary.total: jni :: sys :: jdouble",
+        ],
+        "a nested data class contributes its own wires, under its field's path"
+    );
+}
+
+/// Two gates deep, the inner one supplies the absent value and the outer one
+/// must not supply a second.
+///
+/// `Outer { mid: Option<Mid> }` where `Mid { inner: Option<Leaf> }`: reaching
+/// `Leaf.id` passes through both. The value slot reads
+/// `o.mid?.inner?.id ?: 0L` — one elvis, from the innermost gate — and the
+/// presence flags read as plain comparisons, which are already non-null and
+/// which Kotlin refuses to elvis at all.
+#[test]
+fn a_gate_inside_a_gate_supplies_one_absent_value() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Leaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Mid {
+                    pub inner: Option<Leaf>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Outer {
+                    pub mid: Option<Mid>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn outer_use(o: Option<Outer>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Leaf))
+                .class(crate::data_class!(Mid))
+                .class(crate::data_class!(Outer))
+                .fun(prebindgen_registry::fun!(outer_use)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    assert_eq!(
+        wire_lines(&gen, "Outer", "o"),
+        vec![
+            "oMidPresent: Boolean = o.mid != null",
+            "oMidInnerPresent: Boolean = o.mid?.inner != null",
+            "oMidInnerId: Long = o.mid?.inner?.id ?: 0L",
+        ],
+    );
+    assert_eq!(
+        wire_lines(&gen, "Mid", "m"),
+        vec![
+            "mInnerPresent: Boolean = m.inner != null",
+            "mInnerId: Long = m.inner?.id ?: 0L",
+        ],
+    );
+}
+
+/// A nullable primitive keeps the allocation-free `(present, value)` pair
+/// rather than boxing, at field depth as at parameter depth.
+///
+/// The value crosses through the **inner's** conversion — there is no boxed
+/// `Option` on that wire to decode — and neither half names a field of its own:
+/// both were decoupled from one, which is the field they answer with.
+#[test]
+fn a_nullable_primitive_field_crosses_as_a_pair() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Scal {
+                    pub n: Option<i64>,
+                    pub k: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn scal_use(s: Scal) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Scal))
+                .fun(prebindgen_registry::fun!(scal_use)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    assert_eq!(
+        wire_lines(&gen, "Scal", "s"),
+        vec![
+            "sNPresent: Boolean = s.n != null",
+            "sNValue: Long = s.n ?: 0L",
+            "sK: Long = s.k",
+        ],
+    );
+    // Neither half of the pair names a field of its own; the field they were
+    // decoupled from is what both answer with.
+    let wires = gen.parts_wires_for_test("Scal").expect("row");
+    assert_eq!(wires[0].field(), Some("n"));
+    assert_eq!(wires[1].field(), Some("n"));
+}
+
+/// A `sealed_class` field crosses as a tag plus every alternative's slots, and
+/// the row says so where the walk did.
+///
+/// The shape covertest carries: `Observation` holds a required `Reading` and an
+/// optional one, whose alternatives between them cover a scalar payload, a
+/// two-field payload, a string payload that rides a JVM `null`, and a Kotlin
+/// enum payload read through `.value`. Both fields go through the same
+/// composition, and the optional one takes the `null` arm and the presence flag
+/// on top of it.
+#[test]
+fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                    Range { low: i64, high: i64 },
+                    Tagged(String, Priority),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Observation {
+                    pub id: i64,
+                    pub reading: Reading,
+                    pub fallback: Option<Reading>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn observation_which(o: Observation) -> i32 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::sealed_class!(Reading))
+                .class(crate::data_class!(Observation))
+                .fun(prebindgen_registry::fun!(observation_which)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    // The whole signature, in the order the three coordinated sites read it.
+    // Between them the alternatives cover a scalar payload, a two-field
+    // payload, a string payload that rides a JVM `null` rather than a literal,
+    // and a Kotlin enum payload read through its discriminant.
+    assert_eq!(
+        wire_lines(&gen, "Observation", "o"),
+        vec![
+            "oId: Long = o.id",
+            "oReadingTag: Int = when (o.reading) { is io.test.jni.Reading.Missing -> 0; is io.test.jni.Reading.Exact -> 1; is io.test.jni.Reading.Range -> 2; is io.test.jni.Reading.Tagged -> 3 }",
+            "oReadingExactV0: Long = (o.reading as? io.test.jni.Reading.Exact)?.v0 ?: 0L",
+            "oReadingRangeLow: Long = (o.reading as? io.test.jni.Reading.Range)?.low ?: 0L",
+            "oReadingRangeHigh: Long = (o.reading as? io.test.jni.Reading.Range)?.high ?: 0L",
+            "oReadingTaggedV0: String? = (o.reading as? io.test.jni.Reading.Tagged)?.v0",
+            "oReadingTaggedV1: Int = (o.reading as? io.test.jni.Reading.Tagged)?.v1?.value ?: 0",
+            // The optional field adds the gate, and its `when` adds the arm the
+            // required one has no need of.
+            "oFallbackPresent: Boolean = o.fallback != null",
+            "oFallbackTag: Int = when (o.fallback) { null -> 0; is io.test.jni.Reading.Missing -> 0; is io.test.jni.Reading.Exact -> 1; is io.test.jni.Reading.Range -> 2; is io.test.jni.Reading.Tagged -> 3 }",
+            "oFallbackExactV0: Long = (o.fallback as? io.test.jni.Reading.Exact)?.v0 ?: 0L",
+            "oFallbackRangeLow: Long = (o.fallback as? io.test.jni.Reading.Range)?.low ?: 0L",
+            "oFallbackRangeHigh: Long = (o.fallback as? io.test.jni.Reading.Range)?.high ?: 0L",
+            "oFallbackTaggedV0: String? = (o.fallback as? io.test.jni.Reading.Tagged)?.v0",
+            "oFallbackTaggedV1: Int = (o.fallback as? io.test.jni.Reading.Tagged)?.v1?.value ?: 0",
+        ],
+    );
+}
+
+/// Every spelling the walk flattens states the same row.
+///
+/// `build_flat_input_plan` accepts a `data_class` parameter through five
+/// spellings — bare, `&`, `Option`, `Box`, and `Box<Option<…>>` — and all five
+/// appear in `covertest-kotlin` or `perftest-kotlin`. A borrow and a transparent
+/// wrapper find the class's own `parts` row, because a crossing is keyed by the
+/// value that crosses; an optional has no such row and composes on the one the
+/// registry derives for it, which is why `Declarations::bindings` binds its
+/// part.
+#[test]
+fn every_spelling_the_walk_flattens_states_the_same_row() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Summary {
+                    pub count: i64,
+                    pub total: f64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub tag: i64,
+                    pub summary: Summary,
+                    pub note: Option<i64>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bare(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn borrowed(h: &Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn optional(h: Option<Holder>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn boxed(h: Box<Holder>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn boxed_optional(h: Box<Option<Holder>>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Summary))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(bare))
+                .fun(prebindgen_registry::fun!(borrowed))
+                .fun(prebindgen_registry::fun!(optional))
+                .fun(prebindgen_registry::fun!(boxed))
+                .fun(prebindgen_registry::fun!(boxed_optional)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    for spelling in [
+        "Holder",
+        "&Holder",
+        "Option<Holder>",
+        "Box<Holder>",
+        "Box<Option<Holder>>",
+    ] {
+        let optional = spelling.contains("Option");
+        let mut expected = vec![
+            "hTag: Long = h.tag",
+            "hSummaryCount: Long = h.summary.count",
+            "hSummaryTotal: Double = h.summary.total",
+            "hNotePresent: Boolean = h.note != null",
+            "hNoteValue: Long = h.note ?: 0L",
+        ];
+        // The two optional spellings carry one wire more, and every read below
+        // that gate is a safe call.
+        let gated = vec![
+            "hPresent: Boolean = h != null",
+            "hTag: Long = h?.tag ?: 0L",
+            "hSummaryCount: Long = h?.summary?.count ?: 0L",
+            "hSummaryTotal: Double = h?.summary?.total ?: 0.0",
+            "hNotePresent: Boolean = h?.note != null",
+            "hNoteValue: Long = h?.note ?: 0L",
+        ];
+        if optional {
+            expected = gated;
+        }
+        assert_eq!(wire_lines(&gen, spelling, "h"), expected, "{spelling}");
+    }
+}
+
+/// Every field shape the walk reads specially, held to the row.
+///
+/// A `data_class` field is not always one property read: an `enum_class`
+/// property holds the enum object where the wire holds its discriminant, an
+/// unsigned representation's property is a `ULong` over a `Long` wire, an
+/// optional primitive is decoupled into a presence flag and a raw slot rather
+/// than boxed, an optional whose wire is a JVM object rides a `null`, and a
+/// nested handle is locked through the object rather than the pointer it
+/// carries. Each of those is a place the composition and the walk could differ
+/// silently, so the fixture carries all of them at once — and again one layer
+/// down, where a closed gate above turns every read into a safe call and
+/// substitutes what a non-nullable slot carries meanwhile.
+#[test]
+fn every_field_shape_the_walk_reads_specially_states_the_same_row() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Bits {
+                    pub pri: Priority,
+                    pub maybe_pri: Option<Priority>,
+                    pub big: u64,
+                    pub maybe_big: Option<u64>,
+                    pub name: String,
+                    pub maybe_name: Option<String>,
+                    pub flag: bool,
+                    pub maybe_flag: Option<bool>,
+                    pub bytes: [u8; 4],
+                    pub opaque: Opaque,
+                    pub maybe_opaque: Option<Opaque>,
+                    pub nested: Nested,
+                    pub maybe_nested: Option<Nested>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Opaque {
+                    pub v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Nested {
+                    pub k: i64,
+                    pub s: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bits_use(b: Bits) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bits_opt(b: Option<Bits>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::ptr_class!(Opaque))
+                .class(crate::data_class!(Nested))
+                .class(crate::data_class!(Bits))
+                .fun(prebindgen_registry::fun!(bits_use))
+                .fun(prebindgen_registry::fun!(bits_opt)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    assert_eq!(
+        wire_lines(&gen, "Bits", "b"),
+        vec![
+            "bPri: Int = b.pri.value",
+            "bMaybePriPresent: Boolean = b.maybePri != null",
+            "bMaybePriValue: Int = b.maybePri?.value ?: 0",
+            "bBig: Long = b.big.toLong()",
+            "bMaybeBigPresent: Boolean = b.maybeBig != null",
+            "bMaybeBigValue: Long = b.maybeBig?.toLong() ?: 0L",
+            "bName: String = b.name",
+            "bMaybeName: String? = b.maybeName",
+            "bFlag: Boolean = b.flag",
+            "bMaybeFlagPresent: Boolean = b.maybeFlag != null",
+            "bMaybeFlagValue: Boolean = b.maybeFlag ?: false",
+            "bBytes: ByteArray = b.bytes",
+            "bOpaque: Long = b.opaque",
+            "bMaybeOpaque: Long = b.maybeOpaque",
+            "bNestedK: Long = b.nested.k",
+            "bNestedS: String = b.nested.s",
+            "bMaybeNestedPresent: Boolean = b.maybeNested != null",
+            "bMaybeNestedK: Long = b.maybeNested?.k ?: 0L",
+            "bMaybeNestedS: String? = b.maybeNested?.s ?: \"\"",
+        ],
+    );
+    // The same fields one layer down, where a gate above turns every read into
+    // a safe call and states what a non-nullable slot carries meanwhile.
+    assert_eq!(
+        wire_lines(&gen, "Option<Bits>", "b"),
+        vec![
+            "bPresent: Boolean = b != null",
+            "bPri: Int = b?.pri?.value ?: 0",
+            "bMaybePriPresent: Boolean = b?.maybePri != null",
+            "bMaybePriValue: Int = b?.maybePri?.value ?: 0",
+            "bBig: Long = b?.big?.toLong() ?: 0L",
+            "bMaybeBigPresent: Boolean = b?.maybeBig != null",
+            "bMaybeBigValue: Long = b?.maybeBig?.toLong() ?: 0L",
+            "bName: String? = b?.name ?: \"\"",
+            "bMaybeName: String? = b?.maybeName",
+            "bFlag: Boolean = b?.flag ?: false",
+            "bMaybeFlagPresent: Boolean = b?.maybeFlag != null",
+            "bMaybeFlagValue: Boolean = b?.maybeFlag ?: false",
+            "bBytes: ByteArray? = b?.bytes ?: ByteArray(0)",
+            "bOpaque: Long = b?.opaque",
+            "bMaybeOpaque: Long = b?.maybeOpaque",
+            "bNestedK: Long = b?.nested?.k ?: 0L",
+            "bNestedS: String? = b?.nested?.s ?: \"\"",
+            "bMaybeNestedPresent: Boolean = b?.maybeNested != null",
+            "bMaybeNestedK: Long = b?.maybeNested?.k ?: 0L",
+            "bMaybeNestedS: String? = b?.maybeNested?.s ?: \"\"",
+        ],
+    );
+}
+
+/// One line per JNI parameter a crossing occupies: the name a site gives it,
+/// its Kotlin type, and the Kotlin expression that fills it.
+///
+/// What the three coordinated sites read, in the order they read it — so a
+/// fixture states the whole signature rather than one fact about it.
+fn wire_lines(gen: &crate::jni::JniGen, spelling: &str, param: &str) -> Vec<String> {
+    gen.named_wires_for_test(spelling, param)
+        .unwrap_or_else(|| panic!("{spelling} states no composition"))
+        .into_iter()
+        .map(|(name, kt_ty, access, ..)| format!("{name}: {kt_ty} = {access}"))
+        .collect()
 }

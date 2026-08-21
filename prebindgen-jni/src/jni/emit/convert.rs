@@ -1,6 +1,6 @@
 //! Scalar / `Option` / enum converter bodies and their wire probes.
 
-use prebindgen_registry::{Conversions, TypeEntry};
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -169,11 +169,14 @@ pub(crate) fn primitive_output(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> 
 
 /// Invoke an inner input converter's complete `wire -> Rust` chain.
 ///
-/// Structural wrappers cannot call only [`TypeEntry::function`]: custom
+/// Structural wrappers cannot call only [`ConverterImpl::function`]: custom
 /// conversions may carry semantic steps in `pre_stages` (for example
 /// `jlong -> u64 -> Duration`). Keep those steps inside the `Some` arm so a
 /// niche discriminator is tested before any conversion runs.
-pub(crate) fn composed_inner_input(inner: &TypeEntry<KotlinMeta>, wire: TokenStream) -> syn::Expr {
+pub(crate) fn composed_inner_input(
+    inner: &ConverterImpl<KotlinMeta>,
+    wire: TokenStream,
+) -> syn::Expr {
     let converter = inner.converter_ident();
     if inner.pre_stages.is_empty() {
         return syn::parse2(quote!(#converter(env, #wire)?))
@@ -199,7 +202,7 @@ pub(crate) fn composed_inner_input(inner: &TypeEntry<KotlinMeta>, wire: TokenStr
 /// Invoke an inner output converter's complete `Rust -> wire` chain.
 /// Mirror of [`composed_inner_input`].
 pub(crate) fn composed_inner_output(
-    inner: &TypeEntry<KotlinMeta>,
+    inner: &ConverterImpl<KotlinMeta>,
     value: TokenStream,
 ) -> syn::Expr {
     let converter = inner.converter_ident();
@@ -244,13 +247,13 @@ pub(crate) fn composed_inner_output(
 /// fails and the resolver falls through to other rank-1 attempts.
 pub(crate) fn option_input(
     t1: &prebindgen_registry::flat::TypeRef,
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
     emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry.input_entry(t1)?;
+    let inner_entry = ext.in_frag(t1)?;
     let t1_spelled = emit.spell(t1);
     let inner_wire = inner_entry.destination.clone();
-    let inner_decode = composed_inner_input(inner_entry, quote!(v));
+    let inner_decode = composed_inner_input(&inner_entry, quote!(v));
 
     // 1. Niche path.
     if let Some((slot, rest)) = inner_entry.niches.clone().carve() {
@@ -285,7 +288,7 @@ pub(crate) fn option_input(
         let unbox_sig = jni_unbox_sig(&inner_wire);
         let getter = jni_unbox_getter(&inner_wire);
         let getter_id = format_ident!("{}", getter);
-        let inner_decode = composed_inner_input(inner_entry, quote!(&__unboxed));
+        let inner_decode = composed_inner_input(&inner_entry, quote!(&__unboxed));
         let body: syn::Expr = syn::parse_quote!({
             if !v.is_null() {
                 let __unboxed: #inner_wire = env
@@ -312,11 +315,11 @@ pub(crate) fn option_input(
 /// Build `Option<T>`'s output converter — symmetric to [`option_input`].
 pub(crate) fn option_output(
     t1: &prebindgen_registry::flat::TypeRef,
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry.output_entry(t1)?;
+    let inner_entry = ext.out_frag(t1)?;
     let inner_wire = inner_entry.destination.clone();
-    let inner_encode = composed_inner_output(inner_entry, quote!(value));
+    let inner_encode = composed_inner_output(&inner_entry, quote!(value));
 
     // 1. Niche path.
     if let Some((slot, rest)) = inner_entry.niches.clone().carve() {
@@ -332,7 +335,7 @@ pub(crate) fn option_output(
 
     // 2. Boxed-primitive fallback (cached box class + `valueOf` method ID).
     if let Some(helper) = box_helper_for_wire(&inner_wire) {
-        let inner_encode = composed_inner_output(inner_entry, quote!(value));
+        let inner_encode = composed_inner_output(&inner_entry, quote!(value));
         let body: syn::Expr = syn::parse_quote!({
             match v {
                 Some(value) => {
@@ -407,7 +410,7 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 /// `use` statements. Pairs with output body below.
 pub(crate) fn enum_input_body(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     e: &prebindgen_registry::flat::Enum,
 ) -> (syn::Type, syn::Expr) {
     let ident = &e.name;
@@ -476,15 +479,12 @@ pub(crate) fn enum_output_body(
 pub(crate) fn nullable_kind_for(
     outer_wire: &syn::Type,
     inner_ty: &prebindgen_registry::flat::TypeRef,
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
 ) -> NullableKind {
-    let inner_dest = registry
-        .input_entry(inner_ty)
-        .map(|e| e.destination.clone())
-        .expect(
-            "nullable_kind_for: Option<_> input handler reached here only after option_input \
+    let inner_dest = ext.in_frag(inner_ty).map(|e| e.destination.clone()).expect(
+        "nullable_kind_for: Option<_> input handler reached here only after option_input \
              returned Some, so the inner's input entry must exist",
-        );
+    );
     if outer_wire == &inner_dest {
         NullableKind::Niche
     } else {
@@ -495,10 +495,10 @@ pub(crate) fn nullable_kind_for(
 pub(crate) fn nullable_kind_for_output(
     outer_wire: &syn::Type,
     inner_ty: &prebindgen_registry::flat::TypeRef,
-    registry: &impl Conversions<KotlinMeta>,
+    ext: &Declarations,
 ) -> NullableKind {
-    let inner_dest = registry
-        .output_entry(inner_ty)
+    let inner_dest = ext
+        .out_frag(inner_ty)
         .map(|e| e.destination.clone())
         .expect(
             "nullable_kind_for_output: Option<_> output handler reached here only after \

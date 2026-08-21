@@ -422,7 +422,7 @@ impl Declarations {
 
     fn emitted_source_type_names(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
     ) -> std::collections::HashMap<String, syn::Path> {
         let mut names = std::collections::HashMap::new();
         let mut add = |key: &TypeKey| {
@@ -467,7 +467,7 @@ impl Declarations {
     /// time via [`Prebindgen::post_process_item`] so converter bodies,
     /// type ascriptions, and casts all stay in sync without each emit
     /// site having to remember to qualify.
-    fn qualify_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
+    fn qualify_item(&self, item: &mut syn::Item, registry: &Registry) {
         let source_names = self.emitted_source_type_names(registry);
         // Names reachable from an array LENGTH (`[u8; MAX]`, `[u8; Holder::N]`).
         //
@@ -633,7 +633,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 /// producing destructors that reference types not in scope.
 pub(crate) fn build_handle_destructor_items(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     emit: &prebindgen_registry::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
@@ -648,7 +648,7 @@ pub(crate) fn build_handle_destructor_items(
         let Some(reading) = registry.reading(key) else {
             continue;
         };
-        if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none() {
+        if ext.in_frag(&reading).is_none() && ext.out_frag(&reading).is_none() {
             continue;
         }
         let ty = emit.spell(&reading);
@@ -1031,7 +1031,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let WrapperShape::Borrow { .. } = shape else {
             return None;
@@ -1044,7 +1043,7 @@ impl Declarations {
         if !produced.is_canonical() {
             return None;
         }
-        let inner = registry.input_entry(t1)?;
+        let inner = self.in_frag(t1)?;
         let outer_ty = produced.key();
         // `&T` / `&mut T` are Kotlin-side no-ops — inherit the inner
         // type's name, unless the user pinned an explicit override
@@ -1082,7 +1081,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
@@ -1099,7 +1097,7 @@ impl Declarations {
         if !produced.is_canonical() {
             return None;
         }
-        let inner = registry.input_entry(t1)?;
+        let inner = self.in_frag(t1)?;
         if !inner.metadata.is_direct_handle() {
             // Non-opaque: let the general `Option<_>` handler take it.
             return None;
@@ -1152,7 +1150,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
@@ -1163,7 +1160,7 @@ impl Declarations {
         if shape != WrapperShape::Sequence {
             return None;
         }
-        let inner = registry.input_entry(t1)?;
+        let inner = self.in_frag(t1)?;
         reject_vec_of_handle(&inner.metadata.projection, t1);
         let inner_wire = inner.destination.clone();
         if !is_jobject_shaped_wire(&inner_wire) {
@@ -1172,7 +1169,8 @@ impl Declarations {
         // The element's COMPLETE wire -> Rust chain: a `convert!` element
         // (`Label` -> `String`) reaches its value through the rust-side stages,
         // not through the wire-facing converter alone.
-        let inner_conv = crate::jni::emit::composed_inner_input(inner, quote::quote!(&__elem_wire));
+        let inner_conv =
+            crate::jni::emit::composed_inner_input(&inner, quote::quote!(&__elem_wire));
         let outer_ty = produced.key();
         // Bridgeable first — see `box_layers_to`.
         let build = build_from_canonical(produced, quote::quote!(__out))?;
@@ -1222,7 +1220,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
@@ -1231,7 +1228,7 @@ impl Declarations {
         // the READING itself (#284).
         let t1_ty = emit.spell(t1);
         if shape == WrapperShape::Optional {
-            let inner = registry.input_entry(t1)?;
+            let inner = self.in_frag(t1)?;
             if inner.metadata.is_direct_handle() {
                 let inner_wire = inner.destination.clone();
                 let outer_ty = produced.key();
@@ -1291,7 +1288,7 @@ impl Declarations {
         if shape == WrapperShape::Optional {
             let outer_ty = produced.key();
             let build = build_from_canonical(produced, quote::quote!(__v))?;
-            let (wire, inner_body, niches) = option_input(t1, registry, emit)?;
+            let (wire, inner_body, niches) = option_input(t1, self, emit)?;
             // `option_input` yields the canonical `Option<T>`; the converter
             // yields the spelling.
             let body: syn::Expr = syn::parse_quote!({
@@ -1300,8 +1297,8 @@ impl Declarations {
             });
             // Inherit the inner's name; user pins on `Option<T>` win.
             // The nullability marker (`?`) is added by the use site.
-            let inherited = registry
-                .input_entry(t1)
+            let inherited = self
+                .in_frag(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
             let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
@@ -1309,9 +1306,9 @@ impl Declarations {
             // an inner niche, the wire stays identical to the inner's
             // destination and `None` is the niche slot sentinel; the boxed
             // fallback widens the wire to `JObject`.
-            let nullable_kind = nullable_kind_for(&wire, t1, registry);
-            let projection = registry
-                .input_entry(t1)
+            let nullable_kind = nullable_kind_for(&wire, t1, self);
+            let projection = self
+                .in_frag(t1)
                 .and_then(|e| e.metadata.projection.clone())
                 .map(|h| Projection {
                     strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
@@ -1410,14 +1407,14 @@ impl JniGenBuilder {
     /// route to a `JniGenBuilder` at all.
     pub(crate) fn build_with(
         self,
-        registry: prebindgen_registry::RegistryBuilder<KotlinMeta>,
+        registry: prebindgen_registry::RegistryBuilder,
     ) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let mut decls = self.decls;
         let declared = decls.declare_into(registry)?.validate_with(&decls)?;
         // A second holding of the model: `convert_with` consumes the builder,
         // and the table outlives that call.
         let model = declared.flat().clone();
-        let recipes = decls.recipes(&model).map_err(|errors| {
+        let recipes = decls.recipes(&model, &declared).map_err(|errors| {
             prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors
                     .iter()
@@ -1426,44 +1423,90 @@ impl JniGenBuilder {
                     .join("; "),
             }
         })?;
-        // JniGen overrides no site yet: every crossing takes its type's own row.
-        let bindings = prebindgen_registry::recipe::Bindings::default();
-        // The driver's state, carried between calls. The adapter borrows the
-        // partial registry view, which is lent per call and so is a different
-        // type each time; what it built is not, and outlives every one of them.
-        let mut compiled = Some(prebindgen_registry::recipe::Compiled::<
-            crate::jni::compile::JFrag,
-        >::default());
+        // A `data_class` field that is itself one takes the `parts` row rather
+        // than its own default — see `Declarations::bindings`.
+        let bindings = decls
+            .bindings(&model, &declared, &recipes)
+            .map_err(|errors| prebindgen_registry::ScanError::AdapterInvariant {
+                message: errors
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            })?;
+        // Both tables go on `decls`, because compiling a **site** happens after
+        // this function has returned: the sites are `fn_plan`'s to enumerate,
+        // and `Compiler::resume` needs these two beside the model.
+        decls.tables = Some(std::rc::Rc::new(crate::jni::Tables { recipes, bindings }));
+        // The driver's state lives on `decls` rather than here, because the
+        // adapter reads it **while** it compiles: a conversion for one type is
+        // built out of the conversions for its inners, which are compiled
+        // first. That is the same order the converter table was filled in, so
+        // a fragment is there exactly when a table entry would have been.
         // A callback is still answered without the compiler — see
         // `compile_crossing` — so no fragment carries its conversion and the
         // fragment list alone would not reach the file. Collected here rather
         // than papered over: this list empties when the derived callback row
         // takes over.
         let mut uncompiled: Vec<syn::ItemFn> = Vec::new();
+        // Compositions that refused. See `compile_crossing`: these are adapter
+        // invariants, reported together once the walk is done.
+        let mut refusals: Vec<String> = Vec::new();
         let registry = declared
             .convert_with(|crossing, built, emit| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
-                    &recipes,
-                    &bindings,
-                    compiled.take().expect("the state is put back every call"),
+                    decls.recipe_table(),
+                    decls.site_bindings(),
+                    decls.compiled.borrow().clone(),
                 );
-                let conv = decls.compile_crossing(&mut compiler, crossing, built, emit);
-                compiled = Some(compiler.finish());
+                let conv =
+                    decls.compile_crossing(&mut compiler, crossing, built, emit, &mut refusals);
+                *decls.compiled.borrow_mut() = compiler.finish();
                 if let (Some(c), true) =
                     (conv.as_ref(), decls.is_callback_crossing(crossing, built))
                 {
                     uncompiled.push(c.function.clone());
+                    // File it as this crossing's fragment even though no row
+                    // built it, so every emitter has one lookup rather than a
+                    // fall-back for the one crossing kind the compiler skips.
+                    let (dir, key) = crossing;
+                    decls.compiled.borrow_mut().record(
+                        key.clone(),
+                        match dir {
+                            Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
+                            Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
+                        },
+                        prebindgen_registry::recipe::RecipeId::new("callback"),
+                        crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
+                    );
                 }
-                conv
+                // The conversion stays here; what the registry gets back is
+                // which other crossings this one delegates to, which is what
+                // its reachability walk needs.
+                conv.map(|c| prebindgen_registry::Answer::over(c.subs))
             })?
             .build()?;
+        if !refusals.is_empty() {
+            return Err(prebindgen_registry::ScanError::AdapterInvariant {
+                message: refusals.join("; "),
+            }
+            .into());
+        }
         // What the compilation produced, kept for emission. The converter table
         // stays the lookup index; this is what reaches the file.
-        decls.compiled_fns = compiled
-            .expect("the state is put back every call")
+        decls.compiled_fns = decls
+            .compiled
+            .borrow()
             .fragments()
             .into_iter()
+            // A composed-only fragment has no conversion to emit: the `parts`
+            // row states what a `data_class` is made of, and the function that
+            // reads those several values and rebuilds the struct is what the
+            // emitter switch brings. Its marker would otherwise reach the file.
+            // Deliberately not "has wires" — an `Option<data_class>` has both a
+            // wire list and a conversion of its own.
+            .filter(|f| !f.composed_only)
             // A JNI conversion already emits more than one function: a
             // `convert!` with a fallible or binding-local step carries it as a
             // pre-stage, and every one of them has to reach the file. This is
@@ -1480,6 +1523,90 @@ impl JniGenBuilder {
         decls
             .validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
+        // What each declared class hands out, composed last of all.
+        //
+        // Driven here rather than from `compile_crossing` because a
+        // `sealed_class` has **no** deconstructing crossing to be driven from:
+        // it is boundary-only, so nothing ever asks for its whole-value output
+        // conversion and the converter walk never reaches it. A `data_class`
+        // does have one, and goes through the same loop so that both sides of
+        // the same question are answered in one place.
+        //
+        // After `validate_resolved`, so a binding whose part simply has no
+        // output conversion gets the diagnostic that names the part rather than
+        // this one, which could only say that composing failed. Nothing reads
+        // the result yet; compiling it is what holds the composition to every
+        // binding this crate builds rather than to one fixture.
+        for key in decls.declared_decompositions() {
+            let Some(ident) = key.ident() else { continue };
+            let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
+                continue;
+            };
+            // Only a type every part of which already crosses. One that does
+            // not is a gap in the binding, and the writers report it against
+            // the part — `Reading.Exact.v0 has no OUTPUT converter` — where
+            // this could only say that composing failed.
+            let part_types: Vec<&prebindgen_registry::flat::TypeRef> =
+                match model.declared_type(&ident) {
+                    Some(prebindgen_registry::flat::Type::Variant(sum)) => sum
+                        .alternatives
+                        .iter()
+                        .flat_map(|alt| &alt.fields)
+                        .map(|f| &f.ty)
+                        .collect(),
+                    Some(prebindgen_registry::flat::Type::Struct(s)) => {
+                        s.fields.iter().map(|f| &f.ty).collect()
+                    }
+                    // A value form's parts belong to the struct its accessor
+                    // returns, not to this type — so there is nothing to
+                    // pre-check here, and the compiler's own deferral answers.
+                    _ if decls.value_form_names(&registry, &ty).is_some() => Vec::new(),
+                    _ => continue,
+                };
+            if part_types.iter().any(|ty| decls.out_frag(ty).is_none()) {
+                continue;
+            }
+            let crossing = prebindgen_registry::recipe::Crossing::new(
+                ty,
+                prebindgen_registry::recipe::Assembly::Deconstruct,
+            );
+            // A type with nothing to hand out states no `parts` row — an empty
+            // struct, or an enum with no alternatives. Asking for one by name
+            // is refused now rather than answered with the default, so the
+            // condition that declared it is the condition asked here.
+            if decls
+                .recipe_table()
+                .get(&crossing.key(), &crate::jni::rows::parts())
+                .is_none()
+            {
+                continue;
+            }
+            let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+                &model,
+                decls.recipe_table(),
+                decls.site_bindings(),
+                decls.compiled.borrow().clone(),
+            );
+            let mut adapter = crate::jni::compile::JCompile {
+                decls: &decls,
+                registry: &registry,
+                declared_return: None,
+                site: None,
+            };
+            if let Err(e) = compiler.row_of(&mut adapter, &crossing, &crate::jni::rows::parts()) {
+                refusals.push(format!(
+                    "`{key}` hands out its parts, but composing them failed: {e:?}"
+                ));
+            }
+            let compiled = compiler.finish();
+            *decls.compiled.borrow_mut() = compiled;
+        }
+        if !refusals.is_empty() {
+            return Err(prebindgen_registry::ScanError::AdapterInvariant {
+                message: refusals.join("; "),
+            }
+            .into());
+        }
         Ok(JniGen { decls, registry })
     }
 }
@@ -1492,11 +1619,7 @@ impl Declarations {
     /// so everything this could compose from is already in `built`.
     /// Whether this crossing is the callback shape `compile_crossing` answers
     /// without the compiler.
-    fn is_callback_crossing<R: Conversions<KotlinMeta>>(
-        &self,
-        crossing: &Crossing,
-        built: &R,
-    ) -> bool {
+    fn is_callback_crossing<R: Conversions>(&self, crossing: &Crossing, built: &R) -> bool {
         let (dir, key) = crossing;
         matches!(dir, Direction::Input)
             && built.reading(key).is_some_and(|r| {
@@ -1507,7 +1630,7 @@ impl Declarations {
             })
     }
 
-    fn compile_crossing<'v, R: Conversions<KotlinMeta>>(
+    fn compile_crossing<'v, R: Conversions>(
         &'v self,
         compiler: &mut prebindgen_registry::recipe::Compiler<
             '_,
@@ -1516,6 +1639,7 @@ impl Declarations {
         crossing: &Crossing,
         built: &'v R,
         emit: &prebindgen_registry::Emit,
+        refusals: &mut Vec<String>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
@@ -1543,16 +1667,57 @@ impl Declarations {
         let mut adapter = crate::jni::compile::JCompile {
             decls: self,
             registry: built,
+            declared_return: None,
+            site: None,
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(reading, assembly);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
+        // A `data_class` also states a row that says what it is made of, and
+        // compiling it here is what holds the composition to every binding this
+        // crate builds rather than to one fixture. Nothing reads the result
+        // yet: `whole` is still the row every site takes, so a failure here is
+        // a failure to compose parts that already cross individually.
+        // The **stripped** key, so `Box<Payload>` and `&Payload` compile the
+        // row too: all three spellings find one row and each gets its own
+        // fragment, which is what a site taking a wrapped spelling reads.
+        // A `data_class` with no fields states no `parts` row — there is
+        // nothing for it to be made of — so the row is asked for by name only
+        // where it was declared. `row_of` refuses an absent name rather than
+        // answering with the default, which is what makes that condition the
+        // one that has to match.
+        if assembly == prebindgen_registry::recipe::Assembly::Construct
+            && matches!(
+                self.types
+                    .get(&crossing.value().stripped_key())
+                    .map(|c| &c.kind),
+                Some(DeclaredKind::Data)
+            )
+            && compiler
+                .recipes()
+                .get(&crossing.key(), &crate::jni::rows::parts())
+                .is_some()
+        {
+            // A refusal is a bug in the composition, not a gap in the binding:
+            // every part of a `data_class` is a crossing that already resolved
+            // on its own, so nothing here can legitimately be missing.
+            // Returning `None` would report an unresolved crossing and blame
+            // the declaration, so the reason is collected and surfaced as an
+            // adapter invariant — beside whatever else the walk found, and
+            // through the same `Result` every other refusal takes.
+            if let Err(e) = compiler.row_of(&mut adapter, &crossing, &crate::jni::rows::parts()) {
+                refusals.push(format!(
+                    "`{}` crosses as its fields, but composing them failed: {e:?}",
+                    crossing.spelled().key()
+                ));
+            }
+        }
         Some((*fragment).clone().conv)
     }
 
     pub fn declare_into(
         &self,
-        mut registry: RegistryBuilder<KotlinMeta>,
-    ) -> Result<RegistryBuilder<KotlinMeta>, prebindgen_registry::ScanError> {
+        mut registry: RegistryBuilder,
+    ) -> Result<RegistryBuilder, prebindgen_registry::ScanError> {
         // Binding-local fns first: they become model, and everything below may
         // name one.
         for (item_fn, origin) in self.collect_local_functions() {
@@ -1630,7 +1795,7 @@ impl Declarations {
 impl Declarations {
     pub(crate) fn build_value_struct_decons(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
     ) -> Vec<prebindgen_registry::unfold::ValueDecon> {
         let mut out = Vec::new();
         for item_struct in registry.flat().types().filter_map(|t| match t {
@@ -1650,8 +1815,7 @@ impl Declarations {
             if !is_data_class {
                 continue;
             }
-            if let Some(leaves) =
-                crate::jni::synth_value_struct_leaves(self, registry, item_struct, &[], "", 0)
+            if let Some(leaves) = crate::jni::synth_value_struct_leaves(self, registry, item_struct)
             {
                 if !leaves.is_empty() {
                     out.push(prebindgen_registry::unfold::ValueDecon {
@@ -1667,15 +1831,15 @@ impl Declarations {
 
     pub(crate) fn build_sum_decons(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
     ) -> Vec<prebindgen_registry::unfold::SumDecon> {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         let mut out = Vec::new();
         for key in keys {
-            let Some(sum_cfg) = self.types[key].sum() else {
+            if self.types[key].sum().is_none() {
                 continue;
-            };
+            }
             // The `sealed_class!` declaration's own IDENTITY. This runs during
             // the declare phase, where a `reading()` would legitimately answer
             // `None` for a type nothing has interned yet — the declaration is
@@ -1696,16 +1860,13 @@ impl Declarations {
                 // `Variant::type_ref` exists for exactly this, and it works in
                 // the declare phase where a `reading()` lookup could not.
                 source: sum.type_ref().clone(),
-                leaves: crate::jni::synth_sum_leaves(self, sum_cfg, sum),
+                leaves: crate::jni::synth_sum_leaves(self, registry, &ident, sum),
             });
         }
         out
     }
 
-    pub(crate) fn build_leaf_vec_fold_elements(
-        &self,
-        registry: &impl Conversions<KotlinMeta>,
-    ) -> Vec<TypeKey> {
+    pub(crate) fn build_leaf_vec_fold_elements(&self, registry: &impl Conversions) -> Vec<TypeKey> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut consider = |bare: &prebindgen_registry::flat::TypeRef| {
@@ -1764,7 +1925,7 @@ fn peel_one_borrow(t: &prebindgen_registry::flat::TypeRef) -> &prebindgen_regist
 /// classification the model makes once, at parse time, and expresses as two
 /// different elements.
 fn flat_unit_enum<'r>(
-    registry: &'r impl Conversions<KotlinMeta>,
+    registry: &'r impl Conversions,
     name: &syn::Ident,
     declarator: &str,
 ) -> Option<&'r prebindgen_registry::flat::Enum> {
@@ -1792,7 +1953,7 @@ impl Declarations {
     pub(crate) fn dispatch_fn_input(
         &self,
         args: &[prebindgen_registry::flat::TypeRef],
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let outer_ty = build_fn_type(args, emit);
@@ -1814,14 +1975,6 @@ impl Declarations {
 }
 
 impl Prebindgen for Declarations {
-    /// Cross-language extras every JNI converter carries — currently
-    /// the Kotlin value-context type name. Filled by the rank-N
-    /// handlers at the same point they build the wire/body; the
-    /// resolver propagates it into [`prebindgen_registry::TypeEntry::metadata`];
-    /// the Kotlin emitter reads it back to drive every wrapper /
-    /// typed-handle / `JNIWrappers` signature.
-    type Metadata = KotlinMeta;
-
     // ── Structural type resolution ──────────────────────────────────────
     // Try the terminal categories, then the `Result` peel, then the built-in
     // wrapper shapes — peel
@@ -1832,7 +1985,7 @@ impl Prebindgen for Declarations {
     /// the earliest possible moment. Without this, a receiver-less `.method()`
     /// member would silently emit a method that ignores `this`, and a
     /// wrong-return `.constructor()` a factory of the wrong type.
-    fn validate(&self, binding: &Building<'_, Self::Metadata>) -> Result<(), String> {
+    fn validate(&self, binding: &Building<'_>) -> Result<(), String> {
         // Report what this binding left unclaimed. Here because it is the
         // earliest generator-owned hook that sees the model, and it runs
         // exactly where the binding used to print these itself. Moves into
@@ -2020,7 +2173,7 @@ impl Prebindgen for Declarations {
     /// The post-resolve validation boundary (issue #90): every bound
     /// function's lowered plan must build, and the split declarations must
     /// be unambiguous, before ANY artifact writer touches disk.
-    fn validate_resolved(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
+    fn validate_resolved(&self, registry: &Registry) -> Result<(), String> {
         validate_bindings(self, registry)
     }
 
@@ -2038,7 +2191,7 @@ impl Prebindgen for Declarations {
     /// crate's source tree.
     fn prerequisites(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> Vec<syn::Item> {
         // `__JniErr` is the **framework** error type alias — always the
@@ -2104,7 +2257,7 @@ impl Prebindgen for Declarations {
     fn post_process_item(
         &self,
         item: &mut syn::Item,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) {
         self.qualify_item(item, registry);
@@ -2115,7 +2268,7 @@ impl Prebindgen for Declarations {
     fn on_function(
         &self,
         f: &prebindgen_registry::flat::Function,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         emit_jni_function_wrapper(self, f, registry, emit)
@@ -2124,7 +2277,7 @@ impl Prebindgen for Declarations {
     fn on_struct(
         &self,
         _s: &prebindgen_registry::flat::Struct,
-        _registry: &Registry<KotlinMeta>,
+        _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         // Struct converter bodies are emitted by the resolver via
@@ -2136,7 +2289,7 @@ impl Prebindgen for Declarations {
     fn on_variant(
         &self,
         _v: &prebindgen_registry::flat::Variant,
-        _registry: &Registry<KotlinMeta>,
+        _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         TokenStream::new()
@@ -2145,7 +2298,7 @@ impl Prebindgen for Declarations {
     fn on_enum(
         &self,
         _e: &prebindgen_registry::flat::Enum,
-        _registry: &Registry<KotlinMeta>,
+        _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         TokenStream::new()
@@ -2161,7 +2314,7 @@ impl Prebindgen for Declarations {
     fn on_const(
         &self,
         c: &prebindgen_registry::flat::Constant,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         reject_handle_const(self, c);
@@ -2191,7 +2344,7 @@ impl Declarations {
     pub(crate) fn input_terminal(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()`: the arms below that ask what
@@ -2423,7 +2576,7 @@ impl Declarations {
     pub(crate) fn output_transparent_bridge(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
@@ -2448,7 +2601,7 @@ impl Declarations {
         // It has to be a type this binding already crosses; if it is not, the
         // ordinary "unresolved" diagnostic names it, which is the better error.
         let inner = registry.reading(&stripped)?;
-        let entry = registry.output_entry(&inner)?;
+        let entry = self.out_frag(&inner)?;
         let wire = entry.destination.clone();
         // Take the wrappers off what the caller handed us. `None` is `Cow`'s
         // policy refusal — the crossing then stays unresolved and names the
@@ -2457,7 +2610,7 @@ impl Declarations {
         let read = read_through_erased_wrappers(reading, quote!(v))?;
         // The inner's COMPLETE chain, stages included: a `convert!` type reaches
         // its wire through them.
-        let inner_call = crate::jni::emit::composed_inner_output(entry, quote!(__inner));
+        let inner_call = crate::jni::emit::composed_inner_output(&entry, quote!(__inner));
         let body: syn::Expr = syn::parse_quote!({
             let __inner = #read;
             #inner_call
@@ -2497,7 +2650,7 @@ impl Declarations {
     pub(crate) fn input_transparent_bridge(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
@@ -2523,7 +2676,7 @@ impl Declarations {
         // It has to be a type this binding already crosses; if it is not, the
         // ordinary "unresolved" diagnostic names it, which is the better error.
         let inner = registry.reading(&stripped)?;
-        let entry = registry.input_entry(&inner)?;
+        let entry = self.in_frag(&inner)?;
         let wire = entry.destination.clone();
         // Wrap what the inner converter produced. `None` here is `Cow`'s policy
         // refusal — the crossing then stays unresolved and names the type,
@@ -2535,7 +2688,7 @@ impl Declarations {
         // stages (`jlong -> u64 -> Duration`), so a `Box` over one arrived
         // un-staged. Every other composing arm goes through this helper for
         // exactly that reason (#309).
-        let inner_call = crate::jni::emit::composed_inner_input(entry, quote!(v));
+        let inner_call = crate::jni::emit::composed_inner_input(&entry, quote!(v));
         let body: syn::Expr = syn::parse_quote!({
             let __inner = #inner_call;
             #built
@@ -2566,16 +2719,15 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
         // borrow/option-ref/vec shapes are mutually exclusive; the two
         // `Optional` sub-cases share a method.
-        self.input_borrow(shape, produced, t1, registry)
-            .or_else(|| self.input_option_ref(shape, produced, t1, registry, emit))
-            .or_else(|| self.input_vec(shape, produced, t1, registry, emit))
-            .or_else(|| self.input_option(shape, produced, t1, registry, emit))
+        self.input_borrow(shape, produced, t1)
+            .or_else(|| self.input_option_ref(shape, produced, t1, emit))
+            .or_else(|| self.input_vec(shape, produced, t1, emit))
+            .or_else(|| self.input_option(shape, produced, t1, emit))
     }
 
     // ── Output converters ────────────────────────────────────────────
@@ -2586,7 +2738,7 @@ impl Declarations {
     pub(crate) fn output_terminal(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()` — see `input_terminal`.
@@ -2768,7 +2920,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
@@ -2820,13 +2971,13 @@ impl Declarations {
             // Bridgeable first: an unsupported representation must not resolve
             // and then emit code the consumer cannot compile.
             let read = read_as_canonical(produced)?;
-            let (wire, inner_body, niches) = option_output(t1, registry)?;
+            let (wire, inner_body, niches) = option_output(t1, self)?;
             let body: syn::Expr = syn::parse_quote!({
                 let v: #canonical = #read;
                 #inner_body
             });
-            let inherited = registry
-                .output_entry(t1)
+            let inherited = self
+                .out_frag(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
             let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
@@ -2834,9 +2985,9 @@ impl Declarations {
             // [`nullable_kind_for`]): niche-fulfilled keeps the inner wire
             // and treats the slot value as `None`; boxed widens to `JObject`
             // and uses JVM null.
-            let nullable_kind = nullable_kind_for_output(&wire, t1, registry);
-            let projection = registry
-                .output_entry(t1)
+            let nullable_kind = nullable_kind_for_output(&wire, t1, self);
+            let projection = self
+                .out_frag(t1)
                 .and_then(|e| e.metadata.projection.clone())
                 .map(|h| Projection {
                     strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
@@ -2868,7 +3019,7 @@ impl Declarations {
         // Symmetric to the input handler. `Vec<u8>` is special-cased at
         // rank-0 (primitive_output → JByteArray) so rank-1 never sees it.
         if shape == WrapperShape::Sequence {
-            let inner = registry.output_entry(t1)?;
+            let inner = self.out_frag(t1)?;
             // `Vec<opaque-handle>` output is delivered by the Kotlin-side leaf
             // fold (`apply_leaf_vec_folds` → typed-handle wrap), so this
             // whole-`ArrayList` converter is bypassed for it. A handle's `jlong`
@@ -2879,7 +3030,7 @@ impl Declarations {
                 return None;
             }
             // The element's COMPLETE Rust -> wire chain (see the input peer).
-            let inner_conv = crate::jni::emit::composed_inner_output(inner, quote::quote!(__elem));
+            let inner_conv = crate::jni::emit::composed_inner_output(&inner, quote::quote!(__elem));
             let outer_ty = produced.key();
             let canonical: syn::Type = syn::parse_quote!(Vec<#t1_ty>);
             let read = read_as_canonical(produced)?;
@@ -2946,10 +3097,9 @@ impl Declarations {
     pub(crate) fn output_slice(
         &self,
         elem: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let inner = registry.output_entry(elem)?;
+        let inner = self.out_frag(elem)?;
         let elem_key = elem.key();
         // The element as the source spelled it — the slice type this converter
         // yields is re-emitted, never re-derived.
@@ -2963,7 +3113,7 @@ impl Declarations {
         }
         // The element's COMPLETE Rust -> wire chain (see the `Vec<_>` peer).
         let inner_conv = crate::jni::emit::composed_inner_output(
-            inner,
+            &inner,
             quote::quote!(::core::clone::Clone::clone(__elem)),
         );
         let outer_ty: syn::Type = syn::parse_quote!(&[#elem]);
@@ -3137,6 +3287,37 @@ impl Declarations {
             .map(|(k, c)| (k.clone(), c.rust_type.clone()))
             .collect()
     }
+    /// The row table this binding was built against.
+    pub(crate) fn recipe_table(&self) -> &prebindgen_registry::recipe::Recipes {
+        &self.tables.as_ref().expect("built").recipes
+    }
+
+    /// Which row each site takes.
+    pub(crate) fn site_bindings(&self) -> &prebindgen_registry::recipe::Bindings {
+        &self.tables.as_ref().expect("built").bindings
+    }
+
+    /// Every type that states what it hands out — `sealed_class!` and
+    /// `data_class!` — in a stable order.
+    ///
+    /// Sorted, because what reads it drives compilation and a refusal has to
+    /// name the same type run to run.
+    pub(crate) fn declared_decompositions(&self) -> Vec<TypeKey> {
+        let mut keys: Vec<TypeKey> = self
+            .types
+            .iter()
+            .filter(|(_, c)| matches!(c.kind, DeclaredKind::Sealed(_) | DeclaredKind::Data))
+            .map(|(k, _)| k.clone())
+            // And every type whose value form says what it hands out, whatever
+            // kind of class it is — `expand_return!` is declared over a
+            // `ptr_class` as readily as over anything else.
+            .chain(self.return_expand_decls.iter().map(|d| d.key().clone()))
+            .collect();
+        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        keys.dedup();
+        keys
+    }
+
     /// Types acknowledged-but-undeclared via [`JniGenBuilder::ignore`].
     pub(crate) fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
         self.ignored_class_types.clone()

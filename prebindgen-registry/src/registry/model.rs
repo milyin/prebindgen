@@ -7,7 +7,7 @@ use super::{
     *,
 };
 
-impl<M> Registry<M> {
+impl Registry {
     /// The parameter-side fold for each `(function, parameter)` position.
     ///
     /// Inherent rather than on [`Conversions`]: a fold is read when a wrapper's

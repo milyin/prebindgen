@@ -1,4 +1,4 @@
-//! JNI adapter metadata propagated through `TypeEntry`.
+//! JNI adapter metadata, carried on this adapter's own conversions.
 
 use kotlin_codegen::KtType;
 
@@ -82,10 +82,10 @@ pub struct Projection {
 
 /// Per-converter language-specific extras carried by every converter this
 /// adapter produces. Filled by the same handler that builds the wire/body,
-/// propagated by the resolver into
-/// [`prebindgen_registry::TypeEntry::metadata`], and read directly by
-/// the Kotlin emitter — so cross-language facts flow through the existing
-/// wrapper machinery rather than a parallel side channel.
+/// carried in [`prebindgen_registry::ConverterImpl::metadata`], and read
+/// directly by the Kotlin emitter off the fragment that conversion belongs to
+/// — so cross-language facts flow through the existing wrapper machinery
+/// rather than a parallel side channel.
 #[derive(Clone, Debug, Default)]
 pub struct KotlinMeta {
     /// Value-context Kotlin type, structured ([`KtType`]). `Long` for

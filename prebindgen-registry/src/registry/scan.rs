@@ -23,7 +23,7 @@ fn canonical_of(declared_ty: &prebindgen_flat::flat::Origin<syn::Type>) -> syn::
         .expect("a `TypeKey` is a normalized `syn::Type`, so it re-parses")
 }
 
-impl<M> Registry<M> {
+impl Registry {
     pub(super) fn scan_declared_items(&mut self, declared: &Declared) -> Result<(), ScanError> {
         // Source-qualified declared types are a hard error (issue #95). The
         // key's own normalization already reduced `crate::`/`self::` and std
@@ -589,7 +589,7 @@ impl<M> Registry<M> {
         dir: Direction,
         ty: &syn::Type,
         root: bool,
-        entry: Option<TypeEntry<M>>,
+        entry: Option<Answer>,
     ) {
         self.intern(dir, ty, root).unwrap_or_else(|e| {
             panic!(
@@ -698,7 +698,7 @@ impl<M> Registry<M> {
     }
 
     /// Direction-indexed read access to the type-resolution tables.
-    pub(crate) fn type_table(&self, dir: Direction) -> &HashMap<TypeKey, TypeCell<M>> {
+    pub(crate) fn type_table(&self, dir: Direction) -> &HashMap<TypeKey, TypeCell> {
         match dir {
             Direction::Input => &self.input_types,
             Direction::Output => &self.output_types,
@@ -719,38 +719,10 @@ impl<M> Registry<M> {
     }
 
     /// Direction-indexed mutable access to the type-resolution tables.
-    pub(crate) fn type_table_mut(&mut self, dir: Direction) -> &mut HashMap<TypeKey, TypeCell<M>> {
+    pub(crate) fn type_table_mut(&mut self, dir: Direction) -> &mut HashMap<TypeKey, TypeCell> {
         match dir {
             Direction::Input => &mut self.input_types,
             Direction::Output => &mut self.output_types,
         }
-    }
-
-    /// Look up the resolved input entry for `reading`, returning `None` if it
-    /// was never registered or is still unresolved. The returned entry's
-    /// `function.sig.ident` is the converter's call name; `destination` is
-    /// its wire form.
-    ///
-    /// Takes a `TypeRef` for the reason the trait methods do (#284) — and this
-    /// pair matters more than they do, because an **inherent** method wins over
-    /// a trait method on a concrete `Registry`. While these took a spelling they
-    /// were a second door into the table that the trait's signature could not
-    /// close, and every caller with a `Registry` in hand silently used it. The
-    /// same "second door inside the room" that hid `classify` behind
-    /// `Registry::reading` until #267.
-    pub fn input_entry(&self, reading: &prebindgen_flat::flat::TypeRef) -> Option<&TypeEntry<M>> {
-        self.type_table(Direction::Input)
-            .get(&reading.key())?
-            .entry
-            .as_ref()
-    }
-
-    /// Look up the resolved output entry for `reading`. See
-    /// [`Self::input_entry`].
-    pub fn output_entry(&self, reading: &prebindgen_flat::flat::TypeRef) -> Option<&TypeEntry<M>> {
-        self.type_table(Direction::Output)
-            .get(&reading.key())?
-            .entry
-            .as_ref()
     }
 }

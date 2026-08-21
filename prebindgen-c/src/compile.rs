@@ -66,7 +66,7 @@ impl Carrier for CFrag {
 
 impl CFrag {
     /// One of the adapter's existing converter builders, as a fragment.
-    fn from_converter(at: At<'_>, conv: ConverterImpl<()>) -> Self {
+    fn from_converter(at: At<'_>, conv: ConverterImpl) -> Self {
         let validity = validity_of(&conv, at.crossing.assembly());
         Self {
             destination: conv.destination,
@@ -83,7 +83,7 @@ impl CFrag {
     }
 
     /// What the registry that still emits converters expects back.
-    pub(crate) fn into_converter(self) -> ConverterImpl<()> {
+    pub(crate) fn into_converter(self) -> ConverterImpl {
         ConverterImpl {
             destination: self.destination,
             function: self.function,
@@ -101,7 +101,7 @@ impl CFrag {
 /// Reading the spelling is wrong in both directions: a conversion may clone or
 /// allocate out of a borrow, and — the case C actually has — a conversion may
 /// hand C a pointer *into* a Rust value from a crossing that looks owned.
-fn validity_of(conv: &ConverterImpl<()>, assembly: Assembly) -> Validity {
+fn validity_of(conv: &ConverterImpl, assembly: Assembly) -> Validity {
     match assembly {
         // Rust to C. A `*const T` is the zero-copy borrow: `out_borrow_or_result`
         // casts the Rust value's own address, and `repr_c_struct`'s reinterpret
@@ -194,14 +194,14 @@ fn refuse(at: At<'_>, why: &str) -> String {
     format!("Cbindgen: {} ({why})", at.crossing.key())
 }
 
-impl<R: Conversions<()>> CCompile<'_, R> {
-    fn wrap(&self, at: At<'_>, why: &str, conv: Option<ConverterImpl<()>>) -> Frag<Self> {
+impl<R: Conversions> CCompile<'_, R> {
+    fn wrap(&self, at: At<'_>, why: &str, conv: Option<ConverterImpl>) -> Frag<Self> {
         conv.map(|c| CFrag::from_converter(at, c))
             .ok_or_else(|| refuse(at, why))
     }
 }
 
-impl<R: Conversions<()>> Compile for CCompile<'_, R> {
+impl<R: Conversions> Compile for CCompile<'_, R> {
     type Fragment = CFrag;
     /// C keeps its own per-site emission for now: the exported signature, the
     /// call and the cleanup are built in `emit.rs` from the resolved registry.
@@ -306,10 +306,6 @@ impl<R: Conversions<()>> Compile for CCompile<'_, R> {
         self.wrap(at, "no C representation for this run", conv)
     }
 
-    fn identity(&mut self, _cx: &mut Cx<'_>, at: At<'_>, _inner: &CFrag) -> Frag<Self> {
-        Err(refuse(at, "Cbindgen declares no identity rows"))
-    }
-
     fn construct(
         &mut self,
         _cx: &mut Cx<'_>,
@@ -397,7 +393,7 @@ impl<R: Conversions<()>> Compile for CCompile<'_, R> {
                     // to the value's own conversion.
                     match (
                         at.crossing.assembly(),
-                        self.gen.payload_field_wire(&part.ty, self.registry),
+                        self.gen.payload_field_wire(&part.ty),
                     ) {
                         (Assembly::Deconstruct, Ok(w)) if held_uninit(&w, &frag.destination) => {
                             quote!(::core::mem::MaybeUninit::new(#call))

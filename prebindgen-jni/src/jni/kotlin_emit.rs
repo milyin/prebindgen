@@ -82,7 +82,7 @@ impl Declarations {
     /// was resolved first.
     pub(crate) fn write_kotlin(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
         // Validation already ran once in `RegistryBuilder::build` — this emitter
@@ -536,7 +536,7 @@ impl Declarations {
     /// uniform.
     pub(crate) fn write_enum_classes(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
     ) -> Result<Vec<KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
@@ -595,7 +595,7 @@ impl Declarations {
     /// and each declarator rejects the other's.
     pub(crate) fn write_sealed_classes(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
     ) -> Result<Vec<KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
@@ -667,7 +667,7 @@ impl Declarations {
     /// identically.
     fn build_sealed_class(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         class_name: &str,
         sum: &prebindgen_registry::flat::Variant,
         sum_cfg: &SumConfig,
@@ -728,7 +728,7 @@ impl Declarations {
             let mut vcloses: Vec<String> = Vec::new();
             for field in &alt.fields {
                 let prop = sum_field_prop_name(&field.member());
-                let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
+                let ty = self.sum_payload_kt_type(&sum.name, &alt.name, &prop, field);
                 if let Some(strategy) = payload_close(field) {
                     vcloses.push(render_handle_close(&strategy, &prop));
                 }
@@ -795,7 +795,7 @@ impl Declarations {
             let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
             for field in &alt.fields {
                 let prop = sum_field_prop_name(&field.member());
-                let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
+                let ty = self.sum_payload_kt_type(&sum.name, &alt.name, &prop, field);
                 factory = factory.param(KtParam::new(sum_slot_fragment(&vname, &prop), ty));
             }
         }
@@ -905,7 +905,6 @@ impl Declarations {
     ///   ABI mismatch at runtime.
     fn sum_payload_kt_type(
         &self,
-        registry: &Registry<KotlinMeta>,
         sum_name: &syn::Ident,
         variant: &syn::Ident,
         prop: &str,
@@ -917,7 +916,7 @@ impl Declarations {
         // below, which is a diagnostic and needs no emission capability.
         let field_ty = &field.ty;
         let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
-        let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
+        let out = self.out_frag(&field.ty).unwrap_or_else(|| {
             panic!(
                 "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
                  cannot be derived — register converters for the payload type before \
@@ -957,7 +956,7 @@ impl Declarations {
         // boxed value, a present flag, a niche) rather than in the type name.
         // Comparing the rendered types would reject that legitimate shape —
         // which is what an `Option<enum>` payload does.
-        if let Some(inp) = registry.input_entry(&field.ty) {
+        if let Some(inp) = self.in_frag(&field.ty) {
             if let (Some(in_ty), (Some(a), Some(b))) = (
                 inp.metadata.kotlin_name.clone(),
                 (
@@ -998,7 +997,7 @@ impl Declarations {
     /// types, so wrappers and data-class declarations stay in sync. A
     /// compatibility-alias fragment is appended when any data class is
     /// renamed relative to its Rust ident.
-    pub(crate) fn write_data_classes(&self, registry: &Registry<KotlinMeta>) -> Vec<KtFile> {
+    pub(crate) fn write_data_classes(&self, registry: &Registry) -> Vec<KtFile> {
         let mut written = Vec::new();
         let mut aliases: Vec<(String, String)> = Vec::new();
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -1137,7 +1136,7 @@ impl Declarations {
     /// from the declaration's representative plan (`registry.decon_plans`) —
     /// the same source the native emitters read, so all sites agree by
     /// construction (no dedup, no signature reconciliation).
-    pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<KtFile> {
+    pub(crate) fn write_callback_ifaces(&self, registry: &Registry) -> Vec<KtFile> {
         use prebindgen_registry::unfold::{DeconId, Delivery};
 
         // Distinct interface identities in use — [`SpecKey`] (`Ord`, so
@@ -1163,7 +1162,7 @@ impl Declarations {
             registry
                 .decon_plans()
                 .get(d)
-                .is_some_and(|p| is_sum_leaves(&p.leaves))
+                .is_some_and(|p| is_sum_row(&crate::jni::compile::OutWire::from_leaves(&p.leaves)))
         };
 
         // Fixedness sets shared with the memo derivation (`iface.rs`): a
@@ -1363,7 +1362,7 @@ impl Declarations {
     /// positionally with `fromParts`.
     fn value_struct_builder_singleton(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
     ) -> KtDecl {
@@ -1410,7 +1409,7 @@ impl Declarations {
     /// `[acc, leaf0, …]`; `fromParts` takes the element leaves (all but `acc`).
     fn value_struct_folder_singleton(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
     ) -> KtDecl {
@@ -1470,7 +1469,7 @@ impl Declarations {
     /// `factory_field`, so it is emitted here directly.
     fn sum_builder_singleton(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
     ) -> KtDecl {
@@ -1480,7 +1479,7 @@ impl Declarations {
         let (iface_short, when) = self.sum_reconstruct(
             registry,
             &plan.source.key(),
-            &plan.leaves,
+            &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
             &spec.params,
             &names,
             &mut imports,
@@ -1513,7 +1512,7 @@ impl Declarations {
     /// `[acc, tag, group-slots…]`, so the reassembly reads all but `acc`.
     fn sum_folder_singleton(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
     ) -> KtDecl {
@@ -1523,7 +1522,7 @@ impl Declarations {
         let (iface_short, when) = self.sum_reconstruct(
             registry,
             &plan.source.key(),
-            &plan.leaves,
+            &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
             &spec.params[1..],
             &names[1..],
             &mut imports,
@@ -1561,12 +1560,12 @@ impl Declarations {
     /// its variant-constructor argument by [`Self::sum_ctor_arg`].
     pub(crate) fn sum_reconstruct(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         // The sum's **identity**: every use of `source` here was
         // `TypeKey::from_type` or `bare_path_ident`, and a key that is one
         // identifier IS the ident — the same reduction `type_kind` made.
         key: &TypeKey,
-        leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
+        leaves: &[crate::jni::compile::OutWire],
         params: &[crate::jni::IfaceParam],
         names: &[String],
         imports: &mut BTreeSet<String>,
@@ -1597,7 +1596,7 @@ impl Declarations {
                 .zip(params)
                 .zip(names)
                 .filter(|((l, _), _)| l.group == Some(group))
-                .map(|((l, p), n)| self.sum_ctor_arg(registry, l, p, n, imports))
+                .map(|((l, p), n)| self.sum_ctor_arg(l, p, n, imports))
                 .collect();
             // Kotlin has no `B()` / `B {}` distinction to keep: a payload-less
             // alternative is a `data object`, named bare. The Rust side is where
@@ -1641,8 +1640,7 @@ impl Declarations {
     /// `!!` would turn a legitimately absent value into an exception.
     fn sum_ctor_arg(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
-        leaf: &prebindgen_registry::unfold::UnfoldLeaf,
+        leaf: &crate::jni::compile::OutWire,
         param: &crate::jni::IfaceParam,
         name: &str,
         imports: &mut BTreeSet<String>,
@@ -1655,7 +1653,6 @@ impl Declarations {
             name.to_string()
         };
         self.carry_layers(
-            registry,
             &param.wrap,
             param.raw.is_nullable(),
             &leaf.out_ty,
@@ -1686,7 +1683,6 @@ impl Declarations {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn carry_layers(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
         wrap: &crate::jni::WrapKind,
         slot_nullable: bool,
         ty: &prebindgen_registry::flat::TypeRef,
@@ -1696,16 +1692,7 @@ impl Declarations {
         imports: &mut BTreeSet<String>,
     ) -> String {
         if let Some(inner) = ty.optional_inner() {
-            return self.carry_layers(
-                registry,
-                wrap,
-                slot_nullable,
-                inner,
-                recv,
-                true,
-                depth,
-                imports,
-            );
+            return self.carry_layers(wrap, slot_nullable, inner, recv, true, depth, imports);
         }
         if let Some(elem) = ty.sequence_elem() {
             let bound = if depth == 0 {
@@ -1714,7 +1701,6 @@ impl Declarations {
                 format!("__e{depth}")
             };
             let body = self.carry_layers(
-                registry,
                 wrap,
                 slot_nullable,
                 elem,
@@ -1744,8 +1730,8 @@ impl Declarations {
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
         if self.is_kotlin_enum_reading(ty) {
-            let name = registry
-                .output_entry(ty)
+            let name = self
+                .out_frag(ty)
                 .and_then(|e| e.metadata.kotlin_name.clone())
                 .and_then(|t| t.leaf_name().map(str::to_string))
                 .unwrap_or_else(|| {
@@ -1799,7 +1785,7 @@ impl Declarations {
 
     pub(crate) fn write_jni_package(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         subpackage: &str,
         pkg_cfg: &crate::jni::PackageConfig,
     ) -> KtFile {
@@ -1914,7 +1900,7 @@ impl Declarations {
     /// inside an `init { … }` block here (e.g. a reference to the consumer's
     /// own loader object). Unset, the holder stays free of any loading logic
     /// and the wrapper layer is responsible for loading.
-    pub(crate) fn write_jni_native(&self, registry: &Registry<KotlinMeta>) -> KtFile {
+    pub(crate) fn write_jni_native(&self, registry: &Registry) -> KtFile {
         let class_name = self.jni_native_class_name();
         let declared = self.declared_functions();
 
@@ -1992,10 +1978,10 @@ impl Declarations {
             let mut push = KtFun::new(push_m)
                 .external()
                 .param(KtParam::new("handle", KtType::long()));
-            for leaf in h.plan.leaves.iter().filter(|l| !l.is_present_flag) {
+            for leaf in h.plan.leaves.iter().filter(|l| !l.is_present_flag()) {
                 push = push.param(KtParam::new(
                     leaf.kt_name.clone(),
-                    KtType::cls(leaf.kt_wire_ty.clone()),
+                    KtType::cls(leaf.kt_wire_ty().to_string()),
                 ));
             }
             externs.push(push);
@@ -2058,7 +2044,7 @@ impl Declarations {
     /// promoted method's signature).
     pub(crate) fn write_typed_handles(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         handles: &[TypedHandle<'_>],
     ) -> Vec<KtFile> {
         let mut written = Vec::new();

@@ -334,7 +334,7 @@ impl AliasAccess {
 /// emission over a complete registry.
 pub struct Cbindgen {
     pub(crate) gen: CbindgenBuilder,
-    pub(crate) registry: prebindgen_registry::Registry<()>,
+    pub(crate) registry: prebindgen_registry::Registry,
 }
 
 // Opaque — exists so `Result<Cbindgen, _>::expect_err` works in tests.
@@ -359,13 +359,13 @@ impl Cbindgen {
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.gen,
-            prebindgen_registry::write::Conversions::Compiled(&self.gen.compiled_fns),
+            &self.gen.compiled_fns,
             out_path,
         )?)
     }
 
     /// The resolved registry — conversions, decompositions, and the model.
-    pub fn registry(&self) -> &prebindgen_registry::Registry<()> {
+    pub fn registry(&self) -> &prebindgen_registry::Registry {
         &self.registry
     }
 
@@ -444,14 +444,30 @@ pub struct CbindgenBuilder {
     /// Where the `#[prebindgen]` items come from — see
     /// `JniGenBuilder::source`.
     pub(crate) sources: prebindgen_registry::flat::FlatBuilder,
+    /// Every conversion this binding compiled, keyed by crossing.
+    ///
+    /// What the emitters ask instead of the converter table. The table can only
+    /// name **one** wire type per crossing, so it stops being able to answer as
+    /// soon as a crossing occupies several — and the answer an emitter wants
+    /// was always the adapter's own.
+    ///
+    /// Shared and interior-mutable because the emitters that run *during*
+    /// compilation read it too: `dispatch_fn_input` builds a callback's closure
+    /// struct out of `lower_shape` and `encode_value`, and those ask what a
+    /// type crosses as. A conversion for one type is built out of the
+    /// conversions for its inners, which the resolver compiles first, so a
+    /// fragment is there exactly when a table entry would have been.
+    pub(crate) compiled: std::rc::Rc<
+        std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::compile::CFrag>>,
+    >,
     /// Every conversion this binding compiled.
     ///
-    /// Filled once by [`Self::build_with`] and handed to `write_rust` as
-    /// `Conversions::Compiled`. It is what reaches the generated file,
-    /// so a fragment no longer has to be expressible as one `ConverterImpl` to
-    /// be emitted — only to be looked up. The writer sorts and de-duplicates by
-    /// function name, so the order here decides which of two same-named
-    /// functions wins and not where any of them lands.
+    /// Filled once by [`Self::build_with`] and handed to `write_rust` directly. It is what
+    /// reaches the generated file, so a fragment no longer has to be
+    /// expressible as one `ConverterImpl` to be emitted — only to be looked up.
+    /// The writer sorts and de-duplicates by function name, so the order here
+    /// decides which of two same-named functions wins and not where any of them
+    /// lands.
     pub(crate) compiled_fns: Vec<syn::ItemFn>,
 }
 
@@ -508,7 +524,7 @@ fn type_short(key: &TypeKey) -> String {
 /// `enum_shape` over a `syn::ItemEnum` to re-derive what the first had thrown
 /// away.
 fn payload_enum<'r>(
-    registry: &'r impl Conversions<()>,
+    registry: &'r impl Conversions,
     key: &TypeKey,
 ) -> Option<&'r prebindgen_registry::flat::Variant> {
     match registry.flat().declared_type(&key.ident()?)? {
@@ -535,7 +551,7 @@ fn payload_enum<'r>(
 /// was `enum_item` + `assert_unit_enum`, the second running `enum_shape` over a
 /// `syn::ItemEnum` to re-derive what the first had already thrown away.
 fn unit_enum<'r>(
-    registry: &'r impl Conversions<()>,
+    registry: &'r impl Conversions,
     key: &TypeKey,
 ) -> Option<&'r prebindgen_registry::flat::Enum> {
     match registry.flat().declared_type(&key.ident()?)? {
@@ -632,9 +648,12 @@ fn marker_destination(ty: &syn::Type) -> bool {
 /// `out_wrappers` gives that destination to a `Result` too, and no arm lowers
 /// one — so a destination test answers `yes` for a shape nothing can emit, and
 /// the caller ends up calling the marker it was trying to avoid (#428 review).
-fn r_is_lowered_composite(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
-    let composite = t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some();
-    composite && r_shape_is_lowerable(t, registry)
+impl CbindgenBuilder {
+    fn is_lowered_composite(&self, t: &TypeRef) -> bool {
+        let composite =
+            t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some();
+        composite && self.shape_is_lowerable(t)
+    }
 }
 
 /// Whether this node already has a wire of its own: a real converter rather
@@ -644,10 +663,11 @@ fn r_is_lowered_composite(t: &TypeRef, registry: &impl Conversions<()>) -> bool 
 /// conversion answers here — and the shape lowering has to agree with the
 /// converter table at **every** level, not only the outermost, or the two
 /// describe different ABIs for the same argument (#428 review).
-fn r_has_own_wire(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
-    registry
-        .output_entry(t)
-        .is_some_and(|e| !marker_destination(&e.destination))
+impl CbindgenBuilder {
+    fn has_own_wire(&self, t: &TypeRef) -> bool {
+        self.out_frag(t)
+            .is_some_and(|e| !marker_destination(&e.destination))
+    }
 }
 
 /// Whether [`Cbindgen::lower_shape`] decomposes `t` **all the way down**.
@@ -663,20 +683,22 @@ fn r_has_own_wire(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
 /// Enumerating the wrapper kinds instead missed `Vec<&'static [u8]>`, whose
 /// element is a plain borrow by every shape test and a shared-slice marker in
 /// the table (#428 review).
-fn r_shape_is_lowerable(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
-    // A node with a wire of its own IS the bottom: `lower_shape` stops there
-    // too, so the recursion must not walk past it into a shape that node no
-    // longer describes.
-    if r_has_own_wire(t, registry) {
-        return true;
+impl CbindgenBuilder {
+    fn shape_is_lowerable(&self, t: &TypeRef) -> bool {
+        // A node with a wire of its own IS the bottom: `lower_shape` stops
+        // there too, so the recursion must not walk past it into a shape that
+        // node no longer describes.
+        if self.has_own_wire(t) {
+            return true;
+        }
+        if let Some(inner) = t.optional_inner() {
+            return self.shape_is_lowerable(inner);
+        }
+        // A run's element must lower to one wire of its own — the same rule
+        // `lower_shape` asserts when it builds the `(ptr, len)` pair.
+        let leaf = r_vec_elem(t).or_else(|| r_cow_slice_elem(t)).unwrap_or(t);
+        self.has_own_wire(leaf)
     }
-    if let Some(inner) = t.optional_inner() {
-        return r_shape_is_lowerable(inner, registry);
-    }
-    // A run's element must lower to one wire of its own — the same rule
-    // `lower_shape` asserts when it builds the `(ptr, len)` pair.
-    let leaf = r_vec_elem(t).or_else(|| r_cow_slice_elem(t)).unwrap_or(t);
-    r_has_own_wire(leaf, registry)
 }
 
 /// The element of a `Vec<E>`.

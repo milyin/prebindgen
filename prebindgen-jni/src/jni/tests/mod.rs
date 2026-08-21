@@ -1,6 +1,5 @@
-// Only `entry` (below, gated off with the `niches` module) needs `TypeEntry`.
 pub(crate) use prebindgen::SourceLocation;
-use prebindgen_registry::TypeEntry;
+use prebindgen_registry::{Answer, ConverterImpl};
 use quote::ToTokens;
 
 use super::*;
@@ -37,10 +36,10 @@ mod symbols;
 mod value_form;
 mod values;
 
-/// Build a `TypeEntry` for use in tests. The function body is not
-/// inspected by `option_input` / `option_output`; only the ident,
-/// destination, and niches matter, so we use a stub `ItemFn`.
-fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> TypeEntry<KotlinMeta> {
+/// Build a conversion for use in tests. The function body is not inspected by
+/// `option_input` / `option_output`; only the ident, destination, and niches
+/// matter, so we use a stub `ItemFn`.
+fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> ConverterImpl<KotlinMeta> {
     let ident = syn::Ident::new(conv_name, proc_macro2::Span::call_site());
     let func: syn::ItemFn = syn::parse_quote!(
         unsafe fn #ident<'env, 'v>(
@@ -50,7 +49,7 @@ fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> TypeEntry<KotlinMe
             Ok(())
         }
     );
-    TypeEntry {
+    ConverterImpl {
         destination: wire,
         function: func,
         pre_stages: vec![],
@@ -62,22 +61,45 @@ fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> TypeEntry<KotlinMe
 
 // BLOCKED: `Registry::insert_crossing` is `pub(crate)` in `prebindgen::core` —
 // see the `niches` module gate above.
-fn install_input(
-    reg: &mut Registry<KotlinMeta>,
+/// Put one conversion where both a registry query and an adapter lookup can
+/// find it: in the registry the test builds, and in `decls` as the fragment a
+/// compiled binding would have filed. Helpers under test read the second.
+fn install(
+    reg: &mut Registry,
+    decls: &Declarations,
+    direction: Direction,
     ty_str: &str,
-    _rank: usize,
-    e: TypeEntry<KotlinMeta>,
+    e: ConverterImpl<KotlinMeta>,
 ) {
     let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
-    reg.insert_crossing(Direction::Input, &ty, true, Some(e));
+    let key = TypeKey::from_type(&ty);
+    let assembly = match direction {
+        Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
+        Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
+    };
+    decls.compiled.borrow_mut().record(
+        key.clone(),
+        assembly,
+        prebindgen_registry::recipe::RecipeId::new("whole"),
+        crate::jni::compile::JFrag::by_hand(key, e.clone()),
+    );
+    reg.insert_crossing(direction, &ty, true, Some(Answer::over(e.subs)));
+}
+
+fn install_input(
+    reg: &mut Registry,
+    decls: &Declarations,
+    ty_str: &str,
+    e: ConverterImpl<KotlinMeta>,
+) {
+    install(reg, decls, Direction::Input, ty_str, e);
 }
 
 fn install_output(
-    reg: &mut Registry<KotlinMeta>,
+    reg: &mut Registry,
+    decls: &Declarations,
     ty_str: &str,
-    _rank: usize,
-    e: TypeEntry<KotlinMeta>,
+    e: ConverterImpl<KotlinMeta>,
 ) {
-    let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
-    reg.insert_crossing(Direction::Output, &ty, true, Some(e));
+    install(reg, decls, Direction::Output, ty_str, e);
 }

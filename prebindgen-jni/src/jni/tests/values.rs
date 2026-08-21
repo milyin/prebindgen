@@ -1025,6 +1025,27 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    // The two boundaries this fixture draws, stated as the row states them:
+    // `object` is declared `.jobject_input()` and stays ONE value, and `maybe`
+    // is an `Option<data_class>`, which is a presence flag plus the inner's
+    // wires.
+    let hybrid: Vec<String> = generation
+        .named_wires_for_test("Hybrid", "h")
+        .expect("Hybrid states a composition")
+        .into_iter()
+        .map(|(name, kt_ty, access, ..)| format!("{name}: {kt_ty} = {access}"))
+        .collect();
+    assert_eq!(
+        hybrid,
+        vec![
+            "hFlatId: Long = h.flat.id",
+            "hMaybePresent: Boolean = h.maybe != null",
+            "hMaybeId: Long = h.maybe?.id ?: 0L",
+            // The `.jobject_input()` child stays one value, and its own fields
+            // never reach the signature.
+            "hObject: io.test.jni.ObjectChild = h.object_",
+        ],
+    );
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -1850,6 +1871,22 @@ fn an_optional_handle_field_mints_through_the_factory() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    // A nested owned handle crosses as a `Long` and is locked through the
+    // handle OBJECT, so the row has to carry both — the facts the Kotlin
+    // lock-and-consume scaffold reads. Asserted here because `Bag`'s field is
+    // an `Option<Handle>`, where the access is nullable and the pointer still
+    // is not.
+    let bag = generation
+        .named_wires_for_test("Bag", "b")
+        .expect("Bag states a composition");
+    assert_eq!(
+        bag.iter()
+            .map(|(name, kt_ty, access, _, target, nullable, ..)| format!(
+                "{name}: {kt_ty} = {access} @ {target:?} null={nullable}"
+            ))
+            .collect::<Vec<_>>(),
+        vec!["bHandle: Long = b.handle @ Some(\"b.handle\") null=true"],
+    );
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
         .unwrap()
@@ -2856,6 +2893,70 @@ fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
         assert!(
             refusal.contains("could not be resolved") && refusal.contains(names),
             "the refusal names the spelling: {refusal}"
+        );
+    }
+}
+
+/// A declared type with nothing to be made of states no `parts` row, and no
+/// fragment is filed under that name.
+///
+/// `Declarations::recipes` declares `parts` only where there is something to
+/// decompose — an empty struct has no fields, so it gets the `whole` row and
+/// nothing else. The build then asks each declared type for `parts` by name,
+/// and `Compiler::row_of` refuses a name the crossing lacks rather than
+/// compiling the default and filing it under the asked-for name.
+///
+/// Without that refusal `row_fragment(.., parts)` answered with the whole-value
+/// fragment for a row nobody declared — an emitter reading it would take a
+/// single atomic conversion for a list of parts.
+#[test]
+fn a_type_with_no_parts_files_no_parts_row() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct EmptyNamed {}
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct HasOne {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn use_both(a: EmptyNamed, b: HasOne) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(EmptyNamed))
+                .class(crate::data_class!(HasOne))
+                .fun(prebindgen_registry::fun!(use_both)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    for out in [false, true] {
+        assert!(
+            !gen.has_parts_row_for_test("EmptyNamed", out),
+            "an empty struct states no parts row (out={out})",
+        );
+        assert!(
+            gen.has_parts_row_for_test("HasOne", out),
+            "a struct with a field states one (out={out})",
         );
     }
 }

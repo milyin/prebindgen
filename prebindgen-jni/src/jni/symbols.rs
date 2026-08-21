@@ -40,7 +40,7 @@ use super::*;
 ///   names colliding in one package, including a collision the mangler
 ///   created.
 /// * **Warnings** — where the default mangler sanitized a Rust-derived name.
-pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMeta>) -> Vec<String> {
+pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry) -> Vec<String> {
     let mut errors: Vec<String> = Vec::new();
     // (package, name) → origin, for top-level-unique Kotlin declarations.
     let mut top_level: BTreeMap<(String, String), String> = BTreeMap::new();
@@ -264,7 +264,7 @@ fn check_ident(name: &str, origin: &str, errors: &mut Vec<String>) {
 
 /// Emit a `cargo:warning` for each Rust struct field (data-class property) or
 /// enum variant whose Kotlin name the default mangler had to change.
-fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>) {
+fn warn_derived_name_changes(ext: &Declarations, registry: &Registry) {
     let warn = |raw: &str, mangled: &str, what: &str, owner: &str| {
         if raw != mangled {
             println!(
@@ -318,7 +318,7 @@ fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>
 /// `syn::ItemEnum`; the model states them as two elements, and both carry the
 /// names this asks for. `None` when `ident` names neither.
 fn declared_member_names(
-    registry: &impl prebindgen_registry::Conversions<KotlinMeta>,
+    registry: &impl prebindgen_registry::Conversions,
     ident: &syn::Ident,
 ) -> Option<Vec<syn::Ident>> {
     use prebindgen_registry::flat::Type;

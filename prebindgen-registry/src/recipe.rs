@@ -52,7 +52,7 @@ mod tests;
 pub use self::{
     compile::{
         At, Carrier, Compile, CompileError, Compiled, Compiler, Cx, Frag, Part, PartSource, Parts,
-        RequirementId, Validity, Yield,
+        Validity, Yield,
     },
     site::{Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site},
 };
@@ -124,12 +124,6 @@ pub enum Construct {
     ///
     /// Inside a [`Shape::Choice`] arm the fields are that alternative's.
     Fields,
-    /// The single part named here already is the value.
-    ///
-    /// Boxed because a `TypeRef` is many times the size of the identifier
-    /// [`Call`](Self::Call) carries, and a call is the common form. The same
-    /// trade-off the model makes for an array's extent.
-    Identity(Box<TypeRef>),
 }
 
 impl Operation for Construct {
@@ -767,7 +761,6 @@ impl<'a> Check<'a, '_> {
 
     fn construct(&mut self, ty: &TypeRef, op: &Construct) -> Vec<TypeRef> {
         match op {
-            Construct::Identity(inner) => vec![(**inner).clone()],
             Construct::Call(func) => match self.function(func) {
                 Some(f) => {
                     let parts = f.params.iter().map(|p| p.ty.clone()).collect();
@@ -1111,6 +1104,19 @@ pub enum RecipeError {
         /// The name the site asked for.
         recipe: RecipeId,
     },
+    /// A caller named a row the crossing does not have.
+    ///
+    /// Distinct from [`UnknownRow`](Self::UnknownRow), which is a **site**
+    /// asking for one. This is a caller compiling a named row directly through
+    /// [`Compiler::row_of`](crate::recipe::Compiler::row_of), where there is no
+    /// site to name — an adapter checking a row it declared conditionally, and
+    /// getting the condition wrong.
+    NoSuchRow {
+        /// The crossing that has no such row.
+        crossing: CrossingKey,
+        /// The name the caller asked for.
+        recipe: RecipeId,
+    },
     /// Two declarations of equal precedence bound one site to different rows.
     Rebound {
         /// The site both named.
@@ -1222,6 +1228,11 @@ impl fmt::Display for RecipeError {
             RecipeError::NotAProduct { row, recipe } => write!(
                 f,
                 "row `{recipe}` takes {row} apart, and the model gives that type no parts"
+            ),
+            RecipeError::NoSuchRow { crossing, recipe } => write!(
+                f,
+                "{crossing} has no row `{recipe}` — it was compiled by name, not \
+                 through a site"
             ),
             RecipeError::UnknownRow {
                 site,

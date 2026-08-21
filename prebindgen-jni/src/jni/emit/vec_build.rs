@@ -53,7 +53,7 @@ pub(crate) struct VecBuildElem {
 /// four sites agree on which params take the handle path.
 pub(crate) fn vec_build_elem(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl prebindgen_registry::Conversions,
     arg: &TypeRef,
 ) -> Option<VecBuildElem> {
     // The run and its element off the MODEL. `&mut [T]` is still refused —
@@ -156,9 +156,10 @@ pub(crate) fn vec_build_elem(
     // silently changing the Vec helper ABI.
     if plan.contains_nested
         || plan.leaves.iter().any(|l| {
-            l.is_present_flag
-                || l.handle_target_tail.is_some()
-                || l.entry.as_ref().is_none_or(|e| !e.pre_stages.is_empty())
+            l.is_present_flag()
+                || l.wire.handle_target.is_some()
+                || l.entry().is_none()
+                || l.wire.staged()
         })
     {
         return None;
@@ -182,7 +183,7 @@ pub(crate) fn vec_build_elem(
 /// the name `payloadVec` (#296).
 pub(crate) fn collect_vec_build_elem_types(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
 ) -> Vec<TypeRef> {
     let declared = ext.declared_functions();
     let mut seen: std::collections::BTreeMap<String, TypeRef> = std::collections::BTreeMap::new();
@@ -217,7 +218,7 @@ pub(crate) struct VecBuildHelpers {
 /// the generated methods read naturally (`Payload` → `payloadVec`).
 pub(crate) fn vec_build_helpers(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     elem: &TypeRef,
 ) -> Option<VecBuildHelpers> {
     let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)
@@ -225,9 +226,10 @@ pub(crate) fn vec_build_helpers(
         .flatten()?;
     if plan.contains_nested
         || plan.leaves.iter().any(|l| {
-            l.is_present_flag
-                || l.handle_target_tail.is_some()
-                || l.entry.as_ref().is_none_or(|e| !e.pre_stages.is_empty())
+            l.is_present_flag()
+                || l.wire.handle_target.is_some()
+                || l.entry().is_none()
+                || l.wire.staged()
         })
     {
         return None;
@@ -282,7 +284,7 @@ fn vec_helper_symbol(ext: &Declarations, base: &str, suffix: &str) -> String {
 /// push loop free of a per-element failure check.
 pub(crate) fn build_vec_build_helper_items(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     emit: &prebindgen_registry::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
@@ -320,19 +322,19 @@ pub(crate) fn build_vec_build_helper_items(
             .plan
             .leaves
             .iter()
-            .filter(|l| !l.is_present_flag)
+            .filter(|l| !l.is_present_flag())
             .map(|l| {
                 let id = &l.native_ident;
-                let ty = &l.native_wire_ty;
+                let ty = &l.native_wire_ty();
                 quote!(#id: #ty)
             })
             .collect();
         let mut decodes: Vec<TokenStream> = Vec::new();
         let mut inits: Vec<TokenStream> = Vec::new();
-        for l in h.plan.leaves.iter().filter(|l| !l.is_present_flag) {
-            let conv = l.conv.as_ref().expect("non-present leaf has a converter");
+        for l in h.plan.leaves.iter().filter(|l| !l.is_present_flag()) {
+            let conv = l.conv().expect("non-present leaf has a converter");
             let wid = &l.native_ident;
-            let fid = l.field.clone().expect("non-present leaf has a field");
+            let fid = format_ident!("{}", l.wire.field().expect("non-present leaf has a field"));
             let tmp = format_ident!("__e_{}", fid);
             decodes.push(quote!(
                 let #tmp = match #conv(&mut env, &#wid) {

@@ -1,12 +1,12 @@
 //! Completeness: which conversions a binding actually needs, and whether it has
 //! them.
 //!
-//! What survives here is the completeness check. The generator fills the cells
-//! itself (`RegistryBuilder::crossings` → `convert_with`); this decides whether the
-//! set it produced covers everything reachable from an exported root.
+//! What survives here is the completeness check. The generator answers the
+//! crossings itself, in `RegistryBuilder::convert_with`; this decides whether
+//! the set it answered covers everything reachable from an exported root.
 //!
-//! There is no loop. `Registry::crossings` hands the demand out inner-first, so
-//! a generator answers each crossing once, with everything it composes from
+//! There is no loop. `convert_with` hands the demand out inner-first, so a
+//! generator answers each crossing once, with everything it composes from
 //! already built — including across the `impl Fn` seam, whose args cross in the
 //! opposite direction.
 //!
@@ -80,7 +80,7 @@ impl std::error::Error for ResolveError {}
 /// Derived, never stored. Needing a converter is a property of the graph, and the
 /// graph is not complete until resolution has run — so computing it once here
 /// beats maintaining a flag that every edge discovery has to write back.
-fn required_set<M>(registry: &Registry<M>) -> HashSet<(Direction, TypeKey)> {
+fn required_set(registry: &Registry) -> HashSet<(Direction, TypeKey)> {
     let mut required: HashSet<(Direction, TypeKey)> = HashSet::new();
     let mut queue: VecDeque<(Direction, TypeKey)> = VecDeque::new();
     for dir in [Direction::Input, Direction::Output] {
@@ -117,8 +117,8 @@ fn required_set<M>(registry: &Registry<M>) -> HashSet<(Direction, TypeKey)> {
 /// `subs` were already walked by `required_set`, so traversing through
 /// them risks reporting dependents the resolved converter doesn't actually
 /// need.
-fn collect_unresolved_descendants<M>(
-    registry: &Registry<M>,
+fn collect_unresolved_descendants(
+    registry: &Registry,
     seeds: &[(Direction, TypeKey)],
     seen: &mut std::collections::HashSet<(Direction, TypeKey)>,
     out: &mut Vec<UnresolvedEntry>,
@@ -169,7 +169,7 @@ fn collect_unresolved_descendants<M>(
     }
 }
 
-pub(crate) fn check_complete<M>(registry: &Registry<M>) -> Result<(), ResolveError> {
+pub(crate) fn check_complete(registry: &Registry) -> Result<(), ResolveError> {
     let required = required_set(registry);
     let mut entries: Vec<UnresolvedEntry> = Vec::new();
     let mut unresolved_required_roots: Vec<(Direction, TypeKey)> = Vec::new();

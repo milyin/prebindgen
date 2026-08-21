@@ -231,6 +231,13 @@ pub(crate) enum DeclaredKind {
     Data,
 }
 
+/// What compiling a site needs beyond the model: which rows exist, and which
+/// row each site takes.
+pub(crate) struct Tables {
+    pub(crate) recipes: prebindgen_registry::recipe::Recipes,
+    pub(crate) bindings: prebindgen_registry::recipe::Bindings,
+}
+
 /// All configuration the structured builder accumulates for one
 /// canonical Rust type key. The declared kind is mandatory (an entry exists
 /// only because some declarator created it); the remaining, cross-kind
@@ -448,7 +455,270 @@ pub struct JniGen {
     /// would be a comment rather than a type.
     decls: Declarations,
     /// Every crossing this binding needs, each with its conversion.
-    registry: prebindgen_registry::Registry<KotlinMeta>,
+    registry: prebindgen_registry::Registry,
+}
+
+/// One JNI parameter as a signature writes it: name, Kotlin type, the Kotlin
+/// expression that fills it, the conversion it crosses through, where Kotlin
+/// finds the object to lock and whether that access can be null (both for a
+/// nested owned handle only), whether the conversion carries Rust-side stages,
+/// and the struct field it fills.
+#[cfg(test)]
+pub(crate) type NamedWire = (
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    bool,
+    bool,
+    Option<String>,
+);
+
+/// How a reach renders: its field steps, joined — the accessor call every leaf
+/// hangs off is the site's, not the value's, so it is dropped.
+#[cfg(test)]
+fn reach_of(path: &[prebindgen_registry::unfold::PathStep]) -> String {
+    use prebindgen_registry::unfold::PathStep;
+    path.iter()
+        .filter_map(|step| match step {
+            PathStep::Field { ident, .. } => Some(ident.to_string()),
+            PathStep::Call { .. } => None,
+        })
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+/// How the Rust side reaches one plan leaf, in the form a wire renders it —
+/// the accessor call every leaf hangs off is the site's, not the value's, so it
+/// is dropped to line the two up.
+#[cfg(test)]
+fn leaf_reach(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> String {
+    use prebindgen_registry::unfold::LeafSource;
+    match &leaf.source {
+        LeafSource::SumTag => "tag".to_string(),
+        LeafSource::VariantField { variant, member } => format!(
+            "{variant}.{}",
+            crate::jni::struct_plan::sum_field_prop_name(member)
+        ),
+        _ => reach_of(&leaf.path),
+    }
+}
+
+#[cfg(test)]
+impl JniGen {
+    /// What one crossing occupies on the wire, named the way a parameter
+    /// names it.
+    ///
+    /// Test support: the composition is what the emitters read, and this is it
+    /// in the form the three coordinated sites see — the JNI parameter name,
+    /// its Kotlin type, the Kotlin expression that fills it, the conversion it
+    /// crosses through, where the lock scaffold finds a nested handle and
+    /// whether that can be null, whether the conversion carries Rust-side
+    /// stages, and the struct field it fills.
+    pub(crate) fn named_wires_for_test(
+        &self,
+        spelling: &str,
+        param: &str,
+    ) -> Option<Vec<NamedWire>> {
+        Some(
+            self.parts_wires_for_test(spelling)?
+                .iter()
+                .map(|w| {
+                    (
+                        crate::util::snake_to_camel(&format!(
+                            "{param}_{}",
+                            w.path.replace('.', "_")
+                        )),
+                        w.kt_ty.clone(),
+                        w.access.render(param),
+                        w.conv().map(|c| c.to_string()),
+                        w.handle_target
+                            .as_ref()
+                            .map(|t| crate::jni::compile::reached(param, t)),
+                        w.handle_nullable,
+                        w.staged(),
+                        w.field().map(str::to_string),
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    /// What a declared type hands out, as the row states it: one line per
+    /// value, naming it, the alternative it belongs to, and how the Rust side
+    /// reaches it.
+    ///
+    /// Test support. The same list `synth_sum_leaves` produces, in the form
+    /// that compares — a `TypeRef` has no equality and a `syn::Member` prints
+    /// differently by variant, so both sides go through the same rendering.
+    pub(crate) fn out_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
+        use prebindgen_registry::recipe::Assembly;
+        let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
+        let ty: syn::Type = syn::parse_quote!(#ident);
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let compiled = self.decls.compiled.borrow();
+        let wires = compiled
+            .row_fragment(
+                &reading.key(),
+                Assembly::Deconstruct,
+                &crate::jni::rows::parts(),
+            )?
+            .out_wires
+            .clone()?;
+        Some(
+            wires
+                .iter()
+                .map(|w| {
+                    let from = match &w.from {
+                        crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
+                        crate::jni::compile::OutFrom::Payload { variant, member } => format!(
+                            "{}.{}",
+                            variant
+                                .as_ref()
+                                .map(|v| v.to_string())
+                                .unwrap_or_else(|| "?".to_string()),
+                            crate::jni::struct_plan::sum_field_prop_name(member)
+                        ),
+                    };
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
+                })
+                .collect(),
+        )
+    }
+
+    /// The same list, taken from the leaf synthesis the row is meant to
+    /// replace — `synth_sum_leaves` for a `sealed_class`,
+    /// `synth_value_struct_leaves` for a `data_class`.
+    pub(crate) fn walk_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
+        let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
+        let leaves = match self.registry.flat().declared_type(&ident)? {
+            prebindgen_registry::flat::Type::Variant(sum) => {
+                crate::jni::synth_sum_leaves(&self.decls, &self.registry, &ident, sum)
+            }
+            prebindgen_registry::flat::Type::Struct(s) => {
+                crate::jni::synth_value_struct_leaves(&self.decls, &self.registry, s)?
+            }
+            _ => return None,
+        };
+        Some(
+            leaves
+                .iter()
+                .map(|l| {
+                    format!(
+                        "{}: {} <- {} @{:?}",
+                        l.name,
+                        l.out_ty.key(),
+                        leaf_reach(l),
+                        l.group
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    /// What the return **site** of one function composes to, as the row states
+    /// it — rendered exactly as [`Self::out_lines_for_test`] renders a type's
+    /// row, so a site and a type can be compared.
+    ///
+    /// The decomposed-return path through `Compiler::site`: the site asks for
+    /// the `parts` row of its return type and gets the several values that row
+    /// states.
+    pub(crate) fn return_site_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
+        let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
+        let wires =
+            crate::jni::fn_plan::decomposed_return_for_test(&self.decls, &self.registry, &ident)?;
+        Some(
+            wires
+                .iter()
+                .map(|w| {
+                    let from = match &w.from {
+                        crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
+                        crate::jni::compile::OutFrom::Payload { variant, member } => format!(
+                            "{}.{}",
+                            variant
+                                .as_ref()
+                                .map(|v| v.to_string())
+                                .unwrap_or_else(|| "?".to_string()),
+                            crate::jni::struct_plan::sum_field_prop_name(member)
+                        ),
+                    };
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
+                })
+                .collect(),
+        )
+    }
+
+    /// The leaves the registry's own expansion plans for one function, in the
+    /// form [`Self::out_lines_for_test`] renders a row in.
+    ///
+    /// The walk side of a value form: its leaves come from `unfold::flatten`
+    /// rather than from a JniGen-side synthesis, so the comparison goes through
+    /// a plan rather than through a leaf list.
+    pub(crate) fn plan_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
+        let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
+        let plan = prebindgen_registry::Conversions::unfold_plans(&self.registry).get(&ident)?;
+        Some(
+            plan.leaves
+                .iter()
+                .map(|l| {
+                    format!(
+                        "{}: {} <- {} @{:?}",
+                        l.name,
+                        l.out_ty.key(),
+                        leaf_reach(l),
+                        l.group
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    /// Whether a declared type states a `parts` row at all, in the given
+    /// direction — asked of the compiled fragments the way an emitter asks.
+    ///
+    /// Test support. A type with nothing to be made of declares no such row,
+    /// and `Compiled::row_fragment` must then answer `None` rather than hand
+    /// back whatever the crossing compiled by default.
+    pub(crate) fn has_parts_row_for_test(&self, short: &str, out: bool) -> bool {
+        use prebindgen_registry::recipe::Assembly;
+        let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
+        let assembly = match out {
+            true => Assembly::Deconstruct,
+            false => Assembly::Construct,
+        };
+        self.decls
+            .compiled
+            .borrow()
+            .row_fragment(
+                &TypeKey::from_ident(&ident),
+                assembly,
+                &crate::jni::rows::parts(),
+            )
+            .is_some()
+    }
+
+    /// The wires a crossing composes into, by spelling.
+    pub(crate) fn parts_wires_for_test(
+        &self,
+        spelling: &str,
+    ) -> Option<Vec<crate::jni::compile::Wire>> {
+        use prebindgen_registry::recipe::Assembly;
+        let ty: syn::Type = syn::parse_str(spelling).ok()?;
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let key = reading.key();
+        let compiled = self.decls.compiled.borrow();
+        // A declared class states its composition under `parts`; an optional
+        // over one has no row of its own and composes on the row the registry
+        // derived, which is the crossing's default.
+        compiled
+            .row_fragment(&key, Assembly::Construct, &crate::jni::rows::parts())
+            .or_else(|| compiled.fragment(&key, Assembly::Construct))?
+            .wires
+            .clone()
+    }
 }
 
 // Opaque — exists so `Result<JniGen, _>::expect_err` works in tests.
@@ -478,13 +748,13 @@ impl JniGen {
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.decls,
-            prebindgen_registry::write::Conversions::Compiled(&self.decls.compiled_fns),
+            &self.decls.compiled_fns,
             out_path,
         )?)
     }
 
     /// The resolved registry — conversions, decompositions, and the model.
-    pub fn registry(&self) -> &prebindgen_registry::Registry<KotlinMeta> {
+    pub fn registry(&self) -> &prebindgen_registry::Registry {
         &self.registry
     }
 
@@ -572,13 +842,42 @@ pub struct Declarations {
     pub(crate) convert_decls: Vec<ConvertDecl>,
     /// Every conversion this binding compiled.
     ///
-    /// Filled once by `JniGenBuilder::build_with` and handed to `write_rust` as
-    /// `Conversions::Compiled`. It is what reaches the generated file, so
-    /// a fragment no longer has to be expressible as one `ConverterImpl` to be
-    /// emitted — only to be looked up. The writer sorts and de-duplicates by
-    /// function name, so the order here decides which of two same-named
-    /// functions wins and not where any of them lands.
+    /// Filled once by `JniGenBuilder::build_with` and handed to `write_rust`
+    /// directly. It is what reaches the generated file, so a fragment no longer
+    /// has to be expressible as one `ConverterImpl` to be emitted — only to be
+    /// looked up. The writer sorts and de-duplicates by function name, so the
+    /// order here decides which of two same-named functions wins and not where
+    /// any of them lands.
     pub(crate) compiled_fns: Vec<syn::ItemFn>,
+    /// Every conversion this binding has compiled so far, keyed by crossing.
+    ///
+    /// What the emitters ask instead of the converter table. A table entry
+    /// carries one `destination`, the single wire type a conversion produces,
+    /// so it can answer only while a crossing occupies one wire value — and the
+    /// answer an emitter wants is this adapter's own fragment.
+    ///
+    /// Shared and interior-mutable because JniGen reads it **while** it is
+    /// being filled: unlike `prebindgen-c`, this adapter's emitters are also
+    /// its conversion builders, and `JniGen::build_with` calls them from inside
+    /// `convert_with`. A conversion for one type is built out of the
+    /// conversions for its inners, which the resolver compiles first — the same
+    /// order that filled the converter table, so a fragment is there exactly
+    /// when a table entry would have been.
+    pub(crate) compiled: std::rc::Rc<
+        std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>>,
+    >,
+    /// The row table and the site bindings this binding was built against.
+    ///
+    /// Kept beside the fragment store for the same reason it is: a plan is
+    /// compiled per **site**, and the sites are `fn_plan`'s to enumerate — a
+    /// constructor expansion contributes leaves no signature names. So the
+    /// compiler has to be resumable after `build_with` has returned, and these
+    /// are the two things `Compiler::resume` needs that the model does not
+    /// already carry.
+    ///
+    /// `None` only before the build fills them, which is before anything can
+    /// ask.
+    pub(crate) tables: Option<std::rc::Rc<Tables>>,
 
     /// When `true` (default), generated wrappers wrap each call that
     /// touches an opaque handle in the per-call `withSortedHandleLocks`

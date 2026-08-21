@@ -291,7 +291,7 @@ fn reopened_ptr_class_keeps_gc_managed() {
         )]
     };
     let gc_managed_of = |first: crate::PtrClassDecl, second: crate::PtrClassDecl| {
-        let registry: RegistryBuilder<KotlinMeta> =
+        let registry: RegistryBuilder =
             crate::test_util::reg_from_items(declare_referenced(items())).expect("index items");
         let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
@@ -349,7 +349,7 @@ fn a_type_gets_one_class_declarator() {
         ]
     };
     let declare = |first: crate::ClassDecl, second: crate::ClassDecl| {
-        let registry: RegistryBuilder<KotlinMeta> =
+        let registry: RegistryBuilder =
             crate::test_util::reg_from_items(declare_referenced(items())).expect("index items");
         let _ = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
@@ -868,9 +868,13 @@ fn recursive_sum_shapes_fail_deterministically() {
         }
     };
 
-    // `Vec<Node>` — variable arity, rejected with the intended message.
+    // `Vec<Node>` — the row saying what `Node` is made of reaches `Node`
+    // again, and the table refuses it by name before anything is compiled.
+    // The same refusal the emitter used to phrase as "variable arity", now
+    // stating which crossings close the loop.
     let msg = attempt(quote::quote!(Branch(Vec<Node>)), "rec_vec").expect_err("must fail");
-    assert!(msg.contains("variable arity"), "{msg}");
+    assert!(msg.contains("reaches its own crossing"), "{msg}");
+    assert!(msg.contains("Node"), "{msg}");
 
     // `Box<Node>` — not a bare ident, so it never classifies as a sum; it
     // fails as an unresolvable payload rather than recursing.
@@ -2382,5 +2386,267 @@ fn a_types_close_answer_matches_its_plans() {
         closes,
         vec!["probe", "maybe_probe", "outcome", "inner"],
         "the fixture must cover reaching a handle four ways AND not reaching one"
+    );
+}
+
+/// A `sealed_class` states a row saying what it hands out, and it says exactly
+/// what the leaf synthesis it will replace says.
+///
+/// One `jint` naming which alternative is live, then one group of values per
+/// alternative laid beside the others — names, types, groups and the pattern
+/// binding each is reached through. The fixture carries a unit alternative
+/// (which contributes nothing), a positional payload, a two-field payload and a
+/// named-field payload, so the slot naming is exercised in every form it takes.
+#[test]
+fn a_sealed_class_states_what_it_hands_out() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                    Range { low: i64, high: i64 },
+                    Tagged(String, Priority),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_one(which: i32) -> Reading {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::sealed_class!(Reading))
+                .fun(prebindgen_registry::fun!(read_one)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let composed = gen
+        .out_lines_for_test("Reading")
+        .expect("Reading states a deconstructing parts row");
+    assert_eq!(
+        composed,
+        vec![
+            "tag: Reading <- tag @None",
+            "exact_v0: i64 <- Exact.v0 @Some(1)",
+            "range_low: i64 <- Range.low @Some(2)",
+            "range_high: i64 <- Range.high @Some(2)",
+            "tagged_v0: String <- Tagged.v0 @Some(3)",
+            "tagged_v1: Priority <- Tagged.v1 @Some(3)",
+        ],
+        "the row states the tag, then one group per alternative",
+    );
+    // And it is the same list the synthesis it replaces produces, which is what
+    // makes pointing the emitters at the fragment a move rather than a rewrite.
+    assert_eq!(
+        composed,
+        gen.walk_lines_for_test("Reading").expect("the walk"),
+        "the row and the leaf synthesis disagree",
+    );
+}
+
+/// A `data_class` states a row saying what it hands out, and a field that is
+/// itself one contributes its own values under the parent's name and chain.
+///
+/// The row declines for the **whole** value rather than per field, because the
+/// emitter it feeds does: a handle, an `enum_class`, a sum, or a `data_class`
+/// behind an `Option` or a `Vec` is delivered with a transform the decoupled
+/// form does not carry, and one such field sends the whole object down the
+/// whole-value `fromParts` path. So `Wrapped` composes and `Opaque`-bearing
+/// `Guarded` does not, and both agree with the synthesis they will replace.
+#[test]
+fn a_data_class_states_what_it_hands_out() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Inner {
+                    pub count: i64,
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Wrapped {
+                    pub id: i64,
+                    pub inner: Inner,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Opaque {
+                    pub v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Guarded {
+                    pub id: i64,
+                    pub held: Opaque,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn wrapped_new() -> Wrapped {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn guarded_new() -> Guarded {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Inner))
+                .class(crate::data_class!(Wrapped))
+                .class(crate::ptr_class!(Opaque))
+                .class(crate::data_class!(Guarded))
+                .fun(prebindgen_registry::fun!(wrapped_new))
+                .fun(prebindgen_registry::fun!(guarded_new)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    assert_eq!(
+        gen.out_lines_for_test("Wrapped")
+            .expect("Wrapped states a deconstructing parts row"),
+        vec![
+            "id: i64 <- id @None",
+            "inner__count: i64 <- inner.count @None",
+            "inner__label: String <- inner.label @None",
+        ],
+        "a nested data class contributes its own values, under its field's name",
+    );
+    // Compared as options, because declining is one of the two answers: a row
+    // that states nothing and a synthesis that returns nothing are the same
+    // claim, and `Guarded` makes it.
+    for short in ["Wrapped", "Inner", "Guarded"] {
+        assert_eq!(
+            gen.out_lines_for_test(short),
+            gen.walk_lines_for_test(short),
+            "the row and the leaf synthesis disagree on {short}",
+        );
+    }
+    assert!(
+        gen.out_lines_for_test("Guarded").is_none(),
+        "a handle field sends the whole object down the whole-value path",
+    );
+}
+
+/// A decomposed return is a **site** asking for its type's `parts` row, and it
+/// composes to what the expansion plan delivers.
+///
+/// The registry needed nothing new to express this: `Ask::Recipe` already lets
+/// a site name a row, and a `parts` fragment already occupies several wires.
+/// The two facts stages 3 and 4 established, meeting.
+#[test]
+fn a_decomposed_return_is_a_site_asking_for_the_parts_row() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                    Range { low: i64, high: i64 },
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_one(which: i32) -> Reading {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_maybe(which: i32) -> Option<Reading> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(prebindgen_registry::fun!(read_one))
+                .fun(prebindgen_registry::fun!(read_maybe)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let expected = vec![
+        "tag: Reading <- tag @None",
+        "exact_v0: i64 <- Exact.v0 @Some(1)",
+        "range_low: i64 <- Range.low @Some(2)",
+        "range_high: i64 <- Range.high @Some(2)",
+    ];
+    assert_eq!(
+        gen.return_site_lines_for_test("read_one")
+            .expect("read_one's return is a site"),
+        expected,
+        "the site composes the sum's parts",
+    );
+    // The shape rides the delivery, not the row: an `Option<Reading>` return
+    // hands out the same values, and the optional is what the builder's
+    // nullability says.
+    assert_eq!(
+        gen.return_site_lines_for_test("read_maybe")
+            .expect("read_maybe's return is a site"),
+        expected,
+        "an optional return decomposes the same type",
+    );
+    // And it is what the expansion plan delivers, which is what the emitters
+    // read today.
+    assert_eq!(
+        gen.return_site_lines_for_test("read_one"),
+        gen.plan_lines_for_test("read_one"),
+        "the site and the expansion plan disagree",
     );
 }

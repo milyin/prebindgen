@@ -135,7 +135,7 @@ impl super::JniGen {
                 .unwrap_or_else(|| key.as_str().to_string());
             let wire = registry
                 .reading(key)
-                .and_then(|tr| registry.output_entry(&tr))
+                .and_then(|tr| ext.out_frag(&tr))
                 .map(|e| e.wire_type().to_token_stream().to_string())
                 .unwrap_or_else(|| "?".to_string());
             out.push_str(&format!(

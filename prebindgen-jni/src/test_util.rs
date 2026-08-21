@@ -15,9 +15,7 @@ use prebindgen_registry::{Registry, RegistryBuilder};
 ///
 /// Test-only sugar: the two steps are one line each in a build script, but they
 /// appear in dozens of fixtures here.
-pub(crate) fn reg_from_items<M, I>(
-    items: I,
-) -> Result<RegistryBuilder<M>, prebindgen_registry::ScanError>
+pub(crate) fn reg_from_items<I>(items: I) -> Result<RegistryBuilder, prebindgen_registry::ScanError>
 where
     I: IntoIterator<Item = (syn::Item, prebindgen::SourceLocation)>,
 {

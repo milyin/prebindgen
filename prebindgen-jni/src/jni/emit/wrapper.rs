@@ -11,7 +11,7 @@ use crate::jni::trait_impl::{
 pub(crate) fn emit_jni_function_wrapper(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
     emit_jni_function_wrapper_with_callee(ext, f, registry, None, emit)
@@ -128,7 +128,7 @@ pub(crate) fn validate_constant_fn(ext: &Declarations, f: &prebindgen_registry::
 pub(crate) fn const_expr_getter_fn(
     kotlin_name: &str,
     ty: &syn::Type,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
 ) -> prebindgen_registry::flat::Function {
     let ident = format_ident!("const_get_{}", kotlin_name.to_lowercase());
     // The one lookup this path needs: the type is named by a build script, so
@@ -182,7 +182,7 @@ pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: 
 pub(crate) fn emit_jni_function_wrapper_with_callee(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     callee: Option<syn::Expr>,
     emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
@@ -231,8 +231,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // registry borrows for the future build-once stage.
     let output_entry = match &plan.output {
         FnOutputPlan::Value(v) => Some(
-            registry
-                .output_entry(&v.target_ty)
+            ext.out_frag(&v.target_ty)
                 .expect("output entry validated at plan build"),
         ),
         FnOutputPlan::Unfold(_) => None,
@@ -284,12 +283,22 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
             let stmts = &hoisted.stmts;
             let reached = match hoisted.rebase(&leaf.path) {
-                Some((local, rest, consuming)) => {
-                    reach_leaf_flat(&qualify, leaf, &rest, quote!(#local), false, consuming)
-                }
-                None => {
-                    reach_leaf_flat(&qualify, leaf, &leaf.path, base.clone(), base_is_ref, false)
-                }
+                Some((local, rest, consuming)) => reach_leaf_flat(
+                    &qualify,
+                    &crate::jni::compile::OutWire::from_leaf(leaf),
+                    &rest,
+                    quote!(#local),
+                    false,
+                    consuming,
+                ),
+                None => reach_leaf_flat(
+                    &qualify,
+                    &crate::jni::compile::OutWire::from_leaf(leaf),
+                    &leaf.path,
+                    base.clone(),
+                    base_is_ref,
+                    false,
+                ),
             };
             if stmts.is_empty() && reached.to_string() == base.to_string() {
                 return None;
@@ -333,7 +342,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         let (ze_stmts, ze_args) = encode_plan_leaves(
             ext,
             registry,
-            ep,
+            crate::jni::emit::Delivered::of(ep),
             &eze_idents,
             &quote!(__de),
             &ze_fail,
@@ -521,7 +530,7 @@ fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     original_ident: &syn::Ident,
     param: &PlanParam,
     on_err: &TokenStream,
@@ -555,7 +564,7 @@ fn emit_input_param(
         InputKind::FlattenStruct(plan) => {
             for leaf in &plan.leaves {
                 let pid = &leaf.native_ident;
-                let pty = &leaf.native_wire_ty;
+                let pty = &leaf.native_wire_ty();
                 wire_params.push(quote!(#pid: #pty));
             }
             let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err, emit);
@@ -692,8 +701,8 @@ fn emit_input_param(
                 prebindgen_registry::flat::TypeKind::Ref { .. }
             ) =>
         {
-            let entry = registry
-                .input_entry(arg_ty)
+            let entry = ext
+                .in_frag(arg_ty)
                 .expect("plan classified Handle ⇒ entry present");
             let wire_ident = if matches!(&entry.destination, syn::Type::Ptr(_)) {
                 format_ident!("{}_ptr", arg_ident)
@@ -726,7 +735,7 @@ fn emit_input_param(
             // without the round trip. The panic now CALLS the shared message
             // instead of restating it, which is what `PlanError::message`'s doc
             // has always claimed and hand-duplication did not deliver.
-            let entry = registry.input_entry(&leaf.reading).unwrap_or_else(|| {
+            let entry = ext.in_frag(&leaf.reading).unwrap_or_else(|| {
                 panic!(
                     "{}",
                     PlanError::Unresolved {
@@ -735,7 +744,7 @@ fn emit_input_param(
                     .message(original_ident)
                 )
             });
-            emit_plain_decode(entry, arg_ident, arg_ty, on_err)
+            emit_plain_decode(&entry, arg_ident, arg_ty, on_err)
         }
     }
 }
@@ -744,7 +753,7 @@ fn emit_input_param(
 /// wire param + staged decode prelude + the call argument (`&decoded` /
 /// `.as_deref()` per the source param's Rust shape).
 fn emit_plain_decode(
-    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
     arg_ident: &syn::Ident,
     arg_ty: &prebindgen_registry::flat::TypeRef,
     on_err: &TokenStream,
@@ -878,7 +887,7 @@ fn emit_plain_decode(
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     plan: &prebindgen_registry::expand::FoldPlan,
     leaves: &[PlanLeaf],
     orig_param: &syn::Ident,
@@ -897,7 +906,7 @@ pub(crate) fn emit_expanded_param(
         let lookup_entry = || {
             // The leaf's own reading goes straight to the entry: spelling it and
             // looking the same reading back up is the round trip #286 removed.
-            registry.input_entry(&leaf.ty).unwrap_or_else(|| {
+            ext.in_frag(&leaf.ty).unwrap_or_else(|| {
                 // Shared wording, not restated — see the sibling backstop above.
                 panic!(
                     "{}",
@@ -917,7 +926,7 @@ pub(crate) fn emit_expanded_param(
         if let InputKind::FlattenStruct(flat) = &classified.kind {
             for flat_leaf in &flat.leaves {
                 let ident = &flat_leaf.native_ident;
-                let wire = &flat_leaf.native_wire_ty;
+                let wire = &flat_leaf.native_wire_ty();
                 wire_params.push(quote!(#ident: #wire));
             }
             let (decode, _) = render_flat_input_decode(flat, &local, on_err, emit);

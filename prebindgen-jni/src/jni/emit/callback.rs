@@ -23,7 +23,7 @@ use super::*;
 pub(crate) fn callback_input(
     ext: &Declarations,
     args: &[prebindgen_registry::flat::TypeRef],
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     // Human-readable tag for attach/log messages.
@@ -85,7 +85,7 @@ pub(crate) fn callback_input(
             // Every leaf converter must already be resolved (deferral safety).
             // A synthesized leaf (a sum's tag) has no converter to wait for.
             for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                registry.output_entry(&leaf.out_ty)?;
+                ext.out_frag(&leaf.out_ty)?;
             }
             let spec = folder_iface_for_plan(ext, registry, plan)?;
             let holder_slash =
@@ -129,7 +129,7 @@ pub(crate) fn callback_input(
             let (leaf_stmts, leaf_args) = encode_plan_leaves(
                 ext,
                 registry,
-                plan,
+                crate::jni::emit::Delivered::of(plan),
                 &obj_idents,
                 &quote!(__cb_elem),
                 &fail,
@@ -182,7 +182,7 @@ pub(crate) fn callback_input(
             // would make the trampoline wait forever on an `i32` crossing the
             // binding may not have.
             for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                let e = registry.output_entry(&leaf.out_ty)?;
+                let e = ext.out_frag(&leaf.out_ty)?;
                 if leaf.identity && e.metadata.projection.is_none() {
                     return None;
                 }
@@ -193,7 +193,7 @@ pub(crate) fn callback_input(
             let (stmts, arg_exprs) = encode_plan_leaves(
                 ext,
                 registry,
-                plan,
+                crate::jni::emit::Delivered::of(plan),
                 &obj_idents,
                 &quote!(#cb_arg),
                 &fail,
@@ -212,7 +212,7 @@ pub(crate) fn callback_input(
         // converter and clone the borrow (the callback only borrows the value). The
         // `data_class` converter composes the whole object via `fromParts`, so the
         // Kotlin `run(t: T)` receives a ready-made `T`.
-        let (cb_val, arg_entry) = match registry.output_entry(arg_ty) {
+        let (cb_val, arg_entry) = match ext.out_frag(arg_ty) {
             Some(e) => (quote!(#cb_arg), e),
             // A borrow: the callback hands out a reference, and the value is
             // cloned for the JVM.
@@ -237,7 +237,7 @@ pub(crate) fn callback_input(
             // `Box<&ZThing>`, and added a classification that never fires.
             None => {
                 let core = arg_ty.borrow_target()?;
-                (quote!((#cb_arg).clone()), registry.output_entry(core)?)
+                (quote!((#cb_arg).clone()), ext.out_frag(core)?)
             }
         };
         let arg_wire = arg_entry.destination.clone();

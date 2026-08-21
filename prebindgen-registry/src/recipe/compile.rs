@@ -27,11 +27,7 @@
 //! one, and rebuilding a `Box` are three different pieces of Rust. Sharing the
 //! row is the declaration's business; sharing the code is not.
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    fmt,
-    rc::Rc,
-};
+use std::{collections::HashMap, fmt, rc::Rc};
 
 use super::{
     Assembly, Bindings, Bound, Construct, Crossing, Deconstruct, Mode, Reach, RecipeError,
@@ -97,37 +93,16 @@ pub struct At<'a> {
     pub recipe: &'a RecipeId,
 }
 
-/// An adapter-minted name for a helper the generated prelude must carry.
+/// What every hook receives: a read-only view of the model and the table, and
+/// the capability to emit Rust.
 ///
-/// The registry only de-duplicates these; what one names is the adapter's.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RequirementId(String);
-
-impl RequirementId {
-    /// Name one helper.
-    pub fn new(name: impl Into<String>) -> Self {
-        Self(name.into())
-    }
-
-    /// The name as written.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for RequirementId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-/// What every hook receives: the read-only view of the model and the table,
-/// plus the one thing a hook may ask the registry to record.
+/// A hook asks the registry nothing and records nothing in it. What it produces
+/// is its fragment, and what the registry reads of that is
+/// [`Carrier::yields`].
 pub struct Cx<'a> {
     model: &'a Flat,
     recipes: &'a Recipes,
     emit: &'a Emit,
-    required: &'a mut BTreeSet<RequirementId>,
 }
 
 impl Cx<'_> {
@@ -156,11 +131,6 @@ impl Cx<'_> {
     /// row.
     pub fn rows(&self, crossing: &Crossing) -> Vec<&RecipeId> {
         self.recipes.rows(&crossing.key())
-    }
-
-    /// A helper the compiled fragment calls, so the generated prelude emits it.
-    pub fn require(&mut self, req: RequirementId) {
-        self.required.insert(req);
     }
 }
 
@@ -253,9 +223,6 @@ pub trait Compile {
         func: &Function,
         args: Parts<'_, Self>,
     ) -> Frag<Self>;
-
-    /// The single part is the value.
-    fn identity(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &Self::Fragment) -> Frag<Self>;
 
     /// Read the parts off the value where it stands.
     fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self>;
@@ -365,7 +332,12 @@ type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>
 /// nothing and outlive any of them.
 pub struct Compiled<F> {
     fragments: HashMap<FragmentKey, Rc<F>>,
-    required: BTreeSet<RequirementId>,
+    /// Which row answered when a crossing was compiled **as a whole**, rather
+    /// than as one part of a container. Recorded by [`Compiler::crossing`],
+    /// which is the only entry point that consults the crossing's default —
+    /// so [`Compiled::fragment`] can give back that same answer instead of
+    /// choosing between the rows a crossing happens to have.
+    defaults: HashMap<(TypeKey, Assembly), RecipeId>,
 }
 
 /// What a fragment is memoised under: the type **as the site spelled it**, the
@@ -377,7 +349,18 @@ impl<F> Default for Compiled<F> {
     fn default() -> Self {
         Self {
             fragments: HashMap::new(),
-            required: BTreeSet::new(),
+            defaults: HashMap::new(),
+        }
+    }
+}
+
+/// Cheap: a fragment sits behind an `Rc`, so a clone shares the fragments
+/// rather than copying them, and needs nothing of `F`.
+impl<F> Clone for Compiled<F> {
+    fn clone(&self) -> Self {
+        Self {
+            fragments: self.fragments.clone(),
+            defaults: self.defaults.clone(),
         }
     }
 }
@@ -394,19 +377,55 @@ impl<F> Compiled<F> {
         self.fragments.is_empty()
     }
 
-    /// Every helper a compiled fragment asked for, de-duplicated.
-    pub fn required(&self) -> impl Iterator<Item = &RequirementId> {
-        self.required.iter()
+    /// The fragment for one crossing, compiled **as a whole**.
+    ///
+    /// What an adapter's emitters ask once they stop reading the converter
+    /// table. The answer is the one [`Compiler::crossing`] built — the
+    /// crossing's default row — and not one of the rows that answer for this
+    /// type only as a part of some container. A caller that wants a particular
+    /// row has the row and asks through [`Self::row_fragment`].
+    ///
+    /// `None` means no site ever crossed this type in this direction.
+    ///
+    /// Handed back as the `Rc` it is stored under: an adapter that reads its
+    /// store while compilation is still filling it cannot hold a borrow across
+    /// the next write, and a fragment holds a whole `syn::ItemFn` that a
+    /// recursive lookup should not be copying.
+    pub fn fragment(&self, ty: &TypeKey, assembly: Assembly) -> Option<Rc<F>> {
+        let row = self.defaults.get(&(ty.clone(), assembly))?;
+        self.row_fragment(ty, assembly, row)
+    }
+
+    /// Record a fragment an adapter built **without** the compiler, as this
+    /// crossing's whole answer.
+    ///
+    /// The escape hatch for a crossing the adapter still answers by hand:
+    /// `Compiler::crossing` never saw it, so nothing would file it, and
+    /// [`Self::fragment`] would have no answer to give. Recording it keeps the
+    /// adapter's emitters on one lookup instead of a per-site fall-back to
+    /// whatever else knows.
+    pub fn record(&mut self, ty: TypeKey, assembly: Assembly, row: RecipeId, fragment: F) {
+        self.fragments.insert(
+            (ty.clone(), assembly, row.clone()),
+            std::rc::Rc::new(fragment),
+        );
+        self.defaults.insert((ty, assembly), row);
+    }
+
+    /// The fragment for one crossing and one named row.
+    pub fn row_fragment(&self, ty: &TypeKey, assembly: Assembly, row: &RecipeId) -> Option<Rc<F>> {
+        self.fragments
+            .get(&(ty.clone(), assembly, row.clone()))
+            .cloned()
     }
 
     /// Every fragment this compilation built, in a deterministic order.
     ///
     /// What an adapter emits from once it stops routing its conversions back
     /// through the converter table — handed to
-    /// [`write_rust`](crate::write::write_rust) as
-    /// [`Conversions::Compiled`](crate::write::Conversions::Compiled). The
-    /// order is by crossing key and then by row name, so a file written from
-    /// this is stable across runs.
+    /// [`write_rust`](crate::write::write_rust) directly. The order is by
+    /// crossing key and then by row name, so a file written from this is
+    /// stable across runs.
     pub fn fragments(&self) -> Vec<&F> {
         let mut keyed: Vec<(&FragmentKey, &Rc<F>)> = self.fragments.iter().collect();
         keyed.sort_by(|a, b| {
@@ -452,11 +471,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
         self.compiled
     }
 
-    /// Every helper a compiled fragment asked for, de-duplicated.
-    pub fn required(&self) -> impl Iterator<Item = &RequirementId> {
-        self.compiled.required.iter()
-    }
-
     /// How many fragments have been built, which is what makes the
     /// per-crossing promise observable.
     pub fn compiled_fragments(&self) -> usize {
@@ -491,7 +505,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.compiled.required,
         };
         adapter
             .plan(&mut cx, &bound, &root)
@@ -509,7 +522,55 @@ impl<'a, C: Compile> Compiler<'a, C> {
         crossing: &Crossing,
     ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
         let recipe = self.recipes.row(crossing).0;
-        self.row(adapter, crossing, &recipe)
+        let fragment = self.row(adapter, crossing, &recipe)?;
+        // The whole-crossing answer, so the emitters can ask for it back
+        // without re-deriving which row a crossing defaults to.
+        self.compiled
+            .defaults
+            .insert((crossing.spelled().key(), crossing.assembly()), recipe);
+        Ok(fragment)
+    }
+
+    /// The rows this compilation was built against.
+    ///
+    /// So a caller can ask whether a crossing has a row before compiling it by
+    /// name — the check [`Self::row_of`] enforces, available ahead of the
+    /// error rather than only through it.
+    pub fn recipes(&self) -> &Recipes {
+        self.recipes
+    }
+
+    /// The fragment for one crossing under a **named** row, rather than the one
+    /// the crossing defaults to.
+    ///
+    /// For an adapter that states more than one row for a type and wants both:
+    /// the default answers every site, and this compiles the other so it can be
+    /// checked, or read through
+    /// [`Compiled::row_fragment`](Compiled::row_fragment), before any site
+    /// takes it.
+    ///
+    /// Refuses a name the crossing does not have. Compiling a row falls back to
+    /// the derived row when the lookup misses, which is right for the two
+    /// callers that pass a name they got **from** the table — a crossing's
+    /// default, or a site's binding — and wrong here, where the name is the
+    /// caller's own claim. Without the check a conditionally-declared row that was not
+    /// declared compiles the default instead and files it under the asked-for
+    /// name, leaving [`Compiled::row_fragment`] to answer for a row that does
+    /// not exist.
+    pub fn row_of(
+        &mut self,
+        adapter: &mut C,
+        crossing: &Crossing,
+        recipe: &RecipeId,
+    ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
+        if self.recipes.get(&crossing.key(), recipe).is_none() {
+            return Err(RecipeError::NoSuchRow {
+                crossing: crossing.key(),
+                recipe: recipe.clone(),
+            }
+            .into());
+        }
+        self.row(adapter, crossing, recipe)
     }
 
     /// The fragment for one row, built once and reused.
@@ -779,14 +840,9 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.compiled.required,
         };
         match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
-            ProductKind::Identity => {
-                let (_, inner) = &paired[0];
-                adapter.identity(&mut cx, at, inner)
-            }
             ProductKind::Fields => adapter.fields(&mut cx, at, &paired),
             ProductKind::ValueForm(func) => adapter.value_form(&mut cx, at, func, &paired),
         }
@@ -804,7 +860,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.compiled.required,
         };
         adapter
             .choice(&mut cx, at, &paired)
@@ -818,7 +873,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
             model: self.model,
             recipes: self.recipes,
             emit: &self.emit,
-            required: &mut self.compiled.required,
         }
     }
 
@@ -846,15 +900,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     .collect();
                 Ok((ProductKind::Fields, parts))
             }
-            Construct::Identity(inner) => Ok((
-                ProductKind::Identity,
-                vec![Part {
-                    from: PartSource::Argument { index: 0 },
-                    mode: mode_of(inner),
-                    ty: (**inner).clone(),
-                    name: "value".to_owned(),
-                }],
-            )),
             Construct::Call(name) => {
                 let func = self.function(at, name)?;
                 let parts = func
@@ -1012,7 +1057,6 @@ fn field_name(field: &Field, index: usize) -> String {
 /// Which of the four product hooks composes a set of parts.
 enum ProductKind<'a> {
     Construct(&'a Function),
-    Identity,
     Fields,
     ValueForm(&'a Function),
 }

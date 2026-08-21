@@ -4,12 +4,12 @@ use prebindgen::SourceLocation;
 use proc_macro2::TokenStream;
 
 use super::*;
-use crate::registry::{Direction, RegistryBuilder};
+use crate::registry::RegistryBuilder;
 
 struct IdentityExt;
 
 impl IdentityExt {
-    fn declare_into(&self, mut reg: RegistryBuilder<()>) -> RegistryBuilder<()> {
+    fn declare_into(&self, mut reg: RegistryBuilder) -> RegistryBuilder {
         for f in [syn::parse_quote!(a_fn), syn::parse_quote!(b_fn)] {
             reg = reg.export(&f);
         }
@@ -23,12 +23,10 @@ impl IdentityExt {
 }
 
 impl Prebindgen for IdentityExt {
-    type Metadata = ();
-
     fn on_function(
         &self,
         f: &prebindgen_flat::flat::Function,
-        _registry: &Registry<Self::Metadata>,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_fn(f)
@@ -37,7 +35,7 @@ impl Prebindgen for IdentityExt {
     fn on_struct(
         &self,
         s: &prebindgen_flat::flat::Struct,
-        _registry: &Registry<Self::Metadata>,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_struct(s)
@@ -46,7 +44,7 @@ impl Prebindgen for IdentityExt {
     fn on_variant(
         &self,
         v: &prebindgen_flat::flat::Variant,
-        _registry: &Registry<Self::Metadata>,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_variant(v)
@@ -55,7 +53,7 @@ impl Prebindgen for IdentityExt {
     fn on_enum(
         &self,
         e: &prebindgen_flat::flat::Enum,
-        _registry: &Registry<Self::Metadata>,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_enum(e)
@@ -64,49 +62,24 @@ impl Prebindgen for IdentityExt {
 
 #[test]
 fn dedup_and_sort() {
-    let mut reg: Registry<()> = Registry::empty();
-    let ty_a: syn::Type = syn::parse_quote!(u64);
-    let ty_b: syn::Type = syn::parse_quote!(Sample);
-    let wire: syn::Type = syn::parse_quote!(i64);
-    let wire2: syn::Type = syn::parse_quote!(*const u8);
-
-    reg.insert_crossing(
-        Direction::Input,
-        &ty_a,
-        true,
-        Some(TypeEntry {
-            destination: wire.clone(),
-            function: syn::parse_quote!(
-                fn handle_to_u64_aaaa(v: i64) -> u64 {
-                    v as u64
-                }
-            ),
-            pre_stages: vec![],
-            subs: vec![],
-            niches: crate::niches::Niches::empty(),
-            metadata: (),
-        }),
+    // Two crossings can compile the same conversion, and an adapter hands over
+    // whatever its compilation produced. One function per name reaches the
+    // file, in name order — a generated file that reordered between runs would
+    // show up as a diff in `examples/regen-check.sh`.
+    let handle: syn::ItemFn = syn::parse_quote!(
+        fn handle_to_u64_aaaa(v: i64) -> u64 {
+            v as u64
+        }
     );
-    reg.insert_crossing(
-        Direction::Input,
-        &ty_b,
-        true,
-        Some(TypeEntry {
-            destination: wire2.clone(),
-            function: syn::parse_quote!(
-                fn Ptr_to_Sample_bbbb(v: *const u8) -> Sample {
-                    decode_sample(v)
-                }
-            ),
-            pre_stages: vec![],
-            subs: vec![],
-            niches: crate::niches::Niches::empty(),
-            metadata: (),
-        }),
+    let sample: syn::ItemFn = syn::parse_quote!(
+        fn Ptr_to_Sample_bbbb(v: *const u8) -> Sample {
+            decode_sample(v)
+        }
     );
 
-    let items = collect_converter_items(&reg);
-    assert_eq!(items.len(), 2);
+    let items = crate::write::dedup_by_name(vec![handle.clone(), sample.clone(), handle.clone()]);
+
+    assert_eq!(items.len(), 2, "the repeated conversion lands once");
     // Sorted ASCII: "Ptr_to_Sample_bbbb" < "handle_to_u64_aaaa"
     // (uppercase P < lowercase h).
     assert_eq!(items[0].0.to_string(), "Ptr_to_Sample_bbbb");
@@ -172,7 +145,7 @@ fn write_rust_sorts_declared_items_by_ident() {
             loc,
         ),
     ];
-    let reg: Registry<()> = IdentityExt
+    let reg: Registry = IdentityExt
         .declare_into(crate::test_util::reg_from_items(items).expect("index"))
         .scanned()
         .expect("scan");
@@ -182,8 +155,7 @@ fn write_rust_sorts_declared_items_by_ident() {
         .expect("clock drift")
         .as_nanos();
     let path = std::env::temp_dir().join(format!("prebindgen-write-rust-{unique}.rs"));
-    let written = write_rust(&reg, &IdentityExt, crate::write::Conversions::Table, &path)
-        .expect("write_rust");
+    let written = write_rust(&reg, &IdentityExt, &[], &path).expect("write_rust");
     let content = std::fs::read_to_string(&written).expect("read generated file");
     let _ = std::fs::remove_file(&written);
 
@@ -222,14 +194,10 @@ fn guards_emit_ungated_and_in_stream_order() {
     struct ConstGatingExt;
 
     trait ResolveGating {
-        fn resolve_gating(self, ext: ConstGatingExt)
-            -> Result<Registry<()>, crate::WriteRustError>;
+        fn resolve_gating(self, ext: ConstGatingExt) -> Result<Registry, crate::WriteRustError>;
     }
-    impl ResolveGating for RegistryBuilder<()> {
-        fn resolve_gating(
-            self,
-            ext: ConstGatingExt,
-        ) -> Result<Registry<()>, crate::WriteRustError> {
+    impl ResolveGating for RegistryBuilder {
+        fn resolve_gating(self, ext: ConstGatingExt) -> Result<Registry, crate::WriteRustError> {
             let registry = self.declares_consts().build()?;
             let _ = &ext;
             Ok(registry)
@@ -237,12 +205,10 @@ fn guards_emit_ungated_and_in_stream_order() {
     }
 
     impl Prebindgen for ConstGatingExt {
-        type Metadata = ();
-
         fn on_function(
             &self,
             f: &prebindgen_flat::flat::Function,
-            _r: &Registry<()>,
+            _r: &Registry,
             _emit: &crate::Emit,
         ) -> TokenStream {
             _emit.verbatim_fn(f)
@@ -250,7 +216,7 @@ fn guards_emit_ungated_and_in_stream_order() {
         fn on_struct(
             &self,
             s: &prebindgen_flat::flat::Struct,
-            _r: &Registry<()>,
+            _r: &Registry,
             _emit: &crate::Emit,
         ) -> TokenStream {
             _emit.verbatim_struct(s)
@@ -258,7 +224,7 @@ fn guards_emit_ungated_and_in_stream_order() {
         fn on_variant(
             &self,
             v: &prebindgen_flat::flat::Variant,
-            _r: &Registry<()>,
+            _r: &Registry,
             _emit: &crate::Emit,
         ) -> TokenStream {
             _emit.verbatim_variant(v)
@@ -266,7 +232,7 @@ fn guards_emit_ungated_and_in_stream_order() {
         fn on_enum(
             &self,
             e: &prebindgen_flat::flat::Enum,
-            _r: &Registry<()>,
+            _r: &Registry,
             _emit: &crate::Emit,
         ) -> TokenStream {
             _emit.verbatim_enum(e)
@@ -300,19 +266,14 @@ fn guards_emit_ungated_and_in_stream_order() {
             loc.clone(),
         ),
     ];
-    let registry: RegistryBuilder<()> = crate::test_util::reg_from_items(items).expect("index");
+    let registry: RegistryBuilder = crate::test_util::reg_from_items(items).expect("index");
     assert_eq!(registry.flat().guards().count(), 2);
 
     let dir = crate::test_util::unique_test_dir("write_guards");
     std::fs::create_dir_all(&dir).unwrap();
     let registry = registry.resolve_gating(ConstGatingExt).expect("resolve");
-    let path = crate::write::write_rust(
-        &registry,
-        &ConstGatingExt,
-        crate::write::Conversions::Table,
-        dir.join("gen.rs"),
-    )
-    .expect("write_rust");
+    let path = crate::write::write_rust(&registry, &ConstGatingExt, &[], dir.join("gen.rs"))
+        .expect("write_rust");
     let src = std::fs::read_to_string(&path).unwrap();
 
     // The named const is gated out; both guards emit regardless.

@@ -7,10 +7,11 @@ use super::*;
 #[test]
 fn option_carves_single_niche() {
     let mut reg = Registry::empty_for_test();
+    let decls = Declarations::default();
     install_input(
         &mut reg,
+        &decls,
         "TestType",
-        0,
         entry(
             syn::parse_quote!(jni::sys::jlong),
             "jlong_to_TestType_aaaa",
@@ -21,7 +22,7 @@ fn option_carves_single_niche() {
     let inner_ty: syn::Type = syn::parse_quote!(TestType);
     let (wire, _body, niches) = option_input(
         &reg.reading_of(&inner_ty).expect("interned"),
-        &reg,
+        &decls,
         &prebindgen_registry::Emit::for_test(),
     )
     .expect("Option<TestType> resolves");
@@ -39,12 +40,13 @@ fn option_carves_single_niche() {
 #[test]
 fn option_cascades_through_multi_niche() {
     let mut reg = Registry::empty_for_test();
+    let decls = Declarations::default();
 
     // TestType: jint with two niches (MIN, MAX).
     install_input(
         &mut reg,
+        &decls,
         "TestType",
-        0,
         entry(
             syn::parse_quote!(jni::sys::jint),
             "jint_to_TestType_aaaa",
@@ -65,7 +67,7 @@ fn option_cascades_through_multi_niche() {
     let layer1_ty: syn::Type = syn::parse_quote!(TestType);
     let (w1, _, n1) = option_input(
         &reg.reading_of(&layer1_ty).expect("interned"),
-        &reg,
+        &decls,
         &prebindgen_registry::Emit::for_test(),
     )
     .expect("layer 1 resolves");
@@ -77,8 +79,8 @@ fn option_cascades_through_multi_niche() {
     // here we mimic it by installing the produced ConverterImpl.)
     install_input(
         &mut reg,
+        &decls,
         "Option < TestType >",
-        1,
         entry(w1.clone(), "jint_to_OptionTestType_bbbb", n1),
     );
 
@@ -86,7 +88,7 @@ fn option_cascades_through_multi_niche() {
     let layer2_ty: syn::Type = syn::parse_quote!(Option<TestType>);
     let (w2, _, n2) = option_input(
         &reg.reading_of(&layer2_ty).expect("interned"),
-        &reg,
+        &decls,
         &prebindgen_registry::Emit::for_test(),
     )
     .expect("layer 2 resolves");
@@ -100,8 +102,8 @@ fn option_cascades_through_multi_niche() {
     // Install layer-2 wrapper for the layer-3 lookup.
     install_input(
         &mut reg,
+        &decls,
         "Option < Option < TestType > >",
-        1,
         entry(w2.clone(), "jint_to_OptionOptionTestType_cccc", n2),
     );
 
@@ -110,7 +112,7 @@ fn option_cascades_through_multi_niche() {
     let layer3_ty: syn::Type = syn::parse_quote!(Option<Option<TestType>>);
     let (w3, _, n3) = option_input(
         &reg.reading_of(&layer3_ty).expect("interned"),
-        &reg,
+        &decls,
         &prebindgen_registry::Emit::for_test(),
     )
     .expect("layer 3 resolves via box fallback");
@@ -130,10 +132,11 @@ fn option_cascades_through_multi_niche() {
 #[test]
 fn option_output_cascades_through_multi_niche() {
     let mut reg = Registry::empty_for_test();
+    let decls = Declarations::default();
     install_output(
         &mut reg,
+        &decls,
         "TestType",
-        0,
         entry(
             syn::parse_quote!(jni::sys::jint),
             "TestType_to_jint_aaaa",
@@ -151,7 +154,7 @@ fn option_output_cascades_through_multi_niche() {
     );
 
     let inner_ty: syn::Type = syn::parse_quote!(TestType);
-    let (w1, body1, n1) = option_output(&reg.reading_of(&inner_ty).expect("interned"), &reg)
+    let (w1, body1, n1) = option_output(&reg.reading_of(&inner_ty).expect("interned"), &decls)
         .expect("Option<TestType> output resolves");
     assert_eq!(w1.to_token_stream().to_string(), "jni :: sys :: jint");
     assert_eq!(n1.len(), 1, "one slot left after carving the first");
@@ -165,13 +168,13 @@ fn option_output_cascades_through_multi_niche() {
 
     install_output(
         &mut reg,
+        &decls,
         "Option < TestType >",
-        1,
         entry(w1.clone(), "OptionTestType_to_jint_bbbb", n1),
     );
 
     let layer2_ty: syn::Type = syn::parse_quote!(Option<TestType>);
-    let (w2, body2, n2) = option_output(&reg.reading_of(&layer2_ty).expect("interned"), &reg)
+    let (w2, body2, n2) = option_output(&reg.reading_of(&layer2_ty).expect("interned"), &decls)
         .expect("Option<Option<TestType>> output resolves");
     assert_eq!(w2.to_token_stream().to_string(), "jni :: sys :: jint");
     assert!(n2.is_empty());
@@ -189,10 +192,11 @@ fn option_output_cascades_through_multi_niche() {
 #[test]
 fn option_over_jobject_uses_default_null_niche() {
     let mut reg = Registry::empty_for_test();
+    let decls = Declarations::default();
     install_input(
         &mut reg,
+        &decls,
         "MyStruct",
-        0,
         entry(
             syn::parse_quote!(jni::objects::JObject),
             "JObject_to_MyStruct_aaaa",
@@ -203,7 +207,7 @@ fn option_over_jobject_uses_default_null_niche() {
     let ty: syn::Type = syn::parse_quote!(MyStruct);
     let (wire, _, rest) = option_input(
         &reg.reading_of(&ty).expect("interned"),
-        &reg,
+        &decls,
         &prebindgen_registry::Emit::for_test(),
     )
     .expect("Option<MyStruct> resolves");
@@ -220,10 +224,11 @@ fn option_over_jobject_uses_default_null_niche() {
 #[test]
 fn option_fails_when_no_niche_and_non_primitive_wire() {
     let mut reg = Registry::empty_for_test();
+    let decls = Declarations::default();
     install_input(
         &mut reg,
+        &decls,
         "MyStruct",
-        0,
         entry(
             syn::parse_quote!(jni::objects::JObject),
             "JObject_to_MyStruct_aaaa",
@@ -233,7 +238,7 @@ fn option_fails_when_no_niche_and_non_primitive_wire() {
     let ty: syn::Type = syn::parse_quote!(MyStruct);
     assert!(option_input(
         &reg.reading_of(&ty).expect("interned"),
-        &reg,
+        &decls,
         &prebindgen_registry::Emit::for_test()
     )
     .is_none());
@@ -245,10 +250,11 @@ fn option_fails_when_no_niche_and_non_primitive_wire() {
 #[test]
 fn option_box_fallback_exposes_no_niches() {
     let mut reg = Registry::empty_for_test();
+    let decls = Declarations::default();
     install_input(
         &mut reg,
+        &decls,
         "i64",
-        0,
         entry(
             syn::parse_quote!(jni::sys::jlong),
             "jlong_to_i64_aaaa",
@@ -258,7 +264,7 @@ fn option_box_fallback_exposes_no_niches() {
     let ty: syn::Type = syn::parse_quote!(i64);
     let (wire, _, rest) = option_input(
         &reg.reading_of(&ty).expect("interned"),
-        &reg,
+        &decls,
         &prebindgen_registry::Emit::for_test(),
     )
     .expect("Option<i64> via box fallback");

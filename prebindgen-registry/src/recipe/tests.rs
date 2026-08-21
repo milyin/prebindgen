@@ -932,11 +932,6 @@ impl Compile for Recorder {
         self.hook(at, "construct", detail)
     }
 
-    fn identity(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
-        let detail = inner.text.clone();
-        self.hook(at, "identity", detail)
-    }
-
     fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
         let detail = part_names::<Self>(parts);
         self.hook(at, "fields", detail)
@@ -969,12 +964,11 @@ impl Compile for Recorder {
 
     fn callback(
         &mut self,
-        cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_>,
         at: At<'_>,
         args: &[&Note],
         result: Option<&Note>,
     ) -> Frag<Self> {
-        cx.require(RequirementId::new("callback-shim"));
         let detail = format!(
             "({}) -> {:?}",
             args.iter()
@@ -1516,13 +1510,6 @@ fn a_callbacks_arguments_do_the_other_job() {
         adapter.calls
     );
     assert!(adapter.calls[1].contains("callback"), "{:?}", adapter.calls);
-    assert_eq!(
-        compiler
-            .required()
-            .map(|r| r.to_string())
-            .collect::<Vec<_>>(),
-        vec!["callback-shim".to_string()]
-    );
 }
 
 #[test]
@@ -1965,9 +1952,6 @@ fn what_a_role_tolerates_is_the_adapters_own_answer() {
         ) -> Frag<Self> {
             self.0.construct(cx, at, func, args)
         }
-        fn identity(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
-            self.0.identity(cx, at, inner)
-        }
         fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
             self.0.fields(cx, at, parts)
         }
@@ -2273,4 +2257,94 @@ fn a_value_form_binds_the_accessors_result_and_reads_its_fields() {
         plan.contains("handle_read -> key=field0/owned, payload=field1/owned"),
         "{plan}"
     );
+}
+
+#[test]
+fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
+    let model = model(&[SAMPLE]);
+    let sample = ty(&model, "Sample");
+    // `fields` sorts before `whole`, so a lookup that ranked the rows by name
+    // rather than asking which one the crossing defaults to would answer with
+    // the wrong one.
+    let recipes = two_rows(&model);
+    let crossing = Crossing::new(sample.clone(), Assembly::Deconstruct);
+    let mut builder = Bindings::builder();
+    builder.bind(
+        site("z_put", 0),
+        crossing.clone(),
+        Ask::Recipe(id("fields")),
+        Origin::Function,
+    );
+    let bindings = builder.build(&recipes).expect("bindings");
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    // One site takes `fields`; the crossing on its own takes its default.
+    compiler
+        .site(&mut adapter, site("z_put", 0), crossing.clone())
+        .expect("site");
+    compiler.crossing(&mut adapter, &crossing).expect("whole");
+    let compiled = compiler.finish();
+
+    let key = sample.key();
+    // An emitter asks by crossing and gets the default …
+    assert_eq!(
+        compiled
+            .fragment(&key, Assembly::Deconstruct)
+            .map(|n| n.text.clone()),
+        Some("atomic Sample deconstruct: Sample".to_string()),
+    );
+    // … and a caller holding a row still reaches that row.
+    assert!(compiled
+        .row_fragment(&key, Assembly::Deconstruct, &id("fields"))
+        .is_some());
+    // The other direction was never crossed, so there is no answer to give.
+    assert!(compiled.fragment(&key, Assembly::Construct).is_none());
+}
+
+/// Compiling a row **by name** refuses a name the crossing does not have,
+/// rather than answering with the row it would have derived.
+///
+/// The two callers that reach [`Compiler::row`] with a name they got *from* the
+/// table — a crossing's default, and a site's binding — rely on that fallback,
+/// and it is right for them. [`Compiler::row_of`] takes the caller's own claim,
+/// so the same fallback would compile the default and file it under the asked-for
+/// name, leaving [`Compiled::row_fragment`] to answer for a row nobody declared.
+///
+/// The shape that hits it is a conditionally-declared row: an adapter that
+/// declares `fields` only for a type that has some, then asks every declared
+/// type for `fields` anyway.
+#[test]
+fn compiling_a_row_by_name_refuses_a_name_the_crossing_lacks() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let bindings = Bindings::default();
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let err = compiler
+        .row_of(&mut adapter, &crossing, &id("nonesuch"))
+        .expect_err("`Sample` declares `whole` and `fields`, and nothing else");
+    let message = err.to_string();
+    assert!(message.contains("nonesuch"), "{message}");
+    assert!(message.contains("Sample"), "{message}");
+
+    // And nothing was filed under the name, so no emitter can read one back.
+    let compiled = compiler.finish();
+    assert!(compiled
+        .row_fragment(
+            &ty(&model, "Sample").key(),
+            Assembly::Deconstruct,
+            &id("nonesuch")
+        )
+        .is_none());
+
+    // The two rows that DO exist still compile by name.
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    for name in ["whole", "fields"] {
+        compiler
+            .row_of(&mut adapter, &crossing, &id(name))
+            .unwrap_or_else(|e| panic!("`{name}` is declared: {e}"));
+    }
 }

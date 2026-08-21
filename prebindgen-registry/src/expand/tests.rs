@@ -26,7 +26,7 @@ fn src_qualify(id: &syn::Ident) -> syn::Path {
 
 #[test]
 fn single_constructor_plan_and_fold() {
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
     ]);
@@ -68,7 +68,7 @@ fn single_constructor_plan_and_fold() {
 
 #[test]
 fn constructor_plan_and_fold() {
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
     ]);
@@ -131,7 +131,7 @@ fn constructor_plan_and_fold() {
 #[test]
 fn optional_byvalue_single_ctor() {
     // `attachment: Option<ZZBytes>` with single `z_zbytes_from_vec(Vec<u8>)`.
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_zbytes_from_vec(bytes: Vec<u8>) -> ZZBytes { todo!() }",
         "fn z_session_delete(s: &ZSession, attachment: Option<ZZBytes>) -> bool { todo!() }",
     ]);
@@ -184,7 +184,7 @@ fn optional_byvalue_single_ctor() {
 fn optional_byref_single_ctor() {
     // `encoding: Option<&ZEncoding>` with single, infallible
     // `z_encoding_from_string(String) -> ZEncoding`.
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_encoding_from_string(s: String) -> ZEncoding { todo!() }",
         "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
     ]);
@@ -227,7 +227,7 @@ fn optional_byref_multi_arg_ctor() {
     // `encoding: Option<&ZEncoding>` built from a TWO-arg, infallible
     // `z_encoding_from_id(i32, Option<String>) -> ZEncoding`: an explicit
     // `present: bool` flag + two plain (non-`Option`-wrapped) arg leaves.
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_encoding_from_id(id: i32, schema: Option<String>) -> ZEncoding { todo!() }",
         "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
     ]);
@@ -296,7 +296,7 @@ fn optional_combined_selector_encodes_absence() {
     // absence (`-1` = `None`). The ctor's own `Option<String>` arg is a
     // PASSTHROUGH leaf (kept as `Option<String>`, not double-wrapped —
     // `None` is a legitimate value for the taken arm).
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_encoding_from_id(id: i32, schema: Option<String>) -> ZEncoding { todo!() }",
         "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
     ]);
@@ -420,7 +420,7 @@ fn iterable_emit_shape() {
 fn default_constructor_auto_applies_and_skips() {
     // A `.default()` ZKeyExpr constructor auto-`construct`s every matching
     // param of every declared fn — except where `.skip_default_construct`'d.
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
         "fn z_session_undeclare(s: &ZSession, k: ZKeyExpr) -> bool { todo!() }",
@@ -464,7 +464,7 @@ fn default_constructor_auto_applies_and_skips() {
 
 #[test]
 fn default_constructor_skips_accessor_and_explicit_construct_errors() {
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
         "fn z_keyexpr_clone(ke: &ZKeyExpr) -> ZKeyExpr { todo!() }",
@@ -493,7 +493,7 @@ fn default_constructor_skips_accessor_and_explicit_construct_errors() {
         .contains_key(&(ident("z_keyexpr_clone"), ident("ke"))));
 
     // An explicit per-fn input flatten on an accessor is a build error.
-    let mut reg2: Registry<()> = reg_with(&[
+    let mut reg2: Registry = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_keyexpr_clone(ke: &ZKeyExpr) -> ZKeyExpr { todo!() }",
     ]);
@@ -514,7 +514,7 @@ fn recursive_input_nests_param_constructors() {
     // by z_reply_sample(sample: ZSample). ZSample's default input expands
     // the `sample` param into z_sample_new's params, each of which (ZKeyExpr,
     // ZZBytes) recursively expands per ITS default input.
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_sample_new(key_expr: ZKeyExpr, payload: ZZBytes) -> ZSample { todo!() }",
         "fn z_keyexpr_try_from(s: String) -> ZKeyExpr { todo!() }",
         "fn z_zbytes_from_vec(b: Vec<u8>) -> ZZBytes { todo!() }",
@@ -604,7 +604,7 @@ fn recursive_input_nests_param_constructors() {
 #[test]
 fn recursive_input_cycle_errors() {
     // A → B → A constructor cycle is a build error (not an infinite expansion).
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn make_a(b: B) -> A { todo!() }",
         "fn make_b(a: A) -> B { todo!() }",
         "fn consume_a(a: A) -> bool { todo!() }",
@@ -642,7 +642,7 @@ fn recursive_input_cycle_errors() {
 #[test]
 fn unknown_constructor_errors() {
     use prebindgen_flat::types_util::ident;
-    let mut reg: Registry<()> =
+    let mut reg: Registry =
         reg_with(&["fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }"]);
     let mut exp = Expansions::default();
     exp.expands.push(ExpandDecl {
@@ -671,7 +671,7 @@ fn unknown_constructor_errors() {
 #[test]
 fn constructor_target_mismatch_errors() {
     use prebindgen_flat::types_util::ident;
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_sample_new(s: String) -> ZSample { todo!() }",
         "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
     ]);
@@ -699,7 +699,7 @@ fn constructor_target_mismatch_errors() {
 #[test]
 fn invalid_declarations_collected() {
     use prebindgen_flat::types_util::ident;
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_session_get(s: &ZSession, k: &ZKeyExpr) -> bool { todo!() }",
     ]);
@@ -776,7 +776,7 @@ fn invalid_declarations_collected() {
 /// parameter whose element is constructible. That is what this fixture is.
 #[test]
 fn a_vec_param_does_not_match_its_elements_constructor() {
-    let mut reg: Registry<()> = reg_with(&[
+    let mut reg: Registry = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_keyexpr_join_all(parts: Vec<ZKeyExpr>) -> bool { todo!() }",
     ]);

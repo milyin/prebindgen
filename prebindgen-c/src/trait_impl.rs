@@ -1,6 +1,37 @@
-use prebindgen_registry::{Building, Conversions, Crossing, RegistryBuilder};
+use prebindgen_registry::{recipe::Assembly, Building, Conversions, Crossing, RegistryBuilder};
 
 use super::{builder::callback_fn_type, *};
+
+/// What an emitter asks instead of the converter table.
+///
+/// [`CbindgenBuilder::compiled`] holds every fragment this binding compiled,
+/// keyed by crossing. A fragment answers for a crossing that occupies several
+/// wire values; the converter table's single `destination` cannot.
+impl CbindgenBuilder {
+    /// The fragment for `ty` crossing in the given direction, if one compiled.
+    ///
+    /// Shares the fragment rather than copying it: the store is read while
+    /// compilation is still writing to it, so a borrow cannot be held across
+    /// the next write, and `shape_is_lowerable` walks a type's layers asking
+    /// this at every one.
+    pub(crate) fn frag(
+        &self,
+        ty: &TypeRef,
+        assembly: Assembly,
+    ) -> Option<std::rc::Rc<crate::compile::CFrag>> {
+        self.compiled.borrow().fragment(&ty.key(), assembly)
+    }
+
+    /// The fragment that builds a Rust `ty` out of C parts.
+    pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<std::rc::Rc<crate::compile::CFrag>> {
+        self.frag(ty, Assembly::Construct)
+    }
+
+    /// The fragment that takes a Rust `ty` apart into C parts.
+    pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<std::rc::Rc<crate::compile::CFrag>> {
+        self.frag(ty, Assembly::Deconstruct)
+    }
+}
 
 /// Per-category **input** terminal converter builders. Each returns
 /// `Some(ConverterImpl)` only for the type category it claims (and `None`
@@ -10,7 +41,7 @@ use super::{builder::callback_fn_type, *};
 impl CbindgenBuilder {
     /// Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible (null
     /// handle → message). The wire is the bare handle pointer `*mut #c_struct`.
-    pub(crate) fn in_opaque_handle(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_opaque_handle(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         let key = ty.key();
         if !self.opaque.contains_key(&key) {
             return None;
@@ -51,7 +82,7 @@ impl CbindgenBuilder {
     /// invalid `Box`) forces the full `gravestone()` write.
     fn nullable_owned_ptr_fields(
         &self,
-        registry: &impl Conversions<()>,
+        registry: &impl Conversions,
         key: &TypeKey,
     ) -> Option<Vec<syn::Ident>> {
         let cfg = self.value_opaque.get(key)?;
@@ -81,7 +112,7 @@ impl CbindgenBuilder {
     /// declared `kind` (its fields are an opaque blob the generator can't introspect).
     fn value_opaque_writeback(
         &self,
-        registry: &impl Conversions<()>,
+        registry: &impl Conversions,
         key: &TypeKey,
         slot: &syn::Ident,
     ) -> Option<TokenStream> {
@@ -114,7 +145,7 @@ impl CbindgenBuilder {
     /// has a bare `Box<T>` owned-pointer field (a null `Box` is invalid). Nullable
     /// (`Option<Box<T>>`) mirrors null in place and need no `Gravestone`/`Default`;
     /// non-mirror owned types get their `Gravestone` impl from the consumer.
-    fn mirror_needs_gravestone_impl(&self, registry: &Registry<()>, key: &TypeKey) -> bool {
+    fn mirror_needs_gravestone_impl(&self, registry: &Registry, key: &TypeKey) -> bool {
         match self.value_opaque.get(key) {
             Some(cfg) if cfg.generate_mirror => {
                 self.nullable_owned_ptr_fields(registry, key).is_none()
@@ -143,8 +174,8 @@ impl CbindgenBuilder {
     pub(crate) fn in_value_opaque(
         &self,
         ty: &TypeRef,
-        registry: &impl Conversions<()>,
-    ) -> Option<ConverterImpl<()>> {
+        registry: &impl Conversions,
+    ) -> Option<ConverterImpl> {
         let opaque = self.value_opaque_ty_of(&ty.key())?.clone();
         let name = Self::in_name_of(&ty.key());
         let src = self.src_ty_of(&ty.key());
@@ -199,11 +230,7 @@ impl CbindgenBuilder {
     /// no generator-side evaluation. An unmatched value is a binding error
     /// through the wrapper's error channel; no Rust enum is ever constructed
     /// from it.
-    pub(crate) fn in_enum(
-        &self,
-        ty: &TypeRef,
-        r: &impl Conversions<()>,
-    ) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_enum(&self, ty: &TypeRef, r: &impl Conversions) -> Option<ConverterImpl> {
         let key = ty.key();
         if !self.enums.contains_key(&key) {
             return None;
@@ -259,7 +286,7 @@ impl CbindgenBuilder {
     }
 
     /// `String` input: `*const c_char` → owned `String` — fallible.
-    pub(crate) fn in_string(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_string(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         if !r_is_string(ty) {
             return None;
         }
@@ -298,7 +325,7 @@ impl CbindgenBuilder {
 
     /// Bare `str` never crosses the C ABI directly, but resolving `&str`
     /// inputs requires its inner node to have a filled rank-0 cell.
-    pub(crate) fn in_str(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_str(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         if !r_is_str(ty) {
             return None;
         }
@@ -323,7 +350,7 @@ impl CbindgenBuilder {
     /// Rust `bool` may hold, so it crosses as [`bool_wire`] and is normalised
     /// by [`bool_in_expr`] before a `bool` exists. The C prototype is
     /// unchanged — cbindgen simplifies `MaybeUninit<T>` to `T`.
-    pub(crate) fn in_bool(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_bool(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         if !r_is_bool(ty) {
             return None;
         }
@@ -367,9 +394,9 @@ impl CbindgenBuilder {
         &'v self,
         compiler: &mut prebindgen_registry::recipe::Compiler<
             '_,
-            crate::compile::CCompile<'v, Registry<()>>,
+            crate::compile::CCompile<'v, Registry>,
         >,
-        registry: &'v Registry<()>,
+        registry: &'v Registry,
     ) -> Result<(), String> {
         use prebindgen_registry::recipe::{Assembly, Crossing, Role, Site};
 
@@ -430,7 +457,7 @@ impl CbindgenBuilder {
     pub(crate) fn union_arm_name(
         &self,
         key: &TypeKey,
-        registry: &impl Conversions<()>,
+        registry: &impl Conversions,
         parts: &[(
             prebindgen_registry::recipe::Part<'_>,
             &crate::compile::CFrag,
@@ -461,7 +488,7 @@ impl CbindgenBuilder {
     /// back after being dropped arrives here NULL — and is reported, never
     /// materialised. An `Option<Box<T>>` reads NULL as `None` instead, which is
     /// the representation it has room for.
-    pub(crate) fn in_boxed_payload(&self, fty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_boxed_payload(&self, fty: &TypeRef) -> Option<ConverterImpl> {
         let name = format_ident!("{}_payload", Self::in_name_of(&fty.key()));
         let optional = fty.optional_inner().is_some();
         let (wire, src_inner, owned, short) =
@@ -532,7 +559,7 @@ impl CbindgenBuilder {
 
     /// The peer of [`Self::in_boxed_payload`]: an owned value the C side must
     /// later release, boxed here rather than having arrived boxed.
-    pub(crate) fn out_boxed_payload(&self, fty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn out_boxed_payload(&self, fty: &TypeRef) -> Option<ConverterImpl> {
         let name = format_ident!("{}_payload", Self::out_name_of(&fty.key()));
         let optional = fty.optional_inner().is_some();
         let src = self.src_ty_of(&fty.key());
@@ -591,7 +618,7 @@ impl CbindgenBuilder {
     /// Lossy on invalid UTF-8 for the same reason. This is the reading the
     /// hand-written field walk had; stating it as a row is what makes it
     /// visible rather than buried.
-    pub(crate) fn in_string_field(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_string_field(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         if !r_is_string(ty) {
             return None;
         }
@@ -626,7 +653,7 @@ impl CbindgenBuilder {
     /// `bool` **return** is always already one of two values and crosses as
     /// itself, while a field shares one mirror with the decode that has to
     /// normalise it.
-    pub(crate) fn out_bool_field(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn out_bool_field(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         if !r_is_bool(ty) {
             return None;
         }
@@ -651,7 +678,7 @@ impl CbindgenBuilder {
 
     /// FFI-safe scalar (integers, floats): identity pass-through. `bool` is
     /// claimed earlier by [`Self::in_bool`] and never reaches here.
-    pub(crate) fn in_scalar(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_scalar(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         if !r_is_scalar(ty) || r_is_bool(ty) {
             return None;
         }
@@ -682,7 +709,7 @@ impl CbindgenBuilder {
     /// C allocator extern + raw C-string allocator + the universal memory freer.
     /// Emitted when the layer hands `char*`/array memory to C. Panics if such
     /// memory is produced but no `.free_memory_function` is declared.
-    fn prereq_alloc_free(&self, registry: &Registry<()>, produces_array: bool) -> Vec<syn::Item> {
+    fn prereq_alloc_free(&self, registry: &Registry, produces_array: bool) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         if !(self.needs_free(registry) || produces_array) {
             return items;
@@ -762,7 +789,7 @@ impl CbindgenBuilder {
 
     /// Opaque handles: bare-pointer C type (`z_*_t*` = `Box::into_raw`) + typed
     /// `_drop`. The C type is an opaque/incomplete struct.
-    fn prereq_opaque_handles(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prereq_opaque_handles(&self, registry: &Registry) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.opaque) {
             // Keyed directly: this used to spell the key into tokens purely so
@@ -770,8 +797,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let c_struct = self.c_type_ident(&reading.key());
@@ -802,14 +828,13 @@ impl CbindgenBuilder {
     /// Data structs: `#[repr(C)]` mirror only. Heap (`String`) fields are
     /// `char*` raw blocks the C user releases individually via the
     /// `free_memory_function` — no per-struct destructor.
-    fn prereq_data_structs(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prereq_data_structs(&self, registry: &Registry) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.data) {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let Some(fields) = self.struct_fields(registry, &reading.key()) else {
@@ -844,7 +869,7 @@ impl CbindgenBuilder {
     /// the fail-closed size+align equality asserts and the typed `_drop` (drops
     /// the live Rust value in place; NULL/gravestone ⇒ no-op), plus a `_take`
     /// for types delivered as takeable callback params.
-    fn prereq_value_opaque(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prereq_value_opaque(&self, registry: &Registry) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         let takeable_keys = self.takeable_type_keys();
         let mut vo: Vec<(&TypeKey, &ValueOpaqueCfg)> = self.value_opaque.iter().collect();
@@ -853,8 +878,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let src = self.src_ty_of(&reading.key());
@@ -1052,7 +1076,7 @@ impl CbindgenBuilder {
     /// need from it — a number versus a spelling.
     fn prereq_enums(
         &self,
-        registry: &Registry<()>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
@@ -1060,8 +1084,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let Some(e) = unit_enum(registry, &reading.key()) else {
@@ -1103,7 +1126,7 @@ impl CbindgenBuilder {
     /// and gets no drop.
     fn prereq_tagged_unions(
         &self,
-        registry: &Registry<()>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
@@ -1111,8 +1134,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
-            {
+            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
                 continue;
             }
             let Some(e) = payload_enum(registry, &reading.key()) else {
@@ -1129,7 +1151,7 @@ impl CbindgenBuilder {
                 let wires: Vec<syn::Type> = a
                     .fields
                     .iter()
-                    .map(|f| self.payload_wire_of(&reading.key(), vident, f, registry))
+                    .map(|f| self.payload_wire_of(&reading.key(), vident, f))
                     .collect();
                 // `Alternative::spell` writes the delimiters the source wrote,
                 // which is what the three-armed `syn::Fields` match was doing —
@@ -1221,27 +1243,20 @@ impl CbindgenBuilder {
 
     /// The wire of one payload field, or a generation error naming the
     /// offending variant field and the supported set.
-    fn payload_wire_of(
-        &self,
-        key: &TypeKey,
-        variant: &syn::Ident,
-        field: &Field,
-        registry: &Registry<()>,
-    ) -> syn::Type {
-        self.payload_field_wire(&field.ty, registry)
-            .unwrap_or_else(|reason| {
-                panic!(
-                    "Cbindgen::tagged_union: payload `{}::{}{}` of type `{}` cannot cross: {}",
-                    type_short(key),
-                    variant,
-                    match &field.name {
-                        Some(n) => format!(".{n}"),
-                        None => String::new(),
-                    },
-                    field.ty,
-                    reason,
-                )
-            })
+    fn payload_wire_of(&self, key: &TypeKey, variant: &syn::Ident, field: &Field) -> syn::Type {
+        self.payload_field_wire(&field.ty).unwrap_or_else(|reason| {
+            panic!(
+                "Cbindgen::tagged_union: payload `{}::{}{}` of type `{}` cannot cross: {}",
+                type_short(key),
+                variant,
+                match &field.name {
+                    Some(n) => format!(".{n}"),
+                    None => String::new(),
+                },
+                field.ty,
+                reason,
+            )
+        })
     }
 
     /// Release one owning payload slot held behind `binding` (a `&mut` to the
@@ -1253,7 +1268,7 @@ impl CbindgenBuilder {
         &self,
         fty: &TypeRef,
         binding: &syn::Ident,
-        registry: &Registry<()>,
+        registry: &Registry,
     ) -> TokenStream {
         if r_is_string(fty) {
             return quote!(
@@ -1350,7 +1365,7 @@ impl CbindgenBuilder {
     /// resolved). `call` takes each arg's output wire (the owned handle the
     /// C callback must drop) plus the `void *context`; `drop` releases the
     /// context. Deterministic order by emitted name.
-    fn prereq_callback_structs(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prereq_callback_structs(&self, registry: &Registry) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         // The declaration's own argument types. `CallbackKey` is a list of
         // identities — what the map is keyed by — and the arguments it was
@@ -1364,7 +1379,7 @@ impl CbindgenBuilder {
             // declared-but-unused signature.
             if registry
                 .reading_of(&callback_fn_type(&args))
-                .and_then(|tr| registry.input_entry(&tr))
+                .and_then(|tr| self.in_frag(&tr))
                 .is_none()
             {
                 continue;
@@ -1385,8 +1400,8 @@ impl CbindgenBuilder {
                         a.to_token_stream()
                     )
                 });
-                let wire = registry
-                    .output_entry(&reading)
+                let wire = self
+                    .out_frag(&reading)
                     .unwrap_or_else(|| {
                         panic!(
                             "Cbindgen: callback arg `{}` has no output converter (declare it \
@@ -1407,7 +1422,7 @@ impl CbindgenBuilder {
                 // leaves its slot unwritten, and the wrapper must not build a
                 // Rust value to fill it with. `#[repr(transparent)]` keeps both
                 // the C ABI and the header spelling.
-                if marker_destination(&wire) && r_is_lowered_composite(&reading, registry) {
+                if marker_destination(&wire) && self.is_lowered_composite(&reading) {
                     for field in self.lower_shape(&reading, registry).fields {
                         let w = field.wire;
                         arg_wires.push(syn::parse_quote!(::core::mem::MaybeUninit<#w>));
@@ -1482,7 +1497,7 @@ impl CbindgenBuilder {
     /// [`Self::build`] over a registry described elsewhere — the test seam.
     pub(crate) fn build_with(
         mut self,
-        registry: prebindgen_registry::RegistryBuilder<()>,
+        registry: prebindgen_registry::RegistryBuilder,
     ) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
         let declared = self.declare_into(registry)?.validate_with(&self)?;
         // A second holding of the model: `convert_with` consumes the builder,
@@ -1506,22 +1521,26 @@ impl CbindgenBuilder {
                     .join("; "),
             }
         })?;
-        // The driver's state, carried between calls. The adapter borrows the
-        // partial registry view, which is lent per call and so is a different
-        // type each time; what it built is not, and outlives every one of them.
-        let mut compiled =
-            prebindgen_registry::recipe::Compiled::<crate::compile::CFrag>::default();
+        // The driver's state lives on `self` rather than here, because the
+        // adapter reads it **while** it compiles: `dispatch_fn_input` builds a
+        // callback's closure struct out of `lower_shape` and `encode_value`,
+        // both of which ask what a type crosses as. Handing the compiler the
+        // store by `mem::take` would empty it for exactly the span of that
+        // call, so it is cloned — a map of `Rc`s.
         let registry = declared
             .convert_with(|crossing, built, _emit| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     &recipes,
                     &bindings,
-                    std::mem::take(&mut compiled),
+                    self.compiled.borrow().clone(),
                 );
                 let conv = self.compile_crossing(&mut compiler, crossing, built);
-                compiled = compiler.finish();
-                conv
+                *self.compiled.borrow_mut() = compiler.finish();
+                // The conversion stays here; what the registry gets back is
+                // which other crossings this one delegates to, which is what
+                // its reachability walk needs.
+                conv.map(|c| prebindgen_registry::Answer::over(c.subs))
             })?
             .build()?;
         // Every site of every exported function, compiled. Nothing consumes
@@ -1532,15 +1551,19 @@ impl CbindgenBuilder {
         // borrowed return where the JVM must not.
         {
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
-                &model, &recipes, &bindings, compiled,
+                &model,
+                &recipes,
+                &bindings,
+                self.compiled.borrow().clone(),
             );
             self.check_sites(&mut compiler, &registry)
                 .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
-            compiled = compiler.finish();
+            *self.compiled.borrow_mut() = compiler.finish();
         }
-        // What the compilation produced, kept for emission. The converter table
-        // stays the lookup index; this is what reaches the file.
-        self.compiled_fns = compiled
+        // What the compilation produced, kept for emission and for lookup.
+        self.compiled_fns = self
+            .compiled
+            .borrow()
             .fragments()
             .into_iter()
             .map(|f| f.function.clone())
@@ -1559,12 +1582,12 @@ impl CbindgenBuilder {
     /// `None` records a gap, exactly as the chain of guesses this replaced did:
     /// whether the gap matters is the registry's call, and its report names the
     /// crossing.
-    fn compile_crossing<'v, R: Conversions<()>>(
+    fn compile_crossing<'v, R: Conversions>(
         &'v self,
         compiler: &mut prebindgen_registry::recipe::Compiler<'_, crate::compile::CCompile<'v, R>>,
         crossing: &Crossing,
         built: &'v R,
-    ) -> Option<ConverterImpl<()>> {
+    ) -> Option<ConverterImpl> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
         // key the crossing IS.
@@ -1584,8 +1607,8 @@ impl CbindgenBuilder {
 
     pub fn declare_into(
         &self,
-        mut registry: RegistryBuilder<()>,
-    ) -> Result<RegistryBuilder<()>, prebindgen_registry::ScanError> {
+        mut registry: RegistryBuilder,
+    ) -> Result<RegistryBuilder, prebindgen_registry::ScanError> {
         for (item_fn, origin) in self.collect_local_functions() {
             registry = registry.local_function(item_fn, origin)?;
         }
@@ -1606,8 +1629,8 @@ impl CbindgenBuilder {
     pub(crate) fn dispatch_fn_input(
         &self,
         args: &[TypeRef],
-        registry: &impl Conversions<()>,
-    ) -> Option<ConverterImpl<()>> {
+        registry: &impl Conversions,
+    ) -> Option<ConverterImpl> {
         let key: CallbackKey = args.iter().map(|a| a.key()).collect();
         if !self.callbacks.contains_key(&key) {
             // Undeclared callback signature: leave unresolved so the registry
@@ -1639,7 +1662,7 @@ impl CbindgenBuilder {
                 call_args.push(quote!(#ai.len()));
                 continue;
             }
-            let entry = registry.output_entry(arg)?;
+            let entry = self.out_frag(arg)?;
             let conv = entry.function.sig.ident.clone();
             let opaque = entry.destination.clone();
             let fallible = matches!(
@@ -1670,7 +1693,7 @@ impl CbindgenBuilder {
             // converter call can produce.
             if !is_takeable
                 && marker_destination(&entry.destination)
-                && !r_is_lowered_composite(arg, registry)
+                && !self.is_lowered_composite(arg)
             {
                 panic!(
                     "Cbindgen: callback argument `{}` has no C ABI — it resolves to a marker \
@@ -1689,7 +1712,7 @@ impl CbindgenBuilder {
             // (#428 review).
             let composite = !is_takeable
                 && marker_destination(&entry.destination)
-                && r_is_lowered_composite(arg, registry);
+                && self.is_lowered_composite(arg);
             if composite {
                 let shape = self.lower_shape(arg, registry);
                 closure_params.push(quote!(#ai: #src));
@@ -1824,7 +1847,7 @@ impl Prebindgen for CbindgenBuilder {
     ///
     /// `consts: None` — cbindgen has no const declaration mechanism, so every
     /// captured const is re-emitted verbatim and none is ever a skip.
-    fn validate(&self, binding: &Building<'_, Self::Metadata>) -> Result<(), String> {
+    fn validate(&self, binding: &Building<'_>) -> Result<(), String> {
         let mut functions = self.declared_functions();
         functions.extend(self.helper_functions());
         prebindgen_registry::warn_unclaimed(
@@ -1844,8 +1867,6 @@ impl Prebindgen for CbindgenBuilder {
         Ok(())
     }
 
-    type Metadata = ();
-
     // Consts have no declaration mechanism here (`declared_consts` stays
     // `None`), so every indexed const re-emits through the default
     // `on_const` — a path-alias against this source module, keeping consts
@@ -1863,7 +1884,7 @@ impl Prebindgen for CbindgenBuilder {
 
     fn prerequisites(
         &self,
-        registry: &Registry<()>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> Vec<syn::Item> {
         // C-string data memory (string returns + `String` fields of data structs)
@@ -1891,7 +1912,7 @@ impl Prebindgen for CbindgenBuilder {
     fn on_function(
         &self,
         f: &prebindgen_registry::flat::Function,
-        registry: &Registry<()>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         self.emit_function_wrapper(f, registry, emit)
@@ -1900,7 +1921,7 @@ impl Prebindgen for CbindgenBuilder {
     fn on_struct(
         &self,
         _s: &prebindgen_registry::flat::Struct,
-        _registry: &Registry<()>,
+        _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         // The `#[repr(C)]` mirror + converters come from prerequisites /
@@ -1911,7 +1932,7 @@ impl Prebindgen for CbindgenBuilder {
     fn on_variant(
         &self,
         _v: &prebindgen_registry::flat::Variant,
-        _registry: &Registry<()>,
+        _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         TokenStream::new()
@@ -1920,7 +1941,7 @@ impl Prebindgen for CbindgenBuilder {
     fn on_enum(
         &self,
         _e: &prebindgen_registry::flat::Enum,
-        _registry: &Registry<()>,
+        _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         TokenStream::new()
@@ -1933,9 +1954,9 @@ impl CbindgenBuilder {
     pub(crate) fn out_terminal(
         &self,
         ty: &TypeRef,
-        _r: &impl Conversions<()>,
+        _r: &impl Conversions,
         _emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<()>> {
+    ) -> Option<ConverterImpl> {
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
         // Never actually called — void-returning wrappers ignore it, and
         // `emit_fallible_wrapper` special-cases `Result<(), E>` to drop the
@@ -2110,7 +2131,7 @@ impl CbindgenBuilder {
         &self,
         inner: &TypeRef,
         entry: &crate::compile::CFrag,
-    ) -> Option<ConverterImpl<()>> {
+    ) -> Option<ConverterImpl> {
         {
             let inner_wire = entry.destination.clone();
             let inner_conv = entry.function.sig.ident.clone();
@@ -2229,7 +2250,7 @@ impl CbindgenBuilder {
 
     /// `&[E]` slice **input**: marker only — the two-param (`*const E_wire`,
     /// `usize`) lowering is done structurally in `emit_inputs`.
-    pub(crate) fn in_slice(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_slice(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         let e = r_shared_slice_elem(ty)?;
         // #170, the slice instance. The two-param lowering builds the
         // `&[E]` zero-copy from C's own block, so there is nowhere to
@@ -2270,7 +2291,7 @@ impl CbindgenBuilder {
 
     /// `&str`, `&mut T` and `&T` **input** shapes: a borrow reached through the
     /// pointer the C caller supplied.
-    pub(crate) fn in_borrow(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_borrow(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         // `mutable` off the `Ref` itself, NOT `is_exclusive_borrow`: that
         // reading deliberately answers `false` for `&mut MaybeUninit<_>` — an
         // out-param slot is not an exclusive borrow OF A VALUE — and these arms
@@ -2426,7 +2447,7 @@ impl CbindgenBuilder {
     /// Carries a `()` destination: the real lowering is structural in
     /// `emit_function_wrapper`, and this exists so the shape resolves and its
     /// inner is marked reachable.
-    pub(crate) fn out_arity_marker(&self, kind: &str, inner: &TypeRef) -> ConverterImpl<()> {
+    pub(crate) fn out_arity_marker(&self, kind: &str, inner: &TypeRef) -> ConverterImpl {
         let name = format_ident!("__cbg_outmark_{}_{}", kind, sanitize(&inner.key()));
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, dead_code, unused)]
@@ -2448,7 +2469,7 @@ impl CbindgenBuilder {
     /// `call` parameter is structural in `prereq_callback_structs` /
     /// `dispatch_fn_input`; `subs: [E]` forces E's output so the closure wire
     /// element type exists.
-    pub(crate) fn out_slice_marker(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn out_slice_marker(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         let elem = self
             .r_value_opaque_slice_elem(ty)
             .or_else(|| r_scalar_slice_elem(ty))?;
@@ -2469,7 +2490,7 @@ impl CbindgenBuilder {
 
     /// The `&T` shared borrow and the `Result<T, E>` marker — the two **output**
     /// shapes that are neither terminal nor a run.
-    pub(crate) fn out_borrow_or_result(&self, ty: &TypeRef) -> Option<ConverterImpl<()>> {
+    pub(crate) fn out_borrow_or_result(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         // `&T` shared borrow of an opaque/value-opaque type → non-owning `*const`.
         if let TypeKind::Ref { mutable, inner, .. } = ty.kind() {
             if !*mutable {
