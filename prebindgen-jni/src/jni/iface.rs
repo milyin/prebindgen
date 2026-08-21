@@ -1313,21 +1313,20 @@ fn fixed_reassembly(
     ext: &Declarations,
     registry: &impl Conversions,
     source: &TypeKey,
-    leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
+    wires: &[crate::jni::compile::OutWire],
     class_fqn: &str,
 ) -> (String, Vec<String>) {
-    let slots: Vec<String> = (0..leaves.len()).map(|i| format!("${i}")).collect();
-    let wires = crate::jni::compile::OutWire::from_leaves(leaves);
-    if !is_sum_row(&wires) {
+    let slots: Vec<String> = (0..wires.len()).map(|i| format!("${i}")).collect();
+    if !is_sum_row(wires) {
         let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
         return (
             format!("{class_short}.fromParts({})", slots.join(", ")),
             Vec::new(),
         );
     }
-    let params = plan_leaf_params(ext, &wires).unwrap_or_default();
+    let params = plan_leaf_params(ext, wires).unwrap_or_default();
     let mut imports: BTreeSet<String> = BTreeSet::new();
-    let (_, when) = ext.sum_reconstruct(registry, source, &wires, &params, &slots, &mut imports);
+    let (_, when) = ext.sum_reconstruct(registry, source, wires, &params, &slots, &mut imports);
     (when, imports.into_iter().collect())
 }
 
@@ -1366,7 +1365,7 @@ pub(crate) fn callback_iface_spec(
     /// and `owned_handle` marks a plan-less opaque handle delivered as a raw
     /// `jlong` and wrapped + closed Kotlin-side (Phase 3).
     enum LeafDesc {
-        Plan(String, prebindgen_registry::unfold::UnfoldLeaf),
+        Plan(String, crate::jni::compile::OutWire),
         Whole {
             name: String,
             ty: prebindgen_registry::flat::TypeRef,
@@ -1400,7 +1399,10 @@ pub(crate) fn callback_iface_spec(
             let leaf_names =
                 plan_leaf_names(&crate::jni::compile::OutWire::from_leaves(&plan.leaves));
             for (n, l) in leaf_names.iter().zip(plan.leaves.iter()) {
-                leaf_tys.push(LeafDesc::Plan(n.clone(), l.clone()));
+                leaf_tys.push(LeafDesc::Plan(
+                    n.clone(),
+                    crate::jni::compile::OutWire::from_leaf(l),
+                ));
             }
             if plan.fixed_builder {
                 any_fixed = true;
@@ -1408,8 +1410,13 @@ pub(crate) fn callback_iface_spec(
                 // answer to "is this a borrow", not a syn match.
                 let core = t.borrow_target().unwrap_or(t);
                 let fqn = ext.kotlin_fqn(&core.key())?;
-                let (reassemble, imports) =
-                    fixed_reassembly(ext, registry, &core.key(), &plan.leaves, &fqn);
+                let (reassemble, imports) = fixed_reassembly(
+                    ext,
+                    registry,
+                    &core.key(),
+                    &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
+                    &fqn,
+                );
                 groups.push(GroupDesc {
                     name: whole_value_name(t, i),
                     typed: Some(KtType::cls(fqn.to_string())),
@@ -1443,7 +1450,7 @@ pub(crate) fn callback_iface_spec(
                             ext,
                             registry,
                             &leaf.out_ty.key(),
-                            &plan.leaves[k..seg],
+                            &crate::jni::compile::OutWire::from_leaves(&plan.leaves[k..seg]),
                             &fqn,
                         );
                         groups.push(GroupDesc {
@@ -1517,9 +1524,7 @@ pub(crate) fn callback_iface_spec(
     for (k, desc) in leaf_tys.iter().enumerate() {
         let name = names[k].clone();
         let param = match desc {
-            LeafDesc::Plan(_, leaf) => {
-                plan_leaf_param(ext, name, &crate::jni::compile::OutWire::from_leaf(leaf))?
-            }
+            LeafDesc::Plan(_, leaf) => plan_leaf_param(ext, name, leaf)?,
             LeafDesc::Whole {
                 ty,
                 nullable,
@@ -1706,8 +1711,13 @@ pub(crate) fn fixed_folder_typed_groups(
 ) -> Option<Vec<TypedGroup>> {
     let spec = registry.decon_plans().get(decon)?;
     let fqn = ext.kotlin_fqn(&spec.source.key())?;
-    let (reassemble, imports) =
-        fixed_reassembly(ext, registry, &spec.source.key(), &spec.leaves, &fqn);
+    let (reassemble, imports) = fixed_reassembly(
+        ext,
+        registry,
+        &spec.source.key(),
+        &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
+        &fqn,
+    );
     Some(vec![
         TypedGroup {
             name: "acc".to_string(),
