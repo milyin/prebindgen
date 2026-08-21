@@ -2103,3 +2103,74 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
         "{all}"
     );
 }
+
+/// A `data_class` states a row saying what it is made of, and a field that is
+/// itself one contributes its own wires rather than a single value.
+///
+/// The composition every binding compiles (see `JniGen::compile_crossing`),
+/// asserted here on the shape that makes the recursion visible: `Holder` is a
+/// scalar plus a nested `Summary`, so it crosses as three JNI values and not
+/// as two.
+#[test]
+fn a_data_class_crosses_as_its_fields_and_a_nested_one_as_its_own() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Summary {
+                    pub count: i64,
+                    pub total: f64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub tag: i64,
+                    pub summary: Summary,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_tag(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Summary))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(holder_tag)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let wires = gen
+        .parts_wires_for_test("Holder")
+        .expect("Holder states a parts row");
+    let described: Vec<String> = wires
+        .iter()
+        .map(|w| {
+            let ty = &w.ty;
+            format!("{}: {}", w.path, quote::quote!(#ty))
+        })
+        .collect();
+    assert_eq!(
+        described,
+        vec![
+            "tag: jni :: sys :: jlong",
+            "summary.count: jni :: sys :: jlong",
+            "summary.total: jni :: sys :: jdouble",
+        ],
+        "a nested data class contributes its own wires, under its field's path"
+    );
+}
