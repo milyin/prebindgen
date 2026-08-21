@@ -1059,7 +1059,7 @@ pub(crate) fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<Kotlin
 #[allow(clippy::too_many_arguments)]
 fn build_flat_sum_field(
     ext: &Declarations,
-    registry: &Registry,
+    registry: &impl Conversions,
     sum_reading: &TypeRef,
     field: syn::Ident,
     optional: bool,
@@ -1152,7 +1152,7 @@ impl Leaves<'_> {
 
 pub(crate) fn build_flat_input_plan(
     ext: &Declarations,
-    registry: &Registry,
+    registry: &impl Conversions,
     param_name: &syn::Ident,
     arg: &TypeRef,
 ) -> Result<Option<FlatInputPlan>, FlatInputError> {
@@ -1272,7 +1272,7 @@ pub(crate) fn build_flat_input_plan(
 #[allow(clippy::too_many_arguments)]
 fn build_flat_struct_node(
     ext: &Declarations,
-    registry: &Registry,
+    registry: &impl Conversions,
     st: &flat::Struct,
     optional: bool,
     native_prefix: &str,

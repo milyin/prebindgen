@@ -53,7 +53,7 @@ pub(crate) struct VecBuildElem {
 /// four sites agree on which params take the handle path.
 pub(crate) fn vec_build_elem(
     ext: &Declarations,
-    registry: &Registry,
+    registry: &impl prebindgen_registry::Conversions,
     arg: &TypeRef,
 ) -> Option<VecBuildElem> {
     // The run and its element off the MODEL. `&mut [T]` is still refused —

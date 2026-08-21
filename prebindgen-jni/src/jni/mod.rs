@@ -231,6 +231,13 @@ pub(crate) enum DeclaredKind {
     Data,
 }
 
+/// What compiling a site needs beyond the model: which rows exist, and which
+/// row each site takes.
+pub(crate) struct Tables {
+    pub(crate) recipes: prebindgen_registry::recipe::Recipes,
+    pub(crate) bindings: prebindgen_registry::recipe::Bindings,
+}
+
 /// All configuration the structured builder accumulates for one
 /// canonical Rust type key. The declared kind is mandatory (an entry exists
 /// only because some declarator created it); the remaining, cross-kind
@@ -795,6 +802,18 @@ pub struct Declarations {
     pub(crate) compiled: std::rc::Rc<
         std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>>,
     >,
+    /// The row table and the site bindings this binding was built against.
+    ///
+    /// Kept beside the fragment store for the same reason it is: a plan is
+    /// compiled per **site**, and the sites are `fn_plan`'s to enumerate — a
+    /// constructor expansion contributes leaves no signature names. So the
+    /// compiler has to be resumable after `build_with` has returned, and these
+    /// are the two things `Compiler::resume` needs that the model does not
+    /// already carry.
+    ///
+    /// `None` only before the build fills them, which is before anything can
+    /// ask.
+    pub(crate) tables: Option<std::rc::Rc<Tables>>,
 
     /// When `true` (default), generated wrappers wrap each call that
     /// touches an opaque handle in the per-call `withSortedHandleLocks`
