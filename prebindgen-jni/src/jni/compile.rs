@@ -36,6 +36,15 @@ pub(crate) struct JFrag {
     /// makes a nested `data_class` field contribute its own several rather than
     /// one.
     pub(crate) wires: Option<Vec<Wire>>,
+    /// The values this crossing hands **out**, when it hands out more than one.
+    ///
+    /// The deconstructing twin of [`Self::wires`], and a different shape rather
+    /// than the same one read backwards: an outgoing value is not filled from a
+    /// Kotlin expression, it is produced by the Rust side and named for the
+    /// builder parameter it lands in. Never set at the same time as
+    /// [`Self::wires`] — a fragment answers one crossing, and a crossing does
+    /// one job.
+    pub(crate) out_wires: Option<Vec<OutWire>>,
     /// This fragment states a wire list and nothing else — no conversion of its
     /// own, so nothing of it reaches the generated file.
     ///
@@ -187,6 +196,62 @@ impl Access {
     }
 }
 
+/// One value a crossing hands out, when it hands out several.
+///
+/// What a JVM builder call receives: a name, the Rust value behind it, and —
+/// for a sum — which alternative produces it. There is no access expression
+/// and no Kotlin type, because the foreign side does not reach for this value;
+/// the Rust side pushes it.
+#[derive(Clone)]
+pub(crate) struct OutWire {
+    /// The builder parameter this value fills, used literally.
+    pub(crate) name: String,
+    /// The reading whose output conversion encodes it.
+    ///
+    /// For the tag it is **the sum**, not the `jint` the tag crosses as: what
+    /// the tag carries is which alternative is live, and naming the sum is how
+    /// an emitter finds the enum to match over.
+    pub(crate) out_ty: TypeRef,
+    /// Which alternative produces this value, or `None` for one every call
+    /// produces — including the tag, which selects between the groups rather
+    /// than joining one.
+    ///
+    /// Composed and checked but not yet read outside the equivalence fixture:
+    /// grouping is what turns the list into a `match`, and the emitter that
+    /// writes that `match` still reads it off the leaf synthesis.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) group: Option<i32>,
+    /// How the Rust side reaches it.
+    pub(crate) from: OutFrom,
+}
+
+/// Where an outgoing value comes from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum OutFrom {
+    /// The synthesized selector, which is not read off the value at all: the
+    /// emitter assigns the alternative's number in each arm of its `match`.
+    Tag,
+    /// A field of the value, reached by field access and cloned — the chain of
+    /// idents from the value itself.
+    ///
+    /// Nested where a `data_class` field is itself one: its fields cross as
+    /// decoupled values under the parent's chain, and the foreign side
+    /// reassembles the whole graph in one call.
+    Field {
+        /// The field idents from the value down to this one.
+        path: Vec<syn::Ident>,
+    },
+    /// A payload of one alternative, bound by that arm's pattern.
+    Payload {
+        /// The alternative's ident as the source enum declares it. Empty until
+        /// [`Compile::choice`] names it — an arm's own composition cannot,
+        /// because a product hook is not told which alternative it is.
+        variant: Option<syn::Ident>,
+        /// How the payload is addressed in the arm's pattern.
+        member: syn::Member,
+    },
+}
+
 /// One wire value of a crossing that occupies several.
 ///
 /// `Clone` alone: a wire carries the whole conversion its value crosses
@@ -272,6 +337,7 @@ impl JFrag {
         Self {
             conv,
             wires: None,
+            out_wires: None,
             composed_only: false,
             yields: Yield {
                 ty,
@@ -286,6 +352,7 @@ impl JFrag {
         Self {
             conv,
             wires: None,
+            out_wires: None,
             composed_only: false,
             yields: Yield {
                 ty: at.crossing.value().stripped_key(),
@@ -552,18 +619,20 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     }
 
     fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
-        if at.crossing.assembly() != Assembly::Construct {
-            return Err(refuse(
-                at,
-                "JniGen states no deconstructing product rows yet",
-            ));
-        }
         // A product whose own type is a sum is one **alternative's** payload:
         // the registry composes every arm through this hook and hands the lot
-        // to `choice`. Its parts are read off a cast rather than off the value,
-        // so they take the slot form — and which alternative to cast to is
-        // `choice`'s to fill in, being the only hook told.
-        if self.is_sum(cx, at) {
+        // to `choice`. Which alternative that is stays `choice`'s to fill in,
+        // being the only hook told — so both directions leave a hole here.
+        let sum = self.is_sum(cx, at);
+        if at.crossing.assembly() != Assembly::Construct {
+            return match sum {
+                true => Ok(self.out_arm(at, parts)),
+                false => Ok(self.out_product(at, parts)),
+            };
+        }
+        if sum {
+            // Its parts are read off a cast rather than off the value, so they
+            // take the slot form.
             return Ok(self.arm(at, parts));
         }
         // A `data_class` crosses as its fields, and a field that is itself one
@@ -645,10 +714,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         arms: &[(&Alternative, &JFrag)],
     ) -> Frag<Self> {
         if at.crossing.assembly() != Assembly::Construct {
-            return Err(refuse(
-                at,
-                "JniGen states no deconstructing choice rows yet",
-            ));
+            return self.selected_out(at, arms);
         }
         // Which alternative is live crosses as its own `jint`, and every
         // alternative's slots cross on every call — the inert ones carrying the
@@ -918,6 +984,173 @@ impl<R: Conversions> JCompile<'_, R> {
         }
     }
 
+    /// One alternative's payloads, as the values it hands out.
+    ///
+    /// Every payload contributes, unconditionally: a sum's alternatives are
+    /// laid side by side on the wire and the tag says which group is live, so
+    /// there is nothing for an arm to decline. That is the asymmetry with the
+    /// constructing side, where a payload with no slot form leaves the whole
+    /// sum object-shaped — going the other way the Rust side produces the
+    /// value and its own output conversion is what encodes it.
+    fn out_arm(&self, at: At<'_>, parts: Parts<'_, Self>) -> JFrag {
+        let wires = parts
+            .iter()
+            .filter_map(|(part, _)| {
+                Some(OutWire {
+                    // Named by `choice`, which knows the alternative the name
+                    // is built from.
+                    name: crate::jni::struct_plan::sum_field_prop_name(&part_member(part)?),
+                    out_ty: part.ty.clone(),
+                    group: None,
+                    from: OutFrom::Payload {
+                        variant: None,
+                        member: part_member(part)?,
+                    },
+                })
+            })
+            .collect();
+        let mut frag = JFrag::new(
+            at,
+            self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
+        );
+        frag.out_wires = Some(wires);
+        frag.composed_only = true;
+        frag
+    }
+
+    /// The values a `data_class` hands out: its fields, and a field that is
+    /// itself one contributes its own.
+    ///
+    /// A fragment with **no** out-wires is this adapter declining, and it
+    /// declines for the whole value rather than per field. A handle, an
+    /// `enum_class`, a sum or a `data_class` behind an `Option` or a `Vec` is
+    /// delivered with a transform the decoupled form does not carry, and one
+    /// such field sends the whole object down the whole-value `fromParts` path
+    /// — so a row that decomposed the rest of it would describe a shape nothing
+    /// emits.
+    fn out_product(&self, at: At<'_>, parts: Parts<'_, Self>) -> JFrag {
+        let declined = JFrag::new(at, self.parts_marker(Vec::new()));
+        let mut wires = Vec::new();
+        for (part, frag) in parts {
+            let Some(field) = part_field(part) else {
+                return declined;
+            };
+            let ident = match &field.name {
+                Some(name) => name.clone(),
+                None => return declined,
+            };
+            // The same name the leaf synthesis gives it: the Kotlin property,
+            // and nested names joined by the reserved `__` separator.
+            let name =
+                crate::jni::mangle_kotlin_ident(&crate::jni::kt_snake_to_camel(&ident.to_string()));
+            // The layer questions off the field's own reading — `Optional` to
+            // look through, `Vec` to decline — never a last path segment.
+            let probe = part.ty.optional_inner().unwrap_or(&part.ty);
+            if matches!(
+                self.decls.type_kind(self.registry, &probe.key()),
+                crate::jni::classify::TypeKind::Handle
+                    | crate::jni::classify::TypeKind::Enum
+                    | crate::jni::classify::TypeKind::Sum
+            ) {
+                return declined;
+            }
+            match &frag.out_wires {
+                // A nested `data_class`, which contributes its own values under
+                // this field's name and chain. Only unwrapped: behind an
+                // `Option` or a `Vec` there is no chain to reach through.
+                Some(inner) => {
+                    if part.ty.optional_inner().is_some()
+                        || matches!(part.ty.kind(), TypeKind::Vec(_))
+                    {
+                        return declined;
+                    }
+                    for w in inner {
+                        let OutFrom::Field { path } = &w.from else {
+                            return declined;
+                        };
+                        wires.push(OutWire {
+                            name: format!("{name}__{}", w.name),
+                            out_ty: w.out_ty.clone(),
+                            group: None,
+                            from: OutFrom::Field {
+                                path: std::iter::once(ident.clone())
+                                    .chain(path.iter().cloned())
+                                    .collect(),
+                            },
+                        });
+                    }
+                }
+                None => wires.push(OutWire {
+                    name,
+                    out_ty: part.ty.clone(),
+                    group: None,
+                    from: OutFrom::Field { path: vec![ident] },
+                }),
+            }
+        }
+        let mut frag = JFrag::new(
+            at,
+            self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
+        );
+        frag.out_wires = Some(wires);
+        frag.composed_only = true;
+        frag
+    }
+
+    /// The tag, then every alternative's payloads.
+    ///
+    /// The deconstructing shape of a `sealed_class`: one `jint` naming which
+    /// alternative is live, and one group of values per alternative laid
+    /// beside the others. Exactly one group is live per value and the rest
+    /// carry their wire defaults, which is what makes the whole thing one
+    /// `match` on the Rust side rather than N conditionals.
+    fn selected_out(&self, at: At<'_>, arms: &[(&Alternative, &JFrag)]) -> Frag<Self> {
+        let TypeKind::Named { id, .. } = at.crossing.value().unwrapped().kind() else {
+            return Err(refuse(at, "a choice row over a type that is not named"));
+        };
+        let sum_cfg = id
+            .ident()
+            .and_then(|ident| self.decls.types.get(&TypeKey::from_ident(&ident)))
+            .and_then(|cfg| cfg.sum())
+            .ok_or_else(|| refuse(at, "a choice row over an undeclared sum"))?;
+
+        // The selector rides ahead of the groups it chooses between, and
+        // carries **which sum** it selects over — nothing converts it, so
+        // naming the sum is the only use its type has, and it is the one an
+        // emitter needs to find the enum to match.
+        let mut wires = vec![OutWire {
+            name: crate::jni::emit::SUM_TAG_LEAF.to_string(),
+            out_ty: at.crossing.value().clone(),
+            group: None,
+            from: OutFrom::Tag,
+        }];
+        for (alt, frag) in arms {
+            let kotlin = self.decls.sum_variant_class_name(sum_cfg, &alt.name);
+            let group = Some(crate::jni::struct_plan::sum_tag(alt));
+            for w in frag.out_wires.as_ref().into_iter().flatten() {
+                let OutFrom::Payload { member, .. } = &w.from else {
+                    return Err(refuse(
+                        at,
+                        "an arm that states something other than payloads",
+                    ));
+                };
+                wires.push(OutWire {
+                    name: crate::jni::struct_plan::sum_slot_fragment(&kotlin, &w.name),
+                    out_ty: w.out_ty.clone(),
+                    group,
+                    from: OutFrom::Payload {
+                        variant: Some(alt.name.clone()),
+                        member: member.clone(),
+                    },
+                });
+            }
+        }
+        let mut frag = JFrag::new(at, self.parts_marker(parts_subs(arms)));
+        frag.out_wires = Some(wires);
+        frag.composed_only = true;
+        Ok(frag)
+    }
+
     /// One payload of one alternative, or `None` if it has no slot form.
     fn slot(&self, part: &Part<'_>, frag: &JFrag) -> Option<Wire> {
         if frag.wires.is_some() || frag.conv.metadata.projection.is_some() {
@@ -1112,12 +1345,17 @@ impl<R: Conversions> JCompile<'_, R> {
     }
 }
 
-/// The model field one part reads, which a sum payload names its slot after.
-fn part_member(part: &Part<'_>) -> Option<syn::Member> {
+/// The model field one part reads, or `None` for a part that is not a field.
+fn part_field<'a>(part: &Part<'a>) -> Option<&'a prebindgen_registry::flat::Field> {
     match part.from {
-        prebindgen_registry::recipe::PartSource::Field { field, .. } => Some(field.member()),
+        prebindgen_registry::recipe::PartSource::Field { field, .. } => Some(field),
         _ => None,
     }
+}
+
+/// The model field one part reads, which a sum payload names its slot after.
+fn part_member(part: &Part<'_>) -> Option<syn::Member> {
+    part_field(part).map(|f| f.member())
 }
 
 /// Every crossing a sum's arms delegate to, which is what reachability walks.

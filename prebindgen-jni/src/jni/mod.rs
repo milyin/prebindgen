@@ -508,6 +508,96 @@ impl JniGen {
         )
     }
 
+    /// What a declared type hands out, as the row states it: one line per
+    /// value, naming it, the alternative it belongs to, and how the Rust side
+    /// reaches it.
+    ///
+    /// Test support. The same list `synth_sum_leaves` produces, in the form
+    /// that compares — a `TypeRef` has no equality and a `syn::Member` prints
+    /// differently by variant, so both sides go through the same rendering.
+    pub(crate) fn out_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
+        use prebindgen_registry::recipe::Assembly;
+        let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
+        let ty: syn::Type = syn::parse_quote!(#ident);
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let compiled = self.decls.compiled.borrow();
+        let wires = compiled
+            .row_fragment(
+                &reading.key(),
+                Assembly::Deconstruct,
+                &crate::jni::rows::parts(),
+            )?
+            .out_wires
+            .clone()?;
+        Some(
+            wires
+                .iter()
+                .map(|w| {
+                    let from = match &w.from {
+                        crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Field { path } => path
+                            .iter()
+                            .map(|p| p.to_string())
+                            .collect::<Vec<_>>()
+                            .join("."),
+                        crate::jni::compile::OutFrom::Payload { variant, member } => format!(
+                            "{}.{}",
+                            variant
+                                .as_ref()
+                                .map(|v| v.to_string())
+                                .unwrap_or_else(|| "?".to_string()),
+                            crate::jni::struct_plan::sum_field_prop_name(member)
+                        ),
+                    };
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
+                })
+                .collect(),
+        )
+    }
+
+    /// The same list, taken from the leaf synthesis the row is meant to
+    /// replace — `synth_sum_leaves` for a `sealed_class`,
+    /// `synth_value_struct_leaves` for a `data_class`.
+    pub(crate) fn walk_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
+        use prebindgen_registry::unfold::{LeafSource, PathStep};
+        let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
+        let cfg = self.decls.types.get(&TypeKey::from_ident(&ident))?;
+        let leaves = match self.registry.flat().declared_type(&ident)? {
+            prebindgen_registry::flat::Type::Variant(sum) => {
+                crate::jni::synth_sum_leaves(&self.decls, cfg.sum()?, sum)
+            }
+            prebindgen_registry::flat::Type::Struct(s) => {
+                crate::jni::synth_value_struct_leaves(&self.decls, &self.registry, s, &[], "", 0)?
+            }
+            _ => return None,
+        };
+        Some(
+            leaves
+                .iter()
+                .map(|l| {
+                    let from = match &l.source {
+                        LeafSource::SumTag => "tag".to_string(),
+                        LeafSource::VariantField { variant, member } => format!(
+                            "{variant}.{}",
+                            crate::jni::struct_plan::sum_field_prop_name(member)
+                        ),
+                        LeafSource::Field => l
+                            .path
+                            .iter()
+                            .map(|step| match step {
+                                PathStep::Field { ident, .. } => ident.to_string(),
+                                other => format!("{other:?}"),
+                            })
+                            .collect::<Vec<_>>()
+                            .join("."),
+                        other => format!("{other:?}"),
+                    };
+                    format!("{}: {} <- {from} @{:?}", l.name, l.out_ty.key(), l.group)
+                })
+                .collect(),
+        )
+    }
+
     /// The wires a crossing composes into, by spelling.
     pub(crate) fn parts_wires_for_test(
         &self,

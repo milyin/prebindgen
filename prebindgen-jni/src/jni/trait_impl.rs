@@ -1519,6 +1519,73 @@ impl JniGenBuilder {
         decls
             .validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
+        // What each declared class hands out, composed last of all.
+        //
+        // Driven here rather than from `compile_crossing` because a
+        // `sealed_class` has **no** deconstructing crossing to be driven from:
+        // it is boundary-only, so nothing ever asks for its whole-value output
+        // conversion and the converter walk never reaches it. A `data_class`
+        // does have one, and goes through the same loop so that both sides of
+        // the same question are answered in one place.
+        //
+        // After `validate_resolved`, so a binding whose part simply has no
+        // output conversion gets the diagnostic that names the part rather than
+        // this one, which could only say that composing failed. Nothing reads
+        // the result yet; compiling it is what holds the composition to every
+        // binding this crate builds rather than to one fixture.
+        for key in decls.declared_decompositions() {
+            let Some(ident) = key.ident() else { continue };
+            let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
+                continue;
+            };
+            // Only a type every part of which already crosses. One that does
+            // not is a gap in the binding, and the writers report it against
+            // the part — `Reading.Exact.v0 has no OUTPUT converter` — where
+            // this could only say that composing failed.
+            let part_types: Vec<&prebindgen_registry::flat::TypeRef> =
+                match model.declared_type(&ident) {
+                    Some(prebindgen_registry::flat::Type::Variant(sum)) => sum
+                        .alternatives
+                        .iter()
+                        .flat_map(|alt| &alt.fields)
+                        .map(|f| &f.ty)
+                        .collect(),
+                    Some(prebindgen_registry::flat::Type::Struct(s)) => {
+                        s.fields.iter().map(|f| &f.ty).collect()
+                    }
+                    _ => continue,
+                };
+            if part_types.iter().any(|ty| decls.out_frag(ty).is_none()) {
+                continue;
+            }
+            let crossing = prebindgen_registry::recipe::Crossing::new(
+                ty,
+                prebindgen_registry::recipe::Assembly::Deconstruct,
+            );
+            let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+                &model,
+                &recipes,
+                &bindings,
+                decls.compiled.borrow().clone(),
+            );
+            let mut adapter = crate::jni::compile::JCompile {
+                decls: &decls,
+                registry: &registry,
+            };
+            if let Err(e) = compiler.row_of(&mut adapter, &crossing, &crate::jni::rows::parts()) {
+                refusals.push(format!(
+                    "`{key}` hands out its parts, but composing them failed: {e:?}"
+                ));
+            }
+            let compiled = compiler.finish();
+            *decls.compiled.borrow_mut() = compiled;
+        }
+        if !refusals.is_empty() {
+            return Err(prebindgen_registry::ScanError::AdapterInvariant {
+                message: refusals.join("; "),
+            }
+            .into());
+        }
         Ok(JniGen { decls, registry })
     }
 }
@@ -3189,6 +3256,22 @@ impl Declarations {
             .map(|(k, c)| (k.clone(), c.rust_type.clone()))
             .collect()
     }
+    /// Every type that states what it hands out — `sealed_class!` and
+    /// `data_class!` — in a stable order.
+    ///
+    /// Sorted, because what reads it drives compilation and a refusal has to
+    /// name the same type run to run.
+    pub(crate) fn declared_decompositions(&self) -> Vec<TypeKey> {
+        let mut keys: Vec<TypeKey> = self
+            .types
+            .iter()
+            .filter(|(_, c)| matches!(c.kind, DeclaredKind::Sealed(_) | DeclaredKind::Data))
+            .map(|(k, _)| k.clone())
+            .collect();
+        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        keys
+    }
+
     /// Types acknowledged-but-undeclared via [`JniGenBuilder::ignore`].
     pub(crate) fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
         self.ignored_class_types.clone()

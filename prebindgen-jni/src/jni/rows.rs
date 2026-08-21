@@ -17,7 +17,10 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
-    recipe::{Arm, Construct, Constructing, Deconstructing, RecipeError, RecipeId, Recipes},
+    recipe::{
+        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeId,
+        Recipes,
+    },
 };
 
 use super::*;
@@ -68,6 +71,49 @@ fn alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Construct>> {
             op: Construct::Fields,
         })
         .collect()
+}
+
+/// One arm per alternative of a declared sum, each taken apart into its own
+/// payload fields.
+///
+/// The deconstructing twin of [`alternatives`]. Separate because the two jobs
+/// name different operations — building an alternative is `Construct::Fields`,
+/// reading one is `Deconstruct::Fields` over the reaches that get there — and
+/// a shared helper would have to be generic over an operation neither side
+/// chooses.
+fn out_alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Deconstruct>> {
+    let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
+        return Vec::new();
+    };
+    let Some(prebindgen_registry::flat::Type::Variant(v)) =
+        id.ident().and_then(|ident| model.declared_type(&ident))
+    else {
+        return Vec::new();
+    };
+    v.alternatives
+        .iter()
+        .map(|alt| Arm {
+            alternative: alt.index,
+            op: Deconstruct::Fields((0..alt.fields.len()).map(Reach::Field).collect()),
+        })
+        .collect()
+}
+
+/// One reach per field of a declared struct, in the model's order.
+///
+/// Empty for anything the model does not hold as a struct, which includes a
+/// `data_class!` over a type the scan dropped — the scan reports that, and a
+/// row over no fields would report it a second time.
+fn out_fields(model: &Flat, ty: &TypeRef) -> Vec<Reach> {
+    let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
+        return Vec::new();
+    };
+    let Some(prebindgen_registry::flat::Type::Struct(s)) =
+        id.ident().and_then(|ident| model.declared_type(&ident))
+    else {
+        return Vec::new();
+    };
+    (0..s.fields.len()).map(Reach::Field).collect()
 }
 
 /// The row a type with no parts takes: the adapter emits the conversion itself.
@@ -128,7 +174,37 @@ impl Declarations {
             // the adapter emits the conversion itself, and how many wire values
             // that costs is its own business — so it describes the adapter as it
             // stands rather than as it will be.
-            rows.declare(ty.clone(), whole(), Deconstructing::Atomic);
+            // A `sealed_class` hands its value out as a tag plus every
+            // alternative's payloads, laid side by side — the deconstructing
+            // twin of the constructing row below, and the direction that
+            // actually has no alternative: a sum has no whole-value output
+            // conversion, because a tag plus groups is not one wire.
+            match self.types.get(&ty.key()).map(|c| &c.kind) {
+                Some(DeclaredKind::Sealed(_)) => {
+                    let arms = out_alternatives(model, &ty);
+                    rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+                    if !arms.is_empty() {
+                        rows.declare(ty.clone(), parts(), Deconstructing::Choice { arms });
+                    }
+                }
+                // A `data_class` hands its value out as its fields too, so the
+                // foreign side reassembles the object and nothing builds one on
+                // the Rust side.
+                Some(DeclaredKind::Data) => {
+                    let reaches = out_fields(model, &ty);
+                    rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+                    if !reaches.is_empty() {
+                        rows.declare(
+                            ty.clone(),
+                            parts(),
+                            Deconstructing::Product(Deconstruct::Fields(reaches)),
+                        );
+                    }
+                }
+                _ => {
+                    rows.declare(ty.clone(), whole(), Deconstructing::Atomic);
+                }
+            }
             // A `data_class` also has a row that says what it is made of, so
             // its constructing side names which of the two a site takes by
             // default. See [`parts`] for why that is still `whole`.
@@ -280,7 +356,8 @@ impl Declarations {
             let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
                 continue;
             };
-            let of = Crossing::new(ty, Assembly::Construct);
+            let building = Crossing::new(ty.clone(), Assembly::Construct);
+            let handing_out = Crossing::new(ty, Assembly::Deconstruct);
             for (index, field) in s.fields.iter().enumerate() {
                 // An `Option<D>` field reaches D through the optional's own
                 // row, so the part bound here is the optional and the inner is
@@ -292,14 +369,19 @@ impl Declarations {
                 // An `Option<D>` field reaches D through the optional's own
                 // part site, which the model-wide scan above already bound. What
                 // is left is the field that IS the class: its part takes the
-                // `parts` row.
+                // `parts` row, in both directions.
                 if field.ty.optional_inner().is_none() {
-                    bound.bind(
-                        Site::part(&of, &parts(), index),
-                        Crossing::new(field.ty.clone(), Assembly::Construct),
-                        Ask::Recipe(parts()),
-                        Origin::Part,
-                    );
+                    for (of, assembly) in [
+                        (&building, Assembly::Construct),
+                        (&handing_out, Assembly::Deconstruct),
+                    ] {
+                        bound.bind(
+                            Site::part(of, &parts(), index),
+                            Crossing::new(field.ty.clone(), assembly),
+                            Ask::Recipe(parts()),
+                            Origin::Part,
+                        );
+                    }
                 }
             }
         }
