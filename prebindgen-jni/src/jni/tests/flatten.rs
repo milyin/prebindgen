@@ -2289,3 +2289,324 @@ fn a_nullable_primitive_field_crosses_as_a_pair() {
     let (composed, walked) = gen.parts_vs_walk_for_test("Scal", "s").expect("plan");
     assert_eq!(composed, walked, "the row and the walk disagree");
 }
+
+/// A `sealed_class` field crosses as a tag plus every alternative's slots, and
+/// the row says so where the walk did.
+///
+/// The shape covertest carries: `Observation` holds a required `Reading` and an
+/// optional one, whose alternatives between them cover a scalar payload, a
+/// two-field payload, a string payload that rides a JVM `null`, and a Kotlin
+/// enum payload read through `.value`. Both fields go through the same
+/// composition, and the optional one takes the `null` arm and the presence flag
+/// on top of it.
+#[test]
+fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                    Range { low: i64, high: i64 },
+                    Tagged(String, Priority),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Observation {
+                    pub id: i64,
+                    pub reading: Reading,
+                    pub fallback: Option<Reading>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn observation_which(o: Observation) -> i32 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::sealed_class!(Reading))
+                .class(crate::data_class!(Observation))
+                .fun(prebindgen_registry::fun!(observation_which)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let (composed, walked) = gen
+        .parts_vs_walk_for_test("Observation", "o")
+        .expect("Observation states a parts row and the walk plans it");
+    assert_eq!(composed, walked, "the row and the walk disagree");
+
+    // What the two agree on, stated once so a change to both at the same time
+    // still has to be meant: the required field is a tag and six slots, the
+    // optional one adds a presence flag and a `null` arm.
+    let accesses: Vec<String> = composed.iter().map(|w| w.2.clone()).collect();
+    assert!(
+        accesses.contains(&"(o.reading as? io.test.jni.Reading.Exact)?.v0 ?: 0L".to_string()),
+        "{accesses:#?}"
+    );
+    assert!(
+        accesses
+            .contains(&"(o.reading as? io.test.jni.Reading.Tagged)?.v1?.value ?: 0".to_string()),
+        "a Kotlin enum payload is read through its discriminant: {accesses:#?}"
+    );
+    assert!(
+        accesses.contains(&"(o.reading as? io.test.jni.Reading.Tagged)?.v0".to_string()),
+        "a string payload rides a JVM null rather than a literal: {accesses:#?}"
+    );
+    assert!(
+        accesses.contains(&"o.fallback != null".to_string()),
+        "{accesses:#?}"
+    );
+    assert!(
+        accesses
+            .iter()
+            .any(|a| a.starts_with("when (o.fallback) { null -> 0;")),
+        "an optional sum gates on null in its own arm: {accesses:#?}"
+    );
+    assert!(
+        accesses
+            .iter()
+            .any(|a| a.starts_with("when (o.reading) { is io.test.jni.Reading.Missing -> 0;")),
+        "a required sum has no null arm: {accesses:#?}"
+    );
+}
+
+/// Every spelling the walk flattens states the same row.
+///
+/// `build_flat_input_plan` accepts a `data_class` parameter through five
+/// spellings — bare, `&`, `Option`, `Box`, and `Box<Option<…>>` — and all five
+/// appear in `covertest-kotlin` or `perftest-kotlin`. A borrow and a transparent
+/// wrapper find the class's own `parts` row, because a crossing is keyed by the
+/// value that crosses; an optional has no such row and composes on the one the
+/// registry derives for it, which is why `Declarations::bindings` binds its
+/// part.
+#[test]
+fn every_spelling_the_walk_flattens_states_the_same_row() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Summary {
+                    pub count: i64,
+                    pub total: f64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub tag: i64,
+                    pub summary: Summary,
+                    pub note: Option<i64>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bare(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn borrowed(h: &Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn optional(h: Option<Holder>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn boxed(h: Box<Holder>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn boxed_optional(h: Box<Option<Holder>>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Summary))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(bare))
+                .fun(prebindgen_registry::fun!(borrowed))
+                .fun(prebindgen_registry::fun!(optional))
+                .fun(prebindgen_registry::fun!(boxed))
+                .fun(prebindgen_registry::fun!(boxed_optional)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    for spelling in [
+        "Holder",
+        "&Holder",
+        "Option<Holder>",
+        "Box<Holder>",
+        "Box<Option<Holder>>",
+    ] {
+        let (composed, walked) = gen
+            .parts_vs_walk_for_test(spelling, "h")
+            .unwrap_or_else(|| panic!("{spelling} states a row and the walk plans it"));
+        assert_eq!(
+            composed, walked,
+            "the row and the walk disagree on {spelling}"
+        );
+    }
+
+    // The optional spellings carry a presence flag the bare ones do not, so
+    // "they all agree with the walk" is not the same claim as "they are all
+    // the same list".
+    let bare = gen.parts_wires_for_test("Holder").expect("bare row");
+    let opt = gen
+        .parts_wires_for_test("Option<Holder>")
+        .expect("optional row");
+    assert_eq!(opt.len(), bare.len() + 1, "the gate is one more wire");
+}
+
+/// Every field shape the walk reads specially, held to the row.
+///
+/// A `data_class` field is not always one property read: an `enum_class`
+/// property holds the enum object where the wire holds its discriminant, an
+/// unsigned representation's property is a `ULong` over a `Long` wire, an
+/// optional primitive is decoupled into a presence flag and a raw slot rather
+/// than boxed, an optional whose wire is a JVM object rides a `null`, and a
+/// nested handle is locked through the object rather than the pointer it
+/// carries. Each of those is a place the composition and the walk could differ
+/// silently, so the fixture carries all of them at once — and again one layer
+/// down, where a closed gate above turns every read into a safe call and
+/// substitutes what a non-nullable slot carries meanwhile.
+#[test]
+fn every_field_shape_the_walk_reads_specially_states_the_same_row() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Bits {
+                    pub pri: Priority,
+                    pub maybe_pri: Option<Priority>,
+                    pub big: u64,
+                    pub maybe_big: Option<u64>,
+                    pub name: String,
+                    pub maybe_name: Option<String>,
+                    pub flag: bool,
+                    pub maybe_flag: Option<bool>,
+                    pub bytes: [u8; 4],
+                    pub opaque: Opaque,
+                    pub maybe_opaque: Option<Opaque>,
+                    pub nested: Nested,
+                    pub maybe_nested: Option<Nested>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Opaque {
+                    pub v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Nested {
+                    pub k: i64,
+                    pub s: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bits_use(b: Bits) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bits_opt(b: Option<Bits>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::ptr_class!(Opaque))
+                .class(crate::data_class!(Nested))
+                .class(crate::data_class!(Bits))
+                .fun(prebindgen_registry::fun!(bits_use))
+                .fun(prebindgen_registry::fun!(bits_opt)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    for spelling in ["Bits", "Option<Bits>"] {
+        let (composed, walked) = gen
+            .parts_vs_walk_for_test(spelling, "b")
+            .unwrap_or_else(|| panic!("{spelling}"));
+        assert_eq!(composed, walked, "disagree on {spelling}");
+    }
+}

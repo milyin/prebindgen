@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
-    recipe::{Construct, Constructing, Deconstructing, RecipeError, RecipeId, Recipes},
+    recipe::{Arm, Construct, Constructing, Deconstructing, RecipeError, RecipeId, Recipes},
 };
 
 use super::*;
@@ -44,6 +44,30 @@ fn element_types(element: &prebindgen_registry::Element) -> Vec<&TypeRef> {
         prebindgen_registry::Element::Constant(c) => vec![&c.ty],
         _ => Vec::new(),
     }
+}
+
+/// One arm per alternative of a declared sum, each assembled from its own
+/// payload fields.
+///
+/// Empty for anything the model does not hold as a data-carrying enum, which
+/// includes a `sealed_class!` declared over a type the scan dropped — the scan
+/// reports that, and a row over no arms would report it a second time.
+fn alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Construct>> {
+    let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
+        return Vec::new();
+    };
+    let Some(prebindgen_registry::flat::Type::Variant(v)) =
+        id.ident().and_then(|ident| model.declared_type(&ident))
+    else {
+        return Vec::new();
+    };
+    v.alternatives
+        .iter()
+        .map(|alt| Arm {
+            alternative: alt.index,
+            op: Construct::Fields,
+        })
+        .collect()
 }
 
 /// The row a type with no parts takes: the adapter emits the conversion itself.
@@ -108,14 +132,25 @@ impl Declarations {
             // A `data_class` also has a row that says what it is made of, so
             // its constructing side names which of the two a site takes by
             // default. See [`parts`] for why that is still `whole`.
-            if matches!(
-                self.types.get(&ty.key()).map(|c| &c.kind),
-                Some(DeclaredKind::Data)
-            ) {
-                rows.declare_default(ty.clone(), whole(), Constructing::Atomic)
-                    .declare(ty, parts(), Constructing::Product(Construct::Fields));
-            } else {
-                rows.declare(ty, whole(), Constructing::Atomic);
+            match self.types.get(&ty.key()).map(|c| &c.kind) {
+                Some(DeclaredKind::Data) => {
+                    rows.declare_default(ty.clone(), whole(), Constructing::Atomic)
+                        .declare(ty, parts(), Constructing::Product(Construct::Fields));
+                }
+                // A `sealed_class` has one too, and it is a choice rather than
+                // a product: exactly one alternative is live, every one of them
+                // still crosses, and the tag says which. The arms are the
+                // model's — a row states which parts, never what they are.
+                Some(DeclaredKind::Sealed(_)) => {
+                    let arms = alternatives(model, &ty);
+                    rows.declare_default(ty.clone(), whole(), Constructing::Atomic);
+                    if !arms.is_empty() {
+                        rows.declare(ty, parts(), Constructing::Choice { arms });
+                    }
+                }
+                _ => {
+                    rows.declare(ty, whole(), Constructing::Atomic);
+                }
             }
         }
 
@@ -165,7 +200,16 @@ impl Declarations {
     fn field_crosses_as_its_fields(&self, ty: &TypeRef) -> bool {
         self.types
             .get(&ty.stripped_key())
-            .is_some_and(|c| matches!(c.kind, DeclaredKind::Data) && !c.jobject_input)
+            .is_some_and(|c| match c.kind {
+                DeclaredKind::Data => !c.jobject_input,
+                // A `sealed_class` field crosses as a tag plus every alternative's
+                // slots. Whether it *can* is the adapter's answer at compile time,
+                // not a declaration: a payload with no slot form leaves the sum
+                // object-shaped, which is the fragment `Compile::choice` hands
+                // back. So the site asks, and the row answers.
+                DeclaredKind::Sealed(_) => true,
+                _ => false,
+            })
     }
 
     pub(crate) fn bindings(
@@ -186,6 +230,45 @@ impl Declarations {
             .collect();
         declared.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
+        // Every optional over a flattenable value, wherever the model spells
+        // one: a parameter, a field, a callback argument. A `Site` keys a part
+        // by the crossing's **stripped** key, so `Option<Payload>` and
+        // `Box<Option<Payload>>` are one site and binding it once answers for
+        // both spellings.
+        //
+        // Enumerated from the model rather than from the declarations, for the
+        // same reason the array rows are: what has to be bound is what the
+        // model names, and a declaration says nothing about where its type is
+        // used.
+        let mut optionals: BTreeMap<TypeKey, (&TypeRef, &TypeRef)> = BTreeMap::new();
+        for ty in model
+            .elements()
+            .flat_map(element_types)
+            .flat_map(|t| t.walk())
+        {
+            let Some(inner) = ty.optional_inner() else {
+                continue;
+            };
+            if self.field_crosses_as_its_fields(inner) {
+                optionals.entry(ty.stripped_key()).or_insert((ty, inner));
+            }
+        }
+        for (outer, inner) in optionals.into_values() {
+            // The optional keeps the row the registry derived from its shape —
+            // it has no `parts` row of its own — and it is the value one layer
+            // in that crosses as its parts.
+            bound.bind(
+                Site::part(
+                    &Crossing::new(outer.clone(), Assembly::Construct),
+                    &RecipeId::derived(),
+                    0,
+                ),
+                Crossing::new(inner.clone(), Assembly::Construct),
+                Ask::Recipe(parts()),
+                Origin::Part,
+            );
+        }
+
         for key in declared {
             let Some(ident) = key.ident() else { continue };
             let Some(prebindgen_registry::flat::Type::Struct(s)) = model.declared_type(&ident)
@@ -204,29 +287,18 @@ impl Declarations {
                 if !self.field_crosses_as_its_fields(target) {
                     continue;
                 }
-                match field.ty.optional_inner() {
-                    // The field IS the class: its part takes the `parts` row.
-                    None => bound.bind(
+                // An `Option<D>` field reaches D through the optional's own
+                // part site, which the model-wide scan above already bound. What
+                // is left is the field that IS the class: its part takes the
+                // `parts` row.
+                if field.ty.optional_inner().is_none() {
+                    bound.bind(
                         Site::part(&of, &parts(), index),
                         Crossing::new(field.ty.clone(), Assembly::Construct),
                         Ask::Recipe(parts()),
                         Origin::Part,
-                    ),
-                    // The field is an `Option<D>`. That crossing keeps the row
-                    // the registry derived from its shape — it has no `parts`
-                    // row of its own — and it is D, one layer in, that takes
-                    // `parts`.
-                    Some(_) => bound.bind(
-                        Site::part(
-                            &Crossing::new(field.ty.clone(), Assembly::Construct),
-                            &RecipeId::derived(),
-                            0,
-                        ),
-                        Crossing::new(target.clone(), Assembly::Construct),
-                        Ask::Recipe(parts()),
-                        Origin::Part,
-                    ),
-                };
+                    );
+                }
             }
         }
         bound.build(recipes)

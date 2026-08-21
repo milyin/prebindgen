@@ -479,10 +479,10 @@ impl JniGen {
     /// asserting a hand-written expectation.
     pub(crate) fn parts_vs_walk_for_test(
         &self,
-        short: &str,
+        spelling: &str,
         param: &str,
     ) -> Option<(Vec<NamedWire>, Vec<NamedWire>)> {
-        let wires = self.parts_wires_for_test(short)?;
+        let wires = self.parts_wires_for_test(spelling)?;
         let composed = wires
             .iter()
             .map(|w| {
@@ -491,18 +491,19 @@ impl JniGen {
                 (
                     name,
                     w.kt_ty.clone(),
-                    format!("{param}{}", w.access),
-                    w.conv.as_ref().map(|c| c.to_string()),
-                    w.handle_target.as_ref().map(|t| format!("{param}{t}")),
+                    w.access.render(param),
+                    w.conv().map(|c| c.to_string()),
+                    w.handle_target
+                        .as_ref()
+                        .map(|t| crate::jni::compile::reached(param, t)),
                     w.handle_nullable,
-                    w.staged,
+                    w.staged(),
                     w.field().map(str::to_string),
                 )
             })
             .collect();
 
-        let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
-        let ty: syn::Type = syn::parse_quote!(#ident);
+        let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let arg = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let plan = crate::jni::emit::build_flat_input_plan(
             &self.decls,
@@ -537,25 +538,19 @@ impl JniGen {
     /// what it composed.
     pub(crate) fn parts_wires_for_test(
         &self,
-        short: &str,
+        spelling: &str,
     ) -> Option<Vec<crate::jni::compile::Wire>> {
-        let key = self
-            .decls
-            .compiled
-            .borrow()
-            .fragments()
-            .iter()
-            .find_map(|f| {
-                (f.wires.is_some() && f.yields.ty.as_str() == short).then(|| f.yields.ty.clone())
-            })?;
-        self.decls
-            .compiled
-            .borrow()
-            .row_fragment(
-                &key,
-                prebindgen_registry::recipe::Assembly::Construct,
-                &crate::jni::rows::parts(),
-            )?
+        use prebindgen_registry::recipe::Assembly;
+        let ty: syn::Type = syn::parse_str(spelling).ok()?;
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let key = reading.key();
+        let compiled = self.decls.compiled.borrow();
+        // A declared class states its composition under `parts`; an optional
+        // over one has no row of its own and composes on the row the registry
+        // derived, which is the crossing's default.
+        compiled
+            .row_fragment(&key, Assembly::Construct, &crate::jni::rows::parts())
+            .or_else(|| compiled.fragment(&key, Assembly::Construct))?
             .wires
             .clone()
     }

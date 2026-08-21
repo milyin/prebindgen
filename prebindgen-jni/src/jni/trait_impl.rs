@@ -1587,9 +1587,14 @@ impl Declarations {
         // crate builds rather than to one fixture. Nothing reads the result
         // yet: `whole` is still the row every site takes, so a failure here is
         // a failure to compose parts that already cross individually.
+        // The **stripped** key, so `Box<Payload>` and `&Payload` compile the
+        // row too: all three spellings find one row and each gets its own
+        // fragment, which is what a site taking a wrapped spelling reads.
         if assembly == prebindgen_registry::recipe::Assembly::Construct
             && matches!(
-                self.types.get(&crossing.value().key()).map(|c| &c.kind),
+                self.types
+                    .get(&crossing.value().stripped_key())
+                    .map(|c| &c.kind),
                 Some(DeclaredKind::Data)
             )
         {

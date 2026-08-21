@@ -868,9 +868,13 @@ fn recursive_sum_shapes_fail_deterministically() {
         }
     };
 
-    // `Vec<Node>` — variable arity, rejected with the intended message.
+    // `Vec<Node>` — the row saying what `Node` is made of reaches `Node`
+    // again, and the table refuses it by name before anything is compiled.
+    // The same refusal the emitter used to phrase as "variable arity", now
+    // stating which crossings close the loop.
     let msg = attempt(quote::quote!(Branch(Vec<Node>)), "rec_vec").expect_err("must fail");
-    assert!(msg.contains("variable arity"), "{msg}");
+    assert!(msg.contains("reaches its own crossing"), "{msg}");
+    assert!(msg.contains("Node"), "{msg}");
 
     // `Box<Node>` — not a bare ident, so it never classifies as a sum; it
     // fails as an unresolvable payload rather than recursing.
