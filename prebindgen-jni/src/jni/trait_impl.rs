@@ -1816,9 +1816,9 @@ impl Declarations {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         let mut out = Vec::new();
         for key in keys {
-            let Some(sum_cfg) = self.types[key].sum() else {
+            if self.types[key].sum().is_none() {
                 continue;
-            };
+            }
             // The `sealed_class!` declaration's own IDENTITY. This runs during
             // the declare phase, where a `reading()` would legitimately answer
             // `None` for a type nothing has interned yet — the declaration is
@@ -1839,7 +1839,7 @@ impl Declarations {
                 // `Variant::type_ref` exists for exactly this, and it works in
                 // the declare phase where a `reading()` lookup could not.
                 source: sum.type_ref().clone(),
-                leaves: crate::jni::synth_sum_leaves(self, sum_cfg, sum),
+                leaves: crate::jni::synth_sum_leaves(self, registry, &ident, sum),
             });
         }
         out

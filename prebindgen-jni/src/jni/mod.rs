@@ -568,10 +568,9 @@ impl JniGen {
     pub(crate) fn walk_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
         use prebindgen_registry::unfold::{LeafSource, PathStep};
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
-        let cfg = self.decls.types.get(&TypeKey::from_ident(&ident))?;
         let leaves = match self.registry.flat().declared_type(&ident)? {
             prebindgen_registry::flat::Type::Variant(sum) => {
-                crate::jni::synth_sum_leaves(&self.decls, cfg.sum()?, sum)
+                crate::jni::synth_sum_leaves(&self.decls, &self.registry, &ident, sum)
             }
             prebindgen_registry::flat::Type::Struct(s) => {
                 crate::jni::synth_value_struct_leaves(&self.decls, &self.registry, s, &[], "", 0)?

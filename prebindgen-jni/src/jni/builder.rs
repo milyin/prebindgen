@@ -1122,14 +1122,25 @@ impl Declarations {
                     else {
                         panic!("TypeKind::Sum implies a payload-carrying enum")
                     };
-                    let sum_cfg = self.types[&probe.key()]
-                        .sum()
-                        .expect("TypeKind::Sum implies a sealed-class config");
+                    // The declaration has to exist for the composition below
+                    // to name the alternatives' classes, and `TypeKind::Sum`
+                    // means it does — asserted here rather than trusted,
+                    // because the composition answers `None` for a missing one
+                    // and an empty leaf list would silently drop the field.
+                    assert!(
+                        self.types[&probe.key()].sum().is_some(),
+                        "TypeKind::Sum implies a sealed-class config",
+                    );
                     out.push(FieldRecord {
                         members: member_path,
                         name,
                         ty: field.ty.clone(),
-                        decon: FieldDecon::Leaves(crate::jni::synth_sum_leaves(self, sum_cfg, sum)),
+                        decon: FieldDecon::Leaves(crate::jni::synth_sum_leaves(
+                            self,
+                            registry,
+                            &id.ident().expect("a sum type is one identifier"),
+                            sum,
+                        )),
                     });
                     continue;
                 }
