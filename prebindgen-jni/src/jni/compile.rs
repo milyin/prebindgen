@@ -223,6 +223,47 @@ pub(crate) struct OutWire {
     pub(crate) group: Option<i32>,
     /// How the Rust side reaches it.
     pub(crate) from: OutFrom,
+    /// Whether the value may be absent, so the wire boxes rather than carrying
+    /// a raw primitive.
+    ///
+    /// Always false in a composition: a decomposition of its own is reached
+    /// unconditionally. It is a **splice** that makes one nullable — a value
+    /// form reached through an `Option` puts every value under it in doubt —
+    /// and the site that splices is what sets it.
+    pub(crate) nullable: bool,
+}
+
+impl OutWire {
+    /// One leaf of an expansion plan, in the row's vocabulary.
+    ///
+    /// The shim that lets the sum emitters speak rows before every plan is one:
+    /// what they read of a leaf is exactly what a wire states, so the switch is
+    /// per call site rather than all at once.
+    pub(crate) fn from_leaf(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> Self {
+        use prebindgen_registry::unfold::LeafSource;
+        Self {
+            name: leaf.name.clone(),
+            out_ty: leaf.out_ty.clone(),
+            group: leaf.group,
+            from: match &leaf.source {
+                LeafSource::SumTag => OutFrom::Tag,
+                LeafSource::VariantField { variant, member } => OutFrom::Payload {
+                    variant: Some(variant.clone()),
+                    member: member.clone(),
+                },
+                // An accessor chain and a field chain are one thing to a wire:
+                // where the Rust side reaches the value. Which of the two it
+                // was is the plan's, and nothing the sum emitters read.
+                _ => OutFrom::Field { path: Vec::new() },
+            },
+            nullable: leaf.nullable,
+        }
+    }
+
+    /// Whether this value is the synthesized selector.
+    pub(crate) fn is_tag(&self) -> bool {
+        matches!(self.from, OutFrom::Tag)
+    }
 }
 
 /// Where an outgoing value comes from.
@@ -1143,6 +1184,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         variant: None,
                         member: part_member(part)?,
                     },
+                    nullable: false,
                 })
             })
             .collect();
@@ -1214,6 +1256,7 @@ impl<R: Conversions> JCompile<'_, R> {
                                     .chain(path.iter().cloned())
                                     .collect(),
                             },
+                            nullable: false,
                         });
                     }
                 }
@@ -1222,6 +1265,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     out_ty: part.ty.clone(),
                     group: None,
                     from: OutFrom::Field { path: vec![ident] },
+                    nullable: false,
                 }),
             }
         }
@@ -1272,6 +1316,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 // binds once. The call itself is the site's to make, so what a
                 // wire states is the field read off it.
                 from: OutFrom::Field { path: vec![ident] },
+                nullable: false,
             });
         }
         let mut frag = JFrag::new(
@@ -1313,6 +1358,7 @@ impl<R: Conversions> JCompile<'_, R> {
             out_ty: at.crossing.value().clone(),
             group: None,
             from: OutFrom::Tag,
+            nullable: false,
         }];
         for (alt, frag) in arms {
             let kotlin = self.decls.sum_variant_class_name(sum_cfg, &alt.name);
@@ -1332,6 +1378,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         variant: Some(alt.name.clone()),
                         member: member.clone(),
                     },
+                    nullable: w.nullable,
                 });
             }
         }

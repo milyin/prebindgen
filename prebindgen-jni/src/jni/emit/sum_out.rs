@@ -105,11 +105,7 @@ pub(crate) struct Slot {
     pub(crate) default: TokenStream,
 }
 
-pub(crate) fn leaf_slot(
-    ext: &Declarations,
-    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
-) -> Slot {
-    use prebindgen_registry::unfold::LeafSource;
+pub(crate) fn leaf_slot(ext: &Declarations, leaf: &crate::jni::compile::OutWire) -> Slot {
     if !leaf_is_prim(ext, leaf) {
         return Slot {
             prim: false,
@@ -119,7 +115,7 @@ pub(crate) fn leaf_slot(
     }
     // The tag is synthesized, so it has no converter to read a wire from — it
     // is a `jint` by definition.
-    let (sig, letter) = if leaf.source == LeafSource::SumTag {
+    let (sig, letter) = if leaf.is_tag() {
         ("I", format_ident!("i"))
     } else {
         let wire = ext
@@ -165,20 +161,18 @@ pub(crate) fn is_sum_leaves(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) 
 pub(crate) fn encode_sum_group(
     ext: &Declarations,
     registry: &impl Conversions,
-    leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
+    leaves: &[crate::jni::compile::OutWire],
     obj_idents: &[syn::Ident],
     matched: TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
     emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, Vec<TokenStream>) {
-    use prebindgen_registry::unfold::LeafSource;
-
     // Which sum this is comes from the selector leaf, not from the plan's
     // source: the plan's source is the *containing* value when the sum is a
     // field of a value form.
     let tag_leaf = leaves
         .iter()
-        .find(|l| l.source == LeafSource::SumTag)
+        .find(|l| l.is_tag())
         .expect("a sum segment carries its selector leaf");
     // The name off the reading — `TypeId` IS the name, so nothing takes a path
     // apart to re-derive one.
@@ -231,7 +225,7 @@ pub(crate) fn encode_sum_group(
     // its pattern binds them in.
     let tag_idx = leaves
         .iter()
-        .position(|l| l.source == LeafSource::SumTag)
+        .position(|l| l.is_tag())
         .expect("a sum plan carries its selector leaf");
     let tag_id = &obj_idents[tag_idx];
     // A unit variant contributes no leaf, so the arm list is driven by the
@@ -339,7 +333,7 @@ pub(crate) fn encode_sum_group(
 /// way.
 fn encode_group_leaf(
     ext: &Declarations,
-    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
+    leaf: &crate::jni::compile::OutWire,
     obj_ident: &syn::Ident,
     prim: bool,
     bind: &syn::Ident,

@@ -880,7 +880,7 @@ pub(crate) fn encode_plan_leaves(
     let mut arg_exprs: Vec<TokenStream> = Vec::with_capacity(n);
     for (idx, leaf) in plan.leaves.iter().enumerate() {
         let obj_ident = &obj_idents[idx];
-        if leaf_is_prim(ext, leaf) {
+        if leaf_is_prim(ext, &crate::jni::compile::OutWire::from_leaf(leaf)) {
             arg_exprs.push(quote!(#obj_ident));
         } else {
             arg_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
@@ -1019,7 +1019,10 @@ pub(crate) fn encode_plan_leaves(
         let (group_stmts, group_args) = encode_sum_group(
             ext,
             registry,
-            &plan.leaves[seg.clone()],
+            &plan.leaves[seg.clone()]
+                .iter()
+                .map(crate::jni::compile::OutWire::from_leaf)
+                .collect::<Vec<_>>(),
             &obj_idents[seg.clone()],
             matched,
             fail,
@@ -1031,7 +1034,7 @@ pub(crate) fn encode_plan_leaves(
                 let ids: Vec<&syn::Ident> = obj_idents[seg.clone()].iter().collect();
                 let slots: Vec<Slot> = plan.leaves[seg.clone()]
                     .iter()
-                    .map(|l| leaf_slot(ext, l))
+                    .map(|l| leaf_slot(ext, &crate::jni::compile::OutWire::from_leaf(l)))
                     .collect();
                 let tys = slots.iter().map(|s| &s.ty);
                 let defaults = slots.iter().map(|s| &s.default);
@@ -1404,7 +1407,7 @@ pub(crate) fn encode_plan_leaves(
         // value with the leaf's output converter and casts to JObject.
         let wire = out_entry.destination.clone();
         let enc_ident = format_ident!("__enc{}", idx);
-        if leaf_is_prim(ext, leaf) {
+        if leaf_is_prim(ext, &crate::jni::compile::OutWire::from_leaf(leaf)) {
             let letter = jni_field_access(&wire)
                 .expect("leaf_is_prim guarantees a primitive wire")
                 .1;
@@ -1447,10 +1450,20 @@ pub(crate) fn encode_plan_leaves(
             })
             .collect();
         let ids: Vec<&syn::Ident> = idxs.iter().map(|&k| &obj_idents[k]).collect();
-        let tys = idxs.iter().map(|&k| leaf_slot(ext, &plan.leaves[k]).ty);
-        let defaults = idxs
-            .iter()
-            .map(|&k| leaf_slot(ext, &plan.leaves[k]).default);
+        let tys = idxs.iter().map(|&k| {
+            leaf_slot(
+                ext,
+                &crate::jni::compile::OutWire::from_leaf(&plan.leaves[k]),
+            )
+            .ty
+        });
+        let defaults = idxs.iter().map(|&k| {
+            leaf_slot(
+                ext,
+                &crate::jni::compile::OutWire::from_leaf(&plan.leaves[k]),
+            )
+            .default
+        });
         // Matched BY VALUE: the local is this arm's alone (every leaf under the
         // hoist is in it), so a consuming value form's fields move out here
         // exactly as they do at an unconditional one.
@@ -1469,10 +1482,7 @@ pub(crate) fn encode_plan_leaves(
 /// primitive JNI wire. Must agree with the descriptor chunk
 /// [`crate::jni::iface`] derives for the same leaf — a
 /// nullable primitive boxes (object chunk), object wires pass as objects.
-pub(crate) fn leaf_is_prim(
-    ext: &Declarations,
-    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
-) -> bool {
+pub(crate) fn leaf_is_prim(ext: &Declarations, leaf: &crate::jni::compile::OutWire) -> bool {
     // The synthesized sum selector is a `jint` by definition — it is assigned,
     // never converted, so it has no output entry to read a wire from and must
     // not be made to depend on one resolving.
@@ -1481,7 +1491,7 @@ pub(crate) fn leaf_is_prim(
     // the absent case needs a representation the tag's own variants do not
     // provide. A raw `jint` has none — zero is a real variant — so the selector
     // boxes like any other nullable leaf and JVM null means "no value here".
-    if leaf.source == prebindgen_registry::unfold::LeafSource::SumTag {
+    if leaf.is_tag() {
         return !leaf.nullable;
     }
     if leaf.nullable {
