@@ -531,6 +531,15 @@ impl<'a, C: Compile> Compiler<'a, C> {
         Ok(fragment)
     }
 
+    /// The rows this compilation was built against.
+    ///
+    /// So a caller can ask whether a crossing has a row before compiling it by
+    /// name — the check [`Self::row_of`] enforces, available ahead of the
+    /// error rather than only through it.
+    pub fn recipes(&self) -> &Recipes {
+        self.recipes
+    }
+
     /// The fragment for one crossing under a **named** row, rather than the one
     /// the crossing defaults to.
     ///
@@ -539,12 +548,28 @@ impl<'a, C: Compile> Compiler<'a, C> {
     /// checked, or read through
     /// [`Compiled::row_fragment`](Compiled::row_fragment), before any site
     /// takes it.
+    ///
+    /// Refuses a name the crossing does not have. Compiling a row falls back to
+    /// the derived row when the lookup misses, which is right for the two
+    /// callers that pass a name they got **from** the table — a crossing's
+    /// default, or a site's binding — and wrong here, where the name is the
+    /// caller's own claim. Without the check a conditionally-declared row that was not
+    /// declared compiles the default instead and files it under the asked-for
+    /// name, leaving [`Compiled::row_fragment`] to answer for a row that does
+    /// not exist.
     pub fn row_of(
         &mut self,
         adapter: &mut C,
         crossing: &Crossing,
         recipe: &RecipeId,
     ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
+        if self.recipes.get(&crossing.key(), recipe).is_none() {
+            return Err(RecipeError::NoSuchRow {
+                crossing: crossing.key(),
+                recipe: recipe.clone(),
+            }
+            .into());
+        }
         self.row(adapter, crossing, recipe)
     }
 

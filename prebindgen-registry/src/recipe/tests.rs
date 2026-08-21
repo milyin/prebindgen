@@ -2301,3 +2301,50 @@ fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
     // The other direction was never crossed, so there is no answer to give.
     assert!(compiled.fragment(&key, Assembly::Construct).is_none());
 }
+
+/// Compiling a row **by name** refuses a name the crossing does not have,
+/// rather than answering with the row it would have derived.
+///
+/// The two callers that reach [`Compiler::row`] with a name they got *from* the
+/// table — a crossing's default, and a site's binding — rely on that fallback,
+/// and it is right for them. [`Compiler::row_of`] takes the caller's own claim,
+/// so the same fallback would compile the default and file it under the asked-for
+/// name, leaving [`Compiled::row_fragment`] to answer for a row nobody declared.
+///
+/// The shape that hits it is a conditionally-declared row: an adapter that
+/// declares `fields` only for a type that has some, then asks every declared
+/// type for `fields` anyway.
+#[test]
+fn compiling_a_row_by_name_refuses_a_name_the_crossing_lacks() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_rows(&model);
+    let bindings = Bindings::default();
+    let crossing = Crossing::new(ty(&model, "Sample"), Assembly::Deconstruct);
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let err = compiler
+        .row_of(&mut adapter, &crossing, &id("nonesuch"))
+        .expect_err("`Sample` declares `whole` and `fields`, and nothing else");
+    let message = err.to_string();
+    assert!(message.contains("nonesuch"), "{message}");
+    assert!(message.contains("Sample"), "{message}");
+
+    // And nothing was filed under the name, so no emitter can read one back.
+    let compiled = compiler.finish();
+    assert!(compiled
+        .row_fragment(
+            &ty(&model, "Sample").key(),
+            Assembly::Deconstruct,
+            &id("nonesuch")
+        )
+        .is_none());
+
+    // The two rows that DO exist still compile by name.
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    for name in ["whole", "fields"] {
+        compiler
+            .row_of(&mut adapter, &crossing, &id(name))
+            .unwrap_or_else(|e| panic!("`{name}` is declared: {e}"));
+    }
+}

@@ -1570,6 +1570,17 @@ impl JniGenBuilder {
                 ty,
                 prebindgen_registry::recipe::Assembly::Deconstruct,
             );
+            // A type with nothing to hand out states no `parts` row — an empty
+            // struct, or an enum with no alternatives. Asking for one by name
+            // is refused now rather than answered with the default, so the
+            // condition that declared it is the condition asked here.
+            if decls
+                .recipe_table()
+                .get(&crossing.key(), &crate::jni::rows::parts())
+                .is_none()
+            {
+                continue;
+            }
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                 &model,
                 decls.recipe_table(),
@@ -1669,6 +1680,11 @@ impl Declarations {
         // The **stripped** key, so `Box<Payload>` and `&Payload` compile the
         // row too: all three spellings find one row and each gets its own
         // fragment, which is what a site taking a wrapped spelling reads.
+        // A `data_class` with no fields states no `parts` row — there is
+        // nothing for it to be made of — so the row is asked for by name only
+        // where it was declared. `row_of` refuses an absent name rather than
+        // answering with the default, which is what makes that condition the
+        // one that has to match.
         if assembly == prebindgen_registry::recipe::Assembly::Construct
             && matches!(
                 self.types
@@ -1676,6 +1692,10 @@ impl Declarations {
                     .map(|c| &c.kind),
                 Some(DeclaredKind::Data)
             )
+            && compiler
+                .recipes()
+                .get(&crossing.key(), &crate::jni::rows::parts())
+                .is_some()
         {
             // A refusal is a bug in the composition, not a gap in the binding:
             // every part of a `data_class` is a crossing that already resolved
