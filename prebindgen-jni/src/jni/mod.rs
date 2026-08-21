@@ -676,6 +676,30 @@ impl JniGen {
         )
     }
 
+    /// Whether a declared type states a `parts` row at all, in the given
+    /// direction — asked of the compiled fragments the way an emitter asks.
+    ///
+    /// Test support. A type with nothing to be made of declares no such row,
+    /// and `Compiled::row_fragment` must then answer `None` rather than hand
+    /// back whatever the crossing compiled by default.
+    pub(crate) fn has_parts_row_for_test(&self, short: &str, out: bool) -> bool {
+        use prebindgen_registry::recipe::Assembly;
+        let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
+        let assembly = match out {
+            true => Assembly::Deconstruct,
+            false => Assembly::Construct,
+        };
+        self.decls
+            .compiled
+            .borrow()
+            .row_fragment(
+                &TypeKey::from_ident(&ident),
+                assembly,
+                &crate::jni::rows::parts(),
+            )
+            .is_some()
+    }
+
     /// The wires a crossing composes into, by spelling.
     pub(crate) fn parts_wires_for_test(
         &self,

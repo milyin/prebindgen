@@ -1104,6 +1104,19 @@ pub enum RecipeError {
         /// The name the site asked for.
         recipe: RecipeId,
     },
+    /// A caller named a row the crossing does not have.
+    ///
+    /// Distinct from [`UnknownRow`](Self::UnknownRow), which is a **site**
+    /// asking for one. This is a caller compiling a named row directly through
+    /// [`Compiler::row_of`](crate::recipe::Compiler::row_of), where there is no
+    /// site to name — an adapter checking a row it declared conditionally, and
+    /// getting the condition wrong.
+    NoSuchRow {
+        /// The crossing that has no such row.
+        crossing: CrossingKey,
+        /// The name the caller asked for.
+        recipe: RecipeId,
+    },
     /// Two declarations of equal precedence bound one site to different rows.
     Rebound {
         /// The site both named.
@@ -1215,6 +1228,11 @@ impl fmt::Display for RecipeError {
             RecipeError::NotAProduct { row, recipe } => write!(
                 f,
                 "row `{recipe}` takes {row} apart, and the model gives that type no parts"
+            ),
+            RecipeError::NoSuchRow { crossing, recipe } => write!(
+                f,
+                "{crossing} has no row `{recipe}` — it was compiled by name, not \
+                 through a site"
             ),
             RecipeError::UnknownRow {
                 site,

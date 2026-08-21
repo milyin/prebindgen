@@ -2896,3 +2896,67 @@ fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
         );
     }
 }
+
+/// A declared type with nothing to be made of states no `parts` row, and no
+/// fragment is filed under that name.
+///
+/// `Declarations::recipes` declares `parts` only where there is something to
+/// decompose — an empty struct has no fields, so it gets the `whole` row and
+/// nothing else. The build then asks each declared type for `parts` by name,
+/// and `Compiler::row_of` refuses a name the crossing lacks rather than
+/// compiling the default and filing it under the asked-for name.
+///
+/// Without that refusal `row_fragment(.., parts)` answered with the whole-value
+/// fragment for a row nobody declared — an emitter reading it would take a
+/// single atomic conversion for a list of parts.
+#[test]
+fn a_type_with_no_parts_files_no_parts_row() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct EmptyNamed {}
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct HasOne {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn use_both(a: EmptyNamed, b: HasOne) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(EmptyNamed))
+                .class(crate::data_class!(HasOne))
+                .fun(prebindgen_registry::fun!(use_both)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    for out in [false, true] {
+        assert!(
+            !gen.has_parts_row_for_test("EmptyNamed", out),
+            "an empty struct states no parts row (out={out})",
+        );
+        assert!(
+            gen.has_parts_row_for_test("HasOne", out),
+            "a struct with a field states one (out={out})",
+        );
+    }
+}

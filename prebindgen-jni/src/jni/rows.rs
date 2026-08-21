@@ -223,15 +223,19 @@ impl Declarations {
 /// `data_class!` over a type the scan dropped — the scan reports that, and a
 /// row over no fields would report it a second time.
 fn out_fields(model: &Flat, ty: &TypeRef) -> Vec<Reach> {
+    (0..fields_of(model, ty).len()).map(Reach::Field).collect()
+}
+
+/// The fields of a declared struct, or none for anything the model does not
+/// hold as one.
+fn fields_of<'a>(model: &'a Flat, ty: &TypeRef) -> &'a [prebindgen_registry::flat::Field] {
     let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
-        return Vec::new();
+        return &[];
     };
-    let Some(prebindgen_registry::flat::Type::Struct(s)) =
-        id.ident().and_then(|ident| model.declared_type(&ident))
-    else {
-        return Vec::new();
-    };
-    (0..s.fields.len()).map(Reach::Field).collect()
+    match id.ident().and_then(|ident| model.declared_type(&ident)) {
+        Some(prebindgen_registry::flat::Type::Struct(s)) => &s.fields,
+        _ => &[],
+    }
 }
 
 /// The row a type with no parts takes: the adapter emits the conversion itself.
@@ -345,7 +349,11 @@ impl Declarations {
             // its constructing side names which of the two a site takes by
             // default. See [`parts`] for why that is still `whole`.
             match self.types.get(&ty.key()).map(|c| &c.kind) {
-                Some(DeclaredKind::Data) => {
+                // A struct with no fields is nothing to be made of, so it
+                // states no `parts` row — the same condition the deconstructing
+                // side applies, and the reason `row_of` may be asked for the
+                // row by name.
+                Some(DeclaredKind::Data) if !fields_of(model, &ty).is_empty() => {
                     rows.declare_default(ty.clone(), whole(), Constructing::Atomic)
                         .declare(ty, parts(), Constructing::Product(Construct::Fields));
                 }
