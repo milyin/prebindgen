@@ -1573,7 +1573,7 @@ mod tests {
                 syn::parse_quote!(Owned),
                 path.clone(),
                 true,
-                LeafSource::Accessor,
+                LeafSource::Reach,
             );
             let got = reach_leaf_flat(
                 &qualify,
@@ -1600,7 +1600,7 @@ mod tests {
             syn::parse_quote!(&Owned),
             path.clone(),
             true,
-            LeafSource::Accessor,
+            LeafSource::Reach,
         );
         let got = reach_leaf_flat(
             &qualify,
@@ -1632,7 +1632,7 @@ mod tests {
             syn::parse_quote!(Owned),
             path.clone(),
             false,
-            LeafSource::Field,
+            LeafSource::Reach,
         );
         let got = reach_leaf_flat(
             &qualify,
@@ -1662,7 +1662,7 @@ mod tests {
             PathStep::call(syn::parse_quote!(get_it), true, false),
             PathStep::field(syn::parse_quote!(a), false),
         ];
-        let l = leaf(syn::parse_quote!(Owned), full, false, LeafSource::Accessor);
+        let l = leaf(syn::parse_quote!(Owned), full, false, LeafSource::Reach);
         // The suffix a rebase would hand over — the optional call is gone from
         // it, and used to take the guard with it.
         let rest = vec![PathStep::field(syn::parse_quote!(a), false)];

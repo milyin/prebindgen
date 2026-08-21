@@ -478,7 +478,7 @@ pub(crate) fn apply(
 /// classes) and handed over as
 /// [`Decompositions::value_structs`](crate::Decompositions::value_structs).
 /// Its [`leaves`](Self::leaves)
-/// are [`LeafSource::Field`] leaves: each crosses the boundary as its own field
+/// are [`LeafSource::Reach`] leaves: each crosses the boundary as its own field
 /// value and the foreign side reassembles the object (no Java object is built
 /// on the Rust side).
 pub struct ValueDecon {
@@ -1403,7 +1403,7 @@ fn flatten(
                     out_ty,
                     identity: true,
                     nullable,
-                    source: LeafSource::Accessor,
+                    source: LeafSource::Reach,
                     group: None,
                 });
             }
@@ -1586,7 +1586,7 @@ fn flatten(
                             out_ty: fr.ty.clone(),
                             identity: false,
                             nullable,
-                            source: LeafSource::Field,
+                            source: LeafSource::Reach,
                             group: None,
                         });
                     }
@@ -1687,7 +1687,7 @@ fn flatten(
                         out_ty,
                         identity,
                         nullable,
-                        source: LeafSource::Accessor,
+                        source: LeafSource::Reach,
                         group: None,
                     });
                 }

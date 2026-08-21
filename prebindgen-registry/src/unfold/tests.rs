@@ -1085,7 +1085,7 @@ fn value_struct_vec_is_fixed_iterable_fold() {
         out_ty: tref(ty),
         identity: false,
         nullable: false,
-        source: LeafSource::Field,
+        source: LeafSource::Reach,
         group: None,
     };
     let vd = ValueDecon {
@@ -1118,7 +1118,7 @@ fn value_struct_vec_is_fixed_iterable_fold() {
         "decomposed-leaf fold, not whole-element"
     );
     assert_eq!(plan.leaves.len(), 2, "field leaves cross raw per element");
-    assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Field));
+    assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Reach));
     assert!(!plan.by_ref, "owned Vec<Payload> elements");
 }
 
@@ -1138,7 +1138,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
         out_ty: tref(ty),
         identity: false,
         nullable: false,
-        source: LeafSource::Field,
+        source: LeafSource::Reach,
         group: None,
     };
     let vd = ValueDecon {
@@ -1167,7 +1167,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     assert!(plan.decon.is_some(), "carries the field decon");
     assert!(plan.element.is_none(), "decomposed-leaf fold");
     assert_eq!(plan.leaves.len(), 2);
-    assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Field));
+    assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Reach));
     // A scalar `&Payload` callback arg must stay a Base fixed builder.
     let mut reg2: Registry = reg_with(&[
         "fn storage_callback(f: impl Fn(&Payload) + Send + Sync + 'static) { todo!() }",
@@ -1873,7 +1873,7 @@ fn a_vec_of_optionals_installs_no_fixed_fold() {
         out_ty: tref(ty),
         identity: false,
         nullable: false,
-        source: LeafSource::Field,
+        source: LeafSource::Reach,
         group: None,
     };
     let vd = ValueDecon {

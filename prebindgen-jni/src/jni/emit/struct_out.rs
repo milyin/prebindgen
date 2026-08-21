@@ -64,7 +64,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
     }
 }
 
-/// The [`LeafSource::Field`](prebindgen_registry::unfold::LeafSource) leaves of
+/// The [`LeafSource::Reach`](prebindgen_registry::unfold::LeafSource) leaves of
 /// a by-value `data_class`, as the fixed-builder output and callback paths want
 /// them.
 ///
@@ -93,7 +93,7 @@ pub(crate) fn synth_value_struct_leaves(
                 out_ty: w.out_ty,
                 identity: false,
                 nullable: w.nullable,
-                source: LeafSource::Field,
+                source: LeafSource::Reach,
                 group: w.group,
             })
             .collect(),
