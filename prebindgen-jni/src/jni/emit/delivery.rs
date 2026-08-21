@@ -62,7 +62,15 @@ pub(crate) fn emit_unfold_delivery(
     // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
     // yielding the per-leaf typed jvalue arg expressions.
     let encode_leaves = |value: &TokenStream| -> (TokenStream, Vec<TokenStream>) {
-        encode_plan_leaves(ext, registry, plan, &obj_idents, value, &fail, emit)
+        encode_plan_leaves(
+            ext,
+            registry,
+            Delivered::of(plan),
+            &obj_idents,
+            value,
+            &fail,
+            emit,
+        )
     };
 
     // Cached-interface call statics for the builder / folder `run`.
@@ -515,6 +523,37 @@ pub(crate) fn reach_leaf_flat(
     }
 }
 
+/// One delivery site, as the encoder sees it: what it hands out, and the value
+/// forms it evaluates once on the way.
+///
+/// Not an `UnfoldPlan`. A plan carries the delivery's shape as well — whether
+/// it folds, whether it is optional, what the builder's generic is — and none
+/// of that reaches this encoder, which writes only the statements that fill the
+/// slots. Naming exactly what it reads is what lets the caller assemble one
+/// from a row.
+pub(crate) struct Delivered<'a> {
+    /// The values handed out, in the order the builder receives them.
+    pub(crate) wires: Vec<crate::jni::compile::OutWire>,
+    /// The value forms to evaluate once and bind to a local, outermost first.
+    ///
+    /// Per **site** rather than per value: two values reached through one
+    /// accessor share its call, and that is the whole point of a hoist.
+    pub(crate) hoists: &'a [prebindgen_registry::unfold::Hoist],
+    /// Whether the delivered value is reached through a borrow.
+    pub(crate) by_ref: bool,
+}
+
+impl<'a> Delivered<'a> {
+    /// The site one expansion plan describes.
+    pub(crate) fn of(plan: &'a prebindgen_registry::unfold::UnfoldPlan) -> Self {
+        Self {
+            wires: crate::jni::compile::OutWire::from_leaves(&plan.leaves),
+            hoists: &plan.hoists,
+            by_ref: plan.by_ref,
+        }
+    }
+}
+
 /// Every value form on a plan, evaluated **once** and bound to a local
 /// (`__vf0`, `__vf1`, …), so a struct is built once per delivery rather than
 /// once per field. The bound prefixes come back with the statements, since
@@ -860,21 +899,20 @@ fn reach_leaf(
 pub(crate) fn encode_plan_leaves(
     ext: &Declarations,
     registry: &impl Conversions,
-    plan: &prebindgen_registry::unfold::UnfoldPlan,
+    site: Delivered<'_>,
     obj_idents: &[syn::Ident],
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
     emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, Vec<TokenStream>) {
-    // The values this delivery hands out. Every question below is asked of
-    // these; what stays the plan's is the **hoists** — which value forms to
-    // evaluate once and bind to a local — because that is a property of the
-    // site rather than of any one value.
-    let wires = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
+    let Delivered {
+        wires,
+        hoists,
+        by_ref,
+    } = site;
     // Per-fn origin qualification: each accessor call is prefixed with the
     // module of the crate that defines it (multi-source bindings).
     let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
-    let by_ref = plan.by_ref;
     let n = wires.len();
 
     // Typed `jvalue` argument expression per leaf, in leaf order: a non-null
@@ -892,7 +930,7 @@ pub(crate) fn encode_plan_leaves(
         }
     }
 
-    let hoisted = bind_hoists(&qualify, &plan.hoists, value, by_ref);
+    let hoisted = bind_hoists(&qualify, hoists, value, by_ref);
     let mut stmts = hoisted.stmts.clone();
 
     // Reach a leaf off the innermost value form it sits under, with that
@@ -938,8 +976,7 @@ pub(crate) fn encode_plan_leaves(
     // conditional form may carry a sum field and that segment has to land in
     // the arm too: emitted ahead of it, its `match` would reach a binding the
     // arm has not introduced yet.
-    let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = plan
-        .hoists
+    let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = hoists
         .iter()
         .enumerate()
         .filter_map(|(i, _)| {

@@ -129,7 +129,7 @@ pub(crate) fn callback_input(
             let (leaf_stmts, leaf_args) = encode_plan_leaves(
                 ext,
                 registry,
-                plan,
+                crate::jni::emit::Delivered::of(plan),
                 &obj_idents,
                 &quote!(__cb_elem),
                 &fail,
@@ -193,7 +193,7 @@ pub(crate) fn callback_input(
             let (stmts, arg_exprs) = encode_plan_leaves(
                 ext,
                 registry,
-                plan,
+                crate::jni::emit::Delivered::of(plan),
                 &obj_idents,
                 &quote!(#cb_arg),
                 &fail,
