@@ -2509,3 +2509,104 @@ fn every_spelling_the_walk_flattens_states_the_same_row() {
         .expect("optional row");
     assert_eq!(opt.len(), bare.len() + 1, "the gate is one more wire");
 }
+
+/// Every field shape the walk reads specially, held to the row.
+///
+/// A `data_class` field is not always one property read: an `enum_class`
+/// property holds the enum object where the wire holds its discriminant, an
+/// unsigned representation's property is a `ULong` over a `Long` wire, an
+/// optional primitive is decoupled into a presence flag and a raw slot rather
+/// than boxed, an optional whose wire is a JVM object rides a `null`, and a
+/// nested handle is locked through the object rather than the pointer it
+/// carries. Each of those is a place the composition and the walk could differ
+/// silently, so the fixture carries all of them at once — and again one layer
+/// down, where a closed gate above turns every read into a safe call and
+/// substitutes what a non-nullable slot carries meanwhile.
+#[test]
+fn every_field_shape_the_walk_reads_specially_states_the_same_row() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Bits {
+                    pub pri: Priority,
+                    pub maybe_pri: Option<Priority>,
+                    pub big: u64,
+                    pub maybe_big: Option<u64>,
+                    pub name: String,
+                    pub maybe_name: Option<String>,
+                    pub flag: bool,
+                    pub maybe_flag: Option<bool>,
+                    pub bytes: [u8; 4],
+                    pub opaque: Opaque,
+                    pub maybe_opaque: Option<Opaque>,
+                    pub nested: Nested,
+                    pub maybe_nested: Option<Nested>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Opaque {
+                    pub v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Nested {
+                    pub k: i64,
+                    pub s: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bits_use(b: Bits) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bits_opt(b: Option<Bits>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::ptr_class!(Opaque))
+                .class(crate::data_class!(Nested))
+                .class(crate::data_class!(Bits))
+                .fun(prebindgen_registry::fun!(bits_use))
+                .fun(prebindgen_registry::fun!(bits_opt)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    for spelling in ["Bits", "Option<Bits>"] {
+        let (composed, walked) = gen
+            .parts_vs_walk_for_test(spelling, "b")
+            .unwrap_or_else(|| panic!("{spelling}"));
+        assert_eq!(composed, walked, "disagree on {spelling}");
+    }
+}

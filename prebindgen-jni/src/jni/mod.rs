@@ -492,10 +492,12 @@ impl JniGen {
                     name,
                     w.kt_ty.clone(),
                     w.access.render(param),
-                    w.conv.as_ref().map(|c| c.to_string()),
-                    w.handle_target.as_ref().map(|t| format!("{param}{t}")),
+                    w.conv().map(|c| c.to_string()),
+                    w.handle_target
+                        .as_ref()
+                        .map(|t| crate::jni::compile::reached(param, t)),
                     w.handle_nullable,
-                    w.staged,
+                    w.staged(),
                     w.field().map(str::to_string),
                 )
             })
