@@ -330,25 +330,31 @@ impl<R: Conversions<KotlinMeta>> Compile for JCompile<'_, R> {
 impl crate::jni::Declarations {
     /// The conversion for `ty` in the given direction, from the fragments
     /// compiled so far.
-    pub(crate) fn frag(
-        &self,
-        ty: &TypeRef,
-        assembly: Assembly,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        Some(
-            self.compiled
-                .borrow()
-                .fragment(&ty.key(), assembly)?
-                .conv
-                .clone(),
-        )
+    pub(crate) fn frag(&self, ty: &TypeRef, assembly: Assembly) -> Option<Conv> {
+        Some(Conv(self.compiled.borrow().fragment(&ty.key(), assembly)?))
     }
 
-    pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<ConverterImpl<KotlinMeta>> {
+    pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<Conv> {
         self.frag(ty, Assembly::Construct)
     }
 
-    pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<ConverterImpl<KotlinMeta>> {
+    pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<Conv> {
         self.frag(ty, Assembly::Deconstruct)
+    }
+}
+
+/// A fragment's conversion, read without copying it.
+///
+/// The store is read while compilation is still writing to it, so a caller
+/// cannot hold a borrow into it; sharing the fragment's `Rc` and reaching the
+/// conversion through it costs a refcount instead of a whole `syn::ItemFn` per
+/// lookup.
+pub(crate) struct Conv(std::rc::Rc<JFrag>);
+
+impl std::ops::Deref for Conv {
+    type Target = ConverterImpl<KotlinMeta>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.conv
     }
 }

@@ -427,7 +427,12 @@ impl<F> Compiled<F> {
     /// row has the row and asks through [`Self::row_fragment`].
     ///
     /// `None` means no site ever crossed this type in this direction.
-    pub fn fragment(&self, ty: &TypeKey, assembly: Assembly) -> Option<&F> {
+    ///
+    /// Handed back as the `Rc` it is stored under: an adapter that reads its
+    /// store while compilation is still filling it cannot hold a borrow across
+    /// the next write, and a fragment holds a whole `syn::ItemFn` that a
+    /// recursive lookup should not be copying.
+    pub fn fragment(&self, ty: &TypeKey, assembly: Assembly) -> Option<Rc<F>> {
         let row = self.defaults.get(&(ty.clone(), assembly))?;
         self.row_fragment(ty, assembly, row)
     }
@@ -449,10 +454,10 @@ impl<F> Compiled<F> {
     }
 
     /// The fragment for one crossing and one named row.
-    pub fn row_fragment(&self, ty: &TypeKey, assembly: Assembly, row: &RecipeId) -> Option<&F> {
+    pub fn row_fragment(&self, ty: &TypeKey, assembly: Assembly, row: &RecipeId) -> Option<Rc<F>> {
         self.fragments
             .get(&(ty.clone(), assembly, row.clone()))
-            .map(|f| &**f)
+            .cloned()
     }
 
     /// Every fragment this compilation built, in a deterministic order.

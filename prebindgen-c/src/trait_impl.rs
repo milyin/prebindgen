@@ -9,20 +9,26 @@ use super::{builder::callback_fn_type, *};
 /// wire values; the converter table's single `destination` cannot.
 impl CbindgenBuilder {
     /// The fragment for `ty` crossing in the given direction, if one compiled.
-    pub(crate) fn frag(&self, ty: &TypeRef, assembly: Assembly) -> Option<crate::compile::CFrag> {
-        self.compiled
-            .borrow()
-            .fragment(&ty.key(), assembly)
-            .cloned()
+    ///
+    /// Shares the fragment rather than copying it: the store is read while
+    /// compilation is still writing to it, so a borrow cannot be held across
+    /// the next write, and `shape_is_lowerable` walks a type's layers asking
+    /// this at every one.
+    pub(crate) fn frag(
+        &self,
+        ty: &TypeRef,
+        assembly: Assembly,
+    ) -> Option<std::rc::Rc<crate::compile::CFrag>> {
+        self.compiled.borrow().fragment(&ty.key(), assembly)
     }
 
     /// The fragment that builds a Rust `ty` out of C parts.
-    pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<crate::compile::CFrag> {
+    pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<std::rc::Rc<crate::compile::CFrag>> {
         self.frag(ty, Assembly::Construct)
     }
 
     /// The fragment that takes a Rust `ty` apart into C parts.
-    pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<crate::compile::CFrag> {
+    pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<std::rc::Rc<crate::compile::CFrag>> {
         self.frag(ty, Assembly::Deconstruct)
     }
 }

@@ -116,7 +116,7 @@ pub(crate) fn struct_input_body(
                             FoldStrategy::Optional(NullableKind::Niche, _)
                         );
                         let inner_conv =
-                            composed_entry_decode(&ext.in_frag(inner)?, &raw_ident, &fname_ident);
+                            composed_entry_decode(&*ext.in_frag(inner)?, &raw_ident, &fname_ident);
                         let tmp_ident = format_ident!("__{}_jobj", fname_ident);
                         let decode = if niche {
                             // The Kotlin data-class property is still `ULong?`
@@ -179,7 +179,7 @@ pub(crate) fn struct_input_body(
             {
                 let sig = format!("L{};", fqn.replace('.', "/"));
                 let inner_conv =
-                    composed_entry_decode(&ext.in_frag(inner)?, &raw_ident, &fname_ident);
+                    composed_entry_decode(&*ext.in_frag(inner)?, &raw_ident, &fname_ident);
                 let tmp_ident = format_ident!("__{}_jobj", fname_ident);
                 let decode = if field_optional {
                     quote! {
@@ -504,7 +504,7 @@ fn read_kotlin_property(
         // Under `Option`, JVM null is `None` and the INNER converter decodes
         // the discriminant; the outer converter would expect a boxed Integer.
         let decode = if optional {
-            let inner_conv = composed_entry_decode(&ext.in_frag(inner)?, &raw, bind);
+            let inner_conv = composed_entry_decode(&*ext.in_frag(inner)?, &raw, bind);
             quote! {
                 let #bind = if #obj.is_null() {
                     ::core::option::Option::None
