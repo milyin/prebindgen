@@ -1162,7 +1162,7 @@ impl Declarations {
             registry
                 .decon_plans()
                 .get(d)
-                .is_some_and(|p| is_sum_leaves(&p.leaves))
+                .is_some_and(|p| is_sum_row(&crate::jni::compile::OutWire::from_leaves(&p.leaves)))
         };
 
         // Fixedness sets shared with the memo derivation (`iface.rs`): a

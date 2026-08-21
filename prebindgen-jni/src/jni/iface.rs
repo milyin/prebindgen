@@ -1317,14 +1317,14 @@ fn fixed_reassembly(
     class_fqn: &str,
 ) -> (String, Vec<String>) {
     let slots: Vec<String> = (0..leaves.len()).map(|i| format!("${i}")).collect();
-    if !is_sum_leaves(leaves) {
+    let wires = crate::jni::compile::OutWire::from_leaves(leaves);
+    if !is_sum_row(&wires) {
         let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
         return (
             format!("{class_short}.fromParts({})", slots.join(", ")),
             Vec::new(),
         );
     }
-    let wires = crate::jni::compile::OutWire::from_leaves(leaves);
     let params = plan_leaf_params(ext, &wires).unwrap_or_default();
     let mut imports: BTreeSet<String> = BTreeSet::new();
     let (_, when) = ext.sum_reconstruct(registry, source, &wires, &params, &slots, &mut imports);

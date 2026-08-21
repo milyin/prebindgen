@@ -116,11 +116,11 @@ pub(crate) fn leaf_slot(ext: &Declarations, leaf: &crate::jni::compile::OutWire)
     }
 }
 
-/// True when `plan` decomposes a sum — it carries the synthesized selector.
-/// The one place that question is asked, so every consumer agrees on it.
-pub(crate) fn is_sum_leaves(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) -> bool {
-    use prebindgen_registry::unfold::LeafSource;
-    leaves.iter().any(|l| l.source == LeafSource::SumTag)
+/// True when these values decompose a sum — they carry the synthesized
+/// selector. The one place that question is asked, so every consumer agrees on
+/// it.
+pub(crate) fn is_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
+    leaves.iter().any(|l| l.is_tag())
 }
 
 /// Emit the Rust-side encode of a decomposed sum: ONE `match` over the value
