@@ -230,6 +230,45 @@ impl Declarations {
             .collect();
         declared.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
+        // Every optional over a flattenable value, wherever the model spells
+        // one: a parameter, a field, a callback argument. A `Site` keys a part
+        // by the crossing's **stripped** key, so `Option<Payload>` and
+        // `Box<Option<Payload>>` are one site and binding it once answers for
+        // both spellings.
+        //
+        // Enumerated from the model rather than from the declarations, for the
+        // same reason the array rows are: what has to be bound is what the
+        // model names, and a declaration says nothing about where its type is
+        // used.
+        let mut optionals: BTreeMap<TypeKey, (&TypeRef, &TypeRef)> = BTreeMap::new();
+        for ty in model
+            .elements()
+            .flat_map(element_types)
+            .flat_map(|t| t.walk())
+        {
+            let Some(inner) = ty.optional_inner() else {
+                continue;
+            };
+            if self.field_crosses_as_its_fields(inner) {
+                optionals.entry(ty.stripped_key()).or_insert((ty, inner));
+            }
+        }
+        for (outer, inner) in optionals.into_values() {
+            // The optional keeps the row the registry derived from its shape —
+            // it has no `parts` row of its own — and it is the value one layer
+            // in that crosses as its parts.
+            bound.bind(
+                Site::part(
+                    &Crossing::new(outer.clone(), Assembly::Construct),
+                    &RecipeId::derived(),
+                    0,
+                ),
+                Crossing::new(inner.clone(), Assembly::Construct),
+                Ask::Recipe(parts()),
+                Origin::Part,
+            );
+        }
+
         for key in declared {
             let Some(ident) = key.ident() else { continue };
             let Some(prebindgen_registry::flat::Type::Struct(s)) = model.declared_type(&ident)
@@ -248,29 +287,18 @@ impl Declarations {
                 if !self.field_crosses_as_its_fields(target) {
                     continue;
                 }
-                match field.ty.optional_inner() {
-                    // The field IS the class: its part takes the `parts` row.
-                    None => bound.bind(
+                // An `Option<D>` field reaches D through the optional's own
+                // part site, which the model-wide scan above already bound. What
+                // is left is the field that IS the class: its part takes the
+                // `parts` row.
+                if field.ty.optional_inner().is_none() {
+                    bound.bind(
                         Site::part(&of, &parts(), index),
                         Crossing::new(field.ty.clone(), Assembly::Construct),
                         Ask::Recipe(parts()),
                         Origin::Part,
-                    ),
-                    // The field is an `Option<D>`. That crossing keeps the row
-                    // the registry derived from its shape — it has no `parts`
-                    // row of its own — and it is D, one layer in, that takes
-                    // `parts`.
-                    Some(_) => bound.bind(
-                        Site::part(
-                            &Crossing::new(field.ty.clone(), Assembly::Construct),
-                            &RecipeId::derived(),
-                            0,
-                        ),
-                        Crossing::new(target.clone(), Assembly::Construct),
-                        Ask::Recipe(parts()),
-                        Origin::Part,
-                    ),
-                };
+                    );
+                }
             }
         }
         bound.build(recipes)

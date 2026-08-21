@@ -47,36 +47,60 @@ pub(crate) struct JFrag {
     pub(crate) composed_only: bool,
 }
 
+/// One step of the walk from the object a site names to a wire's value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Nav {
+    /// The Kotlin property read.
+    pub(crate) field: String,
+    /// Whether the value it is read **off** may be null, which makes the read a
+    /// safe call.
+    ///
+    /// Set by every gate above the step, not only the nearest: once a chain
+    /// passes through one `?.` every read after it is on a nullable value, so a
+    /// gate marks the whole chain below it rather than its first step.
+    pub(crate) gated: bool,
+}
+
 /// How Kotlin reaches one wire value, relative to the object the site names.
 ///
-/// Three forms rather than one string, because two of them put the base in the
-/// **middle**: a sum's tag reads `when (<base>.f) { … }` and a sum's payload
-/// slot reads `(<base>.f as? I.V)?.v0`. A suffix cannot say that, and a raw
-/// prefix/suffix pair cannot be composed — an optional layer has to know
-/// whether it is adding a `?.` navigation or a `null ->` arm, and only a named
-/// form tells it which.
+/// The walk is kept as steps rather than as one string, and that is what makes
+/// a gate composable: an optional is applied **after** the fields under it have
+/// composed, so it has to reach back and make every step below it a safe call.
+/// A string cannot say which of its dots are property reads — the `0.0` a
+/// non-nullable slot falls back to has one too.
+///
+/// Three forms, because two of them put the base in the **middle**: a sum's tag
+/// reads `when (<base>.f) { … }` and a sum's payload slot reads
+/// `(<base>.f as? I.V)?.v0`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Access {
-    /// `<base><tail>` — the ordinary read, including a presence comparison.
-    Read(String),
-    /// `when (<base><tail>) { … }` — which alternative of a sum is live, as the
+    /// `<base><walk><tail>` — the ordinary read. `tail` is whatever follows the
+    /// property chain: a presence comparison, an elvis default, a Kotlin enum's
+    /// `?.value`, or nothing.
+    Read {
+        /// The property chain from the base.
+        walk: Vec<Nav>,
+        /// What follows it.
+        tail: String,
+    },
+    /// `when (<base><walk>) { … }` — which alternative of a sum is live, as the
     /// `jint` tag the arms below are numbered by.
     Select {
-        /// What reaches the sum value from the base.
-        tail: String,
+        /// The property chain reaching the sum value.
+        walk: Vec<Nav>,
         /// One arm per alternative, in declaration order, without the `null`
-        /// one — an optional ancestor adds that by setting `nullable`.
+        /// one — a gate above adds that by setting `nullable`.
         arms: Vec<String>,
         /// Whether the value reached can be null, which is its own arm.
         nullable: bool,
     },
-    /// `(<base><tail> as? <class>)?.<read>[ ?: <zero>]` — one payload slot of
-    /// one alternative. Every alternative's slots cross on every call; the
-    /// cast yields null for the ones that are not live, and `zero` is what a
+    /// `(<base><walk> as? <class>)?.<read>[ ?: <zero>]` — one payload slot of
+    /// one alternative. Every alternative's slots cross on every call; the cast
+    /// yields null for the ones that are not live, and `zero` is what a
     /// non-nullable wire carries instead.
     Slot {
-        /// What reaches the sum value from the base.
-        tail: String,
+        /// The property chain reaching the sum value.
+        walk: Vec<Nav>,
         /// The Kotlin class of the alternative this slot belongs to. Empty
         /// until [`Compile::choice`] names it — the arm's own composition
         /// cannot, because a product hook is not told which alternative it is.
@@ -91,16 +115,29 @@ pub(crate) enum Access {
 }
 
 impl Access {
+    /// An ordinary read of the base itself, with nothing walked.
+    fn read(tail: impl Into<String>) -> Self {
+        Access::Read {
+            walk: Vec::new(),
+            tail: tail.into(),
+        }
+    }
+
     /// The Kotlin expression, rooted at the object this site destructures.
     ///
     /// Only the equivalence check calls it until the emitters take the row —
     /// the same `#[cfg(test)]` the wire's other readers carry.
     #[cfg(test)]
     pub(crate) fn render(&self, base: &str) -> String {
+        let reached = |walk: &[Nav]| {
+            walk.iter()
+                .map(|n| format!("{}{}", if n.gated { "?." } else { "." }, n.field))
+                .collect::<String>()
+        };
         match self {
-            Access::Read(tail) => format!("{base}{tail}"),
+            Access::Read { walk, tail } => format!("{base}{}{tail}", reached(walk)),
             Access::Select {
-                tail,
+                walk,
                 arms,
                 nullable,
             } => {
@@ -110,10 +147,10 @@ impl Access {
                     .chain(arms.iter().cloned())
                     .collect::<Vec<_>>()
                     .join("; ");
-                format!("when ({base}{tail}) {{ {arms} }}")
+                format!("when ({base}{}) {{ {arms} }}", reached(walk))
             }
             Access::Slot {
-                tail,
+                walk,
                 class,
                 read,
                 zero,
@@ -122,23 +159,29 @@ impl Access {
                     .as_ref()
                     .map(|z| format!(" ?: {z}"))
                     .unwrap_or_default();
-                format!("({base}{tail} as? {class})?.{read}{zero}")
+                format!("({base}{} as? {class})?.{read}{zero}", reached(walk))
             }
         }
     }
 
-    /// What reaches this value from the base — the part a container prepends
-    /// its own field to, whichever form the access takes.
-    fn tail_mut(&mut self) -> &mut String {
+    /// The property chain, whichever form the access takes.
+    fn walk_mut(&mut self) -> &mut Vec<Nav> {
         match self {
-            Access::Read(tail) | Access::Select { tail, .. } | Access::Slot { tail, .. } => tail,
+            Access::Read { walk, .. } | Access::Select { walk, .. } | Access::Slot { walk, .. } => {
+                walk
+            }
         }
     }
 
     /// This access read from one field in, rather than from the object itself.
     fn under(mut self, field: &str) -> Self {
-        let tail = self.tail_mut();
-        *tail = format!(".{field}{tail}");
+        self.walk_mut().insert(
+            0,
+            Nav {
+                field: field.to_string(),
+                gated: false,
+            },
+        );
         self
     }
 }
@@ -429,7 +472,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 kt_ty: "Boolean".to_string(),
                 path: "present".to_string(),
                 // The gate reads the object itself, not through it.
-                access: Access::Read(" != null".to_string()),
+                access: Access::read(" != null"),
                 conv: None,
                 handle_target: None,
                 handle_nullable: false,
@@ -554,7 +597,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     ty: syn::parse_quote!(jni::sys::jlong),
                     kt_ty: "Long".to_string(),
                     path: part.name.clone(),
-                    access: Access::Read(format!(".{}", field_kt(part))),
+                    access: Access::read("").under(&field_kt(part)),
                     conv: None,
                     handle_target: Some(format!(".{}", field_kt(part))),
                     handle_nullable: part.ty.optional_inner().is_some(),
@@ -566,7 +609,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     ty: frag.conv.destination.clone(),
                     kt_ty: crate::jni::emit::wire_kotlin_type(&frag.conv),
                     path: part.name.clone(),
-                    access: Access::Read(format!(".{}", field_kt(part))),
+                    access: Access::read("").under(&field_kt(part)),
                     conv: Some(frag.conv.function.sig.ident.clone()),
                     handle_target: None,
                     handle_nullable: false,
@@ -798,7 +841,7 @@ impl<R: Conversions> JCompile<'_, R> {
             kt_ty,
             path: prop,
             access: Access::Slot {
-                tail: String::new(),
+                walk: Vec::new(),
                 // Named by `choice`, the only hook told which alternative this
                 // payload belongs to.
                 class: String::new(),
@@ -838,7 +881,7 @@ impl<R: Conversions> JCompile<'_, R> {
             kt_ty: "Int".to_string(),
             path: "_tag".to_string(),
             access: Access::Select {
-                tail: String::new(),
+                walk: Vec::new(),
                 arms: arms
                     .iter()
                     .zip(&classes)
@@ -864,7 +907,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 wires.push(Wire {
                     path: crate::jni::struct_plan::sum_slot_fragment(short, &w.path),
                     access: Access::Slot {
-                        tail: String::new(),
+                        walk: Vec::new(),
                         class: class.clone(),
                         read: read.clone(),
                         zero: zero.clone(),
@@ -906,7 +949,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 ty: syn::parse_quote!(jni::sys::jboolean),
                 kt_ty: "Boolean".to_string(),
                 path: "present".to_string(),
-                access: Access::Read(" != null".to_string()),
+                access: Access::read(" != null"),
                 conv: None,
                 handle_target: None,
                 handle_nullable: false,
@@ -918,7 +961,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 ty: c.destination.clone(),
                 kt_ty: crate::jni::emit::wire_kotlin_type(c),
                 path: "value".to_string(),
-                access: Access::Read(value_access),
+                access: Access::read(value_access),
                 conv: Some(c.function.sig.ident.clone()),
                 handle_target: None,
                 handle_nullable: false,
@@ -994,15 +1037,18 @@ fn absent_default(w: &Wire, tail: &str) -> String {
 /// `null` arm instead, and a sum's `as?` slot needs neither — a cast over a
 /// null subject is already null.
 fn gated(access: &Access, w: &Wire) -> Access {
-    match access {
-        Access::Read(tail) => Access::Read(format!("?{tail}{}", absent_default(w, tail))),
-        Access::Select { tail, arms, .. } => Access::Select {
-            tail: tail.clone(),
-            arms: arms.clone(),
-            nullable: true,
-        },
-        slot @ Access::Slot { .. } => slot.clone(),
+    let mut gated = access.clone();
+    // Every step below the gate, not only the first: after one safe call the
+    // chain is on a nullable value and stays there.
+    for nav in gated.walk_mut() {
+        nav.gated = true;
     }
+    match &mut gated {
+        Access::Read { tail, .. } => *tail = format!("{tail}{}", absent_default(w, tail)),
+        Access::Select { nullable, .. } => *nullable = true,
+        Access::Slot { .. } => {}
+    }
+    gated
 }
 
 /// Whether this fragment states a sum taken apart into a tag and its arms'

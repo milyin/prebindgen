@@ -2394,3 +2394,118 @@ fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
         "a required sum has no null arm: {accesses:#?}"
     );
 }
+
+/// Every spelling the walk flattens states the same row.
+///
+/// `build_flat_input_plan` accepts a `data_class` parameter through five
+/// spellings — bare, `&`, `Option`, `Box`, and `Box<Option<…>>` — and all five
+/// appear in `covertest-kotlin` or `perftest-kotlin`. A borrow and a transparent
+/// wrapper find the class's own `parts` row, because a crossing is keyed by the
+/// value that crosses; an optional has no such row and composes on the one the
+/// registry derives for it, which is why `Declarations::bindings` binds its
+/// part.
+#[test]
+fn every_spelling_the_walk_flattens_states_the_same_row() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Summary {
+                    pub count: i64,
+                    pub total: f64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub tag: i64,
+                    pub summary: Summary,
+                    pub note: Option<i64>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bare(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn borrowed(h: &Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn optional(h: Option<Holder>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn boxed(h: Box<Holder>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn boxed_optional(h: Box<Option<Holder>>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Summary))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(bare))
+                .fun(prebindgen_registry::fun!(borrowed))
+                .fun(prebindgen_registry::fun!(optional))
+                .fun(prebindgen_registry::fun!(boxed))
+                .fun(prebindgen_registry::fun!(boxed_optional)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    for spelling in [
+        "Holder",
+        "&Holder",
+        "Option<Holder>",
+        "Box<Holder>",
+        "Box<Option<Holder>>",
+    ] {
+        let (composed, walked) = gen
+            .parts_vs_walk_for_test(spelling, "h")
+            .unwrap_or_else(|| panic!("{spelling} states a row and the walk plans it"));
+        assert_eq!(
+            composed, walked,
+            "the row and the walk disagree on {spelling}"
+        );
+    }
+
+    // The optional spellings carry a presence flag the bare ones do not, so
+    // "they all agree with the walk" is not the same claim as "they are all
+    // the same list".
+    let bare = gen.parts_wires_for_test("Holder").expect("bare row");
+    let opt = gen
+        .parts_wires_for_test("Option<Holder>")
+        .expect("optional row");
+    assert_eq!(opt.len(), bare.len() + 1, "the gate is one more wire");
+}
