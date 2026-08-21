@@ -1519,19 +1519,20 @@ impl JniGenBuilder {
         decls
             .validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
-        // A `sealed_class`'s deconstructing composition, last of all.
+        // What each declared class hands out, composed last of all.
         //
-        // After `validate_resolved`, so a binding whose payload simply has no
-        // output conversion gets the diagnostic that names the payload rather
-        // than this one, which can only say that composing failed. What is left
-        // for this to catch is a composition that fails over parts which did
-        // resolve — a bug here rather than a gap in the binding.
-        // Driven here rather than from `compile_crossing`
-        // because a sum has **no** deconstructing crossing to be driven from: it
-        // is boundary-only, so nothing ever asks for its whole-value output
-        // conversion and the walk never reaches it. Nothing reads the result
-        // yet; compiling it is what holds the composition to every binding this
-        // crate builds rather than to one fixture.
+        // Driven here rather than from `compile_crossing` because a
+        // `sealed_class` has **no** deconstructing crossing to be driven from:
+        // it is boundary-only, so nothing ever asks for its whole-value output
+        // conversion and the converter walk never reaches it. A `data_class`
+        // does have one, and goes through the same loop so that both sides of
+        // the same question are answered in one place.
+        //
+        // After `validate_resolved`, so a binding whose part simply has no
+        // output conversion gets the diagnostic that names the part rather than
+        // this one, which could only say that composing failed. Nothing reads
+        // the result yet; compiling it is what holds the composition to every
+        // binding this crate builds rather than to one fixture.
         for key in decls.declared_decompositions() {
             let Some(ident) = key.ident() else { continue };
             let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
@@ -1541,20 +1542,20 @@ impl JniGenBuilder {
             // not is a gap in the binding, and the writers report it against
             // the part — `Reading.Exact.v0 has no OUTPUT converter` — where
             // this could only say that composing failed.
-            let parts: Vec<&prebindgen_registry::flat::TypeRef> = match model.declared_type(&ident)
-            {
-                Some(prebindgen_registry::flat::Type::Variant(sum)) => sum
-                    .alternatives
-                    .iter()
-                    .flat_map(|alt| &alt.fields)
-                    .map(|f| &f.ty)
-                    .collect(),
-                Some(prebindgen_registry::flat::Type::Struct(s)) => {
-                    s.fields.iter().map(|f| &f.ty).collect()
-                }
-                _ => continue,
-            };
-            if parts.iter().any(|ty| decls.out_frag(ty).is_none()) {
+            let part_types: Vec<&prebindgen_registry::flat::TypeRef> =
+                match model.declared_type(&ident) {
+                    Some(prebindgen_registry::flat::Type::Variant(sum)) => sum
+                        .alternatives
+                        .iter()
+                        .flat_map(|alt| &alt.fields)
+                        .map(|f| &f.ty)
+                        .collect(),
+                    Some(prebindgen_registry::flat::Type::Struct(s)) => {
+                        s.fields.iter().map(|f| &f.ty).collect()
+                    }
+                    _ => continue,
+                };
+            if part_types.iter().any(|ty| decls.out_frag(ty).is_none()) {
                 continue;
             }
             let crossing = prebindgen_registry::recipe::Crossing::new(
@@ -1576,8 +1577,8 @@ impl JniGenBuilder {
                     "`{key}` hands out its parts, but composing them failed: {e:?}"
                 ));
             }
-            let done = compiler.finish();
-            *decls.compiled.borrow_mut() = done;
+            let compiled = compiler.finish();
+            *decls.compiled.borrow_mut() = compiled;
         }
         if !refusals.is_empty() {
             return Err(prebindgen_registry::ScanError::AdapterInvariant {
