@@ -271,6 +271,24 @@ pub(crate) struct OutWire {
     pub(crate) group: Option<i32>,
     /// How the Rust side reaches it.
     pub(crate) from: OutFrom,
+    /// The steps from the crossed value down to this one.
+    ///
+    /// **Steps** rather than a chain of idents, because the two kinds mix: a
+    /// value form calls an accessor and then reads fields off what it returned,
+    /// while a nested `data_class` reads fields all the way down. A step also
+    /// says whether it may find nothing, which is what puts every value below
+    /// it in doubt.
+    ///
+    /// Spelled in the plans' own vocabulary rather than a second one. A reach
+    /// **is** a path, and inventing a parallel spelling would leave two things
+    /// to keep in step for no gain — the mistake the constructing side avoided
+    /// by making `Access` and `handle_target` one type.
+    ///
+    /// Independent of [`Self::from`], because every kind of value has one: a
+    /// selector spliced into a value form reaches the sum it selects over, and
+    /// a payload reaches the sum whose arm binds it. Empty means the value the
+    /// site names, which is the common case.
+    pub(crate) reach: Vec<prebindgen_registry::unfold::PathStep>,
     /// Whether this value is the whole crossed object rather than a part of it
     /// — the move-or-clone handle a decomposition delivers beside its fields.
     ///
@@ -306,12 +324,10 @@ impl OutWire {
                     variant: Some(variant.clone()),
                     member: member.clone(),
                 },
-                // Every other leaf is reached off the value, and the steps say
-                // how — an accessor chain, a field chain, or the two mixed.
-                _ => OutFrom::Reach {
-                    path: leaf.path.clone(),
-                },
+                // Every other leaf is read off the place its reach names.
+                _ => OutFrom::Place,
             },
+            reach: leaf.path.clone(),
             identity: leaf.identity,
             nullable: leaf.nullable,
         }
@@ -325,10 +341,7 @@ impl OutWire {
     /// The steps from the crossed value down to this one, or empty for a value
     /// no reach describes — the selector, or a payload its arm's pattern binds.
     pub(crate) fn reach(&self) -> &[prebindgen_registry::unfold::PathStep] {
-        match &self.from {
-            OutFrom::Reach { path } => path,
-            _ => &[],
-        }
+        &self.reach
     }
 
     /// Whether this value is **read off** a place rather than produced by a
@@ -339,7 +352,7 @@ impl OutWire {
     /// what the accessor returned, and an accessor leaf ends at the call.
     pub(crate) fn is_field_read(&self) -> bool {
         matches!(
-            self.reach().last(),
+            self.reach.last(),
             Some(prebindgen_registry::unfold::PathStep::Field { .. })
         )
     }
@@ -356,22 +369,9 @@ pub(crate) enum OutFrom {
     /// The synthesized selector, which is not read off the value at all: the
     /// emitter assigns the alternative's number in each arm of its `match`.
     Tag,
-    /// Reached off the value, by field access or by calling an accessor.
-    ///
-    /// The **steps** rather than a chain of idents, because the two kinds mix:
-    /// a value form calls an accessor and then reads fields off what it
-    /// returned, and a nested `data_class` reads fields all the way down. A
-    /// step also says whether it may find nothing, which is what puts every
-    /// value below it in doubt.
-    ///
-    /// Spelled in the plans' own vocabulary rather than a second one. A reach
-    /// **is** a path, and inventing a parallel spelling for it would leave two
-    /// things to keep in step for no gain — the mistake `Access` and
-    /// `handle_target` avoided on the constructing side by being one type.
-    Reach {
-        /// The steps from the value down to this one.
-        path: Vec<prebindgen_registry::unfold::PathStep>,
-    },
+    /// Read off the place [`OutWire::reach`] names — a field access, or the
+    /// result of the accessor the reach ends in.
+    Place,
     /// A payload of one alternative, bound by that arm's pattern.
     Payload {
         /// The alternative's ident as the source enum declares it. Empty until
@@ -1307,6 +1307,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     },
                     nullable: false,
                     identity: false,
+                    reach: Vec::new(),
                 })
             })
             .collect();
@@ -1403,9 +1404,8 @@ impl<R: Conversions> JCompile<'_, R> {
                 // The chain starts at the accessor's result, which the emitter
                 // binds once. The call itself is the site's to make, so what a
                 // wire states is the field read off it.
-                from: OutFrom::Reach {
-                    path: vec![field_step(&ident)],
-                },
+                from: OutFrom::Place,
+                reach: vec![field_step(&ident)],
                 nullable: false,
                 identity: false,
             });
@@ -1757,9 +1757,8 @@ impl Declarations {
                 name,
                 out_ty: field.ty.clone(),
                 group: None,
-                from: OutFrom::Reach {
-                    path: field_path.iter().map(field_step).collect(),
-                },
+                from: OutFrom::Place,
+                reach: field_path.iter().map(field_step).collect(),
                 nullable: false,
                 identity: false,
             });
@@ -1800,6 +1799,7 @@ impl Declarations {
             from: OutFrom::Tag,
             nullable: false,
             identity: false,
+            reach: Vec::new(),
         }];
         for alt in &sum.alternatives {
             let kotlin = self.sum_variant_class_name(cfg, &alt.name);
@@ -1818,6 +1818,7 @@ impl Declarations {
                     },
                     nullable: false,
                     identity: false,
+                    reach: Vec::new(),
                 });
             }
         }

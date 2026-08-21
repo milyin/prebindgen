@@ -898,16 +898,16 @@ pub(crate) fn encode_plan_leaves(
     // A leaf under a CONDITIONAL value form reaches off the name that form's
     // `Some` arm binds — a borrow of the struct, so nothing moves out of it —
     // and its statements are collected into that arm rather than emitted here.
-    let rebase =
-        |leaf: &prebindgen_registry::unfold::UnfoldLeaf| -> (TokenStream, bool, Vec<PathStep>, bool) {
-            if let Some((i, _, bind, rest)) = hoisted.conditional(&leaf.path) {
-                return (quote!(#bind), false, rest, hoisted.consumed(i));
-            }
-            match hoisted.rebase(&leaf.path) {
-                Some((local, rest, consuming)) => (quote!(#local), false, rest, consuming),
-                None => (value.clone(), by_ref, leaf.path.clone(), false),
-            }
-        };
+    let rebase = |leaf: &crate::jni::compile::OutWire| -> (TokenStream, bool, Vec<PathStep>, bool) {
+        let path = leaf.reach();
+        if let Some((i, _, bind, rest)) = hoisted.conditional(path) {
+            return (quote!(#bind), false, rest, hoisted.consumed(i));
+        }
+        match hoisted.rebase(path) {
+            Some((local, rest, consuming)) => (quote!(#local), false, rest, consuming),
+            None => (value.clone(), by_ref, path.to_vec(), false),
+        }
+    };
 
     // A decomposed **sum** is the one shape whose leaves are not independent:
     // only one group is live per value, so its whole segment — the selector
@@ -915,8 +915,9 @@ pub(crate) fn encode_plan_leaves(
     // instead of per-leaf expressions. A plan may carry several: a sum that IS
     // the returned value is the degenerate case of one segment covering
     // everything, while a value form contributes one per sum-typed field.
+    let wires = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
     let sum_segments: Vec<std::ops::Range<usize>> = (0..n)
-        .filter(|&i| plan.leaves[i].source == prebindgen_registry::unfold::LeafSource::SumTag)
+        .filter(|&i| wires[i].is_tag())
         .map(|start| {
             let end = (start + 1..n)
                 .take_while(|&i| plan.leaves[i].group.is_some())
@@ -946,7 +947,7 @@ pub(crate) fn encode_plan_leaves(
         .collect();
 
     for seg in &sum_segments {
-        let leaf = &plan.leaves[seg.start];
+        let leaf = &wires[seg.start];
         let (base, base_is_ref, path, _) = rebase(leaf);
         // The value to `match` on. The selector's own path reaches the sum
         // (empty when the sum IS the value), and a step on it MAY be optional:
@@ -1066,7 +1067,7 @@ pub(crate) fn encode_plan_leaves(
         };
         // The whole segment — its slot declarations and its `match` — is
         // routed like any other leaf under the same form.
-        match hoisted.conditional(&leaf.path) {
+        match hoisted.conditional(leaf.reach()) {
             Some((i, ..)) => cond_stmts
                 .get_mut(&i)
                 .expect("a conditional leaf's hoist has a bucket")
@@ -1094,7 +1095,8 @@ pub(crate) fn encode_plan_leaves(
             Some((i, ..)) => cond_stmts.get_mut(&i).expect("collected above"),
             None => &mut stmts,
         };
-        let (value, by_ref, path, consuming) = rebase(leaf);
+        let (value, by_ref, path, consuming) =
+            rebase(&crate::jni::compile::OutWire::from_leaf(leaf));
         let value = &value;
         let out_entry = ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
             panic!(
