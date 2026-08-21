@@ -2247,3 +2247,45 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
         assert_eq!(composed, walked, "the row and the walk disagree on {name}");
     }
 }
+
+/// A nullable primitive keeps the allocation-free `(present, value)` pair
+/// rather than boxing, at field depth as at parameter depth.
+///
+/// The value crosses through the **inner's** conversion — there is no boxed
+/// `Option` on that wire to decode — and neither half names a field of its own:
+/// both were decoupled from one, which is the field they answer with.
+#[test]
+fn a_nullable_primitive_field_crosses_as_a_pair() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Scal {
+                    pub n: Option<i64>,
+                    pub k: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn scal_use(s: Scal) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Scal))
+                .fun(prebindgen_registry::fun!(scal_use)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    let (composed, walked) = gen.parts_vs_walk_for_test("Scal", "s").expect("plan");
+    assert_eq!(composed, walked, "the row and the walk disagree");
+}
