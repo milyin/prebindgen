@@ -400,10 +400,57 @@ fn produces_borrow(ty: &syn::Type) -> bool {
 pub(crate) struct JCompile<'a, R> {
     pub(crate) decls: &'a Declarations,
     pub(crate) registry: &'a R,
+    /// Which site is being planned, when one is.
+    ///
+    /// `None` while compiling a row: a row answers for a crossing wherever it
+    /// appears, so nothing about a site may reach it. Set only for the one hook
+    /// the registry calls per site.
+    pub(crate) site: Option<PlanSite>,
 }
 
-fn refuse(at: At<'_>, why: &str) -> String {
-    format!("JniGen: {} ({why})", at.crossing.key())
+/// What [`Compile::plan`] needs about a site that the crossing does not say.
+pub(crate) struct PlanSite {
+    /// The parameter ident the wrapper binds this value to.
+    pub(crate) ident: syn::Ident,
+    /// Whether this leaf is one of a constructor expansion's arguments rather
+    /// than a parameter the signature names.
+    ///
+    /// The one fact a plan needs that the crossing cannot say: a `Vec`
+    /// parameter builds through a collection helper where the site is a real
+    /// parameter, and crosses as one value where it is an expansion's leaf.
+    pub(crate) expanded: bool,
+}
+
+/// What this adapter reports when it cannot answer.
+///
+/// Two kinds, because two readers act on them differently. A **refusal** names
+/// a crossing this adapter has no representation for, and the driver turns it
+/// into an adapter invariant. A **plan failure** is `fn_plan`'s own typed
+/// error, whose readers choose their diagnostic from which failure it is — so
+/// it travels whole rather than as the string it would print to.
+#[derive(Debug)]
+pub(crate) enum JErr {
+    /// No JNI representation for this crossing.
+    Refused(String),
+    /// One site could not be planned.
+    ///
+    /// Boxed for the reason `PlanError` boxes its own readings: a `Result` is
+    /// sized by its largest variant, and the success side of every hook on this
+    /// path is the one that always happens.
+    Plan(Box<crate::jni::fn_plan::PlanError>),
+}
+
+impl std::fmt::Display for JErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JErr::Refused(why) => f.write_str(why),
+            JErr::Plan(e) => write!(f, "{e:?}"),
+        }
+    }
+}
+
+fn refuse(at: At<'_>, why: &str) -> JErr {
+    JErr::Refused(format!("JniGen: {} ({why})", at.crossing.key()))
 }
 
 impl<R: Conversions> JCompile<'_, R> {
@@ -471,10 +518,9 @@ impl<R: Conversions> JCompile<'_, R> {
 
 impl<R: Conversions> Compile for JCompile<'_, R> {
     type Fragment = JFrag;
-    /// JniGen keeps its own per-site emission for now: the exported signature,
-    /// the call and the cleanup are built from the resolved registry.
-    type Plan = ();
-    type Error = String;
+    /// One parameter of one exported function, classified.
+    type Plan = crate::jni::fn_plan::PlanLeaf;
+    type Error = JErr;
 
     fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
@@ -763,8 +809,93 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         self.wrap(at, "undeclared callback signature", conv)
     }
 
-    fn plan(&mut self, _cx: &mut Cx<'_>, _bound: &Bound, _root: &JFrag) -> Result<(), String> {
-        Ok(())
+    /// One site: which of the seven wire layouts this parameter takes, and the
+    /// names the three coordinated emitters give it.
+    ///
+    /// The only hook the registry calls once per **site**; every hook above it
+    /// answers once per crossing, however many sites reuse the answer. What
+    /// makes this one per-site is not the type — that is the fragment's — but
+    /// what wraps it: a `Vec` parameter builds through a collection helper only
+    /// where the site is a real parameter and not a constructor expansion's
+    /// leaf, and the diagnostic for an unresolved leaf names the parameter that
+    /// expanded.
+    fn plan(&mut self, _cx: &mut Cx<'_>, bound: &Bound, root: &JFrag) -> Result<PlanLeaf, JErr> {
+        use crate::jni::fn_plan::{plan_error, InputKind, PlanLeaf};
+        let site = self
+            .site
+            .as_ref()
+            .ok_or_else(|| JErr::Refused("JniGen: a site compiled with no site context".into()))?;
+        let (ident, expanded) = (&site.ident, site.expanded);
+        let reading = bound.crossing.spelled();
+        let registry = self.registry;
+        let ext = self.decls;
+
+        // Every question below is the model's — the local spelling this
+        // function opened with has no users left.
+        let optional = reading.optional_inner().is_some();
+        // The enum probe off the reading: the layers it peels are the model's
+        // own (`&`, `Option`), so there is nothing to re-spell and nothing to
+        // look up.
+        let as_enum_value = ext.is_kotlin_enum_reading(reading);
+        let kt_name = crate::jni::kt_param_name(&ident.to_string());
+
+        // The site's own conversion, which the registry built before calling
+        // this. What used to be a lookup by type is the fragment it is handed.
+        let entry = &root.conv;
+
+        let flat_plan = crate::jni::emit::build_flat_input_plan(ext, registry, ident, reading)
+            .map_err(|e| plan_error(crate::jni::fn_plan::PlanError::UnflattenableDataClass(e)))?;
+        let kind = if let Some(v) = (!expanded)
+            .then(|| crate::jni::emit::vec_build_elem(ext, registry, reading))
+            .flatten()
+        {
+            InputKind::VecBuild {
+                elem: v.elem,
+                by_ref: v.by_ref,
+                elem_wrappers: v.elem_wrappers,
+            }
+        } else if let Some(sp) =
+            crate::jni::emit::build_option_scalar_input_plan(ext, ident, reading)
+        {
+            InputKind::OptionScalar(sp)
+        } else if let Some(plan) = flat_plan {
+            InputKind::FlattenStruct(plan)
+        } else {
+            match entry.metadata.projection.as_ref().map(|p| p.kind.clone()) {
+                Some(ProjectionKind::Handle) => InputKind::Handle {
+                    direct: entry.metadata.is_direct_handle(),
+                },
+                Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64 {
+                    niche: entry.metadata.projection.as_ref().and_then(|p| {
+                        reading
+                            .optional_inner()
+                            .is_some()
+                            .then(|| p.niche_sentinels.first().cloned())
+                            .flatten()
+                    }),
+                },
+                None => InputKind::Plain,
+            }
+        };
+
+        // Typed surface: handle/value projections show their Kotlin class (from
+        // the projection's leaf key); everything else the conversion's resolved
+        // name.
+        let kt_meta = entry.metadata.kotlin_name.clone();
+        let kt_public = match entry.metadata.projection.as_ref() {
+            Some(p) => crate::jni::projection_leaf_kt(ext, p),
+            None => kt_meta.clone(),
+        };
+
+        Ok(PlanLeaf {
+            reading: reading.clone(),
+            kt_name,
+            kt_public,
+            kt_meta,
+            optional,
+            as_enum_value,
+            kind,
+        })
     }
 }
 

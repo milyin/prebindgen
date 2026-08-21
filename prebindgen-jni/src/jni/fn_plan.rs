@@ -274,6 +274,11 @@ pub(crate) enum PlanError {
     JvmParameterLimit { slots: usize },
 }
 
+/// A plan failure, as the adapter's own error carries it.
+pub(crate) fn plan_error(e: PlanError) -> crate::jni::compile::JErr {
+    crate::jni::compile::JErr::Plan(Box::new(e))
+}
+
 impl PlanError {
     /// Where the offending type was written, when a file wrote it — the
     /// suffix [`Self::message`] appends.
@@ -610,42 +615,71 @@ fn classify_leaf(
     expanded: bool,
     source_param: &syn::Ident,
 ) -> Result<PlanLeaf, PlanError> {
-    // Every question below is the model's now — the local spelling this function
-    // opened with has no users left.
-    let optional = reading.optional_inner().is_some();
-    // The enum probe off the reading — the layers it peels are the model's own
-    // (`&`, `Option`), so there is nothing to re-spell and nothing to look up.
-    let as_enum_value = ext.is_kotlin_enum_reading(reading);
-    let kt_name = kt_param_name(&ident.to_string());
-
-    // `impl Fn(args)` first: typed entirely from the interface spec — the
-    // erased entry exists but its metadata carries no surface type.
+    use prebindgen_registry::recipe::{Assembly, Compiler, Crossing, Role, Site};
+    // `impl Fn(args)` never reaches the compiler, for the reason
+    // `JniGen::compile_crossing` gives: a callback is answered whole, because a
+    // JniGen callback ARGUMENT does not always have a conversion of its own —
+    // a sealed class reaches the JVM as a selector plus the live arm's slots.
+    // Driving the derived callback row here would ask for the one conversion
+    // that does not exist. This carve-out goes when the arms are rows a
+    // callback can be composed from.
     if let Some(args) = reading.callback_args() {
         // `SpecKey` is a memo key and holds `TypeKey`s, so the args reach it as
         // each arg reading's own identity.
-        // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax`
-        // pins that this is the same identity the signature-derived key gives.
         let iface = ext.iface_spec(registry, &SpecKey::callback(args));
         return Ok(PlanLeaf {
             reading: reading.clone(),
-            kt_name,
+            kt_name: kt_param_name(&ident.to_string()),
             kt_public: None,
             kt_meta: ext
                 .in_frag(reading)
                 .and_then(|e| e.metadata.kotlin_name.clone()),
-            optional,
-            as_enum_value,
+            optional: reading.optional_inner().is_some(),
+            as_enum_value: ext.is_kotlin_enum_reading(reading),
             kind: InputKind::Callback { iface },
         });
     }
-
-    // Every non-callback leaf requires a resolved input entry — the same
-    // hard boundary the Rust emitter has always enforced.
-    let Some(entry) = ext.in_frag(reading) else {
-        // The reading itself, so the diagnostic can say where the type was
-        // written. Reaching here means the type IS classified and merely has no
-        // converter, which is why there is something to carry.
-        return Err(if expanded {
+    // The compiler, resumed over what the build already compiled. Every
+    // fragment this site's row needs is in that store, so `site` finds them
+    // rather than building them again — and the plan it wraps them in is the
+    // one hook the registry calls per site rather than per crossing.
+    let mut compiler = Compiler::resume(
+        registry.flat(),
+        ext.recipe_table(),
+        ext.site_bindings(),
+        ext.compiled.borrow().clone(),
+    );
+    let mut adapter = crate::jni::compile::JCompile {
+        decls: ext,
+        registry,
+        site: Some(crate::jni::compile::PlanSite {
+            ident: ident.clone(),
+            expanded,
+        }),
+    };
+    // The site names the parameter it is, and the position is the source
+    // parameter's rather than a running count: a constructor expansion
+    // contributes leaves the signature does not name, and they all belong to
+    // the one parameter that expanded.
+    let site = Site {
+        owner: source_param.clone(),
+        role: Role::Param { index: 0 },
+    };
+    let crossing = Crossing::new(reading.clone(), Assembly::Construct);
+    let planned = compiler.site(&mut adapter, site, crossing);
+    *ext.compiled.borrow_mut() = compiler.finish();
+    match planned {
+        Ok(Some(leaf)) => Ok(leaf),
+        // A site the bindings omitted, which JniGen never declares.
+        Ok(None) => Err(PlanError::Unresolved {
+            ty: Box::new(reading.clone()),
+        }),
+        Err(prebindgen_registry::recipe::CompileError::Adapter(
+            crate::jni::compile::JErr::Plan(e),
+        )) => Err(*e),
+        // A refusal or a table disagreement, which reach this path only for a
+        // type with no conversion — the same failure the entry lookup reported.
+        Err(_) => Err(if expanded {
             PlanError::UnresolvedLeaf {
                 ty: Box::new(reading.clone()),
                 param: source_param.clone(),
@@ -654,59 +688,8 @@ fn classify_leaf(
             PlanError::Unresolved {
                 ty: Box::new(reading.clone()),
             }
-        });
-    };
-
-    let flat_plan = build_flat_input_plan(ext, registry, ident, reading)
-        .map_err(PlanError::UnflattenableDataClass)?;
-    let kind = if let Some(v) = (!expanded)
-        .then(|| vec_build_elem(ext, registry, reading))
-        .flatten()
-    {
-        InputKind::VecBuild {
-            elem: v.elem,
-            by_ref: v.by_ref,
-            elem_wrappers: v.elem_wrappers,
-        }
-    } else if let Some(sp) = build_option_scalar_input_plan(ext, ident, reading) {
-        InputKind::OptionScalar(sp)
-    } else if let Some(plan) = flat_plan {
-        InputKind::FlattenStruct(plan)
-    } else {
-        match entry.metadata.projection.as_ref().map(|p| p.kind.clone()) {
-            Some(ProjectionKind::Handle) => InputKind::Handle {
-                direct: entry.metadata.is_direct_handle(),
-            },
-            Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64 {
-                niche: entry.metadata.projection.as_ref().and_then(|p| {
-                    reading
-                        .optional_inner()
-                        .is_some()
-                        .then(|| p.niche_sentinels.first().cloned())
-                        .flatten()
-                }),
-            },
-            None => InputKind::Plain,
-        }
-    };
-
-    // Typed surface: handle/value projections show their Kotlin class (from
-    // the projection's leaf key); everything else the entry's resolved name.
-    let kt_meta = entry.metadata.kotlin_name.clone();
-    let kt_public = match entry.metadata.projection.as_ref() {
-        Some(p) => projection_leaf_kt(ext, p),
-        None => kt_meta.clone(),
-    };
-
-    Ok(PlanLeaf {
-        reading: reading.clone(),
-        kt_name,
-        kt_public,
-        kt_meta,
-        optional,
-        as_enum_value,
-        kind,
-    })
+        }),
+    }
 }
 
 /// Lower the output side. Mirrors the historical derivations exactly:

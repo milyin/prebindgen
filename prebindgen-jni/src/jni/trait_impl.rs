@@ -1434,6 +1434,10 @@ impl JniGenBuilder {
                     .join("; "),
             }
         })?;
+        // Both tables go on `decls`, because compiling a **site** happens after
+        // this function has returned: the sites are `fn_plan`'s to enumerate,
+        // and `Compiler::resume` needs these two beside the model.
+        decls.tables = Some(std::rc::Rc::new(crate::jni::Tables { recipes, bindings }));
         // The driver's state lives on `decls` rather than here, because the
         // adapter reads it **while** it compiles: a conversion for one type is
         // built out of the conversions for its inners, which are compiled
@@ -1452,8 +1456,8 @@ impl JniGenBuilder {
             .convert_with(|crossing, built, emit| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
-                    &recipes,
-                    &bindings,
+                    decls.recipe_table(),
+                    decls.site_bindings(),
                     decls.compiled.borrow().clone(),
                 );
                 let conv =
@@ -1568,13 +1572,14 @@ impl JniGenBuilder {
             );
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                 &model,
-                &recipes,
-                &bindings,
+                decls.recipe_table(),
+                decls.site_bindings(),
                 decls.compiled.borrow().clone(),
             );
             let mut adapter = crate::jni::compile::JCompile {
                 decls: &decls,
                 registry: &registry,
+                site: None,
             };
             if let Err(e) = compiler.row_of(&mut adapter, &crossing, &crate::jni::rows::parts()) {
                 refusals.push(format!(
@@ -1650,6 +1655,7 @@ impl Declarations {
         let mut adapter = crate::jni::compile::JCompile {
             decls: self,
             registry: built,
+            site: None,
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(reading, assembly);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
@@ -3260,6 +3266,16 @@ impl Declarations {
             .map(|(k, c)| (k.clone(), c.rust_type.clone()))
             .collect()
     }
+    /// The row table this binding was built against.
+    pub(crate) fn recipe_table(&self) -> &prebindgen_registry::recipe::Recipes {
+        &self.tables.as_ref().expect("built").recipes
+    }
+
+    /// Which row each site takes.
+    pub(crate) fn site_bindings(&self) -> &prebindgen_registry::recipe::Bindings {
+        &self.tables.as_ref().expect("built").bindings
+    }
+
     /// Every type that states what it hands out — `sealed_class!` and
     /// `data_class!` — in a stable order.
     ///
