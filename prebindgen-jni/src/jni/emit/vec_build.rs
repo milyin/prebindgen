@@ -53,7 +53,7 @@ pub(crate) struct VecBuildElem {
 /// four sites agree on which params take the handle path.
 pub(crate) fn vec_build_elem(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     arg: &TypeRef,
 ) -> Option<VecBuildElem> {
     // The run and its element off the MODEL. `&mut [T]` is still refused —
@@ -182,7 +182,7 @@ pub(crate) fn vec_build_elem(
 /// the name `payloadVec` (#296).
 pub(crate) fn collect_vec_build_elem_types(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
 ) -> Vec<TypeRef> {
     let declared = ext.declared_functions();
     let mut seen: std::collections::BTreeMap<String, TypeRef> = std::collections::BTreeMap::new();
@@ -217,7 +217,7 @@ pub(crate) struct VecBuildHelpers {
 /// the generated methods read naturally (`Payload` → `payloadVec`).
 pub(crate) fn vec_build_helpers(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     elem: &TypeRef,
 ) -> Option<VecBuildHelpers> {
     let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)
@@ -282,7 +282,7 @@ fn vec_helper_symbol(ext: &Declarations, base: &str, suffix: &str) -> String {
 /// push loop free of a per-element failure check.
 pub(crate) fn build_vec_build_helper_items(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     emit: &prebindgen_registry::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();

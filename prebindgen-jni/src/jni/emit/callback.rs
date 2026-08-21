@@ -23,7 +23,7 @@ use super::*;
 pub(crate) fn callback_input(
     ext: &Declarations,
     args: &[prebindgen_registry::flat::TypeRef],
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     // Human-readable tag for attach/log messages.

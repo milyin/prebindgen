@@ -48,7 +48,7 @@ pub(crate) enum LeafForm {
 /// followed by the wire-facing converter (`u64 → jlong`).
 ///
 /// A leaf must carry the whole chain, not just
-/// [`TypeEntry::converter_ident`](prebindgen_registry::TypeEntry::converter_ident):
+/// [`converter_ident`](prebindgen_registry::ConverterImpl::converter_ident):
 /// calling only the wire-facing function would hand it the *semantic* value
 /// (a `Duration`) where it expects the *representation* (a `u64`), which does
 /// not compile. Structural wrappers (`Option<_>`, `Vec<_>`) already compose
@@ -186,7 +186,7 @@ pub(crate) struct SumPlanField {
 /// could silently diverge on such edge cases.
 pub(crate) fn build_struct_plan(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     s: &prebindgen_registry::flat::Struct,
     depth: usize,
 ) -> Option<StructPlan> {
@@ -250,7 +250,7 @@ fn kind_mints_handle(kind: &PlanFieldKind) -> bool {
 /// `Reading::Exact.v0`).
 pub(crate) fn classify_field(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     reading: &prebindgen_registry::flat::TypeRef,
     owner: &str,
     depth: usize,
@@ -626,7 +626,7 @@ fn whole_value_close(optional: bool, sequence: bool) -> FoldStrategy {
 /// leak direction — for a shape nobody can compile anyway.
 pub(crate) fn type_close_strategy(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     ty: &prebindgen_registry::flat::TypeRef,
     depth: usize,
 ) -> Option<FoldStrategy> {
@@ -697,7 +697,7 @@ pub(crate) fn type_close_strategy(
 /// was first attempted.
 fn sum_plan_kind(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     ty: &prebindgen_registry::flat::TypeRef,
     owner: &str,
     optional: bool,

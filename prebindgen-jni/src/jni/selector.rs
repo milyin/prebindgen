@@ -126,7 +126,7 @@ impl Declarations {
     pub(crate) fn result_shape(
         &self,
         ty: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (ok, err) = fallible_parts(ty, emit)?;

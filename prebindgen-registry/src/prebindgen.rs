@@ -40,14 +40,12 @@ pub struct Stage<M = ()> {
     /// [`ConverterImpl::function`] but typed for this stage's own `In →
     /// Out` and own error type.
     pub function: syn::ItemFn,
-    /// Adapter-specific extras for this stage — same [`Metadata`] type as
-    /// the owning converter ([`ConverterImpl::metadata`]). The core never
+    /// Adapter-specific extras for this stage — the same type as the owning
+    /// converter's ([`ConverterImpl::metadata`]). The core never
     /// inspects this; the adapter's emitter reads it to decide how the
     /// stage's `Err` arm is surfaced (e.g. a JNI adapter stores the JVM
     /// exception class and `throw_*` fn to call here; a C adapter might
     /// store the error-code sentinel). Defaults to `()`.
-    ///
-    /// [`Metadata`]: Prebindgen::Metadata
     pub metadata: M,
 }
 
@@ -93,32 +91,30 @@ pub struct ConverterImpl<M = ()> {
     /// Default is empty (no niche optimisation).
     pub niches: Niches,
     /// Adapter-specific extras carried alongside the converter. Filled by
-    /// the same handler that produces `destination` / `function` /
-    /// `niches`, copied through into `TypeEntry::metadata` by the resolver,
-    /// and read by the adapter's language-side emitters. Set this where you
-    /// build the converter, not in a side channel.
+    /// the same handler that produces `destination` / `function` / `niches`,
+    /// and read by the adapter's language-side emitters off the fragment this
+    /// conversion belongs to. Set this where you build the converter, not in a
+    /// side channel.
     pub metadata: M,
-    /// Inner types this converter composed from — the types whose
-    /// `input_entry`/`output_entry` the adapter looked up to build a wrapper
-    /// (`Option<X>` → `[X]`, `Result<T,E>` → `[T, E]`, `&T` → `[&T]`). Empty
-    /// for a terminal converter (scalar, opaque handle, string) and for
-    /// a callback's own converter (callback args are cross-direction — their
-    /// required-ness flows through the registry's type-graph edges, not here). The
-    /// resolver copies these into `TypeEntry::subs`, which `propagate_required`
-    /// walks to mark reachable types required.
+    /// Inner crossings this converter composed from — the ones the adapter
+    /// looked up to build a wrapper (`Option<X>` → `[X]`, `Result<T,E>` →
+    /// `[T, E]`, `&T` → `[&T]`). Empty for a terminal converter (scalar, opaque
+    /// handle, string) and for a callback's own converter (callback args are
+    /// cross-direction — their required-ness flows through the registry's
+    /// type-graph edges, not here).
+    ///
+    /// This is what an adapter reports back as an
+    /// [`Answer`](crate::Answer), and what `propagate_required` walks to mark
+    /// reachable crossings required.
     ///
     /// **Identities, not spellings.** They are looked up and walked, never
-    /// emitted — [`TypeEntry::subs`](crate::registry::TypeEntry::subs)
-    /// was already `Vec<TypeKey>` and the resolver keyed these on arrival, so
-    /// the spelling existed only to be converted. An adapter that composed the
-    /// inner type keys it (`TypeKey::from_type`); one that read it off the model
-    /// asks the reading (`TypeRef::key`), and names no escape to do it.
+    /// emitted. An adapter that composed the inner type keys it
+    /// (`TypeKey::from_type`); one that read it off the model asks the reading
+    /// (`TypeRef::key`), and names no escape to do it.
     pub subs: Vec<crate::registry::TypeKey>,
 }
 
-/// The same reads [`TypeEntry`](crate::TypeEntry) offers, on the conversion an
-/// adapter built. A `TypeEntry` is this type with its inners keyed, so an
-/// emitter reading a compiled fragment asks it the same questions.
+/// What an emitter asks of a conversion it holds.
 impl<M> ConverterImpl<M> {
     /// Identifier of the wire-facing converter function.
     pub fn converter_ident(&self) -> &syn::Ident {
@@ -163,11 +159,10 @@ impl<M> ConverterImpl<M> {
 /// trait entirely (prebindgen#251 phase E).
 ///
 /// Anything language-specific the rest of the pipeline must carry — a JNI
-/// adapter's Kotlin class names and exception info, a C adapter's header
-/// names, etc. — rides in [`Self::Metadata`], an opaque type the adapter
-/// chooses. It is set in each `ConverterImpl::metadata`, propagated by the
-/// resolver into `TypeEntry::metadata`, and read back by the adapter's own
-/// emitter. Adapters that need no extras leave it at the default `()`.
+/// adapter's Kotlin class names and exception info, a C adapter's header names,
+/// etc. — rides in [`ConverterImpl::metadata`], and is read back by the
+/// adapter's own emitter off the fragment that conversion belongs to. The
+/// registry neither stores it nor names its type.
 ///
 /// # The rule an adapter must obey
 ///
@@ -206,12 +201,6 @@ impl<M> ConverterImpl<M> {
 /// Reusing a mirror's spelling test in a converted position is how the rule
 /// gets broken (prebindgen#230, #292).
 pub trait Prebindgen {
-    /// Adapter-specific extras every resolved converter carries. The
-    /// resolver copies this from each `ConverterImpl` it accepts into
-    /// the matching `TypeEntry`, so emitter code reads metadata off
-    /// the registry rather than through a parallel side channel.
-    type Metadata: Clone + Default;
-
     /// Rust items the adapter's emitted converters depend on (helper
     /// structs, type aliases, runtime-support code). Emitted at the top
     /// of the destination file, before all auto-generated converters.
@@ -222,11 +211,7 @@ pub trait Prebindgen {
     /// (feature-aware) scan actually contains — e.g. emitting a
     /// per-opaque-handle item only for handles a scanned `#[prebindgen]`
     /// fn references.
-    fn prerequisites(
-        &self,
-        _registry: &Registry<Self::Metadata>,
-        _emit: &crate::Emit,
-    ) -> Vec<syn::Item> {
+    fn prerequisites(&self, _registry: &Registry, _emit: &crate::Emit) -> Vec<syn::Item> {
         Vec::new()
     }
 
@@ -241,13 +226,7 @@ pub trait Prebindgen {
     /// converter bodies compile in the binding crate's scope. Walks the
     /// entire AST, not just signatures, so type ascriptions and casts
     /// inside function bodies are covered.
-    fn post_process_item(
-        &self,
-        _item: &mut syn::Item,
-        _registry: &Registry<Self::Metadata>,
-        _emit: &crate::Emit,
-    ) {
-    }
+    fn post_process_item(&self, _item: &mut syn::Item, _registry: &Registry, _emit: &crate::Emit) {}
 
     /// Adapter-invariant checks that need registry **signatures** — the
     /// earliest they can run (decl objects are built before any source is
@@ -259,10 +238,7 @@ pub trait Prebindgen {
     /// receiver parameter of the class type.
     ///
     /// Default: no checks.
-    fn validate(
-        &self,
-        _binding: &crate::registry::Building<'_, Self::Metadata>,
-    ) -> Result<(), String> {
+    fn validate(&self, _binding: &crate::registry::Building<'_>) -> Result<(), String> {
         Ok(())
     }
 
@@ -276,7 +252,7 @@ pub trait Prebindgen {
     /// order-independent.
     ///
     /// Default: no checks.
-    fn validate_resolved(&self, _registry: &Registry<Self::Metadata>) -> Result<(), String> {
+    fn validate_resolved(&self, _registry: &Registry) -> Result<(), String> {
         Ok(())
     }
 
@@ -306,7 +282,7 @@ pub trait Prebindgen {
     fn on_function(
         &self,
         f: &prebindgen_flat::flat::Function,
-        registry: &Registry<Self::Metadata>,
+        registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream;
 
@@ -315,7 +291,7 @@ pub trait Prebindgen {
     fn on_struct(
         &self,
         s: &prebindgen_flat::flat::Struct,
-        registry: &Registry<Self::Metadata>,
+        registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream;
 
@@ -328,7 +304,7 @@ pub trait Prebindgen {
     fn on_variant(
         &self,
         v: &prebindgen_flat::flat::Variant,
-        registry: &Registry<Self::Metadata>,
+        registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream;
 
@@ -336,7 +312,7 @@ pub trait Prebindgen {
     fn on_enum(
         &self,
         e: &prebindgen_flat::flat::Enum,
-        registry: &Registry<Self::Metadata>,
+        registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream;
 
@@ -352,7 +328,7 @@ pub trait Prebindgen {
     fn on_const(
         &self,
         c: &prebindgen_flat::flat::Constant,
-        _registry: &Registry<Self::Metadata>,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
         match self.source_module() {

@@ -3,7 +3,7 @@ use prebindgen_registry::Conversions;
 use super::*;
 
 impl CbindgenBuilder {
-    pub(crate) fn prereq_domain_constants(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    pub(crate) fn prereq_domain_constants(&self, registry: &Registry) -> Vec<syn::Item> {
         let mut items = Vec::new();
         for decl in &self.convert_decls {
             let Some(domain) = decl.domain() else {
@@ -55,9 +55,9 @@ impl CbindgenBuilder {
     pub(crate) fn in_custom(
         &self,
         ty: &TypeRef,
-        registry: &impl Conversions<()>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<()>> {
+    ) -> Option<ConverterImpl> {
         let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| *d.key() == key)?;
         let spec = decl.input_spec().as_ref()?;
@@ -123,9 +123,9 @@ impl CbindgenBuilder {
     pub(crate) fn out_custom(
         &self,
         ty: &TypeRef,
-        registry: &impl Conversions<()>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<()>> {
+    ) -> Option<ConverterImpl> {
         let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| *d.key() == key)?;
         let spec = decl.output_spec().as_ref()?;
@@ -193,7 +193,7 @@ impl CbindgenBuilder {
         &self,
         decl: &ConvertDecl,
         spec: &ConvertSpec,
-        registry: &impl Conversions<()>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> (syn::Type, syn::Expr, bool) {
         let target = self.src_ty_of(&decl.rust_type().key());
@@ -240,7 +240,7 @@ impl CbindgenBuilder {
         &self,
         decl: &ConvertDecl,
         spec: &ConvertSpec,
-        registry: &impl Conversions<()>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> (syn::Type, syn::Expr, bool) {
         let target = self.src_ty_of(&decl.rust_type().key());
@@ -282,7 +282,7 @@ impl CbindgenBuilder {
     fn c_domain_niches(
         &self,
         decl: &ConvertDecl,
-        registry: &impl Conversions<()>,
+        registry: &impl Conversions,
         direction: Direction,
     ) -> Niches {
         let Some(domain) = decl.domain() else {
@@ -329,7 +329,7 @@ impl CbindgenBuilder {
         )
     }
 
-    fn conversion_fn_path(&self, registry: &impl Conversions<()>, ident: &syn::Ident) -> syn::Path {
+    fn conversion_fn_path(&self, registry: &impl Conversions, ident: &syn::Ident) -> syn::Path {
         let Some(mut module) = registry.origin_module(ident) else {
             return self.src_fn(ident);
         };

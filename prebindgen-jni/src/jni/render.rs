@@ -88,7 +88,7 @@ pub(crate) fn build_data_class(
     ext: &Declarations,
     class_name: &str,
     item_struct: &prebindgen_registry::flat::Struct,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
 ) -> KtClass {
     // A tuple struct is an `Extern` in the model, never a `Struct`, so every
     // field here is named by construction.
@@ -279,7 +279,7 @@ pub(crate) fn build_data_class(
 /// extern on the Rust side (the auto-generated destructor).
 pub(crate) fn build_typed_handle(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     class_name: &str,
     rust_doc_name: &str,
     key: &TypeKey,
@@ -513,7 +513,7 @@ pub(crate) fn is_iterable_fold(shape: &prebindgen_registry::unfold::UnfoldShape)
 pub(crate) fn render_extern_decl(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
 ) -> Option<KtFun> {
     // The name and wire params come straight off the lowered plan — the
     // same classification the Rust extern and the Kotlin call site consume,
@@ -828,7 +828,7 @@ fn nullable_recovery_type(declared: KtType, generics: &[String]) -> KtType {
 pub(crate) fn build_wrapper_surface(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<WrapperSurface> {
@@ -845,7 +845,7 @@ pub(crate) fn build_wrapper_surface(
 fn build_wrapper_surface_with_recovery(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
     recovery: RecoveryReturn,
@@ -922,7 +922,7 @@ fn build_wrapper_surface_with_recovery(
 pub(crate) fn render_wrapper_fn(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<KtFun> {
@@ -939,7 +939,7 @@ pub(crate) fn render_wrapper_fn(
 fn render_wrapper_fn_with_recovery(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
     recovery: RecoveryReturn,
@@ -1005,7 +1005,7 @@ pub(crate) fn render_const_val(
     ext: &Declarations,
     package: &str,
     c: &prebindgen_registry::flat::Constant,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(KtFun, KtProperty)> {
@@ -1044,7 +1044,7 @@ pub(crate) fn render_constant_fn_val(
     ext: &Declarations,
     package: &str,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(KtFun, KtProperty)> {
@@ -1082,7 +1082,7 @@ pub(crate) fn render_const_expr_val(
     ext: &Declarations,
     package: &str,
     decl: &crate::jni::decl::ConstExprDecl,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     imports: &mut BTreeSet<String>,
 ) -> Option<(KtFun, KtProperty)> {
     let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
@@ -1120,7 +1120,7 @@ pub(crate) fn render_const_expr_val(
 /// not fire one JNI call per `val` at class-load (issue #58).
 fn render_val_over_helper(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     mut helper: KtFun,
     val_name: String,
     kdoc: String,
@@ -1211,7 +1211,7 @@ struct DomainSink {
 fn classify_params(
     ext: &Declarations,
     fplan: &JniFunctionPlan,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     imports: &mut BTreeSet<String>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<(Vec<Param>, Option<usize>)> {
@@ -1407,7 +1407,7 @@ fn classify_output(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
     fplan: &JniFunctionPlan,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     imports: &mut BTreeSet<String>,
 ) -> Option<OutputPlan> {
     let unfold = registry.unfold_plans().get(&f.name);
@@ -1754,7 +1754,7 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
 fn error_sink_parts(
     f: &prebindgen_registry::flat::Function,
     fplan: &JniFunctionPlan,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     imports: &mut BTreeSet<String>,
     r_ty: &KtType,
 ) -> Option<ErrorSink> {
@@ -2361,10 +2361,7 @@ pub(crate) fn kt_param_name(rust_ident: &str) -> String {
 /// documenting the REAL prototype after all expansions — one note per
 /// position a plan reshaped, phrased for the caller. `None` for an
 /// undocumented, unshaped fn.
-fn wrapper_kdoc(
-    f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
-) -> Option<String> {
+fn wrapper_kdoc(f: &prebindgen_registry::flat::Function, registry: &Registry) -> Option<String> {
     let prose = f.docs();
     let notes = shape_notes(f, registry);
     match (prose, notes) {
@@ -2380,10 +2377,7 @@ fn wrapper_kdoc(
 /// returns (what the builder/fold receives), and error decompositions
 /// (what `onError` receives). Reads the same resolved plan maps the C7
 /// report uses.
-fn shape_notes(
-    f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
-) -> Option<String> {
+fn shape_notes(f: &prebindgen_registry::flat::Function, registry: &Registry) -> Option<String> {
     let fn_ident = &f.name;
     let mut notes: Vec<String> = Vec::new();
 
@@ -2470,7 +2464,7 @@ fn shape_notes(
 
 /// The `///` doc of the `#[prebindgen]` struct/enum behind a declared type
 /// key, when the item is indexed (a re-exported foreign type has none).
-pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Option<String> {
+pub(crate) fn source_item_doc(registry: &Registry, key: &TypeKey) -> Option<String> {
     // Whichever of the three shapes the name declares — the docs are the
     // element's answer, so there is no `attrs` slice to unify across them.
     match registry.flat().declared_type(&key.ident()?)? {

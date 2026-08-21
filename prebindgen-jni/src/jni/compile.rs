@@ -108,7 +108,7 @@ fn refuse(at: At<'_>, why: &str) -> String {
     format!("JniGen: {} ({why})", at.crossing.key())
 }
 
-impl<R: Conversions<KotlinMeta>> JCompile<'_, R> {
+impl<R: Conversions> JCompile<'_, R> {
     fn wrap(&self, at: At<'_>, why: &str, conv: Option<ConverterImpl<KotlinMeta>>) -> Frag<Self> {
         conv.map(|c| JFrag::new(at, c))
             .ok_or_else(|| refuse(at, why))
@@ -171,7 +171,7 @@ impl<R: Conversions<KotlinMeta>> JCompile<'_, R> {
     }
 }
 
-impl<R: Conversions<KotlinMeta>> Compile for JCompile<'_, R> {
+impl<R: Conversions> Compile for JCompile<'_, R> {
     type Fragment = JFrag;
     /// JniGen keeps its own per-site emission for now: the exported signature,
     /// the call and the cleanup are built from the resolved registry.

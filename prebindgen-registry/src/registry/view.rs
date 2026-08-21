@@ -22,8 +22,8 @@ pub type Crossing = (Direction, TypeKey);
 /// [`Building`] is the partial view a generator sees while it is still
 /// producing conversions; [`Registry`] is the total one everything else sees.
 /// A helper that serves both — reading a signature off the model, say — takes
-/// `&impl Conversions<M>` and works either side of the boundary.
-pub trait Conversions<M> {
+/// `&impl Conversions` and works either side of the boundary.
+pub trait Conversions {
     /// The model.
     fn flat(&self) -> &Flat;
 
@@ -45,15 +45,6 @@ pub trait Conversions<M> {
     /// rest take one precisely because this exists to hand them one (#284).
     fn reading(&self, key: &TypeKey) -> Option<TypeRef>;
 
-    /// The conversion for `reading` in `dir`, if there is one.
-    ///
-    /// Takes the **reading**, not a spelling. A caller that has to ask what a
-    /// type converts to has already established what the type *is*; asking with
-    /// tokens instead let a spelling nobody classified reach the table, and cost
-    /// a `TypeKey::from_type` on every call for an identity the reading already
-    /// carries.
-    fn conversion(&self, dir: Direction, reading: &TypeRef) -> Option<&TypeEntry<M>>;
-
     /// The reading for a **spelling** — identify, then look up.
     ///
     /// The door for a caller holding tokens it peeled or composed itself, which
@@ -67,16 +58,6 @@ pub trait Conversions<M> {
     /// tokens is a visible step with a `None` to handle.
     fn reading_of(&self, ty: &syn::Type) -> Option<TypeRef> {
         self.reading(&TypeKey::from_type(ty))
-    }
-
-    /// Wire → rust.
-    fn input_entry(&self, reading: &TypeRef) -> Option<&TypeEntry<M>> {
-        self.conversion(Direction::Input, reading)
-    }
-
-    /// Rust → wire.
-    fn output_entry(&self, reading: &TypeRef) -> Option<&TypeEntry<M>> {
-        self.conversion(Direction::Output, reading)
     }
 
     /// The decomposition of a callback argument type, if it has one.
@@ -116,15 +97,12 @@ pub trait Conversions<M> {
     }
 }
 
-impl<M> Conversions<M> for Building<'_, M> {
+impl Conversions for Building<'_> {
     fn flat(&self) -> &Flat {
         &self.registry.flat
     }
     fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         self.registry.reading(key)
-    }
-    fn conversion(&self, dir: Direction, reading: &TypeRef) -> Option<&TypeEntry<M>> {
-        self.built.get(&(dir, reading.key()))
     }
     fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan> {
         self.registry.callback_arg_plans.get(key)
@@ -150,15 +128,12 @@ impl<M> Conversions<M> for Building<'_, M> {
     }
 }
 
-impl<M> Conversions<M> for Registry<M> {
+impl Conversions for Registry {
     fn flat(&self) -> &Flat {
         &self.flat
     }
     fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         Registry::reading(self, key)
-    }
-    fn conversion(&self, dir: Direction, reading: &TypeRef) -> Option<&TypeEntry<M>> {
-        self.type_table(dir).get(&reading.key())?.entry.as_ref()
     }
     fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan> {
         self.callback_arg_plans.get(key)
@@ -182,36 +157,28 @@ impl<M> Conversions<M> for Registry<M> {
 
 /// The registry mid-fill: the model, plus the conversions supplied so far.
 ///
-/// What a generator builds a conversion *against*. It sees every crossing it
-/// can compose from — `RegistryBuilder::crossings` hands them out inner-first, so by
-/// the time `Option<Handle>` is asked for, `Handle` is already in here.
+/// What a generator builds a conversion *against*: the model, the
+/// decompositions, and the full crossing population.
 ///
 /// It exposes exactly the reads a conversion needs, which is what keeps the
 /// half-filled state from leaking anywhere else: the resolved [`Registry`] is
 /// what the emitters get, and it is total.
-pub struct Building<'a, M> {
-    /// The prepared registry: model, decompositions and the full crossing
-    /// population. Its conversion cells are still empty — [`Self::conversion`]
-    /// deliberately reads [`Self::built`] instead, so a generator can only see
-    /// what it has actually produced.
-    registry: &'a Registry<M>,
-    built: &'a HashMap<Crossing, TypeEntry<M>>,
+///
+/// It no longer lends out conversions built so far. An adapter composes from
+/// its own fragments, which it keeps itself, so what the registry could offer
+/// here — one `ConverterImpl` per crossing — was both less than the adapter
+/// already had and less than a multi-wire crossing needs.
+pub struct Building<'a> {
+    /// The prepared registry. Its cells are still empty at this point.
+    registry: &'a Registry,
     /// Every crossing in the binding, resolved or not — the niche allocator
     /// reads the population, not just what is built so far.
     all_keys: &'a [Crossing],
 }
 
-impl<'a, M> Building<'a, M> {
-    pub(crate) fn new(
-        registry: &'a Registry<M>,
-        built: &'a HashMap<Crossing, TypeEntry<M>>,
-        all_keys: &'a [Crossing],
-    ) -> Self {
-        Self {
-            registry,
-            built,
-            all_keys,
-        }
+impl<'a> Building<'a> {
+    pub(crate) fn new(registry: &'a Registry, all_keys: &'a [Crossing]) -> Self {
+        Self { registry, all_keys }
     }
 }
 

@@ -16,7 +16,7 @@ use crate::registry::{Registry, RegistryBuilder};
 /// Whatever it does *not* declare is supplied by [`declare_referenced`], because
 /// these fixtures exist to exercise plan shapes and a handle declaration is noise
 /// in them.
-pub(crate) fn reg_with<M>(sources: &[&str]) -> RegistryBuilder<M> {
+pub(crate) fn reg_with(sources: &[&str]) -> RegistryBuilder {
     let items = sources
         .iter()
         .map(|src| {
@@ -30,7 +30,7 @@ pub(crate) fn reg_with<M>(sources: &[&str]) -> RegistryBuilder<M> {
 /// A **scanned** registry from item sources — for tests that drive `expand` /
 /// `unfold` directly and need the type tables populated, without going through
 /// a generator's conversion loop.
-pub(crate) fn scanned_with<M>(sources: &[&str]) -> Registry<M> {
+pub(crate) fn scanned_with(sources: &[&str]) -> Registry {
     reg_with(sources).scanned().expect("scan")
 }
 
@@ -47,7 +47,7 @@ pub(crate) fn declared_origin(ty: syn::Type) -> prebindgen_flat::flat::Origin<sy
 ///
 /// Test-only sugar: the two steps are one line each in a build script, but they
 /// appear in dozens of fixtures here.
-pub(crate) fn reg_from_items<M, I>(items: I) -> Result<RegistryBuilder<M>, crate::ScanError>
+pub(crate) fn reg_from_items<I>(items: I) -> Result<RegistryBuilder, crate::ScanError>
 where
     I: IntoIterator<Item = (syn::Item, SourceLocation)>,
 {

@@ -83,7 +83,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// output converter table (not yet built at this stage).
 pub(crate) fn synth_value_struct_leaves(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     s: &prebindgen_registry::flat::Struct,
     path_prefix: &[prebindgen_registry::unfold::PathStep],
     name_prefix: &str,
@@ -174,7 +174,7 @@ pub(crate) fn synth_value_struct_leaves(
 /// order and JVM descriptors agree by construction.
 pub(crate) fn flatten_struct_encode(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     s: &prebindgen_registry::flat::Struct,
     access: &TokenStream,
     prefix: &str,
@@ -591,7 +591,7 @@ fn encode_field(
 pub(crate) fn struct_output_body(
     ext: &Declarations,
     s: &prebindgen_registry::flat::Struct,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.name.to_string();
     // Prefer the registered Kotlin FQN (`io.zenoh.jni.JniSample`) so the
@@ -652,7 +652,7 @@ pub(crate) fn struct_output_body(
 
 pub(crate) fn struct_module_path(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     name: &syn::Ident,
 ) -> syn::Path {
     // The module the struct is reachable under from the generated file: its

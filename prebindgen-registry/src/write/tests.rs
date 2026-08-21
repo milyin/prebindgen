@@ -9,7 +9,7 @@ use crate::registry::RegistryBuilder;
 struct IdentityExt;
 
 impl IdentityExt {
-    fn declare_into(&self, mut reg: RegistryBuilder<()>) -> RegistryBuilder<()> {
+    fn declare_into(&self, mut reg: RegistryBuilder) -> RegistryBuilder {
         for f in [syn::parse_quote!(a_fn), syn::parse_quote!(b_fn)] {
             reg = reg.export(&f);
         }
@@ -23,12 +23,10 @@ impl IdentityExt {
 }
 
 impl Prebindgen for IdentityExt {
-    type Metadata = ();
-
     fn on_function(
         &self,
         f: &prebindgen_flat::flat::Function,
-        _registry: &Registry<Self::Metadata>,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_fn(f)
@@ -37,7 +35,7 @@ impl Prebindgen for IdentityExt {
     fn on_struct(
         &self,
         s: &prebindgen_flat::flat::Struct,
-        _registry: &Registry<Self::Metadata>,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_struct(s)
@@ -46,7 +44,7 @@ impl Prebindgen for IdentityExt {
     fn on_variant(
         &self,
         v: &prebindgen_flat::flat::Variant,
-        _registry: &Registry<Self::Metadata>,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_variant(v)
@@ -55,7 +53,7 @@ impl Prebindgen for IdentityExt {
     fn on_enum(
         &self,
         e: &prebindgen_flat::flat::Enum,
-        _registry: &Registry<Self::Metadata>,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_enum(e)
@@ -147,7 +145,7 @@ fn write_rust_sorts_declared_items_by_ident() {
             loc,
         ),
     ];
-    let reg: Registry<()> = IdentityExt
+    let reg: Registry = IdentityExt
         .declare_into(crate::test_util::reg_from_items(items).expect("index"))
         .scanned()
         .expect("scan");
@@ -196,14 +194,10 @@ fn guards_emit_ungated_and_in_stream_order() {
     struct ConstGatingExt;
 
     trait ResolveGating {
-        fn resolve_gating(self, ext: ConstGatingExt)
-            -> Result<Registry<()>, crate::WriteRustError>;
+        fn resolve_gating(self, ext: ConstGatingExt) -> Result<Registry, crate::WriteRustError>;
     }
-    impl ResolveGating for RegistryBuilder<()> {
-        fn resolve_gating(
-            self,
-            ext: ConstGatingExt,
-        ) -> Result<Registry<()>, crate::WriteRustError> {
+    impl ResolveGating for RegistryBuilder {
+        fn resolve_gating(self, ext: ConstGatingExt) -> Result<Registry, crate::WriteRustError> {
             let registry = self.declares_consts().build()?;
             let _ = &ext;
             Ok(registry)
@@ -211,12 +205,10 @@ fn guards_emit_ungated_and_in_stream_order() {
     }
 
     impl Prebindgen for ConstGatingExt {
-        type Metadata = ();
-
         fn on_function(
             &self,
             f: &prebindgen_flat::flat::Function,
-            _r: &Registry<()>,
+            _r: &Registry,
             _emit: &crate::Emit,
         ) -> TokenStream {
             _emit.verbatim_fn(f)
@@ -224,7 +216,7 @@ fn guards_emit_ungated_and_in_stream_order() {
         fn on_struct(
             &self,
             s: &prebindgen_flat::flat::Struct,
-            _r: &Registry<()>,
+            _r: &Registry,
             _emit: &crate::Emit,
         ) -> TokenStream {
             _emit.verbatim_struct(s)
@@ -232,7 +224,7 @@ fn guards_emit_ungated_and_in_stream_order() {
         fn on_variant(
             &self,
             v: &prebindgen_flat::flat::Variant,
-            _r: &Registry<()>,
+            _r: &Registry,
             _emit: &crate::Emit,
         ) -> TokenStream {
             _emit.verbatim_variant(v)
@@ -240,7 +232,7 @@ fn guards_emit_ungated_and_in_stream_order() {
         fn on_enum(
             &self,
             e: &prebindgen_flat::flat::Enum,
-            _r: &Registry<()>,
+            _r: &Registry,
             _emit: &crate::Emit,
         ) -> TokenStream {
             _emit.verbatim_enum(e)
@@ -274,7 +266,7 @@ fn guards_emit_ungated_and_in_stream_order() {
             loc.clone(),
         ),
     ];
-    let registry: RegistryBuilder<()> = crate::test_util::reg_from_items(items).expect("index");
+    let registry: RegistryBuilder = crate::test_util::reg_from_items(items).expect("index");
     assert_eq!(registry.flat().guards().count(), 2);
 
     let dir = crate::test_util::unique_test_dir("write_guards");

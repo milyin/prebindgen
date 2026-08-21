@@ -11,7 +11,7 @@ use crate::jni::trait_impl::{
 pub(crate) fn emit_jni_function_wrapper(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
     emit_jni_function_wrapper_with_callee(ext, f, registry, None, emit)
@@ -128,7 +128,7 @@ pub(crate) fn validate_constant_fn(ext: &Declarations, f: &prebindgen_registry::
 pub(crate) fn const_expr_getter_fn(
     kotlin_name: &str,
     ty: &syn::Type,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
 ) -> prebindgen_registry::flat::Function {
     let ident = format_ident!("const_get_{}", kotlin_name.to_lowercase());
     // The one lookup this path needs: the type is named by a build script, so
@@ -182,7 +182,7 @@ pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: 
 pub(crate) fn emit_jni_function_wrapper_with_callee(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     callee: Option<syn::Expr>,
     emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
@@ -520,7 +520,7 @@ fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     original_ident: &syn::Ident,
     param: &PlanParam,
     on_err: &TokenStream,
@@ -877,7 +877,7 @@ fn emit_plain_decode(
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     plan: &prebindgen_registry::expand::FoldPlan,
     leaves: &[PlanLeaf],
     orig_param: &syn::Ident,

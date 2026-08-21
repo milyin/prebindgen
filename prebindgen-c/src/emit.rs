@@ -6,7 +6,7 @@ impl CbindgenBuilder {
     /// Whether the generated layer hands `char*` data memory to C — a `String`
     /// return value, or a declared data struct that is produced as output and has
     /// a `String` field. When true, a `free_memory_function` must be declared.
-    pub(super) fn needs_free(&self, registry: &Registry<()>) -> bool {
+    pub(super) fn needs_free(&self, registry: &Registry) -> bool {
         let string_ty: syn::Type = syn::parse_quote!(String);
         // A `String` return hands out a `char*` — unless `String` is declared
         // `opaque_ptr` (then it crosses as `string_t *`, freed by `string_drop`).
@@ -65,7 +65,7 @@ impl CbindgenBuilder {
     /// path segment, and fetched the `syn::ItemEnum` to reach the same list.
     pub(super) fn enum_alternatives<'r>(
         &self,
-        registry: &'r Registry<()>,
+        registry: &'r Registry,
         key: &TypeKey,
     ) -> Option<&'r [prebindgen_registry::flat::Alternative]> {
         match registry.flat().declared_type(&key.ident()?)? {
@@ -284,7 +284,7 @@ impl CbindgenBuilder {
         &self,
         fty: &TypeRef,
         wire: &syn::Type,
-        registry: &Registry<()>,
+        registry: &Registry,
     ) -> bool {
         if matches!(wire, syn::Type::Ptr(_)) {
             return true;
@@ -297,7 +297,7 @@ impl CbindgenBuilder {
     pub(super) fn owning_data_struct_fields<'r>(
         &self,
         fty: &TypeRef,
-        registry: &'r Registry<()>,
+        registry: &'r Registry,
     ) -> Vec<(syn::Ident, &'r TypeRef)> {
         if !self.data.contains_key(&fty.key()) {
             return Vec::new();
@@ -313,7 +313,7 @@ impl CbindgenBuilder {
     /// is a pointer (`String` → `char *`), or it is a declared
     /// [`CbindgenBuilder::tagged_union`] with an owning arm — which crosses by value,
     /// so the pointer it owns is one level further down.
-    fn data_field_owns(&self, fty: &TypeRef, registry: &Registry<()>) -> bool {
+    fn data_field_owns(&self, fty: &TypeRef, registry: &Registry) -> bool {
         if matches!(self.data_field_wire(fty), Some(syn::Type::Ptr(_))) {
             return true;
         }
@@ -328,7 +328,7 @@ impl CbindgenBuilder {
     /// containing struct has to call it, so a union nested inside a payload
     /// cannot be freed through a symbol that was never emitted. `false` for
     /// anything that is not a declared tagged union.
-    pub(super) fn tagged_union_has_drop(&self, fty: &TypeRef, registry: &Registry<()>) -> bool {
+    pub(super) fn tagged_union_has_drop(&self, fty: &TypeRef, registry: &Registry) -> bool {
         if !self.tagged_unions.contains_key(&fty.key()) || self.out_frag(fty).is_none() {
             return false;
         }
@@ -352,7 +352,7 @@ impl CbindgenBuilder {
     /// it crosses as. [`sequence_elem`](prebindgen_registry::flat::TypeRef::sequence_elem)
     /// answers all three, which is why the two spellings this used to test
     /// separately need no arms of their own.
-    pub(super) fn produces_array(&self, registry: &Registry<()>) -> bool {
+    pub(super) fn produces_array(&self, registry: &Registry) -> bool {
         self.functions.keys().any(|orig| {
             registry
                 .flat()
@@ -369,7 +369,7 @@ impl CbindgenBuilder {
     /// struct.
     pub(super) fn struct_fields<'r>(
         &self,
-        registry: &'r impl Conversions<()>,
+        registry: &'r impl Conversions,
         key: &TypeKey,
     ) -> Option<Vec<(syn::Ident, &'r TypeRef)>> {
         // The element, not its item. A `Struct` holds the field list the
@@ -449,7 +449,7 @@ impl CbindgenBuilder {
     /// declaration order. Empty ⇒ the whole mirror is safe to reinterpret.
     pub(super) fn restricted_validity_fields(
         &self,
-        registry: &Registry<()>,
+        registry: &Registry,
         key: &TypeKey,
     ) -> Vec<(syn::Ident, &'static str)> {
         self.struct_fields(registry, key)
@@ -481,7 +481,7 @@ impl CbindgenBuilder {
     pub(super) fn emit_function_wrapper(
         &self,
         f: &prebindgen_registry::flat::Function,
-        registry: &Registry<()>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         let orig = &f.name;
@@ -702,7 +702,7 @@ impl CbindgenBuilder {
     /// available for enclosing `Option`/`Result` layers. Mirrors the
     /// niche-stacking model in `core::niches`.
     #[allow(clippy::only_used_in_recursion)]
-    pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> ValueShape {
+    pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &impl Conversions) -> ValueShape {
         if matches!(ty.kind(), TypeKind::Unit) {
             return ValueShape {
                 fields: vec![],
@@ -838,7 +838,7 @@ impl CbindgenBuilder {
         ty: &TypeRef,
         val: TokenStream,
         targets: &[TokenStream],
-        registry: &impl Conversions<()>,
+        registry: &impl Conversions,
         route: &ErrRoute,
     ) -> TokenStream {
         if matches!(ty.kind(), TypeKind::Unit) {
@@ -1086,7 +1086,7 @@ impl CbindgenBuilder {
         &self,
         orig: &syn::Ident,
         f: &prebindgen_registry::flat::Function,
-        registry: &Registry<()>,
+        registry: &Registry,
         route: &ErrRoute,
         emit: &prebindgen_registry::Emit,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {

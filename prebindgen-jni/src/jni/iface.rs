@@ -180,7 +180,7 @@ impl IfaceParam {
     pub fn conversion(
         &self,
         ext: &crate::jni::Declarations,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         imports: &mut std::collections::BTreeSet<String>,
     ) -> String {
         // A key the registry no longer knows is not a layer question — it is a
@@ -577,7 +577,7 @@ impl IfaceSpec {
     pub fn to_as_raw_fun(
         &self,
         ext: &crate::jni::Declarations,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         imports: &mut std::collections::BTreeSet<String>,
     ) -> KtFun {
         let bare_generics: Vec<String> = self
@@ -1169,9 +1169,7 @@ impl SpecKey {
 /// so it is computed per `DeconId` over all plans, shared by the memo
 /// derivation ([`SpecKey::Folder`]'s typed groups) and the declaration
 /// emitter (the hoisted `fromParts`/appender singletons).
-pub(crate) fn fixed_decon_ids(
-    registry: &impl Conversions<KotlinMeta>,
-) -> std::collections::HashSet<DeconId> {
+pub(crate) fn fixed_decon_ids(registry: &impl Conversions) -> std::collections::HashSet<DeconId> {
     let fixed: std::collections::HashSet<DeconId> = registry
         .unfold_plans()
         .values()
@@ -1207,9 +1205,7 @@ pub(crate) fn fixed_decon_ids(
 /// Element type keys whose whole-element fold is fixed (a synthesized
 /// single-leaf `Vec<T>` fold) — the leaf dual of [`fixed_decon_ids`], used
 /// by the declaration emitter for the hoisted appender singleton.
-pub(crate) fn fixed_leaf_element_keys(
-    registry: &Registry<KotlinMeta>,
-) -> std::collections::HashSet<TypeKey> {
+pub(crate) fn fixed_leaf_element_keys(registry: &Registry) -> std::collections::HashSet<TypeKey> {
     registry
         .unfold_plans()
         .values()
@@ -1228,7 +1224,7 @@ pub(crate) fn fixed_leaf_element_keys(
 /// typed-group view in per `DeconId` (see [`fixed_decon_ids`]).
 fn derive_iface_spec(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     key: &SpecKey,
 ) -> Option<IfaceSpec> {
     match key {
@@ -1281,7 +1277,7 @@ impl Declarations {
     /// instead of shipping descriptor drift.
     pub(crate) fn iface_spec(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         key: &SpecKey,
     ) -> Option<std::sync::Arc<IfaceSpec>> {
         let hit = self.iface_specs.borrow().get(key).cloned();
@@ -1316,7 +1312,7 @@ impl Declarations {
 /// `when` over the tag that a sum-typed struct field gets.
 fn fixed_reassembly(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     source: &TypeKey,
     leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
     class_fqn: &str,
@@ -1341,7 +1337,7 @@ fn fixed_reassembly(
 /// placed in the first arg type's package (root for `Fn()`).
 pub(crate) fn callback_iface_spec(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     cb_args: &[prebindgen_registry::flat::TypeRef],
 ) -> Option<IfaceSpec> {
     // Per-arg grouping over the flat raw leaves. A **fixed-builder** (by-value
@@ -1587,7 +1583,7 @@ pub(crate) fn callback_iface_spec(
 /// type's package.
 pub(crate) fn builder_iface_spec(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans().get(decon)?;
@@ -1613,7 +1609,7 @@ pub(crate) fn builder_iface_spec(
 /// placed in the element type's package.
 pub(crate) fn folder_iface_spec(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans().get(decon)?;
@@ -1671,7 +1667,7 @@ pub(crate) fn whole_folder_iface_spec(
 /// against), not per this plan's own `fixed_builder` flag.
 pub(crate) fn folder_iface_for_plan(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     plan: &UnfoldPlan,
 ) -> Option<std::sync::Arc<IfaceSpec>> {
     debug_assert!(
@@ -1696,7 +1692,7 @@ pub(crate) fn folder_iface_for_plan(
 /// two stay in lockstep.
 pub(crate) fn fixed_folder_typed_groups(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
     let spec = registry.decon_plans().get(decon)?;
@@ -1746,7 +1742,7 @@ pub(crate) fn fixed_folder_typed_groups(
 /// `<decl-base>Handler`, placed in the error type's package.
 pub(crate) fn error_handler_iface_spec(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
+    registry: &impl Conversions,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans().get(decon)?;
@@ -1828,7 +1824,7 @@ pub(crate) struct ErrorIfaces {
 /// alone always derives.
 pub(crate) fn onerror_iface_spec(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     fn_ident: &syn::Ident,
 ) -> Option<ErrorIfaces> {
     let binding = ext.iface_spec(registry, &SpecKey::JniErrorHandler)?;

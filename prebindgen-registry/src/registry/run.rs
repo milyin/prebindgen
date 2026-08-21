@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl<M> Registry<M> {
+impl Registry {
     pub(super) fn apply_adapter_plans(
         &mut self,
         declared: &mut Declared,

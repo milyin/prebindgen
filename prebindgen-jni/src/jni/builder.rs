@@ -83,11 +83,7 @@ impl Declarations {
     /// stream's `SourceLocation` stamp (multi-source bindings — helper
     /// crates layered on the flat crate), else the registry's default
     /// module (first-seen stream origin), else `crate`.
-    pub(crate) fn fn_module(
-        &self,
-        registry: &impl Conversions<KotlinMeta>,
-        ident: &syn::Ident,
-    ) -> syn::Path {
+    pub(crate) fn fn_module(&self, registry: &impl Conversions, ident: &syn::Ident) -> syn::Path {
         registry
             .origin_module(ident)
             .or_else(|| registry.default_module())
@@ -97,7 +93,7 @@ impl Declarations {
     /// The module for source references with no per-item origin (declared
     /// types with no `#[prebindgen]` item, glob imports): the registry's
     /// default module (first source), `crate` for an origin-less registry.
-    pub(crate) fn default_module(&self, registry: &Registry<KotlinMeta>) -> syn::Path {
+    pub(crate) fn default_module(&self, registry: &Registry) -> syn::Path {
         registry
             .default_module()
             .unwrap_or_else(|| syn::parse_quote!(crate))
@@ -845,7 +841,7 @@ impl Declarations {
     /// once, on the member), else the camel-cased Rust name.
     fn lower_fields(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         key: &TypeKey,
         fields: &[LocalField],
     ) -> Vec<prebindgen_registry::unfold::DeconRecord> {
@@ -902,7 +898,7 @@ impl Declarations {
     /// a field renamed upstream must not silently lose its adjustment.
     fn lower_value_form(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         key: &TypeKey,
         decl: &FieldsDecl,
     ) -> Vec<prebindgen_registry::unfold::FieldRecord> {
@@ -980,7 +976,7 @@ impl Declarations {
     #[allow(clippy::too_many_arguments)]
     fn walk_value_form(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         key: &TypeKey,
         decl: &FieldsDecl,
         st: &flat::Struct,
@@ -1157,7 +1153,7 @@ impl Declarations {
     /// output-flattened.
     pub(crate) fn build_deconstructors(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
     ) -> prebindgen_registry::unfold::Deconstructors {
         use prebindgen_registry::unfold::{
             DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,
@@ -1496,7 +1492,7 @@ impl Declarations {
     pub(crate) fn convert_input_body(
         &self,
         key: &TypeKey,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
@@ -1567,7 +1563,7 @@ impl Declarations {
     pub(crate) fn convert_output_body(
         &self,
         key: &TypeKey,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
@@ -1781,7 +1777,7 @@ impl Declarations {
     fn conversion_domain_niches(
         &self,
         key: &TypeKey,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         direction: Direction,
         wire: &syn::Type,
     ) -> (Niches, Vec<String>) {
@@ -1887,7 +1883,7 @@ impl Declarations {
     pub(crate) fn convert_target(
         &self,
         key: &TypeKey,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         dir: Direction,
     ) -> Option<syn::Type> {
         let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
@@ -1914,7 +1910,7 @@ impl Declarations {
     pub(crate) fn lookup_input(
         &self,
         outer: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // A `convert!`-declared conversion is the only thing that answers here.
@@ -2025,7 +2021,7 @@ impl Declarations {
     pub(crate) fn lookup_output(
         &self,
         outer: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = outer.key();
@@ -2045,7 +2041,7 @@ impl Declarations {
         outer: &prebindgen_registry::flat::TypeRef,
         ok: &syn::Type,
         err: &syn::Type,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         self.build_output_converter(
@@ -2072,7 +2068,7 @@ impl Declarations {
         ty: syn::Type,
         exc_ty: Option<syn::Type>,
         body: syn::Expr,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = outer.key();

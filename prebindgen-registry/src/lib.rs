@@ -25,12 +25,11 @@
 //!   `on_function` / `on_struct` / `on_enum` / `on_const` on the
 //!   [`Prebindgen`] trait.
 //!
-//! Everything language-specific that must travel through the pipeline rides in
-//! the back-end's chosen [`Metadata`](Prebindgen::Metadata) type (a JNI
-//! back-end's Kotlin class names and exception info, a C back-end's header
-//! names, …). It is set on each converter, propagated into the registry's
-//! [`TypeEntry`], and read back by the back-end's own emitter — no side
-//! channels. Back-ends needing no extras leave it at the default `()`.
+//! Everything language-specific that must travel through the pipeline rides on
+//! the adapter's own conversions — a JNI back-end's Kotlin class names and
+//! exception info in [`ConverterImpl::metadata`], a C back-end's header names.
+//! The registry does not carry it: an adapter keeps its own conversions, sets
+//! the extras where it builds them, and reads them back in its own emitter.
 //!
 //! # Flow
 //!
@@ -132,9 +131,9 @@ pub use self::{
     niches::{NicheSlot, Niches},
     prebindgen::{ConverterImpl, NamePredicate, Prebindgen, Stage},
     registry::{
-        Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
-        NotExpressibleEntry, Registry, RegistryBuilder, ScanError, TypeEntry, TypeKey,
-        TypeKeyParseError, WriteRustError,
+        Answer, Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
+        NotExpressibleEntry, Registry, RegistryBuilder, ScanError, TypeKey, TypeKeyParseError,
+        WriteRustError,
     },
 };
 

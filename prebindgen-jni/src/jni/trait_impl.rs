@@ -422,7 +422,7 @@ impl Declarations {
 
     fn emitted_source_type_names(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
     ) -> std::collections::HashMap<String, syn::Path> {
         let mut names = std::collections::HashMap::new();
         let mut add = |key: &TypeKey| {
@@ -467,7 +467,7 @@ impl Declarations {
     /// time via [`Prebindgen::post_process_item`] so converter bodies,
     /// type ascriptions, and casts all stay in sync without each emit
     /// site having to remember to qualify.
-    fn qualify_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
+    fn qualify_item(&self, item: &mut syn::Item, registry: &Registry) {
         let source_names = self.emitted_source_type_names(registry);
         // Names reachable from an array LENGTH (`[u8; MAX]`, `[u8; Holder::N]`).
         //
@@ -633,7 +633,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 /// producing destructors that reference types not in scope.
 pub(crate) fn build_handle_destructor_items(
     ext: &Declarations,
-    registry: &Registry<KotlinMeta>,
+    registry: &Registry,
     emit: &prebindgen_registry::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
@@ -1407,7 +1407,7 @@ impl JniGenBuilder {
     /// route to a `JniGenBuilder` at all.
     pub(crate) fn build_with(
         self,
-        registry: prebindgen_registry::RegistryBuilder<KotlinMeta>,
+        registry: prebindgen_registry::RegistryBuilder,
     ) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let mut decls = self.decls;
         let declared = decls.declare_into(registry)?.validate_with(&decls)?;
@@ -1464,7 +1464,10 @@ impl JniGenBuilder {
                         crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
                     );
                 }
-                conv
+                // The conversion stays here; what the registry gets back is
+                // which other crossings this one delegates to, which is what
+                // its reachability walk needs.
+                conv.map(|c| prebindgen_registry::Answer::over(c.subs))
             })?
             .build()?;
         // What the compilation produced, kept for emission. The converter table
@@ -1502,11 +1505,7 @@ impl Declarations {
     /// so everything this could compose from is already in `built`.
     /// Whether this crossing is the callback shape `compile_crossing` answers
     /// without the compiler.
-    fn is_callback_crossing<R: Conversions<KotlinMeta>>(
-        &self,
-        crossing: &Crossing,
-        built: &R,
-    ) -> bool {
+    fn is_callback_crossing<R: Conversions>(&self, crossing: &Crossing, built: &R) -> bool {
         let (dir, key) = crossing;
         matches!(dir, Direction::Input)
             && built.reading(key).is_some_and(|r| {
@@ -1517,7 +1516,7 @@ impl Declarations {
             })
     }
 
-    fn compile_crossing<'v, R: Conversions<KotlinMeta>>(
+    fn compile_crossing<'v, R: Conversions>(
         &'v self,
         compiler: &mut prebindgen_registry::recipe::Compiler<
             '_,
@@ -1561,8 +1560,8 @@ impl Declarations {
 
     pub fn declare_into(
         &self,
-        mut registry: RegistryBuilder<KotlinMeta>,
-    ) -> Result<RegistryBuilder<KotlinMeta>, prebindgen_registry::ScanError> {
+        mut registry: RegistryBuilder,
+    ) -> Result<RegistryBuilder, prebindgen_registry::ScanError> {
         // Binding-local fns first: they become model, and everything below may
         // name one.
         for (item_fn, origin) in self.collect_local_functions() {
@@ -1640,7 +1639,7 @@ impl Declarations {
 impl Declarations {
     pub(crate) fn build_value_struct_decons(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
     ) -> Vec<prebindgen_registry::unfold::ValueDecon> {
         let mut out = Vec::new();
         for item_struct in registry.flat().types().filter_map(|t| match t {
@@ -1677,7 +1676,7 @@ impl Declarations {
 
     pub(crate) fn build_sum_decons(
         &self,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
     ) -> Vec<prebindgen_registry::unfold::SumDecon> {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
@@ -1712,10 +1711,7 @@ impl Declarations {
         out
     }
 
-    pub(crate) fn build_leaf_vec_fold_elements(
-        &self,
-        registry: &impl Conversions<KotlinMeta>,
-    ) -> Vec<TypeKey> {
+    pub(crate) fn build_leaf_vec_fold_elements(&self, registry: &impl Conversions) -> Vec<TypeKey> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut consider = |bare: &prebindgen_registry::flat::TypeRef| {
@@ -1774,7 +1770,7 @@ fn peel_one_borrow(t: &prebindgen_registry::flat::TypeRef) -> &prebindgen_regist
 /// classification the model makes once, at parse time, and expresses as two
 /// different elements.
 fn flat_unit_enum<'r>(
-    registry: &'r impl Conversions<KotlinMeta>,
+    registry: &'r impl Conversions,
     name: &syn::Ident,
     declarator: &str,
 ) -> Option<&'r prebindgen_registry::flat::Enum> {
@@ -1802,7 +1798,7 @@ impl Declarations {
     pub(crate) fn dispatch_fn_input(
         &self,
         args: &[prebindgen_registry::flat::TypeRef],
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let outer_ty = build_fn_type(args, emit);
@@ -1824,14 +1820,6 @@ impl Declarations {
 }
 
 impl Prebindgen for Declarations {
-    /// Cross-language extras every JNI converter carries — currently
-    /// the Kotlin value-context type name. Filled by the rank-N
-    /// handlers at the same point they build the wire/body; the
-    /// resolver propagates it into [`prebindgen_registry::TypeEntry::metadata`];
-    /// the Kotlin emitter reads it back to drive every wrapper /
-    /// typed-handle / `JNIWrappers` signature.
-    type Metadata = KotlinMeta;
-
     // ── Structural type resolution ──────────────────────────────────────
     // Try the terminal categories, then the `Result` peel, then the built-in
     // wrapper shapes — peel
@@ -1842,7 +1830,7 @@ impl Prebindgen for Declarations {
     /// the earliest possible moment. Without this, a receiver-less `.method()`
     /// member would silently emit a method that ignores `this`, and a
     /// wrong-return `.constructor()` a factory of the wrong type.
-    fn validate(&self, binding: &Building<'_, Self::Metadata>) -> Result<(), String> {
+    fn validate(&self, binding: &Building<'_>) -> Result<(), String> {
         // Report what this binding left unclaimed. Here because it is the
         // earliest generator-owned hook that sees the model, and it runs
         // exactly where the binding used to print these itself. Moves into
@@ -2030,7 +2018,7 @@ impl Prebindgen for Declarations {
     /// The post-resolve validation boundary (issue #90): every bound
     /// function's lowered plan must build, and the split declarations must
     /// be unambiguous, before ANY artifact writer touches disk.
-    fn validate_resolved(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
+    fn validate_resolved(&self, registry: &Registry) -> Result<(), String> {
         validate_bindings(self, registry)
     }
 
@@ -2048,7 +2036,7 @@ impl Prebindgen for Declarations {
     /// crate's source tree.
     fn prerequisites(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> Vec<syn::Item> {
         // `__JniErr` is the **framework** error type alias — always the
@@ -2114,7 +2102,7 @@ impl Prebindgen for Declarations {
     fn post_process_item(
         &self,
         item: &mut syn::Item,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) {
         self.qualify_item(item, registry);
@@ -2125,7 +2113,7 @@ impl Prebindgen for Declarations {
     fn on_function(
         &self,
         f: &prebindgen_registry::flat::Function,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         emit_jni_function_wrapper(self, f, registry, emit)
@@ -2134,7 +2122,7 @@ impl Prebindgen for Declarations {
     fn on_struct(
         &self,
         _s: &prebindgen_registry::flat::Struct,
-        _registry: &Registry<KotlinMeta>,
+        _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         // Struct converter bodies are emitted by the resolver via
@@ -2146,7 +2134,7 @@ impl Prebindgen for Declarations {
     fn on_variant(
         &self,
         _v: &prebindgen_registry::flat::Variant,
-        _registry: &Registry<KotlinMeta>,
+        _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         TokenStream::new()
@@ -2155,7 +2143,7 @@ impl Prebindgen for Declarations {
     fn on_enum(
         &self,
         _e: &prebindgen_registry::flat::Enum,
-        _registry: &Registry<KotlinMeta>,
+        _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         TokenStream::new()
@@ -2171,7 +2159,7 @@ impl Prebindgen for Declarations {
     fn on_const(
         &self,
         c: &prebindgen_registry::flat::Constant,
-        registry: &Registry<KotlinMeta>,
+        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         reject_handle_const(self, c);
@@ -2201,7 +2189,7 @@ impl Declarations {
     pub(crate) fn input_terminal(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()`: the arms below that ask what
@@ -2433,7 +2421,7 @@ impl Declarations {
     pub(crate) fn output_transparent_bridge(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
@@ -2507,7 +2495,7 @@ impl Declarations {
     pub(crate) fn input_transparent_bridge(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
@@ -2595,7 +2583,7 @@ impl Declarations {
     pub(crate) fn output_terminal(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
+        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()` — see `input_terminal`.

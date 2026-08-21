@@ -279,8 +279,8 @@ fn validate_declarations(acc: &Deconstructors) -> Result<(), UnfoldError> {
 ///
 /// Runs inside `write_rust` after `expand::apply` and before `resolve`, so leaf
 /// converters resolve through the normal rank machinery.
-pub(crate) fn apply<M>(
-    registry: &mut Registry<M>,
+pub(crate) fn apply(
+    registry: &mut Registry,
     acc: &Deconstructors,
     declared_fns: &std::collections::HashSet<syn::Ident>,
     accessor_fns: &std::collections::HashSet<syn::Ident>,
@@ -502,8 +502,8 @@ pub struct ValueDecon {
 /// stays non-generic.
 ///
 /// Runs in `write_rust` right after [`apply`] and before `resolve`.
-pub(crate) fn apply_value_structs<M>(
-    registry: &mut Registry<M>,
+pub(crate) fn apply_value_structs(
+    registry: &mut Registry,
     decons: Vec<ValueDecon>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
@@ -577,7 +577,7 @@ pub struct SumDecon {
 /// true for jnigen via `export_type`, and not true at all for a registry
 /// assembled without declarations. The invariant holds by construction now
 /// rather than by declaration order.
-fn register_leaves<M>(registry: &mut crate::registry::Registry<M>, leaves: &[UnfoldLeaf]) {
+fn register_leaves(registry: &mut crate::registry::Registry, leaves: &[UnfoldLeaf]) {
     for leaf in leaves {
         if leaf.has_converter() {
             registry.require_output(&leaf.out_ty);
@@ -588,8 +588,8 @@ fn register_leaves<M>(registry: &mut crate::registry::Registry<M>, leaves: &[Unf
 }
 
 /// Runs in `write_rust` right after [`apply_value_structs`] and before `resolve`.
-pub(crate) fn apply_sum_returns<M>(
-    registry: &mut Registry<M>,
+pub(crate) fn apply_sum_returns(
+    registry: &mut Registry,
     decons: Vec<SumDecon>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
@@ -608,8 +608,8 @@ pub(crate) fn apply_sum_returns<M>(
 
 /// Register the declaration-canonical [`DeconSpec`] of a synthesized
 /// decomposition (first writer wins) and return its identity.
-fn wire_fixed_decon<M>(
-    registry: &mut Registry<M>,
+fn wire_fixed_decon(
+    registry: &mut Registry,
     key: &TypeKey,
     source: &prebindgen_flat::flat::TypeRef,
     leaves: &[UnfoldLeaf],
@@ -631,8 +631,8 @@ fn wire_fixed_decon<M>(
 /// marks a type that has no whole-value converter at all (a sum), so the
 /// declared return's scan-time output requirement is dropped as the plan
 /// replaces it.
-fn wire_fixed_returns<M>(
-    registry: &mut Registry<M>,
+fn wire_fixed_returns(
+    registry: &mut Registry,
     vd: &ValueDecon,
     decon: &DeconId,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -696,8 +696,8 @@ fn wire_fixed_returns<M>(
 /// instead of a whole value built on the Rust side. Separate from the
 /// output-position wiring so the callback path (which needs the foreign-side
 /// group-reassembly adapter) can be enabled on its own.
-fn wire_fixed_callbacks<M>(
-    registry: &mut Registry<M>,
+fn wire_fixed_callbacks(
+    registry: &mut Registry,
     vd: &ValueDecon,
     decon: &DeconId,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -772,8 +772,8 @@ fn wire_fixed_callbacks<M>(
 /// Runs right after [`apply_value_structs`]; skips any function/arg that already
 /// carries a plan (an explicit `.deconstruct_output`, a `data_class` fold, …) so
 /// declared decompositions and value-struct folds win.
-pub(crate) fn apply_leaf_vec_folds<M>(
-    registry: &mut Registry<M>,
+pub(crate) fn apply_leaf_vec_folds(
+    registry: &mut Registry,
     elements: Vec<TypeKey>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
@@ -980,8 +980,8 @@ fn returns_type(ret: &prebindgen_flat::flat::TypeRef, key: &TypeKey) -> bool {
 }
 
 /// Build one output/error plan for `ed` and store it in the right registry map.
-fn process_decl<M>(
-    registry: &mut Registry<M>,
+fn process_decl(
+    registry: &mut Registry,
     acc: &Deconstructors,
     ed: &OutputDecl,
 ) -> Result<(), UnfoldError> {
@@ -1175,8 +1175,8 @@ fn decl_id(type_key: &TypeKey, _decl: &DeconstructorDecl) -> DeconId {
 /// already present): re-flatten the records with normalized inputs —
 /// borrowed identity, no outer shape — so the stored spec is independent of
 /// the using function's return shape and of processing order.
-fn register_decon_spec<M>(
-    registry: &mut Registry<M>,
+fn register_decon_spec(
+    registry: &mut Registry,
     acc: &Deconstructors,
     decon: &DeconId,
     records: &[DeconRecord],
@@ -1251,9 +1251,9 @@ fn find_deconstructor_by_type<'a>(
 /// recursively flattened ([`flatten`]) — nested accessors contribute
 /// their leaves with the access path prefixed.
 #[allow(clippy::too_many_arguments)]
-fn build_plan<M>(
+fn build_plan(
     acc: &Deconstructors,
-    registry: &Registry<M>,
+    registry: &Registry,
     ed: &OutputDecl,
     by_ref: bool,
     source: &prebindgen_flat::flat::TypeRef,
@@ -1340,9 +1340,9 @@ fn require_root_identity_last(
 /// * `visited` — type keys on the current nesting chain (cycle guard; entries
 ///   are removed after each nested recursion so sibling records may reuse a type).
 #[allow(clippy::too_many_arguments)]
-fn flatten<M>(
+fn flatten(
     acc: &Deconstructors,
-    registry: &Registry<M>,
+    registry: &Registry,
     records: &[DeconRecord],
     source: &prebindgen_flat::flat::TypeRef,
     path_prefix: &[PathStep],
@@ -1744,8 +1744,8 @@ pub fn dedup_names(names: &mut [String]) {
 /// to be about, so the check cannot be the thing a new declarator forgets
 /// (#223). The comparison is [`check_declared_target`], shared with the input
 /// side's constructor lookup.
-fn accessor_signature<M>(
-    registry: &Registry<M>,
+fn accessor_signature(
+    registry: &Registry,
     func: &syn::Ident,
     expected: &TypeKey,
 ) -> Result<prebindgen_flat::flat::TypeRef, UnfoldError> {
@@ -1797,7 +1797,7 @@ fn place_is_owned(hoists: &[Hoist], path_prefix: &[PathStep], by_ref: bool) -> b
 /// Asked separately because [`accessor_signature`] peels the `&` in order to
 /// compare target types, so `f(v: T)` and `f(v: &T)` are indistinguishable
 /// there by design.
-fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
+fn accessor_consumes(registry: &Registry, func: &syn::Ident) -> bool {
     registry
         .flat()
         .function(&func)
