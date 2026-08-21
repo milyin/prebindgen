@@ -99,6 +99,99 @@ fn out_alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Deconstruct>> {
         .collect()
 }
 
+impl Declarations {
+    /// The accessor a type's value form names, and one reach per field of the
+    /// struct it returns.
+    ///
+    /// `None` unless the declaration is exactly one `.fields(fields!(f))` whose
+    /// every field is a plain leaf. A record that states its own decomposition
+    /// — a per-field `expand_return!` override, an inlined nested class, a sum
+    /// laid out as a selector and its groups — is a shape this row does not
+    /// state yet, and stating half of one would describe a boundary nothing
+    /// emits.
+    fn value_form_of(
+        &self,
+        model: &Flat,
+        registry: &impl prebindgen_registry::Conversions,
+        ty: &TypeRef,
+    ) -> Option<(syn::Ident, Vec<Reach>)> {
+        use prebindgen_registry::unfold::{FieldDecon, FieldRecord};
+        let decl = self
+            .return_expand_decls
+            .iter()
+            .find(|d| *d.key() == ty.stripped_key())?;
+        let [crate::jni::LocalField::Fields(fields)] = decl.field_list() else {
+            return None;
+        };
+        let records: Vec<FieldRecord> = self.lower_value_form(registry, decl.key(), fields);
+        let ret = model.function(fields.func())?.ret.clone();
+        let ret = ret.borrow_target().unwrap_or(&ret);
+        let prebindgen_registry::flat::TypeKind::Named { id, .. } = ret.unwrapped().kind() else {
+            return None;
+        };
+        let prebindgen_registry::flat::Type::Struct(st) =
+            id.ident().and_then(|i| model.declared_type(&i))?
+        else {
+            return None;
+        };
+        let mut reaches = Vec::new();
+        for record in &records {
+            if !matches!(record.decon, FieldDecon::Default) {
+                return None;
+            }
+            let [member] = record.members.as_slice() else {
+                return None;
+            };
+            let index = st
+                .fields
+                .iter()
+                .position(|f| f.name.as_ref() == Some(member))?;
+            // A field that reaches the type being taken apart. The leaf
+            // synthesis treats `Box<T>` as a spelling of its own and stops
+            // there; a recipe keys a crossing by the value that crosses, so
+            // `Box<ZSample>` inside `ZSample`'s own value form is that row
+            // reaching itself. Refused here rather than by `Recipes::build`,
+            // which would refuse the whole binding over a shape the leaf
+            // synthesis handles.
+            if st.fields[index].ty.stripped_key() == ty.stripped_key() {
+                return None;
+            }
+            reaches.push(Reach::Field(index));
+        }
+        Some((fields.func().clone(), reaches))
+    }
+}
+
+impl Declarations {
+    /// What a value form calls each of its fields, by the Rust field ident.
+    ///
+    /// The declaration's answer, so a `.name(..)` rename carries through to the
+    /// builder parameter. `None` for a type with no value form, or one whose
+    /// records this row does not state — the same test [`Self::value_form_of`]
+    /// makes when it declares the row.
+    pub(crate) fn value_form_names(
+        &self,
+        registry: &impl prebindgen_registry::Conversions,
+        ty: &TypeRef,
+    ) -> Option<std::collections::HashMap<String, String>> {
+        use prebindgen_registry::unfold::FieldDecon;
+        let decl = self
+            .return_expand_decls
+            .iter()
+            .find(|d| *d.key() == ty.stripped_key())?;
+        let [crate::jni::LocalField::Fields(fields)] = decl.field_list() else {
+            return None;
+        };
+        self.lower_value_form(registry, decl.key(), fields)
+            .into_iter()
+            .map(|r| match (r.members.as_slice(), &r.decon) {
+                ([member], FieldDecon::Default) => Some((member.to_string(), r.name)),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
 /// One reach per field of a declared struct, in the model's order.
 ///
 /// Empty for anything the model does not hold as a struct, which includes a
@@ -137,7 +230,11 @@ impl Declarations {
     /// A type declared but absent from the model is skipped rather than
     /// refused: the scan already reports it, and reporting it twice in
     /// different words helps nobody.
-    pub(crate) fn recipes(&self, model: &Flat) -> Result<Recipes, Vec<RecipeError>> {
+    pub(crate) fn recipes(
+        &self,
+        model: &Flat,
+        registry: &impl prebindgen_registry::Conversions,
+    ) -> Result<Recipes, Vec<RecipeError>> {
         let mut rows = Recipes::builder();
         // Every Kotlin class declaration, and every `convert!`-declared
         // conversion. The second matters as much as the first: a conversion may
@@ -202,8 +299,22 @@ impl Declarations {
                     }
                 }
                 _ => {
-                    rows.declare(ty.clone(), whole(), Deconstructing::Atomic);
+                    rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
                 }
+            }
+            // A value form: `expand_return!(T).fields(fields!(f))` calls `f`
+            // once and hands out the fields of the struct it returns. The one
+            // declaration shape that names its own accessor, and the reason
+            // `Deconstruct::ValueForm` exists.
+            if let Some((func, reaches)) = self.value_form_of(model, registry, &ty) {
+                rows.declare(
+                    ty.clone(),
+                    parts(),
+                    Deconstructing::Product(Deconstruct::ValueForm {
+                        func,
+                        parts: reaches,
+                    }),
+                );
             }
             // A `data_class` also has a row that says what it is made of, so
             // its constructing side names which of the two a site takes by

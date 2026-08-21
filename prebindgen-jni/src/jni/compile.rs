@@ -612,10 +612,16 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         &mut self,
         _cx: &mut Cx<'_>,
         at: At<'_>,
-        _func: &Function,
-        _parts: Parts<'_, Self>,
+        func: &Function,
+        parts: Parts<'_, Self>,
     ) -> Frag<Self> {
-        Err(refuse(at, "JniGen states no value-form rows yet"))
+        if at.crossing.assembly() != Assembly::Construct {
+            return Ok(self.out_value_form(at, func, parts));
+        }
+        Err(refuse(
+            at,
+            "JniGen states no constructing value-form rows yet",
+        ))
     }
 
     fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
@@ -1091,6 +1097,59 @@ impl<R: Conversions> JCompile<'_, R> {
         let mut frag = JFrag::new(
             at,
             self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
+        );
+        frag.out_wires = Some(wires);
+        frag.composed_only = true;
+        frag
+    }
+
+    /// The values a **value form** hands out: call the accessor once, then read
+    /// the fields of what it returned.
+    ///
+    /// Every field is one value here, where a by-value `data_class` inlines a
+    /// nested one — the difference is the declaration, not the type. A value
+    /// form states its own field list, and what it does not state, it does not
+    /// decompose.
+    ///
+    /// The names are the declaration's: a `.name(..)` rename carries through,
+    /// which is why the record list is asked for again rather than the Kotlin
+    /// property being derived a second time here.
+    fn out_value_form(&self, at: At<'_>, func: &Function, parts: Parts<'_, Self>) -> JFrag {
+        let declined = JFrag::new(at, self.parts_marker(Vec::new()));
+        let Some(names) = self
+            .decls
+            .value_form_names(self.registry, at.crossing.value())
+        else {
+            return declined;
+        };
+        let mut wires = Vec::new();
+        for (part, _) in parts {
+            let Some(field) = part_field(part) else {
+                return declined;
+            };
+            let Some(ident) = field.name.clone() else {
+                return declined;
+            };
+            let Some(name) = names.get(&ident.to_string()).cloned() else {
+                return declined;
+            };
+            wires.push(OutWire {
+                name,
+                out_ty: part.ty.clone(),
+                group: None,
+                // The chain starts at the accessor's result, which the emitter
+                // binds once. The call itself is the site's to make, so what a
+                // wire states is the field read off it.
+                from: OutFrom::Field { path: vec![ident] },
+            });
+        }
+        let mut frag = JFrag::new(
+            at,
+            self.parts_marker(
+                std::iter::once(TypeKey::from_ident(&func.name))
+                    .chain(parts.iter().map(|(p, _)| p.ty.key()))
+                    .collect(),
+            ),
         );
         frag.out_wires = Some(wires);
         frag.composed_only = true;

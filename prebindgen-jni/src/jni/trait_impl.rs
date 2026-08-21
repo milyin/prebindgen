@@ -1414,7 +1414,7 @@ impl JniGenBuilder {
         // A second holding of the model: `convert_with` consumes the builder,
         // and the table outlives that call.
         let model = declared.flat().clone();
-        let recipes = decls.recipes(&model).map_err(|errors| {
+        let recipes = decls.recipes(&model, &declared).map_err(|errors| {
             prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors
                     .iter()
@@ -1553,6 +1553,10 @@ impl JniGenBuilder {
                     Some(prebindgen_registry::flat::Type::Struct(s)) => {
                         s.fields.iter().map(|f| &f.ty).collect()
                     }
+                    // A value form's parts belong to the struct its accessor
+                    // returns, not to this type — so there is nothing to
+                    // pre-check here, and the compiler's own deferral answers.
+                    _ if decls.value_form_names(&registry, &ty).is_some() => Vec::new(),
                     _ => continue,
                 };
             if part_types.iter().any(|ty| decls.out_frag(ty).is_none()) {
@@ -3267,8 +3271,13 @@ impl Declarations {
             .iter()
             .filter(|(_, c)| matches!(c.kind, DeclaredKind::Sealed(_) | DeclaredKind::Data))
             .map(|(k, _)| k.clone())
+            // And every type whose value form says what it hands out, whatever
+            // kind of class it is — `expand_return!` is declared over a
+            // `ptr_class` as readily as over anything else.
+            .chain(self.return_expand_decls.iter().map(|d| d.key().clone()))
             .collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        keys.dedup();
         keys
     }
 

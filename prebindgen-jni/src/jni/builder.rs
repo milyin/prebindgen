@@ -896,7 +896,7 @@ impl Declarations {
     /// **Rust field ident**, and both are checked against the struct: naming a
     /// field the value form doesn't have is a hard error, which is the point —
     /// a field renamed upstream must not silently lose its adjustment.
-    fn lower_value_form(
+    pub(crate) fn lower_value_form(
         &self,
         registry: &impl Conversions,
         key: &TypeKey,

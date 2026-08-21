@@ -598,6 +598,37 @@ impl JniGen {
         )
     }
 
+    /// The leaves the registry's own expansion plans for one function, in the
+    /// form [`Self::out_lines_for_test`] renders a row in.
+    ///
+    /// The walk side of a value form: its leaves come from `unfold::flatten`
+    /// rather than from a JniGen-side synthesis, so the comparison goes through
+    /// a plan rather than through a leaf list.
+    pub(crate) fn plan_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
+        use prebindgen_registry::unfold::PathStep;
+        let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
+        let plan = prebindgen_registry::Conversions::unfold_plans(&self.registry).get(&ident)?;
+        Some(
+            plan.leaves
+                .iter()
+                .map(|l| {
+                    // The accessor call every leaf hangs off is the site's, not
+                    // the wire's, so it is dropped to line the two up.
+                    let from = l
+                        .path
+                        .iter()
+                        .filter_map(|step| match step {
+                            PathStep::Field { ident, .. } => Some(ident.to_string()),
+                            PathStep::Call { .. } => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    format!("{}: {} <- {from} @{:?}", l.name, l.out_ty.key(), l.group)
+                })
+                .collect(),
+        )
+    }
+
     /// The wires a crossing composes into, by spelling.
     pub(crate) fn parts_wires_for_test(
         &self,
