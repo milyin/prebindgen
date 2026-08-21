@@ -99,6 +99,23 @@ fn out_alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Deconstruct>> {
         .collect()
 }
 
+/// One reach per field of a declared struct, in the model's order.
+///
+/// Empty for anything the model does not hold as a struct, which includes a
+/// `data_class!` over a type the scan dropped — the scan reports that, and a
+/// row over no fields would report it a second time.
+fn out_fields(model: &Flat, ty: &TypeRef) -> Vec<Reach> {
+    let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
+        return Vec::new();
+    };
+    let Some(prebindgen_registry::flat::Type::Struct(s)) =
+        id.ident().and_then(|ident| model.declared_type(&ident))
+    else {
+        return Vec::new();
+    };
+    (0..s.fields.len()).map(Reach::Field).collect()
+}
+
 /// The row a type with no parts takes: the adapter emits the conversion itself.
 fn whole() -> RecipeId {
     RecipeId::new("whole")
@@ -168,6 +185,20 @@ impl Declarations {
                     rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
                     if !arms.is_empty() {
                         rows.declare(ty.clone(), parts(), Deconstructing::Choice { arms });
+                    }
+                }
+                // A `data_class` hands its value out as its fields too, so the
+                // foreign side reassembles the object and nothing builds one on
+                // the Rust side.
+                Some(DeclaredKind::Data) => {
+                    let reaches = out_fields(model, &ty);
+                    rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+                    if !reaches.is_empty() {
+                        rows.declare(
+                            ty.clone(),
+                            parts(),
+                            Deconstructing::Product(Deconstruct::Fields(reaches)),
+                        );
                     }
                 }
                 _ => {
@@ -325,7 +356,8 @@ impl Declarations {
             let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
                 continue;
             };
-            let of = Crossing::new(ty, Assembly::Construct);
+            let building = Crossing::new(ty.clone(), Assembly::Construct);
+            let handing_out = Crossing::new(ty, Assembly::Deconstruct);
             for (index, field) in s.fields.iter().enumerate() {
                 // An `Option<D>` field reaches D through the optional's own
                 // row, so the part bound here is the optional and the inner is
@@ -337,14 +369,19 @@ impl Declarations {
                 // An `Option<D>` field reaches D through the optional's own
                 // part site, which the model-wide scan above already bound. What
                 // is left is the field that IS the class: its part takes the
-                // `parts` row.
+                // `parts` row, in both directions.
                 if field.ty.optional_inner().is_none() {
-                    bound.bind(
-                        Site::part(&of, &parts(), index),
-                        Crossing::new(field.ty.clone(), Assembly::Construct),
-                        Ask::Recipe(parts()),
-                        Origin::Part,
-                    );
+                    for (of, assembly) in [
+                        (&building, Assembly::Construct),
+                        (&handing_out, Assembly::Deconstruct),
+                    ] {
+                        bound.bind(
+                            Site::part(of, &parts(), index),
+                            Crossing::new(field.ty.clone(), assembly),
+                            Ask::Recipe(parts()),
+                            Origin::Part,
+                        );
+                    }
                 }
             }
         }

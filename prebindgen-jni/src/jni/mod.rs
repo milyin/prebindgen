@@ -508,14 +508,14 @@ impl JniGen {
         )
     }
 
-    /// What a `sealed_class` hands out, as the row states it: one line per
+    /// What a declared type hands out, as the row states it: one line per
     /// value, naming it, the alternative it belongs to, and how the Rust side
     /// reaches it.
     ///
     /// Test support. The same list `synth_sum_leaves` produces, in the form
     /// that compares — a `TypeRef` has no equality and a `syn::Member` prints
     /// differently by variant, so both sides go through the same rendering.
-    pub(crate) fn sum_out_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
+    pub(crate) fn out_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
         use prebindgen_registry::recipe::Assembly;
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let ty: syn::Type = syn::parse_quote!(#ident);
@@ -535,6 +535,11 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Field { path } => path
+                            .iter()
+                            .map(|p| p.to_string())
+                            .collect::<Vec<_>>()
+                            .join("."),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
                             variant
@@ -551,18 +556,23 @@ impl JniGen {
     }
 
     /// The same list, taken from the leaf synthesis the row is meant to
-    /// replace.
-    pub(crate) fn sum_walk_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
-        use prebindgen_registry::unfold::LeafSource;
+    /// replace — `synth_sum_leaves` for a `sealed_class`,
+    /// `synth_value_struct_leaves` for a `data_class`.
+    pub(crate) fn walk_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
+        use prebindgen_registry::unfold::{LeafSource, PathStep};
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let cfg = self.decls.types.get(&TypeKey::from_ident(&ident))?;
-        let prebindgen_registry::flat::Type::Variant(sum) =
-            self.registry.flat().declared_type(&ident)?
-        else {
-            return None;
+        let leaves = match self.registry.flat().declared_type(&ident)? {
+            prebindgen_registry::flat::Type::Variant(sum) => {
+                crate::jni::synth_sum_leaves(&self.decls, cfg.sum()?, sum)
+            }
+            prebindgen_registry::flat::Type::Struct(s) => {
+                crate::jni::synth_value_struct_leaves(&self.decls, &self.registry, s, &[], "", 0)?
+            }
+            _ => return None,
         };
         Some(
-            crate::jni::synth_sum_leaves(&self.decls, cfg.sum()?, sum)
+            leaves
                 .iter()
                 .map(|l| {
                     let from = match &l.source {
@@ -571,6 +581,15 @@ impl JniGen {
                             "{variant}.{}",
                             crate::jni::struct_plan::sum_field_prop_name(member)
                         ),
+                        LeafSource::Field => l
+                            .path
+                            .iter()
+                            .map(|step| match step {
+                                PathStep::Field { ident, .. } => ident.to_string(),
+                                other => format!("{other:?}"),
+                            })
+                            .collect::<Vec<_>>()
+                            .join("."),
                         other => format!("{other:?}"),
                     };
                     format!("{}: {} <- {from} @{:?}", l.name, l.out_ty.key(), l.group)

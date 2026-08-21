@@ -2443,7 +2443,7 @@ fn a_sealed_class_states_what_it_hands_out() {
     let gen = jni.build_with(registry).expect("resolve");
 
     let composed = gen
-        .sum_out_lines_for_test("Reading")
+        .out_lines_for_test("Reading")
         .expect("Reading states a deconstructing parts row");
     assert_eq!(
         composed,
@@ -2461,7 +2461,113 @@ fn a_sealed_class_states_what_it_hands_out() {
     // makes pointing the emitters at the fragment a move rather than a rewrite.
     assert_eq!(
         composed,
-        gen.sum_walk_lines_for_test("Reading").expect("the walk"),
+        gen.walk_lines_for_test("Reading").expect("the walk"),
         "the row and the leaf synthesis disagree",
+    );
+}
+
+/// A `data_class` states a row saying what it hands out, and a field that is
+/// itself one contributes its own values under the parent's name and chain.
+///
+/// The row declines for the **whole** value rather than per field, because the
+/// emitter it feeds does: a handle, an `enum_class`, a sum, or a `data_class`
+/// behind an `Option` or a `Vec` is delivered with a transform the decoupled
+/// form does not carry, and one such field sends the whole object down the
+/// whole-value `fromParts` path. So `Wrapped` composes and `Opaque`-bearing
+/// `Guarded` does not, and both agree with the synthesis they will replace.
+#[test]
+fn a_data_class_states_what_it_hands_out() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Inner {
+                    pub count: i64,
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Wrapped {
+                    pub id: i64,
+                    pub inner: Inner,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Opaque {
+                    pub v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Guarded {
+                    pub id: i64,
+                    pub held: Opaque,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn wrapped_new() -> Wrapped {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn guarded_new() -> Guarded {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Inner))
+                .class(crate::data_class!(Wrapped))
+                .class(crate::ptr_class!(Opaque))
+                .class(crate::data_class!(Guarded))
+                .fun(prebindgen_registry::fun!(wrapped_new))
+                .fun(prebindgen_registry::fun!(guarded_new)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    assert_eq!(
+        gen.out_lines_for_test("Wrapped")
+            .expect("Wrapped states a deconstructing parts row"),
+        vec![
+            "id: i64 <- id @None",
+            "inner__count: i64 <- inner.count @None",
+            "inner__label: String <- inner.label @None",
+        ],
+        "a nested data class contributes its own values, under its field's name",
+    );
+    // Compared as options, because declining is one of the two answers: a row
+    // that states nothing and a synthesis that returns nothing are the same
+    // claim, and `Guarded` makes it.
+    for short in ["Wrapped", "Inner", "Guarded"] {
+        assert_eq!(
+            gen.out_lines_for_test(short),
+            gen.walk_lines_for_test(short),
+            "the row and the leaf synthesis disagree on {short}",
+        );
+    }
+    assert!(
+        gen.out_lines_for_test("Guarded").is_none(),
+        "a handle field sends the whole object down the whole-value path",
     );
 }

@@ -1532,25 +1532,29 @@ impl JniGenBuilder {
         // conversion and the walk never reaches it. Nothing reads the result
         // yet; compiling it is what holds the composition to every binding this
         // crate builds rather than to one fixture.
-        for key in decls.declared_sums() {
+        for key in decls.declared_decompositions() {
             let Some(ident) = key.ident() else { continue };
             let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
                 continue;
             };
-            // Only a sum every payload of which already crosses. One that does
+            // Only a type every part of which already crosses. One that does
             // not is a gap in the binding, and the writers report it against
-            // the payload — `Reading.Exact.v0 has no OUTPUT converter` — where
+            // the part — `Reading.Exact.v0 has no OUTPUT converter` — where
             // this could only say that composing failed.
-            let Some(prebindgen_registry::flat::Type::Variant(sum)) = model.declared_type(&ident)
-            else {
-                continue;
-            };
-            if sum
-                .alternatives
-                .iter()
-                .flat_map(|alt| &alt.fields)
-                .any(|f| decls.out_frag(&f.ty).is_none())
+            let parts: Vec<&prebindgen_registry::flat::TypeRef> = match model.declared_type(&ident)
             {
+                Some(prebindgen_registry::flat::Type::Variant(sum)) => sum
+                    .alternatives
+                    .iter()
+                    .flat_map(|alt| &alt.fields)
+                    .map(|f| &f.ty)
+                    .collect(),
+                Some(prebindgen_registry::flat::Type::Struct(s)) => {
+                    s.fields.iter().map(|f| &f.ty).collect()
+                }
+                _ => continue,
+            };
+            if parts.iter().any(|ty| decls.out_frag(ty).is_none()) {
                 continue;
             }
             let crossing = prebindgen_registry::recipe::Crossing::new(
@@ -1569,7 +1573,7 @@ impl JniGenBuilder {
             };
             if let Err(e) = compiler.row_of(&mut adapter, &crossing, &crate::jni::rows::parts()) {
                 refusals.push(format!(
-                    "`{key}` hands out its alternatives, but composing them failed: {e:?}"
+                    "`{key}` hands out its parts, but composing them failed: {e:?}"
                 ));
             }
             let done = compiler.finish();
@@ -3251,15 +3255,16 @@ impl Declarations {
             .map(|(k, c)| (k.clone(), c.rust_type.clone()))
             .collect()
     }
-    /// Every type declared `sealed_class!`, in a stable order.
+    /// Every type that states what it hands out — `sealed_class!` and
+    /// `data_class!` — in a stable order.
     ///
     /// Sorted, because what reads it drives compilation and a refusal has to
     /// name the same type run to run.
-    pub(crate) fn declared_sums(&self) -> Vec<TypeKey> {
+    pub(crate) fn declared_decompositions(&self) -> Vec<TypeKey> {
         let mut keys: Vec<TypeKey> = self
             .types
             .iter()
-            .filter(|(_, c)| matches!(c.kind, DeclaredKind::Sealed(_)))
+            .filter(|(_, c)| matches!(c.kind, DeclaredKind::Sealed(_) | DeclaredKind::Data))
             .map(|(k, _)| k.clone())
             .collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
