@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
-    recipe::{Construct, Constructing, Deconstructing, RecipeError, RecipeId, Recipes},
+    recipe::{Arm, Construct, Constructing, Deconstructing, RecipeError, RecipeId, Recipes},
 };
 
 use super::*;
@@ -44,6 +44,30 @@ fn element_types(element: &prebindgen_registry::Element) -> Vec<&TypeRef> {
         prebindgen_registry::Element::Constant(c) => vec![&c.ty],
         _ => Vec::new(),
     }
+}
+
+/// One arm per alternative of a declared sum, each assembled from its own
+/// payload fields.
+///
+/// Empty for anything the model does not hold as a data-carrying enum, which
+/// includes a `sealed_class!` declared over a type the scan dropped — the scan
+/// reports that, and a row over no arms would report it a second time.
+fn alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Construct>> {
+    let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
+        return Vec::new();
+    };
+    let Some(prebindgen_registry::flat::Type::Variant(v)) =
+        id.ident().and_then(|ident| model.declared_type(&ident))
+    else {
+        return Vec::new();
+    };
+    v.alternatives
+        .iter()
+        .map(|alt| Arm {
+            alternative: alt.index,
+            op: Construct::Fields,
+        })
+        .collect()
 }
 
 /// The row a type with no parts takes: the adapter emits the conversion itself.
@@ -108,14 +132,25 @@ impl Declarations {
             // A `data_class` also has a row that says what it is made of, so
             // its constructing side names which of the two a site takes by
             // default. See [`parts`] for why that is still `whole`.
-            if matches!(
-                self.types.get(&ty.key()).map(|c| &c.kind),
-                Some(DeclaredKind::Data)
-            ) {
-                rows.declare_default(ty.clone(), whole(), Constructing::Atomic)
-                    .declare(ty, parts(), Constructing::Product(Construct::Fields));
-            } else {
-                rows.declare(ty, whole(), Constructing::Atomic);
+            match self.types.get(&ty.key()).map(|c| &c.kind) {
+                Some(DeclaredKind::Data) => {
+                    rows.declare_default(ty.clone(), whole(), Constructing::Atomic)
+                        .declare(ty, parts(), Constructing::Product(Construct::Fields));
+                }
+                // A `sealed_class` has one too, and it is a choice rather than
+                // a product: exactly one alternative is live, every one of them
+                // still crosses, and the tag says which. The arms are the
+                // model's — a row states which parts, never what they are.
+                Some(DeclaredKind::Sealed(_)) => {
+                    let arms = alternatives(model, &ty);
+                    rows.declare_default(ty.clone(), whole(), Constructing::Atomic);
+                    if !arms.is_empty() {
+                        rows.declare(ty, parts(), Constructing::Choice { arms });
+                    }
+                }
+                _ => {
+                    rows.declare(ty, whole(), Constructing::Atomic);
+                }
             }
         }
 
@@ -165,7 +200,16 @@ impl Declarations {
     fn field_crosses_as_its_fields(&self, ty: &TypeRef) -> bool {
         self.types
             .get(&ty.stripped_key())
-            .is_some_and(|c| matches!(c.kind, DeclaredKind::Data) && !c.jobject_input)
+            .is_some_and(|c| match c.kind {
+                DeclaredKind::Data => !c.jobject_input,
+                // A `sealed_class` field crosses as a tag plus every alternative's
+                // slots. Whether it *can* is the adapter's answer at compile time,
+                // not a declaration: a payload with no slot form leaves the sum
+                // object-shaped, which is the fragment `Compile::choice` hands
+                // back. So the site asks, and the row answers.
+                DeclaredKind::Sealed(_) => true,
+                _ => false,
+            })
     }
 
     pub(crate) fn bindings(

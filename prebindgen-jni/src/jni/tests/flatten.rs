@@ -2289,3 +2289,108 @@ fn a_nullable_primitive_field_crosses_as_a_pair() {
     let (composed, walked) = gen.parts_vs_walk_for_test("Scal", "s").expect("plan");
     assert_eq!(composed, walked, "the row and the walk disagree");
 }
+
+/// A `sealed_class` field crosses as a tag plus every alternative's slots, and
+/// the row says so where the walk did.
+///
+/// The shape covertest carries: `Observation` holds a required `Reading` and an
+/// optional one, whose alternatives between them cover a scalar payload, a
+/// two-field payload, a string payload that rides a JVM `null`, and a Kotlin
+/// enum payload read through `.value`. Both fields go through the same
+/// composition, and the optional one takes the `null` arm and the presence flag
+/// on top of it.
+#[test]
+fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                    Range { low: i64, high: i64 },
+                    Tagged(String, Priority),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Observation {
+                    pub id: i64,
+                    pub reading: Reading,
+                    pub fallback: Option<Reading>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn observation_which(o: Observation) -> i32 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::sealed_class!(Reading))
+                .class(crate::data_class!(Observation))
+                .fun(prebindgen_registry::fun!(observation_which)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let (composed, walked) = gen
+        .parts_vs_walk_for_test("Observation", "o")
+        .expect("Observation states a parts row and the walk plans it");
+    assert_eq!(composed, walked, "the row and the walk disagree");
+
+    // What the two agree on, stated once so a change to both at the same time
+    // still has to be meant: the required field is a tag and six slots, the
+    // optional one adds a presence flag and a `null` arm.
+    let accesses: Vec<String> = composed.iter().map(|w| w.2.clone()).collect();
+    assert!(
+        accesses.contains(&"(o.reading as? io.test.jni.Reading.Exact)?.v0 ?: 0L".to_string()),
+        "{accesses:#?}"
+    );
+    assert!(
+        accesses
+            .contains(&"(o.reading as? io.test.jni.Reading.Tagged)?.v1?.value ?: 0".to_string()),
+        "a Kotlin enum payload is read through its discriminant: {accesses:#?}"
+    );
+    assert!(
+        accesses.contains(&"(o.reading as? io.test.jni.Reading.Tagged)?.v0".to_string()),
+        "a string payload rides a JVM null rather than a literal: {accesses:#?}"
+    );
+    assert!(
+        accesses.contains(&"o.fallback != null".to_string()),
+        "{accesses:#?}"
+    );
+    assert!(
+        accesses
+            .iter()
+            .any(|a| a.starts_with("when (o.fallback) { null -> 0;")),
+        "an optional sum gates on null in its own arm: {accesses:#?}"
+    );
+    assert!(
+        accesses
+            .iter()
+            .any(|a| a.starts_with("when (o.reading) { is io.test.jni.Reading.Missing -> 0;")),
+        "a required sum has no null arm: {accesses:#?}"
+    );
+}

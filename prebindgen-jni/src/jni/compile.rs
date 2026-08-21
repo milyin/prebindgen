@@ -47,6 +47,102 @@ pub(crate) struct JFrag {
     pub(crate) composed_only: bool,
 }
 
+/// How Kotlin reaches one wire value, relative to the object the site names.
+///
+/// Three forms rather than one string, because two of them put the base in the
+/// **middle**: a sum's tag reads `when (<base>.f) { … }` and a sum's payload
+/// slot reads `(<base>.f as? I.V)?.v0`. A suffix cannot say that, and a raw
+/// prefix/suffix pair cannot be composed — an optional layer has to know
+/// whether it is adding a `?.` navigation or a `null ->` arm, and only a named
+/// form tells it which.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Access {
+    /// `<base><tail>` — the ordinary read, including a presence comparison.
+    Read(String),
+    /// `when (<base><tail>) { … }` — which alternative of a sum is live, as the
+    /// `jint` tag the arms below are numbered by.
+    Select {
+        /// What reaches the sum value from the base.
+        tail: String,
+        /// One arm per alternative, in declaration order, without the `null`
+        /// one — an optional ancestor adds that by setting `nullable`.
+        arms: Vec<String>,
+        /// Whether the value reached can be null, which is its own arm.
+        nullable: bool,
+    },
+    /// `(<base><tail> as? <class>)?.<read>[ ?: <zero>]` — one payload slot of
+    /// one alternative. Every alternative's slots cross on every call; the
+    /// cast yields null for the ones that are not live, and `zero` is what a
+    /// non-nullable wire carries instead.
+    Slot {
+        /// What reaches the sum value from the base.
+        tail: String,
+        /// The Kotlin class of the alternative this slot belongs to. Empty
+        /// until [`Compile::choice`] names it — the arm's own composition
+        /// cannot, because a product hook is not told which alternative it is.
+        class: String,
+        /// What reads the payload off the cast alternative — `v0`, or
+        /// `v1?.value` for a Kotlin enum payload.
+        read: String,
+        /// What an inert slot carries, or `None` for a wire that rides a JVM
+        /// `null`.
+        zero: Option<String>,
+    },
+}
+
+impl Access {
+    /// The Kotlin expression, rooted at the object this site destructures.
+    ///
+    /// Only the equivalence check calls it until the emitters take the row —
+    /// the same `#[cfg(test)]` the wire's other readers carry.
+    #[cfg(test)]
+    pub(crate) fn render(&self, base: &str) -> String {
+        match self {
+            Access::Read(tail) => format!("{base}{tail}"),
+            Access::Select {
+                tail,
+                arms,
+                nullable,
+            } => {
+                let arms = nullable
+                    .then(|| "null -> 0".to_string())
+                    .into_iter()
+                    .chain(arms.iter().cloned())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                format!("when ({base}{tail}) {{ {arms} }}")
+            }
+            Access::Slot {
+                tail,
+                class,
+                read,
+                zero,
+            } => {
+                let zero = zero
+                    .as_ref()
+                    .map(|z| format!(" ?: {z}"))
+                    .unwrap_or_default();
+                format!("({base}{tail} as? {class})?.{read}{zero}")
+            }
+        }
+    }
+
+    /// What reaches this value from the base — the part a container prepends
+    /// its own field to, whichever form the access takes.
+    fn tail_mut(&mut self) -> &mut String {
+        match self {
+            Access::Read(tail) | Access::Select { tail, .. } | Access::Slot { tail, .. } => tail,
+        }
+    }
+
+    /// This access read from one field in, rather than from the object itself.
+    fn under(mut self, field: &str) -> Self {
+        let tail = self.tail_mut();
+        *tail = format!(".{field}{tail}");
+        self
+    }
+}
+
 /// One wire value of a crossing that occupies several.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Wire {
@@ -67,7 +163,7 @@ pub(crate) struct Wire {
     /// Relative for the same reason `path` is: the site supplies the base, so
     /// the same wire reads `h.flat.id` in one call and `this.flat.id` in the
     /// next.
-    pub(crate) access: String,
+    pub(crate) access: Access,
     /// The conversion this value crosses through, or `None` for a presence flag
     /// — which is read on the Rust side and converts nothing.
     pub(crate) conv: Option<syn::Ident>,
@@ -321,24 +417,31 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             }
         }
         if let (Assembly::Construct, Some(inner_wires)) = (at.crossing.assembly(), &inner.wires) {
+            // A sum reached through the gate needs no navigation added: every
+            // one of its wires already reads the value through a `when` or an
+            // `as?`, both of which take a null subject. What the gate does add
+            // is the `null` arm — and the flag it prepends gates one field
+            // rather than a whole value, because the value under it IS the
+            // field.
+            let sum = is_choice(inner);
             let mut wires = vec![Wire {
                 ty: syn::parse_quote!(jni::sys::jboolean),
                 kt_ty: "Boolean".to_string(),
                 path: "present".to_string(),
                 // The gate reads the object itself, not through it.
-                access: " != null".to_string(),
+                access: Access::Read(" != null".to_string()),
                 conv: None,
                 handle_target: None,
                 handle_nullable: false,
                 staged: false,
                 field: None,
-                whole_gate: true,
+                whole_gate: !sum,
             }];
             // Everything under the gate is reached through it, and a
             // non-nullable slot still has to hold something when the value is
             // absent — the flag is what tells Rust to ignore it.
             wires.extend(inner_wires.iter().map(|w| Wire {
-                access: format!("?{}{}", w.access, absent_default(w)),
+                access: gated(&w.access, w),
                 // Anything under the gate can be absent, however the field
                 // itself was spelled.
                 handle_nullable: w.handle_target.is_some() || w.handle_nullable,
@@ -398,12 +501,20 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         Err(refuse(at, "JniGen states no value-form rows yet"))
     }
 
-    fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
+    fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
         if at.crossing.assembly() != Assembly::Construct {
             return Err(refuse(
                 at,
                 "JniGen states no deconstructing product rows yet",
             ));
+        }
+        // A product whose own type is a sum is one **alternative's** payload:
+        // the registry composes every arm through this hook and hands the lot
+        // to `choice`. Its parts are read off a cast rather than off the value,
+        // so they take the slot form — and which alternative to cast to is
+        // `choice`'s to fill in, being the only hook told.
+        if self.is_sum(cx, at) {
+            return Ok(self.arm(at, parts));
         }
         // A `data_class` crosses as its fields, and a field that is itself one
         // contributes its own several — which is the recursion, stated once
@@ -418,7 +529,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         path: format!("{}.{}", part.name, w.path),
                         // The field this part reads, then however the part's own
                         // wire reaches on from there.
-                        access: format!(".{}{}", field_kt(part), w.access),
+                        access: w.access.clone().under(&field_kt(part)),
                         conv: w.conv.clone(),
                         handle_target: w
                             .handle_target
@@ -443,7 +554,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     ty: syn::parse_quote!(jni::sys::jlong),
                     kt_ty: "Long".to_string(),
                     path: part.name.clone(),
-                    access: format!(".{}", field_kt(part)),
+                    access: Access::Read(format!(".{}", field_kt(part))),
                     conv: None,
                     handle_target: Some(format!(".{}", field_kt(part))),
                     handle_nullable: part.ty.optional_inner().is_some(),
@@ -455,7 +566,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     ty: frag.conv.destination.clone(),
                     kt_ty: crate::jni::emit::wire_kotlin_type(&frag.conv),
                     path: part.name.clone(),
-                    access: format!(".{}", field_kt(part)),
+                    access: Access::Read(format!(".{}", field_kt(part))),
                     conv: Some(frag.conv.function.sig.ident.clone()),
                     handle_target: None,
                     handle_nullable: false,
@@ -474,17 +585,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // their own.
         let mut frag = JFrag::new(
             at,
-            ConverterImpl {
-                destination: syn::parse_quote!(()),
-                function: syn::parse_quote!(
-                    #[allow(dead_code)]
-                    fn __jni_parts() {}
-                ),
-                pre_stages: Vec::new(),
-                niches: Niches::empty(),
-                metadata: KotlinMeta::default(),
-                subs: parts.iter().map(|(p, _)| p.ty.key()).collect(),
-            },
+            self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
         );
         frag.wires = Some(wires);
         frag.composed_only = true;
@@ -495,9 +596,38 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         &mut self,
         _cx: &mut Cx<'_>,
         at: At<'_>,
-        _arms: &[(&Alternative, &JFrag)],
+        arms: &[(&Alternative, &JFrag)],
     ) -> Frag<Self> {
-        Err(refuse(at, "JniGen states no choice rows yet"))
+        if at.crossing.assembly() != Assembly::Construct {
+            return Err(refuse(
+                at,
+                "JniGen states no deconstructing choice rows yet",
+            ));
+        }
+        // Which alternative is live crosses as its own `jint`, and every
+        // alternative's slots cross on every call — the inert ones carrying the
+        // literal their wire takes when the cast finds nothing. The N-way form
+        // of the presence flag an optional already uses.
+        match self.selected(at, arms) {
+            Some(wires) => {
+                let mut frag = JFrag::new(at, self.parts_marker(parts_subs(arms)));
+                frag.wires = Some(wires);
+                frag.composed_only = true;
+                Ok(frag)
+            }
+            // A payload this adapter has no slot for — a nested object, a
+            // handle — leaves the whole sum object-shaped, which is the row it
+            // already had. Stated as a fragment with no wires rather than as a
+            // refusal: the site that asked composes it as one value, exactly as
+            // it did before a `parts` row existed.
+            None => {
+                let conv = self
+                    .decls
+                    .in_frag(at.crossing.spelled())
+                    .ok_or_else(|| refuse(at, "no JNI representation for this sum"))?;
+                Ok(JFrag::new(at, (*conv).clone()))
+            }
+        }
     }
 
     fn callback(
@@ -582,6 +712,170 @@ impl Wire {
 }
 
 impl<R: Conversions> JCompile<'_, R> {
+    /// The conversion a composed-only row carries: none.
+    ///
+    /// The `parts` and arm rows state what a value is made of and nothing
+    /// about how it is rebuilt, so there is no function to name. `subs` is
+    /// still real — it is what the registry walks for reachability.
+    /// `prebindgen-c` does the same for a union arm, and for the same reason.
+    fn parts_marker(&self, subs: Vec<TypeKey>) -> ConverterImpl<KotlinMeta> {
+        ConverterImpl {
+            destination: syn::parse_quote!(()),
+            function: syn::parse_quote!(
+                #[allow(dead_code)]
+                fn __jni_parts() {}
+            ),
+            pre_stages: Vec::new(),
+            niches: Niches::empty(),
+            metadata: KotlinMeta::default(),
+            subs,
+        }
+    }
+
+    /// Whether the crossing being composed is a data-carrying enum, which is
+    /// what makes a product hook an **arm** rather than a struct.
+    fn is_sum(&self, cx: &Cx<'_>, at: At<'_>) -> bool {
+        let TypeKind::Named { id, .. } = at.crossing.value().unwrapped().kind() else {
+            return false;
+        };
+        id.ident().is_some_and(|ident| {
+            matches!(
+                cx.model().declared_type(&ident),
+                Some(prebindgen_registry::flat::Type::Variant(_))
+            )
+        })
+    }
+
+    /// One alternative's payload, as the slots it crosses in.
+    ///
+    /// A fragment with **no** wires is this adapter declining: a payload it has
+    /// no slot for — one that is itself several values, an opaque handle, or a
+    /// wire that is neither a JNI primitive nor a string — keeps the whole sum
+    /// object-shaped. See [`Compile::choice`]'s `None` arm for what that costs.
+    fn arm(&self, at: At<'_>, parts: Parts<'_, Self>) -> JFrag {
+        let mut wires = Vec::new();
+        for (part, frag) in parts {
+            let Some(wire) = self.slot(part, frag) else {
+                return JFrag::new(at, self.parts_marker(Vec::new()));
+            };
+            wires.push(wire);
+        }
+        let mut frag = JFrag::new(
+            at,
+            self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
+        );
+        frag.wires = Some(wires);
+        frag.composed_only = true;
+        frag
+    }
+
+    /// One payload of one alternative, or `None` if it has no slot form.
+    fn slot(&self, part: &Part<'_>, frag: &JFrag) -> Option<Wire> {
+        if frag.wires.is_some() || frag.conv.metadata.projection.is_some() {
+            return None;
+        }
+        let prim = crate::jni::JniPrim::from_wire(&frag.conv.destination);
+        let string_like = matches!(&frag.conv.destination, syn::Type::Path(tp)
+            if tp.path.segments.last().is_some_and(|s| s.ident == "JString"));
+        if prim.is_none() && !string_like {
+            return None;
+        }
+        let prop = crate::jni::struct_plan::sum_field_prop_name(&part_member(part)?);
+        // An `enum_class` payload is a Kotlin enum object whose wire is the
+        // `jint` discriminant, so the slot reads `.value` — without it the wire
+        // would carry a `Priority?` where it wants an `Int`.
+        let read = if self.decls.is_kotlin_enum_reading(&part.ty) {
+            format!("{prop}?.value")
+        } else {
+            prop.clone()
+        };
+        let mut kt_ty = crate::jni::emit::wire_kotlin_type(&frag.conv);
+        if prim.is_none() && !kt_ty.ends_with('?') {
+            kt_ty.push('?');
+        }
+        Some(Wire {
+            ty: frag.conv.destination.clone(),
+            kt_ty,
+            path: prop,
+            access: Access::Slot {
+                tail: String::new(),
+                // Named by `choice`, the only hook told which alternative this
+                // payload belongs to.
+                class: String::new(),
+                read,
+                zero: prim.map(|p| p.kotlin_zero().to_string()),
+            },
+            conv: Some(frag.conv.function.sig.ident.clone()),
+            handle_target: None,
+            handle_nullable: false,
+            staged: !frag.conv.pre_stages.is_empty(),
+            field: None,
+            whole_gate: false,
+        })
+    }
+
+    /// The tag, then every alternative's slots — or `None` if any alternative
+    /// declined, since a sum crosses whole or not at all.
+    fn selected(&self, at: At<'_>, arms: &[(&Alternative, &JFrag)]) -> Option<Vec<Wire>> {
+        let TypeKind::Named { id, .. } = at.crossing.value().unwrapped().kind() else {
+            return None;
+        };
+        let cfg = self.decls.types.get(&TypeKey::from_ident(&id.ident()?))?;
+        let sum_cfg = cfg.sum()?;
+        let iface = cfg.name_spec.as_ref().map(|s| self.decls.fqn_of(s))?;
+
+        let classes: Vec<String> = arms
+            .iter()
+            .map(|(alt, _)| {
+                format!(
+                    "{iface}.{}",
+                    self.decls.sum_variant_class_name(sum_cfg, &alt.name)
+                )
+            })
+            .collect();
+        let mut wires = vec![Wire {
+            ty: syn::parse_quote!(jni::sys::jint),
+            kt_ty: "Int".to_string(),
+            path: "_tag".to_string(),
+            access: Access::Select {
+                tail: String::new(),
+                arms: arms
+                    .iter()
+                    .zip(&classes)
+                    .map(|((alt, _), class)| {
+                        format!("is {class} -> {}", crate::jni::struct_plan::sum_tag(alt))
+                    })
+                    .collect(),
+                nullable: false,
+            },
+            conv: None,
+            handle_target: None,
+            handle_nullable: false,
+            staged: false,
+            field: None,
+            whole_gate: false,
+        }];
+        for ((_, frag), class) in arms.iter().zip(&classes) {
+            let short = class.rsplit('.').next().unwrap_or(class);
+            for w in frag.wires.as_ref()? {
+                let Access::Slot { read, zero, .. } = &w.access else {
+                    return None;
+                };
+                wires.push(Wire {
+                    path: crate::jni::struct_plan::sum_slot_fragment(short, &w.path),
+                    access: Access::Slot {
+                        tail: String::new(),
+                        class: class.clone(),
+                        read: read.clone(),
+                        zero: zero.clone(),
+                    },
+                    ..w.clone()
+                });
+            }
+        }
+        Some(wires)
+    }
+
     /// The `(present, value)` pair a nullable primitive or enum crosses as, or
     /// `None` if this optional boxes instead.
     ///
@@ -612,7 +906,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 ty: syn::parse_quote!(jni::sys::jboolean),
                 kt_ty: "Boolean".to_string(),
                 path: "present".to_string(),
-                access: " != null".to_string(),
+                access: Access::Read(" != null".to_string()),
                 conv: None,
                 handle_target: None,
                 handle_nullable: false,
@@ -624,7 +918,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 ty: c.destination.clone(),
                 kt_ty: crate::jni::emit::wire_kotlin_type(c),
                 path: "value".to_string(),
-                access: value_access,
+                access: Access::Read(value_access),
                 conv: Some(c.function.sig.ident.clone()),
                 handle_target: None,
                 handle_nullable: false,
@@ -634,6 +928,21 @@ impl<R: Conversions> JCompile<'_, R> {
             },
         ])
     }
+}
+
+/// The model field one part reads, which a sum payload names its slot after.
+fn part_member(part: &Part<'_>) -> Option<syn::Member> {
+    match part.from {
+        prebindgen_registry::recipe::PartSource::Field { field, .. } => Some(field.member()),
+        _ => None,
+    }
+}
+
+/// Every crossing a sum's arms delegate to, which is what reachability walks.
+fn parts_subs(arms: &[(&Alternative, &JFrag)]) -> Vec<TypeKey> {
+    arms.iter()
+        .flat_map(|(_, f)| f.conv.subs.iter().cloned())
+        .collect()
 }
 
 /// The Kotlin property name for one part of a product, sanitized — `object` is
@@ -661,11 +970,11 @@ fn is_handle(frag: &JFrag) -> bool {
 /// does not compile. A wire that **already carries one** got it from a gate
 /// further in — the expression yields a value from there on, so an outer gate
 /// has nothing left to substitute for.
-fn absent_default(w: &Wire) -> String {
+fn absent_default(w: &Wire, tail: &str) -> String {
     if w.conv.is_none() && w.handle_target.is_none() {
         return String::new();
     }
-    if w.access.contains(" ?: ") {
+    if tail.contains(" ?: ") {
         return String::new();
     }
     crate::jni::emit::kt_leaf_default(
@@ -676,4 +985,31 @@ fn absent_default(w: &Wire) -> String {
     )
     .map(|d| format!(" ?: {d}"))
     .unwrap_or_default()
+}
+
+/// One wire's access, read through a gate that may find nothing.
+///
+/// Only an ordinary read navigates: it gains the `?` that stops at a null and
+/// the literal a non-nullable slot then carries. A sum's `when` gains the
+/// `null` arm instead, and a sum's `as?` slot needs neither — a cast over a
+/// null subject is already null.
+fn gated(access: &Access, w: &Wire) -> Access {
+    match access {
+        Access::Read(tail) => Access::Read(format!("?{tail}{}", absent_default(w, tail))),
+        Access::Select { tail, arms, .. } => Access::Select {
+            tail: tail.clone(),
+            arms: arms.clone(),
+            nullable: true,
+        },
+        slot @ Access::Slot { .. } => slot.clone(),
+    }
+}
+
+/// Whether this fragment states a sum taken apart into a tag and its arms'
+/// slots, rather than a product taken apart into its fields.
+fn is_choice(frag: &JFrag) -> bool {
+    frag.wires
+        .as_ref()
+        .and_then(|w| w.first())
+        .is_some_and(|w| matches!(w.access, Access::Select { .. }))
 }

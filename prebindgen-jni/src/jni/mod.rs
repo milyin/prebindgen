@@ -491,7 +491,7 @@ impl JniGen {
                 (
                     name,
                     w.kt_ty.clone(),
-                    format!("{param}{}", w.access),
+                    w.access.render(param),
                     w.conv.as_ref().map(|c| c.to_string()),
                     w.handle_target.as_ref().map(|t| format!("{param}{t}")),
                     w.handle_nullable,
