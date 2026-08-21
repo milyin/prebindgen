@@ -451,9 +451,12 @@ pub struct JniGen {
     registry: prebindgen_registry::Registry,
 }
 
-/// One JNI parameter as a signature writes it: its name and its Kotlin type.
+/// One JNI parameter as a signature writes it: name, Kotlin type, the Kotlin
+/// expression that fills it, the conversion it crosses through, and — for a
+/// nested owned handle — where Kotlin finds the object to lock and whether that
+/// access can be null.
 #[cfg(test)]
-pub(crate) type NamedWire = (String, String);
+pub(crate) type NamedWire = (String, String, String, Option<String>, Option<String>, bool);
 
 #[cfg(test)]
 impl JniGen {
@@ -475,7 +478,14 @@ impl JniGen {
             .map(|w| {
                 let name =
                     crate::util::snake_to_camel(&format!("{param}_{}", w.path.replace('.', "_")));
-                (name, w.kt_ty.clone())
+                (
+                    name,
+                    w.kt_ty.clone(),
+                    format!("{param}{}", w.access),
+                    w.conv.as_ref().map(|c| c.to_string()),
+                    w.handle_target.as_ref().map(|t| format!("{param}{t}")),
+                    w.handle_nullable,
+                )
             })
             .collect();
 
@@ -492,7 +502,16 @@ impl JniGen {
         let walked = plan
             .leaves
             .iter()
-            .map(|l| (l.kt_name.clone(), l.kt_wire_ty.clone()))
+            .map(|l| {
+                (
+                    l.kt_name.clone(),
+                    l.kt_wire_ty.clone(),
+                    l.kt_access(param),
+                    l.conv.as_ref().map(|c| c.to_string()),
+                    l.kt_handle_target(param),
+                    l.handle_nullable,
+                )
+            })
             .collect();
         Some((composed, walked))
     }

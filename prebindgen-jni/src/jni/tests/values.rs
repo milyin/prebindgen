@@ -1860,6 +1860,15 @@ fn an_optional_handle_field_mints_through_the_factory() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    // A nested owned handle crosses as a `Long` and is locked through the
+    // handle OBJECT, so the row has to carry both — the facts the Kotlin
+    // lock-and-consume scaffold reads. Asserted here because `Bag`'s field is
+    // an `Option<Handle>`, where the access is nullable and the pointer still
+    // is not.
+    let (composed, walked) = generation
+        .parts_vs_walk_for_test("Bag", "b")
+        .expect("Bag states a parts row and the walk plans it");
+    assert_eq!(composed, walked, "the row and the walk disagree");
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
         .unwrap()
