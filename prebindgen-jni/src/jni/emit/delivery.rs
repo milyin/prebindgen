@@ -447,13 +447,12 @@ fn project_leading_fields(
 /// [`Delivery::Return`]: prebindgen_registry::unfold::Delivery::Return
 pub(crate) fn reach_leaf_flat(
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
+    leaf: &crate::jni::compile::OutWire,
     path: &[PathStep],
     base: TokenStream,
     base_is_ref: bool,
     consuming: bool,
 ) -> TokenStream {
-    use prebindgen_registry::unfold::LeafSource;
     // An optional step BEFORE the last one needs a `match` whose `None` arm has
     // somewhere to go. This derivation has none — it yields a plain Rust value,
     // not a `JObject` that could be null — so the shape is refused here rather
@@ -466,8 +465,9 @@ pub(crate) fn reach_leaf_flat(
     // conditional one, which is the case that cannot compose (an `Option<T>`
     // local with a field read hung off it). The full path is what the shape
     // question is about.
+    let own_path = leaf.reach();
     assert!(
-        !leaf.path.iter().rev().skip(1).any(PathStep::is_optional),
+        !own_path.iter().rev().skip(1).any(PathStep::is_optional),
         "jnigen unfold: leaf `{}` reaches through an optional step but is \
          delivered as a single return value, which has no `None` arm — this \
          shape needs callback delivery",
@@ -508,7 +508,7 @@ pub(crate) fn reach_leaf_flat(
     }
     let (e, lead) = project_leading_fields(&base, base_is_ref, path);
     let e = fold_steps(qualify, &path[lead..], e, false);
-    if leaf.source == LeafSource::Field {
+    if leaf.is_field_read() {
         quote!((#e).clone())
     } else {
         e
@@ -1592,7 +1592,15 @@ mod tests {
                 true,
                 LeafSource::Accessor,
             );
-            let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+            let got = reach_leaf_flat(
+                &qualify,
+                &crate::jni::compile::OutWire::from_leaf(&l),
+                &path,
+                quote!(__src),
+                false,
+                false,
+            )
+            .to_string();
             assert!(
                 !got.contains('&') && !got.contains("clone"),
                 "a movable place is moved, not borrowed or cloned — got `{got}`"
@@ -1611,7 +1619,15 @@ mod tests {
             true,
             LeafSource::Accessor,
         );
-        let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+        let got = reach_leaf_flat(
+            &qualify,
+            &crate::jni::compile::OutWire::from_leaf(&l),
+            &path,
+            quote!(__src),
+            false,
+            false,
+        )
+        .to_string();
         assert!(
             got.contains('&'),
             "a borrowed out_ty keeps its borrow — got `{got}`"
@@ -1635,7 +1651,15 @@ mod tests {
             false,
             LeafSource::Field,
         );
-        let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+        let got = reach_leaf_flat(
+            &qualify,
+            &crate::jni::compile::OutWire::from_leaf(&l),
+            &path,
+            quote!(__src),
+            false,
+            false,
+        )
+        .to_string();
         assert!(
             got.contains("clone"),
             "a non-consuming field leaf clones rather than moves — got `{got}`"
@@ -1659,6 +1683,13 @@ mod tests {
         // The suffix a rebase would hand over — the optional call is gone from
         // it, and used to take the guard with it.
         let rest = vec![PathStep::field(syn::parse_quote!(a), false)];
-        let _ = reach_leaf_flat(&qualify, &l, &rest, quote!(__vf0), false, false);
+        let _ = reach_leaf_flat(
+            &qualify,
+            &crate::jni::compile::OutWire::from_leaf(&l),
+            &rest,
+            quote!(__vf0),
+            false,
+            false,
+        );
     }
 }

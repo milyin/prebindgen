@@ -475,27 +475,33 @@ pub(crate) type NamedWire = (
     Option<String>,
 );
 
+/// How a reach renders: its field steps, joined — the accessor call every leaf
+/// hangs off is the site's, not the value's, so it is dropped.
+#[cfg(test)]
+fn reach_of(path: &[prebindgen_registry::unfold::PathStep]) -> String {
+    use prebindgen_registry::unfold::PathStep;
+    path.iter()
+        .filter_map(|step| match step {
+            PathStep::Field { ident, .. } => Some(ident.to_string()),
+            PathStep::Call { .. } => None,
+        })
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
 /// How the Rust side reaches one plan leaf, in the form a wire renders it —
 /// the accessor call every leaf hangs off is the site's, not the value's, so it
 /// is dropped to line the two up.
 #[cfg(test)]
 fn leaf_reach(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> String {
-    use prebindgen_registry::unfold::{LeafSource, PathStep};
+    use prebindgen_registry::unfold::LeafSource;
     match &leaf.source {
         LeafSource::SumTag => "tag".to_string(),
         LeafSource::VariantField { variant, member } => format!(
             "{variant}.{}",
             crate::jni::struct_plan::sum_field_prop_name(member)
         ),
-        _ => leaf
-            .path
-            .iter()
-            .filter_map(|step| match step {
-                PathStep::Field { ident, .. } => Some(ident.to_string()),
-                PathStep::Call { .. } => None,
-            })
-            .collect::<Vec<_>>()
-            .join("."),
+        _ => reach_of(&leaf.path),
     }
 }
 
@@ -566,11 +572,7 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
-                        crate::jni::compile::OutFrom::Field { path } => path
-                            .iter()
-                            .map(|p| p.to_string())
-                            .collect::<Vec<_>>()
-                            .join("."),
+                        crate::jni::compile::OutFrom::Reach { path } => reach_of(path),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
                             variant
@@ -633,11 +635,7 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
-                        crate::jni::compile::OutFrom::Field { path } => path
-                            .iter()
-                            .map(|p| p.to_string())
-                            .collect::<Vec<_>>()
-                            .join("."),
+                        crate::jni::compile::OutFrom::Reach { path } => reach_of(path),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
                             variant
