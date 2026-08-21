@@ -648,7 +648,7 @@ pub(crate) fn build_handle_destructor_items(
         let Some(reading) = registry.reading(key) else {
             continue;
         };
-        if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none() {
+        if ext.in_frag(&reading).is_none() && ext.out_frag(&reading).is_none() {
             continue;
         }
         let ty = emit.spell(&reading);
@@ -1031,7 +1031,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let WrapperShape::Borrow { .. } = shape else {
             return None;
@@ -1044,7 +1043,7 @@ impl Declarations {
         if !produced.is_canonical() {
             return None;
         }
-        let inner = registry.input_entry(t1)?;
+        let inner = self.in_frag(t1)?;
         let outer_ty = produced.key();
         // `&T` / `&mut T` are Kotlin-side no-ops — inherit the inner
         // type's name, unless the user pinned an explicit override
@@ -1082,7 +1081,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
@@ -1099,7 +1097,7 @@ impl Declarations {
         if !produced.is_canonical() {
             return None;
         }
-        let inner = registry.input_entry(t1)?;
+        let inner = self.in_frag(t1)?;
         if !inner.metadata.is_direct_handle() {
             // Non-opaque: let the general `Option<_>` handler take it.
             return None;
@@ -1152,7 +1150,6 @@ impl Declarations {
         shape: WrapperShape,
         produced: &Produced<'_>,
         t1: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
@@ -1163,7 +1160,7 @@ impl Declarations {
         if shape != WrapperShape::Sequence {
             return None;
         }
-        let inner = registry.input_entry(t1)?;
+        let inner = self.in_frag(t1)?;
         reject_vec_of_handle(&inner.metadata.projection, t1);
         let inner_wire = inner.destination.clone();
         if !is_jobject_shaped_wire(&inner_wire) {
@@ -1172,7 +1169,8 @@ impl Declarations {
         // The element's COMPLETE wire -> Rust chain: a `convert!` element
         // (`Label` -> `String`) reaches its value through the rust-side stages,
         // not through the wire-facing converter alone.
-        let inner_conv = crate::jni::emit::composed_inner_input(inner, quote::quote!(&__elem_wire));
+        let inner_conv =
+            crate::jni::emit::composed_inner_input(&inner, quote::quote!(&__elem_wire));
         let outer_ty = produced.key();
         // Bridgeable first — see `box_layers_to`.
         let build = build_from_canonical(produced, quote::quote!(__out))?;
@@ -1231,7 +1229,7 @@ impl Declarations {
         // the READING itself (#284).
         let t1_ty = emit.spell(t1);
         if shape == WrapperShape::Optional {
-            let inner = registry.input_entry(t1)?;
+            let inner = self.in_frag(t1)?;
             if inner.metadata.is_direct_handle() {
                 let inner_wire = inner.destination.clone();
                 let outer_ty = produced.key();
@@ -1300,8 +1298,8 @@ impl Declarations {
             });
             // Inherit the inner's name; user pins on `Option<T>` win.
             // The nullability marker (`?`) is added by the use site.
-            let inherited = registry
-                .input_entry(t1)
+            let inherited = self
+                .in_frag(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
             let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
@@ -1310,8 +1308,8 @@ impl Declarations {
             // destination and `None` is the niche slot sentinel; the boxed
             // fallback widens the wire to `JObject`.
             let nullable_kind = nullable_kind_for(&wire, t1, registry);
-            let projection = registry
-                .input_entry(t1)
+            let projection = self
+                .in_frag(t1)
                 .and_then(|e| e.metadata.projection.clone())
                 .map(|h| Projection {
                     strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
@@ -1428,12 +1426,11 @@ impl JniGenBuilder {
         })?;
         // JniGen overrides no site yet: every crossing takes its type's own row.
         let bindings = prebindgen_registry::recipe::Bindings::default();
-        // The driver's state, carried between calls. The adapter borrows the
-        // partial registry view, which is lent per call and so is a different
-        // type each time; what it built is not, and outlives every one of them.
-        let mut compiled = Some(prebindgen_registry::recipe::Compiled::<
-            crate::jni::compile::JFrag,
-        >::default());
+        // The driver's state lives on `decls` rather than here, because the
+        // adapter reads it **while** it compiles: a conversion for one type is
+        // built out of the conversions for its inners, which are compiled
+        // first. That is the same order the converter table was filled in, so
+        // a fragment is there exactly when a table entry would have been.
         // A callback is still answered without the compiler — see
         // `compile_crossing` — so no fragment carries its conversion and the
         // fragment list alone would not reach the file. Collected here rather
@@ -1446,22 +1443,36 @@ impl JniGenBuilder {
                     &model,
                     &recipes,
                     &bindings,
-                    compiled.take().expect("the state is put back every call"),
+                    decls.compiled.borrow().clone(),
                 );
                 let conv = decls.compile_crossing(&mut compiler, crossing, built, emit);
-                compiled = Some(compiler.finish());
+                *decls.compiled.borrow_mut() = compiler.finish();
                 if let (Some(c), true) =
                     (conv.as_ref(), decls.is_callback_crossing(crossing, built))
                 {
                     uncompiled.push(c.function.clone());
+                    // File it as this crossing's fragment even though no row
+                    // built it, so every emitter has one lookup rather than a
+                    // fall-back for the one crossing kind the compiler skips.
+                    let (dir, key) = crossing;
+                    decls.compiled.borrow_mut().record(
+                        key.clone(),
+                        match dir {
+                            Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
+                            Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
+                        },
+                        prebindgen_registry::recipe::RecipeId::new("callback"),
+                        crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
+                    );
                 }
                 conv
             })?
             .build()?;
         // What the compilation produced, kept for emission. The converter table
         // stays the lookup index; this is what reaches the file.
-        decls.compiled_fns = compiled
-            .expect("the state is put back every call")
+        decls.compiled_fns = decls
+            .compiled
+            .borrow()
             .fragments()
             .into_iter()
             // A JNI conversion already emits more than one function: a
@@ -2448,7 +2459,7 @@ impl Declarations {
         // It has to be a type this binding already crosses; if it is not, the
         // ordinary "unresolved" diagnostic names it, which is the better error.
         let inner = registry.reading(&stripped)?;
-        let entry = registry.output_entry(&inner)?;
+        let entry = self.out_frag(&inner)?;
         let wire = entry.destination.clone();
         // Take the wrappers off what the caller handed us. `None` is `Cow`'s
         // policy refusal — the crossing then stays unresolved and names the
@@ -2457,7 +2468,7 @@ impl Declarations {
         let read = read_through_erased_wrappers(reading, quote!(v))?;
         // The inner's COMPLETE chain, stages included: a `convert!` type reaches
         // its wire through them.
-        let inner_call = crate::jni::emit::composed_inner_output(entry, quote!(__inner));
+        let inner_call = crate::jni::emit::composed_inner_output(&entry, quote!(__inner));
         let body: syn::Expr = syn::parse_quote!({
             let __inner = #read;
             #inner_call
@@ -2523,7 +2534,7 @@ impl Declarations {
         // It has to be a type this binding already crosses; if it is not, the
         // ordinary "unresolved" diagnostic names it, which is the better error.
         let inner = registry.reading(&stripped)?;
-        let entry = registry.input_entry(&inner)?;
+        let entry = self.in_frag(&inner)?;
         let wire = entry.destination.clone();
         // Wrap what the inner converter produced. `None` here is `Cow`'s policy
         // refusal — the crossing then stays unresolved and names the type,
@@ -2535,7 +2546,7 @@ impl Declarations {
         // stages (`jlong -> u64 -> Duration`), so a `Box` over one arrived
         // un-staged. Every other composing arm goes through this helper for
         // exactly that reason (#309).
-        let inner_call = crate::jni::emit::composed_inner_input(entry, quote!(v));
+        let inner_call = crate::jni::emit::composed_inner_input(&entry, quote!(v));
         let body: syn::Expr = syn::parse_quote!({
             let __inner = #inner_call;
             #built
@@ -2572,9 +2583,9 @@ impl Declarations {
         // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
         // borrow/option-ref/vec shapes are mutually exclusive; the two
         // `Optional` sub-cases share a method.
-        self.input_borrow(shape, produced, t1, registry)
-            .or_else(|| self.input_option_ref(shape, produced, t1, registry, emit))
-            .or_else(|| self.input_vec(shape, produced, t1, registry, emit))
+        self.input_borrow(shape, produced, t1)
+            .or_else(|| self.input_option_ref(shape, produced, t1, emit))
+            .or_else(|| self.input_vec(shape, produced, t1, emit))
             .or_else(|| self.input_option(shape, produced, t1, registry, emit))
     }
 
@@ -2825,8 +2836,8 @@ impl Declarations {
                 let v: #canonical = #read;
                 #inner_body
             });
-            let inherited = registry
-                .output_entry(t1)
+            let inherited = self
+                .out_frag(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
             let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
@@ -2835,8 +2846,8 @@ impl Declarations {
             // and treats the slot value as `None`; boxed widens to `JObject`
             // and uses JVM null.
             let nullable_kind = nullable_kind_for_output(&wire, t1, registry);
-            let projection = registry
-                .output_entry(t1)
+            let projection = self
+                .out_frag(t1)
                 .and_then(|e| e.metadata.projection.clone())
                 .map(|h| Projection {
                     strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
@@ -2868,7 +2879,7 @@ impl Declarations {
         // Symmetric to the input handler. `Vec<u8>` is special-cased at
         // rank-0 (primitive_output → JByteArray) so rank-1 never sees it.
         if shape == WrapperShape::Sequence {
-            let inner = registry.output_entry(t1)?;
+            let inner = self.out_frag(t1)?;
             // `Vec<opaque-handle>` output is delivered by the Kotlin-side leaf
             // fold (`apply_leaf_vec_folds` → typed-handle wrap), so this
             // whole-`ArrayList` converter is bypassed for it. A handle's `jlong`
@@ -2879,7 +2890,7 @@ impl Declarations {
                 return None;
             }
             // The element's COMPLETE Rust -> wire chain (see the input peer).
-            let inner_conv = crate::jni::emit::composed_inner_output(inner, quote::quote!(__elem));
+            let inner_conv = crate::jni::emit::composed_inner_output(&inner, quote::quote!(__elem));
             let outer_ty = produced.key();
             let canonical: syn::Type = syn::parse_quote!(Vec<#t1_ty>);
             let read = read_as_canonical(produced)?;
@@ -2946,10 +2957,9 @@ impl Declarations {
     pub(crate) fn output_slice(
         &self,
         elem: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions<KotlinMeta>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let inner = registry.output_entry(elem)?;
+        let inner = self.out_frag(elem)?;
         let elem_key = elem.key();
         // The element as the source spelled it — the slice type this converter
         // yields is re-emitted, never re-derived.
@@ -2963,7 +2973,7 @@ impl Declarations {
         }
         // The element's COMPLETE Rust -> wire chain (see the `Vec<_>` peer).
         let inner_conv = crate::jni::emit::composed_inner_output(
-            inner,
+            &inner,
             quote::quote!(::core::clone::Clone::clone(__elem)),
         );
         let outer_ty: syn::Type = syn::parse_quote!(&[#elem]);

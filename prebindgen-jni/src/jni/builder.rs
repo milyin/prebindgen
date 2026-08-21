@@ -148,6 +148,7 @@ impl Default for Declarations {
     fn default() -> Self {
         Self {
             compiled_fns: Vec::new(),
+            compiled: Default::default(),
             package: String::new(),
             fun_name_mangle: None,
             ptr_class_name_mangle: None,
@@ -1939,9 +1940,7 @@ impl Declarations {
         let inner = if is_self {
             None
         } else {
-            registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.input_entry(&tr))
+            registry.reading_of(&ty).and_then(|tr| self.in_frag(&tr))
         };
         match inner {
             None if is_self || is_wire_type(&ty) => {
@@ -2085,9 +2084,7 @@ impl Declarations {
         let inner = if is_self {
             None
         } else {
-            registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.output_entry(&tr))
+            registry.reading_of(&ty).and_then(|tr| self.out_frag(&tr))
         };
         match inner {
             None if is_self || is_wire_type(&ty) => {
@@ -2095,7 +2092,7 @@ impl Declarations {
                 let (kotlin_name, value_rust_type) = if let Some(a0) = arg0 {
                     registry
                         .reading_of(a0)
-                        .and_then(|tr| registry.output_entry(&tr))
+                        .and_then(|tr| self.out_frag(&tr))
                         .map(|e| {
                             (
                                 e.metadata.kotlin_name.clone(),

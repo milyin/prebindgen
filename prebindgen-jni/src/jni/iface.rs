@@ -193,7 +193,6 @@ impl IfaceParam {
             .and_then(|key| registry.reading(&key));
         match reading {
             Some(reading) => ext.carry_layers(
-                registry,
                 &self.wrap,
                 self.raw.is_nullable(),
                 &reading,
@@ -935,7 +934,6 @@ fn plan_leaf_param(
     let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, &leaf.out_ty);
     leaf_iface_param(
         ext,
-        registry,
         name,
         &leaf.out_ty,
         leaf.nullable || inert_nullable,
@@ -956,7 +954,6 @@ fn plan_leaf_param(
 ///   wrapped object after the invoke.
 fn leaf_iface_param(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
     name: String,
     out_ty: &prebindgen_registry::flat::TypeRef,
     nullable: bool,
@@ -974,16 +971,16 @@ fn leaf_iface_param(
     // servable here (`a_wrapped_borrow_callback_arg_declines`) — peeling it
     // would resolve a shape the wrapper arms own.
     let mut out_ty = out_ty;
-    if registry.output_entry(out_ty).is_none() {
+    if ext.out_frag(out_ty).is_none() {
         if let prebindgen_registry::flat::TypeKind::Ref { inner, .. } = out_ty.kind() {
             out_ty = inner;
         }
     }
     let (builder_kt, _wire_kt, _wrap, is_value_projection) =
-        unfold_leaf_kt(ext, registry, out_ty, nullable, "x")?;
-    let proj = registry
-        .output_entry(out_ty)
-        .and_then(|e| e.metadata.projection.as_ref());
+        unfold_leaf_kt(ext, out_ty, nullable, "x")?;
+    let proj = ext
+        .out_frag(out_ty)
+        .and_then(|e| e.metadata.projection.clone());
     let nullable_kt = |t: KtType| {
         if builder_kt.is_nullable() {
             t.nullable()
@@ -992,9 +989,10 @@ fn leaf_iface_param(
         }
     };
     if is_value_projection {
-        match proj?.kind {
+        let proj = proj.clone()?;
+        match proj.kind {
             ProjectionKind::Unsigned64 => {
-                let mut raw = projection_wire_return(proj?);
+                let mut raw = projection_wire_return(&proj);
                 if nullable && !raw.is_nullable() {
                     raw = raw.nullable();
                 }
@@ -1011,7 +1009,7 @@ fn leaf_iface_param(
                 // `unfold_leaf_kt` makes, so the two derivations of this wrap
                 // cannot disagree.
                 let niche_sentinel = if builder_kt.is_nullable() {
-                    wrap_sentinel(proj?, nullable)
+                    wrap_sentinel(&proj, nullable)
                 } else {
                     None
                 };
@@ -1040,7 +1038,7 @@ fn leaf_iface_param(
             // The sentinel is the other axis: the leaf's own `None`, which rides
             // the niche whatever the ancestor does — a `Box` pointer is never 0.
             let niche_sentinel = if builder_kt.is_nullable() {
-                wrap_sentinel(p, nullable)
+                wrap_sentinel(&p, nullable)
             } else {
                 None
             };
@@ -1104,12 +1102,11 @@ fn leaf_iface_param(
 /// post-invoke `close()`. `None` if the arg's projection FQN can't be resolved.
 pub(crate) fn owned_handle_iface_param(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
     name: String,
     out_ty: &prebindgen_registry::flat::TypeRef,
     nullable: bool,
 ) -> Option<IfaceParam> {
-    let proj = registry.output_entry(out_ty)?.metadata.projection.clone()?;
+    let proj = ext.out_frag(out_ty)?.metadata.projection.clone()?;
     let fqn = ext.kotlin_fqn(&proj.leaf_key)?.to_string();
     let typed = KtType::cls(fqn.clone());
     let (typed, raw) = if nullable {
@@ -1268,9 +1265,7 @@ fn derive_iface_spec(
         // Same round trip, same reason, same answer as the `Callback` arm
         // above: the memo key holds an identity, and the reading behind it is a
         // lookup. `None` defers, exactly as it does there (#291).
-        SpecKey::WholeFolder(el_key) => {
-            whole_folder_iface_spec(ext, registry, &registry.reading(el_key)?)
-        }
+        SpecKey::WholeFolder(el_key) => whole_folder_iface_spec(ext, &registry.reading(el_key)?),
         SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
     }
@@ -1500,9 +1495,9 @@ pub(crate) fn callback_iface_spec(
         } else {
             // A plan-less opaque-handle arg is delivered as a raw `jlong` and
             // wrapped + closed Kotlin-side (Phase 3 — no Rust `new_object`).
-            let owned_handle = registry
-                .output_entry(t)
-                .and_then(|e| e.metadata.projection.as_ref())
+            let owned_handle = ext
+                .out_frag(t)
+                .and_then(|e| e.metadata.projection.clone())
                 .map(|p| p.kind == ProjectionKind::Handle)
                 .unwrap_or(false);
             leaf_tys.push(LeafDesc::Whole {
@@ -1533,9 +1528,9 @@ pub(crate) fn callback_iface_spec(
                 nullable,
                 owned_handle: true,
                 ..
-            } => owned_handle_iface_param(ext, registry, name, ty, *nullable)?,
+            } => owned_handle_iface_param(ext, name, ty, *nullable)?,
             LeafDesc::Whole { ty, nullable, .. } => {
-                leaf_iface_param(ext, registry, name, ty, *nullable, false)?
+                leaf_iface_param(ext, name, ty, *nullable, false)?
             }
         };
         params.push(param);
@@ -1645,7 +1640,6 @@ pub(crate) fn folder_iface_spec(
 /// `run(acc: A, element): A`. One shape per element type by construction.
 pub(crate) fn whole_folder_iface_spec(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
     element: &prebindgen_registry::flat::TypeRef,
 ) -> Option<IfaceSpec> {
     let mut params: Vec<IfaceParam> = vec![IfaceParam::same("acc".to_string(), KtType::var_("A"))];
@@ -1656,7 +1650,6 @@ pub(crate) fn whole_folder_iface_spec(
     // unaffected (they ignore the flag; see [`leaf_iface_param`]).
     params.push(leaf_iface_param(
         ext,
-        registry,
         "element".to_string(),
         element,
         false,

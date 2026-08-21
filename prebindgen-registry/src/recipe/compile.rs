@@ -389,6 +389,18 @@ impl<F> Default for Compiled<F> {
     }
 }
 
+/// Cheap: a fragment sits behind an `Rc`, so a clone shares the fragments
+/// rather than copying them, and needs nothing of `F`.
+impl<F> Clone for Compiled<F> {
+    fn clone(&self) -> Self {
+        Self {
+            fragments: self.fragments.clone(),
+            defaults: self.defaults.clone(),
+            required: self.required.clone(),
+        }
+    }
+}
+
 impl<F> Compiled<F> {
     /// How many fragments have been built, which is what makes the
     /// per-crossing promise observable.
@@ -418,6 +430,22 @@ impl<F> Compiled<F> {
     pub fn fragment(&self, ty: &TypeKey, assembly: Assembly) -> Option<&F> {
         let row = self.defaults.get(&(ty.clone(), assembly))?;
         self.row_fragment(ty, assembly, row)
+    }
+
+    /// Record a fragment an adapter built **without** the compiler, as this
+    /// crossing's whole answer.
+    ///
+    /// The escape hatch for a crossing the adapter still answers by hand:
+    /// `Compiler::crossing` never saw it, so nothing would file it, and
+    /// [`Self::fragment`] would have no answer to give. Recording it keeps the
+    /// adapter's emitters on one lookup instead of a per-site fall-back to
+    /// whatever else knows.
+    pub fn record(&mut self, ty: TypeKey, assembly: Assembly, row: RecipeId, fragment: F) {
+        self.fragments.insert(
+            (ty.clone(), assembly, row.clone()),
+            std::rc::Rc::new(fragment),
+        );
+        self.defaults.insert((ty, assembly), row);
     }
 
     /// The fragment for one crossing and one named row.

@@ -632,8 +632,8 @@ fn classify_leaf(
             reading: reading.clone(),
             kt_name,
             kt_public: None,
-            kt_meta: registry
-                .input_entry(reading)
+            kt_meta: ext
+                .in_frag(reading)
                 .and_then(|e| e.metadata.kotlin_name.clone()),
             optional,
             as_enum_value,
@@ -643,7 +643,7 @@ fn classify_leaf(
 
     // Every non-callback leaf requires a resolved input entry — the same
     // hard boundary the Rust emitter has always enforced.
-    let Some(entry) = registry.input_entry(reading) else {
+    let Some(entry) = ext.in_frag(reading) else {
         // The reading itself, so the diagnostic can say where the type was
         // written. Reaching here means the type IS classified and merely has no
         // converter, which is why there is something to carry.
@@ -670,7 +670,7 @@ fn classify_leaf(
             by_ref: v.by_ref,
             elem_wrappers: v.elem_wrappers,
         }
-    } else if let Some(sp) = build_option_scalar_input_plan(ext, registry, ident, reading) {
+    } else if let Some(sp) = build_option_scalar_input_plan(ext, ident, reading) {
         InputKind::OptionScalar(sp)
     } else if let Some(plan) = flat_plan {
         InputKind::FlattenStruct(plan)
@@ -793,7 +793,7 @@ fn build_output(
             ty: target_ty.key(),
         });
     };
-    let Some(entry) = registry.output_entry(&target) else {
+    let Some(entry) = ext.out_frag(&target) else {
         return Err(PlanError::UnresolvedOutput {
             ty: Box::new(target),
         });
@@ -805,7 +805,7 @@ fn build_output(
     // Kotlin error peel rides the entry's `value_rust_type`, so the full
     // `Result<T, E>` type is looked up as written.)
     let ret_decl = if is_convert { target_ty } else { &f.ret };
-    let (surface, enums) = ReturnSurface::classify(ext, registry, ret_decl);
+    let (surface, enums) = ReturnSurface::classify(ext, ret_decl);
     let EnumSurface {
         is_enum,
         is_option_enum,
@@ -837,13 +837,12 @@ impl ReturnSurface {
     /// and the former `canonical_return_ty`.
     pub fn classify(
         ext: &Declarations,
-        registry: &impl Conversions<KotlinMeta>,
         ret: &prebindgen_registry::flat::TypeRef,
     ) -> (Self, EnumSurface) {
         // The RETURN, as the model classified it. Both callers used to spell a
         // reading into a `-> #ty` fragment for this to take apart again, and
         // the `ReturnType::Default` arm was a unit the element already states.
-        let outer_meta = registry.output_entry(ret).map(|e| e.metadata.clone());
+        let outer_meta = ext.out_frag(ret).map(|e| e.metadata.clone());
         // Unit returns (incl. `ZResult<()>`, whose inner identity rides
         // `value_rust_type`) declare no Kotlin return type. The peeled type is
         // the one the converter's metadata stored — a canonical `syn::Type`,

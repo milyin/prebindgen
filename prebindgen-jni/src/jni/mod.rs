@@ -579,6 +579,23 @@ pub struct Declarations {
     /// function name, so the order here decides which of two same-named
     /// functions wins and not where any of them lands.
     pub(crate) compiled_fns: Vec<syn::ItemFn>,
+    /// Every conversion this binding has compiled so far, keyed by crossing.
+    ///
+    /// What the emitters ask instead of the converter table. A table entry
+    /// carries one `destination`, the single wire type a conversion produces,
+    /// so it can answer only while a crossing occupies one wire value — and the
+    /// answer an emitter wants is this adapter's own fragment.
+    ///
+    /// Shared and interior-mutable because JniGen reads it **while** it is
+    /// being filled: unlike `prebindgen-c`, this adapter's emitters are also
+    /// its conversion builders, and `JniGen::build_with` calls them from inside
+    /// `convert_with`. A conversion for one type is built out of the
+    /// conversions for its inners, which the resolver compiles first — the same
+    /// order that filled the converter table, so a fragment is there exactly
+    /// when a table entry would have been.
+    pub(crate) compiled: std::rc::Rc<
+        std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>>,
+    >,
 
     /// When `true` (default), generated wrappers wrap each call that
     /// touches an opaque handle in the per-call `withSortedHandleLocks`

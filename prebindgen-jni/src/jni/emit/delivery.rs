@@ -146,7 +146,7 @@ pub(crate) fn emit_unfold_delivery(
             // declares the matching typed param).
             let out_entry = registry
                 .reading(&element.key())
-                .and_then(|tr| registry.output_entry(&tr))
+                .and_then(|tr| ext.out_frag(&tr))
                 .unwrap_or_else(|| {
                     panic!(
                         "emit_unfold_delivery: Vec element `{}` has no registered output converter",
@@ -1093,7 +1093,7 @@ pub(crate) fn encode_plan_leaves(
         };
         let (value, by_ref, path, consuming) = rebase(leaf);
         let value = &value;
-        let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
+        let out_entry = ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
             panic!(
                 "jnigen unfold: leaf `{}` has no registered output converter",
                 leaf.out_ty.key()

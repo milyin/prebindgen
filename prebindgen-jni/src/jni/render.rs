@@ -139,8 +139,8 @@ pub(crate) fn build_data_class(
         // ordinary leaf, so the property and its own factory parameter
         // disagreed. Reject it at the declaration instead.
         if !matches!(pf.kind, PlanFieldKind::Projection { .. }) {
-            if let Some(proj) = registry
-                .input_entry(&field.ty)
+            if let Some(proj) = ext
+                .in_frag(&field.ty)
                 .and_then(|e| e.metadata.projection.clone())
             {
                 panic!(
@@ -2148,13 +2148,12 @@ fn render_body(
 /// Shared by the unfold builder/fold lambda and the callback lambda params.
 pub(crate) fn unfold_leaf_kt(
     ext: &Declarations,
-    registry: &impl Conversions<KotlinMeta>,
     out_ty: &prebindgen_registry::flat::TypeRef,
     nullable: bool,
     pk: &str,
 ) -> Option<(KtType, String, String, bool)> {
-    let proj = registry
-        .output_entry(out_ty)
+    let proj = ext
+        .out_frag(out_ty)
         .and_then(|e| e.metadata.projection.clone());
     let is_value_projection = proj
         .as_ref()
@@ -2165,7 +2164,7 @@ pub(crate) fn unfold_leaf_kt(
     let builder_kt = if ext.is_kotlin_enum_reading(out_ty) {
         KtType::int()
     } else {
-        classify_return(ext, out_ty, registry)?.0?
+        classify_return(ext, out_ty)?.0?
     };
     let (mut wire_kt, wrap) = if is_value_projection {
         let p = proj.as_ref().unwrap();
@@ -2271,9 +2270,8 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<KtType> {
 pub(crate) fn classify_return(
     ext: &Declarations,
     output: &prebindgen_registry::flat::TypeRef,
-    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(Option<KtType>, Option<crate::jni::Projection>)> {
-    let (surface, _canonical) = ReturnSurface::classify(ext, registry, output);
+    let (surface, _canonical) = ReturnSurface::classify(ext, output);
     render_return_surface(&surface)
 }
 
