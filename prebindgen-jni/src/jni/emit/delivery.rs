@@ -866,11 +866,16 @@ pub(crate) fn encode_plan_leaves(
     fail: &dyn Fn(TokenStream) -> TokenStream,
     emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, Vec<TokenStream>) {
+    // The values this delivery hands out. Every question below is asked of
+    // these; what stays the plan's is the **hoists** — which value forms to
+    // evaluate once and bind to a local — because that is a property of the
+    // site rather than of any one value.
+    let wires = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
     // Per-fn origin qualification: each accessor call is prefixed with the
     // module of the crate that defines it (multi-source bindings).
     let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
     let by_ref = plan.by_ref;
-    let n = plan.leaves.len();
+    let n = wires.len();
 
     // Typed `jvalue` argument expression per leaf, in leaf order: a non-null
     // primitive-wire leaf passes its raw primitive (`__objN` IS the jvalue);
@@ -878,9 +883,9 @@ pub(crate) fn encode_plan_leaves(
     // slot. Matches the descriptor [`crate::jni::iface`]
     // derives for the same leaf (primitive chunk vs object chunk).
     let mut arg_exprs: Vec<TokenStream> = Vec::with_capacity(n);
-    for (idx, leaf) in plan.leaves.iter().enumerate() {
+    for (idx, leaf) in wires.iter().enumerate() {
         let obj_ident = &obj_idents[idx];
-        if leaf_is_prim(ext, &crate::jni::compile::OutWire::from_leaf(leaf)) {
+        if leaf_is_prim(ext, leaf) {
             arg_exprs.push(quote!(#obj_ident));
         } else {
             arg_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
@@ -915,12 +920,11 @@ pub(crate) fn encode_plan_leaves(
     // instead of per-leaf expressions. A plan may carry several: a sum that IS
     // the returned value is the degenerate case of one segment covering
     // everything, while a value form contributes one per sum-typed field.
-    let wires = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
     let sum_segments: Vec<std::ops::Range<usize>> = (0..n)
         .filter(|&i| wires[i].is_tag())
         .map(|start| {
             let end = (start + 1..n)
-                .take_while(|&i| plan.leaves[i].group.is_some())
+                .take_while(|&i| wires[i].group.is_some())
                 .last()
                 .map_or(start + 1, |i| i + 1);
             start..end
@@ -939,9 +943,9 @@ pub(crate) fn encode_plan_leaves(
         .iter()
         .enumerate()
         .filter_map(|(i, _)| {
-            plan.leaves
+            wires
                 .iter()
-                .any(|l| hoisted.conditional(&l.path).is_some_and(|(j, ..)| j == i))
+                .any(|w| hoisted.conditional(w.reach()).is_some_and(|(j, ..)| j == i))
                 .then_some((i, TokenStream::new()))
         })
         .collect();
@@ -1020,10 +1024,7 @@ pub(crate) fn encode_plan_leaves(
         let (group_stmts, group_args) = encode_sum_group(
             ext,
             registry,
-            &plan.leaves[seg.clone()]
-                .iter()
-                .map(crate::jni::compile::OutWire::from_leaf)
-                .collect::<Vec<_>>(),
+            &wires[seg.clone()],
             &obj_idents[seg.clone()],
             matched,
             fail,
@@ -1033,9 +1034,9 @@ pub(crate) fn encode_plan_leaves(
             None => group_stmts,
             Some((k, opt_e, bind)) => {
                 let ids: Vec<&syn::Ident> = obj_idents[seg.clone()].iter().collect();
-                let slots: Vec<Slot> = plan.leaves[seg.clone()]
+                let slots: Vec<Slot> = wires[seg.clone()]
                     .iter()
-                    .map(|l| leaf_slot(ext, &crate::jni::compile::OutWire::from_leaf(l)))
+                    .map(|l| leaf_slot(ext, l))
                     .collect();
                 let tys = slots.iter().map(|s| &s.ty);
                 let defaults = slots.iter().map(|s| &s.default);
@@ -1081,22 +1082,21 @@ pub(crate) fn encode_plan_leaves(
 
     let in_sum = |i: usize| sum_segments.iter().any(|s| s.contains(&i));
     let mut order: Vec<usize> = (0..n)
-        .filter(|&i| !plan.leaves[i].identity && !in_sum(i))
+        .filter(|&i| !wires[i].identity && !in_sum(i))
         .collect();
-    order.extend((0..n).filter(|&i| plan.leaves[i].identity && !in_sum(i)));
+    order.extend((0..n).filter(|&i| wires[i].identity && !in_sum(i)));
 
     for idx in order {
-        let leaf = &plan.leaves[idx];
+        let leaf = &wires[idx];
         let obj_ident = &obj_idents[idx];
         // Route this leaf's statements: into its conditional arm, or straight
         // out. Shadows `stmts` for the rest of the body, so every `extend`
         // below lands in the right place without knowing which case it is in.
-        let stmts: &mut TokenStream = match hoisted.conditional(&leaf.path) {
+        let stmts: &mut TokenStream = match hoisted.conditional(leaf.reach()) {
             Some((i, ..)) => cond_stmts.get_mut(&i).expect("collected above"),
             None => &mut stmts,
         };
-        let (value, by_ref, path, consuming) =
-            rebase(&crate::jni::compile::OutWire::from_leaf(leaf));
+        let (value, by_ref, path, consuming) = rebase(leaf);
         let value = &value;
         let out_entry = ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
             panic!(
@@ -1357,25 +1357,25 @@ pub(crate) fn encode_plan_leaves(
         // String, …) carries any nullability, so there is no path `Option` to
         // unwrap. `reach(body)` dispatches on the source and feeds the reached
         // Rust expression to `body`.
-        use prebindgen_registry::unfold::LeafSource;
+        //
+        // Which of the two it is, asked of the wire: a field read ends its
+        // reach in a field step, an accessor's ends at the call. That is what
+        // `LeafSource` said, and saying it off the reach keeps one answer.
         let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
-            match &leaf.source {
-                LeafSource::Accessor => {
-                    reach_leaf(&qualify, &path, value.clone(), by_ref, false, 0, body)
-                }
+            match leaf.is_field_read() {
+                false => reach_leaf(&qualify, &path, value.clone(), by_ref, false, 0, body),
                 // Under a CONSUMING value form the leaf owns its field, so it
                 // is **moved** out; the whole point of consuming is that this
                 // clone disappears. Each field is read by exactly one leaf, so
                 // the partial moves are disjoint — but nothing may then borrow
                 // the local as a whole, which is why the reach below projects
                 // the field directly rather than through `&(&local)`.
-                LeafSource::Field if consuming && path.iter().all(PathStep::is_plain_field) => {
+                true if path.iter().all(PathStep::is_plain_field) => {
                     let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
-                    body(quote!(#value #(.#segs)*))
-                }
-                LeafSource::Field if path.iter().all(PathStep::is_plain_field) => {
-                    let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
-                    body(quote!(#value #(.#segs)*.clone()))
+                    match consuming {
+                        true => body(quote!(#value #(.#segs)*)),
+                        false => body(quote!(#value #(.#segs)*.clone())),
+                    }
                 }
                 // A `.fields()` leaf reaches its field through the value-form
                 // accessor, so the path can be mixed: compose it like an
@@ -1383,7 +1383,7 @@ pub(crate) fn encode_plan_leaves(
                 // converter takes the field type as written (`Option` and all)
                 // — and clone the reached borrow, which is what a field leaf
                 // delivers.
-                LeafSource::Field => reach_leaf(
+                true => reach_leaf(
                     &qualify,
                     &path,
                     value.clone(),
@@ -1391,13 +1391,6 @@ pub(crate) fn encode_plan_leaves(
                     false,
                     0,
                     &|reached| body(quote!((#reached).clone())),
-                ),
-                // Group leaves never reach this walk: a plan carrying them is
-                // routed to `encode_sum_leaves` at the top of this function,
-                // because a variant payload has no path — it is bound by a
-                // `match` arm.
-                LeafSource::SumTag | LeafSource::VariantField { .. } => unreachable!(
-                    "sum leaves are encoded by `encode_sum_leaves`, not reached by path"
                 ),
             }
         };
@@ -1409,7 +1402,7 @@ pub(crate) fn encode_plan_leaves(
         // value with the leaf's output converter and casts to JObject.
         let wire = out_entry.destination.clone();
         let enc_ident = format_ident!("__enc{}", idx);
-        if leaf_is_prim(ext, &crate::jni::compile::OutWire::from_leaf(leaf)) {
+        if leaf_is_prim(ext, leaf) {
             let letter = jni_field_access(&wire)
                 .expect("leaf_is_prim guarantees a primitive wire")
                 .1;
@@ -1447,25 +1440,13 @@ pub(crate) fn encode_plan_leaves(
         let idxs: Vec<usize> = (0..n)
             .filter(|&k| {
                 hoisted
-                    .conditional(&plan.leaves[k].path)
+                    .conditional(wires[k].reach())
                     .is_some_and(|(j, ..)| j == i)
             })
             .collect();
         let ids: Vec<&syn::Ident> = idxs.iter().map(|&k| &obj_idents[k]).collect();
-        let tys = idxs.iter().map(|&k| {
-            leaf_slot(
-                ext,
-                &crate::jni::compile::OutWire::from_leaf(&plan.leaves[k]),
-            )
-            .ty
-        });
-        let defaults = idxs.iter().map(|&k| {
-            leaf_slot(
-                ext,
-                &crate::jni::compile::OutWire::from_leaf(&plan.leaves[k]),
-            )
-            .default
-        });
+        let tys = idxs.iter().map(|&k| leaf_slot(ext, &wires[k]).ty);
+        let defaults = idxs.iter().map(|&k| leaf_slot(ext, &wires[k]).default);
         // Matched BY VALUE: the local is this arm's alone (every leaf under the
         // hoist is in it), so a consuming value form's fields move out here
         // exactly as they do at an unconditional one.
