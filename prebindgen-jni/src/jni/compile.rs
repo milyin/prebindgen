@@ -271,6 +271,13 @@ pub(crate) struct OutWire {
     pub(crate) group: Option<i32>,
     /// How the Rust side reaches it.
     pub(crate) from: OutFrom,
+    /// Whether this value is the whole crossed object rather than a part of it
+    /// — the move-or-clone handle a decomposition delivers beside its fields.
+    ///
+    /// Never true in a composition: a row states what a value is **made of**,
+    /// and the value itself is not one of its own parts. A declaration is what
+    /// asks for one, through `.field_self()`.
+    pub(crate) identity: bool,
     /// Whether the value may be absent, so the wire boxes rather than carrying
     /// a raw primitive.
     ///
@@ -299,11 +306,13 @@ impl OutWire {
                     variant: Some(variant.clone()),
                     member: member.clone(),
                 },
-                // An accessor chain and a field chain are one thing to a wire:
-                // where the Rust side reaches the value. Which of the two it
-                // was is the plan's, and nothing the sum emitters read.
-                _ => OutFrom::Field { path: Vec::new() },
+                // Every other leaf is reached off the value, and the steps say
+                // how — an accessor chain, a field chain, or the two mixed.
+                _ => OutFrom::Reach {
+                    path: leaf.path.clone(),
+                },
             },
+            identity: leaf.identity,
             nullable: leaf.nullable,
         }
     }
@@ -311,6 +320,28 @@ impl OutWire {
     /// A whole plan's leaves in the row's vocabulary.
     pub(crate) fn from_leaves(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) -> Vec<Self> {
         leaves.iter().map(Self::from_leaf).collect()
+    }
+
+    /// The steps from the crossed value down to this one, or empty for a value
+    /// no reach describes — the selector, or a payload its arm's pattern binds.
+    pub(crate) fn reach(&self) -> &[prebindgen_registry::unfold::PathStep] {
+        match &self.from {
+            OutFrom::Reach { path } => path,
+            _ => &[],
+        }
+    }
+
+    /// Whether this value is **read off** a place rather than produced by a
+    /// call — so it is cloned out of the value that holds it.
+    ///
+    /// The last step being a field read is the whole question, and it is what
+    /// `LeafSource::Field` meant: a value form's field leaf reads a field off
+    /// what the accessor returned, and an accessor leaf ends at the call.
+    pub(crate) fn is_field_read(&self) -> bool {
+        matches!(
+            self.reach().last(),
+            Some(prebindgen_registry::unfold::PathStep::Field { .. })
+        )
     }
 
     /// Whether this value is the synthesized selector.
@@ -325,15 +356,21 @@ pub(crate) enum OutFrom {
     /// The synthesized selector, which is not read off the value at all: the
     /// emitter assigns the alternative's number in each arm of its `match`.
     Tag,
-    /// A field of the value, reached by field access and cloned — the chain of
-    /// idents from the value itself.
+    /// Reached off the value, by field access or by calling an accessor.
     ///
-    /// Nested where a `data_class` field is itself one: its fields cross as
-    /// decoupled values under the parent's chain, and the foreign side
-    /// reassembles the whole graph in one call.
-    Field {
-        /// The field idents from the value down to this one.
-        path: Vec<syn::Ident>,
+    /// The **steps** rather than a chain of idents, because the two kinds mix:
+    /// a value form calls an accessor and then reads fields off what it
+    /// returned, and a nested `data_class` reads fields all the way down. A
+    /// step also says whether it may find nothing, which is what puts every
+    /// value below it in doubt.
+    ///
+    /// Spelled in the plans' own vocabulary rather than a second one. A reach
+    /// **is** a path, and inventing a parallel spelling for it would leave two
+    /// things to keep in step for no gain — the mistake `Access` and
+    /// `handle_target` avoided on the constructing side by being one type.
+    Reach {
+        /// The steps from the value down to this one.
+        path: Vec<prebindgen_registry::unfold::PathStep>,
     },
     /// A payload of one alternative, bound by that arm's pattern.
     Payload {
@@ -1269,6 +1306,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         member: part_member(part)?,
                     },
                     nullable: false,
+                    identity: false,
                 })
             })
             .collect();
@@ -1365,8 +1403,11 @@ impl<R: Conversions> JCompile<'_, R> {
                 // The chain starts at the accessor's result, which the emitter
                 // binds once. The call itself is the site's to make, so what a
                 // wire states is the field read off it.
-                from: OutFrom::Field { path: vec![ident] },
+                from: OutFrom::Reach {
+                    path: vec![field_step(&ident)],
+                },
                 nullable: false,
+                identity: false,
             });
         }
         let mut frag = JFrag::new(
@@ -1716,8 +1757,11 @@ impl Declarations {
                 name,
                 out_ty: field.ty.clone(),
                 group: None,
-                from: OutFrom::Field { path: field_path },
+                from: OutFrom::Reach {
+                    path: field_path.iter().map(field_step).collect(),
+                },
                 nullable: false,
+                identity: false,
             });
         }
         Some(wires)
@@ -1755,6 +1799,7 @@ impl Declarations {
             group: None,
             from: OutFrom::Tag,
             nullable: false,
+            identity: false,
         }];
         for alt in &sum.alternatives {
             let kotlin = self.sum_variant_class_name(cfg, &alt.name);
@@ -1772,11 +1817,21 @@ impl Declarations {
                         member,
                     },
                     nullable: false,
+                    identity: false,
                 });
             }
         }
         Some(wires)
     }
+}
+
+/// One step of a reach that reads a struct field.
+///
+/// Never optional: a composition looks through an `Option` rather than stopping
+/// at one — a terminal optional rides its own conversion, and an intermediate
+/// one is a shape the compositions decline.
+fn field_step(ident: &syn::Ident) -> prebindgen_registry::unfold::PathStep {
+    prebindgen_registry::unfold::PathStep::field(ident.clone(), false)
 }
 
 /// The model field one part reads, or `None` for a part that is not a field.

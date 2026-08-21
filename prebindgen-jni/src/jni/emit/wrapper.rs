@@ -283,12 +283,22 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
             let stmts = &hoisted.stmts;
             let reached = match hoisted.rebase(&leaf.path) {
-                Some((local, rest, consuming)) => {
-                    reach_leaf_flat(&qualify, leaf, &rest, quote!(#local), false, consuming)
-                }
-                None => {
-                    reach_leaf_flat(&qualify, leaf, &leaf.path, base.clone(), base_is_ref, false)
-                }
+                Some((local, rest, consuming)) => reach_leaf_flat(
+                    &qualify,
+                    &crate::jni::compile::OutWire::from_leaf(leaf),
+                    &rest,
+                    quote!(#local),
+                    false,
+                    consuming,
+                ),
+                None => reach_leaf_flat(
+                    &qualify,
+                    &crate::jni::compile::OutWire::from_leaf(leaf),
+                    &leaf.path,
+                    base.clone(),
+                    base_is_ref,
+                    false,
+                ),
             };
             if stmts.is_empty() && reached.to_string() == base.to_string() {
                 return None;

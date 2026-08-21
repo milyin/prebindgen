@@ -83,21 +83,14 @@ pub(crate) fn synth_value_struct_leaves(
     registry: &impl Conversions,
     s: &prebindgen_registry::flat::Struct,
 ) -> Option<Vec<prebindgen_registry::unfold::UnfoldLeaf>> {
-    use prebindgen_registry::unfold::{LeafSource, PathStep, UnfoldLeaf};
+    use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
     Some(
         ext.struct_out_wires_of(registry, &s.name)?
             .into_iter()
             .map(|w| UnfoldLeaf {
                 name: w.name,
-                // The synthesizer declines `Option`-wrapped nesting, so an
-                // intermediate step is never optional; a TERMINAL `Option`
-                // field is not a nesting step either, its own converter
-                // carrying the nullability.
                 path: match w.from {
-                    crate::jni::compile::OutFrom::Field { path } => path
-                        .into_iter()
-                        .map(|ident| PathStep::field(ident, false))
-                        .collect(),
+                    crate::jni::compile::OutFrom::Reach { path } => path,
                     _ => Vec::new(),
                 },
                 out_ty: w.out_ty,
