@@ -1,12 +1,12 @@
 //! Completeness: which conversions a binding actually needs, and whether it has
 //! them.
 //!
-//! What survives here is the completeness check. The generator fills the cells
-//! itself (`RegistryBuilder::crossings` → `convert_with`); this decides whether the
-//! set it produced covers everything reachable from an exported root.
+//! What survives here is the completeness check. The generator answers the
+//! crossings itself, in `RegistryBuilder::convert_with`; this decides whether
+//! the set it answered covers everything reachable from an exported root.
 //!
-//! There is no loop. `Registry::crossings` hands the demand out inner-first, so
-//! a generator answers each crossing once, with everything it composes from
+//! There is no loop. `convert_with` hands the demand out inner-first, so a
+//! generator answers each crossing once, with everything it composes from
 //! already built — including across the `impl Fn` seam, whose args cross in the
 //! opposite direction.
 //!

@@ -27,7 +27,8 @@ use super::*;
 /// than a phase you have to be careful about.
 pub struct RegistryBuilder {
     registry: Registry,
-    /// Conversions handed over so far, applied at [`Self::build`].
+    /// What has been answered so far, applied at [`Self::build`]. Not the
+    /// conversions — those stay with the adapter; see [`Answer`].
     built: HashMap<Crossing, Answer>,
     /// The scan runs once, on demand: it needs every declaration, and
     /// [`Self::convert_with`] and [`Self::build`] each need

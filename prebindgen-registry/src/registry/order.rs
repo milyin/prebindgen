@@ -1,8 +1,9 @@
 //! Hand the demand over, and grade the answers.
 //!
 //! The two halves of the exchange with a generator: [`Registry::crossings`]
-//! sorts the derived set inner-first, `RegistryBuilder::build` takes every
-//! conversion back at once and names whatever is missing.
+//! sorts the derived set inner-first, and `RegistryBuilder::build` grades what
+//! came back — every crossing answered, or a report naming the ones that were
+//! not.
 
 use std::collections::HashSet;
 
