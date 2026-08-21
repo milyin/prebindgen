@@ -85,11 +85,11 @@ impl<M> TypeEntry<M> {
 
     /// This entry as the conversion an adapter built.
     ///
-    /// The two types differ only in `subs`, which an entry keys and a
-    /// conversion spells. An emitter reading a compiled fragment gets a
-    /// [`ConverterImpl`](crate::ConverterImpl), so a helper it shares with a
-    /// caller that still holds a table entry speaks that type, and the entry
-    /// converts.
+    /// The two types carry the same six fields — an entry is what the resolver
+    /// stored, a conversion is what the adapter handed it. An emitter reading a
+    /// compiled fragment gets a [`ConverterImpl`](crate::ConverterImpl), so a
+    /// helper it shares with a caller that still holds a table entry speaks
+    /// that type, and the entry converts.
     pub fn as_converter(&self) -> crate::ConverterImpl<M>
     where
         M: Clone,
@@ -100,7 +100,7 @@ impl<M> TypeEntry<M> {
             pre_stages: self.pre_stages.clone(),
             niches: self.niches.clone(),
             metadata: self.metadata.clone(),
-            subs: Vec::new(),
+            subs: self.subs.clone(),
         }
     }
 

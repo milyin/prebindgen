@@ -169,7 +169,7 @@ pub(crate) fn primitive_output(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> 
 
 /// Invoke an inner input converter's complete `wire -> Rust` chain.
 ///
-/// Structural wrappers cannot call only [`TypeEntry::function`]: custom
+/// Structural wrappers cannot call only [`ConverterImpl::function`]: custom
 /// conversions may carry semantic steps in `pre_stages` (for example
 /// `jlong -> u64 -> Duration`). Keep those steps inside the `Some` arm so a
 /// niche discriminator is tested before any conversion runs.
