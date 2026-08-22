@@ -51,10 +51,8 @@ document says a type *crosses*, it means a Rust value of that type is
 happens at the boundary, and every entry below builds on them.
 
 **Direction.** Which of those two happens at a given position: constructing a
-Rust value, or deconstructing one. `Assembly` is the type; its values are
-`Assembly::Construct` and `Assembly::Deconstruct`. The word and the type name
-differ for now — see the note closing [directions and
-crossings](03-directions-and-crossings.md).
+Rust value, or deconstructing one. `Direction` is the type; its values are
+`Direction::Construct` and `Direction::Deconstruct`.
 
 **Crossing.** One Rust type and one direction: how a value of that type is
 constructed at the boundary, or how it is deconstructed. See [directions and

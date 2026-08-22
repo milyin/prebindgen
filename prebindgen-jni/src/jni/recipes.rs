@@ -7,7 +7,8 @@
 //! into recipes in a [`Recipes`] table: the shared statement of **which parts** a
 //! value gets across in, with nothing about the JNI wire in it.
 //!
-//! One recipe per declared type and job, and every crossing nobody declared takes
+//! One recipe per declared type and direction, and every crossing nobody declared
+//! takes
 //! the recipe the registry derives from its kind. The chain of guesses this
 //! replaced — try a terminal, then a `Result`, then an optional, then a run,
 //! then a borrow, then a transparent bridge — is a lookup for the declared
@@ -76,7 +77,7 @@ fn alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Construct>> {
 /// One arm per alternative of a declared sum, each taken apart into its own
 /// payload fields.
 ///
-/// The deconstructing twin of [`alternatives`]. Separate because the two jobs
+/// The deconstructing twin of [`alternatives`]. Separate because the two directions
 /// name different operations — building an alternative is `Construct::Fields`,
 /// reading one is `Deconstruct::Fields` over the reaches that get there — and
 /// a shared helper would have to be generic over an operation neither side
@@ -443,7 +444,7 @@ impl Declarations {
         recipes: &prebindgen_registry::recipe::Recipes,
     ) -> Result<prebindgen_registry::recipe::Bindings, Vec<RecipeError>> {
         use prebindgen_registry::recipe::{
-            Ask, Assembly, Bindings, Crossing, Origin, RecipeId, Site,
+            Ask, Bindings, Crossing, Direction, Origin, RecipeId, Site,
         };
 
         let mut bound = Bindings::builder();
@@ -484,11 +485,11 @@ impl Declarations {
             // in that crosses as its parts.
             bound.bind(
                 Site::part(
-                    &Crossing::new(outer.clone(), Assembly::Construct),
+                    &Crossing::new(outer.clone(), Direction::Construct),
                     &RecipeId::derived(),
                     0,
                 ),
-                Crossing::new(inner.clone(), Assembly::Construct),
+                Crossing::new(inner.clone(), Direction::Construct),
                 Ask::Recipe(parts()),
                 Origin::Part,
             );
@@ -503,8 +504,8 @@ impl Declarations {
             let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
                 continue;
             };
-            let building = Crossing::new(ty.clone(), Assembly::Construct);
-            let handing_out = Crossing::new(ty, Assembly::Deconstruct);
+            let building = Crossing::new(ty.clone(), Direction::Construct);
+            let handing_out = Crossing::new(ty, Direction::Deconstruct);
             for (index, field) in s.fields.iter().enumerate() {
                 // An `Option<D>` field reaches D through the optional's own
                 // recipe, so the part bound here is the optional and the inner is
@@ -518,13 +519,13 @@ impl Declarations {
                 // is left is the field that IS the class: its part takes the
                 // `parts` recipe, in both directions.
                 if field.ty.optional_inner().is_none() {
-                    for (of, assembly) in [
-                        (&building, Assembly::Construct),
-                        (&handing_out, Assembly::Deconstruct),
+                    for (of, direction) in [
+                        (&building, Direction::Construct),
+                        (&handing_out, Direction::Deconstruct),
                     ] {
                         bound.bind(
                             Site::part(of, &parts(), index),
-                            Crossing::new(field.ty.clone(), assembly),
+                            Crossing::new(field.ty.clone(), direction),
                             Ask::Recipe(parts()),
                             Origin::Part,
                         );
@@ -547,7 +548,7 @@ impl Declarations {
             let ret = ret.optional_inner().unwrap_or(ret);
             let ret = ret.sequence_elem().unwrap_or(ret);
             let ret = ret.borrow_target().unwrap_or(ret);
-            let crossing = Crossing::new(ret.clone(), Assembly::Deconstruct);
+            let crossing = Crossing::new(ret.clone(), Direction::Deconstruct);
             // Only where the type states one. A `sealed_class` always does; a
             // `data_class` states one unless a field of it declines, and a
             // return whose type states none crosses whole.

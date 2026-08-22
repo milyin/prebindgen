@@ -1900,16 +1900,16 @@ impl Declarations {
     ) -> Option<syn::Type> {
         let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
         let spec = match dir {
-            Direction::Input => decl.input_spec().as_ref()?,
-            Direction::Output => decl.output_spec().as_ref()?,
+            Direction::Construct => decl.input_spec().as_ref()?,
+            Direction::Deconstruct => decl.output_spec().as_ref()?,
         };
         match spec {
             ConvertSpec::Trait { repr, .. } => Some(repr.clone()),
             ConvertSpec::PrebindgenFn(f) => {
                 let item_fn = registry.flat().function(f)?;
                 let reading = match dir {
-                    Direction::Input => convert_single_param_any(f, item_fn).0,
-                    Direction::Output => item_fn
+                    Direction::Construct => convert_single_param_any(f, item_fn).0,
+                    Direction::Deconstruct => item_fn
                         .ret
                         .fallible_parts()
                         .map_or(&item_fn.ret, |(ok, _)| ok),
@@ -1998,7 +1998,7 @@ impl Declarations {
                 let (niches, sentinels) = self.conversion_domain_niches(
                     &key,
                     registry,
-                    Direction::Input,
+                    Direction::Construct,
                     &inner.destination,
                 );
                 let mut metadata = KotlinMeta {
@@ -2152,7 +2152,7 @@ impl Declarations {
                     None => self.conversion_domain_niches(
                         &key,
                         registry,
-                        Direction::Output,
+                        Direction::Deconstruct,
                         &inner.destination,
                     ),
                     Some(_) => (default_niches_for_wire(&inner.destination), Vec::new()),

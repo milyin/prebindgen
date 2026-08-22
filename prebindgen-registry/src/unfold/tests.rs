@@ -1805,7 +1805,7 @@ fn a_vec_only_sum_return_drops_the_bare_requirement() {
     let mut reg: Registry = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
     let bare: syn::Type = syn::parse_quote!(Reading);
     let bare_reading = reg
-        .intern(crate::registry::Direction::Output, &bare, true)
+        .intern(crate::registry::Direction::Deconstruct, &bare, true)
         .expect("fixture type");
     reg.require_output(&bare_reading);
     assert!(

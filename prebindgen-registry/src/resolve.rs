@@ -49,8 +49,8 @@ impl std::fmt::Display for ResolveError {
                 )?;
                 for e in entries {
                     let dir = match e.direction {
-                        Direction::Input => "input",
-                        Direction::Output => "output",
+                        Direction::Construct => "input",
+                        Direction::Deconstruct => "output",
                     };
                     if let Some(loc) = e.location.as_ref() {
                         writeln!(
@@ -83,7 +83,7 @@ impl std::error::Error for ResolveError {}
 fn required_set(registry: &Registry) -> HashSet<(Direction, TypeKey)> {
     let mut required: HashSet<(Direction, TypeKey)> = HashSet::new();
     let mut queue: VecDeque<(Direction, TypeKey)> = VecDeque::new();
-    for dir in [Direction::Input, Direction::Output] {
+    for dir in [Direction::Construct, Direction::Deconstruct] {
         for (key, cell) in registry.type_table(dir) {
             if cell.root && required.insert((dir, key.clone())) {
                 queue.push_back((dir, key.clone()));
@@ -175,7 +175,7 @@ pub(crate) fn check_complete(registry: &Registry) -> Result<(), ResolveError> {
     let mut unresolved_required_roots: Vec<(Direction, TypeKey)> = Vec::new();
     let mut seen_unresolved: HashSet<(Direction, TypeKey)> = HashSet::new();
 
-    for dir in [Direction::Input, Direction::Output] {
+    for dir in [Direction::Construct, Direction::Deconstruct] {
         // Sorted, so a build that fails reports the same list every time.
         let mut keys: Vec<&TypeKey> = registry.type_table(dir).keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));

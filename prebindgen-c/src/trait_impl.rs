@@ -1,4 +1,4 @@
-use prebindgen_registry::{recipe::Assembly, Building, Conversions, Crossing, RegistryBuilder};
+use prebindgen_registry::{recipe::Direction, Building, Conversions, Crossing, RegistryBuilder};
 
 use super::{builder::callback_fn_type, *};
 
@@ -17,19 +17,19 @@ impl CbindgenBuilder {
     pub(crate) fn frag(
         &self,
         ty: &TypeRef,
-        assembly: Assembly,
+        direction: Direction,
     ) -> Option<std::rc::Rc<crate::compile::CFrag>> {
-        self.compiled.borrow().fragment(&ty.key(), assembly)
+        self.compiled.borrow().fragment(&ty.key(), direction)
     }
 
     /// The fragment that builds a Rust `ty` out of C parts.
     pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<std::rc::Rc<crate::compile::CFrag>> {
-        self.frag(ty, Assembly::Construct)
+        self.frag(ty, Direction::Construct)
     }
 
     /// The fragment that takes a Rust `ty` apart into C parts.
     pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<std::rc::Rc<crate::compile::CFrag>> {
-        self.frag(ty, Assembly::Deconstruct)
+        self.frag(ty, Direction::Deconstruct)
     }
 }
 
@@ -398,7 +398,7 @@ impl CbindgenBuilder {
         >,
         registry: &'v Registry,
     ) -> Result<(), String> {
-        use prebindgen_registry::recipe::{Assembly, Crossing, Role, Site};
+        use prebindgen_registry::recipe::{Crossing, Direction, Role, Site};
 
         let mut adapter = crate::compile::CCompile {
             gen: self,
@@ -416,7 +416,7 @@ impl CbindgenBuilder {
                     owner: name.clone(),
                     role: Role::Param { index },
                 };
-                let crossing = Crossing::new(param.ty.clone(), Assembly::Construct);
+                let crossing = Crossing::new(param.ty.clone(), Direction::Construct);
                 compiler
                     .site(&mut adapter, site, crossing)
                     .map_err(|e| e.to_string())?;
@@ -436,7 +436,7 @@ impl CbindgenBuilder {
                     owner: name.clone(),
                     role,
                 };
-                let crossing = Crossing::new(ty.clone(), Assembly::Deconstruct);
+                let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
                 compiler
                     .site(&mut adapter, site, crossing)
                     .map_err(|e| e.to_string())?;
@@ -1592,15 +1592,12 @@ impl CbindgenBuilder {
         // The reading the scan already took for this crossing, fetched by the
         // key the crossing IS.
         let ty = built.reading(key)?;
-        let assembly = match dir {
-            Direction::Input => Assembly::Construct,
-            Direction::Output => Assembly::Deconstruct,
-        };
+        let direction = *dir;
         let mut adapter = crate::compile::CCompile {
             gen: self,
             registry: built,
         };
-        let crossing = prebindgen_registry::recipe::Crossing::new(ty, assembly);
+        let crossing = prebindgen_registry::recipe::Crossing::new(ty, direction);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
         Some((*fragment).clone().into_converter())
     }

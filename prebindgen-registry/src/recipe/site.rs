@@ -86,7 +86,7 @@ pub enum Role {
     Error,
     /// One argument the Rust side passes out through a callback.
     ///
-    /// Swaps jobs: Rust holds the value and pushes it out, so the argument is
+    /// Swaps direction: Rust holds the value and pushes it out, so the argument is
     /// deconstructed even though it sits in a parameter list.
     ///
     /// A **root** role, like [`Return`](Self::Return) and

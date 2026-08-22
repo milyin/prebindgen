@@ -722,10 +722,10 @@ fn a_sums_registry_cells_are_registered_but_not_required() {
     let key = TypeKey::from_type(&syn::parse_quote!(Reading));
 
     let input_root = reg
-        .is_root_for_test(Direction::Input, &key)
+        .is_root_for_test(Direction::Construct, &key)
         .expect("input cell");
     let output_root = reg
-        .is_root_for_test(Direction::Output, &key)
+        .is_root_for_test(Direction::Deconstruct, &key)
         .expect("output cell");
 
     // Registered both ways — the declaration put them there.
@@ -737,11 +737,11 @@ fn a_sums_registry_cells_are_registered_but_not_required() {
     // The asymmetry: Kotlin → Rust decodes a whole `JObject`; Rust → Kotlin is
     // always flattened, so there is nothing to resolve.
     assert!(
-        reg.has_entry_for_test(Direction::Input, &key) == Some(true),
+        reg.has_entry_for_test(Direction::Construct, &key) == Some(true),
         "the input direction has a whole-object decoder"
     );
     assert!(
-        reg.has_entry_for_test(Direction::Output, &key) == Some(false),
+        reg.has_entry_for_test(Direction::Deconstruct, &key) == Some(false),
         "the output direction has none — a sum crosses flattened, always"
     );
 }

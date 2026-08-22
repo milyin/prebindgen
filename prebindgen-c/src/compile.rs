@@ -67,7 +67,7 @@ impl Carrier for CFrag {
 impl CFrag {
     /// One of the adapter's existing converter builders, as a fragment.
     fn from_converter(at: At<'_>, conv: ConverterImpl) -> Self {
-        let validity = validity_of(&conv, at.crossing.assembly());
+        let validity = validity_of(&conv, at.crossing.direction());
         Self {
             destination: conv.destination,
             function: conv.function,
@@ -101,21 +101,21 @@ impl CFrag {
 /// Reading the spelling is wrong in both directions: a conversion may clone or
 /// allocate out of a borrow, and — the case C actually has — a conversion may
 /// hand C a pointer *into* a Rust value from a crossing that looks owned.
-fn validity_of(conv: &ConverterImpl, assembly: Assembly) -> Validity {
-    match assembly {
+fn validity_of(conv: &ConverterImpl, direction: Direction) -> Validity {
+    match direction {
         // Rust to C. A `*const T` is the zero-copy borrow: `out_borrow_or_result`
         // casts the Rust value's own address, and `repr_c_struct`'s reinterpret
         // does the same, so the pointer dies with the value it points into. A
         // `*mut` is a handle C now owns (`Box::into_raw`) or a block C must free
         // (`__cbg_alloc_cstr`), and every by-value wire is a copy.
-        Assembly::Deconstruct => match &conv.destination {
+        Direction::Deconstruct => match &conv.destination {
             syn::Type::Ptr(p) if p.mutability.is_none() => Validity::Borrowed,
             _ => Validity::SelfSufficient,
         },
         // C to Rust: what the converter's own function hands back. A decode
         // yielding `&'a T` borrows the caller's memory, which is right at a
         // parameter and refused at a return.
-        Assembly::Construct => match &conv.function.sig.output {
+        Direction::Construct => match &conv.function.sig.output {
             syn::ReturnType::Type(_, ty) if produces_borrow(ty) => Validity::Borrowed,
             _ => Validity::SelfSufficient,
         },
@@ -224,26 +224,26 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         // `Blob` share one recipe and could not be told apart there. A fragment is
         // keyed by the spelling, which is exactly the distinction needed.
         if *at.recipe == crate::recipes::payload() {
-            let conv = match at.crossing.assembly() {
-                Assembly::Construct => self.gen.in_boxed_payload(ty),
-                Assembly::Deconstruct => self.gen.out_boxed_payload(ty),
+            let conv = match at.crossing.direction() {
+                Direction::Construct => self.gen.in_boxed_payload(ty),
+                Direction::Deconstruct => self.gen.out_boxed_payload(ty),
             };
             return self.wrap(at, "no payload reading for this handle", conv);
         }
         if *at.recipe == crate::recipes::in_field() {
-            let conv = match at.crossing.assembly() {
-                Assembly::Construct => self
+            let conv = match at.crossing.direction() {
+                Direction::Construct => self
                     .gen
                     .in_bool(ty)
                     .or_else(|| self.gen.in_string_field(ty)),
                 // Only `bool` reads differently on the way out; a `String`
                 // field is allocated exactly as a `String` return is.
-                Assembly::Deconstruct => self.gen.out_bool_field(ty),
+                Direction::Deconstruct => self.gen.out_bool_field(ty),
             };
             return self.wrap(at, "no field reading for this type", conv);
         }
-        let conv = match at.crossing.assembly() {
-            Assembly::Construct => self
+        let conv = match at.crossing.direction() {
+            Direction::Construct => self
                 .gen
                 .in_custom(ty, self.registry, cx.emit())
                 .or_else(|| self.gen.in_opaque_handle(ty))
@@ -260,7 +260,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     let args = ty.callback_args()?;
                     self.gen.dispatch_fn_input(args, self.registry)
                 }),
-            Assembly::Deconstruct => self
+            Direction::Deconstruct => self
                 .gen
                 .out_custom(ty, self.registry, cx.emit())
                 .or_else(|| self.gen.out_terminal(ty, self.registry, cx.emit()))
@@ -276,9 +276,9 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 "an optional recipe over a type that is not optional",
             ));
         };
-        let conv = match at.crossing.assembly() {
-            Assembly::Construct => self.gen.in_option(elem, inner),
-            Assembly::Deconstruct => Some(self.gen.out_arity_marker("option", elem)),
+        let conv = match at.crossing.direction() {
+            Direction::Construct => self.gen.in_option(elem, inner),
+            Direction::Deconstruct => Some(self.gen.out_arity_marker("option", elem)),
         };
         self.wrap(at, "no C representation for this optional", conv)
     }
@@ -291,14 +291,14 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         _inner: &CFrag,
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
-        let conv = match at.crossing.assembly() {
+        let conv = match at.crossing.direction() {
             // A `&[E]` is the only run C builds a Rust value out of, and it does
             // it zero-copy from the caller's own block.
-            Assembly::Construct => self.gen.in_slice(ty),
+            Direction::Construct => self.gen.in_slice(ty),
             // A `&[E]` callback argument is delivered by reference and has its
             // own marker; every other run is lowered structurally from the
             // element's.
-            Assembly::Deconstruct => self
+            Direction::Deconstruct => self
                 .gen
                 .out_slice_marker(ty)
                 .or_else(|| Some(self.gen.out_arity_marker("vec", ty.sequence_elem()?))),
@@ -392,10 +392,10 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     // reason: the wrap belongs to whatever holds the value, not
                     // to the value's own conversion.
                     match (
-                        at.crossing.assembly(),
+                        at.crossing.direction(),
                         self.gen.payload_field_wire(&part.ty),
                     ) {
-                        (Assembly::Deconstruct, Ok(w)) if held_uninit(&w, &frag.destination) => {
+                        (Direction::Deconstruct, Ok(w)) if held_uninit(&w, &frag.destination) => {
                             quote!(::core::mem::MaybeUninit::new(#call))
                         }
                         _ => call,
@@ -478,8 +478,8 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 // struct's holding form rather than the union's wire, so the
                 // wrap belongs here and the union's own conversion stays the
                 // one both directions use.
-                match (at.crossing.assembly(), self.gen.data_field_wire(&part.ty)) {
-                    (Assembly::Deconstruct, Some(w)) if held_uninit(&w, &frag.destination) => {
+                match (at.crossing.direction(), self.gen.data_field_wire(&part.ty)) {
+                    (Direction::Deconstruct, Some(w)) if held_uninit(&w, &frag.destination) => {
                         quote!(::core::mem::MaybeUninit::new(#call))
                     }
                     _ => call,
@@ -489,8 +489,8 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         let any_fallible = parts.iter().any(|(_, f)| fallible(&f.function));
         let subs: Vec<TypeKey> = parts.iter().map(|(p, _)| p.ty.key()).collect();
 
-        match at.crossing.assembly() {
-            Assembly::Construct => {
+        match at.crossing.direction() {
+            Direction::Construct => {
                 let name = CbindgenBuilder::in_name_of(&key);
                 let function: syn::ItemFn = if any_fallible {
                     syn::parse_quote!(
@@ -521,7 +521,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     },
                 ))
             }
-            Assembly::Deconstruct => {
+            Direction::Deconstruct => {
                 let name = CbindgenBuilder::out_name_of(&key);
                 let function: syn::ItemFn = if any_fallible {
                     syn::parse_quote!(
@@ -566,7 +566,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         let cname = self.gen.c_type_ident(&key);
         let src = self.gen.src_ty_of(&key);
         let emit = cx.emit();
-        let construct = at.crossing.assembly() == Assembly::Construct;
+        let construct = at.crossing.direction() == Direction::Construct;
 
         let mut subs: Vec<TypeKey> = Vec::new();
         let mut fallible_any = false;

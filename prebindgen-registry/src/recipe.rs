@@ -1,6 +1,6 @@
 //! One table of crossings, one recipe per recipe.
 //!
-//! A **crossing** is one Rust type plus one of two jobs — *construct* a Rust
+//! A **crossing** is one Rust type plus one of two directions — *construct* a Rust
 //! value out of the wire values that arrived, or *deconstruct* one into the
 //! wire values that leave. [`Recipes`] is the table that answers it, and a
 //! **recipe** is one answer: which `#[prebindgen]` constructor assembles the
@@ -34,7 +34,7 @@
 //! crossing takes: converting the arguments is what makes the callable
 //! callable, so there is no second answer to choose between.
 //! [`RecipesBuilder::build`] refuses any other shape there, and an `Invoke` recipe's
-//! parts are the callback's arguments, which do the other job.
+//! parts are the callback's arguments, which take the other direction.
 
 use std::{
     borrow::Cow,
@@ -57,47 +57,47 @@ pub use self::{
     site::{Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site},
 };
 
-// ── The two jobs ──────────────────────────────────────────────────────────
+// ── The two directions ──────────────────────────────────────────────────────────
 
-/// Which of the two jobs a crossing is, as a value.
+/// Which of the two directions a crossing is, as a value.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Assembly {
+pub enum Direction {
     /// Build a Rust value out of the wire values that arrived.
     Construct,
     /// Take a Rust value apart into the wire values that leave.
     Deconstruct,
 }
 
-impl Assembly {
-    /// The other job. Only a callback swaps: the Rust side holds the values its
+impl Direction {
+    /// The other direction. Only a callback swaps: the Rust side holds the values
     /// arguments carry and pushes them out through the call.
     pub fn swap(self) -> Self {
         match self {
-            Assembly::Construct => Assembly::Deconstruct,
-            Assembly::Deconstruct => Assembly::Construct,
+            Direction::Construct => Direction::Deconstruct,
+            Direction::Deconstruct => Direction::Construct,
         }
     }
 }
 
-impl fmt::Display for Assembly {
+impl fmt::Display for Direction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Assembly::Construct => "construct",
-            Assembly::Deconstruct => "deconstruct",
+            Direction::Construct => "construct",
+            Direction::Deconstruct => "deconstruct",
         })
     }
 }
 
-/// The same two jobs at the type level, stated on the operations themselves.
+/// The same two directions at the type level, stated on the operations themselves.
 ///
 /// An adapter never writes this bound and never names an implementor: `OP` is
 /// inferred from the shape handed to [`RecipesBuilder::declare`], which is what
-/// files a recipe under the right job without anything stating it twice.
+/// files a recipe under the right direction without anything stating it twice.
 pub trait Operation: Sized {
-    /// Which job an operation of this type does.
-    const ASSEMBLY: Assembly;
+    /// Which direction an operation of this type takes.
+    const DIRECTION: Direction;
 
-    /// Erase the job so the table can hold both. Not part of the surface an
+    /// Erase the direction so the table can hold both. Not part of the surface an
     /// adapter writes against.
     #[doc(hidden)]
     fn into_row(shape: Shape<Self>) -> Recipe;
@@ -127,7 +127,7 @@ pub enum Construct {
 }
 
 impl Operation for Construct {
-    const ASSEMBLY: Assembly = Assembly::Construct;
+    const DIRECTION: Direction = Direction::Construct;
 
     fn into_row(shape: Shape<Self>) -> Recipe {
         Recipe::Constructing(shape)
@@ -151,7 +151,7 @@ pub enum Deconstruct {
 }
 
 impl Operation for Deconstruct {
-    const ASSEMBLY: Assembly = Assembly::Deconstruct;
+    const DIRECTION: Direction = Direction::Deconstruct;
 
     fn into_row(shape: Shape<Self>) -> Recipe {
         Recipe::Deconstructing(shape)
@@ -244,21 +244,21 @@ impl fmt::Display for Mode {
 
 // ── The crossing ──────────────────────────────────────────────────────────
 
-/// One Rust type and one of the two jobs: the question the table answers.
+/// One Rust type and one of the two directions: the question the table answers.
 #[derive(Clone, Debug)]
 pub struct Crossing {
     ty: TypeRef,
-    assembly: Assembly,
+    direction: Direction,
 }
 
 impl Crossing {
-    /// The crossing of `ty`, doing `assembly`.
+    /// The crossing of `ty`, doing `direction`.
     ///
     /// `ty` is kept exactly as the site spelled it, borrow and transparent
     /// wrappers included; what is normalized away is only the key
     /// [`Self::key`] derives from it.
-    pub fn new(ty: TypeRef, assembly: Assembly) -> Self {
-        Self { ty, assembly }
+    pub fn new(ty: TypeRef, direction: Direction) -> Self {
+        Self { ty, direction }
     }
 
     /// The type as the site spelled it.
@@ -271,9 +271,9 @@ impl Crossing {
         self.ty.borrow_target().unwrap_or(&self.ty)
     }
 
-    /// Which job this crossing is.
-    pub fn assembly(&self) -> Assembly {
-        self.assembly
+    /// Which direction this crossing takes.
+    pub fn direction(&self) -> Direction {
+        self.direction
     }
 
     /// Whether the value is handed over or reached through a borrow.
@@ -289,7 +289,7 @@ impl Crossing {
     pub fn key(&self) -> CrossingKey {
         CrossingKey {
             ty: self.value().stripped_key(),
-            assembly: self.assembly,
+            direction: self.direction,
         }
     }
 }
@@ -299,13 +299,13 @@ impl Crossing {
 pub struct CrossingKey {
     /// The Rust value that crosses, with borrow and transparent wrappers gone.
     pub ty: TypeKey,
-    /// Which of the two jobs.
-    pub assembly: Assembly,
+    /// Which of the two directions.
+    pub direction: Direction,
 }
 
 impl fmt::Display for CrossingKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} ({})", self.ty, self.assembly)
+        write!(f, "{} ({})", self.ty, self.direction)
     }
 }
 
@@ -342,10 +342,10 @@ impl fmt::Display for RecipeId {
 
 /// How a value gets across, in terms of its parts.
 ///
-/// `OP` is the one thing a recipe states differently between the two jobs:
+/// `OP` is the one thing a recipe states differently between the two directions:
 /// what assembles the parts into a value, or takes them out of it. Nothing
-/// below the top restates the job, because a part, an optional's value and a
-/// sequence's element all do the same job as the recipe.
+/// below the top restates the direction, because a part, an optional's value and
+/// a sequence's element all take the same direction as the recipe.
 #[derive(Clone, Debug)]
 pub enum Shape<OP> {
     /// No parts. The adapter emits the conversion itself; how many wire values
@@ -376,7 +376,7 @@ pub enum Shape<OP> {
     /// converting the arguments is what makes the callable callable, so there
     /// is no second way for such a crossing to be answered. It names no
     /// arguments — they are the ones the crossing's own type carries — and
-    /// their job is the recipe's swapped, which the table applies rather than any
+    /// their direction is the recipe's swapped, which the table applies rather than any
     /// declaration stating it.
     Invoke,
 }
@@ -399,22 +399,22 @@ pub type Constructing = Shape<Construct>;
 /// A recipe that takes a Rust value apart into what leaves.
 pub type Deconstructing = Shape<Deconstruct>;
 
-/// One recipe's recipe, under whichever job it does.
+/// One recipe, under whichever direction it takes.
 ///
-/// The table holds recipes in this form so both jobs share one map. An adapter
+/// The table holds recipes in this form so both directions share one map. An adapter
 /// writes a [`Constructing`] or a [`Deconstructing`] and never builds or
 /// matches on a `Recipe`.
 #[derive(Clone, Debug)]
 pub enum Recipe {
-    /// A recipe filed under [`Assembly::Construct`].
+    /// A recipe filed under [`Direction::Construct`].
     Constructing(Constructing),
-    /// A recipe filed under [`Assembly::Deconstruct`].
+    /// A recipe filed under [`Direction::Deconstruct`].
     Deconstructing(Deconstructing),
 }
 
 impl Recipe {
     /// Whether this recipe takes a callable apart — the one shape whose parts do
-    /// the other job.
+    /// the other direction.
     pub fn is_invoke(&self) -> bool {
         matches!(
             self,
@@ -422,11 +422,11 @@ impl Recipe {
         )
     }
 
-    /// Which job this recipe does.
-    pub fn assembly(&self) -> Assembly {
+    /// Which direction this recipe takes.
+    pub fn direction(&self) -> Direction {
         match self {
-            Recipe::Constructing(_) => Assembly::Construct,
-            Recipe::Deconstructing(_) => Assembly::Deconstruct,
+            Recipe::Constructing(_) => Direction::Construct,
+            Recipe::Deconstructing(_) => Direction::Deconstruct,
         }
     }
 }
@@ -522,13 +522,13 @@ fn derive(crossing: &Crossing) -> Recipe {
     } else {
         DerivedKind::Atomic
     };
-    match crossing.assembly {
-        Assembly::Construct => Recipe::Constructing(kind.shape()),
-        Assembly::Deconstruct => Recipe::Deconstructing(kind.shape()),
+    match crossing.direction {
+        Direction::Construct => Recipe::Constructing(kind.shape()),
+        Direction::Deconstruct => Recipe::Deconstructing(kind.shape()),
     }
 }
 
-/// The shape a type's own kind implies, before either job is chosen. Shared so
+/// The shape a type's own kind implies, before either direction is chosen. Shared so
 /// the two arms of [`derive`] cannot drift apart.
 #[derive(Copy, Clone)]
 enum DerivedKind {
@@ -573,7 +573,7 @@ pub struct RecipesBuilder {
 impl RecipesBuilder {
     /// Add one recipe for `ty`.
     ///
-    /// Which job the recipe is filed under is the shape's own, so nothing states
+    /// Which direction the recipe is filed under is the shape's own, so nothing states
     /// it twice and the two cannot disagree. Declaring a second recipe for one
     /// crossing is how a type offers a choice, and the site is what picks
     /// between them — at which point one of the recipes has to be declared through
@@ -601,7 +601,7 @@ impl RecipesBuilder {
     }
 
     fn insert(&mut self, ty: TypeRef, id: RecipeId, recipe: Recipe, default: bool) -> &mut Self {
-        let key = Crossing::new(ty.clone(), recipe.assembly()).key();
+        let key = Crossing::new(ty.clone(), recipe.direction()).key();
         let entries = self.recipes.entry(key.clone()).or_default();
         if entries.iter().any(|e| e.id == id) {
             self.duplicates.push((key, id));
@@ -647,7 +647,7 @@ impl RecipesBuilder {
                 }
             }
             for entry in entries {
-                let crossing = Crossing::new(entry.ty.clone(), entry.recipe.assembly());
+                let crossing = Crossing::new(entry.ty.clone(), entry.recipe.direction());
                 // A callback type takes `Invoke` and nothing else: converting
                 // the arguments is what makes the callable callable, so there
                 // is no second answer for such a crossing.
@@ -737,18 +737,18 @@ impl<'a> Check<'a, '_> {
 
     /// Every part crossing this recipe reaches, checking what it names on the way.
     fn recipe(&mut self, ty: &TypeRef, recipe: &Recipe) -> Vec<Crossing> {
-        let assembly = recipe.assembly();
-        // The one place the two jobs swap: the Rust side holds the values a
+        let direction = recipe.direction();
+        // The one place the two directions swap: the Rust side holds the values a
         // callback's arguments carry and pushes them out through the call.
         if recipe.is_invoke() {
-            let value = Crossing::new(ty.clone(), assembly);
+            let value = Crossing::new(ty.clone(), direction);
             let Some(args) = value.value().callback_args().map(<[_]>::to_vec) else {
                 self.not_a_callback();
                 return Vec::new();
             };
             return args
                 .into_iter()
-                .map(|ty| Crossing::new(ty, assembly.swap()))
+                .map(|ty| Crossing::new(ty, direction.swap()))
                 .collect();
         }
         let parts = match recipe {
@@ -757,7 +757,7 @@ impl<'a> Check<'a, '_> {
         };
         parts
             .into_iter()
-            .map(|ty| Crossing::new(ty, assembly))
+            .map(|ty| Crossing::new(ty, direction))
             .collect()
     }
 
@@ -987,7 +987,7 @@ fn constructor_of(f: &Function, ty: &TypeRef) -> bool {
 }
 
 /// The type's identity with a borrow and any transparent wrapper gone — what
-/// [`Crossing::key`] keys a recipe by, without a job attached.
+/// [`Crossing::key`] keys a recipe by, without a direction attached.
 fn value_key(ty: &TypeRef) -> TypeKey {
     ty.borrow_target().unwrap_or(ty).stripped_key()
 }
@@ -1019,7 +1019,7 @@ fn cycles(model: &Flat, table: &Recipes, errors: &mut Vec<RecipeError>) {
         .flat_map(|entries| {
             entries
                 .iter()
-                .map(|e| Crossing::new(e.ty.clone(), e.recipe.assembly()))
+                .map(|e| Crossing::new(e.ty.clone(), e.recipe.direction()))
         })
         .collect();
     for root in roots {
@@ -1108,7 +1108,7 @@ pub enum RecipeError {
     /// A recipe's parts reach the recipe's own crossing.
     ///
     /// The path is a chain of keys because it may pass through a callback, and
-    /// so swap jobs.
+    /// so swap directions.
     Cycle {
         /// The chain, starting and ending at the crossing that repeats.
         path: Vec<CrossingKey>,

@@ -553,7 +553,7 @@ impl JniGen {
     /// that compares — a `TypeRef` has no equality and a `syn::Member` prints
     /// differently by variant, so both sides go through the same rendering.
     pub(crate) fn out_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
-        use prebindgen_registry::recipe::Assembly;
+        use prebindgen_registry::recipe::Direction;
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let ty: syn::Type = syn::parse_quote!(#ident);
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
@@ -561,7 +561,7 @@ impl JniGen {
         let wires = compiled
             .recipe_fragment(
                 &reading.key(),
-                Assembly::Deconstruct,
+                Direction::Deconstruct,
                 &crate::jni::recipes::parts(),
             )?
             .out_wires
@@ -683,18 +683,18 @@ impl JniGen {
     /// and `Compiled::recipe_fragment` must then answer `None` rather than hand
     /// back whatever the crossing compiled by default.
     pub(crate) fn has_parts_row_for_test(&self, short: &str, out: bool) -> bool {
-        use prebindgen_registry::recipe::Assembly;
+        use prebindgen_registry::recipe::Direction;
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
-        let assembly = match out {
-            true => Assembly::Deconstruct,
-            false => Assembly::Construct,
+        let direction = match out {
+            true => Direction::Deconstruct,
+            false => Direction::Construct,
         };
         self.decls
             .compiled
             .borrow()
             .recipe_fragment(
                 &TypeKey::from_ident(&ident),
-                assembly,
+                direction,
                 &crate::jni::recipes::parts(),
             )
             .is_some()
@@ -705,7 +705,7 @@ impl JniGen {
         &self,
         spelling: &str,
     ) -> Option<Vec<crate::jni::compile::Wire>> {
-        use prebindgen_registry::recipe::Assembly;
+        use prebindgen_registry::recipe::Direction;
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let key = reading.key();
@@ -714,8 +714,8 @@ impl JniGen {
         // over one has no recipe of its own and composes on the recipe the registry
         // derived, which is the crossing's default.
         compiled
-            .recipe_fragment(&key, Assembly::Construct, &crate::jni::recipes::parts())
-            .or_else(|| compiled.fragment(&key, Assembly::Construct))?
+            .recipe_fragment(&key, Direction::Construct, &crate::jni::recipes::parts())
+            .or_else(|| compiled.fragment(&key, Direction::Construct))?
             .wires
             .clone()
     }

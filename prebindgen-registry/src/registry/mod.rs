@@ -103,7 +103,7 @@
 //! ```ignore
 //! let mut builder = Registry::builder(flat)?;
 //! for name in &self.exported    { builder = builder.export(name); }
-//! for ty in &self.foreign_types { builder = builder.cross(Direction::Output, ty); }
+//! for ty in &self.foreign_types { builder = builder.cross(Direction::Deconstruct, ty); }
 //!
 //! let registry = builder
 //!     .decompose(self.decompositions())

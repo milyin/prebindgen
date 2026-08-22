@@ -30,7 +30,7 @@
 use std::{collections::HashMap, fmt, rc::Rc};
 
 use super::{
-    Assembly, Bindings, Bound, Construct, Crossing, Deconstruct, Mode, Reach, Recipe, RecipeError,
+    Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Reach, Recipe, RecipeError,
     RecipeId, Recipes, Role, Shape, Site,
 };
 use crate::{
@@ -240,7 +240,7 @@ pub trait Compile {
     ///
     /// A choice is a run-time alternative, so the adapter is never offered one
     /// of them to pick. Each arm arrives already composed by one of the four
-    /// hooks above, which is why this hook needs no job of its own.
+    /// hooks above, which is why this hook needs no direction of its own.
     fn choice(
         &mut self,
         cx: &mut Cx<'_>,
@@ -337,13 +337,14 @@ pub struct Compiled<F> {
     /// which is the only entry point that consults the crossing's default —
     /// so [`Compiled::fragment`] can give back that same answer instead of
     /// choosing between the recipes a crossing happens to have.
-    defaults: HashMap<(TypeKey, Assembly), RecipeId>,
+    defaults: HashMap<(TypeKey, Direction), RecipeId>,
 }
 
 /// What a fragment is memoised under: the type **as the site spelled it**, the
-/// job, and which recipe answered. See the module docs on why the spelling and not
+/// direction, and which recipe answered. See the module docs on why the spelling
+/// and not
 /// the recipe's own identity.
-type FragmentKey = (TypeKey, Assembly, RecipeId);
+type FragmentKey = (TypeKey, Direction, RecipeId);
 
 impl<F> Default for Compiled<F> {
     fn default() -> Self {
@@ -391,9 +392,9 @@ impl<F> Compiled<F> {
     /// store while compilation is still filling it cannot hold a borrow across
     /// the next write, and a fragment holds a whole `syn::ItemFn` that a
     /// recursive lookup should not be copying.
-    pub fn fragment(&self, ty: &TypeKey, assembly: Assembly) -> Option<Rc<F>> {
-        let recipe = self.defaults.get(&(ty.clone(), assembly))?;
-        self.recipe_fragment(ty, assembly, recipe)
+    pub fn fragment(&self, ty: &TypeKey, direction: Direction) -> Option<Rc<F>> {
+        let recipe = self.defaults.get(&(ty.clone(), direction))?;
+        self.recipe_fragment(ty, direction, recipe)
     }
 
     /// Record a fragment an adapter built **without** the compiler, as this
@@ -404,23 +405,23 @@ impl<F> Compiled<F> {
     /// [`Self::fragment`] would have no answer to give. Recording it keeps the
     /// adapter's emitters on one lookup instead of a per-site fall-back to
     /// whatever else knows.
-    pub fn record(&mut self, ty: TypeKey, assembly: Assembly, recipe: RecipeId, fragment: F) {
+    pub fn record(&mut self, ty: TypeKey, direction: Direction, recipe: RecipeId, fragment: F) {
         self.fragments.insert(
-            (ty.clone(), assembly, recipe.clone()),
+            (ty.clone(), direction, recipe.clone()),
             std::rc::Rc::new(fragment),
         );
-        self.defaults.insert((ty, assembly), recipe);
+        self.defaults.insert((ty, direction), recipe);
     }
 
     /// The fragment for one crossing and one named recipe.
     pub fn recipe_fragment(
         &self,
         ty: &TypeKey,
-        assembly: Assembly,
+        direction: Direction,
         recipe: &RecipeId,
     ) -> Option<Rc<F>> {
         self.fragments
-            .get(&(ty.clone(), assembly, recipe.clone()))
+            .get(&(ty.clone(), direction, recipe.clone()))
             .cloned()
     }
 
@@ -532,7 +533,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // without re-deriving which recipe a crossing defaults to.
         self.compiled
             .defaults
-            .insert((crossing.spelled().key(), crossing.assembly()), recipe);
+            .insert((crossing.spelled().key(), crossing.direction()), recipe);
         Ok(fragment)
     }
 
@@ -584,7 +585,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // for `T`, `&T` and `Box<T>`, and each of the three needs its own Rust.
         let key = (
             crossing.spelled().key(),
-            crossing.assembly(),
+            crossing.direction(),
             recipe.clone(),
         );
         if let Some(built) = self.compiled.fragments.get(&key) {
@@ -612,8 +613,8 @@ impl<'a, C: Compile> Compiler<'a, C> {
     /// exported function, so it cannot answer for a recipe every function with
     /// that signature shares; an adapter that wants a per-function answer
     /// compiles that position as its own root site through [`Self::site`].
-    /// `assembly` is the recipe's own except for a callback, whose arguments do
-    /// the other job — Rust holds those values and pushes them out through the
+    /// `direction` is the recipe's own except for a callback, whose arguments do
+    /// the other direction — Rust holds those values and pushes them out through
     /// call. The **site** is still the recipe's either way: a part is identified
     /// by the recipe that names it and its index, and a binding written against
     /// that recipe has to match here, so only the part's `Crossing` carries the
@@ -626,12 +627,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
-        assembly: Assembly,
+        direction: Direction,
         index: usize,
         ty: &TypeRef,
         wanted: Mode,
     ) -> Built<C> {
-        self.part_of(adapter, at, assembly, None, index, ty, wanted)
+        self.part_of(adapter, at, direction, None, index, ty, wanted)
     }
 
     /// [`Self::part`] for a part inside a [`Shape::Choice`] arm, which numbers
@@ -641,13 +642,13 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
-        assembly: Assembly,
+        direction: Direction,
         arm: Option<usize>,
         index: usize,
         ty: &TypeRef,
         wanted: Mode,
     ) -> Built<C> {
-        let crossing = Crossing::new(ty.clone(), assembly);
+        let crossing = Crossing::new(ty.clone(), direction);
         let site = Site::arm_part(at.crossing, at.recipe, arm, index);
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRecipe {
@@ -771,7 +772,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // reading through the shared optional cannot produce, and
         // `&mut Option<T>` would demand an owned one where it lends `&mut T`.
         let wanted = mode_of(inner).through(at.crossing.mode());
-        let inner = self.part(adapter, at, at.crossing.assembly(), 0, inner, wanted)?;
+        let inner = self.part(adapter, at, at.crossing.direction(), 0, inner, wanted)?;
         let mut cx = self.cx();
         adapter
             .optional(&mut cx, at, &inner)
@@ -791,7 +792,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // A run's element is held the way the collection lends it, which is
         // what the adapter is told and so what its fragment must satisfy.
         let elements = element_mode(at.crossing, inner);
-        let inner = self.part(adapter, at, at.crossing.assembly(), 0, inner, elements)?;
+        let inner = self.part(adapter, at, at.crossing.direction(), 0, inner, elements)?;
         let mut cx = self.cx();
         adapter
             .sequence(&mut cx, at, elements, &inner)
@@ -803,17 +804,17 @@ impl<'a, C: Compile> Compiler<'a, C> {
         adapter: &mut C,
         at: At<'_>,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
-        let assembly = at.crossing.assembly();
+        let direction = at.crossing.direction();
         let Some(args) = at.crossing.value().callback_args().map(<[_]>::to_vec) else {
             return Err(wrong_shape(at, "Invoke", "a callback type"));
         };
-        // The one place the two jobs swap: Rust holds these values and pushes
+        // The one place the two directions swap: Rust holds these values and pushes
         // them out through the call. The swap is the argument's, not the site's
         // — the parts still belong to the callback recipe that names them.
         let mut built = Vec::new();
         for (index, arg) in args.iter().enumerate() {
             let wanted = mode_of(arg);
-            built.push(self.part(adapter, at, assembly.swap(), index, arg, wanted)?);
+            built.push(self.part(adapter, at, direction.swap(), index, arg, wanted)?);
         }
         let refs: Vec<&C::Fragment> = built.iter().map(|f| &**f).collect();
         let mut cx = self.cx();
@@ -839,7 +840,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             built.push(self.part_of(
                 adapter,
                 at,
-                at.crossing.assembly(),
+                at.crossing.direction(),
                 arm,
                 index,
                 &part.ty,

@@ -1,6 +1,6 @@
 //! What Cbindgen's per-type declarations become as registry recipes.
 
-use prebindgen_registry::recipe::{Assembly, Crossing, Recipe, Shape};
+use prebindgen_registry::recipe::{Crossing, Direction, Recipe, Shape};
 
 use super::*;
 
@@ -57,12 +57,12 @@ impl<OP> std::fmt::Debug for Named<'_, OP> {
 
 fn recipes_of(gen: &CbindgenBuilder, model: &prebindgen_registry::Flat, spelling: &str) -> String {
     let recipes = gen.recipes(model).expect("recipes");
-    [Assembly::Construct, Assembly::Deconstruct]
+    [Direction::Construct, Direction::Deconstruct]
         .into_iter()
-        .map(|assembly| {
-            let crossing = Crossing::new(ty(model, spelling), assembly);
+        .map(|direction| {
+            let crossing = Crossing::new(ty(model, spelling), direction);
             let (id, recipe) = recipes.recipe(&crossing);
-            format!("{assembly} {id}:{}", shape(&recipe))
+            format!("{direction} {id}:{}", shape(&recipe))
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -123,23 +123,23 @@ fn a_value_read_two_ways_inside_a_struct_has_two_rows() {
     let gen = Cbindgen::builder().data_struct(syn::parse_quote!(Sample));
     let recipes = gen.recipes(&model).expect("recipes");
 
-    for (spelling, assembly, expected) in [
-        ("bool", Assembly::Construct, 2),
-        ("bool", Assembly::Deconstruct, 2),
+    for (spelling, direction, expected) in [
+        ("bool", Direction::Construct, 2),
+        ("bool", Direction::Deconstruct, 2),
         // A `String` reads differently only on the way in.
-        ("String", Assembly::Construct, 2),
-        ("String", Assembly::Deconstruct, 0),
+        ("String", Direction::Construct, 2),
+        ("String", Direction::Deconstruct, 0),
     ] {
-        let key = Crossing::new(ty(&model, spelling), assembly).key();
+        let key = Crossing::new(ty(&model, spelling), direction).key();
         assert_eq!(
             recipes.names_of(&key).len(),
             expected,
-            "{spelling} {assembly}"
+            "{spelling} {direction}"
         );
     }
     // The default is the whole-value reading in every case; the field reading
     // is reached only by a part that asks for it.
-    let key = Crossing::new(ty(&model, "bool"), Assembly::Construct).key();
+    let key = Crossing::new(ty(&model, "bool"), Direction::Construct).key();
     assert_eq!(recipes.default_of(&key).unwrap().as_str(), "whole");
 }
 

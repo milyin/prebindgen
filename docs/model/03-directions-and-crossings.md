@@ -4,7 +4,7 @@
 
 ```rust
 /// Which of the two directions a crossing is, as a value.
-pub enum Assembly {
+pub enum Direction {
     /// Build this crossing's Rust value — from its parts, or from wire values
     /// where the shape has no parts.
     Construct,
@@ -13,7 +13,7 @@ pub enum Assembly {
     Deconstruct,
 }
 
-impl Assembly {
+impl Direction {
     /// The other direction.
     pub fn swap(self) -> Self;
 }
@@ -30,7 +30,7 @@ deconstruct. The registry applies `swap` there, and no declaration states it.
 /// One Rust type and one of the two directions: the question the table answers.
 pub struct Crossing {
     ty: TypeRef,
-    assembly: Assembly,
+    direction: Direction,
 }
 ```
 
@@ -53,7 +53,7 @@ peel the type itself.
 impl Crossing {
     /// `ty` is kept exactly as the site wrote it — borrow and transparent
     /// wrappers included. Only the key normalizes.
-    pub fn new(ty: TypeRef, assembly: Assembly) -> Self;
+    pub fn new(ty: TypeRef, direction: Direction) -> Self;
 
     /// The type exactly as the site wrote it: `&Sample`, `Box<Sample>`,
     /// `Sample`. What generated Rust writes to name this position.
@@ -64,7 +64,7 @@ impl Crossing {
     pub fn value(&self) -> &TypeRef;
 
     /// Which direction.
-    pub fn assembly(&self) -> Assembly;
+    pub fn direction(&self) -> Direction;
 
     /// Whether that value is handed over or reached through a borrow, read off
     /// the way it was written: `&mut T` is `Exclusive`, `&T` is `Shared`,
@@ -105,7 +105,7 @@ pub struct CrossingKey {
     /// The value that crosses, with borrow and transparent wrappers — `Box`,
     /// `Cow` and friends — gone.
     pub ty: TypeKey,
-    pub assembly: Assembly,
+    pub direction: Direction,
 }
 ```
 
@@ -135,23 +135,3 @@ how a type crosses on its own and `in_field` / `parts` / `payload` for how the
 same type crosses inside a container — and the registry never reads one.
 `derived()` is the single reserved name, given to the recipe the table builds
 for a crossing nobody declared.
-
-## A note on the name
-
-The type is `Assembly`; this chapter and the vocabulary call the concept a
-*direction*. Two names for one thing is exactly what the rest of this model
-avoids, and the type should be renamed to match the word.
-
-It cannot be yet. `prebindgen-registry`'s converter table has its own
-`Direction { Input, Output }` — *wire to Rust* and *Rust to wire* — which is
-the same axis under a third set of names, and the adapters translate between
-them by hand:
-
-```rust
-Direction::Input  => Assembly::Construct,
-Direction::Output => Assembly::Deconstruct,
-```
-
-The rename therefore has to land with, or after, that enum's removal, and that
-belongs with the rest of the converter-table work. Until then the word is the
-one to think in and `Assembly` is the one to type.

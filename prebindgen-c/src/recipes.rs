@@ -6,7 +6,7 @@
 //! statement of **which parts** a value gets across in, with nothing about the
 //! C wire in it.
 //!
-//! There is one recipe per declared type and job, and every crossing nobody
+//! There is one recipe per declared type and direction, and every crossing nobody
 //! declared takes the recipe the registry derives from its kind. So the chain of
 //! `or_else` guesses this replaced — try a custom conversion, then a handle,
 //! then a data struct, then an enum, … — is now a lookup, and the answer is
@@ -15,7 +15,7 @@
 use prebindgen_registry::{
     flat::{Flat, Type, TypeRef},
     recipe::{
-        Arm, Assembly, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError,
+        Arm, Construct, Constructing, Deconstruct, Deconstructing, Direction, Reach, RecipeError,
         RecipeId, Recipes,
     },
 };
@@ -252,16 +252,16 @@ impl CbindgenBuilder {
 
     /// `bool` and `String` read as they do inside a struct; a `Box`-over-handle
     /// needs [`payload`], the one reading neither of the other two covers.
-    fn payload_reading(&self, fty: &TypeRef) -> Option<(RecipeId, &'static [Assembly])> {
+    fn payload_reading(&self, fty: &TypeRef) -> Option<(RecipeId, &'static [Direction])> {
         use prebindgen_registry::flat::{ScalarKind, TypeKind};
         if self.declared_opaque_payload_inner(fty).is_some() || r_boxed_inner(fty).is_some() {
-            return Some((payload(), &[Assembly::Construct, Assembly::Deconstruct]));
+            return Some((payload(), &[Direction::Construct, Direction::Deconstruct]));
         }
         match fty.unwrapped().kind() {
             TypeKind::Scalar(ScalarKind::Bool) => {
-                Some((in_field(), &[Assembly::Construct, Assembly::Deconstruct]))
+                Some((in_field(), &[Direction::Construct, Direction::Deconstruct]))
             }
-            TypeKind::String => Some((in_field(), &[Assembly::Construct])),
+            TypeKind::String => Some((in_field(), &[Direction::Construct])),
             _ => None,
         }
     }
@@ -278,9 +278,7 @@ impl CbindgenBuilder {
         // `recipe::Origin` is which declaration asked; `flat::Origin` is a
         // captured item's own syntax. Both are in play here, so the one that
         // arrives by glob keeps its name.
-        use prebindgen_registry::recipe::{
-            Ask, Assembly, Bindings, Crossing, Origin as Asked, Site,
-        };
+        use prebindgen_registry::recipe::{Ask, Bindings, Crossing, Origin as Asked, Site};
 
         let mut bound = Bindings::builder();
         // A union's payload reads like a struct's field for `bool` and
@@ -304,11 +302,11 @@ impl CbindgenBuilder {
                     let Some((recipe, directions)) = self.payload_reading(&field.ty) else {
                         continue;
                     };
-                    for &assembly in directions {
-                        let of = Crossing::new(ty.clone(), assembly);
+                    for &direction in directions {
+                        let of = Crossing::new(ty.clone(), direction);
                         bound.bind(
                             Site::arm_part(&of, &parts(), Some(arm), index),
-                            Crossing::new(field.ty.clone(), assembly),
+                            Crossing::new(field.ty.clone(), direction),
                             Ask::Recipe(recipe.clone()),
                             Asked::Part,
                         );
@@ -345,16 +343,16 @@ impl CbindgenBuilder {
                     continue;
                 }
                 // A `String` reads differently only on the way in.
-                let directions: &[Assembly] = if is_bool {
-                    &[Assembly::Construct, Assembly::Deconstruct]
+                let directions: &[Direction] = if is_bool {
+                    &[Direction::Construct, Direction::Deconstruct]
                 } else {
-                    &[Assembly::Construct]
+                    &[Direction::Construct]
                 };
-                for &assembly in directions {
-                    let of = Crossing::new(ty.clone(), assembly);
+                for &direction in directions {
+                    let of = Crossing::new(ty.clone(), direction);
                     bound.bind(
                         Site::part(&of, &parts(), index),
-                        Crossing::new(field.ty.clone(), assembly),
+                        Crossing::new(field.ty.clone(), direction),
                         Ask::Recipe(in_field()),
                         Asked::Part,
                     );

@@ -8,7 +8,9 @@
 
 use prebindgen_registry::{
     flat::{Alternative, Function, TypeKind, TypeRef},
-    recipe::{Assembly, At, Bound, Carrier, Compile, Cx, Frag, Mode, Part, Parts, Validity, Yield},
+    recipe::{
+        At, Bound, Carrier, Compile, Cx, Direction, Frag, Mode, Part, Parts, Validity, Yield,
+    },
     Conversions,
 };
 
@@ -91,7 +93,7 @@ pub(crate) struct JFrag {
     /// Kotlin expression, it is produced by the Rust side and named for the
     /// builder parameter it lands in. Never set at the same time as
     /// [`Self::wires`] — a fragment answers one crossing, and a crossing does
-    /// one job.
+    /// one direction.
     pub(crate) out_wires: Option<Vec<OutWire>>,
     /// This fragment states a wire list and nothing else — no conversion of its
     /// own, so nothing of it reaches the generated file.
@@ -479,7 +481,7 @@ impl JFrag {
     }
 
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
-        let validity = validity_of(&conv, at.crossing.assembly());
+        let validity = validity_of(&conv, at.crossing.direction());
         Self {
             conv,
             wires: None,
@@ -501,16 +503,16 @@ impl JFrag {
 /// declared opaque handle clones its referent into a fresh `Box`-handle, and a
 /// `&str` output copies into a JVM string, so both are self-sufficient although
 /// the crossing is a borrow.
-fn validity_of(conv: &ConverterImpl<KotlinMeta>, assembly: Assembly) -> Validity {
-    match assembly {
+fn validity_of(conv: &ConverterImpl<KotlinMeta>, direction: Direction) -> Validity {
+    match direction {
         // Rust to the JVM. Every JNI wire value is a `jlong` the Rust side
         // handed over or a JVM object the JVM now owns; nothing on this wire
         // points into the Rust value it came from.
-        Assembly::Deconstruct => Validity::SelfSufficient,
+        Direction::Deconstruct => Validity::SelfSufficient,
         // The JVM to Rust: what the converter's own function hands back. A
         // decode that yields a borrow is valid only for the call, which is
         // exactly right at a parameter and refused at a return.
-        Assembly::Construct => match &conv.function.sig.output {
+        Direction::Construct => match &conv.function.sig.output {
             syn::ReturnType::Type(_, ty) if produces_borrow(ty) => Validity::Borrowed,
             _ => Validity::SelfSufficient,
         },
@@ -674,8 +676,8 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let emit = cx.emit();
-        let conv = match at.crossing.assembly() {
-            Assembly::Construct => self
+        let conv = match at.crossing.direction() {
+            Direction::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
                 .or_else(|| self.borrow(ty, emit, true))
@@ -689,7 +691,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     };
                     self.decls.dispatch_fn_input(args, self.registry, emit)
                 }),
-            Assembly::Deconstruct => self
+            Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
                 .or_else(|| self.decls.result_shape(ty, self.registry, emit))
@@ -708,12 +710,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // A declared terminal outranks the arity the registry derived, exactly
         // as it did when one chain answered both: `input_terminal` claims a
         // `Cow<'_, [u8]>` blob, and a `convert!` may name an optional.
-        let conv = match at.crossing.assembly() {
-            Assembly::Construct => self
+        let conv = match at.crossing.direction() {
+            Direction::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
                 .or_else(|| self.decls.input_optional(ty, emit)),
-            Assembly::Deconstruct => self
+            Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
                 .or_else(|| self.decls.output_optional(ty, emit)),
@@ -728,13 +730,13 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // is read on the Rust side and the slot carries the raw value. The
         // value crosses through the INNER's conversion, not the optional's —
         // there is no boxed `Option` on this wire to decode.
-        if at.crossing.assembly() == Assembly::Construct && inner.wires.is_none() {
+        if at.crossing.direction() == Direction::Construct && inner.wires.is_none() {
             if let Some(pair) = self.decoupled_optional(at, inner, &frag.conv) {
                 frag.wires = Some(pair);
                 return Ok(frag);
             }
         }
-        if let (Assembly::Construct, Some(inner_wires)) = (at.crossing.assembly(), &inner.wires) {
+        if let (Direction::Construct, Some(inner_wires)) = (at.crossing.direction(), &inner.wires) {
             // A sum reached through the gate needs no navigation added: every
             // one of its wires already reads the value through a `when` or an
             // `as?`, both of which take a null subject. What the gate does add
@@ -773,14 +775,14 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let emit = cx.emit();
-        let conv = match at.crossing.assembly() {
-            Assembly::Construct => self
+        let conv = match at.crossing.direction() {
+            Direction::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
                 .or_else(|| self.decls.input_run(ty, emit))
                 .or_else(|| self.borrow(ty, emit, true))
                 .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit)),
-            Assembly::Deconstruct => self
+            Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
                 .or_else(|| self.decls.output_run(ty, emit))
@@ -810,7 +812,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         func: &Function,
         parts: Parts<'_, Self>,
     ) -> Frag<Self> {
-        if at.crossing.assembly() != Assembly::Construct {
+        if at.crossing.direction() != Direction::Construct {
             return Ok(self.out_value_form(at, func, parts));
         }
         Err(refuse(
@@ -825,7 +827,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // to `choice`. Which alternative that is stays `choice`'s to fill in,
         // being the only hook told — so both directions leave a hole here.
         let sum = self.is_sum(cx, at);
-        if at.crossing.assembly() != Assembly::Construct {
+        if at.crossing.direction() != Direction::Construct {
             return match sum {
                 true => Ok(self.out_arm(at, parts)),
                 false => Ok(self.out_product(at, parts)),
@@ -914,7 +916,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         at: At<'_>,
         arms: &[(&Alternative, &JFrag)],
     ) -> Frag<Self> {
-        if at.crossing.assembly() != Assembly::Construct {
+        if at.crossing.direction() != Direction::Construct {
             return self.selected_out(at, arms);
         }
         // Which alternative is live crosses as its own `jint`, and every
@@ -1077,16 +1079,16 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
 impl crate::jni::Declarations {
     /// The conversion for `ty` in the given direction, from the fragments
     /// compiled so far.
-    pub(crate) fn frag(&self, ty: &TypeRef, assembly: Assembly) -> Option<Conv> {
-        Some(Conv(self.compiled.borrow().fragment(&ty.key(), assembly)?))
+    pub(crate) fn frag(&self, ty: &TypeRef, direction: Direction) -> Option<Conv> {
+        Some(Conv(self.compiled.borrow().fragment(&ty.key(), direction)?))
     }
 
     pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<Conv> {
-        self.frag(ty, Assembly::Construct)
+        self.frag(ty, Direction::Construct)
     }
 
     pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<Conv> {
-        self.frag(ty, Assembly::Deconstruct)
+        self.frag(ty, Direction::Deconstruct)
     }
 
     /// Every wire the Kotlin → Rust crossing of `ty` occupies, or `None` when
@@ -1099,8 +1101,8 @@ impl crate::jni::Declarations {
         let key = ty.key();
         let compiled = self.compiled.borrow();
         compiled
-            .recipe_fragment(&key, Assembly::Construct, &crate::jni::recipes::parts())
-            .or_else(|| compiled.fragment(&key, Assembly::Construct))?
+            .recipe_fragment(&key, Direction::Construct, &crate::jni::recipes::parts())
+            .or_else(|| compiled.fragment(&key, Direction::Construct))?
             .wires
             .clone()
     }

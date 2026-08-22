@@ -1473,10 +1473,7 @@ impl JniGenBuilder {
                     let (dir, key) = crossing;
                     decls.compiled.borrow_mut().record(
                         key.clone(),
-                        match dir {
-                            Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
-                            Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
-                        },
+                        *dir,
                         prebindgen_registry::recipe::RecipeId::new("callback"),
                         crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
                     );
@@ -1568,7 +1565,7 @@ impl JniGenBuilder {
             }
             let crossing = prebindgen_registry::recipe::Crossing::new(
                 ty,
-                prebindgen_registry::recipe::Assembly::Deconstruct,
+                prebindgen_registry::recipe::Direction::Deconstruct,
             );
             // A type with nothing to hand out states no `parts` recipe — an empty
             // struct, or an enum with no alternatives. Asking for one by name
@@ -1623,7 +1620,7 @@ impl Declarations {
     /// without the compiler.
     fn is_callback_crossing<R: Conversions>(&self, crossing: &Crossing, built: &R) -> bool {
         let (dir, key) = crossing;
-        matches!(dir, Direction::Input)
+        matches!(dir, Direction::Construct)
             && built.reading(key).is_some_and(|r| {
                 matches!(
                     r.unwrapped().kind(),
@@ -1655,24 +1652,21 @@ impl Declarations {
         // does not describe yet. Stating those arms as recipes is what lets the
         // derived callback recipe take over, and it is a later stage than this
         // one.
-        if matches!(dir, Direction::Input) {
+        if matches!(dir, Direction::Construct) {
             if let prebindgen_registry::flat::TypeKind::Callback { args } =
                 reading.unwrapped().kind()
             {
                 return self.dispatch_fn_input(args, built, emit);
             }
         }
-        let assembly = match dir {
-            Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
-            Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
-        };
+        let direction = *dir;
         let mut adapter = crate::jni::compile::JCompile {
             decls: self,
             registry: built,
             declared_return: None,
             site: None,
         };
-        let crossing = prebindgen_registry::recipe::Crossing::new(reading, assembly);
+        let crossing = prebindgen_registry::recipe::Crossing::new(reading, direction);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
         // A `data_class` also states a recipe that says what it is made of, and
         // compiling it here is what holds the composition to every binding this
@@ -1687,7 +1681,7 @@ impl Declarations {
         // where it was declared. `recipe_of` refuses an absent name rather than
         // answering with the default, which is what makes that condition the
         // one that has to match.
-        if assembly == prebindgen_registry::recipe::Assembly::Construct
+        if direction == prebindgen_registry::recipe::Direction::Construct
             && matches!(
                 self.types
                     .get(&crossing.value().stripped_key())
@@ -1752,7 +1746,7 @@ impl Declarations {
 
         // An expression constant's value type has no captured item to scan.
         for ty in self.required_output_types() {
-            registry = registry.cross(Direction::Output, &ty);
+            registry = registry.cross(Direction::Deconstruct, &ty);
         }
         // The other-side type of every `convert!` conversion, in the
         // conversion's direction: an input fn's parameter type needs its own
@@ -1760,20 +1754,20 @@ impl Declarations {
         // fn's return type needs the output twin.
         let mut convert_edges: Vec<(Crossing, Crossing)> = Vec::new();
         for decl in &self.convert_decls {
-            if let Some(ty) = self.convert_target(decl.key(), &registry, Direction::Input) {
-                registry = registry.cross(Direction::Input, &ty);
+            if let Some(ty) = self.convert_target(decl.key(), &registry, Direction::Construct) {
+                registry = registry.cross(Direction::Construct, &ty);
                 // The target's conversion chains through this one, and nothing
                 // about the target type says so.
                 convert_edges.push((
-                    (Direction::Input, decl.key().clone()),
-                    (Direction::Input, TypeKey::from_type(&ty)),
+                    (Direction::Construct, decl.key().clone()),
+                    (Direction::Construct, TypeKey::from_type(&ty)),
                 ));
             }
-            if let Some(ty) = self.convert_target(decl.key(), &registry, Direction::Output) {
-                registry = registry.cross(Direction::Output, &ty);
+            if let Some(ty) = self.convert_target(decl.key(), &registry, Direction::Deconstruct) {
+                registry = registry.cross(Direction::Deconstruct, &ty);
                 convert_edges.push((
-                    (Direction::Output, decl.key().clone()),
-                    (Direction::Output, TypeKey::from_type(&ty)),
+                    (Direction::Deconstruct, decl.key().clone()),
+                    (Direction::Deconstruct, TypeKey::from_type(&ty)),
                 ));
             }
         }

@@ -615,7 +615,7 @@ fn classify_leaf(
     expanded: bool,
     source_param: &syn::Ident,
 ) -> Result<PlanLeaf, PlanError> {
-    use prebindgen_registry::recipe::{Assembly, Compiler, Crossing, Role, Site};
+    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
     // `impl Fn(args)` never reaches the compiler, for the reason
     // `JniGen::compile_crossing` gives: a callback is answered whole, because a
     // JniGen callback ARGUMENT does not always have a conversion of its own —
@@ -668,7 +668,7 @@ fn classify_leaf(
         owner: source_param.clone(),
         role: Role::Param { index: 0 },
     };
-    let crossing = Crossing::new(reading.clone(), Assembly::Construct);
+    let crossing = Crossing::new(reading.clone(), Direction::Construct);
     let planned = compiler.site(&mut adapter, site, crossing);
     *ext.compiled.borrow_mut() = compiler.finish();
     match planned {
@@ -709,7 +709,7 @@ fn return_site(
     target: &TypeRef,
     declared: Option<TypeRef>,
 ) -> Option<crate::jni::compile::JPlan> {
-    use prebindgen_registry::recipe::{Assembly, Compiler, Crossing, Role, Site};
+    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
     let mut compiler = Compiler::resume(
         registry.flat(),
         ext.recipe_table(),
@@ -726,7 +726,7 @@ fn return_site(
         owner: func.clone(),
         role: Role::Return,
     };
-    let crossing = Crossing::new(target.clone(), Assembly::Deconstruct);
+    let crossing = Crossing::new(target.clone(), Direction::Deconstruct);
     let planned = compiler.site(&mut adapter, site, crossing);
     *ext.compiled.borrow_mut() = compiler.finish();
     planned.ok().flatten()
