@@ -1311,7 +1311,7 @@ impl fmt::Display for RecipeError {
                 func,
             } => write!(
                 f,
-                "recipe `{recipe}` of {recipe} names `{func}`, which no #[prebindgen] \
+                "recipe `{recipe}` of {crossing} names `{func}`, which no #[prebindgen] \
                  source declares"
             ),
             RecipeError::NotAConstructor {
@@ -1320,7 +1320,7 @@ impl fmt::Display for RecipeError {
                 func,
             } => write!(
                 f,
-                "recipe `{recipe}` of {recipe} builds the value with `{func}`, which does \
+                "recipe `{recipe}` of {crossing} builds the value with `{func}`, which does \
                  not return that type"
             ),
             RecipeError::NotAnAccessor {
@@ -1329,7 +1329,7 @@ impl fmt::Display for RecipeError {
                 func,
             } => write!(
                 f,
-                "recipe `{recipe}` of {recipe} reaches a part through `{func}`, whose \
+                "recipe `{recipe}` of {crossing} reaches a part through `{func}`, whose \
                  first parameter is not that type"
             ),
             RecipeError::OutOfRange {
@@ -1339,7 +1339,7 @@ impl fmt::Display for RecipeError {
                 len,
             } => write!(
                 f,
-                "recipe `{recipe}` of {recipe} names index {index}, and the model holds {len}"
+                "recipe `{recipe}` of {crossing} names index {index}, and the model holds {len}"
             ),
             RecipeError::WrongShape {
                 crossing,
@@ -1348,11 +1348,13 @@ impl fmt::Display for RecipeError {
                 wanted,
             } => write!(
                 f,
-                "recipe `{recipe}` of `{recipe}` declares `{shape}`, but the type is not {wanted}"
+                "recipe `{recipe}` of {crossing} declares `{shape}`, but the type is not \
+                 {wanted}"
             ),
             RecipeError::NotAProduct { crossing, recipe } => write!(
                 f,
-                "recipe `{recipe}` takes {recipe} apart, and the model gives that type no parts"
+                "recipe `{recipe}` takes {crossing} apart, and the model gives that type no \
+                 parts"
             ),
             RecipeError::NoSuchRow { crossing, recipe } => write!(
                 f,
@@ -1396,7 +1398,7 @@ impl fmt::Display for RecipeError {
             ),
             RecipeError::CallbackShape { crossing, recipe } => write!(
                 f,
-                "recipe `{recipe}` of the callback {recipe} is not `Invoke`; a callback is \
+                "recipe `{recipe}` of the callback {crossing} is not `Invoke`; a callback is \
                  always taken apart into its arguments, so that is the only shape \
                  such a crossing takes"
             ),

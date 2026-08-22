@@ -27,7 +27,8 @@ pub struct Site {
 }
 
 impl Site {
-    /// The site of one part of `of`'s recipe `recipe`.
+    /// The site of one part: which crossing the part belongs to, which of that
+    /// crossing's recipes names it, and where in that recipe it sits.
     ///
     /// The one `Site` an adapter must be able to build **exactly**, because the
     /// driver builds it too and the two have to meet: a per-part binding is
@@ -38,11 +39,10 @@ impl Site {
         Self::arm_part(of, recipe, None, index)
     }
 
-    /// The site of one part of `of`'s recipe `recipe`, inside alternative `arm`.
+    /// [`Self::part`], for a part that sits inside one alternative.
     ///
-    /// [`Self::part`] with the alternative stated. A part of a
-    /// [`Shape::Choice`](super::Shape::Choice) recipe needs it, because every arm
-    /// numbers its parts from zero.
+    /// A part of a [`Shape::Choice`](super::Shape::Choice) recipe needs the
+    /// alternative stated, because every arm numbers its parts from zero.
     pub fn arm_part(of: &Crossing, recipe: &RecipeId, arm: Option<usize>, index: usize) -> Self {
         Self {
             owner: of
