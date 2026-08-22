@@ -327,6 +327,7 @@ fn encode_group_leaf(
             leaf.out_ty.key()
         )
     });
+    out_entry.activate();
     let wire = out_entry.destination.clone();
     let conv_fail = fail(quote!(__e.to_string()));
     let enc = format_ident!("__enc_{}", obj_ident);

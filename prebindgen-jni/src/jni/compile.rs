@@ -555,7 +555,7 @@ impl JFrag {
         }
     }
 
-    fn composed_chain_unmarked(&self) -> Option<ComposedChain> {
+    pub(crate) fn composed_chain(&self) -> Option<ComposedChain> {
         if !self.composed_only {
             if let Some(layout) = self.layout.clone().filter(JLayout::is_composed) {
                 return Some(ComposedChain {
@@ -566,12 +566,6 @@ impl JFrag {
             }
         }
         self.nested_chain.clone()
-    }
-
-    pub(crate) fn composed_chain(&self) -> Option<ComposedChain> {
-        let chain = self.composed_chain_unmarked()?;
-        chain.mark_reachable();
-        Some(chain)
     }
 }
 
@@ -784,6 +778,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let rust =
             crate::jni::chain::JFunction::owned_handle(crate::jni::chain::JOwnedHandlePlan {
                 ident,
+                reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
                 source: source.clone(),
                 module,
             });
@@ -937,6 +932,20 @@ impl<R: Conversions> JCompile<'_, R> {
             },
         })
     }
+
+    /// One target-safe inactive value for an intermediate. Product
+    /// intermediates recurse positionally; terminal JNI wires reuse the same
+    /// zero/null policy as wrapper error sentinels.
+    fn inactive_intermediate(ty: &syn::Type) -> TokenStream {
+        match ty {
+            syn::Type::Tuple(tuple) => {
+                let values = tuple.elems.iter().map(Self::inactive_intermediate);
+                quote!((#(#values,)*))
+            }
+            wire => crate::jni::emit::sentinel_for_wire(wire),
+        }
+    }
+
     /// Plan an Optional over one already-composed child intermediate without
     /// spelling its source type or generating its Rust body.
     ///
@@ -947,10 +956,20 @@ impl<R: Conversions> JCompile<'_, R> {
         let source = at.crossing.spelled();
         let element = source.optional_inner()?;
         let direction = at.crossing.direction();
-        if inner.out_wires.is_some()
-            || (inner.wires.is_some() && (direction != Direction::Construct || inner.composed_only))
-        {
-            return None;
+        let composed_child =
+            !inner.composed_only && inner.layout.as_ref().is_some_and(JLayout::is_composed);
+        match direction {
+            Direction::Construct
+                if inner.out_wires.is_some() || (inner.wires.is_some() && !composed_child) =>
+            {
+                return None;
+            }
+            Direction::Deconstruct
+                if inner.wires.is_some() || (inner.out_wires.is_some() && !composed_child) =>
+            {
+                return None;
+            }
+            _ => {}
         }
         if direction == Direction::Construct
             && (element.borrow_target().is_some() || inner.conv.metadata.is_direct_handle())
@@ -1046,7 +1065,28 @@ impl<R: Conversions> JCompile<'_, R> {
                     }
                 }
                 Direction::Deconstruct => {
-                    if let Some((slot, rest)) = inner.conv.niches.clone().carve() {
+                    if inner.out_wires.is_some() {
+                        let inner_layout = inner.layout.clone()?;
+                        let absent = Self::inactive_intermediate(&inner_wire);
+                        let destination: syn::Type =
+                            syn::parse_quote!((jni::sys::jboolean, #inner_wire));
+                        (
+                            crate::jni::chain::JOptionalBridge::OutputGated {
+                                child: inner_wire,
+                                absent,
+                            },
+                            crate::jni::chain::JChild::output(
+                                inner.conv.converter_ident().clone(),
+                                stages,
+                                crate::jni::chain::JValueUse::Direct,
+                            ),
+                            destination,
+                            Niches::empty(),
+                            NullableKind::Boxed,
+                            JLayout::Optional(Box::new(inner_layout)),
+                            true,
+                        )
+                    } else if let Some((slot, rest)) = inner.conv.niches.clone().carve() {
                         (
                             crate::jni::chain::JOptionalBridge::OutputNiche {
                                 wire: inner_wire.clone(),
@@ -1110,9 +1150,15 @@ impl<R: Conversions> JCompile<'_, R> {
             kotlin_name
         };
         let ident = crate::jni::chain::planned_name(direction, source, &destination);
+        let out_wires = (direction == Direction::Deconstruct
+            && matches!(&layout, JLayout::Optional(_)))
+        .then(|| inner.out_wires.clone())
+        .flatten();
         let marker = crate::jni::chain::planned_marker(&ident);
         let rust = crate::jni::chain::JFunction::optional(crate::jni::chain::JOptionalPlan {
             ident,
+            reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
+            dependencies: vec![inner.rust.clone()],
             chain: prebindgen_registry::chain::Optional {
                 source: source.clone(),
                 direction,
@@ -1125,7 +1171,6 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             input_by_ref,
         });
-        inner.rust.mark_reachable();
         Some(JFrag {
             conv: ConverterImpl {
                 destination,
@@ -1142,7 +1187,7 @@ impl<R: Conversions> JCompile<'_, R> {
             layout: Some(layout),
             nested_chain: None,
             wires: None,
-            out_wires: None,
+            out_wires,
             composed_only: false,
             yields: Yield {
                 ty: at.crossing.value().stripped_key(),
@@ -1197,16 +1242,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     fn optional(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &JFrag) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let emit = cx.emit();
-        // A declared terminal outranks the arity the registry derived, exactly
-        // as it did when one chain answered both: `input_terminal` claims a
-        // `Cow<'_, [u8]>` blob, and a `convert!` may name an optional.
-        let terminal = match at.crossing.direction() {
-            Direction::Construct => self.decls.input_terminal(ty, self.registry, emit),
-            Direction::Deconstruct => self.decls.output_terminal(ty, self.registry, emit),
-        };
-        let mut frag = if let Some(conv) = terminal {
-            JFrag::new(at, conv)
-        } else if let Some(planned) = self.planned_optional(at, inner) {
+        let mut frag = if let Some(planned) = self.planned_optional(at, inner) {
             planned
         } else {
             let legacy = match at.crossing.direction() {
@@ -1291,7 +1327,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 }),
         };
         let mut frag = self.wrap(at, "no JNI representation for this run", conv)?;
-        frag.nested_chain = inner.composed_chain_unmarked();
+        frag.nested_chain = inner.composed_chain();
         Ok(frag)
     }
 
@@ -1474,6 +1510,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             .site
             .as_ref()
             .ok_or_else(|| JErr::Refused("JniGen: a site compiled with no site context".into()))?;
+        if matches!(root.layout, Some(JLayout::Leaf)) {
+            root.rust.mark_reachable();
+        }
         let site = match site {
             PlanSite::Return => {
                 // A fragment that occupies several wires IS the decomposed
@@ -1644,7 +1683,7 @@ pub(crate) struct ComposedChain {
 }
 
 impl ComposedChain {
-    fn mark_reachable(&self) {
+    pub(crate) fn activate(&self) {
         self.rust.mark_reachable();
     }
 }
@@ -1656,6 +1695,12 @@ impl ComposedChain {
 /// conversion through it costs a refcount instead of a whole `syn::ItemFn` per
 /// lookup.
 pub(crate) struct Conv(std::rc::Rc<JFrag>);
+
+impl Conv {
+    pub(crate) fn activate(&self) {
+        self.0.rust.mark_reachable();
+    }
+}
 
 impl std::ops::Deref for Conv {
     type Target = ConverterImpl<KotlinMeta>;

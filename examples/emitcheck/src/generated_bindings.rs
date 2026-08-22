@@ -126,32 +126,6 @@ const _: () = {
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn Box_Option_ZKeyExpr_to_jlong_98f8412f<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Box<Option<myflat::ZKeyExpr>>,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    ::core::result::Result::Ok({
-        match *v {
-            ::core::option::Option::Some(__value) => {
-                ZKeyExpr_to_jlong_37f9dc18(env, __value)?
-            }
-            ::core::option::Option::None => 0i64,
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn Box_String_to_JString_027f6250<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Box<String>,
@@ -412,32 +386,6 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn Option_ZKeyExpr_to_jlong_ffed55c9<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Option<myflat::ZKeyExpr>,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    ::core::result::Result::Ok({
-        match v {
-            ::core::option::Option::Some(__value) => {
-                ZKeyExpr_to_jlong_37f9dc18(env, __value)?
-            }
-            ::core::option::Option::None => 0i64,
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: String,
@@ -514,62 +462,6 @@ pub(crate) unsafe fn ZSample_to_jlong_757bca9c<'a>(
     v: myflat::ZSample,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn jlong_to_ZKeyExpr_37f9dc18_owned<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::sys::jlong,
-) -> ::core::result::Result<myflat::ZKeyExpr, __JniErr> {
-    if *v == 0 || (*v & 1) == 1 {
-        return ::core::result::Result::Err(
-            <__JniErr as ::core::convert::From<
-                String,
-            >>::from("Operation on a closed native handle.".to_string()),
-        );
-    }
-    ::core::result::Result::Ok(unsafe {
-        *::std::boxed::Box::from_raw(*v as *mut myflat::ZKeyExpr)
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn jlong_to_ZSample_757bca9c_owned<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::sys::jlong,
-) -> ::core::result::Result<myflat::ZSample, __JniErr> {
-    if *v == 0 || (*v & 1) == 1 {
-        return ::core::result::Result::Err(
-            <__JniErr as ::core::convert::From<
-                String,
-            >>::from("Operation on a closed native handle.".to_string()),
-        );
-    }
-    ::core::result::Result::Ok(unsafe {
-        *::std::boxed::Box::from_raw(*v as *mut myflat::ZSample)
-    })
 }
 #[allow(
     non_snake_case,

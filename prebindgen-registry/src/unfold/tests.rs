@@ -1131,6 +1131,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     // user callback still sees the whole `List<Payload>`.
     let mut reg: Registry = reg_with(&[
         "fn storage_callback_vec(f: impl Fn(&[Payload]) + Send + Sync + 'static) { todo!() }",
+        "fn storage_callback_optional(f: impl Fn(Option<Payload>) + Send + Sync + 'static) { todo!() }",
     ]);
     let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
         name: name.to_string(),
@@ -1150,7 +1151,10 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
         ],
     };
     let declared: std::collections::HashSet<syn::Ident> =
-        ["storage_callback_vec"].iter().map(|s| ident(s)).collect();
+        ["storage_callback_vec", "storage_callback_optional"]
+            .iter()
+            .map(|s| ident(s))
+            .collect();
     apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
 
     let key = TypeKey::from_type(&syn::parse_quote!(&[Payload]));
@@ -1168,6 +1172,17 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     assert!(plan.element.is_none(), "decomposed-leaf fold");
     assert_eq!(plan.leaves.len(), 2);
     assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Reach));
+    let optional = reg
+        .callback_arg_plans
+        .get(&TypeKey::from_type(&syn::parse_quote!(Option<Payload>)))
+        .expect("optional callback-arg plan");
+    assert!(!optional.by_ref);
+    assert_eq!(optional.source.spell().to_string(), "Payload");
+    assert!(matches!(
+        &optional.shape,
+        UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)
+    ));
+    assert!(optional.fixed_builder);
     // A scalar `&Payload` callback arg must stay a Base fixed builder.
     let mut reg2: Registry = reg_with(&[
         "fn storage_callback(f: impl Fn(&Payload) + Send + Sync + 'static) { todo!() }",

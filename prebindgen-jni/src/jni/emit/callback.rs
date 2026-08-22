@@ -127,7 +127,7 @@ pub(crate) fn callback_input(
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cbfold{}_obj{}", i, k))
                 .collect();
-            let (leaf_stmts, leaf_args) = encode_plan_leaves(
+            let (leaf_stmts, leaf_args, _) = encode_plan_leaves(
                 ext,
                 registry,
                 crate::jni::emit::Delivered::with_chain(
@@ -196,7 +196,7 @@ pub(crate) fn callback_input(
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cb{}_obj{}", i, k))
                 .collect();
-            let (stmts, arg_exprs) = encode_plan_leaves(
+            let (stmts, mut arg_exprs, present) = encode_plan_leaves(
                 ext,
                 registry,
                 crate::jni::emit::Delivered::with_chain(
@@ -210,6 +210,17 @@ pub(crate) fn callback_input(
                 &fail,
                 emit,
             );
+            let optional = matches!(
+                &plan.shape,
+                prebindgen_registry::unfold::UnfoldShape::Optional((), inner)
+                    if matches!(**inner, prebindgen_registry::unfold::UnfoldShape::Base)
+            );
+            if optional && present.is_none() {
+                return None;
+            }
+            if let Some(present) = present {
+                arg_exprs.insert(0, quote!(jni::sys::jvalue { z: #present }));
+            }
             preludes.push(stmts);
             total += arg_exprs.len();
             jvalue_exprs.extend(arg_exprs);
@@ -251,6 +262,7 @@ pub(crate) fn callback_input(
                 (quote!((#cb_arg).clone()), ext.out_frag(core)?)
             }
         };
+        arg_entry.activate();
         let arg_wire = arg_entry.destination.clone();
         let enc_ident = format_ident!("__cb{}_enc", i);
         let obj_ident = format_ident!("__cb{}_obj", i);

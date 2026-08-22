@@ -690,10 +690,11 @@ fn wire_fixed_returns(
     }
 }
 
-/// Build a fixed-builder callback-arg plan for every `impl Fn(&T)` /
-/// `impl Fn(T)` parameter (of a declared fn) whose value is the decomposed type
-/// `vd`. The foreign callback receives the flattened leaves (reassembled there)
-/// instead of a whole value built on the Rust side. Separate from the
+/// Build a fixed-builder callback-arg plan for every `impl Fn(&T)`,
+/// `impl Fn(T)`, or `impl Fn(Option<T>)` parameter (of a declared fn) whose
+/// value is the decomposed type `vd`. The foreign callback receives the
+/// flattened leaves (reassembled there) instead of a whole value built on the
+/// Rust side. Separate from the
 /// output-position wiring so the callback path (which needs the foreign-side
 /// group-reassembly adapter) can be enabled on its own.
 fn wire_fixed_callbacks(
@@ -714,22 +715,31 @@ fn wire_fixed_callbacks(
                 continue;
             };
             for arg_ty in args {
-                // Peel a leading `&`, then detect a slice element. An
-                // `impl Fn(&T)` / `impl Fn(T)` arg of the value struct decomposes
-                // into a `Base` fixed builder (foreign side reassembles the whole
-                // value via `fromParts`); an `impl Fn(&[T])` / `impl Fn([T])` arg
-                // becomes an `Iterable` fixed FOLDER (the trampoline folds each
-                // element's leaves into a foreign list — see the callback emitter).
+                // Peel a leading `&`, then one by-value `Option`, then detect a
+                // slice element. A scalar value-struct arg decomposes into a
+                // `Base` fixed builder; `Option<T>` wraps that in `Optional` and
+                // adds a presence slot. A run becomes an `Iterable` fixed FOLDER.
+                // Optional runs are deliberately left to their own shape step.
                 let (by_ref, after_ref) = peel_borrow(arg_ty);
+                let (optional, after_optional) = match after_ref.optional_inner() {
+                    Some(inner) if !by_ref => (true, inner),
+                    _ => (false, after_ref),
+                };
                 // A run of `T` is an Iterable fold over the element; anything else
                 // is a Base fold over the value itself. `Sequence` is the one
                 // question, and it covers `[T]` and `Vec<T>` alike.
-                let (shape, matches_key) = match after_ref.sequence_elem() {
-                    Some(elem) => (
+                let (shape, matches_key) = match after_optional.sequence_elem() {
+                    Some(elem) if !optional => (
                         UnfoldShape::Iterable(Box::new(UnfoldShape::Base)),
                         elem.key() == vd.key,
                     ),
-                    None => (UnfoldShape::Base, after_ref.key() == vd.key),
+                    Some(_) => continue,
+                    None => (UnfoldShape::Base, after_optional.key() == vd.key),
+                };
+                let shape = if optional {
+                    UnfoldShape::Optional((), Box::new(shape))
+                } else {
+                    shape
                 };
                 if !matches_key {
                     continue;

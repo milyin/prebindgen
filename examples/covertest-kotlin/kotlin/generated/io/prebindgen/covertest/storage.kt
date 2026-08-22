@@ -9,6 +9,7 @@ import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.PayloadCallback
 import io.prebindgen.covertest.PayloadHandler
 import io.prebindgen.covertest.PayloadListCallback
+import io.prebindgen.covertest.PayloadOptionalCallback
 import io.prebindgen.covertest.PayloadVecHandler
 import io.prebindgen.covertest.Storage
 import io.prebindgen.covertest.StorageCallback
@@ -401,6 +402,20 @@ public fun storagePutOpt(s: Storage, p: Payload?, onError: JniErrorHandler<Boole
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
+}
+
+/**
+ * Deliver either one [`Payload`] or absence through an
+ * `Option<data-class>` callback argument.
+ */
+public fun payloadOptionalEmit(
+    present: Boolean,
+    f: PayloadOptionalCallback,
+    onError: JniErrorHandler<Unit>,
+) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.payloadOptionalEmit(present, f.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
 /**

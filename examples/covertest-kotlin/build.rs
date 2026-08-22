@@ -815,6 +815,8 @@ fn main() {
                 .fun(fun!(storage_labels))
                 // Option<data-class> input.
                 .fun(fun!(storage_put_opt))
+                // Option<data-class> callback output in both presence states.
+                .fun(fun!(payload_optional_emit))
                 // `.name(...)`: per-function Kotlin rename override. The default name
                 // would be `millisAdd`; force it to `addMillis` to exercise the
                 // override path (the Rust symbol/extern is unaffected).

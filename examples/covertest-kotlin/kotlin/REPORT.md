@@ -145,6 +145,7 @@ Base package: `io.prebindgen.covertest`
 
 - `millis_add` — `fun addMillis(a: Long, b: Long, onError: JniErrorHandler<Long>): Long`
 - `payload_handler_new` — `fun payloadHandlerNew(f: PayloadCallback, onError: JniErrorHandler<PayloadHandler?>): PayloadHandler?`
+- `payload_optional_emit` — `fun payloadOptionalEmit(present: Boolean, f: PayloadOptionalCallback, onError: JniErrorHandler<Unit>)`
 - `payload_vec_handler_new` — `fun payloadVecHandlerNew(f: PayloadListCallback, onError: JniErrorHandler<PayloadVecHandler?>): PayloadVecHandler?`
 - `storage_callback` — `fun storageCallback(s: Storage, handler: PayloadHandler, onError: JniErrorHandler<Unit>)`
 - `storage_callback_vec` — `fun storageCallbackVec(s: Storage, handler: PayloadVecHandler, onError: JniErrorHandler<Unit>)`

@@ -118,6 +118,7 @@ import io.prebindgen.covertest.model.unsignedDataMaybe
 import io.prebindgen.covertest.model.unsignedOptional
 import io.prebindgen.covertest.model.unsignedRoundTrip
 import io.prebindgen.covertest.model.unsignedSeries
+import io.prebindgen.covertest.storage.payloadOptionalEmit
 import io.prebindgen.covertest.storage.addMillis
 import io.prebindgen.covertest.storage.payloadHandlerNew
 import io.prebindgen.covertest.storage.payloadVecHandlerNew
@@ -1265,6 +1266,14 @@ fun main() {
         storageCallback(s, h, boom)
         check(perElem == 6L)
         h.close()
+
+        // Option<Payload> is deconstructed by one registry chain: presence plus
+        // the Product intermediate, then reassembled as a nullable Payload here.
+        val optionalSeen = mutableListOf<Payload?>()
+        val optionalCb = PayloadOptionalCallback { optionalSeen += it }
+        payloadOptionalEmit(true, optionalCb, boom)
+        payloadOptionalEmit(false, optionalCb, boom)
+        check(optionalSeen == listOf(payload(91L, 7, 2.5, true, "optional-callback"), null))
 
         // payload_vec_handler_new: whole batch delivered once as List<Payload>.
         var batchSize = -1

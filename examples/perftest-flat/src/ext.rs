@@ -1702,6 +1702,19 @@ pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
     }
 }
 
+/// Deliver either one [`Payload`] or absence through an
+/// `Option<data-class>` callback argument.
+#[prebindgen]
+pub fn payload_optional_emit(present: bool, f: impl Fn(Option<Payload>) + Send + Sync + 'static) {
+    f(present.then(|| Payload {
+        id: 91,
+        seq: 7,
+        value: 2.5,
+        flag: true,
+        label: Some(Box::new("optional-callback".to_string())),
+    }));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Consts — declared via `PackageDecl::constant`, surfacing as generated JNI
 // getters + lazily-initialized Kotlin top-level `val`s.

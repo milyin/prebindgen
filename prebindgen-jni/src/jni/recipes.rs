@@ -376,6 +376,18 @@ impl Declarations {
             }
         }
 
+        // An optional whose payload has a Product shape offers two rows. Its
+        // established whole/default row preserves object-backed class fields;
+        // `parts` is the registry-composed `(presence, intermediate)` route used
+        // only by sites that explicitly flatten or deconstruct the value.
+        for (outer, _) in self.flattenable_optionals(model).into_values() {
+            recipes
+                .declare_default(outer.clone(), whole(), Constructing::Optional)
+                .declare(outer.clone(), parts(), Constructing::Optional)
+                .declare_default(outer.clone(), whole(), Deconstructing::Optional)
+                .declare(outer.clone(), parts(), Deconstructing::Optional);
+        }
+
         // A fixed-size array of JNI primitives is one Kotlin `ByteArray` or
         // `LongArray`, bulk-copied with nothing boxed — one wire value, not a
         // run this adapter walks. The registry reads `[T; N]` as a run unless
@@ -437,6 +449,38 @@ impl Declarations {
         })
     }
 
+    /// Optional crossings whose payload can use the shared `parts` recipe.
+    ///
+    /// Explicit declarations keep full control of the outer crossing: a
+    /// `convert!(Option<T> => ..)` is an atomic recipe, not an implicit request
+    /// to flatten `T`.
+    fn flattenable_optionals<'a>(
+        &self,
+        model: &'a Flat,
+    ) -> BTreeMap<TypeKey, (&'a TypeRef, &'a TypeRef)> {
+        let explicitly_declared = |ty: &TypeRef| {
+            self.types.contains_key(&ty.key())
+                || self
+                    .convert_decls
+                    .iter()
+                    .any(|decl| decl.key() == &ty.key() || decl.key() == &ty.stripped_key())
+        };
+        let mut optionals = BTreeMap::new();
+        for ty in model
+            .elements()
+            .flat_map(element_types)
+            .flat_map(|ty| ty.walk())
+        {
+            let Some(inner) = ty.optional_inner() else {
+                continue;
+            };
+            if !explicitly_declared(ty) && self.field_crosses_as_its_fields(inner) {
+                optionals.entry(ty.stripped_key()).or_insert((ty, inner));
+            }
+        }
+        optionals
+    }
+
     pub(crate) fn bindings(
         &self,
         model: &Flat,
@@ -456,41 +500,21 @@ impl Declarations {
             .collect();
         declared.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
-        // Every optional over a flattenable value, wherever the model spells
-        // one: a parameter, a field, a callback argument. A `Site` keys a part
-        // by the crossing's **stripped** key, so `Option<Payload>` and
-        // `Box<Option<Payload>>` are one site and binding it once answers for
-        // both spellings.
-        //
-        // Enumerated from the model rather than from the declarations, for the
-        // same reason the array recipes are: what has to be bound is what the
-        // model names, and a declaration says nothing about where its type is
-        // used.
-        let mut optionals: BTreeMap<TypeKey, (&TypeRef, &TypeRef)> = BTreeMap::new();
-        for ty in model
-            .elements()
-            .flat_map(element_types)
-            .flat_map(|t| t.walk())
-        {
-            let Some(inner) = ty.optional_inner() else {
-                continue;
-            };
-            if self.field_crosses_as_its_fields(inner) {
-                optionals.entry(ty.stripped_key()).or_insert((ty, inner));
+        // The named Optional row delegates its one child to the child's named
+        // Product row. The whole/default row has no parts and therefore remains
+        // untouched. Bind both directions: function inputs construct the Rust
+        // optional, while returns and callback arguments deconstruct it.
+        for (outer, inner) in self.flattenable_optionals(model).into_values() {
+            for direction in [Direction::Construct, Direction::Deconstruct] {
+                let outer = Crossing::new(outer.clone(), direction);
+                let row = outer.row(parts());
+                bound.bind(
+                    Site::part(&row, 0),
+                    Crossing::new(inner.clone(), direction),
+                    Ask::Recipe(parts()),
+                    Origin::Part,
+                );
             }
-        }
-        for (outer, inner) in optionals.into_values() {
-            // The optional keeps the recipe the registry derived from its shape —
-            // it has no `parts` recipe of its own — and it is the value one layer
-            // in that crosses as its parts.
-            let outer = Crossing::new(outer.clone(), Direction::Construct);
-            let row = outer.row(RecipeName::derived());
-            bound.bind(
-                Site::part(&row, 0),
-                Crossing::new(inner.clone(), Direction::Construct),
-                Ask::Recipe(parts()),
-                Origin::Part,
-            );
         }
 
         for key in declared {
@@ -512,23 +536,20 @@ impl Declarations {
                 if !self.field_crosses_as_its_fields(target) {
                     continue;
                 }
-                // An `Option<D>` field reaches D through the optional's own
-                // part site, which the model-wide scan above already bound. What
-                // is left is the field that IS the class: its part takes the
-                // `parts` recipe, in both directions.
-                if field.ty.optional_inner().is_none() {
-                    for (of, direction) in [
-                        (&building, Direction::Construct),
-                        (&handing_out, Direction::Deconstruct),
-                    ] {
-                        let row = of.row(parts());
-                        bound.bind(
-                            Site::part(&row, index),
-                            Crossing::new(field.ty.clone(), direction),
-                            Ask::Recipe(parts()),
-                            Origin::Part,
-                        );
-                    }
+                // A direct class field selects its Product row; an optional
+                // class field selects the Optional `parts` row, which in turn
+                // selects that same Product row for its child.
+                for (of, direction) in [
+                    (&building, Direction::Construct),
+                    (&handing_out, Direction::Deconstruct),
+                ] {
+                    let row = of.row(parts());
+                    bound.bind(
+                        Site::part(&row, index),
+                        Crossing::new(field.ty.clone(), direction),
+                        Ask::Recipe(parts()),
+                        Origin::Part,
+                    );
                 }
             }
         }
@@ -588,7 +609,8 @@ impl Declarations {
                 let callback = Crossing::new(param.ty.clone(), Direction::Construct);
                 let row = callback.row(RecipeName::derived());
                 for (index, arg) in args.iter().enumerate() {
-                    let core = arg.borrow_target().unwrap_or(arg);
+                    let crossed = arg.borrow_target().unwrap_or(arg);
+                    let core = crossed.optional_inner().unwrap_or(crossed);
                     if let Some(element) = core.sequence_elem() {
                         let element = element.borrow_target().unwrap_or(element);
                         if !self.field_crosses_as_its_fields(element) {

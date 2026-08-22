@@ -657,6 +657,35 @@ internal fun LedgerCallback.asRaw(): LedgerCallbackRaw =
         }
     }
 
+public fun interface PayloadOptionalCallback {
+    public fun run(payload: Payload?)
+}
+
+internal fun interface PayloadOptionalCallbackRaw {
+    public fun run(
+        payloadPresent: Boolean,
+        id: Long,
+        seq: Int,
+        value: Double,
+        flag: Boolean,
+        label: String?,
+    )
+}
+
+@JvmSynthetic
+internal fun PayloadOptionalCallback.asRaw(): PayloadOptionalCallbackRaw =
+    PayloadOptionalCallbackRaw {
+        payloadPresent,
+        id,
+        seq,
+        value,
+        flag,
+        label ->
+        run(
+            if (payloadPresent) { Payload.fromParts(id, seq, value, flag, label) } else null
+        )
+    }
+
 public fun interface StorageCallback {
     public fun run(storage: Storage)
 }
@@ -1293,6 +1322,9 @@ internal object CovNative {
         pLabel: String?,
         errorSink: Any,
     ): Long?
+
+    @JvmSynthetic
+    external fun payloadOptionalEmit(present: Boolean, f: Any, errorSink: Any)
 
     @JvmSynthetic
     external fun payloadPriority(
