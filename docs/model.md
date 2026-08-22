@@ -436,13 +436,29 @@ trait RenderRust {
         emit: &Emit,
     ) -> Result<Vec<syn::Item>, RenderError>;
 }
+
+fn write_rust<P, R: RenderRust<Plans = P>>(
+    generation: &Generation<P>,
+    renderer: &R,
+    destination: impl AsRef<Path>,
+) -> Result<PathBuf, WriteError>;
 ```
 
-The adapter owns `Generation` and its `write_rust`; the registry is a planning
-input, not the driver of emission callbacks. The concrete API may instead use
-an item sink which owns the private capability. The invariant is the same:
-`Emit` is minted only inside final file assembly, and every adapter call that
-can reach it is a renderer over a frozen, item-specific plan.
+The **shared Rust writer** drives this last function. It mints `Emit`, walks the
+already-ordered artifact envelopes, asks the adapter's renderer to turn each
+item-specific plan into `syn::Item`s, appends model guards, formats the complete
+file, and writes it. C and JNI may expose convenience `write_rust` methods, but
+those delegate to this one pipeline; they do not reimplement assembly, error
+handling, formatting, or destination handling.
+
+The adapter owns the semantic contents of `Generation` and the small
+plan-to-items renderer. The registry is a planning input, not an input to that
+renderer. Calling the renderer is one explicit final-emission boundary rather
+than the current protocol of item-kind callbacks interleaved with registry
+access. The concrete API may instead use an item sink which owns the private
+capability. The invariant is the same: `Emit` is minted only inside final file
+assembly, and every adapter call that can reach it is a renderer over a frozen,
+item-specific plan.
 
 Returning `syn::Item`s (or pushing them into that sink) removes the current
 `TokenStream -> syn::File -> syn::Item` parse round trip. Source qualification
@@ -489,9 +505,9 @@ This can land as byte-identical stages:
 4. Remove `Emit` from `convert_with` and `recipe::Compiler`; make it impossible
    to construct or receive a spelling capability anywhere in the planning call
    graph.
-5. Move final file ownership to each adapter, replace per-item token callbacks
-   with direct item rendering, and remove the shared `Prebindgen` emission
-   protocol and `post_process_item`.
+5. Reduce the shared writer to the single final-assembly driver above, replace
+   the item-kind token callbacks with one plan-rendering boundary, and remove
+   the `Prebindgen` emission protocol and `post_process_item`.
 
 The ordering allows temporary semantic plans to coexist with old rendered
 fragments, but the invariant is complete only after step 4. Each step keeps
