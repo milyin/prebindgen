@@ -524,8 +524,9 @@ pub(crate) fn planned_name(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use prebindgen_registry::flat::ScalarKind;
+
+    use super::*;
 
     #[test]
     fn planned_tuple_names_are_bounded_by_arity() {
