@@ -1170,15 +1170,13 @@ pub(crate) unsafe fn JString_to_Option_Box_String_071e4c8c<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
 ) -> ::core::result::Result<Option<Box<String>>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<Box<String>> = {
-            if v.is_null() {
-                None
-            } else {
-                Some(JString_to_Box_String_027f6250(env, v)?)
-            }
-        };
-        __v
+    ::core::result::Result::Ok({
+        if v.is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = v;
+            ::core::option::Option::Some(JString_to_Box_String_027f6250(env, __present)?)
+        }
     })
 }
 #[allow(
@@ -2580,13 +2578,12 @@ pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Box<String>>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    Ok({
-        let v: Option<Box<String>> = v;
-        {
-            match v {
-                Some(value) => Box_String_to_JString_027f6250(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Box_String_to_JString_027f6250(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -2607,13 +2604,12 @@ pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Payload>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Payload> = v;
-        {
-            match v {
-                Some(value) => Payload_to_JObject_98f64326(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Payload_to_JObject_98f64326(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -2634,13 +2630,12 @@ pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Vec<perftest_flat::Payload>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<Vec<perftest_flat::Payload>> = v;
-        {
-            match v {
-                Some(value) => Vec_Payload_to_JObject_8b7084d2(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Vec_Payload_to_JObject_8b7084d2(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }

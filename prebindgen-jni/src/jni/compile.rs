@@ -73,6 +73,7 @@ impl JPlan {
 #[derive(Clone)]
 pub(crate) struct JFrag {
     pub(crate) conv: ConverterImpl<KotlinMeta>,
+    pub(crate) rust: crate::jni::chain::JFunction,
     pub(crate) yields: Yield,
     /// The wire values this crossing occupies, when it occupies more than the
     /// one `conv.destination` names.
@@ -467,8 +468,10 @@ impl JFrag {
     /// nothing composes a callback as an inner, so no recipe ever reads this
     /// `Yield`. Goes with the derived callback recipe.
     pub(crate) fn by_hand(ty: TypeKey, conv: ConverterImpl<KotlinMeta>) -> Self {
+        let rust = crate::jni::chain::JFunction::complete(conv.function.clone());
         Self {
             conv,
+            rust,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -482,8 +485,10 @@ impl JFrag {
 
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
         let validity = validity_of(&conv, at.crossing.direction());
+        let rust = crate::jni::chain::JFunction::complete(conv.function.clone());
         Self {
             conv,
+            rust,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -665,6 +670,171 @@ impl<R: Conversions> JCompile<'_, R> {
             Some(c)
         }
     }
+
+    /// Plan an ordinary single-intermediate Optional without spelling its
+    /// source type or generating its Rust body.
+    ///
+    /// The deep input recipe for `Option<&opaque>` remains terminal because it
+    /// deliberately yields `OwnedObject<T>` and clones the Java-owned handle.
+    /// Multi-wire products remain with the parts compiler.
+    fn planned_optional(&self, at: At<'_>, inner: &JFrag) -> Option<JFrag> {
+        let source = at.crossing.spelled();
+        let element = source.optional_inner()?;
+        let direction = at.crossing.direction();
+        if inner.wires.is_some() || inner.out_wires.is_some() {
+            return None;
+        }
+        if direction == Direction::Construct
+            && (element.borrow_target().is_some() || inner.conv.metadata.is_direct_handle())
+        {
+            return None;
+        }
+
+        let wrappers = source.erased_wrappers();
+        if wrappers.iter().any(|wrapper| *wrapper != "Box") {
+            return None;
+        }
+
+        let inner_wire = inner.conv.destination.clone();
+        let stages = match direction {
+            Direction::Construct => inner
+                .conv
+                .input_stage_order()
+                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .collect(),
+            Direction::Deconstruct => inner
+                .conv
+                .output_stage_order()
+                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .collect(),
+        };
+
+        let (bridge, child, destination, niches, nullable_kind) = match direction {
+            Direction::Construct => {
+                if let Some((slot, rest)) = inner.conv.niches.clone().carve() {
+                    (
+                        crate::jni::chain::JOptionalBridge::InputNiche {
+                            wire: inner_wire.clone(),
+                            absent: slot.matches,
+                        },
+                        crate::jni::chain::JChild::input(
+                            inner.conv.converter_ident().clone(),
+                            stages,
+                            crate::jni::chain::JValueUse::Direct,
+                        ),
+                        inner_wire,
+                        rest,
+                        NullableKind::Niche,
+                    )
+                } else if is_jni_primitive(&inner_wire) {
+                    (
+                        crate::jni::chain::JOptionalBridge::InputBoxed {
+                            inner_wire: inner_wire.clone(),
+                            method: jni_unbox_method(&inner_wire),
+                            signature: jni_unbox_sig(&inner_wire),
+                            getter: format_ident!("{}", jni_unbox_getter(&inner_wire)),
+                        },
+                        crate::jni::chain::JChild::input(
+                            inner.conv.converter_ident().clone(),
+                            stages,
+                            crate::jni::chain::JValueUse::SharedRef,
+                        ),
+                        syn::parse_quote!(jni::objects::JObject),
+                        Niches::empty(),
+                        NullableKind::Boxed,
+                    )
+                } else {
+                    return None;
+                }
+            }
+            Direction::Deconstruct => {
+                if let Some((slot, rest)) = inner.conv.niches.clone().carve() {
+                    (
+                        crate::jni::chain::JOptionalBridge::OutputNiche {
+                            wire: inner_wire.clone(),
+                            absent: slot.value,
+                        },
+                        crate::jni::chain::JChild::output(
+                            inner.conv.converter_ident().clone(),
+                            stages,
+                        ),
+                        inner_wire,
+                        rest,
+                        NullableKind::Niche,
+                    )
+                } else {
+                    let helper = box_helper_for_wire(&inner_wire)?;
+                    (
+                        crate::jni::chain::JOptionalBridge::OutputBoxed { inner_wire, helper },
+                        crate::jni::chain::JChild::output(
+                            inner.conv.converter_ident().clone(),
+                            stages,
+                        ),
+                        syn::parse_quote!(jni::objects::JObject),
+                        Niches::empty(),
+                        NullableKind::Boxed,
+                    )
+                }
+            }
+        };
+
+        let inherited = inner.conv.metadata.kotlin_name.clone();
+        let kotlin_name = self.decls.override_kotlin_name(&source.key(), inherited);
+        let projection = inner
+            .conv
+            .metadata
+            .projection
+            .clone()
+            .map(|projection| Projection {
+                strategy: FoldStrategy::Optional(nullable_kind, Box::new(projection.strategy)),
+                ..projection
+            });
+        let kotlin_name = if direction == Direction::Deconstruct && projection.is_none() {
+            kotlin_name.map(|name| {
+                if name.is_nullable() {
+                    name
+                } else {
+                    name.nullable()
+                }
+            })
+        } else {
+            kotlin_name
+        };
+        let ident = crate::jni::chain::planned_name(direction, source, &destination);
+        let marker: syn::ItemFn = syn::parse_quote!(fn #ident() {});
+        let rust = crate::jni::chain::JFunction::optional(crate::jni::chain::JOptionalPlan {
+            ident,
+            chain: prebindgen_registry::chain::Optional {
+                source: source.clone(),
+                direction,
+                source_policy: crate::jni::chain::JSource { wrappers },
+                bridge,
+                child,
+            },
+        });
+        Some(JFrag {
+            conv: ConverterImpl {
+                destination,
+                function: marker,
+                pre_stages: Vec::new(),
+                niches,
+                metadata: KotlinMeta {
+                    projection,
+                    ..self.decls.framework_meta(kotlin_name)
+                },
+                subs: vec![element.key()],
+            },
+            rust,
+            wires: None,
+            out_wires: None,
+            composed_only: false,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+        })
+    }
 }
 
 impl<R: Conversions> Compile for JCompile<'_, R> {
@@ -710,17 +880,21 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // A declared terminal outranks the arity the registry derived, exactly
         // as it did when one chain answered both: `input_terminal` claims a
         // `Cow<'_, [u8]>` blob, and a `convert!` may name an optional.
-        let conv = match at.crossing.direction() {
-            Direction::Construct => self
-                .decls
-                .input_terminal(ty, self.registry, emit)
-                .or_else(|| self.decls.input_optional(ty, emit)),
-            Direction::Deconstruct => self
-                .decls
-                .output_terminal(ty, self.registry, emit)
-                .or_else(|| self.decls.output_optional(ty, emit)),
+        let terminal = match at.crossing.direction() {
+            Direction::Construct => self.decls.input_terminal(ty, self.registry, emit),
+            Direction::Deconstruct => self.decls.output_terminal(ty, self.registry, emit),
         };
-        let mut frag = self.wrap(at, "no JNI representation for this optional", conv)?;
+        let mut frag = if let Some(conv) = terminal {
+            JFrag::new(at, conv)
+        } else if let Some(planned) = self.planned_optional(at, inner) {
+            planned
+        } else {
+            let legacy = match at.crossing.direction() {
+                Direction::Construct => self.decls.input_optional(ty, emit),
+                Direction::Deconstruct => self.decls.output_optional(ty, emit),
+            };
+            self.wrap(at, "no JNI representation for this optional", legacy)?
+        };
         // An optional over something that crosses as several values cannot ride
         // a niche in any one of them — which of `(tag, summary)` would carry
         // the absence? So the presence is its own wire, ahead of the rest: the

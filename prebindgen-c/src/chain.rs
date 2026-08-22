@@ -1,0 +1,313 @@
+//! Syntax-free plans for converters composed from recipe shapes.
+//!
+//! A plan keeps Flat [`TypeRef`]s opaque and records only shape operations,
+//! wire-side types and child converter contracts. [`RustFunction::render`]
+//! receives the writer-owned [`Emit`] after resolution and validation, which is
+//! the first point at which the captured Rust types and function bodies are
+//! materialized.
+
+use prebindgen_registry::{
+    chain::{self, Chain as _},
+    flat::TypeRef,
+    write::RustFunction,
+    Emit,
+};
+
+use super::{builder::qualify_source_type, *};
+
+/// The callable facts a parent chain needs from a child converter.
+#[derive(Clone)]
+pub(crate) struct CCall(chain::Call);
+
+impl CCall {
+    pub(crate) fn ident(&self) -> &syn::Ident {
+        self.0.ident()
+    }
+
+    pub(crate) fn fallible(&self) -> bool {
+        self.0.fallible()
+    }
+
+    pub(crate) fn unsafe_(&self) -> bool {
+        self.0.unsafe_()
+    }
+}
+
+impl chain::Child for CCall {
+    fn call(&self) -> &chain::Call {
+        &self.0
+    }
+
+    fn invoke(&self, value: TokenStream) -> TokenStream {
+        let ident = self.ident();
+        quote!(#ident(#value))
+    }
+}
+
+/// A complete legacy function or a chain waiting for final rendering.
+#[derive(Clone)]
+pub(crate) struct CFunction {
+    call: CCall,
+    body: CBody,
+}
+
+#[derive(Clone)]
+enum CBody {
+    Complete(syn::ItemFn),
+    Product(ProductPlan),
+    Optional(OptionalPlan),
+}
+
+impl CFunction {
+    pub(crate) fn complete(function: syn::ItemFn) -> Self {
+        let call = CCall(chain::Call::complete(&function));
+        Self {
+            call,
+            body: CBody::Complete(function),
+        }
+    }
+
+    pub(crate) fn product(plan: ProductPlan) -> Self {
+        let call = CCall(chain::Call::new(
+            plan.ident.clone(),
+            plan.fields.iter().any(|field| field.converter.fallible()),
+            plan.direction == Direction::Construct,
+        ));
+        Self {
+            call,
+            body: CBody::Product(plan),
+        }
+    }
+
+    pub(crate) fn optional(plan: OptionalPlan) -> Self {
+        let call = CCall(chain::Call::new(
+            plan.ident.clone(),
+            plan.converter.fallible(),
+            true,
+        ));
+        Self {
+            call,
+            body: CBody::Optional(plan),
+        }
+    }
+
+    pub(crate) fn call(&self) -> &CCall {
+        &self.call
+    }
+}
+
+impl RustFunction for CFunction {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        match &self.body {
+            CBody::Complete(function) => function.clone(),
+            CBody::Product(plan) => plan.render(emit),
+            CBody::Optional(plan) => plan.render(emit),
+        }
+    }
+}
+
+/// One field step in a product converter chain.
+#[derive(Clone)]
+pub(crate) struct ProductField {
+    pub(crate) name: syn::Ident,
+    pub(crate) converter: CCall,
+    pub(crate) hold_uninit: bool,
+}
+
+#[derive(Clone)]
+struct CSource {
+    module: Option<syn::Path>,
+}
+
+impl chain::Source for CSource {
+    fn spell(&self, source: &TypeRef, emit: &Emit) -> syn::Type {
+        qualify_source_type(&emit.spell_ty(source), self.module.as_ref())
+    }
+}
+
+#[derive(Clone)]
+struct CProductBridge {
+    wire: syn::Type,
+}
+
+impl chain::ProductBridge for CProductBridge {
+    fn intermediate(&self) -> syn::Type {
+        self.wire.clone()
+    }
+
+    fn part(&self, value: TokenStream, _index: usize, name: &syn::Ident) -> TokenStream {
+        quote!((#value).#name)
+    }
+
+    fn build(&self, parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
+        let wire = &self.wire;
+        let names = parts.iter().map(|(name, _)| name);
+        let values = parts.iter().map(|(_, value)| value);
+        quote!(#wire { #(#names: #values),* })
+    }
+}
+
+/// A product chain. Source syntax stays behind `source` until `render`.
+#[derive(Clone)]
+pub(crate) struct ProductPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) wire: syn::Type,
+    pub(crate) direction: Direction,
+    pub(crate) fields: Vec<ProductField>,
+}
+
+impl ProductPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let chain = chain::Product {
+            source: self.source.clone(),
+            direction: self.direction,
+            source_policy: CSource {
+                module: self.source_module.clone(),
+            },
+            bridge: CProductBridge {
+                wire: self.wire.clone(),
+            },
+            parts: self
+                .fields
+                .iter()
+                .map(|field| chain::ProductPart {
+                    name: field.name.clone(),
+                    child: field.converter.clone(),
+                    hold_uninit: field.hold_uninit,
+                })
+                .collect(),
+        };
+        let rendered = chain.render(emit);
+        let name = &self.ident;
+        let source = &rendered.source;
+        let intermediate = &rendered.intermediate;
+        let body = &rendered.body;
+
+        match (self.direction, rendered.fallible) {
+            (Direction::Construct, true) => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name(
+                    v: #intermediate,
+                ) -> ::core::result::Result<#source, ::std::string::String> {
+                    ::core::result::Result::Ok(#body)
+                }
+            ),
+            (Direction::Construct, false) => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name(v: #intermediate) -> #source {
+                    #body
+                }
+            ),
+            (Direction::Deconstruct, true) => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(
+                    v: #source,
+                ) -> ::core::result::Result<#intermediate, ::std::string::String> {
+                    ::core::result::Result::Ok(#body)
+                }
+            ),
+            (Direction::Deconstruct, false) => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #source) -> #intermediate {
+                    #body
+                }
+            ),
+        }
+    }
+}
+
+/// How an inbound optional distinguishes absence from a present child.
+#[derive(Clone)]
+pub(crate) enum OptionalRepr {
+    Niche { absent: syn::Expr },
+    Nullable { read_direct: bool },
+}
+
+#[derive(Clone)]
+struct COptionalBridge {
+    wire: syn::Type,
+    repr: OptionalRepr,
+}
+
+impl chain::OptionalBridge for COptionalBridge {
+    fn intermediate(&self) -> syn::Type {
+        self.wire.clone()
+    }
+
+    fn is_absent(&self, value: TokenStream) -> TokenStream {
+        match &self.repr {
+            OptionalRepr::Niche { absent } => quote!(#absent),
+            OptionalRepr::Nullable { .. } => quote!((#value).is_null()),
+        }
+    }
+
+    fn present(&self, value: TokenStream) -> TokenStream {
+        match self.repr {
+            OptionalRepr::Niche { .. } | OptionalRepr::Nullable { read_direct: true } => value,
+            OptionalRepr::Nullable { read_direct: false } => quote!(::core::ptr::read(#value)),
+        }
+    }
+
+    fn build_absent(&self) -> TokenStream {
+        quote!(::core::unreachable!())
+    }
+
+    fn build_present(&self, _child: TokenStream) -> TokenStream {
+        quote!(::core::unreachable!())
+    }
+}
+
+/// An optional chain. Its source `Option<T>` remains opaque until rendering.
+#[derive(Clone)]
+pub(crate) struct OptionalPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) wire: syn::Type,
+    pub(crate) converter: CCall,
+    pub(crate) repr: OptionalRepr,
+    pub(crate) borrowed: bool,
+}
+
+impl OptionalPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let chain = chain::Optional {
+            source: self.source.clone(),
+            direction: Direction::Construct,
+            source_policy: CSource {
+                module: self.source_module.clone(),
+            },
+            bridge: COptionalBridge {
+                wire: self.wire.clone(),
+                repr: self.repr.clone(),
+            },
+            child: self.converter.clone(),
+        };
+        let rendered = chain.render(emit);
+        let name = &self.ident;
+        let source = &rendered.source;
+        let intermediate = &rendered.intermediate;
+        let body = &rendered.body;
+        let lifetime = self.borrowed.then(|| quote!(<'a>));
+
+        if rendered.fallible {
+            syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name #lifetime(v: #intermediate)
+                    -> ::core::result::Result<#source, ::std::string::String>
+                {
+                    ::core::result::Result::Ok(#body)
+                }
+            )
+        } else {
+            syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name #lifetime(v: #intermediate) -> #source {
+                    #body
+                }
+            )
+        }
+    }
+}

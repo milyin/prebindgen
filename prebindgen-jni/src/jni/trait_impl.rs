@@ -19,7 +19,7 @@ use super::*;
 /// * `let_and_return` — a multi-stage conversion fold's trailing `let`;
 /// * `nonminimal_bool` / `eq_op` — a representation-domain guard whose bounds
 ///   are the scalar's min/max (`true &&`) or which has no exclusions (`!(false)`).
-fn generated_converter_attr() -> syn::Attribute {
+pub(crate) fn generated_converter_attr() -> syn::Attribute {
     syn::parse_quote!(#[allow(
         non_snake_case,
         unused_mut,
@@ -1494,6 +1494,19 @@ impl JniGenBuilder {
         }
         // What the compilation produced, kept for emission. The converter table
         // stays the lookup index; this is what reaches the file.
+        let planned: HashMap<_, _> = decls
+            .compiled
+            .borrow()
+            .fragments()
+            .into_iter()
+            .filter(|fragment| fragment.rust.is_planned())
+            .map(|fragment| {
+                (
+                    fragment.rust.call().ident().to_string(),
+                    fragment.rust.clone(),
+                )
+            })
+            .collect();
         decls.compiled_fns = decls
             .compiled
             .borrow()
@@ -1512,10 +1525,24 @@ impl JniGenBuilder {
             // the case the converter table could hold only because it kept a
             // list beside the conversion; a fragment says it directly.
             .flat_map(|f| {
-                std::iter::once(f.conv.function.clone())
-                    .chain(f.conv.pre_stages.iter().map(|s| s.function.clone()))
+                std::iter::once(
+                    planned
+                        .get(&f.conv.converter_ident().to_string())
+                        .cloned()
+                        .unwrap_or_else(|| f.rust.clone()),
+                )
+                .chain(
+                    f.conv
+                        .pre_stages
+                        .iter()
+                        .map(|s| crate::jni::chain::JFunction::complete(s.function.clone())),
+                )
             })
-            .chain(uncompiled)
+            .chain(
+                uncompiled
+                    .into_iter()
+                    .map(crate::jni::chain::JFunction::complete),
+            )
             .collect();
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.

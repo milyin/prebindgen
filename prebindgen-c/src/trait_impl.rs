@@ -1587,7 +1587,7 @@ impl CbindgenBuilder {
         compiler: &mut prebindgen_registry::recipe::Compiler<'_, crate::compile::CCompile<'v, R>>,
         crossing: &Crossing,
         built: &'v R,
-    ) -> Option<ConverterImpl> {
+    ) -> Option<crate::compile::CFrag> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
         // key the crossing IS.
@@ -1599,7 +1599,7 @@ impl CbindgenBuilder {
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(ty, direction);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
-        Some((*fragment).clone().into_converter())
+        Some((*fragment).clone())
     }
 
     pub fn declare_into(
@@ -1626,6 +1626,7 @@ impl CbindgenBuilder {
     pub(crate) fn dispatch_fn_input(
         &self,
         args: &[TypeRef],
+        fragments: Option<&[&crate::compile::CFrag]>,
         registry: &impl Conversions,
     ) -> Option<ConverterImpl> {
         let key: CallbackKey = args.iter().map(|a| a.key()).collect();
@@ -1659,13 +1660,12 @@ impl CbindgenBuilder {
                 call_args.push(quote!(#ai.len()));
                 continue;
             }
-            let entry = self.out_frag(arg)?;
-            let conv = entry.function.sig.ident.clone();
+            let supplied = fragments.and_then(|fragments| fragments.get(i).copied());
+            let fallback = supplied.is_none().then(|| self.out_frag(arg)).flatten();
+            let entry = supplied.or(fallback.as_deref())?;
+            let conv = entry.function.call().ident().clone();
             let opaque = entry.destination.clone();
-            let fallible = matches!(
-                &entry.function.sig.output,
-                syn::ReturnType::Type(_, ty) if is_result(ty)
-            );
+            let fallible = entry.function.call().fallible();
             let src = self.src_ty_deep_of(arg);
             let ai = format_ident!("__a{}", i);
             let wi = format_ident!("__w{}", i);
@@ -2119,132 +2119,6 @@ impl CbindgenBuilder {
 /// peels `ty`'s outermost layer and composes the inner's converter; `subs`
 /// lists the immediate inner(s) it looked up.
 impl CbindgenBuilder {
-    /// `Option<X>` **input**: a single nullable C param, NULL = `None`.
-    ///
-    /// The inner `X` is reused wholesale — its own fragment, an `&T` borrow's
-    /// for instance, does the non-null decode — so `Option<&ZConfig>` binds the
-    /// *reference* conversion, never the owned one.
-    pub(crate) fn in_option(
-        &self,
-        inner: &TypeRef,
-        entry: &crate::compile::CFrag,
-    ) -> Option<ConverterImpl> {
-        {
-            let inner_wire = entry.destination.clone();
-            let inner_conv = entry.function.sig.ident.clone();
-            let (inner_ok, fallible): (syn::Type, bool) = match &entry.function.sig.output {
-                syn::ReturnType::Type(_, t) if is_result(t) => {
-                    let (ok, _e) = result_parts(t).expect("is_result ⇒ result_parts");
-                    (ok, true)
-                }
-                syn::ReturnType::Type(_, t) => ((**t).clone(), false),
-                syn::ReturnType::Default => (syn::parse_quote!(()), false),
-            };
-            if let Some((slot, rest)) = entry.niches.clone().carve() {
-                let pred = &slot.matches;
-                let name = format_ident!("__cbg_in_option_{}", sanitize(&inner.key()));
-                let function: syn::ItemFn = if fallible {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) unsafe fn #name(
-                            v: #inner_wire,
-                        ) -> ::core::result::Result<
-                            ::core::option::Option<#inner_ok>,
-                            ::std::string::String
-                        > {
-                            if #pred {
-                                ::core::result::Result::Ok(::core::option::Option::None)
-                            } else {
-                                #inner_conv(v).map(::core::option::Option::Some)
-                            }
-                        }
-                    )
-                } else {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) unsafe fn #name(
-                            v: #inner_wire,
-                        ) -> ::core::option::Option<#inner_ok> {
-                            if #pred {
-                                ::core::option::Option::None
-                            } else {
-                                ::core::option::Option::Some(#inner_conv(v))
-                            }
-                        }
-                    )
-                };
-                return Some(ConverterImpl {
-                    subs: vec![inner.key()],
-                    destination: inner_wire,
-                    function,
-                    pre_stages: vec![],
-                    niches: rest,
-                    metadata: (),
-                });
-            }
-            let is_ptr = matches!(inner_wire, syn::Type::Ptr(_));
-            let wire: syn::Type = if is_ptr {
-                inner_wire.clone()
-            } else {
-                syn::parse_quote!(*const #inner_wire)
-            };
-            // A by-value inner is reached through a `*const` the C caller
-            // supplied, and reaches the inner converter by COPY: `*v` is a move
-            // out of a raw pointer, which is only accepted for a `Copy` wire —
-            // a scalar mirror compiled and a struct mirror did not (#412).
-            let read = if is_ptr {
-                quote!(v)
-            } else {
-                quote!(::core::ptr::read(v))
-            };
-            let name = format_ident!("__cbg_in_option_{}", sanitize(&inner.key()));
-            let lt: TokenStream = if inner.borrow_target().is_some() {
-                quote!(<'a>)
-            } else {
-                quote!()
-            };
-            let function: syn::ItemFn = if fallible {
-                syn::parse_quote!(
-                    #[allow(non_snake_case, unused_variables, dead_code)]
-                    pub(crate) unsafe fn #name #lt(
-                        v: #wire,
-                    ) -> ::core::result::Result<::core::option::Option<#inner_ok>, ::std::string::String> {
-                        if v.is_null() {
-                            return ::core::result::Result::Ok(::core::option::Option::None);
-                        }
-                        match #inner_conv(#read) {
-                            ::core::result::Result::Ok(__x) => {
-                                ::core::result::Result::Ok(::core::option::Option::Some(__x))
-                            }
-                            ::core::result::Result::Err(__e) => ::core::result::Result::Err(__e),
-                        }
-                    }
-                )
-            } else {
-                syn::parse_quote!(
-                    #[allow(non_snake_case, unused_variables, dead_code)]
-                    pub(crate) unsafe fn #name #lt(
-                        v: #wire,
-                    ) -> ::core::option::Option<#inner_ok> {
-                        if v.is_null() {
-                            ::core::option::Option::None
-                        } else {
-                            ::core::option::Option::Some(#inner_conv(#read))
-                        }
-                    }
-                )
-            };
-            Some(ConverterImpl {
-                subs: vec![inner.key()],
-                destination: wire,
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            })
-        }
-    }
-
     /// `&[E]` slice **input**: marker only — the two-param (`*const E_wire`,
     /// `usize`) lowering is done structurally in `emit_inputs`.
     pub(crate) fn in_slice(&self, ty: &TypeRef) -> Option<ConverterImpl> {

@@ -56,7 +56,7 @@ fn bounded_duration_option_is_one_scalar_with_named_niche() {
         "{src}"
     );
     assert!(!compact.contains("v:*constu64"), "{src}");
-    assert!(!compact.contains("_present"), "{src}");
+    assert!(!compact.contains("v_present"), "{src}");
     assert!(compact.contains("ifv==18446744073709551615"), "{src}");
 }
 
