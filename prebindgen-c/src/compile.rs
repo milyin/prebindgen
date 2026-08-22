@@ -16,14 +16,15 @@ use prebindgen_registry::{
 };
 
 use super::*;
+use crate::chain::{CFunction, OptionalPlan, OptionalRepr, ProductField, ProductPlan};
 
 /// The C adapter's answer for one crossing.
 #[derive(Clone)]
 pub(crate) struct CFrag {
     /// The C wire type this crossing carries.
     pub(crate) destination: syn::Type,
-    /// The generated converter, complete.
-    pub(crate) function: syn::ItemFn,
+    /// The generated converter's callable contract and late-rendered plan.
+    pub(crate) function: CFunction,
     /// Bit patterns the wire can represent and this conversion never produces.
     pub(crate) niches: Niches,
     /// Inner types this fragment composed from, which is what marks them
@@ -68,9 +69,10 @@ impl CFrag {
     /// One of the adapter's existing converter builders, as a fragment.
     fn from_converter(at: At<'_>, conv: ConverterImpl) -> Self {
         let validity = validity_of(&conv, at.crossing.direction());
+        let function = CFunction::complete(conv.function);
         Self {
             destination: conv.destination,
-            function: conv.function,
+            function,
             niches: conv.niches,
             subs: conv.subs,
             arm: None,
@@ -79,18 +81,6 @@ impl CFrag {
                 mode: at.crossing.mode(),
                 validity,
             },
-        }
-    }
-
-    /// What the registry that still emits converters expects back.
-    pub(crate) fn into_converter(self) -> ConverterImpl {
-        ConverterImpl {
-            destination: self.destination,
-            function: self.function,
-            niches: self.niches,
-            subs: self.subs,
-            pre_stages: vec![],
-            metadata: (),
         }
     }
 }
@@ -184,9 +174,8 @@ fn held_uninit(declared: &syn::Type, produced: &syn::Type) -> bool {
         if TypeKey::from_type(inner) == TypeKey::from_type(produced))
 }
 
-/// Whether a generated converter can fail, read off its own return type.
-fn fallible(function: &syn::ItemFn) -> bool {
-    matches!(&function.sig.output, syn::ReturnType::Type(_, t) if is_result(t))
+fn fallible(function: &CFunction) -> bool {
+    function.call().fallible()
 }
 
 /// A refusal naming the crossing that could not be answered.
@@ -258,7 +247,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     // A callback whose signature was declared: its own
                     // `#[repr(C)]` closure struct.
                     let args = ty.callback_args()?;
-                    self.gen.dispatch_fn_input(args, self.registry)
+                    self.gen.dispatch_fn_input(args, None, self.registry)
                 }),
             Direction::Deconstruct => self
                 .gen
@@ -276,11 +265,57 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 "an optional recipe over a type that is not optional",
             ));
         };
-        let conv = match at.crossing.direction() {
-            Direction::Construct => self.gen.in_option(elem, inner),
-            Direction::Deconstruct => Some(self.gen.out_arity_marker("option", elem)),
+        if at.crossing.direction() == Direction::Deconstruct {
+            return self.wrap(
+                at,
+                "no C representation for this optional",
+                Some(self.gen.out_arity_marker("option", elem)),
+            );
+        }
+
+        let inner_wire = inner.destination.clone();
+        let (wire, repr, niches) = if let Some((slot, rest)) = inner.niches.clone().carve() {
+            (
+                inner_wire,
+                OptionalRepr::Niche {
+                    absent: slot.matches,
+                },
+                rest,
+            )
+        } else {
+            let read_direct = matches!(inner_wire, syn::Type::Ptr(_));
+            let wire = if read_direct {
+                inner_wire
+            } else {
+                syn::parse_quote!(*const #inner_wire)
+            };
+            (
+                wire,
+                OptionalRepr::Nullable { read_direct },
+                Niches::empty(),
+            )
         };
-        self.wrap(at, "no C representation for this optional", conv)
+        let function = CFunction::optional(OptionalPlan {
+            ident: format_ident!("__cbg_in_option_{}", sanitize(&elem.key())),
+            source: at.crossing.spelled().clone(),
+            source_module: self.gen.source_module.clone(),
+            wire: wire.clone(),
+            converter: inner.function.call().clone(),
+            repr,
+            borrowed: elem.borrow_target().is_some(),
+        });
+        Ok(CFrag {
+            destination: wire,
+            function,
+            niches,
+            subs: vec![elem.key()],
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+        })
     }
 
     fn sequence(
@@ -379,7 +414,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 .enumerate()
                 .map(|(i, (part, frag))| {
                     let bind = format_ident!("__f{}", i);
-                    let conv = &frag.function.sig.ident;
+                    let conv = frag.function.call().ident();
                     let call = if fallible(&frag.function) {
                         quote!(#conv(#bind)?)
                     } else {
@@ -417,10 +452,10 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 .collect();
             return Ok(CFrag {
                 destination: syn::parse_quote!(()),
-                function: syn::parse_quote!(
+                function: CFunction::complete(syn::parse_quote!(
                     #[allow(dead_code)]
                     fn __cbg_arm() {}
-                ),
+                )),
                 niches: Niches::empty(),
                 subs: subs.clone(),
                 arm: Some(Arm {
@@ -436,7 +471,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             });
         }
         let c_struct = self.gen.c_type_ident(&key);
-        let src = self.gen.src_ty_of(&key);
         // Each part converts itself. The three statements of a field's wire —
         // this conversion, its twin in the other direction, and the mirror's
         // own field list — collapse to one: the part's fragment says it, and
@@ -457,102 +491,53 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 ));
             }
         }
-        let names: Vec<syn::Ident> = parts
+        let fields = parts
             .iter()
-            .map(|(p, _)| format_ident!("{}", p.name))
-            .collect();
-        let calls: Vec<TokenStream> = parts
-            .iter()
-            .zip(&names)
-            .map(|((part, frag), fname)| {
-                let conv = &frag.function.sig.ident;
-                let call = quote!(#conv(v.#fname));
-                let call = if fallible(&frag.function) {
-                    quote!(#call?)
-                } else {
-                    call
-                };
+            .map(|(part, frag)| {
                 // The mirror holds a tagged-union field as `MaybeUninit`, so a
                 // C caller can hand over any discriminant and the decode can
                 // check it before assuming it initialised. That is the
                 // struct's holding form rather than the union's wire, so the
                 // wrap belongs here and the union's own conversion stays the
                 // one both directions use.
-                match (at.crossing.direction(), self.gen.data_field_wire(&part.ty)) {
-                    (Direction::Deconstruct, Some(w)) if held_uninit(&w, &frag.destination) => {
-                        quote!(::core::mem::MaybeUninit::new(#call))
-                    }
-                    _ => call,
+                let hold_uninit = at.crossing.direction() == Direction::Deconstruct
+                    && self
+                        .gen
+                        .data_field_wire(&part.ty)
+                        .is_some_and(|wire| held_uninit(&wire, &frag.destination));
+                ProductField {
+                    name: format_ident!("{}", part.name),
+                    converter: frag.function.call().clone(),
+                    hold_uninit,
                 }
             })
             .collect();
-        let any_fallible = parts.iter().any(|(_, f)| fallible(&f.function));
         let subs: Vec<TypeKey> = parts.iter().map(|(p, _)| p.ty.key()).collect();
-
-        match at.crossing.direction() {
-            Direction::Construct => {
-                let name = CbindgenBuilder::in_name_of(&key);
-                let function: syn::ItemFn = if any_fallible {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) unsafe fn #name(
-                            v: #c_struct,
-                        ) -> ::core::result::Result<#src, ::std::string::String> {
-                            ::core::result::Result::Ok(#src { #(#names: #calls),* })
-                        }
-                    )
-                } else {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) unsafe fn #name(v: #c_struct) -> #src {
-                            #src { #(#names: #calls),* }
-                        }
-                    )
-                };
-                Ok(CFrag::from_converter(
-                    at,
-                    ConverterImpl {
-                        subs,
-                        destination: syn::parse_quote!(#c_struct),
-                        function,
-                        pre_stages: vec![],
-                        niches: Niches::empty(),
-                        metadata: (),
-                    },
-                ))
-            }
-            Direction::Deconstruct => {
-                let name = CbindgenBuilder::out_name_of(&key);
-                let function: syn::ItemFn = if any_fallible {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) fn #name(
-                            v: #src,
-                        ) -> ::core::result::Result<#c_struct, ::std::string::String> {
-                            ::core::result::Result::Ok(#c_struct { #(#names: #calls),* })
-                        }
-                    )
-                } else {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) fn #name(v: #src) -> #c_struct {
-                            #c_struct { #(#names: #calls),* }
-                        }
-                    )
-                };
-                Ok(CFrag::from_converter(
-                    at,
-                    ConverterImpl {
-                        subs,
-                        destination: syn::parse_quote!(#c_struct),
-                        function,
-                        pre_stages: vec![],
-                        niches: Niches::empty(),
-                        metadata: (),
-                    },
-                ))
-            }
-        }
+        let direction = at.crossing.direction();
+        let ident = match direction {
+            Direction::Construct => CbindgenBuilder::in_name_of(&key),
+            Direction::Deconstruct => CbindgenBuilder::out_name_of(&key),
+        };
+        let wire: syn::Type = syn::parse_quote!(#c_struct);
+        Ok(CFrag {
+            destination: wire.clone(),
+            function: CFunction::product(ProductPlan {
+                ident,
+                source: at.crossing.spelled().clone(),
+                source_module: self.gen.source_module.clone(),
+                wire,
+                direction,
+                fields,
+            }),
+            niches: Niches::empty(),
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+        })
     }
 
     fn choice(
@@ -675,13 +660,15 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         &mut self,
         _cx: &mut Cx<'_>,
         at: At<'_>,
-        _args: &[&CFrag],
+        fragments: &[&CFrag],
         _result: Option<&CFrag>,
     ) -> Frag<Self> {
         let Some(args) = at.crossing.value().callback_args() else {
             return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
-        let conv = self.gen.dispatch_fn_input(args, self.registry);
+        let conv = self
+            .gen
+            .dispatch_fn_input(args, Some(fragments), self.registry);
         self.wrap(at, "undeclared callback signature", conv)
     }
 

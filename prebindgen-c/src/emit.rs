@@ -218,7 +218,7 @@ impl CbindgenBuilder {
         })?;
         // Decided here rather than at the emit site, so every reason a payload
         // can be refused is reported from ONE place, at the declaration.
-        if returns_result(&out_entry.function.sig.output) {
+        if out_entry.function.call().fallible() {
             return Err(
                 "its OUTPUT converter is fallible, but a union is encoded without an error \
                  channel — the encoder always writes a live arm, so there is nowhere for the \
@@ -494,7 +494,7 @@ impl CbindgenBuilder {
 
         let has_fallible_input = f.params.iter().any(|p| {
             self.in_frag(&p.ty)
-                .map(|e| returns_result(&e.function.sig.output))
+                .map(|e| e.function.call().fallible())
                 .unwrap_or(false)
         });
 
@@ -532,7 +532,7 @@ impl CbindgenBuilder {
                 });
             (
                 entry.destination.clone(),
-                entry.function.sig.ident.clone(),
+                entry.function.call().ident().clone(),
                 self.src_ty(err_ty),
             )
         });
@@ -850,12 +850,12 @@ impl CbindgenBuilder {
         if !self.has_own_wire(ty) {
             if let TypeKind::Vec(elem) = ty.kind() {
                 let entry = self.out_frag(elem).expect("Vec element converter");
-                let elem_conv = entry.function.sig.ident.clone();
-                let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
+                let elem_conv = entry.function.call().ident().clone();
+                let elem_map = map_arg(&elem_conv, entry.function.call().unsafe_());
                 let elem_wire = entry.destination.clone();
                 let t_ptr = &targets[0];
                 let t_len = &targets[1];
-                if returns_result(&entry.function.sig.output) {
+                if entry.function.call().fallible() {
                     let converted = route_result(quote!(#elem_conv(__value)), route);
                     return quote!(
                         let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
@@ -878,12 +878,12 @@ impl CbindgenBuilder {
             }
             if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
                 let entry = self.out_frag(elem).expect("slice element converter");
-                let elem_conv = entry.function.sig.ident.clone();
-                let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
+                let elem_conv = entry.function.call().ident().clone();
+                let elem_map = map_arg(&elem_conv, entry.function.call().unsafe_());
                 let elem_wire = entry.destination.clone();
                 let t_ptr = &targets[0];
                 let t_len = &targets[1];
-                if returns_result(&entry.function.sig.output) {
+                if entry.function.call().fallible() {
                     let converted = route_result(quote!(#elem_conv(__value)), route);
                     return quote!(
                         let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
@@ -933,9 +933,9 @@ impl CbindgenBuilder {
         }
         // Base value: run its output converter into the single target.
         let entry = self.out_frag(ty).expect("base value converter");
-        let conv = entry.function.sig.ident.clone();
+        let conv = entry.function.call().ident().clone();
         let t0 = &targets[0];
-        if returns_result(&entry.function.sig.output) {
+        if entry.function.call().fallible() {
             let converted = route_result(quote!(#conv(#val)), route);
             quote!( #t0 = #converted; )
         } else {
@@ -966,7 +966,7 @@ impl CbindgenBuilder {
             }
         }
         self.out_frag(ty)
-            .is_some_and(|entry| returns_result(&entry.function.sig.output))
+            .is_some_and(|entry| entry.function.call().fallible())
     }
 
     /// How one parameter *uses* the resource it names — the axis the alias rule
@@ -1161,11 +1161,11 @@ impl CbindgenBuilder {
                     )
                 });
             let wire = &entry.destination;
-            let conv = &entry.function.sig.ident;
+            let conv = entry.function.call().ident();
 
             params.push(quote!(#ident: #wire));
 
-            if returns_result(&entry.function.sig.output) {
+            if entry.function.call().fallible() {
                 let on_err = route_message(route);
                 decodes.push(quote!(
                     let #ident = match #conv(#ident) {

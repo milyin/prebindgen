@@ -1,19 +1,18 @@
 //! Rust file emission for the resolved `Registry`.
 //!
 //! `write_rust` takes the conversions the adapter compiled, as a slice of
-//! `ItemFn`; adds every per-item `on_<kind>` output and every anonymous const;
-//! concatenates them; and hands them to `Destination::write` (which does
-//! prettyplease formatting and resolves the path against `OUT_DIR`).
+//! [`RustFunction`] plans; renders them with the writer-owned [`crate::Emit`],
+//! adds every per-item `on_<kind>` output and every anonymous const, and hands
+//! the assembled file to `Destination::write`.
 //!
 //! The conversions arrive from the adapter rather than being collected from the
 //! registry, which is what lets one crossing contribute more than one function
 //! — or one that occupies more than a single wire value.
 //!
 //! This module is `pub`, so **every `pub` item in it is public API of the
-//! crate**. That is meant to be exactly two — [`write_rust`] and
-//! [`WriteError`] — which is what an out-of-crate adapter calls to emit its
-//! generated file. Anything else added here stays private unless publishing it
-//! is a deliberate decision.
+//! crate**. [`RustFunction`] is the deliberately narrow late-rendering seam for
+//! out-of-crate adapters; a complete `syn::ItemFn` remains a valid plan for
+//! adapters migrating incrementally.
 
 use std::{
     collections::BTreeMap,
@@ -60,7 +59,38 @@ impl std::fmt::Display for WriteError {
 
 impl std::error::Error for WriteError {}
 
+/// One planned private converter function.
+///
+/// Resolution may keep an adapter-specific semantic plan here instead of a
+/// rendered Rust body. The writer calls this only after planning and
+/// validation are complete, with the same [`crate::Emit`] capability used for
+/// the rest of final Rust emission.
+pub trait RustFunction {
+    /// Materialize the complete private converter function.
+    fn render(&self, emit: &crate::Emit) -> syn::ItemFn;
+}
+
+impl RustFunction for syn::ItemFn {
+    fn render(&self, _emit: &crate::Emit) -> syn::ItemFn {
+        self.clone()
+    }
+}
+
 /// Emit the resolved registry to a Rust file.
+///
+/// This compatibility entry point accepts already-rendered functions. Adapters
+/// with semantic converter plans use [`write_rust_planned`].
+pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
+    registry: &Registry,
+    ext: &E,
+    conversions: &[syn::ItemFn],
+    out_path: P,
+) -> Result<PathBuf, WriteError> {
+    write_rust_planned(registry, ext, conversions, out_path)
+}
+
+/// Emit a resolved registry whose private converters are rendered at this
+/// final writing boundary.
 ///
 /// `conversions` is what the adapter's compilation produced. It is sorted and
 /// de-duplicated by function name here, so the order decides which of two
@@ -71,10 +101,10 @@ impl std::error::Error for WriteError {}
 ///
 /// `out_path` may be relative (resolved against `OUT_DIR` by prebindgen) or
 /// absolute. Returns the path actually written.
-pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
+pub fn write_rust_planned<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     registry: &Registry,
     ext: &E,
-    conversions: &[syn::ItemFn],
+    conversions: &[C],
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
     // Validation already ran ONCE in the generator's `build` — a built generator
@@ -93,7 +123,8 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     items.extend(ext.prerequisites(registry, &emit));
 
     // 1. Auto-generated converter wrappers (sorted by ident, deduped).
-    for (_, item_fn) in dedup_by_name(conversions.to_vec()) {
+    let conversions = conversions.iter().map(|plan| plan.render(&emit)).collect();
+    for (_, item_fn) in dedup_by_name(conversions) {
         items.push(syn::Item::Fn(item_fn));
     }
 
