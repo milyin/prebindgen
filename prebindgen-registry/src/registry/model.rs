@@ -12,9 +12,9 @@
 //!
 //! The final renderer is the sole consumer of the spelling capability. It may
 //! name source-side types stored in frozen plans, but it may not re-plan a
-//! crossing or choose a converter from their syntax. `docs/model.md` records
-//! the current timing violation and the staged generation mechanism that closes
-//! it.
+//! crossing or choose a converter from their syntax. `docs/model.md` defines
+//! the model boundary; `docs/rust-writing.md` audits the current timing
+//! violation and proposes the staged mechanism that closes it.
 
 use std::collections::HashMap;
 
