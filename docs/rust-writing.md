@@ -42,7 +42,7 @@ Their short descriptions here say how this proposal uses them.
 | **Fragment** | The adapter-specific result of applying one selected recipe row to one spelled crossing and composing its child fragments. It is the first layer that records wire layout and terminal decoding or encoding. One normalized table row may produce different fragments for `T`, `&T` and `Box<T>`. |
 | **Site plan** | The adapter-specific answer for one position in the generated interface, such as a function parameter or return. It selects a fragment for that position. |
 | **Wire value** | A Rust value whose type has an exact representation in the target calling convention, such as JNI's 64-bit integer slot `jlong` or C's untyped raw pointer `*mut c_void`. |
-| **Converter** | Internal Rust emitted from a fragment. It composes value–parts operations and child converters; at an `Atomic` terminal it decodes wire values into the Rust value or encodes the Rust value into wire values. |
+| **Converter** | Internal Rust planned from a fragment and emitted later. It composes value–parts operations, representation bridges and child converters; at an `Atomic` terminal it runs the adapter's decode or encode operation. |
 | **Wrapper** | The exported generated Rust entry point for a declared function. It converts parameters, calls the source function and converts its result. See [what the foreign side calls](model.md#what-the-foreign-side-ends-up-calling). |
 | **Callback** | A callable supplied by the foreign side and invoked later by Rust. Its argument crossings run opposite to the callback crossing. |
 
@@ -53,10 +53,48 @@ model:
   sites, generated symbols, ownership and cleanup behavior are validated and
   immutable.
 - A **generation plan** is that complete immutable result. Its Rust type is
-  adapter-specific; C and JNI do not need a shared code-generation language.
+  adapter-specific around a shared recipe-composition core; C and JNI do not
+  need a shared language for their exported wrappers.
 - An **artifact plan** completely describes one output item, such as a converter
   function, exported wrapper, helper type or target-language declaration.
+- A **fragment identity** is the selected complete `RecipeKey` applied to one
+  spelled, directed crossing. The recipe supplies the shape; using only the
+  shape variant would incorrectly merge rows that use different constructors
+  or accessors.
+- An **intermediate type** is the adapter-selected, internal Rust type assigned
+  to one fragment identity. It carries that fragment's converted value while
+  composed recipes are assembled or taken apart. It is not a source type and
+  need not itself be legal in an exported C or JNI signature.
+- **Intermediate parts** are the child intermediate values corresponding to a
+  shape's source parts. A product has a tuple of intermediate parts, an
+  optional has `Option<I>`, and a choice has one selected arm's parts.
+- A **representation bridge** is the formal, shape-specific way to pack
+  intermediate parts into an intermediate value and unpack that value back
+  into its parts. It describes operations; it is not generated Rust syntax.
+- An **ABI layout** is the ordered set of wire values occupied by an
+  intermediate value at one boundary site, together with the operations that
+  flatten into those values or assemble from them. One intermediate value may
+  occupy no, one or several wire values.
+- A **niche** is a bit pattern available in an intermediate or wire
+  representation but excluded from the child value's valid domain. Optional
+  and choice bridges may consume niches for discriminants and expose any
+  unused niches to enclosing bridges.
+- A **converter plan** is the registry-built operation graph relating one
+  source value to its intermediate value. It chains model-defined
+  construct/deconstruct operations, child converter plans and representation
+  bridges; it contains no rendered source type.
+- A **callback bridge** is the adapter-specific plan that turns a foreign
+  callable into a Rust callable and delivers each later Rust invocation across
+  the foreign boundary. It reuses ordinary argument converter plans but also
+  owns callable state, thread entry, invocation, error and cleanup policy.
 - **Final emission** turns artifact plans into Rust abstract syntax tree (AST)
+- A **role** is the implementation's classification of a site as a parameter,
+  receiver, return, error, constant, callback argument or recipe part. It lets
+  an adapter state the validity that the target accepts at that position.
+- A **yield** is the source-value contract of a fragment: normalized type
+  identity, owned or borrowed mode, and validity. The registry compares yields
+  with the requirements on recursive part edges without inspecting adapter
+  representation.
   items and assembles the output file. It makes no generation decisions.
 - **`Emit`** is the registry-owned capability that lets code render the captured
   source syntax behind `TypeRef`. It implements Flat's `RustEmitter` protocol.
@@ -161,7 +199,9 @@ captured records
     -> Flat
     -> declarations, recipes and recipe selection at each site
     -> ordered crossings
-    -> adapter-specific fragment and artifact plans
+    -> adapter intermediate types, bridges and ABI layouts
+    -> registry-composed converter plans
+    -> adapter-specific site and artifact plans
     -> validate and freeze the generation plan
     -> shared Rust writer + adapter renderer + Emit
     -> assemble, format and write the file
@@ -172,7 +212,8 @@ The roles are deliberately narrow:
 | Component | Owns | Must not do |
 |---|---|---|
 | Flat and registry | Source facts, crossing demand and order, dependency completeness | Generate Rust syntax |
-| Adapter planner | Target choices and adapter-specific semantic plans | Render captured source types |
+| Recipe composer | Source construct/deconstruct steps and recursive converter graphs | Choose a target representation or render source types |
+| Adapter planner | Intermediate types, representation bridges, ABI layouts, callback bridges and adapter-specific artifacts | Render captured source types or reproduce the recipe walk |
 | Generation plan | Immutable fragment, site and artifact decisions for one generation run | Lazily consult or mutate registry state |
 | Adapter renderer | Translate one frozen artifact plan into `syn::Item`s | Receive `&Registry` or re-plan from a source signature |
 | Shared Rust writer | Drive artifact iteration, mint `Emit`, collect items, append guards, format and write | Make target-language or crossing decisions |
@@ -182,15 +223,431 @@ convenience `write_rust` methods, but those delegate to it; adapters do not
 reimplement ordering, assembly, formatting, destination handling or common
 errors.
 
+## Restricted recipe conversion
+
+The recipe compiler should stop asking every adapter to render the same
+recursive Rust control flow. For every fragment identity, the adapter assigns
+exactly one intermediate type and describes how that type represents the
+selected shape. The registry then builds the converter plan mechanically.
+
+"Exactly one" means that a fragment cannot acquire different intermediate
+types at different sites. It does not require different fragments to have
+different physical Rust types. Two fragments may both use `jint`, for example,
+but their generated operation and artifact identities remain distinct. Private
+converter symbols therefore derive from the fragment identity and operation,
+not merely from a pair of rendered Rust types.
+
+Because a crossing includes its direction, this rule does not force construct
+and deconstruct fragments to share one Rust type. They may use different input
+and output representations when constness, initialization or the target calling
+convention requires it; compatibility between them belongs to the ABI plan.
+
+The intermediate type is deliberately separate from the ABI layout:
+
+```text
+source Rust value
+    <-> construct/deconstruct through model parts
+child source values
+    <-> child converter plans
+child intermediate values
+    <-> representation bridge
+one intermediate value
+    <-> ABI layout at a site
+wire values
+```
+
+The first relation is defined by the recipe and Flat. The second is already
+resolved recursively. The adapter declares the last two relations without
+seeing source Rust syntax. This preserves the model rule that wire values only
+appear after the recursive shape walk reaches adapter representation: an
+intermediate value is a private carrier for the eventual wire values, not a
+third kind of source part.
+
+An intermediate type may be:
+
+- an adapter runtime type, such as a JNI primitive or handle wrapper;
+- a tuple used only inside generated Rust;
+- a generated private struct or enum;
+- a transparent newtype used to give one recipe its own niche or bridge
+  operations; or
+- another adapter-defined aggregate.
+
+Adapter-authored Rust types remain output vocabulary and may be represented
+during planning. An intermediate declaration may refer to child intermediate
+identities, but it may not embed the rendered spelling of a source `TypeRef`.
+If an operation needs a fact about a source type that Flat does not expose, the
+operation is rejected during planning and Flat is extended first.
+
+### The representation protocol
+
+Every non-atomic shape needs a bidirectional representation protocol. The
+conceptual common operation is:
+
+```rust,ignore
+trait ShapeRepresentation {
+    type Parts;
+
+    fn pack(parts: Self::Parts) -> Result<Self, RepresentationError>;
+    fn unpack(self) -> Result<Self::Parts, RepresentationError>;
+}
+```
+
+This is a specification, not necessarily a Rust trait that will be emitted.
+Generated private free functions or inlined expressions avoid trait coherence
+problems, support borrowed intermediates and allow two recipe rows to reuse the
+same physical type. A frozen plan names operations by semantic artifact
+identity; the renderer assigns Rust identifiers at the end.
+
+The protocol is shape-specific:
+
+| Shape | Intermediate parts | Required representation operations |
+|---|---|---|
+| `Atomic` | None | Adapter terminal `decode` or `encode`, plus its ABI layout. |
+| `Product` | Ordered tuple of child intermediate values | Pack all positions; unpack all positions exactly once. |
+| `Optional` | `Option<I>` | Construct absent/present; distinguish absence; extract the present value; state consumed and remaining niches. |
+| `Sequence` | A run of `I` | Input builder (`begin`, `push`, `finish`) and output traversal (`begin`, `next`, `finish`), including length, allocation and cleanup policy. |
+| `Choice` | A generated logical sum whose arms contain their child intermediate values | Construct each arm; read the active arm; reject invalid tags; state inert-slot and niche policy. |
+| `Invoke` | Callable state plus the argument and future result site plans | Construct the Rust callable and define each later invocation; see [callbacks](#callbacks). |
+
+Fixed positional accessors are sufficient only for `Product`. `Optional`,
+`Sequence`, `Choice` and `Invoke` need control-flow operations as well. The
+formal API therefore uses pack/unpack terminology for fixed shapes and explicit
+builder, traversal, arm and invocation operations for the others.
+
+Each operation plan records:
+
+- which intermediate identities it consumes and produces;
+- whether each input is moved, shared-borrowed or mutably borrowed, using the
+  crossing and part modes defined by the model;
+- the validity of borrowed outputs and what must remain alive;
+- whether it can fail and its typed error route;
+- allocations or resources it acquires;
+- cleanup required on success, foreign-call failure and every earlier
+  conversion failure; and
+- any niche domain it consumes or leaves available.
+
+The registry validates those facts before rendering. A predefined method name
+alone would leave ownership, failure and cleanup implicit and would move type
+errors to compilation of the generated crate.
+
+### Atomic terminals
+
+`Atomic` is the only shape for which the adapter supplies the value conversion
+rather than a representation bridge over child fragments. Its terminal codec
+plan states:
+
+- the source `TypeRef`, kept opaque;
+- the intermediate type and direction;
+- whether the operation decodes or encodes, borrows or moves, and can fail;
+- any validity, niche, allocation and cleanup effects; and
+- either a known runtime operation or an adapter-specific terminal artifact to
+  render later.
+
+The adapter does not return a `syn::ItemFn` or need to return a rendered function
+name. The planner assigns a terminal artifact identity from the fragment and
+operation. During final emission the adapter renderer may derive a readable
+private Rust name from the spelled source and intermediate types, but that name
+is an output of rendering rather than the key used for dependency lookup or
+deduplication.
+
+This retains room for genuinely target-specific terminal bodies while keeping
+all composed control flow in the registry. A built-in scalar codec may render
+as an inline cast, an opaque handle may call a runtime helper, and a string may
+emit a reusable private function; the frozen terminal plan chooses among them.
+
+### Converter synthesis
+
+The registry builds two mirror converter plans for a bidirectional recipe. It
+does not require the adapter to return a complete converter function.
+
+For `Direction::Construct`:
+
+1. The site ABI plan assembles its wire values into the root intermediate.
+2. The root representation bridge unpacks child intermediates.
+3. Each child construct plan recursively decodes or constructs its source
+   value.
+4. Flat's selected product constructor, fields, optional constructor, sequence
+   collector or choice arm constructs the source value.
+5. Any failed step runs cleanup for intermediates already created but not
+   transferred.
+
+For `Direction::Deconstruct`:
+
+1. Flat's selected fields, accessors, value form, optional projection, sequence
+   traversal or choice arm deconstructs the source value.
+2. Each child deconstruct plan recursively deconstructs or encodes its source
+   value.
+3. The root representation bridge packs the child intermediates.
+4. The site ABI plan flattens the root intermediate into its wire values.
+5. Ownership transferred to the foreign side is removed from cleanup; every
+   non-transferred value is released on an error path.
+
+The plan is a directed acyclic operation graph after the registry applies the
+model's existing recursive-cycle rules. Common subgraphs may be emitted as
+shared private helpers or inlined, but that choice is frozen before rendering.
+The final renderer is not allowed to rediscover the chain from a source type.
+
+### Worked product and optional
+
+For a hypothetical source value:
+
+```rust,ignore
+struct Sample {
+    buf: Buffer,
+    enc: Option<Encoding>,
+}
+```
+
+assume the selected recipes and adapter representations are:
+
+```text
+Sample           <-> Product(Buffer, Option<Encoding>)
+Option<Encoding> <-> Optional(Encoding)
+Buffer           <-> Atomic
+Encoding         <-> Atomic
+
+IBuffer           = adapter aggregate of (pointer, length)
+IEncoding         = adapter integer representation
+IOptionalEncoding = adapter niche or (present, value) representation
+ISample           = adapter product representation
+```
+
+The registry derives the construct chain:
+
+```text
+wire values
+    -> ISample
+    -> (IBuffer, IOptionalEncoding)
+    -> (IBuffer, Option<IEncoding>)
+    -> (Buffer, Option<Encoding>)
+    -> Sample
+```
+
+and the deconstruct chain in reverse. Its rendered body may be equivalent to:
+
+```rust,ignore
+fn decode_sample(value: ISample) -> Result<Sample, Error> {
+    let (buf, enc) = unpack_sample(value)?;
+    let buf = decode_buffer(buf)?;
+    let enc = unpack_optional_encoding(enc)?
+        .map(decode_encoding)
+        .transpose()?;
+    Ok(Sample { buf, enc })
+}
+
+fn encode_sample(value: Sample) -> Result<ISample, Error> {
+    let Sample { buf, enc } = value;
+    let buf = encode_buffer(buf)?;
+    let enc = pack_optional_encoding(
+        enc.map(encode_encoding).transpose()?,
+    )?;
+    pack_sample((buf, enc))
+}
+```
+
+Those source type spellings and field expressions appear only when the frozen
+operations are rendered. If the selected recipe names a constructor and
+accessors instead, the plan already contains references to those Flat
+functions and the renderer emits calls rather than field syntax.
+
+`IBuffer` being one Rust type does not imply one ABI value. C may flatten it to
+`(*const u8, usize)`, while JNI may package it in an object or expose several
+native arguments. The root site's ABI layout makes that choice independently
+of the recursive converter.
+
+### Niches and inactive storage
+
+Niche handling belongs to the representation layer. For example,
+`IOptionalEncoding` may be a transparent newtype over `IEncoding`: its absent
+constructor writes a reserved integer, its present constructor rejects that
+integer for the inner value, and unpack tests the sentinel. An enclosing
+optional can reuse another reserved integer only when the child's representation
+plan reports it as still available.
+
+When a representation uses separate presence or choice-tag values, inactive
+payload storage is not a valid child intermediate. Its ABI plan states whether
+the slot is omitted, initialized as `MaybeUninit`, zero-filled only to avoid
+disclosing bytes, or populated with another target-safe inert value. Generic
+composition must never manufacture a Rust enum, pointer or handle value merely
+to fill an inactive ABI slot.
+
+This replaces the current `Niches` payload of early `syn::Expr`s with a frozen
+domain description that the final renderer turns into value and predicate
+expressions.
+
+### Callbacks
+
+A callback is not an ordinary product. Its outer crossing constructs because
+Rust receives a callable from the foreign side, while every callback argument
+deconstructs because Rust later owns that argument and sends it out. This is
+the direction swap defined by [the model](model.md#the-direction), and the
+registry remains the only component that applies it.
+
+The automatic path for a callback parameter is:
+
+```text
+exported-wrapper entry
+    foreign callable ABI
+    -> callback intermediate
+    -> Rust callable
+
+each later Rust invocation
+    Rust callback arguments
+    -> ordinary Deconstruct converter plans
+    -> argument intermediates
+    -> callback-delivery ABI values
+    -> foreign callable
+    -> unconditional per-invocation cleanup
+```
+
+A callback bridge is selected once per callback fragment and frozen with:
+
+- the foreign callable's ABI values and ownership transfer at wrapper entry;
+- the Rust callable mode, lifetime, `Send` and `Sync` requirements read from
+  Flat;
+- one callback-argument role site plan per argument, bound to the selected
+  direction-swapped deconstruct fragment; when it selects the same row as an
+  ordinary output, it reuses the same fragment identity;
+- the exact callback-delivery layout of every argument, including flattened
+  products, option presence, choice tags, sequence iteration and target object
+  wrapping;
+- setup performed once when the callable is constructed;
+- work performed on every invocation;
+- success, failure and drop cleanup, including values offered to foreign code
+  but not taken;
+- the route for conversion and foreign-call errors when the current
+  unit-returning callback provides no error result; and
+- an optional callback-result site reserved for
+  [issue #216](https://github.com/milyin/prebindgen/issues/216). A future result
+  runs `Direction::Construct`: foreign result wire values are assembled into an
+  intermediate and then converted into the Rust return value.
+
+Callback arguments must not be reclassified or independently lowered by a
+callback emitter. Products, optionals, choices and sequences use the same
+deconstruct composer and representation protocols as ordinary outputs while
+retaining their callback-argument site selection. Only the final delivery
+operation differs because the values are arguments of a foreign callable rather
+than the result of an exported wrapper.
+
+The C callback bridge additionally freezes:
+
+- the `#[repr(C)]` closure value containing `context`, `call` and `drop`;
+- the exact `call` function-pointer signature after every argument layout is
+  flattened;
+- whether each opaque argument is borrowed, transferred, or takeable through a
+  mutable graveyard slot;
+- zero-copy pointer-and-length delivery for borrowed slices when its element
+  representation proves the cast valid;
+- the rule that no argument conversion runs when `call` is null;
+- post-call destruction of takeable values that foreign code did not take;
+  and
+- the current panic route for a fallible conversion during a callback firing,
+  because no caller-side error channel remains.
+
+The JNI callback bridge additionally freezes:
+
+- the Java Virtual Machine handle, global reference and typed `run` method
+  descriptor captured at callable construction;
+- one interface specification shared by Rust invocation, generated Kotlin and
+  the JNI descriptor so they cannot drift;
+- daemon-thread attachment and a sized local-reference frame on every
+  invocation;
+- primitive `jvalue` delivery, object wrapping and any sequence-fold helper
+  setup selected for each argument;
+- owned-handle close-unless-taken behavior and cloning required to turn a
+  borrowed Rust argument into a self-sufficient JVM value;
+- unconditional local-frame release on success, conversion failure, JNI
+  failure and a thrown JVM exception; and
+- exception description/clearing plus logging through `__JniErr`, because the
+  current callback signature has no error result.
+
+A callback may fire synchronously inside the source call or asynchronously
+after the exported wrapper returns. The bridge records that lifetime instead of
+assuming either case. A wrapper-scoped lock may therefore overlap a synchronous
+callback under the existing wrapper contract, but the generic composer must not
+silently extend its scope. Handle protection and temporary borrows acquired
+while encoding callback arguments belong to that invocation and end at cleanup
+or the documented ownership transfer.
+
+The callback renderer receives the frozen bridge, the already-resolved
+argument converter plans and `Emit`. It may spell the callback's source
+argument types to emit the closure signature, but it receives neither
+`&Registry` nor a conversion lookup capability. This removes the current JNI
+callback emitter's registry queries and the C callback path's separate
+structural lowering walk.
+
+### Planning API shape
+
+The exact Rust API is implementation work, but the plan needs these semantic
+layers rather than complete `syn::ItemFn`s:
+
+```rust,ignore
+struct FragmentPlan<R> {
+    id: FragmentId,                 // spelled crossing + complete RecipeKey
+    source: TypeRef,                // opaque until final emission
+    intermediate: R::Intermediate,
+    shape: ShapePlan<R>,
+    converter: ConverterPlan,
+    dependencies: Vec<FragmentId>,
+    yields: Yield,
+}
+
+enum ShapePlan<R> {
+    Atomic(R::TerminalCodec),
+    Product(R::ProductBridge),
+    Optional(R::OptionalBridge),
+    Sequence(R::SequenceBridge),
+    Choice(R::ChoiceBridge),
+    Invoke(R::CallbackBridge),
+}
+
+struct SitePlan<R> {
+    fragment: FragmentId,
+    abi: R::AbiLayout,
+    role: Role,
+    cleanup: R::Cleanup,
+}
+```
+
+Here `R` is adapter-owned representation vocabulary. The registry understands
+the shape protocol and child identities but treats target types, ABI values,
+target metadata and cleanup operations as typed adapter data. The adapter may
+offer declarative standard bridges—tuple product, sentinel optional, tagged
+choice—or an external runtime bridge with a fixed semantic symbol. It may not
+return arbitrary already-rendered converter bodies.
+
+Before freezing, validation proves:
+
+- every reached fragment identity has exactly one intermediate type and one
+  selected shape plan;
+- every intermediate part has the same fragment identity, mode and validity as
+  the corresponding resolved child;
+- pack and unpack arity agree and every product position or choice arm is
+  covered exactly once;
+- every site ABI value is produced or consumed exactly once and every inactive
+  slot has a target-safe policy;
+- nested niche domains are disjoint and sufficient for their discriminants;
+- every failure edge has cleanup and an error route;
+- every callback argument uses the direction-swapped fragment selected for its
+  `Role::CallbackArg` site, and Rust, ABI and target-language callback
+  signatures have the same ordered leaves; and
+- no converter, bridge or callback plan contains rendered source syntax.
+
 ## The frozen generation plan
 
-Plan types remain adapter-specific. Each immutable store must contain at least:
+The recipe-composition skeleton is shared while its representation payloads and
+wrapper artifacts remain adapter-specific. Each immutable store must contain at
+least:
 
-- one fragment plan per reached row key and spelled type, including semantic
-  dependencies, wire slots, ownership and cleanup operations, a stable generated
-  symbol and source-side positions stored as `TypeRef`s;
+- one fragment plan per fragment identity, including its intermediate type,
+  selected shape bridge, semantic dependencies, ownership, validity, failure,
+  niche and cleanup operations, and source positions stored as `TypeRef`s;
 - one site plan for every crossing position in a declared function or callback,
-  with its exact selected fragment;
+  with its exact selected fragment, ABI layout and error route;
+- one converter operation graph per reached fragment direction, including an
+  explicit decision to inline it or emit a stable private artifact;
+- one callback bridge per reached `Invoke` fragment, including its argument
+  sites, callable setup, per-invocation work, target signature and cleanup;
 - one artifact plan for every final top-level item. A private conversion may be
   represented as its own helper, an operation in another artifact or a shared
   helper; the plan need not preserve one node per converter function in the old
@@ -293,6 +750,9 @@ The proposal removes accidental coordination:
 - lazy or later compiler resumes used to construct site plans after conversion
   resolution;
 - registry-bearing item-kind emission callbacks;
+- adapter copies of product, optional, sequence and choice converter chaining;
+- the C callback path's second structural lowering walk and the JNI callback
+  renderer's registry lookups;
 - generated-token reparsing; and
 - name-based converter deduplication after rendering.
 
@@ -301,10 +761,12 @@ It preserves model complexity:
 - Flat as the sole description of captured Rust;
 - crossing dependency order and the explicit rule for recursive cycles;
 - the distinction between reusable recipe fragments and per-site plans;
-- adapter-specific wire layouts and artifact plans;
+- adapter choice of intermediate types, representation bridges, ABI layouts,
+  target metadata and wrapper artifacts;
 - typed planning and validation failures; and
 - the callback rule in which argument crossings run opposite to the callback
-  crossing, as described under [direction](model.md#the-direction).
+  crossing, plus each target's callable ownership, invocation, error and cleanup
+  contract, as described under [direction](model.md#the-direction).
 
 ## Migration
 
@@ -313,33 +775,84 @@ adapter all the way from planning through final emission and deletes the state
 it replaces, rather than maintaining parallel semantic and pre-rendered
 representations merely to keep generated text identical.
 
-1. **State and test the observable contracts.** Record the exported C symbols,
-   signatures and layouts; JNI native names and descriptors; Kotlin public
-   signatures; and ownership, cleanup, error, panic and concurrency behavior.
-   Generated-source snapshots remain change detectors, not an immutable
-   specification: an intentional private-code diff is reviewed and committed.
-2. **Migrate C end to end.** Replace generated functions inside C fragments with
-   semantic operations, eagerly freeze every C fragment, site and artifact
-   plan, and render them through the shared writer. Delete C's early `Emit`,
-   shared mutable compiler memo and `compiled_fns` in the same slice. C is the
-   smaller adapter and establishes the boundary and writer API first.
-3. **Migrate JNI end to end.** Make Rust and Kotlin consume one frozen JNI plan,
-   move source spelling to the final renderer and delete, rather than reproduce,
-   the legacy carriers. `ConverterImpl` and `Stage` hold generated converter
-   chains; `expand`, `unfold` and `fn_plan` are the older decomposition and
-   per-function planning modules. Their deletion is tracked by
-   [issue #506](https://github.com/milyin/prebindgen/issues/506). This slice may
-   be several reviewable PRs, but no completed PR keeps duplicate planning and
-   rendering stores solely for textual compatibility.
-4. **Delete and seal the old path.** Remove `Emit` from `convert_with`,
-   `recipe::Compiler` and every planning context. Reduce the shared writer to
-   the final-assembly sequence above, replace item-kind token callbacks with the
-   single artifact-rendering boundary, and remove the `Prebindgen` emission
-   protocol and `post_process_item`. Compile-fail and call-graph checks then
-   enforce that planning cannot obtain source spelling.
+1. **Pin the observable contracts and failure behavior.** Add or identify tests
+   for every representation family before changing its planner. Record exported
+   C symbols, function-pointer signatures, struct and union layouts; JNI native
+   names and descriptors; Kotlin public signatures; ownership and cleanup;
+   fallible conversion, panic and exception routes; and concurrency behavior.
+   Callback coverage must include zero arguments, scalar and composite
+   arguments, optional and sequence arguments, borrowed and owned handles,
+   null C call pointers, C takeable arguments, repeated JNI calls from a daemon
+   thread, thrown JVM exceptions and callback-object destruction. Generated
+   source remains a review aid rather than the specification.
+2. **Introduce syntax-free plan vocabulary.** Add `FragmentId`, intermediate
+   type and ABI layout descriptors, shape bridge plans, converter operations,
+   cleanup operations and semantic artifact identities. Move `Yield`, modes,
+   validity and dependency edges onto those plans. Add validation tests with a
+   small fake adapter for arity, identity, ownership, niche, failure-route and
+   direction errors. This stage emits no new production Rust path.
+3. **Build the shared recipe composer.** Implement construct and deconstruct
+   operation graphs for `Atomic`, `Product` and `Optional`, including the
+   worked `Sample` chain, partial-construction cleanup and nested niche
+   propagation. Add `Sequence` builder/traversal and `Choice` arm/tag protocols
+   only after the fixed-arity path proves the API. The composer consumes Flat
+   operations and child fragment identities, never `Emit` or `syn::Type` from a
+   source `TypeRef`.
+4. **Migrate ordinary C crossings.** Express the existing scalar, pointer,
+   string, data-struct, optional, slice and tagged-union representations as C
+   intermediate and ABI plans. Move field construction/deconstruction, optional
+   propagation, sequence lowering and choice control flow to the shared
+   composer. Preserve `MaybeUninit`, inactive-slot, borrowed-pointer, typed-drop
+   and `Result` routing policies as explicit C operations. Render from the
+   frozen graph and remove the migrated branches from C's `Compile` hooks,
+   `lower_shape` and `encode_value` rather than retaining a second answer.
+5. **Migrate C callbacks as a separate vertical slice.** Freeze the closure
+   struct and its `call` signature from the callback argument site plans. Make
+   callback firing invoke the same deconstruct graphs used by ordinary outputs.
+   Encode only inside the non-null `call` guard; retain zero-copy slices,
+   takeable graveyard slots, post-call destruction and panic-on-conversion-
+   failure. Render the callback struct, Rust closure and header-facing ABI from
+   the same bridge. Delete callback-specific structural classification and
+   registry queries when this slice lands.
+6. **Migrate ordinary JNI crossings.** Represent whole-object and flattened
+   input/output forms as intermediate and ABI plans. Fold existing pre-stages
+   into the converter operation graph. Make exported Rust wrappers, generated
+   Kotlin declarations, native descriptors, handle-lock sets, exception routes
+   and cleanup all consume one frozen plan. Migrate products and optionals
+   first, then sequences and choices; after each family moves, delete its
+   parallel `expand`, `unfold` or `fn_plan` carrier. This deletion coordinates
+   with [issue #506](https://github.com/milyin/prebindgen/issues/506).
+7. **Migrate JNI callbacks as a separate vertical slice.** Freeze the callback
+   interface specification, method descriptor, argument leaves, one-time setup,
+   per-invocation local-frame size and cleanup. Reuse the ordinary deconstruct
+   graph for each callback argument, including pre-stages, flattened data,
+   optional gates, sequence folds and owned-handle delivery. Retain daemon
+   attachment, cached method lookup, close-unless-taken handles, unconditional
+   local-frame release, exception clearing and asynchronous error logging.
+   Generate the Kotlin interface and Rust `jvalue` list from the same ordered
+   leaves. Delete `callback_input` registry lookups and its independent output
+   chain only after the runtime callback tests cover the new bridge.
+8. **Move all source spelling to final emission.** Replace the remaining
+   complete functions inside `ConverterImpl` and `Stage` with frozen operations.
+   Render converter, wrapper, helper-type and callback artifacts through the
+   adapter renderer. Make qualification happen while `Emit` spells each stored
+   source reference, and remove the whole-file `post_process_item` rewrite.
+9. **Delete and seal the old path.** Remove `Emit` from `convert_with`,
+   `recipe::Compiler` and every planning context; remove `compiled_fns`, the
+   shared mutable compiler memo and name-based deduplication; and replace the
+   item-kind `Prebindgen` callbacks with the single artifact-rendering boundary.
+   Compile-fail and call-graph checks then enforce that planning cannot obtain
+   source spelling and rendering cannot obtain a registry.
 
-The Flat boundary is complete after both adapter slices stop rendering during
-planning and stage 4 removes the generic escape. Generated output may evolve at
+Each numbered stage may need multiple pull requests, but each pull request is
+an independently reviewable vertical slice: its description names the migrated
+shape and adapter behavior, identifies the old path deleted in the same diff,
+and reports exact verification performed. A temporary comparison harness may
+run old and new plans in tests, but production generation must have one answer
+for every migrated fragment when the pull request merges.
+
+The Flat boundary is complete after both adapters stop rendering during
+planning and stage 9 removes the generic escape. Generated output may evolve at
 each slice; every externally visible difference still requires an explicit
 contract change outside this proposal.
 
@@ -369,12 +882,42 @@ The boundary and behavior are mechanically testable:
 - Validation and every artifact writer observe the same immutable plan store.
 - All source-spelling calls are reachable only from the shared Rust writer's
   final-emission boundary.
+- Every reached fragment has one intermediate type, and every reached site has
+  one ABI layout referring to that fragment rather than a second conversion.
+- Product, optional, sequence and choice converter bodies are derived from the
+  shared operation graph; adapter planning code contains representation policy
+  but no duplicate recursive source-value walk.
+- C callback declarations and invocation bodies consume the same ordered
+  callback-argument site plans, including takeable and inactive-slot policy.
+- JNI callback interfaces, method descriptors and Rust `jvalue` lists consume
+  the same ordered callback leaves.
+- Callback rendering cannot query the registry; callback runtime setup,
+  per-invocation cleanup and asynchronous error routes are frozen before source
+  types are spelled.
+- Callback-result absence is explicit. Adding callback results uses the frozen
+  construct-direction result site instead of adding another callback-only
+  converter path.
 - Exported C symbols, signatures and layouts remain compatible; JNI native names
   and descriptors remain compatible; generated Kotlin retains its public
   signatures and behavior.
 - Generated-source changes are classified as private restructuring,
   qualification, formatting or an explicit optimization. No unexplained public
   delta is accepted.
-- Workspace tests, the Rust linter (clippy), Rust documentation tests (rustdoc),
-  reviewed regeneration goldens, AddressSanitizer smoke tests and the JNI
-  end-to-end Java Virtual Machine covertest harness remain green.
+
+Every implementation pull request reports the exact subset it ran and why any
+item was not applicable. The complete migration gate is:
+
+- `cargo fmt --all --check`;
+- `cargo test --workspace`;
+- `cargo clippy --workspace --all-targets -- -D warnings`;
+- `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps`;
+- `./examples/regen-check.sh`, with every generated-source difference reviewed
+  and classified;
+- `./examples/smoke-asan.sh` for ownership, partial-construction and callback
+  cleanup; and
+- `cd examples/covertest-kotlin && ./gradlew run --console=plain` for JNI and
+  Kotlin behavior.
+
+The callback migration does not pass on generation snapshots alone. Its C unit
+tests and JNI covertest cases must execute callback creation, repeated firing,
+failure cleanup and final destruction on the generated boundary.
