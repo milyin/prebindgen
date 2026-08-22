@@ -99,18 +99,37 @@ a WebAssembly boundary as **two**, a pointer and a length, because nothing
 there can carry both at once. Going the other way, a C struct passed by value
 is **one** wire value however many Rust fields went into it.
 
-Only **wire** values pass the boundary; a `Sample` never does. So where this
-document says a type *crosses*, it means a Rust value of that type is
-**constructed** on the Rust side out of wire values that arrived, or
-**deconstructed** into wire values that leave. Those two are the whole of what
-happens at the boundary.
+Only **wire** values pass the boundary; a `Sample` never does. A Rust value
+reaches the boundary through a recursive walk of shapes. A shape with parts
+relates the value to those parts, whose crossings continue the walk. An
+`Atomic` shape ends the walk and hands that value to the adapter's wire
+conversion.
 
-**Direction.** Which of those two happens at a given position: constructing a
-Rust value, or deconstructing one. `Direction` is the type; its values are
-`Direction::Construct` and `Direction::Deconstruct`.
+### Parts and wire use different verbs
 
-**Crossing.** One Rust type and one direction: how a value of that type is
-constructed at the boundary, or how it is deconstructed. See [directions and
+These are two different relations and use two different pairs of words:
+
+| Relation | Toward the Rust value | Toward the boundary |
+|---|---|---|
+| parts ↔ Rust value | **construct** the value from its parts | **deconstruct** the value into its parts |
+| wire values ↔ an `Atomic` terminal | **decode** the terminal from wire values | **encode** the terminal into wire values |
+
+Here *terminal* means only that the selected shape is `Atomic`. It need not be a
+scalar: an adapter may treat a whole `Sample` as one terminal.
+
+`Direction::Construct` names the whole walk toward Rust: decode at its atomic
+leaves, then construct enclosing values from their parts. `Direction::Deconstruct`
+names the reverse walk toward the boundary: deconstruct values into parts, then
+encode the atomic leaves. Construct/deconstruct and decode/encode are therefore
+not synonyms.
+
+**Direction.** Which way that recursive shape walk runs. `Direction` is the
+type; its values are `Direction::Construct` and
+`Direction::Deconstruct`.
+
+**Crossing.** One Rust type and one direction: the question used to look up a
+row in the recipe table. A crossing does not say whether its next step is parts
+or wire values; the row's shape says that. See [directions and
 crossings](#directions-and-crossings).
 
 **Callback type.** A Rust type, written `impl Fn(A, B)` in the source and
@@ -149,9 +168,9 @@ falls into one of two cases:
 `Optional` and `Sequence` over one inner value, and `Invoke` over the arguments
 of a callback. Each part is a Rust value with a crossing of its own, answered
 the same way one level down.
-* **It has none** — `Atomic`. Constructing decodes the wire values that arrived;
-deconstructing encodes the ones that leave. The adapter writes both conversions
-itself, and every chain of parts ends here.
+* **It has none** — `Atomic`. In the construct direction the adapter decodes the
+wire values that arrived; in the deconstruct direction it encodes the ones that
+leave. The shape itself names no wire type, and every chain of parts ends here.
 
 > *For example*, the struct `Sample` above, holding a `KeyExpr` and a `ZBytes`.
 > Under `Product`, constructing it calls `sample_new(key, payload)`, and
@@ -179,46 +198,61 @@ callback type takes `Invoke`, and the registry accepts no other shape there.
 makes about how values cross. `Recipes` is the type. The adapter fills the
 table before any of it is walked; the registry reads it and never adds to it.
 
-**Recipe.** One entry of the table — one such decision. Three things make one:
+**Recipe.** One named row owned by the table — one such decision. Three things
+identify and define the row:
 
-* the **crossing** it answers — a Rust type and a direction;
-* a **name**, chosen by the adapter, since a crossing may have several recipes;
+* the **crossing key** under which the table files it — a normalized Rust type
+and a direction;
+* a **recipe ID**, chosen by the adapter to distinguish rows under the same key;
 * a **shape**.
+
+A recipe states the value–parts step at this layer, or `Atomic` to end the shape
+walk. It never states a wire type or wire layout. Those appear only when the
+adapter compiles the table row into a fragment.
 
 *Why the adapter declares recipes and the model does not.* The model already
 knows how a Rust type **can** be taken apart: `Sample`'s fields are in it, and
 so are `sample_new`'s parameters and every accessor's signature. What the model
 cannot know is which of those splits a given target should use, or whether the
-value should skip them and convert straight to the wire — that turns on what
-the target language can express, and the two adapters answer differently for
-the same type. So the model supplies the possibilities, the adapter declares
-which of them are realized, and the registry checks each declaration against
-the model rather than inventing one.
+shape walk should stop at the whole value — that turns on what the target
+language can express, and the two adapters answer differently for the same
+type. So the model supplies the possibilities, the adapter declares which of
+them are realized, and the registry checks each declaration against the model
+rather than inventing one.
 
-*Several recipes for one crossing* is how a type offers a choice. Asking how
-`Sample` crosses then has no single answer: one site may take it whole and the
-next take it apart, and both are right. The question becomes answerable only
-once it names a recipe and a direction.
+*Several rows under one crossing key* is how the table offers a choice. Asking
+for the `Sample` row by crossing key alone may be ambiguous: one site may select
+`whole` and the next `parts`, and both are valid. A site binding selects the
+recipe ID; when it names none, the table must have or derive a default.
 
-> *For example*, a Kotlin data class. JniGen declares two recipes on one
-> crossing — a `whole` recipe with no parts, crossing as a single JVM object,
-> and a `parts` recipe naming the struct's fields, crossing as one wire value
-> per field. Each site picks between them.
+> *For example*, a Kotlin data class. Under the same crossing key JniGen
+> declares a `whole` row with shape `Atomic` and a `parts` row with shape
+> `Product` over the struct's fields. The compiled `JFrag` for `whole` may use
+> one JVM object; the `parts` fragment may use one wire value per field. Those
+> wire layouts belong to the fragments, not to the recipes. Each site selects
+> one row.
 
-**Fragment.** What an adapter works out for one **recipe**: which wire values
-the crossing occupies, the Rust that converts them, and what has to be released
-afterwards. It is the adapter's own type — the registry stores fragments and
-passes them around but never looks inside one, asking only what Rust value it
-yields. **Not a wire value:** a fragment may occupy none, one, or several.
-`prebindgen-c`'s is `CFrag` and `prebindgen-jni`'s is `JFrag`.
+**Fragment.** What an adapter compiles from one **recipe row applied to one
+spelled crossing**, plus its child fragments. At a shape with parts it composes
+construction or deconstruction with those children; at `Atomic` it supplies
+decoding or encoding. The result records which wire values the whole walk
+occupies, the Rust that converts them, and what has to be released afterwards.
+It is the adapter's own type — the registry stores fragments and passes them
+around but never looks inside one, asking only what Rust value it yields. **Not
+a wire value:** a fragment may occupy none, one, or several. `prebindgen-c`'s is
+`CFrag` and `prebindgen-jni`'s is `JFrag`.
+
+One table row serves spellings that normalize to the same crossing key, but its
+fragments may differ: `Sample`, `&Sample` and `Box<Sample>` share the row while
+moving, borrowing and rebuilding the wrapper require different generated Rust.
 
 **Plan.** What an adapter works out for one **site**: that site's fragment,
 plus the exported function's signature, the call into the source crate, and the
 cleanup after it. Also the adapter's own type.
 
-Fragment and plan are the pair to keep apart. A fragment is built once per
-recipe and reused at every site that recipe serves; a plan is built once per
-site.
+Fragment and plan are the pair to keep apart. A fragment is memoized per spelled
+crossing and selected recipe row, then reused at matching sites; a plan is built
+once per site.
 
 ## How the file is built today
 
@@ -244,14 +278,16 @@ need and in what order — inner ones first, so a recipe's parts are ready befor
 the recipe that names them — and asks the adapter for a **converter** for each,
 in that order.
 
-A converter is the Rust code that performs the crossing: a constructing one
-takes wire values and returns a Rust value, a deconstructing one takes a Rust
-value and produces wire values. The adapter renders that code now and keeps it.
-C stores one complete `syn::ItemFn` in each fragment. JNI stores a main function
-plus zero or more pre-stage functions, while a composed-only fragment emits no
-converter function of its own. There is one fragment per recipe, reused by
-every site that picks it, but a fragment may therefore contribute zero, one, or
-several functions to the file.
+The adapter recursively compiles each reached recipe row into a fragment. At a
+shape with parts, generated Rust combines child-fragment conversions with the
+row's construction or deconstruction operation. At `Atomic`, the adapter writes
+the decoder or encoder. The completed fragment therefore reaches wire values,
+although the recipe row itself never names them. The adapter renders that code
+now and keeps it. C stores one complete `syn::ItemFn` in each fragment. JNI
+stores a main function plus zero or more pre-stage functions, while a
+composed-only fragment emits no converter function of its own. A fragment is
+memoized per spelled crossing and selected row, but may contribute zero, one,
+or several functions to the file.
 
 What comes back to the registry is not the function. It is one fact about it:
 which other crossings that function's body calls into. A converter for
@@ -305,10 +341,11 @@ per struct.
 A function's wrapper does four things:
 
 1. take in the wire values of each parameter;
-2. construct one Rust value per parameter, by calling converters;
+2. decode atomic leaves and construct one Rust value per parameter, by calling
+converters;
 3. call the declared function;
-4. deconstruct what it returned into wire values, hand those back, and release
-whatever the call allocated or borrowed.
+4. deconstruct what it returned, encode its atomic leaves into wire values, hand
+those back, and release whatever the call allocated or borrowed.
 
 Converters are not among the entry points — they are internal, called by
 wrappers and by each other. Some entry points are not wrappers either: a drop
@@ -342,11 +379,11 @@ planning live in [Rust writing after planning](rust-writing.md).
 ```rust
 /// Which of the two directions a crossing is, as a value.
 pub enum Direction {
-    /// Build this crossing's Rust value — from its parts, or from wire values
-    /// where the shape has no parts.
+    /// Walk toward this crossing's Rust value: decode an atomic terminal, or
+    /// construct a value from its parts.
     Construct,
-    /// Take this crossing's Rust value apart — into its parts, or into wire
-    /// values where the shape has none.
+    /// Walk toward the boundary: deconstruct a value into its parts, or encode
+    /// an atomic terminal.
     Deconstruct,
 }
 
@@ -364,12 +401,15 @@ The registry applies `swap` there, and no declaration states it.
 ### The crossing
 
 ```rust
-/// One Rust type and one of the two directions: the question the table answers.
+/// One Rust type and one of the two directions: a query into the recipe table.
 pub struct Crossing {
     ty: TypeRef,
     direction: Direction,
 }
 ```
+
+`Crossing` is a query, not a conversion. Its recipe-table row determines the
+next shape step; only a compiled fragment reaches wire values.
 
 A word on `TypeRef`, since three of the accessors below return one. It belongs
 to `prebindgen-flat`, and nothing here changes it: it is the model's
@@ -430,8 +470,8 @@ only yields `Shared`.
 
 Note `Box<Sample>` — `value()` keeps the wrapper because a `Box` is not a
 borrow, while `key()` strips it, because `Sample`, `&Sample` and `Box<Sample>`
-all reach **one** recipe. That is what makes a recipe declared once serve every
-way its type can be written.
+all query the same table rows. That is what makes rows declared once serve every
+way their type can be written.
 
 ### The key
 
@@ -446,29 +486,31 @@ pub struct CrossingKey {
 }
 ```
 
-`Crossing` is what a site hands the compiler; `CrossingKey` is what the table
-and the fragment memo are keyed by. The narrowing is deliberate and one-way —
-`key()` exists, its inverse does not — because a key names a recipe and a
-recipe is shared by every way its type can be written.
+`Crossing` is what a site hands the compiler; `CrossingKey` is what the recipe
+table is keyed by. The narrowing is deliberate and one-way — `key()` exists,
+its inverse does not — because a key indexes rows shared by every way its type
+can be written. The fragment memo is deliberately finer: it uses the spelled
+type key, direction and recipe ID, because applying one shared row to `T`, `&T`
+and `Box<T>` can require different Rust.
 
 ### The recipe's name
 
 ```rust
-/// Names one of several answers a crossing may have. Adapters mint these; the
-/// table attaches no meaning to any particular name.
+/// Names one table row among those filed under the same crossing key. Adapters
+/// mint these; the table attaches no meaning to any particular name.
 pub struct RecipeId(String);
 
 impl RecipeId {
     pub fn new(name: impl Into<String>) -> Self;
-    /// The name the table gives the recipe it derives for an undeclared crossing.
+    /// The name the table gives the row it derives for an undeclared crossing key.
     pub fn derived() -> Self;
     pub fn as_str(&self) -> &str;
 }
 ```
 
-A crossing is identified by `CrossingKey`; one of its recipes by `(CrossingKey,
-RecipeId)`. The names are the adapter's own — `prebindgen-c` uses `whole` for
-how a type crosses on its own and `in_field` / `parts` / `payload` for how the
-same type crosses inside a container — and the registry never reads one.
-`derived()` is the single reserved name, given to the recipe the table builds
-for a crossing nobody declared.
+A crossing query is identified by `CrossingKey`; one table row by
+`(CrossingKey, RecipeId)`. The names are the adapter's own — `prebindgen-c` uses
+`whole` for a type on its own and `in_field` / `parts` / `payload` for the same
+type inside a container — and the registry never reads one. `derived()` is the
+single reserved name, given to the row the table derives when none was
+declared.

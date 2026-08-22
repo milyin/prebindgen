@@ -34,13 +34,15 @@ Their short descriptions here say how this proposal uses them.
 | **Flat** | The complete language-independent model parsed from captured source records. Planning asks Flat for facts instead of inspecting Rust syntax. |
 | **`TypeRef`** | Flat's opaque description of one Rust type. Its structural reading is available during planning; its captured Rust spelling is not. See [the crossing](model.md#the-crossing). |
 | **Declaration** | A build-script statement selecting a function, constant or way for a type to cross. Undeclared source items generate no binding output. |
-| **Crossing** | One `TypeRef` and one direction: construct the Rust value from wire values, or deconstruct it into wire values. |
-| **Recipe** | One adapter-declared way to answer a crossing. A crossing may have several recipes. |
+| **Direction** | The orientation of a recursive shape walk: toward Rust (`Construct`) or toward the boundary (`Deconstruct`). See [parts and wire use different verbs](model.md#parts-and-wire-use-different-verbs). |
+| **Crossing** | One `TypeRef` and one direction, used as a query into the recipe table. It does not itself say whether the next step is parts or wire. |
+| **Recipe** | One named row owned by the recipe table, keyed by `(CrossingKey, RecipeId)` and containing a shape. The table may contain several rows under the same crossing key. |
+| **Shape** | The value–parts step declared by a recipe row. A shape with parts constructs or deconstructs; `Atomic` ends the shape walk without naming wire types. |
 | **Site** | One position where a value crosses, such as a function parameter, return or callback argument. |
-| **Fragment** | The adapter-specific answer for one recipe, reused by every site that selects it. |
+| **Fragment** | The adapter-specific result of applying one selected recipe row to one spelled crossing and composing its child fragments. It is the first layer that records wire layout and terminal decoding or encoding. One normalized table row may produce different fragments for `T`, `&T` and `Box<T>`. |
 | **Site plan** | The adapter-specific answer for one position in the generated interface, such as a function parameter or return. It selects a fragment for that position. |
 | **Wire value** | A Rust value whose type has an exact representation in the target calling convention, such as JNI's 64-bit integer slot `jlong` or C's untyped raw pointer `*mut c_void`. |
-| **Converter** | Internal generated Rust that constructs one Rust value from wire values or deconstructs it back into wire values. |
+| **Converter** | Internal Rust emitted from a fragment. It composes value–parts operations and child converters; at an `Atomic` terminal it decodes wire values into the Rust value or encodes the Rust value into wire values. |
 | **Wrapper** | The exported generated Rust entry point for a declared function. It converts parameters, calls the source function and converts its result. See [what the foreign side calls](model.md#what-the-foreign-side-ends-up-calling). |
 | **Callback** | A callable supplied by the foreign side and invoked later by Rust. Its argument crossings run opposite to the callback crossing. |
 
