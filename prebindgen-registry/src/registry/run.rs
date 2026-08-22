@@ -61,8 +61,8 @@ impl Registry {
         for key in declared.decompositions.replaces.keys() {
             // The key is what a root flag is stored under, so it goes straight
             // in — no `to_type()` round trip to be re-keyed on the far side.
-            self.clear_root(Direction::Input, key);
-            self.clear_root(Direction::Output, key);
+            self.clear_root(Direction::Construct, key);
+            self.clear_root(Direction::Deconstruct, key);
         }
         Ok(())
     }

@@ -1146,7 +1146,7 @@ fn render_val_over_helper(
 
 /// The classified output side of a wrapper: return type, projection wrap,
 /// output-expansion (builder/fold) params, and the extra call-site args —
-/// everything the call-expression builder and the signature assembly must
+/// everything the call-expression builder and the signature direction must
 /// agree on.
 struct OutputPlan {
     kt_return: Option<KtType>,
@@ -1272,7 +1272,7 @@ fn classify_params(
             InputKind::VecBuild { elem, .. } => {
                 // Slice/Vec of a flattenable data_class: build the Rust-side
                 // Vec by pushing each element's leaves, pass the handle (see
-                // the body assembly + `build_vec_build_helper_items`). The
+                // the body direction + `build_vec_build_helper_items`). The
                 // high-level signature stays `List<T>` (registered below).
                 let h = crate::jni::vec_build_helpers(ext, registry, elem)
                     .expect("vec_build_elem Some ⇒ vec_build_helpers Some");

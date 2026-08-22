@@ -615,13 +615,13 @@ fn classify_leaf(
     expanded: bool,
     source_param: &syn::Ident,
 ) -> Result<PlanLeaf, PlanError> {
-    use prebindgen_registry::recipe::{Assembly, Compiler, Crossing, Role, Site};
+    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
     // `impl Fn(args)` never reaches the compiler, for the reason
     // `JniGen::compile_crossing` gives: a callback is answered whole, because a
     // JniGen callback ARGUMENT does not always have a conversion of its own —
     // a sealed class reaches the JVM as a selector plus the live arm's slots.
-    // Driving the derived callback row here would ask for the one conversion
-    // that does not exist. This carve-out goes when the arms are rows a
+    // Driving the derived callback recipe here would ask for the one conversion
+    // that does not exist. This carve-out goes when the arms are recipes a
     // callback can be composed from.
     if let Some(args) = reading.callback_args() {
         // `SpecKey` is a memo key and holds `TypeKey`s, so the args reach it as
@@ -640,7 +640,7 @@ fn classify_leaf(
         });
     }
     // The compiler, resumed over what the build already compiled. Every
-    // fragment this site's row needs is in that store, so `site` finds them
+    // fragment this site's recipe needs is in that store, so `site` finds them
     // rather than building them again — and the plan it wraps them in is the
     // one hook the registry calls per site rather than per crossing.
     let mut compiler = Compiler::resume(
@@ -668,7 +668,7 @@ fn classify_leaf(
         owner: source_param.clone(),
         role: Role::Param { index: 0 },
     };
-    let crossing = Crossing::new(reading.clone(), Assembly::Construct);
+    let crossing = Crossing::new(reading.clone(), Direction::Construct);
     let planned = compiler.site(&mut adapter, site, crossing);
     *ext.compiled.borrow_mut() = compiler.finish();
     match planned {
@@ -709,7 +709,7 @@ fn return_site(
     target: &TypeRef,
     declared: Option<TypeRef>,
 ) -> Option<crate::jni::compile::JPlan> {
-    use prebindgen_registry::recipe::{Assembly, Compiler, Crossing, Role, Site};
+    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
     let mut compiler = Compiler::resume(
         registry.flat(),
         ext.recipe_table(),
@@ -726,7 +726,7 @@ fn return_site(
         owner: func.clone(),
         role: Role::Return,
     };
-    let crossing = Crossing::new(target.clone(), Assembly::Deconstruct);
+    let crossing = Crossing::new(target.clone(), Direction::Deconstruct);
     let planned = compiler.site(&mut adapter, site, crossing);
     *ext.compiled.borrow_mut() = compiler.finish();
     planned.ok().flatten()
@@ -834,8 +834,8 @@ fn build_output(
             ty: target_ty.key(),
         });
     };
-    // The site's own row, compiled through the hook. `Compiler::site` is what
-    // makes this a site rather than a lookup: it picks the row, builds the
+    // The site's own recipe, compiled through the hook. `Compiler::site` is what
+    // makes this a site rather than a lookup: it picks the recipe, builds the
     // fragment, checks the value's validity against what a return tolerates —
     // the JVM keeps what it is given, so a borrowed one is refused here rather
     // than emitted — and hands the fragment to `Compile::plan`.

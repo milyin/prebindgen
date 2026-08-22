@@ -13,6 +13,8 @@
 use prebindgen_flat::flat::{Origin, TypeKey};
 use quote::ToTokens;
 
+use crate::recipe::Direction;
+
 /// The origin of a type a **build script** wrote.
 ///
 /// Real tokens, and deliberately no source position: `SourceLocation::default()`
@@ -1069,18 +1071,13 @@ impl ConvertSpec {
 /// macro states it (`from!`/`try_from!` = into-Rust, `into!`/`try_into!` =
 /// out-of-Rust) and the acceptor cross-checks it, so a chain like
 /// `.output(from!(i32))` is a hard error instead of a silent misread.
-#[derive(Clone, Copy, PartialEq)]
-pub(crate) enum ConvertDirection {
-    Input,
-    Output,
-}
-
-impl ConvertDirection {
-    fn macros(self) -> &'static str {
-        match self {
-            ConvertDirection::Input => "from!/try_from!",
-            ConvertDirection::Output => "into!/try_into!",
-        }
+///
+/// Stated as an [`Direction`], the one type naming this axis: a `from!` builds
+/// the Rust value out of what crossed, an `into!` takes one apart.
+fn convert_macros(direction: Direction) -> &'static str {
+    match direction {
+        Direction::Construct => "from!/try_from!",
+        Direction::Deconstruct => "into!/try_into!",
     }
 }
 
@@ -1115,14 +1112,14 @@ pub(crate) enum ConvertSourceKind {
     /// `from!`/`try_from!`/`into!`/`try_into!` — a stated representation
     /// type, converted via the `core::convert` trait.
     Repr {
-        direction: ConvertDirection,
+        direction: Direction,
         fallible: bool,
         ty: syn::Type,
     },
 }
 
 impl ConvertSourceDecl {
-    fn repr(direction: ConvertDirection, fallible: bool, ty: syn::Type) -> Self {
+    fn repr(direction: Direction, fallible: bool, ty: syn::Type) -> Self {
         Self {
             kind: ConvertSourceKind::Repr {
                 direction,
@@ -1133,19 +1130,19 @@ impl ConvertSourceDecl {
     }
     /// `from!(T)` — input via `T: Into<Self>`.
     pub fn from_type(ty: syn::Type) -> Self {
-        Self::repr(ConvertDirection::Input, false, ty)
+        Self::repr(Direction::Construct, false, ty)
     }
     /// `try_from!(T)` — input via `T: TryInto<Self>`.
     pub fn try_from_type(ty: syn::Type) -> Self {
-        Self::repr(ConvertDirection::Input, true, ty)
+        Self::repr(Direction::Construct, true, ty)
     }
     /// `into!(T)` — output via `Self: Into<T>`.
     pub fn into_type(ty: syn::Type) -> Self {
-        Self::repr(ConvertDirection::Output, false, ty)
+        Self::repr(Direction::Deconstruct, false, ty)
     }
     /// `try_into!(T)` — output via `Self: TryInto<T>`.
     pub fn try_into_type(ty: syn::Type) -> Self {
-        Self::repr(ConvertDirection::Output, true, ty)
+        Self::repr(Direction::Deconstruct, true, ty)
     }
 }
 
@@ -1301,7 +1298,7 @@ impl ConvertDecl {
     /// exactly like a `#[prebindgen]` fn source.
     fn spec_of(
         &mut self,
-        direction: ConvertDirection,
+        direction: Direction,
         method: &str,
         src: ConvertSourceDecl,
     ) -> ConvertSpec {
@@ -1322,8 +1319,8 @@ impl ConvertDecl {
                     "convert!({k}).{method}(...): the source was built with {got} — \
                      an {method} conversion is built with {want}",
                     k = self.key.as_str(),
-                    got = stated.macros(),
-                    want = direction.macros(),
+                    got = convert_macros(stated),
+                    want = convert_macros(direction),
                 );
                 self.check_repr(method, &ty);
                 ConvertSpec::Trait { repr: ty, fallible }
@@ -1338,7 +1335,7 @@ impl ConvertDecl {
     /// [`try_from!`](crate::try_from) (`Repr: Into<T>` / `TryInto`, or a
     /// binding-local callable via `.with(...)`).
     pub fn input(mut self, src: impl Into<ConvertSourceDecl>) -> Self {
-        let spec = self.spec_of(ConvertDirection::Input, "input", src.into());
+        let spec = self.spec_of(Direction::Construct, "input", src.into());
         self.set_input(spec)
     }
 
@@ -1349,7 +1346,7 @@ impl ConvertDecl {
     /// (`T: Into<Repr>` / `TryInto`, or a binding-local callable via
     /// `.with(...)`).
     pub fn output(mut self, src: impl Into<ConvertSourceDecl>) -> Self {
-        let spec = self.spec_of(ConvertDirection::Output, "output", src.into());
+        let spec = self.spec_of(Direction::Deconstruct, "output", src.into());
         self.set_output(spec)
     }
 

@@ -1,4 +1,4 @@
-use prebindgen_registry::{recipe::Assembly, Building, Conversions, Crossing, RegistryBuilder};
+use prebindgen_registry::{recipe::Direction, Building, Conversions, Crossing, RegistryBuilder};
 
 use super::{builder::callback_fn_type, *};
 
@@ -17,19 +17,19 @@ impl CbindgenBuilder {
     pub(crate) fn frag(
         &self,
         ty: &TypeRef,
-        assembly: Assembly,
+        direction: Direction,
     ) -> Option<std::rc::Rc<crate::compile::CFrag>> {
-        self.compiled.borrow().fragment(&ty.key(), assembly)
+        self.compiled.borrow().fragment(&ty.key(), direction)
     }
 
     /// The fragment that builds a Rust `ty` out of C parts.
     pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<std::rc::Rc<crate::compile::CFrag>> {
-        self.frag(ty, Assembly::Construct)
+        self.frag(ty, Direction::Construct)
     }
 
     /// The fragment that takes a Rust `ty` apart into C parts.
     pub(crate) fn out_frag(&self, ty: &TypeRef) -> Option<std::rc::Rc<crate::compile::CFrag>> {
-        self.frag(ty, Assembly::Deconstruct)
+        self.frag(ty, Direction::Deconstruct)
     }
 }
 
@@ -375,7 +375,7 @@ impl CbindgenBuilder {
 
     /// Compile every site of every exported function.
     ///
-    /// The second half of #450 reaching real positions. A **row** is what a
+    /// The second half of #450 reaching real positions. A **recipe** is what a
     /// type's conversion is, and both adapters have compiled those since
     /// #455/#457; a **site** is one position in the generated API, and this is
     /// where they start being asked about.
@@ -398,7 +398,7 @@ impl CbindgenBuilder {
         >,
         registry: &'v Registry,
     ) -> Result<(), String> {
-        use prebindgen_registry::recipe::{Assembly, Crossing, Role, Site};
+        use prebindgen_registry::recipe::{Crossing, Direction, Role, Site};
 
         let mut adapter = crate::compile::CCompile {
             gen: self,
@@ -416,7 +416,7 @@ impl CbindgenBuilder {
                     owner: name.clone(),
                     role: Role::Param { index },
                 };
-                let crossing = Crossing::new(param.ty.clone(), Assembly::Construct);
+                let crossing = Crossing::new(param.ty.clone(), Direction::Construct);
                 compiler
                     .site(&mut adapter, site, crossing)
                     .map_err(|e| e.to_string())?;
@@ -436,7 +436,7 @@ impl CbindgenBuilder {
                     owner: name.clone(),
                     role,
                 };
-                let crossing = Crossing::new(ty.clone(), Assembly::Deconstruct);
+                let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
                 compiler
                     .site(&mut adapter, site, crossing)
                     .map_err(|e| e.to_string())?;
@@ -607,7 +607,7 @@ impl CbindgenBuilder {
     /// `String` **input from a `data_struct`'s mirror**: a null `char *`
     /// decodes to an empty string rather than refusing.
     ///
-    /// The second reading a `String` has, and the reason it needs a row of its
+    /// The second reading a `String` has, and the reason it needs a recipe of its
     /// own. A `String` **parameter** is a pointer the caller chose to pass, so
     /// a null one is a caller error and [`Self::in_string`] says so. A `String`
     /// **field** shares a struct with every other field, and refusing it would
@@ -616,7 +616,7 @@ impl CbindgenBuilder {
     /// it may not even read.
     ///
     /// Lossy on invalid UTF-8 for the same reason. This is the reading the
-    /// hand-written field walk had; stating it as a row is what makes it
+    /// hand-written field walk had; stating it as a recipe is what makes it
     /// visible rather than buried.
     pub(crate) fn in_string_field(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         if !r_is_string(ty) {
@@ -649,7 +649,7 @@ impl CbindgenBuilder {
     /// [`bool_wire`], so the plain Rust `bool` is wrapped rather than passed
     /// through.
     ///
-    /// The twin of [`Self::in_bool`], and the reason `bool` has a second row: a
+    /// The twin of [`Self::in_bool`], and the reason `bool` has a second recipe: a
     /// `bool` **return** is always already one of two values and crosses as
     /// itself, while a field shares one mirror with the decode that has to
     /// normalise it.
@@ -1576,8 +1576,8 @@ impl CbindgenBuilder {
         })
     }
 
-    /// Build the conversion for one crossing by asking the table which row it
-    /// takes and the driver to compile that row.
+    /// Build the conversion for one crossing by asking the table which recipe it
+    /// takes and the driver to compile that recipe.
     ///
     /// `None` records a gap, exactly as the chain of guesses this replaced did:
     /// whether the gap matters is the registry's call, and its report names the
@@ -1592,15 +1592,12 @@ impl CbindgenBuilder {
         // The reading the scan already took for this crossing, fetched by the
         // key the crossing IS.
         let ty = built.reading(key)?;
-        let assembly = match dir {
-            Direction::Input => Assembly::Construct,
-            Direction::Output => Assembly::Deconstruct,
-        };
+        let direction = *dir;
         let mut adapter = crate::compile::CCompile {
             gen: self,
             registry: built,
         };
-        let crossing = prebindgen_registry::recipe::Crossing::new(ty, assembly);
+        let crossing = prebindgen_registry::recipe::Crossing::new(ty, direction);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
         Some((*fragment).clone().into_converter())
     }

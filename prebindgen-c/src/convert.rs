@@ -9,7 +9,7 @@ impl CbindgenBuilder {
             let Some(domain) = decl.domain() else {
                 continue;
             };
-            let demand = [Direction::Input, Direction::Output]
+            let demand = [Direction::Construct, Direction::Deconstruct]
                 .into_iter()
                 .flat_map(|direction| registry.readings(direction))
                 .map(|subject| option_depth(subject, decl.key()))
@@ -109,7 +109,7 @@ impl CbindgenBuilder {
                 }
             )
         };
-        let niches = self.c_domain_niches(decl, registry, Direction::Input);
+        let niches = self.c_domain_niches(decl, registry, Direction::Construct);
         Some(ConverterImpl {
             subs: vec![TypeKey::from_type(&repr)],
             destination: wire,
@@ -178,7 +178,7 @@ impl CbindgenBuilder {
                 }
             )
         };
-        let niches = self.c_domain_niches(decl, registry, Direction::Output);
+        let niches = self.c_domain_niches(decl, registry, Direction::Deconstruct);
         Some(ConverterImpl {
             subs: vec![TypeKey::from_type(&repr)],
             destination: wire,

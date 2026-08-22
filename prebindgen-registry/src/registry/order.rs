@@ -38,7 +38,7 @@ impl Registry {
         // Deterministic roots: same list every build, so a generator's output
         // cannot depend on hash order.
         let mut roots: Vec<Crossing> = Vec::new();
-        for dir in [Direction::Input, Direction::Output] {
+        for dir in [Direction::Construct, Direction::Deconstruct] {
             let mut keys: Vec<&TypeKey> = self.type_table(dir).keys().collect();
             keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
             roots.extend(keys.into_iter().map(|k| (dir, k.clone())));
@@ -115,7 +115,7 @@ impl Registry {
         dir: Direction,
         ty: &prebindgen_flat::flat::TypeRef,
     ) -> Vec<Crossing> {
-        if dir != Direction::Input {
+        if dir != Direction::Construct {
             return Vec::new();
         }
         let Some(args) = ty.callback_args() else {
@@ -125,7 +125,7 @@ impl Registry {
         for arg in args {
             if let Some(plan) = self.callback_arg_plans.get(&arg.key()) {
                 for leaf in &plan.leaves {
-                    out.push((Direction::Output, leaf.out_ty.key()));
+                    out.push((Direction::Deconstruct, leaf.out_ty.key()));
                 }
             }
         }

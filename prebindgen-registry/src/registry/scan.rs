@@ -129,7 +129,7 @@ impl Registry {
             // The const's own TYPE, which the element carries. This cloned the
             // whole `syn::ItemConst` to reach `.ty`.
             if let Some(ty) = self.flat.constant(&ident).map(|c| c.ty.clone()) {
-                self.intern_reading(Direction::Output, &ty, true);
+                self.intern_reading(Direction::Deconstruct, &ty, true);
             } else {
                 missing.push(("constant", ident.to_string()));
             }
@@ -159,8 +159,8 @@ impl Registry {
             if let Some(ident) = bare_path_ident(&ty) {
                 if let Some(s) = self.flat.struct_type(&ident).cloned() {
                     self.scan_struct(&s);
-                    self.intern(Direction::Input, &ty, true)?;
-                    self.intern(Direction::Output, &ty, true)?;
+                    self.intern(Direction::Construct, &ty, true)?;
+                    self.intern(Direction::Deconstruct, &ty, true)?;
                     matched = true;
                 } else if let Some(e) = self
                     .flat
@@ -175,8 +175,8 @@ impl Registry {
                     .cloned()
                 {
                     self.scan_enum(&e);
-                    self.intern(Direction::Input, &ty, true)?;
-                    self.intern(Direction::Output, &ty, true)?;
+                    self.intern(Direction::Construct, &ty, true)?;
+                    self.intern(Direction::Deconstruct, &ty, true)?;
                     matched = true;
                 }
             }
@@ -185,8 +185,8 @@ impl Registry {
                 // `ptr_class(ZKeyExpr<'static>)` on a re-exported
                 // foreign type). Still mark required so the resolver
                 // tries to produce a converter for it.
-                self.intern(Direction::Input, &ty, true)?;
-                self.intern(Direction::Output, &ty, true)?;
+                self.intern(Direction::Construct, &ty, true)?;
+                self.intern(Direction::Deconstruct, &ty, true)?;
             }
         }
 
@@ -216,9 +216,9 @@ impl Registry {
         // a binding-local fn was checked against the same grammar
         // (`Flat::lower_signature`) when `resolve` synthesized it.
         for p in &f.params {
-            self.intern_recursive_reading(Direction::Input, &p.ty, true);
+            self.intern_recursive_reading(Direction::Construct, &p.ty, true);
         }
-        self.intern_recursive_reading(Direction::Output, &f.ret, true);
+        self.intern_recursive_reading(Direction::Deconstruct, &f.ret, true);
         Ok(())
     }
 
@@ -231,12 +231,12 @@ impl Registry {
     /// `syn::Fields::Named` to reach types the element had all along.
     pub(super) fn scan_struct(&mut self, s: &prebindgen_flat::flat::Struct) {
         // The struct itself can appear in either direction.
-        self.intern_reading(Direction::Input, s.type_ref(), false);
-        self.intern_reading(Direction::Output, s.type_ref(), false);
+        self.intern_reading(Direction::Construct, s.type_ref(), false);
+        self.intern_reading(Direction::Deconstruct, s.type_ref(), false);
 
         for field in &s.fields {
-            self.intern_recursive_reading(Direction::Input, &field.ty, false);
-            self.intern_recursive_reading(Direction::Output, &field.ty, false);
+            self.intern_recursive_reading(Direction::Construct, &field.ty, false);
+            self.intern_recursive_reading(Direction::Deconstruct, &field.ty, false);
         }
     }
 
@@ -254,14 +254,14 @@ impl Registry {
             Type::Variant(v) => v.type_ref(),
             _ => return,
         };
-        self.intern_reading(Direction::Input, reading, false);
-        self.intern_reading(Direction::Output, reading, false);
+        self.intern_reading(Direction::Construct, reading, false);
+        self.intern_reading(Direction::Deconstruct, reading, false);
 
         if let Type::Variant(v) = e {
             for alt in &v.alternatives {
                 for field in &alt.fields {
-                    self.intern_recursive_reading(Direction::Input, &field.ty, false);
-                    self.intern_recursive_reading(Direction::Output, &field.ty, false);
+                    self.intern_recursive_reading(Direction::Construct, &field.ty, false);
+                    self.intern_recursive_reading(Direction::Deconstruct, &field.ty, false);
                 }
             }
         }
@@ -440,7 +440,7 @@ impl Registry {
     /// own children of this type, plus — if `key` names a declared struct or sum —
     /// the field types of that item.
     ///
-    /// A callback's argument types flow with `dir.flip()`, because an argument the
+    /// A callback's argument types flow with `dir.swap()`, because an argument the
     /// binding *hands to* a callback crosses the other way; everything else
     /// inherits `dir`. Used by both `register_type_inner` (during scan) and the
     /// unresolved-descendants BFS in `resolve` (for diagnostics).
@@ -493,7 +493,7 @@ impl Registry {
                     | TypeKind::Uninit(t) => (vec![t], dir),
                     TypeKind::Array { elem, .. } => (vec![elem], dir),
                     TypeKind::Fallible { ok, err } => (vec![ok, err], dir),
-                    TypeKind::Callback { args } => (args.iter().collect(), dir.flip()),
+                    TypeKind::Callback { args } => (args.iter().collect(), dir.swap()),
                     // A name is a leaf in the type graph: its generic arguments
                     // belong to the reference, not to a declaration, because no
                     // declaration takes type parameters. Its *fields* are the
@@ -638,7 +638,7 @@ impl Registry {
     /// discard #281 is about: the registry would then re-classify the tokens and
     /// store its own answer beside the caller's.
     pub(crate) fn require_input(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
-        self.register_type_recursive(Direction::Input, reading, true);
+        self.register_type_recursive(Direction::Construct, reading, true);
     }
 
     /// Register `ty` (and its nested positions) as a required **output** so the
@@ -646,7 +646,7 @@ impl Registry {
     /// [`Self::require_input`]; used by [`crate::unfold`] to pull in
     /// the leaf types a decomposition delivers.
     pub(crate) fn require_output(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
-        self.register_type_recursive(Direction::Output, reading, true);
+        self.register_type_recursive(Direction::Deconstruct, reading, true);
     }
 
     /// Register `reading` (and its nested positions) as an **output cell without
@@ -667,7 +667,7 @@ impl Registry {
     /// for the first alone; `ensure_entry`'s `root |= root` means calling it for
     /// a type the binding did declare cannot weaken anything.
     pub(crate) fn reference_output(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
-        self.register_type_recursive(Direction::Output, reading, false);
+        self.register_type_recursive(Direction::Deconstruct, reading, false);
     }
 
     /// Drop `ty` from the required-output scan set. The type's table entry is
@@ -680,7 +680,7 @@ impl Registry {
     /// `Vec<opaque-handle>` it cannot resolve at all (a `jlong` wire is not
     /// JObject-shaped), so requiring it would wrongly fail resolution.
     pub(crate) fn unrequire_output(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
-        self.clear_root(Direction::Output, &reading.key());
+        self.clear_root(Direction::Deconstruct, &reading.key());
     }
 
     /// Stop treating `key` as a root. The cell stays, so the resolver still
@@ -700,8 +700,8 @@ impl Registry {
     /// Direction-indexed read access to the type-resolution tables.
     pub(crate) fn type_table(&self, dir: Direction) -> &HashMap<TypeKey, TypeCell> {
         match dir {
-            Direction::Input => &self.input_types,
-            Direction::Output => &self.output_types,
+            Direction::Construct => &self.input_types,
+            Direction::Deconstruct => &self.output_types,
         }
     }
 
@@ -721,8 +721,8 @@ impl Registry {
     /// Direction-indexed mutable access to the type-resolution tables.
     pub(crate) fn type_table_mut(&mut self, dir: Direction) -> &mut HashMap<TypeKey, TypeCell> {
         match dir {
-            Direction::Input => &mut self.input_types,
-            Direction::Output => &mut self.output_types,
+            Direction::Construct => &mut self.input_types,
+            Direction::Deconstruct => &mut self.output_types,
         }
     }
 }

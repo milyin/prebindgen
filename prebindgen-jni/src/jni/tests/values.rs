@@ -187,9 +187,9 @@ fn flattened_field_composes_bounded_conversion_stages() {
 /// | yes | `Thing`         | `Long?` | `x?.let { Thing.fromRawPtr(it) }` |
 /// | yes | `Option<Thing>` | `Long?` | `x?.let { if (it == 0L) null else Thing.fromRawPtr(it) }` |
 ///
-/// Row 2 is what #433 was: the slot was widened for the leaf's own `Option`, so
+/// Recipe 2 is what #433 was: the slot was widened for the leaf's own `Option`, so
 /// the descriptor asked for a `java.lang.Long` over a `jvalue { j }` and calling
-/// the builder threw. Row 4 is what the first fix for it broke — keying the
+/// the builder threw. Recipe 4 is what the first fix for it broke — keying the
 /// width on the typed view collapses the two axes in the other direction, and
 /// the encoder boxes any ancestor-nullable leaf.
 #[test]
@@ -238,7 +238,7 @@ fn a_handle_leaf_takes_its_niche_from_its_own_type_not_its_ancestor() {
             loc.clone(),
         ),
         // The CONDITIONAL hoist: `Span`'s value form is reached through an
-        // `Option`, so every leaf below it is nullable — rows 3 and 4.
+        // `Option`, so every leaf below it is nullable — recipes 3 and 4.
         (
             syn::Item::Fn(syn::parse_quote!(
                 pub fn holder_span(h: &Holder) -> Option<&Span> {
@@ -255,7 +255,7 @@ fn a_handle_leaf_takes_its_niche_from_its_own_type_not_its_ancestor() {
             )),
             loc.clone(),
         ),
-        // …and the same two leaves NOT under an optional ancestor — rows 1 and 2.
+        // …and the same two leaves NOT under an optional ancestor — recipes 1 and 2.
         (
             syn::Item::Fn(syn::parse_quote!(
                 pub fn span_each(cb: impl Fn(Span) + Send + Sync + 'static) {
@@ -301,7 +301,7 @@ fn a_handle_leaf_takes_its_niche_from_its_own_type_not_its_ancestor() {
         .collect::<Vec<_>>()
         .join("\n");
 
-    // Rows 1 and 2 — no optional ancestor. Both slots are the primitive the
+    // Recipes 1 and 2 — no optional ancestor. Both slots are the primitive the
     // encoder writes, and only the leaf with its own `Option` reads the niche.
     assert!(
         kotlin.contains("public fun run(required: Long, maybe: Long)"),
@@ -309,35 +309,35 @@ fn a_handle_leaf_takes_its_niche_from_its_own_type_not_its_ancestor() {
     );
     assert!(
         kotlin.contains("Thing.fromRawPtr(required)"),
-        "row 1:\n{kotlin}"
+        "recipe 1:\n{kotlin}"
     );
     assert!(
         kotlin.contains("if (maybe == 0L) null else Thing.fromRawPtr(maybe)"),
-        "row 2:\n{kotlin}"
+        "recipe 2:\n{kotlin}"
     );
 
-    // Rows 3 and 4 — under a conditional hoist. Both slots widen, because only
-    // a JVM null can carry the ancestor's absence, and row 4 keeps BOTH.
+    // Recipes 3 and 4 — under a conditional hoist. Both slots widen, because only
+    // a JVM null can carry the ancestor's absence, and recipe 4 keeps BOTH.
     assert!(
         kotlin.contains("public fun run(holderSpan__required: Long?, holderSpan__maybe: Long?)"),
         "an ancestor-nullable handle leaf is boxed:\n{kotlin}"
     );
     assert!(
         kotlin.contains("holderSpan__required?.let { Thing.fromRawPtr(it) }"),
-        "row 3:\n{kotlin}"
+        "recipe 3:\n{kotlin}"
     );
     assert!(
         kotlin.contains("holderSpan__maybe?.let { if (it == 0L) null else Thing.fromRawPtr(it) }"),
-        "row 4:\n{kotlin}"
+        "recipe 4:\n{kotlin}"
     );
 
     // The descriptors are the half a compiler cannot check: they are built from
     // the same `raw` view, and the encoder fills an object slot with a `JObject`
     // and a primitive one with a `jvalue { j }`.
-    assert!(rust.contains(r#""run", "(JJ)V""#), "rows 1-2:\n{rust}");
+    assert!(rust.contains(r#""run", "(JJ)V""#), "recipes 1-2:\n{rust}");
     assert!(
         rust.contains(r#""run", "(Ljava/lang/Long;Ljava/lang/Long;)V""#),
-        "rows 3-4:\n{rust}"
+        "recipes 3-4:\n{rust}"
     );
 }
 
@@ -357,14 +357,14 @@ fn a_handle_leaf_takes_its_niche_from_its_own_type_not_its_ancestor() {
 /// | yes | `Duration`         | `Long?` | `x?.toULong()` — **no sentinel** |
 /// | yes | `Option<Duration>` | `Long?` | `x?.let { if (it == -1L) null else it.toULong() }` |
 ///
-/// Row 3 is the one that was wrong: `projection_leaf_sentinel` answers off the
+/// Recipe 3 is the one that was wrong: `projection_leaf_sentinel` answers off the
 /// declared domain, which `attach_domain_sentinels` puts on the **bare** type's
 /// converter too, so a leaf with no niche encoding at all got a sentinel test
 /// spliced into its wrap. `-1` is outside the declared range so nothing
 /// mis-decoded in practice, but the emitted expression tested for a value its
 /// own encoder can never produce.
 ///
-/// Row 4 is the one #142 predicted would be wrong and is not: the two absences
+/// Recipe 4 is the one #142 predicted would be wrong and is not: the two absences
 /// are independent and both collapse to the `ULong?` the typed view declares.
 /// The Rust side boxes any nullable leaf (`leaf_is_prim`), so the nullable wire
 /// is real, and the inner `None` still rides the sentinel inside it.
@@ -406,7 +406,7 @@ fn a_bounded_leaf_takes_its_sentinel_from_its_own_type_not_its_ancestor() {
             loc.clone(),
         ),
         // The CONDITIONAL hoist: `Span`'s value form is reached through an
-        // `Option`, so every leaf below it is nullable — rows 3 and 4.
+        // `Option`, so every leaf below it is nullable — recipes 3 and 4.
         (
             syn::Item::Fn(syn::parse_quote!(
                 pub fn holder_span(h: &Holder) -> Option<&Span> {
@@ -423,7 +423,7 @@ fn a_bounded_leaf_takes_its_sentinel_from_its_own_type_not_its_ancestor() {
             )),
             loc.clone(),
         ),
-        // …and the same two leaves NOT under an optional ancestor — rows 1 and 2.
+        // …and the same two leaves NOT under an optional ancestor — recipes 1 and 2.
         (
             syn::Item::Fn(syn::parse_quote!(
                 pub fn span_each(cb: impl Fn(Span) + Send + Sync + 'static) {
@@ -471,7 +471,7 @@ fn a_bounded_leaf_takes_its_sentinel_from_its_own_type_not_its_ancestor() {
         .join("\n");
     let kc: String = kotlin.split_whitespace().collect();
 
-    // Rows 1 and 2 — no optional ancestor. Both wires stay primitive `Long`,
+    // Recipes 1 and 2 — no optional ancestor. Both wires stay primitive `Long`,
     // and only the leaf that HAS a niche tests for it.
     assert!(
         kc.contains("funrun(required:Long,delay:Long)"),
@@ -479,35 +479,35 @@ fn a_bounded_leaf_takes_its_sentinel_from_its_own_type_not_its_ancestor() {
     );
     assert!(
         kc.contains("required.toULong()"),
-        "row 1: a bare bounded leaf just converts:\n{kotlin}"
+        "recipe 1: a bare bounded leaf just converts:\n{kotlin}"
     );
     assert!(
         kc.contains("if(delay==-1L)nullelsedelay.toULong()"),
-        "row 2: the leaf's own niche is tested, unguarded:\n{kotlin}"
+        "recipe 2: the leaf's own niche is tested, unguarded:\n{kotlin}"
     );
 
-    // Rows 3 and 4 — under the conditional hoist. Both wires widen, because the
+    // Recipes 3 and 4 — under the conditional hoist. Both wires widen, because the
     // Rust side boxes any nullable leaf.
     assert!(
         kc.contains("funrun(holderSpan__required:Long?,holderSpan__delay:Long?)"),
         "under an optional ancestor both leaves box:\n{kotlin}"
     );
-    // Row 3: the ancestor's `?` is the WHOLE of this leaf's absence. A sentinel
+    // Recipe 3: the ancestor's `?` is the WHOLE of this leaf's absence. A sentinel
     // test here would ask about a value the encoder cannot emit.
     assert!(
         kc.contains("holderSpan__required?.toULong()"),
-        "row 3: a bare bounded leaf under an optional ancestor takes no \
+        "recipe 3: a bare bounded leaf under an optional ancestor takes no \
          sentinel:\n{kotlin}"
     );
     assert!(
         !kc.contains("holderSpan__required?.let{if(it==-1L)"),
-        "row 3: …and specifically not the doubly-optional shape:\n{kotlin}"
+        "recipe 3: …and specifically not the doubly-optional shape:\n{kotlin}"
     );
-    // Row 4: both absences are live and independent — the ancestor's null and
+    // Recipe 4: both absences are live and independent — the ancestor's null and
     // the leaf's own `None` — and both collapse to the declared `ULong?`.
     assert!(
         kc.contains("holderSpan__delay?.let{if(it==-1L)nullelseit.toULong()}"),
-        "row 4: an ancestor's `?` does not erase the leaf's own niche:\n{kotlin}"
+        "recipe 4: an ancestor's `?` does not erase the leaf's own niche:\n{kotlin}"
     );
 }
 
@@ -1025,7 +1025,7 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
-    // The two boundaries this fixture draws, stated as the row states them:
+    // The two boundaries this fixture draws, stated as the recipe states them:
     // `object` is declared `.jobject_input()` and stays ONE value, and `maybe`
     // is an `Option<data_class>`, which is a presence flag plus the inner's
     // wires.
@@ -1872,7 +1872,7 @@ fn an_optional_handle_field_mints_through_the_factory() {
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
     // A nested owned handle crosses as a `Long` and is locked through the
-    // handle OBJECT, so the row has to carry both — the facts the Kotlin
+    // handle OBJECT, so the recipe has to carry both — the facts the Kotlin
     // lock-and-consume scaffold reads. Asserted here because `Bag`'s field is
     // an `Option<Handle>`, where the access is nullable and the pointer still
     // is not.
@@ -2897,17 +2897,17 @@ fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
     }
 }
 
-/// A declared type with nothing to be made of states no `parts` row, and no
+/// A declared type with nothing to be made of states no `parts` recipe, and no
 /// fragment is filed under that name.
 ///
 /// `Declarations::recipes` declares `parts` only where there is something to
-/// decompose — an empty struct has no fields, so it gets the `whole` row and
+/// decompose — an empty struct has no fields, so it gets the `whole` recipe and
 /// nothing else. The build then asks each declared type for `parts` by name,
-/// and `Compiler::row_of` refuses a name the crossing lacks rather than
+/// and `Compiler::recipe_of` refuses a name the crossing lacks rather than
 /// compiling the default and filing it under the asked-for name.
 ///
-/// Without that refusal `row_fragment(.., parts)` answered with the whole-value
-/// fragment for a row nobody declared — an emitter reading it would take a
+/// Without that refusal `recipe_fragment(.., parts)` answered with the whole-value
+/// fragment for a recipe nobody declared — an emitter reading it would take a
 /// single atomic conversion for a list of parts.
 #[test]
 fn a_type_with_no_parts_files_no_parts_row() {
@@ -2952,7 +2952,7 @@ fn a_type_with_no_parts_files_no_parts_row() {
     for out in [false, true] {
         assert!(
             !gen.has_parts_row_for_test("EmptyNamed", out),
-            "an empty struct states no parts row (out={out})",
+            "an empty struct states no parts recipe (out={out})",
         );
         assert!(
             gen.has_parts_row_for_test("HasOne", out),

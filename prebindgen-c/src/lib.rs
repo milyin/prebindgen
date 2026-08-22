@@ -109,8 +109,8 @@ pub(crate) use prebindgen_registry::types_util::{
 use prebindgen_registry::{
     decl::{ConvertDecl, ConvertSpec},
     flat::{extract_fn_trait_args, Field, Origin, ScalarKind, TypeKind, TypeRef},
-    recipe::{Assembly, Bound},
-    Conversions, ConverterImpl, Direction, NicheSlot, Niches, Prebindgen, Registry, TypeKey,
+    recipe::{Bound, Direction},
+    Conversions, ConverterImpl, NicheSlot, Niches, Prebindgen, Registry, TypeKey,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
@@ -480,7 +480,7 @@ mod builder;
 mod compile;
 mod convert;
 mod emit;
-mod rows;
+mod recipes;
 #[cfg(test)]
 mod test_util;
 #[cfg(test)]

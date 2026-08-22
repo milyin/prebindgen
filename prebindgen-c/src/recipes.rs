@@ -1,13 +1,13 @@
-//! Cbindgen's per-type policies, lowered into the registry's row vocabulary.
+//! Cbindgen's per-type policies, lowered into the registry's recipe vocabulary.
 //!
 //! A build script writes `.opaque_ptr()`, `.data_struct()`, `.enum_type()`,
 //! `.tagged_union()` or `.repr_c_struct()`, each saying what C shape one Rust
-//! type takes. This turns those into rows in a [`Recipes`] table: the shared
+//! type takes. This turns those into recipes in a [`Recipes`] table: the shared
 //! statement of **which parts** a value gets across in, with nothing about the
 //! C wire in it.
 //!
-//! There is one row per declared type and job, and every crossing nobody
-//! declared takes the row the registry derives from its kind. So the chain of
+//! There is one recipe per declared type and direction, and every crossing nobody
+//! declared takes the recipe the registry derives from its kind. So the chain of
 //! `or_else` guesses this replaced — try a custom conversion, then a handle,
 //! then a data struct, then an enum, … — is now a lookup, and the answer is
 //! whatever the build script said rather than whichever guess fired first.
@@ -15,24 +15,24 @@
 use prebindgen_registry::{
     flat::{Flat, Type, TypeRef},
     recipe::{
-        Arm, Assembly, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError,
+        Arm, Construct, Constructing, Deconstruct, Deconstructing, Direction, Reach, RecipeError,
         RecipeId, Recipes,
     },
 };
 
 use super::*;
 
-/// The row a type with no parts takes: the adapter emits the conversion itself.
+/// The recipe a type with no parts takes: the adapter emits the conversion itself.
 fn whole() -> RecipeId {
     RecipeId::new("whole")
 }
 
-/// The row a type crossing field by field takes.
+/// The recipe a type crossing field by field takes.
 pub(crate) fn parts() -> RecipeId {
     RecipeId::new("parts")
 }
 
-/// The row a value takes as a **tagged union's payload**, where it rides
+/// The recipe a value takes as a **tagged union's payload**, where it rides
 /// differently from both of the readings below.
 ///
 /// A `Box<T>` or `Option<Box<T>>` over a declared `opaque_ptr` rides in the
@@ -40,18 +40,18 @@ pub(crate) fn parts() -> RecipeId {
 /// reading — a handle parameter is spelled `T` and reclaimed from its own
 /// pointer — nor a struct field's.
 ///
-/// The row is filed on the **stripped** crossing, because `Crossing::key` peels
+/// The recipe is filed on the **stripped** crossing, because `Crossing::key` peels
 /// `Box`: `Box<Blob>` and `Blob` share one crossing and are told apart by the
-/// site that picks between their rows, and by the fragment, which is keyed by
+/// site that picks between their recipes, and by the fragment, which is keyed by
 /// the spelling.
 pub(crate) fn payload() -> RecipeId {
     RecipeId::new("payload")
 }
 
-/// The row a value takes **inside a `data_struct`'s mirror**, where its wire
+/// The recipe a value takes **inside a `data_struct`'s mirror**, where its wire
 /// differs from the one it takes on its own.
 ///
-/// One crossing read two ways is two rows, and the site picks — which is what
+/// One crossing read two ways is two recipes, and the site picks — which is what
 /// `declare_default` and `Ask::Recipe` exist for. Two types need it.
 ///
 /// `bool`: a field arrives from C by value and may hold any byte until it is
@@ -60,28 +60,28 @@ pub(crate) fn payload() -> RecipeId {
 ///
 /// `String`: a field decodes a null pointer to an empty string, where a
 /// `String` parameter refuses one. Both readings were in the hand-written field
-/// walk; the row is what makes the difference visible.
+/// walk; the recipe is what makes the difference visible.
 pub(crate) fn in_field() -> RecipeId {
     RecipeId::new("field")
 }
 
 impl CbindgenBuilder {
-    /// Every row this binding's declarations state.
+    /// Every recipe this binding's declarations state.
     ///
     /// A type declared but absent from the model is skipped rather than
     /// refused: the scan already reports it, and reporting it twice in
     /// different words helps nobody.
     pub(crate) fn recipes(&self, model: &Flat) -> Result<Recipes, Vec<RecipeError>> {
-        let mut rows = Recipes::builder();
-        // The crossings a second row will also land on, so the loop below knows
-        // to make the whole-value one the default rather than leaving two rows
+        let mut recipes = Recipes::builder();
+        // The crossings a second recipe will also land on, so the loop below knows
+        // to make the whole-value one the default rather than leaving two recipes
         // with no answer between them.
         //
-        // Two sources. A payload row shares a crossing with its handle's own,
+        // Two sources. A payload recipe shares a crossing with its handle's own,
         // because `Crossing::key` peels `Box` — right for lookup, and it means
         // `Blob` and `Box<Blob>` are one crossing. And `bool` and `String` each
-        // get a field row unconditionally, which collides with a whole-value
-        // row a binding declared itself.
+        // get a field recipe unconditionally, which collides with a whole-value
+        // recipe a binding declared itself.
         let mut shared: std::collections::HashSet<TypeKey> = self
             .boxed_payloads(model)
             .iter()
@@ -145,7 +145,8 @@ impl CbindgenBuilder {
                         op: Construct::Fields,
                     })
                     .collect();
-                rows.declare(ty.clone(), parts(), Deconstructing::Choice { arms: out })
+                recipes
+                    .declare(ty.clone(), parts(), Deconstructing::Choice { arms: out })
                     .declare(ty, parts(), Constructing::Choice { arms: into });
                 continue;
             }
@@ -161,67 +162,73 @@ impl CbindgenBuilder {
             {
                 let Some(count) = count else { continue };
                 let reaches: Vec<Reach> = (0..count).map(Reach::Field).collect();
-                rows.declare(
-                    ty.clone(),
-                    parts(),
-                    Deconstructing::Product(Deconstruct::Fields(reaches)),
-                )
-                .declare(ty, parts(), Constructing::Product(Construct::Fields));
+                recipes
+                    .declare(
+                        ty.clone(),
+                        parts(),
+                        Deconstructing::Product(Deconstruct::Fields(reaches)),
+                    )
+                    .declare(ty, parts(), Constructing::Product(Construct::Fields));
                 continue;
             }
             if shared.contains(&ty.borrow_target().unwrap_or(&ty).stripped_key()) {
-                rows.declare_default(ty.clone(), whole(), Deconstructing::Atomic)
+                recipes
+                    .declare_default(ty.clone(), whole(), Deconstructing::Atomic)
                     .declare_default(ty, whole(), Constructing::Atomic);
             } else {
-                rows.declare(ty.clone(), whole(), Deconstructing::Atomic)
+                recipes
+                    .declare(ty.clone(), whole(), Deconstructing::Atomic)
                     .declare(ty, whole(), Constructing::Atomic);
             }
         }
-        // The payload rows, on the stripped crossing each `Box`-over-handle
+        // The payload recipes, on the stripped crossing each `Box`-over-handle
         // shares with its own handle type. Only the types a union arm actually
         // carries.
         for ty in self.boxed_payloads(model) {
-            // The handle's own row is already filed on this crossing, so one of
+            // The handle's own recipe is already filed on this crossing, so one of
             // the two has to say which a site gets when it names neither.
-            rows.declare(ty.clone(), payload(), Deconstructing::Atomic)
+            recipes
+                .declare(ty.clone(), payload(), Deconstructing::Atomic)
                 .declare(ty, payload(), Constructing::Atomic);
         }
 
-        // The field rows. Declared for every binding rather than only where a
-        // struct has such a field: a row for a crossing nobody uses is inert,
+        // The field recipes. Declared for every binding rather than only where a
+        // struct has such a field: a recipe for a crossing nobody uses is inert,
         // and the alternative is walking every declared struct twice to find
         // out.
         //
-        // **Always**, whether or not the type's whole-value row was declared
+        // **Always**, whether or not the type's whole-value recipe was declared
         // above. The two are independent readings — the hand-written walks kept
         // them so — and a binding may declare the whole-value one itself:
         // `convert!` refuses a builtin, but `opaque_ptr(String)` is accepted and
-        // `out_terminal` has an arm for it. Suppressing the field row there
+        // `out_terminal` has an arm for it. Suppressing the field recipe there
         // stranded every string field, because `bindings` asks each one for it.
         let boolean = model
             .classify(&syn::parse_quote!(bool))
             .expect("bool is a scalar the model always classifies");
-        // A whole-value row the loop already filed stays as it is and only has
+        // A whole-value recipe the loop already filed stays as it is and only has
         // to become the default; otherwise it is declared here.
         if !declared_keys.contains(&boolean.key()) {
-            rows.declare_default(boolean.clone(), whole(), Deconstructing::Atomic)
+            recipes
+                .declare_default(boolean.clone(), whole(), Deconstructing::Atomic)
                 .declare_default(boolean.clone(), whole(), Constructing::Atomic);
         }
-        rows.declare(boolean.clone(), in_field(), Deconstructing::Atomic)
+        recipes
+            .declare(boolean.clone(), in_field(), Deconstructing::Atomic)
             .declare(boolean, in_field(), Constructing::Atomic);
         if let Ok(string) = model.classify(&syn::parse_quote!(String)) {
-            // Output only ever has one reading, so `String` gets a second row in
+            // Output only ever has one reading, so `String` gets a second recipe in
             // the constructing direction alone.
             if !declared_keys.contains(&string.key()) {
-                rows.declare_default(string.clone(), whole(), Constructing::Atomic);
+                recipes.declare_default(string.clone(), whole(), Constructing::Atomic);
             }
-            rows.declare(string, in_field(), Constructing::Atomic);
+            recipes.declare(string, in_field(), Constructing::Atomic);
         }
 
-        rows.build(model)
+        recipes.build(model)
     }
 
-    /// Which row a union payload of this type takes, and in which directions,
+    /// Which recipe a union payload of this type takes, and in which directions,
     /// where it is not the type's own default.
     ///
     /// Every `Box`-over-handle a union arm carries, keyed once.
@@ -245,21 +252,21 @@ impl CbindgenBuilder {
 
     /// `bool` and `String` read as they do inside a struct; a `Box`-over-handle
     /// needs [`payload`], the one reading neither of the other two covers.
-    fn payload_reading(&self, fty: &TypeRef) -> Option<(RecipeId, &'static [Assembly])> {
+    fn payload_reading(&self, fty: &TypeRef) -> Option<(RecipeId, &'static [Direction])> {
         use prebindgen_registry::flat::{ScalarKind, TypeKind};
         if self.declared_opaque_payload_inner(fty).is_some() || r_boxed_inner(fty).is_some() {
-            return Some((payload(), &[Assembly::Construct, Assembly::Deconstruct]));
+            return Some((payload(), &[Direction::Construct, Direction::Deconstruct]));
         }
         match fty.unwrapped().kind() {
             TypeKind::Scalar(ScalarKind::Bool) => {
-                Some((in_field(), &[Assembly::Construct, Assembly::Deconstruct]))
+                Some((in_field(), &[Direction::Construct, Direction::Deconstruct]))
             }
-            TypeKind::String => Some((in_field(), &[Assembly::Construct])),
+            TypeKind::String => Some((in_field(), &[Direction::Construct])),
             _ => None,
         }
     }
 
-    /// Which row each part of a declared product takes, where it is not the
+    /// Which recipe each part of a declared product takes, where it is not the
     /// part type's own default.
     ///
     /// Only `bool` inside a `data_struct` today — see [`in_field`].
@@ -271,9 +278,7 @@ impl CbindgenBuilder {
         // `recipe::Origin` is which declaration asked; `flat::Origin` is a
         // captured item's own syntax. Both are in play here, so the one that
         // arrives by glob keeps its name.
-        use prebindgen_registry::recipe::{
-            Ask, Assembly, Bindings, Crossing, Origin as Asked, Site,
-        };
+        use prebindgen_registry::recipe::{Ask, Bindings, Crossing, Origin as Asked, Site};
 
         let mut bound = Bindings::builder();
         // A union's payload reads like a struct's field for `bool` and
@@ -294,15 +299,15 @@ impl CbindgenBuilder {
             // one part per arm.
             for (arm, fields) in alternatives.iter().enumerate() {
                 for (index, field) in fields.iter().enumerate() {
-                    let Some((row, directions)) = self.payload_reading(&field.ty) else {
+                    let Some((recipe, directions)) = self.payload_reading(&field.ty) else {
                         continue;
                     };
-                    for &assembly in directions {
-                        let of = Crossing::new(ty.clone(), assembly);
+                    for &direction in directions {
+                        let of = Crossing::new(ty.clone(), direction);
                         bound.bind(
                             Site::arm_part(&of, &parts(), Some(arm), index),
-                            Crossing::new(field.ty.clone(), assembly),
-                            Ask::Recipe(row.clone()),
+                            Crossing::new(field.ty.clone(), direction),
+                            Ask::Recipe(recipe.clone()),
                             Asked::Part,
                         );
                     }
@@ -338,16 +343,16 @@ impl CbindgenBuilder {
                     continue;
                 }
                 // A `String` reads differently only on the way in.
-                let directions: &[Assembly] = if is_bool {
-                    &[Assembly::Construct, Assembly::Deconstruct]
+                let directions: &[Direction] = if is_bool {
+                    &[Direction::Construct, Direction::Deconstruct]
                 } else {
-                    &[Assembly::Construct]
+                    &[Direction::Construct]
                 };
-                for &assembly in directions {
-                    let of = Crossing::new(ty.clone(), assembly);
+                for &direction in directions {
+                    let of = Crossing::new(ty.clone(), direction);
                     bound.bind(
                         Site::part(&of, &parts(), index),
-                        Crossing::new(field.ty.clone(), assembly),
+                        Crossing::new(field.ty.clone(), direction),
                         Ask::Recipe(in_field()),
                         Asked::Part,
                     );

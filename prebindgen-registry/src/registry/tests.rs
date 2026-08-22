@@ -1728,7 +1728,7 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
     }
 
     // Every registered crossing appears — breaking a cycle drops no node.
-    for dir in [Direction::Input, Direction::Output] {
+    for dir in [Direction::Construct, Direction::Deconstruct] {
         for key in reg.type_table(dir).keys() {
             assert!(
                 seen.contains(&(dir, key.clone())),
@@ -1760,7 +1760,7 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
                 break;
             }
             next.extend(
-                reg.immediate_edges(Direction::Output, &k)
+                reg.immediate_edges(Direction::Deconstruct, &k)
                     .into_iter()
                     .map(|(_, sub)| sub.key()),
             );

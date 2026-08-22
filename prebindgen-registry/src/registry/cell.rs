@@ -63,20 +63,4 @@ impl Answer {
     }
 }
 
-/// Direction of a converter pair.
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub enum Direction {
-    /// Wire → Rust.
-    Input,
-    /// Rust → Wire.
-    Output,
-}
-
-impl Direction {
-    pub fn flip(self) -> Self {
-        match self {
-            Direction::Input => Direction::Output,
-            Direction::Output => Direction::Input,
-        }
-    }
-}
+pub use crate::recipe::Direction;

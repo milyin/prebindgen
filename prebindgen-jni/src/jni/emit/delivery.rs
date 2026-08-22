@@ -530,7 +530,7 @@ pub(crate) fn reach_leaf_flat(
 /// it folds, whether it is optional, what the builder's generic is — and none
 /// of that reaches this encoder, which writes only the statements that fill the
 /// slots. Naming exactly what it reads is what lets the caller assemble one
-/// from a row.
+/// from a recipe.
 pub(crate) struct Delivered<'a> {
     /// The values handed out, in the order the builder receives them.
     pub(crate) wires: Vec<crate::jni::compile::OutWire>,

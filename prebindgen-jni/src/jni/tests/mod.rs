@@ -73,13 +73,9 @@ fn install(
 ) {
     let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
     let key = TypeKey::from_type(&ty);
-    let assembly = match direction {
-        Direction::Input => prebindgen_registry::recipe::Assembly::Construct,
-        Direction::Output => prebindgen_registry::recipe::Assembly::Deconstruct,
-    };
     decls.compiled.borrow_mut().record(
         key.clone(),
-        assembly,
+        direction,
         prebindgen_registry::recipe::RecipeId::new("whole"),
         crate::jni::compile::JFrag::by_hand(key, e.clone()),
     );
@@ -92,7 +88,7 @@ fn install_input(
     ty_str: &str,
     e: ConverterImpl<KotlinMeta>,
 ) {
-    install(reg, decls, Direction::Input, ty_str, e);
+    install(reg, decls, Direction::Construct, ty_str, e);
 }
 
 fn install_output(
@@ -101,5 +97,5 @@ fn install_output(
     ty_str: &str,
     e: ConverterImpl<KotlinMeta>,
 ) {
-    install(reg, decls, Direction::Output, ty_str, e);
+    install(reg, decls, Direction::Deconstruct, ty_str, e);
 }

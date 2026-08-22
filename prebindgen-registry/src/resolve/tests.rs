@@ -19,7 +19,7 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
         crate::test_util::scanned_with(&["pub struct Outer { pub inner: ZKeyExpr }"]);
     let outer = reg
         .intern(
-            crate::registry::Direction::Input,
+            crate::registry::Direction::Construct,
             &syn::parse_quote!(Outer),
             true,
         )
@@ -66,16 +66,16 @@ fn final_invariant_stops_at_resolved_nodes() {
     let inner_ty: syn::Type = syn::parse_quote!(Inner);
     let unrelated_ty: syn::Type = syn::parse_quote!(Unrelated);
 
-    reg.insert_crossing(Direction::Input, &outer_ty, true, None);
+    reg.insert_crossing(Direction::Construct, &outer_ty, true, None);
 
     reg.insert_crossing(
-        Direction::Input,
+        Direction::Construct,
         &inner_ty,
         false,
         Some(Answer::over(vec![])),
     );
 
-    reg.insert_crossing(Direction::Input, &unrelated_ty, false, None);
+    reg.insert_crossing(Direction::Construct, &unrelated_ty, false, None);
 
     let err = check_complete(&reg).expect_err("must surface Outer");
     let ResolveError::Unresolved { entries } = err;
@@ -90,7 +90,7 @@ fn final_invariant_stops_at_resolved_nodes() {
         "BFS must stop at resolved nodes, got report: {:?}",
         reported
     );
-    let _ = Direction::Input; // keep import used
+    let _ = Direction::Construct; // keep import used
 }
 
 /// A type nothing declares directly, reached only through a resolved converter's
@@ -110,13 +110,13 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
     // `Outer` is a root AND resolved — so it is not itself reportable — but its
     // converter delegates to `Mid`.
     reg.insert_crossing(
-        Direction::Input,
+        Direction::Construct,
         &outer,
         true,
         Some(Answer::over(vec![TypeKey::from_type(&mid)])),
     );
     // `Mid` is present, unresolved, and NOT a root.
-    reg.insert_crossing(Direction::Input, &mid, false, None);
+    reg.insert_crossing(Direction::Construct, &mid, false, None);
 
     let err = check_complete(&reg).expect_err("Mid must be reported");
     let ResolveError::Unresolved { entries } = err;
