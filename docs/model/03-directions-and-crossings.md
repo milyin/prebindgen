@@ -19,10 +19,10 @@ impl Direction {
 }
 ```
 
-`swap` has one caller: a crossing of a callback type. Rust receives the
-callable, so that crossing constructs, while the values its arguments carry are
-ones Rust already holds and pushes out through the call, so those crossings
-deconstruct. The registry applies `swap` there, and no declaration states it.
+Only the arguments of a callback type swap. Rust receives the callable, so
+that crossing constructs, while the values its arguments carry are ones Rust
+already holds and pushes out through the call, so those crossings deconstruct.
+The registry applies `swap` there, and no declaration states it.
 
 ## The crossing
 
@@ -35,7 +35,7 @@ pub struct Crossing {
 ```
 
 A word on `TypeRef`, since three of the accessors below return one. It belongs
-to `prebindgen-flat`, and this proposal does not change it: it is the model's
+to `prebindgen-flat`, and nothing here changes it: it is the model's
 classification of a Rust type into a closed grammar — `Optional`, `Vec`, `Ref`,
 `Callback`, `Named` and the rest — which an adapter matches on rather than
 re-parsing syntax for itself. `TypeKey` is that same type reduced to an

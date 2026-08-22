@@ -570,7 +570,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         recipe: &RecipeId,
     ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
         if self.recipes.get(&crossing.key(), recipe).is_none() {
-            return Err(RecipeError::NoSuchRow {
+            return Err(RecipeError::NoSuchRecipe {
                 crossing: crossing.key(),
                 recipe: recipe.clone(),
             }
@@ -1094,20 +1094,6 @@ fn mode_of(ty: &TypeRef) -> Mode {
 ///
 /// And whether the element **is** a borrow: a `Vec<&T>` gives its elements up,
 /// and what it gives up is a reference. So an element spelled `&T` is held as a
-/// A shape declared for a type that cannot take it.
-///
-/// The arity shapes and `Invoke` read what they need off the crossing rather
-/// than stating it, so a recipe declaring one on the wrong type is caught here.
-fn wrong_shape<E>(at: At<'_>, shape: &'static str, wanted: &'static str) -> CompileError<E> {
-    RecipeError::WrongShape {
-        crossing: at.crossing.key(),
-        recipe: at.recipe.clone(),
-        shape,
-        wanted,
-    }
-    .into()
-}
-
 /// borrow however the collection hands it over, and reading only the collection
 /// would call that element owned.
 fn element_mode(crossing: &Crossing, elem: &TypeRef) -> Mode {
@@ -1125,4 +1111,18 @@ fn element_mode(crossing: &Crossing, elem: &TypeRef) -> Mode {
     // up and what it gives up is a borrow; a `&[&mut T]` yields `&&mut T` and
     // so cannot hand over the `&mut T` its element is spelled as.
     mode_of(elem).through(lent_as)
+}
+
+/// A shape declared for a type that cannot take it.
+///
+/// The arity shapes and `Invoke` read what they need off the crossing rather
+/// than stating it, so a recipe declaring one on the wrong type is caught here.
+fn wrong_shape<E>(at: At<'_>, shape: &'static str, wanted: &'static str) -> CompileError<E> {
+    RecipeError::WrongShape {
+        crossing: at.crossing.key(),
+        recipe: at.recipe.clone(),
+        shape,
+        wanted,
+    }
+    .into()
 }

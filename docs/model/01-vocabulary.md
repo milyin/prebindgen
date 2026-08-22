@@ -37,7 +37,7 @@ c_char`, `jlong`, `i32` — so it crosses unchanged, which a `Sample` or a
 `String` cannot. A generated converter is an ordinary Rust function whose only
 purpose is turning one kind into the other.
 
-Wire values are the unit this issue counts in, so "two wire values" means two
+Wire values are the unit these chapters count in, so "two wire values" means two
 parameters, not one parameter carrying two things. The two counts do not
 correspond: one Rust `String` reaches C as **one** wire value, a `char *`, and
 a WebAssembly boundary as **two**, a pointer and a length, because nothing
@@ -164,4 +164,3 @@ cleanup after it. Also the adapter's own type.
 Fragment and plan are the pair to keep apart. A fragment is built once per
 recipe and reused at every site that recipe serves; a plan is built once per
 site.
-

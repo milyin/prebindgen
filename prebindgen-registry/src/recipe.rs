@@ -1,4 +1,4 @@
-//! One table of crossings, one recipe per recipe.
+//! The table of crossings, and the recipes that answer them.
 //!
 //! A **crossing** is one Rust type plus one of two directions — *construct* a Rust
 //! value out of the wire values that arrived, or *deconstruct* one into the
@@ -100,7 +100,7 @@ pub trait Operation: Sized {
     /// Erase the direction so the table can hold both. Not part of the surface an
     /// adapter writes against.
     #[doc(hidden)]
-    fn into_row(shape: Shape<Self>) -> Recipe;
+    fn into_recipe(shape: Shape<Self>) -> Recipe;
 }
 
 /// What assembles a value from its parts.
@@ -129,7 +129,7 @@ pub enum Construct {
 impl Operation for Construct {
     const DIRECTION: Direction = Direction::Construct;
 
-    fn into_row(shape: Shape<Self>) -> Recipe {
+    fn into_recipe(shape: Shape<Self>) -> Recipe {
         Recipe::Constructing(shape)
     }
 }
@@ -153,7 +153,7 @@ pub enum Deconstruct {
 impl Operation for Deconstruct {
     const DIRECTION: Direction = Direction::Deconstruct;
 
-    fn into_row(shape: Shape<Self>) -> Recipe {
+    fn into_recipe(shape: Shape<Self>) -> Recipe {
         Recipe::Deconstructing(shape)
     }
 }
@@ -584,7 +584,7 @@ impl RecipesBuilder {
         id: RecipeId,
         shape: Shape<OP>,
     ) -> &mut Self {
-        self.insert(ty, id, OP::into_row(shape), false)
+        self.insert(ty, id, OP::into_recipe(shape), false)
     }
 
     /// Add one recipe and make it the recipe used where a site names none.
@@ -597,7 +597,7 @@ impl RecipesBuilder {
         id: RecipeId,
         shape: Shape<OP>,
     ) -> &mut Self {
-        self.insert(ty, id, OP::into_row(shape), true)
+        self.insert(ty, id, OP::into_recipe(shape), true)
     }
 
     fn insert(&mut self, ty: TypeRef, id: RecipeId, recipe: Recipe, default: bool) -> &mut Self {
@@ -1211,7 +1211,7 @@ pub enum RecipeError {
     /// [`Compiler::recipe_of`](crate::recipe::Compiler::recipe_of), where there is no
     /// site to name — an adapter checking a recipe it declared conditionally, and
     /// getting the condition wrong.
-    NoSuchRow {
+    NoSuchRecipe {
         /// The crossing that has no such recipe.
         crossing: CrossingKey,
         /// The name the caller asked for.
@@ -1356,7 +1356,7 @@ impl fmt::Display for RecipeError {
                 "recipe `{recipe}` takes {crossing} apart, and the model gives that type no \
                  parts"
             ),
-            RecipeError::NoSuchRow { crossing, recipe } => write!(
+            RecipeError::NoSuchRecipe { crossing, recipe } => write!(
                 f,
                 "{crossing} has no recipe `{recipe}` — it was compiled by name, not \
                  through a site"

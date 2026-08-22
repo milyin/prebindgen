@@ -63,7 +63,7 @@ the source module — and writes the result.
 
 ## What the foreign side ends up calling
 
-*Wrapper* is this issue's word for a callable entry point in that file; the API
+*Wrapper* is this document's word for a callable entry point in that file; the API
 has no such type. Which declared items get one differs:
 
 * a declared **function** gets a wrapper that calls it. Usually the function is
