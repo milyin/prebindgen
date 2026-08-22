@@ -1,19 +1,18 @@
 //! Rust file emission for the resolved `Registry`.
 //!
 //! `write_rust` takes the conversions the adapter compiled, as a slice of
-//! `ItemFn`; adds every per-item `on_<kind>` output and every anonymous const;
-//! concatenates them; and hands them to `Destination::write` (which does
-//! prettyplease formatting and resolves the path against `OUT_DIR`).
+//! [`RustFunction`] plans; renders them with the writer-owned [`crate::Emit`],
+//! adds every per-item `on_<kind>` output and every anonymous const, and hands
+//! the assembled file to `Destination::write`.
 //!
 //! The conversions arrive from the adapter rather than being collected from the
 //! registry, which is what lets one crossing contribute more than one function
 //! — or one that occupies more than a single wire value.
 //!
 //! This module is `pub`, so **every `pub` item in it is public API of the
-//! crate**. That is meant to be exactly two — [`write_rust`] and
-//! [`WriteError`] — which is what an out-of-crate adapter calls to emit its
-//! generated file. Anything else added here stays private unless publishing it
-//! is a deliberate decision.
+//! crate**. [`RustFunction`] is the deliberately narrow late-rendering seam for
+//! out-of-crate adapters; a complete `syn::ItemFn` remains a valid plan for
+//! adapters migrating incrementally.
 
 use std::{
     collections::BTreeMap,
@@ -60,7 +59,31 @@ impl std::fmt::Display for WriteError {
 
 impl std::error::Error for WriteError {}
 
-/// Emit the resolved registry to a Rust file.
+/// One planned private converter function.
+///
+/// Resolution may keep an adapter-specific semantic plan here instead of a
+/// rendered Rust body. The writer calls this only after planning and
+/// validation are complete, with the same [`crate::Emit`] capability used for
+/// the rest of final Rust emission.
+pub trait RustFunction {
+    /// Whether this plan is reachable from the generated adapter surface.
+    /// Validation-only plans may return false and remain available for diagnostics.
+    fn should_emit(&self) -> bool {
+        true
+    }
+
+    /// Materialize the complete private converter function.
+    fn render(&self, emit: &crate::Emit) -> syn::ItemFn;
+}
+
+impl RustFunction for syn::ItemFn {
+    fn render(&self, _emit: &crate::Emit) -> syn::ItemFn {
+        self.clone()
+    }
+}
+
+/// Emit a resolved registry whose private converters are rendered at this
+/// final writing boundary.
 ///
 /// `conversions` is what the adapter's compilation produced. It is sorted and
 /// de-duplicated by function name here, so the order decides which of two
@@ -69,12 +92,15 @@ impl std::error::Error for WriteError {}
 /// table could not hold — several functions for one crossing, or one occupying
 /// more than a single wire value.
 ///
+/// Already-rendered [`syn::ItemFn`] values implement [`RustFunction`], so
+/// adapters can migrate to semantic plans incrementally without a second API.
+///
 /// `out_path` may be relative (resolved against `OUT_DIR` by prebindgen) or
 /// absolute. Returns the path actually written.
-pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
+pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     registry: &Registry,
     ext: &E,
-    conversions: &[syn::ItemFn],
+    conversions: &[C],
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
     // Validation already ran ONCE in the generator's `build` — a built generator
@@ -92,11 +118,6 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     //    everything below can reference them.
     items.extend(ext.prerequisites(registry, &emit));
 
-    // 1. Auto-generated converter wrappers (sorted by ident, deduped).
-    for (_, item_fn) in dedup_by_name(conversions.to_vec()) {
-        items.push(syn::Item::Fn(item_fn));
-    }
-
     // 2. Per-item Rust output from the adapter — only for items the adapter
     //    explicitly declared. Undeclared items were already announced
     //    via `cargo:warning=` by the generator's own unclaimed-item report.
@@ -104,14 +125,15 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     let declared_fns = &declared.functions;
     let declared_types = &declared.types;
     let flat = registry.flat();
-    items.extend(parse_items_from_tokens(
+    let mut body_items: Vec<syn::Item> = Vec::new();
+    body_items.extend(parse_items_from_tokens(
         "on_function",
         sorted_by_name(flat.functions().map(|f| (&f.name, f)))
             .into_iter()
             .filter(|(ident, _)| declared_fns.contains(*ident))
             .map(|(_, item)| ext.on_function(item, registry, &emit)),
     )?);
-    items.extend(parse_items_from_tokens(
+    body_items.extend(parse_items_from_tokens(
         "on_struct",
         sorted_by_name(flat.types().filter_map(|t| match t {
             prebindgen_flat::flat::Type::Struct(s) => Some((&s.name, s)),
@@ -126,7 +148,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // emission order is one sequence — but they dispatch to their own methods
     // now, because handing an adapter a `Type` it has to re-match is worse than
     // handing it the element the model already decided on.
-    items.extend(parse_items_from_tokens(
+    body_items.extend(parse_items_from_tokens(
         "on_enum",
         sorted_by_name(flat.types().filter_map(|t| match t {
             prebindgen_flat::flat::Type::Variant(v) => Some((&v.name, t)),
@@ -147,7 +169,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // const passed through verbatim via the default `on_const`. Prebindgen's
     // own injected feature guards are not consts at all — see the guards loop.
     let declared_consts = &declared.consts;
-    items.extend(parse_items_from_tokens(
+    body_items.extend(parse_items_from_tokens(
         "on_const",
         sorted_by_name(flat.constants().map(|c| (&c.name, c)))
             .into_iter()
@@ -158,6 +180,18 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
             })
             .map(|(_, item)| ext.on_const(item, registry, &emit)),
     )?);
+
+    // Render converters only after per-item planning has marked the late plans
+    // reachable, while still placing them before adapter output in the file.
+    let conversions = conversions
+        .iter()
+        .filter(|plan| plan.should_emit())
+        .map(|plan| plan.render(&emit))
+        .collect();
+    for (_, item_fn) in dedup_by_name(conversions) {
+        items.push(syn::Item::Fn(item_fn));
+    }
+    items.extend(body_items);
 
     // 3. Anonymous consts, verbatim. Last, and in stream order. Ungated on
     //    purpose: with no name there is nothing for an adapter to declare, so

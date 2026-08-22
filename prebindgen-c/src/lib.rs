@@ -103,9 +103,7 @@ use std::collections::{HashMap, HashSet};
 // `TypeRef` now, so what is left here serves the two node populations that
 // remain — a build-script declaration, and a converter's own generated
 // signature.
-pub(crate) use prebindgen_registry::types_util::{
-    is_result_type as is_result, path_tail_ident as type_path_tail, result_parts,
-};
+pub(crate) use prebindgen_registry::types_util::{path_tail_ident as type_path_tail, result_parts};
 use prebindgen_registry::{
     decl::{ConvertDecl, ConvertSpec},
     flat::{extract_fn_trait_args, Field, Origin, ScalarKind, TypeKind, TypeRef},
@@ -460,15 +458,16 @@ pub struct CbindgenBuilder {
     pub(crate) compiled: std::rc::Rc<
         std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::compile::CFrag>>,
     >,
-    /// Every conversion this binding compiled.
+    /// Every converter artifact this binding planned.
     ///
-    /// Filled once by [`Self::build_with`] and handed to `write_rust` directly. It is what
-    /// reaches the generated file, so a fragment no longer has to be
-    /// expressible as one `ConverterImpl` to be emitted — only to be looked up.
+    /// Filled once by [`Self::build_with`] and handed to `write_rust` directly.
+    /// A legacy terminal may still contain a complete function; composed
+    /// Product and inbound Optional fragments contain syntax-free chains that
+    /// the shared writer renders only after resolution and validation.
     /// The writer sorts and de-duplicates by function name, so the order here
     /// decides which of two same-named functions wins and not where any of them
     /// lands.
-    pub(crate) compiled_fns: Vec<syn::ItemFn>,
+    pub(crate) compiled_fns: Vec<chain::CFunction>,
 }
 
 /// A mangler over a single name component (Rust short name, base, or fn ident).
@@ -477,6 +476,7 @@ type Mangle1 = Box<dyn Fn(&str) -> String>;
 type MangleN = Box<dyn Fn(&[String]) -> String>;
 
 mod builder;
+mod chain;
 mod compile;
 mod convert;
 mod emit;
@@ -892,14 +892,6 @@ struct WireField {
 struct ValueShape {
     fields: Vec<WireField>,
     niches: Niches,
-}
-
-/// Whether a converter function's return type is `Result<_, _>` (⇒ fallible).
-fn returns_result(output: &syn::ReturnType) -> bool {
-    match output {
-        syn::ReturnType::Type(_, ty) => is_result(ty),
-        syn::ReturnType::Default => false,
-    }
 }
 
 fn route_result(call: TokenStream, route: &ErrRoute<'_>) -> TokenStream {

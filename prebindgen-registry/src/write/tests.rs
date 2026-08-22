@@ -1,4 +1,8 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    cell::Cell,
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use prebindgen::SourceLocation;
 use proc_macro2::TokenStream;
@@ -60,6 +64,92 @@ impl Prebindgen for IdentityExt {
     }
 }
 
+#[derive(Clone)]
+struct LatePlan {
+    reachable: Rc<Cell<bool>>,
+}
+
+impl RustFunction for LatePlan {
+    fn should_emit(&self) -> bool {
+        self.reachable.get()
+    }
+
+    fn render(&self, _emit: &crate::Emit) -> syn::ItemFn {
+        syn::parse_quote!(
+            fn late_converter() {}
+        )
+    }
+}
+
+struct LateExt {
+    reachable: Rc<Cell<bool>>,
+}
+
+impl Prebindgen for LateExt {
+    fn on_function(
+        &self,
+        f: &prebindgen_flat::flat::Function,
+        _registry: &Registry,
+        emit: &crate::Emit,
+    ) -> TokenStream {
+        self.reachable.set(true);
+        emit.verbatim_fn(f)
+    }
+
+    fn on_struct(
+        &self,
+        s: &prebindgen_flat::flat::Struct,
+        _registry: &Registry,
+        emit: &crate::Emit,
+    ) -> TokenStream {
+        emit.verbatim_struct(s)
+    }
+
+    fn on_variant(
+        &self,
+        v: &prebindgen_flat::flat::Variant,
+        _registry: &Registry,
+        emit: &crate::Emit,
+    ) -> TokenStream {
+        emit.verbatim_variant(v)
+    }
+
+    fn on_enum(
+        &self,
+        e: &prebindgen_flat::flat::Enum,
+        _registry: &Registry,
+        emit: &crate::Emit,
+    ) -> TokenStream {
+        emit.verbatim_enum(e)
+    }
+}
+
+#[test]
+fn per_item_planning_precedes_late_converter_filtering() {
+    let item: syn::ItemFn = syn::parse_quote!(
+        fn a_fn() {}
+    );
+    let ident: syn::Ident = syn::parse_quote!(a_fn);
+    let registry =
+        crate::test_util::reg_from_items(vec![(syn::Item::Fn(item), SourceLocation::default())])
+            .expect("index")
+            .export(&ident)
+            .scanned()
+            .expect("scan");
+    let reachable = Rc::new(Cell::new(false));
+    let ext = LateExt {
+        reachable: reachable.clone(),
+    };
+    let plan = LatePlan { reachable };
+    let dir = crate::test_util::unique_test_dir("write_late_plan");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let path = write_rust(&registry, &ext, &[plan], dir.join("gen.rs")).expect("write_rust");
+    let source = std::fs::read_to_string(path).expect("read generated file");
+
+    assert!(source.contains("fn late_converter()"), "{source}");
+    assert!(source.find("fn late_converter").unwrap() < source.find("fn a_fn").unwrap());
+}
 #[test]
 fn dedup_and_sort() {
     // Two crossings can compile the same conversion, and an adapter hands over
@@ -155,7 +245,7 @@ fn write_rust_sorts_declared_items_by_ident() {
         .expect("clock drift")
         .as_nanos();
     let path = std::env::temp_dir().join(format!("prebindgen-write-rust-{unique}.rs"));
-    let written = write_rust(&reg, &IdentityExt, &[], &path).expect("write_rust");
+    let written = write_rust(&reg, &IdentityExt, &[] as &[syn::ItemFn], &path).expect("write_rust");
     let content = std::fs::read_to_string(&written).expect("read generated file");
     let _ = std::fs::remove_file(&written);
 
@@ -272,8 +362,13 @@ fn guards_emit_ungated_and_in_stream_order() {
     let dir = crate::test_util::unique_test_dir("write_guards");
     std::fs::create_dir_all(&dir).unwrap();
     let registry = registry.resolve_gating(ConstGatingExt).expect("resolve");
-    let path = crate::write::write_rust(&registry, &ConstGatingExt, &[], dir.join("gen.rs"))
-        .expect("write_rust");
+    let path = crate::write::write_rust(
+        &registry,
+        &ConstGatingExt,
+        &[] as &[syn::ItemFn],
+        dir.join("gen.rs"),
+    )
+    .expect("write_rust");
     let src = std::fs::read_to_string(&path).unwrap();
 
     // The named const is gated out; both guards emit regardless.

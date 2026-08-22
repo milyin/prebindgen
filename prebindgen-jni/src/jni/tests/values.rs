@@ -47,12 +47,12 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
         "{rust}"
     );
     assert!(
-        rc.contains("Some({let__inner_s0=jlong_to_u64_")
-            && rc.contains("let__inner_s1=u64_to_Duration_"),
+        rc.contains("Some({let__chain_s0=jlong_to_u64_")
+            && rc.contains("let__chain_s1=u64_to_Duration_"),
         "Option input must compose the raw u64 decoder with the Duration stage:\n{rust}"
     );
     assert!(
-        rc.contains("Some(value)=>{let__inner_s0=")
+        rc.contains("Some(__value)=>{{let__chain_s0=")
             && rc.contains("Duration_to_u64_")
             && rc.contains("u64_to_jlong_"),
         "Option output must compose the Duration stage with the raw u64 encoder:\n{rust}"
@@ -166,8 +166,12 @@ fn flattened_field_composes_bounded_conversion_stages() {
     );
     assert!(!rc.contains("let___delay:jni::objects::JObject"), "{rust}");
     assert!(
-        rc.contains("myflat::Timed{delay:__flat_value_delay"),
-        "{rust}"
+        rc.contains("jni_sys_jlong_to_Timed_") && rc.contains("(&mutenv,(value_delay,))"),
+        "the wrapper must delegate Product reconstruction to its registry chain:\n{rust}"
+    );
+    assert!(
+        rc.contains("Timed_to_jni_sys_jlong_") && rc.contains("let(__chain_wire0,)=match"),
+        "output delivery must delegate Product deconstruction to the same chain:\n{rust}"
     );
 }
 
@@ -1213,14 +1217,16 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     assert!(kc.contains("e.token.markConsumed()"), "{kotlin}");
     assert!(kc.contains("e.spare?.markConsumed()"), "{kotlin}");
     assert!(
-        rc.contains("Box::from_raw(e_tokenas*mutmyflat::Token)"),
-        "{rust}"
+        rc.contains("lete=matchjni_sys_jlong_jni_sys_jlong_to_Envelope_")
+            && rc.contains("e_token,e_spare"),
+        "the wrapper must hand the two handle wires to one Product chain:\n{rust}"
     );
     assert!(
-        rc.contains(
-            "Option::Some(unsafe{*::std::boxed::Box::from_raw(e_spareas*mutmyflat::Token)})"
-        ),
-        "{rust}"
+        rc.contains("token:jlong_to_Token_")
+            && rc.contains("env,&((v).0))?")
+            && rc.contains("spare:jlong_to_Option_Token_")
+            && rc.contains("env,&((v).1))?"),
+        "the registry chain must own both field conversions:\n{rust}"
     );
 }
 

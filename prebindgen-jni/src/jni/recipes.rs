@@ -575,6 +575,56 @@ impl Declarations {
             );
         }
 
+        // A callback's `Invoke` recipe owns its argument conversions. Bind a
+        // model-derived data-class argument to `parts` so the Product fragment
+        // reaches `Compile::callback` before the trampoline is rendered.
+        for f in model.functions() {
+            for param in &f.params {
+                let prebindgen_registry::flat::TypeKind::Callback { args } =
+                    param.ty.unwrapped().kind()
+                else {
+                    continue;
+                };
+                let callback = Crossing::new(param.ty.clone(), Direction::Construct);
+                let row = callback.row(RecipeName::derived());
+                for (index, arg) in args.iter().enumerate() {
+                    let core = arg.borrow_target().unwrap_or(arg);
+                    if let Some(element) = core.sequence_elem() {
+                        let element = element.borrow_target().unwrap_or(element);
+                        if !self.field_crosses_as_its_fields(element) {
+                            continue;
+                        }
+                        let sequence = Crossing::new(arg.clone(), Direction::Deconstruct);
+                        let element_crossing =
+                            Crossing::new(element.borrowed(), Direction::Deconstruct);
+                        if recipes.key_of(&element_crossing.key(), &parts()).is_none() {
+                            continue;
+                        }
+                        bound.bind(
+                            Site::part(&sequence.row(RecipeName::derived()), 0),
+                            element_crossing,
+                            Ask::Recipe(parts()),
+                            Origin::Adapter,
+                        );
+                        continue;
+                    }
+                    if !self.field_crosses_as_its_fields(core) {
+                        continue;
+                    }
+                    let crossing = Crossing::new(arg.clone(), Direction::Deconstruct);
+                    if recipes.key_of(&crossing.key(), &parts()).is_none() {
+                        continue;
+                    }
+                    bound.bind(
+                        Site::part(&row, index),
+                        crossing,
+                        Ask::Recipe(parts()),
+                        Origin::Adapter,
+                    );
+                }
+            }
+        }
+
         bound.build(recipes)
     }
 }

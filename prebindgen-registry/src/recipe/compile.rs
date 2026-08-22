@@ -826,6 +826,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
         kind: ProductKind<'p>,
         parts: Vec<Part<'p>>,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
+        let mut parts = parts;
+        if at.crossing.direction() == Direction::Deconstruct {
+            for part in &mut parts {
+                part.mode = part.mode.through(at.crossing.mode());
+            }
+        }
         let mut built = Vec::new();
         for (index, part) in parts.iter().enumerate() {
             // `part.mode` rather than the type's own spelling: a product edge

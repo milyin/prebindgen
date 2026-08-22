@@ -423,6 +423,14 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
         ),
         (
             syn::Item::Fn(syn::parse_quote!(
+                pub fn payload_sub(cb: impl Fn(&Payload) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
                 pub fn z_thing_sub(cb: impl Fn(ZThing) + Send + Sync + 'static) {
                     unimplemented!()
                 }
@@ -442,6 +450,7 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
                 .fun(prebindgen_registry::fun!(z_thing_get))
                 .fun(prebindgen_registry::fun!(take_payload))
                 .fun(prebindgen_registry::fun!(take_many))
+                .fun(prebindgen_registry::fun!(payload_sub))
                 .fun(prebindgen_registry::fun!(z_thing_sub)),
         )
         // Canonical output: handle (identity) + its string form — a return /
@@ -454,6 +463,15 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
         );
     let (rust, kotlin) = run_pipeline("jnigen_xart_shapes", items, jni);
     assert_cross_artifact(&rust, &kotlin);
+    let compact: String = rust.split_whitespace().collect();
+    assert!(
+        compact.contains("Box::new(move|__cb_arg0:&myflat::Payload|")
+            && compact.contains(")=matchPayload_to_")
+            && compact.contains("(&mutenv,__cb_arg0,")
+            && !compact.contains("__cb_arg0.id")
+            && !compact.contains("__cb_arg0.name"),
+        "borrowed data-class callbacks must delegate field decomposition to one Product chain:\n{rust}"
+    );
 }
 
 /// Record-built `Iterable` folds, bare AND `Optional`-wrapped (issue #105):
