@@ -203,8 +203,14 @@ identify and define the row:
 
 * the **crossing key** under which the table files it — a normalized Rust type
 and a direction;
-* a **recipe ID**, chosen by the adapter to distinguish rows under the same key;
+* a **recipe name**, chosen by the adapter and meaningful within that crossing
+key;
 * a **shape**.
+
+Names such as `whole` and `parts` are policy vocabulary and are deliberately
+reused under many crossings. `RecipeName` represents that local selector.
+`RecipeKey` pairs it with the crossing key and identifies the row position
+throughout the table, whether or not a row is present there.
 
 A recipe states the value–parts step at this layer, or `Atomic` to end the shape
 walk. It never states a wire type or wire layout. Those appear only when the
@@ -222,8 +228,10 @@ rather than inventing one.
 
 *Several rows under one crossing key* is how the table offers a choice. Asking
 for the `Sample` row by crossing key alone may be ambiguous: one site may select
-`whole` and the next `parts`, and both are valid. A site binding selects the
-recipe ID; when it names none, the table must have or derive a default.
+`whole` and the next `parts`, and both are valid. A binding declaration selects
+a `RecipeName`; when it names none, the table must have or derive a default.
+Resolution promotes that local name to a `RecipeKey`, which is what the binding,
+compiler and diagnostics carry from then on.
 
 > *For example*, a Kotlin data class. Under the same crossing key JniGen
 > declares a `whole` row with shape `Atomic` and a `parts` row with shape
@@ -486,31 +494,36 @@ pub struct CrossingKey {
 }
 ```
 
-`Crossing` is what a site hands the compiler; `CrossingKey` is what the recipe
-table is keyed by. The narrowing is deliberate and one-way — `key()` exists,
-its inverse does not — because a key indexes rows shared by every way its type
-can be written. The fragment memo is deliberately finer: it uses the spelled
-type key, direction and recipe ID, because applying one shared row to `T`, `&T`
-and `Box<T>` can require different Rust.
+`Crossing` is what a site hands the compiler; `CrossingKey` is what groups rows
+in the table. The narrowing is deliberate and one-way — `key()` exists, its
+inverse does not — because rows are shared by every way their type can be
+written. The fragment memo adds the spelled type to `RecipeKey`, since applying
+one row to `T`, `&T` and `Box<T>` can require different Rust.
 
 ### The recipe's name
 
 ```rust
-/// Names one table row among those filed under the same crossing key. Adapters
-/// mint these; the table attaches no meaning to any particular name.
-pub struct RecipeId(String);
+/// An adapter-chosen row name, reusable under different crossing keys.
+pub struct RecipeName(String);
 
-impl RecipeId {
+impl RecipeName {
     pub fn new(name: impl Into<String>) -> Self;
     /// The name the table gives the row it derives for an undeclared crossing key.
     pub fn derived() -> Self;
     pub fn as_str(&self) -> &str;
 }
+
+/// The globally unique position of one row in the recipe table, whether or not
+/// the table currently holds a row there.
+pub struct RecipeKey {
+    crossing: CrossingKey,
+    name: RecipeName,
+}
 ```
 
-A crossing query is identified by `CrossingKey`; one table row by
-`(CrossingKey, RecipeId)`. The names are the adapter's own — `prebindgen-c` uses
-`whole` for a type on its own and `in_field` / `parts` / `payload` for the same
-type inside a container — and the registry never reads one. `derived()` is the
-single reserved name, given to the row the table derives when none was
-declared.
+A crossing is identified by `CrossingKey`; one table row by `RecipeKey`, whose
+value is the pair `(CrossingKey, RecipeName)`. The names are the adapter's own —
+`prebindgen-c` uses `whole` for how many types cross on their own and `field` /
+`parts` / `payload` for contextual alternatives — and the registry never
+interprets one. `derived()` is the single reserved name, given to a row the
+table derives for a crossing nobody declared.

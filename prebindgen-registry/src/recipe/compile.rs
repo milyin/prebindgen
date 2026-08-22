@@ -15,17 +15,16 @@
 //!
 //! # Per spelled crossing and selected row, not per site
 //!
-//! A fragment is built once per spelled crossing, direction and recipe ID, then
-//! reused at matching sites. That is what makes emitted code shared without a
-//! converter table, and it rests on one assumption: **a fragment is
-//! context-free**. Where an adapter appears to need site context, the site is
-//! wrapping the fragment rather than the fragment differing, and
-//! [`Compile::plan`] — the one hook called per site — is where that wrapping
-//! belongs.
+//! A fragment is built once per spelled type and [`RecipeKey`], then reused at
+//! matching sites. That is what makes emitted code shared without a converter
+//! table, and it rests on one assumption: **a fragment is context-free**. Where
+//! an adapter appears to need site context, the site is wrapping the fragment
+//! rather than the fragment differing, and [`Compile::plan`] — the one hook
+//! called per site — is where that wrapping belongs.
 //!
 //! A crossing here is the type **as the site spelled it**, which is finer than
-//! the identity a recipe row is declared under. `Sample`, `&Sample` and
-//! `Box<Sample>` find the same table rows, but get different fragments because
+//! the [`RecipeKey`] a row is declared under. `Sample`, `&Sample` and
+//! `Box<Sample>` find the same table row, but get different fragments because
 //! taking a value out of a pointer, borrowing through one and rebuilding a
 //! `Box` are different pieces of Rust. Sharing the row is the table's business;
 //! sharing the code is not.
@@ -34,7 +33,7 @@ use std::{collections::HashMap, fmt, rc::Rc};
 
 use super::{
     Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Reach, Recipe, RecipeError,
-    RecipeId, Recipes, Role, Shape, Site,
+    RecipeKey, RecipeName, Recipes, Role, Shape, Site,
 };
 use crate::{
     flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef},
@@ -92,8 +91,8 @@ impl fmt::Display for Validity {
 pub struct At<'a> {
     /// The spelled crossing to which the selected row is being applied.
     pub crossing: &'a Crossing,
-    /// Which row under the crossing key.
-    pub recipe: &'a RecipeId,
+    /// The globally unique row being compiled.
+    pub recipe: &'a RecipeKey,
 }
 
 /// What every hook receives: a read-only view of the model and the table, and
@@ -127,12 +126,12 @@ impl Cx<'_> {
         self.recipes
     }
 
-    /// Which named rows are filed under a crossing's key.
+    /// Which reusable recipe names are declared under a crossing key.
     ///
     /// Demands nothing, so an adapter may ask about an alternative it will not
-    /// take. Empty for a crossing key nobody declared, which still has a
-    /// derived row.
-    pub fn recipe_names(&self, crossing: &Crossing) -> Vec<&RecipeId> {
+    /// take. Empty for a crossing nobody declared, which still has a derived
+    /// recipe.
+    pub fn recipe_names(&self, crossing: &Crossing) -> Vec<&RecipeName> {
         self.recipes.names_of(&crossing.key())
     }
 }
@@ -340,13 +339,13 @@ pub struct Compiled<F> {
     /// [`Compiler::crossing`], which is the only entry point that consults the
     /// default row under the crossing key — so [`Compiled::fragment`] can give
     /// back that same result instead of choosing between the key's rows.
-    defaults: HashMap<(TypeKey, Direction), RecipeId>,
+    defaults: HashMap<(TypeKey, Direction), RecipeKey>,
 }
 
 /// What a fragment is memoised under: the type **as the site spelled it**, the
-/// direction, and which row was selected. See the module docs on why the
-/// spelling is part of the identity.
-type FragmentKey = (TypeKey, Direction, RecipeId);
+/// row key. The spelling remains separate because one normalized row can serve
+/// `T`, `&T` and `Box<T>`, whose generated Rust differs.
+type FragmentKey = (TypeKey, RecipeKey);
 
 impl<F> Default for Compiled<F> {
     fn default() -> Self {
@@ -369,7 +368,7 @@ impl<F> Clone for Compiled<F> {
 }
 
 impl<F> Compiled<F> {
-    /// How many fragments have been built, which makes memoization observable.
+    /// How many fragments have been built, making memoization observable.
     pub fn len(&self) -> usize {
         self.fragments.len()
     }
@@ -395,7 +394,7 @@ impl<F> Compiled<F> {
     /// recursive lookup should not be copying.
     pub fn fragment(&self, ty: &TypeKey, direction: Direction) -> Option<Rc<F>> {
         let recipe = self.defaults.get(&(ty.clone(), direction))?;
-        self.recipe_fragment(ty, direction, recipe)
+        self.recipe_fragment(ty, recipe)
     }
 
     /// Record a fragment an adapter built **without** the compiler, as this
@@ -406,24 +405,17 @@ impl<F> Compiled<F> {
     /// [`Self::fragment`] would have no answer to give. Recording it keeps the
     /// adapter's emitters on one lookup instead of a per-site fall-back to
     /// whatever else knows.
-    pub fn record(&mut self, ty: TypeKey, direction: Direction, recipe: RecipeId, fragment: F) {
-        self.fragments.insert(
-            (ty.clone(), direction, recipe.clone()),
-            std::rc::Rc::new(fragment),
-        );
+    pub fn record(&mut self, recipe: RecipeKey, fragment: F) {
+        let ty = recipe.crossing().ty.clone();
+        let direction = recipe.crossing().direction;
+        self.fragments
+            .insert((ty.clone(), recipe.clone()), std::rc::Rc::new(fragment));
         self.defaults.insert((ty, direction), recipe);
     }
 
-    /// The fragment for one spelled crossing and one named table row.
-    pub fn recipe_fragment(
-        &self,
-        ty: &TypeKey,
-        direction: Direction,
-        recipe: &RecipeId,
-    ) -> Option<Rc<F>> {
-        self.fragments
-            .get(&(ty.clone(), direction, recipe.clone()))
-            .cloned()
+    /// The fragment for one spelled type and one row key.
+    pub fn recipe_fragment(&self, ty: &TypeKey, recipe: &RecipeKey) -> Option<Rc<F>> {
+        self.fragments.get(&(ty.clone(), recipe.clone())).cloned()
     }
 
     /// Every fragment this compilation built, in a deterministic order.
@@ -436,7 +428,11 @@ impl<F> Compiled<F> {
     pub fn fragments(&self) -> Vec<&F> {
         let mut keyed: Vec<(&FragmentKey, &Rc<F>)> = self.fragments.iter().collect();
         keyed.sort_by(|a, b| {
-            (a.0 .0.as_str(), a.0 .1, &a.0 .2).cmp(&(b.0 .0.as_str(), b.0 .1, &b.0 .2))
+            (a.0 .0.as_str(), a.0 .1.crossing().direction, a.0 .1.name()).cmp(&(
+                b.0 .0.as_str(),
+                b.0 .1.crossing().direction,
+                b.0 .1.name(),
+            ))
         });
         keyed.into_iter().map(|(_, f)| &**f).collect()
     }
@@ -479,7 +475,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         self.compiled
     }
 
-    /// How many fragments have been built, which makes memoization observable.
+    /// How many fragments have been built, making memoization observable.
     pub fn compiled_fragments(&self) -> usize {
         self.compiled.fragments.len()
     }
@@ -558,44 +554,44 @@ impl<'a, C: Compile> Compiler<'a, C> {
     ///
     /// Refuses a name not filed under the crossing key. Compiling a row falls
     /// back to the derived row when the lookup misses, which is right for the two
-    /// callers that pass a name they got **from** the table — the key's default,
-    /// or a site's binding — and wrong here, where the name is the
-    /// caller's own claim. Without the check a conditionally-declared recipe that was not
-    /// declared compiles the default instead and files it under the asked-for
-    /// name, leaving [`Compiled::recipe_fragment`] to answer for a row that does
-    /// not exist.
+    /// callers that pass a key they got **from** the table — the key's default,
+    /// or a resolved site binding — and wrong here, where the name is the
+    /// caller's own claim. Without the check a conditionally declared row that
+    /// was not declared compiles the default instead and files it under the
+    /// asked-for key, leaving [`Compiled::recipe_fragment`] to answer for a row
+    /// that does not exist.
     pub fn recipe_of(
         &mut self,
         adapter: &mut C,
         crossing: &Crossing,
-        recipe: &RecipeId,
+        name: &RecipeName,
     ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
-        if self.recipes.get(&crossing.key(), recipe).is_none() {
+        let crossing_key = crossing.key();
+        let Some(recipe) = self.recipes.key_of(&crossing_key, name).cloned() else {
             return Err(RecipeError::NoSuchRecipe {
-                crossing: crossing.key(),
-                recipe: recipe.clone(),
+                recipe: crossing_key.row(name.clone()),
             }
             .into());
-        }
-        self.recipe(adapter, crossing, recipe)
+        };
+        self.recipe(adapter, crossing, &recipe)
     }
 
     /// The fragment for one selected row applied to one spelled crossing,
     /// memoized and reused.
-    fn recipe(&mut self, adapter: &mut C, crossing: &Crossing, recipe: &RecipeId) -> Built<C> {
-        // Keyed by the spelling as well as the row: one table row serves `T`,
-        // `&T` and `Box<T>`, and each of the three needs its own Rust.
-        let key = (
-            crossing.spelled().key(),
-            crossing.direction(),
-            recipe.clone(),
-        );
+    fn recipe(&mut self, adapter: &mut C, crossing: &Crossing, recipe: &RecipeKey) -> Built<C> {
+        debug_assert_eq!(recipe.crossing(), &crossing.key());
+        // The row has global identity, while the fragment also needs the spelling:
+        // one row can serve `T`, `&T` and `Box<T>`, whose Rust differs.
+        let key = (crossing.spelled().key(), recipe.clone());
         if let Some(built) = self.compiled.fragments.get(&key) {
             return Ok(built.clone());
         }
-        let chosen = match self.recipes.get(&crossing.key(), recipe) {
+        let chosen = match self.recipes.get(recipe) {
             Some(chosen) => chosen.clone(),
-            None => self.recipes.recipe(crossing).1.into_owned(),
+            None => {
+                debug_assert_eq!(recipe.name(), &RecipeName::derived());
+                super::derive(crossing)
+            }
         };
         let at = At { crossing, recipe };
         let fragment = match &chosen {
@@ -609,7 +605,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
 
     /// The fragment for one part of the recipe being compiled.
     ///
-    /// Which recipe the part takes is the site machinery's answer, asked at
+    /// Which row the part takes is the site machinery's answer, asked at
     /// [`Role::Part`] — keyed by the recipe, because that is what compilation is
     /// per. A root role such as [`Role::CallbackArg`] names a place in one
     /// exported function, so it cannot answer for a recipe every function with
@@ -651,12 +647,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
         wanted: Mode,
     ) -> Built<C> {
         let crossing = Crossing::new(ty.clone(), direction);
-        let site = Site::arm_part(at.crossing, at.recipe, arm, index);
+        let site = Site::arm_part(at.recipe, arm, index);
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRecipe {
                 site,
-                crossing: crossing.key(),
-                recipe: super::RecipeId::new("<omitted>"),
+                recipe: crossing.row(super::RecipeName::new("<omitted>")),
             }
             .into());
         };
@@ -971,7 +966,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 Reach::Field(index) => {
                     let field = fields.get(*index).ok_or_else(|| {
                         CompileError::Recipe(Box::new(RecipeError::OutOfRange {
-                            crossing: at.crossing.key(),
                             recipe: at.recipe.clone(),
                             index: *index,
                             len: fields.len(),
@@ -1008,7 +1002,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
     ) -> Result<&'a Function, CompileError<C::Error>> {
         self.model.function(name).ok_or_else(|| {
             CompileError::Recipe(Box::new(RecipeError::UnknownFunction {
-                crossing: at.crossing.key(),
                 recipe: at.recipe.clone(),
                 func: name.clone(),
             }))
@@ -1026,7 +1019,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
         };
         alternatives.get(index).ok_or_else(|| {
             CompileError::Recipe(Box::new(RecipeError::OutOfRange {
-                crossing: at.crossing.key(),
                 recipe: at.recipe.clone(),
                 index,
                 len: alternatives.len(),
@@ -1121,7 +1113,6 @@ fn element_mode(crossing: &Crossing, elem: &TypeRef) -> Mode {
 /// than stating it, so a recipe declaring one on the wrong type is caught here.
 fn wrong_shape<E>(at: At<'_>, shape: &'static str, wanted: &'static str) -> CompileError<E> {
     RecipeError::WrongShape {
-        crossing: at.crossing.key(),
         recipe: at.recipe.clone(),
         shape,
         wanted,

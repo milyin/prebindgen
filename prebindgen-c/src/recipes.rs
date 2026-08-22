@@ -16,20 +16,20 @@ use prebindgen_registry::{
     flat::{Flat, Type, TypeRef},
     recipe::{
         Arm, Construct, Constructing, Deconstruct, Deconstructing, Direction, Reach, RecipeError,
-        RecipeId, Recipes,
+        RecipeName, Recipes,
     },
 };
 
 use super::*;
 
 /// The recipe a type with no parts takes: the adapter emits the conversion itself.
-fn whole() -> RecipeId {
-    RecipeId::new("whole")
+fn whole() -> RecipeName {
+    RecipeName::new("whole")
 }
 
 /// The recipe a type crossing field by field takes.
-pub(crate) fn parts() -> RecipeId {
-    RecipeId::new("parts")
+pub(crate) fn parts() -> RecipeName {
+    RecipeName::new("parts")
 }
 
 /// The recipe a value takes as a **tagged union's payload**, where it rides
@@ -44,8 +44,8 @@ pub(crate) fn parts() -> RecipeId {
 /// `Box`: `Box<Blob>` and `Blob` share one crossing and are told apart by the
 /// site that picks between their recipes, and by the fragment, which is keyed by
 /// the spelling.
-pub(crate) fn payload() -> RecipeId {
-    RecipeId::new("payload")
+pub(crate) fn payload() -> RecipeName {
+    RecipeName::new("payload")
 }
 
 /// The recipe a value takes **inside a `data_struct`'s mirror**, where its wire
@@ -61,8 +61,8 @@ pub(crate) fn payload() -> RecipeId {
 /// `String`: a field decodes a null pointer to an empty string, where a
 /// `String` parameter refuses one. Both readings were in the hand-written field
 /// walk; the recipe is what makes the difference visible.
-pub(crate) fn in_field() -> RecipeId {
-    RecipeId::new("field")
+pub(crate) fn in_field() -> RecipeName {
+    RecipeName::new("field")
 }
 
 impl CbindgenBuilder {
@@ -252,7 +252,7 @@ impl CbindgenBuilder {
 
     /// `bool` and `String` read as they do inside a struct; a `Box`-over-handle
     /// needs [`payload`], the one reading neither of the other two covers.
-    fn payload_reading(&self, fty: &TypeRef) -> Option<(RecipeId, &'static [Direction])> {
+    fn payload_reading(&self, fty: &TypeRef) -> Option<(RecipeName, &'static [Direction])> {
         use prebindgen_registry::flat::{ScalarKind, TypeKind};
         if self.declared_opaque_payload_inner(fty).is_some() || r_boxed_inner(fty).is_some() {
             return Some((payload(), &[Direction::Construct, Direction::Deconstruct]));
@@ -304,8 +304,9 @@ impl CbindgenBuilder {
                     };
                     for &direction in directions {
                         let of = Crossing::new(ty.clone(), direction);
+                        let row = of.row(parts());
                         bound.bind(
-                            Site::arm_part(&of, &parts(), Some(arm), index),
+                            Site::arm_part(&row, Some(arm), index),
                             Crossing::new(field.ty.clone(), direction),
                             Ask::Recipe(recipe.clone()),
                             Asked::Part,
@@ -350,8 +351,9 @@ impl CbindgenBuilder {
                 };
                 for &direction in directions {
                     let of = Crossing::new(ty.clone(), direction);
+                    let row = of.row(parts());
                     bound.bind(
-                        Site::part(&of, &parts(), index),
+                        Site::part(&row, index),
                         Crossing::new(field.ty.clone(), direction),
                         Ask::Recipe(in_field()),
                         Asked::Part,

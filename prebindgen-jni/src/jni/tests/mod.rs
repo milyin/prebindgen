@@ -74,9 +74,11 @@ fn install(
     let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
     let key = TypeKey::from_type(&ty);
     decls.compiled.borrow_mut().record(
-        key.clone(),
-        direction,
-        prebindgen_registry::recipe::RecipeId::new("whole"),
+        prebindgen_registry::recipe::CrossingKey {
+            ty: key.clone(),
+            direction,
+        }
+        .row(prebindgen_registry::recipe::RecipeName::new("whole")),
         crate::jni::compile::JFrag::by_hand(key, e.clone()),
     );
     reg.insert_crossing(direction, &ty, true, Some(Answer::over(e.subs)));

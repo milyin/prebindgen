@@ -1,20 +1,21 @@
-//! Which recipe a given place in the generated API uses.
+//! Which recipe-table row a given place in the generated API uses.
 //!
-//! [`Recipes`] says what recipes a crossing has; this says which of them the
+//! [`Recipes`] says what rows a crossing key has; this says which row the
 //! second parameter of `z_put`, or the `Err` arm of a return, or one part of
 //! another recipe actually takes. A declaration states that through
 //! [`BindingsBuilder::bind`], and [`Bindings::resolve`] answers it for one
 //! site.
 //!
-//! A site nobody binds uses its crossing's default recipe, so the common case is
-//! declared nowhere.
+//! Declarations select by reusable [`RecipeName`]; resolution stores the full
+//! [`RecipeKey`]. A site nobody binds uses its crossing's default row, so the
+//! common case is declared nowhere.
 
 use std::{
     collections::{BTreeMap, HashMap},
     fmt,
 };
 
-use super::{Crossing, CrossingKey, RecipeError, RecipeId, Recipes};
+use super::{Crossing, RecipeError, RecipeKey, RecipeName, Recipes};
 
 /// One place in the generated API where a value crosses.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -35,23 +36,22 @@ impl Site {
     /// found by this key or not at all. Its `owner` is derived from the crossed
     /// type rather than chosen, so composing one by hand is a guess — this is
     /// the answer instead.
-    pub fn part(of: &Crossing, recipe: &RecipeId, index: usize) -> Self {
-        Self::arm_part(of, recipe, None, index)
+    pub fn part(recipe: &RecipeKey, index: usize) -> Self {
+        Self::arm_part(recipe, None, index)
     }
 
     /// [`Self::part`], for a part that sits inside one alternative.
     ///
     /// A part of a [`Shape::Choice`](super::Shape::Choice) recipe needs the
     /// alternative stated, because every arm numbers its parts from zero.
-    pub fn arm_part(of: &Crossing, recipe: &RecipeId, arm: Option<usize>, index: usize) -> Self {
+    pub fn arm_part(recipe: &RecipeKey, arm: Option<usize>, index: usize) -> Self {
         Self {
-            owner: of
-                .value()
-                .stripped_key()
+            owner: recipe
+                .crossing()
+                .ty
                 .ident()
                 .unwrap_or_else(|| syn::Ident::new("_", proc_macro2::Span::call_site())),
             role: Role::Part {
-                of: of.key(),
                 recipe: recipe.clone(),
                 arm,
                 index,
@@ -105,10 +105,8 @@ pub enum Role {
     },
     /// One part of another crossing's recipe.
     Part {
-        /// The crossing whose recipe names this part.
-        of: CrossingKey,
-        /// Which of that crossing's recipes.
-        recipe: RecipeId,
+        /// The globally unique row that names this part.
+        recipe: RecipeKey,
         /// Which alternative, for a part inside a [`Shape::Choice`](super::Shape::Choice)
         /// arm; `None` for a product's own part.
         ///
@@ -135,14 +133,9 @@ impl fmt::Display for Role {
             Role::CallbackArg { param, arg } => {
                 write!(f, "argument {arg} of the callback in parameter {param}")
             }
-            Role::Part {
-                of,
-                recipe,
-                arm,
-                index,
-            } => match arm {
-                Some(arm) => write!(f, "part {index} of arm {arm} of recipe `{recipe}` of {of}"),
-                None => write!(f, "part {index} of recipe `{recipe}` of {of}"),
+            Role::Part { recipe, arm, index } => match arm {
+                Some(arm) => write!(f, "part {index} of arm {arm} of {recipe}"),
+                None => write!(f, "part {index} of {recipe}"),
             },
             Role::Const => f.write_str("value"),
         }
@@ -154,8 +147,8 @@ impl fmt::Display for Role {
 pub enum Ask {
     /// The crossing's default recipe.
     Default,
-    /// This named recipe of the crossing.
-    Recipe(RecipeId),
+    /// This named recipe under the crossing key.
+    Recipe(RecipeName),
     /// This site contributes nothing.
     Omit,
 }
@@ -197,8 +190,8 @@ pub struct Bound {
     pub site: Site,
     /// What crosses, and which way.
     pub crossing: Crossing,
-    /// Which of the crossing's recipes this site takes.
-    pub recipe: RecipeId,
+    /// The globally unique row this site takes.
+    pub recipe: RecipeKey,
     /// Which declaration won, so a diagnostic can say why this recipe applies.
     pub origin: Origin,
 }
@@ -271,16 +264,15 @@ impl BindingsBuilder {
                     continue;
                 }
                 Ask::Default => recipes.recipe(&binding.crossing).0,
-                Ask::Recipe(id) => {
-                    if recipes.get(&key, id).is_none() {
+                Ask::Recipe(name) => {
+                    let Some(recipe) = recipes.key_of(&key, name) else {
                         errors.push(RecipeError::UnknownRecipe {
                             site,
-                            crossing: key,
-                            recipe: id.clone(),
+                            recipe: key.row(name.clone()),
                         });
                         continue;
-                    }
-                    id.clone()
+                    };
+                    recipe.clone()
                 }
             };
             bound.insert(
@@ -301,7 +293,7 @@ impl BindingsBuilder {
     }
 }
 
-/// Which recipe every declared site takes. Built by [`BindingsBuilder`], checked
+/// Which row every declared site takes. Built by [`BindingsBuilder`], checked
 /// once, then immutable.
 #[derive(Debug, Default)]
 pub struct Bindings {

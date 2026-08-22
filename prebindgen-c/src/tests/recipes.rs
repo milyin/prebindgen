@@ -61,8 +61,8 @@ fn recipes_of(gen: &CbindgenBuilder, model: &prebindgen_registry::Flat, spelling
         .into_iter()
         .map(|direction| {
             let crossing = Crossing::new(ty(model, spelling), direction);
-            let (id, recipe) = recipes.recipe(&crossing);
-            format!("{direction} {id}:{}", shape(&recipe))
+            let (key, recipe) = recipes.recipe(&crossing);
+            format!("{direction} {}:{}", key.name(), shape(&recipe))
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -140,7 +140,7 @@ fn a_value_read_two_ways_inside_a_struct_has_two_rows() {
     // The default is the whole-value reading in every case; the field reading
     // is reached only by a part that asks for it.
     let key = Crossing::new(ty(&model, "bool"), Direction::Construct).key();
-    assert_eq!(recipes.default_of(&key).unwrap().as_str(), "whole");
+    assert_eq!(recipes.default_of(&key).unwrap().name().as_str(), "whole");
 }
 
 #[test]

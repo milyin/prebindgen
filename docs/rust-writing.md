@@ -36,7 +36,7 @@ Their short descriptions here say how this proposal uses them.
 | **Declaration** | A build-script statement selecting a function, constant or way for a type to cross. Undeclared source items generate no binding output. |
 | **Direction** | The orientation of a recursive shape walk: toward Rust (`Construct`) or toward the boundary (`Deconstruct`). See [parts and wire use different verbs](model.md#parts-and-wire-use-different-verbs). |
 | **Crossing** | One `TypeRef` and one direction, used as a query into the recipe table. It does not itself say whether the next step is parts or wire. |
-| **Recipe** | One named row owned by the recipe table, keyed by `(CrossingKey, RecipeId)` and containing a shape. The table may contain several rows under the same crossing key. |
+| **Recipe** | One named row owned by the recipe table and containing a shape. `RecipeName` is reusable policy vocabulary local to a crossing; `RecipeKey = (CrossingKey, RecipeName)` identifies the row position throughout the table, including a missing position named by a diagnostic. |
 | **Shape** | The value–parts step declared by a recipe row. A shape with parts constructs or deconstructs; `Atomic` ends the shape walk without naming wire types. |
 | **Site** | One position where a value crosses, such as a function parameter, return or callback argument. |
 | **Fragment** | The adapter-specific result of applying one selected recipe row to one spelled crossing and composing its child fragments. It is the first layer that records wire layout and terminal decoding or encoding. One normalized table row may produce different fragments for `T`, `&T` and `Box<T>`. |
@@ -92,8 +92,9 @@ The current call path is:
    sites are still being planned.
 3. A compiled fragment holds generated syntax, including complete
    `syn::ItemFn` AST nodes where its recipe emits converter functions. Both
-   adapters keep the fragment memo in `Rc<RefCell<Compiled<_>>>`, a shared
-   interior-mutable map. They repeatedly clone that map into
+   adapters keep the fragment memo, keyed by spelled `TypeKey` plus complete
+   `RecipeKey`, in `Rc<RefCell<Compiled<_>>>`, a shared interior-mutable map.
+   They repeatedly clone that map into
    `Compiler::resume`, run part of compilation, and store the resulting map
    again so later conversion generation can observe earlier generated code.
 4. The [C builder](../prebindgen-c/src/trait_impl.rs) and
@@ -185,9 +186,9 @@ errors.
 
 Plan types remain adapter-specific. Each immutable store must contain at least:
 
-- one fragment plan per reached recipe, including semantic dependencies, wire
-  slots, ownership and cleanup operations, a stable generated symbol and
-  source-side positions stored as `TypeRef`s;
+- one fragment plan per reached row key and spelled type, including semantic
+  dependencies, wire slots, ownership and cleanup operations, a stable generated
+  symbol and source-side positions stored as `TypeRef`s;
 - one site plan for every crossing position in a declared function or callback,
   with its exact selected fragment;
 - one artifact plan for every final top-level item. A private conversion may be

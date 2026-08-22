@@ -223,14 +223,14 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         // filed under `Crossing::key`, which strips `Box`, so `Box<Blob>` and
         // `Blob` share one recipe and could not be told apart there. A fragment is
         // keyed by the spelling, which is exactly the distinction needed.
-        if *at.recipe == crate::recipes::payload() {
+        if at.recipe.name() == &crate::recipes::payload() {
             let conv = match at.crossing.direction() {
                 Direction::Construct => self.gen.in_boxed_payload(ty),
                 Direction::Deconstruct => self.gen.out_boxed_payload(ty),
             };
             return self.wrap(at, "no payload reading for this handle", conv);
         }
-        if *at.recipe == crate::recipes::in_field() {
+        if at.recipe.name() == &crate::recipes::in_field() {
             let conv = match at.crossing.direction() {
                 Direction::Construct => self
                     .gen
