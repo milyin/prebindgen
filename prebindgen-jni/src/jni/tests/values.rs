@@ -166,11 +166,11 @@ fn flattened_field_composes_bounded_conversion_stages() {
     );
     assert!(!rc.contains("let___delay:jni::objects::JObject"), "{rust}");
     assert!(
-        rc.contains("jni_sys_jlong_to_Timed_") && rc.contains("(&mutenv,(value_delay,))"),
+        rc.contains("tuple1_to_Timed_") && rc.contains("(&mutenv,(value_delay,))"),
         "the wrapper must delegate Product reconstruction to its registry chain:\n{rust}"
     );
     assert!(
-        rc.contains("Timed_to_jni_sys_jlong_") && rc.contains("let(__chain_wire0,)=match"),
+        rc.contains("Timed_to_tuple1_") && rc.contains("let(__chain_wire0,)=match"),
         "output delivery must delegate Product deconstruction to the same chain:\n{rust}"
     );
 }
@@ -1217,16 +1217,22 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     assert!(kc.contains("e.token.markConsumed()"), "{kotlin}");
     assert!(kc.contains("e.spare?.markConsumed()"), "{kotlin}");
     assert!(
-        rc.contains("lete=matchjni_sys_jlong_jni_sys_jlong_to_Envelope_")
-            && rc.contains("e_token,e_spare"),
+        rc.contains("lete=matchtuple2_to_Envelope_") && rc.contains("e_token,e_spare"),
         "the wrapper must hand the two handle wires to one Product chain:\n{rust}"
     );
+    let token_converter_suffix = rc
+        .split("token:jlong_to_Token_")
+        .nth(1)
+        .and_then(|tail| tail.split_once("(env,&((v).0))?"))
+        .map(|(suffix, _)| suffix)
+        .expect("the Product chain must call Token's converter");
     assert!(
-        rc.contains("token:jlong_to_Token_")
-            && rc.contains("env,&((v).0))?")
-            && rc.contains("spare:jlong_to_Option_Token_")
-            && rc.contains("env,&((v).1))?"),
-        "the registry chain must own both field conversions:\n{rust}"
+        token_converter_suffix.ends_with("_owned"),
+        "the Product chain must consume Token through its owned converter:\n{rust}"
+    );
+    assert!(
+        rc.contains("spare:jlong_to_Option_Token_") && rc.contains("env,&((v).1))?"),
+        "the registry chain must own the optional field conversion:\n{rust}"
     );
 }
 

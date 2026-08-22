@@ -1171,6 +1171,7 @@ impl Declarations {
         if !is_jobject_shaped_wire(&inner_wire) {
             return None;
         }
+        inner.activate();
         // The element's COMPLETE wire -> Rust chain: a `convert!` element
         // (`Label` -> `String`) reaches its value through the rust-side stages,
         // not through the wire-facing converter alone.
@@ -2603,6 +2604,7 @@ impl Declarations {
         // type, rather than resolving and emitting Rust the consumer cannot
         // build.
         let read = read_through_erased_wrappers(reading, quote!(v))?;
+        entry.activate();
         // The inner's COMPLETE chain, stages included: a `convert!` type reaches
         // its wire through them.
         let inner_call = crate::jni::emit::composed_inner_output(&entry, quote!(__inner));
@@ -2677,6 +2679,7 @@ impl Declarations {
         // refusal — the crossing then stays unresolved and names the type,
         // rather than resolving and emitting Rust the consumer cannot build.
         let built = build_through_erased_wrappers(reading, quote!(__inner))?;
+        entry.activate();
         // The inner's COMPLETE chain, stages included. This called
         // `entry.function` directly and left `pre_stages` empty, which SKIPPED
         // them: a `convert!`-declared type reaches its Rust value through those
@@ -3024,6 +3027,7 @@ impl Declarations {
             if !is_jobject_shaped_wire(&inner_wire) {
                 return None;
             }
+            inner.activate();
             // The element's COMPLETE Rust -> wire chain (see the input peer).
             let inner_conv = crate::jni::emit::composed_inner_output(&inner, quote::quote!(__elem));
             let outer_ty = produced.key();
@@ -3106,6 +3110,7 @@ impl Declarations {
         if !is_jobject_shaped_wire(&inner_wire) {
             return None;
         }
+        inner.activate();
         // The element's COMPLETE Rust -> wire chain (see the `Vec<_>` peer).
         let inner_conv = crate::jni::emit::composed_inner_output(
             &inner,

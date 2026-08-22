@@ -302,6 +302,7 @@ pub(crate) fn classify_field(
     }
 
     let field_entry = ext.out_frag(reading)?;
+    field_entry.activate();
     let conv = ConvChain::of(&field_entry);
 
     {

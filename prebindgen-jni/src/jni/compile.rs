@@ -544,7 +544,7 @@ impl JFrag {
         }
     }
 
-    fn product_chain_unmarked(&self) -> Option<ProductChain> {
+    pub(crate) fn product_chain(&self) -> Option<ProductChain> {
         if !self.composed_only {
             if let Some(layout @ JLayout::Product(_)) = self.layout.clone() {
                 return Some(ProductChain {
@@ -555,12 +555,6 @@ impl JFrag {
             }
         }
         self.nested_product.clone()
-    }
-
-    pub(crate) fn product_chain(&self) -> Option<ProductChain> {
-        let chain = self.product_chain_unmarked()?;
-        chain.mark_reachable();
-        Some(chain)
     }
 }
 
@@ -773,6 +767,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let rust =
             crate::jni::chain::JFunction::owned_handle(crate::jni::chain::JOwnedHandlePlan {
                 ident,
+                reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
                 source: source.clone(),
                 module,
             });
@@ -1069,6 +1064,8 @@ impl<R: Conversions> JCompile<'_, R> {
         let marker = crate::jni::chain::planned_marker(&ident);
         let rust = crate::jni::chain::JFunction::optional(crate::jni::chain::JOptionalPlan {
             ident,
+            reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
+            dependencies: vec![inner.rust.clone()],
             chain: prebindgen_registry::chain::Optional {
                 source: source.clone(),
                 direction,
@@ -1080,7 +1077,6 @@ impl<R: Conversions> JCompile<'_, R> {
                 child,
             },
         });
-        inner.rust.mark_reachable();
         Some(JFrag {
             conv: ConverterImpl {
                 destination,
@@ -1244,7 +1240,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 }),
         };
         let mut frag = self.wrap(at, "no JNI representation for this run", conv)?;
-        frag.nested_product = inner.product_chain_unmarked();
+        frag.nested_product = inner.product_chain();
         Ok(frag)
     }
 
@@ -1427,6 +1423,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             .site
             .as_ref()
             .ok_or_else(|| JErr::Refused("JniGen: a site compiled with no site context".into()))?;
+        if matches!(root.layout, Some(JLayout::Leaf)) {
+            root.rust.mark_reachable();
+        }
         let site = match site {
             PlanSite::Return => {
                 // A fragment that occupies several wires IS the decomposed
@@ -1587,7 +1586,7 @@ pub(crate) struct ProductChain {
 }
 
 impl ProductChain {
-    fn mark_reachable(&self) {
+    pub(crate) fn activate(&self) {
         self.rust.mark_reachable();
     }
 }
@@ -1599,6 +1598,12 @@ impl ProductChain {
 /// conversion through it costs a refcount instead of a whole `syn::ItemFn` per
 /// lookup.
 pub(crate) struct Conv(std::rc::Rc<JFrag>);
+
+impl Conv {
+    pub(crate) fn activate(&self) {
+        self.0.rust.mark_reachable();
+    }
+}
 
 impl std::ops::Deref for Conv {
     type Target = ConverterImpl<KotlinMeta>;

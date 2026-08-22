@@ -239,10 +239,10 @@ impl chain::OptionalBridge for COptionalBridge {
         self.wire.clone()
     }
 
-    fn is_absent(&self, value: TokenStream) -> TokenStream {
+    fn is_absent(&self) -> TokenStream {
         match &self.repr {
             OptionalRepr::Niche { absent } => quote!(#absent),
-            OptionalRepr::Nullable { .. } => quote!((#value).is_null()),
+            OptionalRepr::Nullable { .. } => quote!((v).is_null()),
         }
     }
 
