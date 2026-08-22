@@ -19,8 +19,8 @@ use std::collections::BTreeMap;
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
     recipe::{
-        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeId,
-        Recipes,
+        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeKey,
+        RecipeName, Recipes,
     },
 };
 
@@ -240,8 +240,8 @@ fn fields_of<'a>(model: &'a Flat, ty: &TypeRef) -> &'a [prebindgen_registry::fla
 }
 
 /// The recipe a type with no parts takes: the adapter emits the conversion itself.
-fn whole() -> RecipeId {
-    RecipeId::new("whole")
+fn whole() -> RecipeName {
+    RecipeName::new("whole")
 }
 
 /// The recipe a `data_class` takes when it crosses **as its fields**.
@@ -250,8 +250,8 @@ fn whole() -> RecipeId {
 /// compiled only where something asks for it by name — which is what lets the
 /// composed wire list be checked against the walk it will replace before
 /// anything depends on it.
-pub(crate) fn parts() -> RecipeId {
-    RecipeId::new("parts")
+pub(crate) fn parts() -> RecipeName {
+    RecipeName::new("parts")
 }
 
 impl Declarations {
@@ -444,7 +444,7 @@ impl Declarations {
         recipes: &prebindgen_registry::recipe::Recipes,
     ) -> Result<prebindgen_registry::recipe::Bindings, Vec<RecipeError>> {
         use prebindgen_registry::recipe::{
-            Ask, Bindings, Crossing, Direction, Origin, RecipeId, Site,
+            Ask, Bindings, Crossing, Direction, Origin, RecipeName, Site,
         };
 
         let mut bound = Bindings::builder();
@@ -483,12 +483,10 @@ impl Declarations {
             // The optional keeps the recipe the registry derived from its shape —
             // it has no `parts` recipe of its own — and it is the value one layer
             // in that crosses as its parts.
+            let outer = Crossing::new(outer.clone(), Direction::Construct);
+            let row = RecipeKey::new(outer.key(), RecipeName::derived());
             bound.bind(
-                Site::part(
-                    &Crossing::new(outer.clone(), Direction::Construct),
-                    &RecipeId::derived(),
-                    0,
-                ),
+                Site::part(&row, 0),
                 Crossing::new(inner.clone(), Direction::Construct),
                 Ask::Recipe(parts()),
                 Origin::Part,
@@ -523,8 +521,9 @@ impl Declarations {
                         (&building, Direction::Construct),
                         (&handing_out, Direction::Deconstruct),
                     ] {
+                        let row = RecipeKey::new(of.key(), parts());
                         bound.bind(
-                            Site::part(of, &parts(), index),
+                            Site::part(&row, index),
                             Crossing::new(field.ty.clone(), direction),
                             Ask::Recipe(parts()),
                             Origin::Part,
@@ -552,7 +551,7 @@ impl Declarations {
             // Only where the type states one. A `sealed_class` always does; a
             // `data_class` states one unless a field of it declines, and a
             // return whose type states none crosses whole.
-            if recipes.get(&crossing.key(), &parts()).is_none() {
+            if recipes.key_of(&crossing.key(), &parts()).is_none() {
                 continue;
             }
             // And only where it is genuinely several. A decomposition that

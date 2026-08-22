@@ -23,8 +23,16 @@ fn ty(model: &Flat, spelling: &str) -> TypeRef {
         .expect("classify")
 }
 
-fn id(name: &str) -> RecipeId {
-    RecipeId::new(name)
+fn recipe_name(value: &str) -> RecipeName {
+    RecipeName::new(value)
+}
+
+fn row(crossing: &Crossing, name: &str) -> RecipeKey {
+    RecipeKey::new(crossing.key(), recipe_name(name))
+}
+
+fn row_at(crossing: &CrossingKey, name: &str) -> RecipeKey {
+    RecipeKey::new(crossing.clone(), recipe_name(name))
 }
 
 fn ident(name: &str) -> syn::Ident {
@@ -55,8 +63,8 @@ fn name_of<OP>(shape: &Shape<OP>) -> &'static str {
 fn derived_shape(model: &Flat, spelling: &str) -> String {
     let table = Recipes::default();
     let crossing = Crossing::new(ty(model, spelling), Direction::Deconstruct);
-    let (id, recipe) = table.recipe(&crossing);
-    format!("{id}:{}", shape_of(&recipe))
+    let (key, recipe) = table.recipe(&crossing);
+    format!("{}:{}", key.name(), shape_of(&recipe))
 }
 
 #[test]
@@ -79,14 +87,18 @@ fn an_undeclared_crossing_gets_its_arity_row_from_the_kind() {
 fn a_borrow_and_a_wrapper_find_the_row_the_bare_type_declared() {
     let model = model(&[SAMPLE]);
     let mut builder = Recipes::builder();
-    builder.declare(ty(&model, "Sample"), id("whole"), Deconstructing::Atomic);
+    builder.declare(
+        ty(&model, "Sample"),
+        recipe_name("whole"),
+        Deconstructing::Atomic,
+    );
     let table = builder.build(&model).expect("table");
 
     for spelling in ["Sample", "&Sample", "&mut Sample", "Box<Sample>"] {
         let crossing = Crossing::new(ty(&model, spelling), Direction::Deconstruct);
         assert_eq!(
             table.recipe(&crossing).0,
-            id("whole"),
+            row(&crossing, "whole"),
             "{spelling} did not find the declared recipe"
         );
     }
@@ -112,12 +124,12 @@ fn the_shape_files_the_row_under_its_own_job() {
     builder
         .declare(
             ty(&model, "Sample"),
-            id("fields"),
+            recipe_name("fields"),
             Constructing::Product(Construct::Call(ident("sample_new"))),
         )
         .declare(
             ty(&model, "Sample"),
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
         );
     let table = builder.build(&model).expect("table");
@@ -126,7 +138,7 @@ fn the_shape_files_the_row_under_its_own_job() {
     for direction in [Direction::Construct, Direction::Deconstruct] {
         let key = Crossing::new(sample.clone(), direction).key();
         assert_eq!(key.direction, direction);
-        assert_eq!(table.names_of(&key), vec![&id("fields")]);
+        assert_eq!(table.names_of(&key), vec![&recipe_name("fields")]);
     }
 }
 
@@ -137,16 +149,16 @@ fn one_row_is_the_default_and_several_have_to_say_which() {
     let key = Crossing::new(sample.clone(), Direction::Deconstruct).key();
 
     let mut one = Recipes::builder();
-    one.declare(sample.clone(), id("whole"), Deconstructing::Atomic);
+    one.declare(sample.clone(), recipe_name("whole"), Deconstructing::Atomic);
     let table = one.build(&model).expect("one recipe is its own default");
-    assert_eq!(table.default_of(&key), Some(&id("whole")));
+    assert_eq!(table.default_of(&key), Some(&row_at(&key, "whole")));
 
     let mut undecided = Recipes::builder();
     undecided
-        .declare(sample.clone(), id("whole"), Deconstructing::Atomic)
+        .declare(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
         .declare(
             sample.clone(),
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0)])),
         );
     let errors = undecided.build(&model).expect_err("no default");
@@ -157,15 +169,44 @@ fn one_row_is_the_default_and_several_have_to_say_which() {
 
     let mut decided = Recipes::builder();
     decided
-        .declare_default(sample.clone(), id("whole"), Deconstructing::Atomic)
+        .declare_default(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
         .declare(
             sample,
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0)])),
         );
     let table = decided.build(&model).expect("one default");
-    assert_eq!(table.default_of(&key), Some(&id("whole")));
+    assert_eq!(table.default_of(&key), Some(&row_at(&key, "whole")));
     assert_eq!(table.names_of(&key).len(), 2);
+}
+
+#[test]
+fn one_name_can_label_several_globally_distinct_rows() {
+    let model = model(&[SAMPLE]);
+    let sample = ty(&model, "Sample");
+    let scalar = ty(&model, "u32");
+    let mut builder = Recipes::builder();
+    builder
+        .declare(sample.clone(), recipe_name("whole"), Constructing::Atomic)
+        .declare(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
+        .declare(scalar, recipe_name("whole"), Deconstructing::Atomic);
+    let table = builder.build(&model).expect("table");
+
+    let sample_in = Crossing::new(sample.clone(), Direction::Construct).key();
+    let sample_out = Crossing::new(sample, Direction::Deconstruct).key();
+    let scalar_out = Crossing::new(ty(&model, "u32"), Direction::Deconstruct).key();
+    let sample_in = table.key_of(&sample_in, &recipe_name("whole")).unwrap();
+    let sample_out = table.key_of(&sample_out, &recipe_name("whole")).unwrap();
+    let scalar_out = table.key_of(&scalar_out, &recipe_name("whole")).unwrap();
+
+    assert_eq!(sample_in.name(), sample_out.name());
+    assert_eq!(sample_out.name(), scalar_out.name());
+    assert_ne!(sample_in, sample_out);
+    assert_ne!(sample_out, scalar_out);
+    assert_ne!(sample_in, scalar_out);
+    assert!(table.get(sample_in).is_some());
+    assert!(table.get(sample_out).is_some());
+    assert!(table.get(scalar_out).is_some());
 }
 
 #[test]
@@ -174,10 +215,10 @@ fn two_defaults_are_as_wrong_as_none() {
     let sample = ty(&model, "Sample");
     let mut builder = Recipes::builder();
     builder
-        .declare_default(sample.clone(), id("whole"), Deconstructing::Atomic)
+        .declare_default(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
         .declare_default(
             sample,
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0)])),
         );
     let errors = builder.build(&model).expect_err("two defaults");
@@ -193,11 +234,11 @@ fn one_name_cannot_be_declared_twice_for_one_crossing() {
     let sample = ty(&model, "Sample");
     let mut builder = Recipes::builder();
     builder
-        .declare(sample.clone(), id("whole"), Deconstructing::Atomic)
-        .declare(sample, id("whole"), Deconstructing::Atomic);
+        .declare(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
+        .declare(sample, recipe_name("whole"), Deconstructing::Atomic);
     let errors = builder.build(&model).expect_err("declared twice");
     assert!(
-        matches!(errors.as_slice(), [RecipeError::Duplicate { recipe, .. }] if recipe == &id("whole")),
+        matches!(errors.as_slice(), [RecipeError::Duplicate { recipe, .. }] if recipe == &recipe_name("whole")),
         "{errors:?}"
     );
 }
@@ -208,7 +249,7 @@ fn a_recipe_naming_a_function_the_model_lacks_is_refused() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("sample_new"))),
     );
     let errors = builder.build(&model).expect_err("no such function");
@@ -224,7 +265,7 @@ fn an_accessor_whose_first_parameter_is_another_type_is_refused() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Deconstructing::Product(Deconstruct::Fields(vec![Reach::Accessor(ident(
             "other_key",
         ))])),
@@ -242,7 +283,7 @@ fn an_accessor_reached_through_a_borrow_is_accepted() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Deconstructing::Product(Deconstruct::Fields(vec![Reach::Accessor(ident(
             "sample_key",
         ))])),
@@ -256,7 +297,7 @@ fn a_field_index_past_the_end_is_refused() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(7)])),
     );
     let errors = builder.build(&model).expect_err("no field 7");
@@ -279,7 +320,7 @@ fn a_field_of_a_type_with_no_fields_is_refused() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "u32"),
-        id("fields"),
+        recipe_name("fields"),
         Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0)])),
     );
     let errors = builder.build(&model).expect_err("a scalar has no fields");
@@ -296,7 +337,7 @@ fn an_arms_payload_supplies_the_field_indices() {
     let mut good = Recipes::builder();
     good.declare(
         reply.clone(),
-        id("variants"),
+        recipe_name("variants"),
         Deconstructing::Choice {
             arms: vec![
                 Arm {
@@ -315,7 +356,7 @@ fn an_arms_payload_supplies_the_field_indices() {
     let mut past_the_end = Recipes::builder();
     past_the_end.declare(
         reply.clone(),
-        id("variants"),
+        recipe_name("variants"),
         Deconstructing::Choice {
             arms: vec![Arm {
                 alternative: 0,
@@ -341,7 +382,7 @@ fn an_arms_payload_supplies_the_field_indices() {
     let mut no_such_arm = Recipes::builder();
     no_such_arm.declare(
         reply,
-        id("variants"),
+        recipe_name("variants"),
         Deconstructing::Choice {
             arms: vec![Arm {
                 alternative: 4,
@@ -373,7 +414,7 @@ fn a_value_form_reads_its_parts_off_what_the_accessor_returns() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Handle"),
-        id("read"),
+        recipe_name("read"),
         Deconstructing::Product(Deconstruct::ValueForm {
             func: ident("handle_read"),
             // `Sample`'s two fields, not `Handle`'s none.
@@ -392,7 +433,7 @@ fn a_callback_takes_invoke_and_nothing_else() {
     // Any other shape is refused: converting the arguments is what makes the
     // callable callable, so there is no second answer to choose between.
     let mut builder = Recipes::builder();
-    builder.declare(callback.clone(), id("whole"), Constructing::Atomic);
+    builder.declare(callback.clone(), recipe_name("whole"), Constructing::Atomic);
     let errors = builder
         .build(&model)
         .expect_err("only `Invoke` fits a callback");
@@ -404,7 +445,7 @@ fn a_callback_takes_invoke_and_nothing_else() {
     // `Invoke` is declarable like any other shape, and states the same thing
     // the table would have derived.
     let mut builder = Recipes::builder();
-    builder.declare(callback, id("invoke"), Constructing::Invoke);
+    builder.declare(callback, recipe_name("invoke"), Constructing::Invoke);
     builder
         .build(&model)
         .expect("`Invoke` is a callback's shape");
@@ -415,7 +456,7 @@ fn invoke_on_a_type_that_is_not_a_callback_is_refused() {
     let model = model(&[SAMPLE]);
     let sample = ty(&model, "Sample");
     let mut builder = Recipes::builder();
-    builder.declare(sample, id("invoke"), Constructing::Invoke);
+    builder.declare(sample, recipe_name("invoke"), Constructing::Invoke);
     let errors = builder.build(&model).expect_err("`Sample` is not callable");
     assert!(
         matches!(
@@ -436,8 +477,8 @@ fn a_callback_derives_the_row_that_takes_it_apart() {
     let table = Recipes::default();
     for direction in [Direction::Construct, Direction::Deconstruct] {
         let crossing = Crossing::new(listen.params[0].ty.clone(), direction);
-        let (id, recipe) = table.recipe(&crossing);
-        assert_eq!(id, RecipeId::derived());
+        let (key, recipe) = table.recipe(&crossing);
+        assert_eq!(key, row(&crossing, "derived"));
         assert_eq!(shape_of(&recipe), "invoke", "{recipe:?}");
         // The recipe's own direction is the crossing's; its arguments take the other.
         assert!(recipe.is_invoke());
@@ -451,7 +492,7 @@ fn a_row_reaching_its_own_crossing_is_refused() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("clone"),
+        recipe_name("clone"),
         Constructing::Product(Construct::Call(ident("sample_clone"))),
     );
     let errors = builder.build(&model).expect_err("a cycle of one");
@@ -473,12 +514,12 @@ fn a_cycle_through_two_crossings_is_refused() {
     builder
         .declare(
             ty(&model, "A"),
-            id("fields"),
+            recipe_name("fields"),
             Constructing::Product(Construct::Call(ident("a_new"))),
         )
         .declare(
             ty(&model, "B"),
-            id("fields"),
+            recipe_name("fields"),
             Constructing::Product(Construct::Call(ident("b_new"))),
         );
     let errors = builder.build(&model).expect_err("A reaches A through B");
@@ -501,12 +542,12 @@ fn a_row_that_only_reaches_a_different_job_is_not_a_cycle() {
     builder
         .declare(
             ty(&model, "Sample"),
-            id("fields"),
+            recipe_name("fields"),
             Constructing::Product(Construct::Call(ident("sample_new"))),
         )
         .declare(
             ty(&model, "Sample"),
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
         );
     builder
@@ -521,13 +562,17 @@ fn every_problem_is_reported_at_once() {
     builder
         .declare(
             ty(&model, "Sample"),
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![
                 Reach::Field(9),
                 Reach::Accessor(ident("nowhere")),
             ])),
         )
-        .declare(ty(&model, "Sample"), id("whole"), Deconstructing::Atomic);
+        .declare(
+            ty(&model, "Sample"),
+            recipe_name("whole"),
+            Deconstructing::Atomic,
+        );
     let errors = builder.build(&model).expect_err("three problems");
     assert_eq!(errors.len(), 3, "{errors:?}");
     assert!(errors
@@ -577,10 +622,14 @@ fn site(owner: &str, index: usize) -> Site {
 fn two_recipes(model: &Flat) -> Recipes {
     let mut builder = Recipes::builder();
     builder
-        .declare_default(ty(model, "Sample"), id("whole"), Deconstructing::Atomic)
+        .declare_default(
+            ty(model, "Sample"),
+            recipe_name("whole"),
+            Deconstructing::Atomic,
+        )
         .declare(
             ty(model, "Sample"),
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
         );
     builder.build(model).expect("table")
@@ -596,7 +645,7 @@ fn a_site_nobody_bound_takes_the_default_row() {
     let bound = bindings
         .resolve(&site("z_put", 0), &crossing, &recipes)
         .expect("a site nobody bound still crosses");
-    assert_eq!(bound.recipe, id("whole"));
+    assert_eq!(bound.recipe, row(&crossing, "whole"));
     assert_eq!(bound.origin, Origin::Adapter);
     assert!(!bindings.is_declared(&site("z_put", 0)));
 }
@@ -611,7 +660,7 @@ fn an_undeclared_crossing_resolves_to_its_derived_row() {
     let bound = bindings
         .resolve(&site("z_put", 0), &crossing, &recipes)
         .expect("the derived recipe");
-    assert_eq!(bound.recipe, RecipeId::derived());
+    assert_eq!(bound.recipe, row(&crossing, "derived"));
 }
 
 #[test]
@@ -623,7 +672,7 @@ fn a_site_takes_the_row_it_names() {
     builder.bind(
         site("z_put", 0),
         crossing.clone(),
-        Ask::Recipe(id("fields")),
+        Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
     let bindings = builder.build(&recipes).expect("bindings");
@@ -631,13 +680,13 @@ fn a_site_takes_the_row_it_names() {
     let bound = bindings
         .resolve(&site("z_put", 0), &crossing, &recipes)
         .expect("bound");
-    assert_eq!(bound.recipe, id("fields"));
+    assert_eq!(bound.recipe, row(&crossing, "fields"));
     assert_eq!(bound.origin, Origin::Function);
     // Every other site of the same crossing still takes the default.
     let other = bindings
         .resolve(&site("z_get", 0), &crossing, &recipes)
         .expect("bound");
-    assert_eq!(other.recipe, id("whole"));
+    assert_eq!(other.recipe, row(&crossing, "whole"));
 }
 
 #[test]
@@ -653,8 +702,8 @@ fn the_higher_precedence_declaration_wins_whichever_was_written_first() {
         let mut builder = Bindings::builder();
         for origin in order {
             let ask = match origin {
-                Origin::Function => Ask::Recipe(id("fields")),
-                _ => Ask::Recipe(id("whole")),
+                Origin::Function => Ask::Recipe(recipe_name("fields")),
+                _ => Ask::Recipe(recipe_name("whole")),
             };
             builder.bind(site("z_put", 0), crossing.clone(), ask, origin);
         }
@@ -662,7 +711,7 @@ fn the_higher_precedence_declaration_wins_whichever_was_written_first() {
         let bound = bindings
             .resolve(&site("z_put", 0), &crossing, &recipes)
             .expect("bound");
-        assert_eq!(bound.recipe, id("fields"), "written {order:?}");
+        assert_eq!(bound.recipe, row(&crossing, "fields"), "written {order:?}");
         assert_eq!(bound.origin, Origin::Function, "written {order:?}");
     }
 }
@@ -678,13 +727,13 @@ fn two_declarations_of_equal_precedence_may_agree_and_may_not_disagree() {
         .bind(
             site("z_put", 0),
             crossing.clone(),
-            Ask::Recipe(id("fields")),
+            Ask::Recipe(recipe_name("fields")),
             Origin::Function,
         )
         .bind(
             site("z_put", 0),
             crossing.clone(),
-            Ask::Recipe(id("fields")),
+            Ask::Recipe(recipe_name("fields")),
             Origin::Function,
         );
     agreeing
@@ -696,13 +745,13 @@ fn two_declarations_of_equal_precedence_may_agree_and_may_not_disagree() {
         .bind(
             site("z_put", 0),
             crossing.clone(),
-            Ask::Recipe(id("fields")),
+            Ask::Recipe(recipe_name("fields")),
             Origin::Function,
         )
         .bind(
             site("z_put", 0),
             crossing,
-            Ask::Recipe(id("whole")),
+            Ask::Recipe(recipe_name("whole")),
             Origin::Function,
         );
     let errors = disagreeing.build(&recipes).expect_err("two answers");
@@ -754,12 +803,12 @@ fn a_site_naming_a_row_the_crossing_lacks_is_refused() {
     builder.bind(
         site("z_put", 0),
         crossing,
-        Ask::Recipe(id("jobject")),
+        Ask::Recipe(recipe_name("jobject")),
         Origin::Function,
     );
     let errors = builder.build(&recipes).expect_err("no such recipe");
     assert!(
-        matches!(errors.as_slice(), [RecipeError::UnknownRecipe { recipe, .. }] if recipe == &id("jobject")),
+        matches!(errors.as_slice(), [RecipeError::UnknownRecipe { recipe, .. }] if recipe == &recipe_name("jobject")),
         "{errors:?}"
     );
 }
@@ -796,7 +845,7 @@ fn asking_for_the_default_records_which_row_that_was() {
     let bound = bindings
         .resolve(&site("z_put", 0), &crossing, &recipes)
         .expect("bound");
-    assert_eq!(bound.recipe, id("whole"));
+    assert_eq!(bound.recipe, row(&crossing, "whole"));
     assert_eq!(bound.origin, Origin::Type);
 }
 
@@ -813,14 +862,14 @@ fn one_site_is_one_role_of_one_owner() {
     builder.bind(
         ret.clone(),
         crossing.clone(),
-        Ask::Recipe(id("fields")),
+        Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
     let bindings = builder.build(&recipes).expect("bindings");
 
     assert_eq!(
         bindings.resolve(&ret, &crossing, &recipes).unwrap().recipe,
-        id("fields")
+        row(&crossing, "fields")
     );
     // The same function's parameter 0 is a different site.
     assert_eq!(
@@ -828,7 +877,7 @@ fn one_site_is_one_role_of_one_owner() {
             .resolve(&site("z_put", 0), &crossing, &recipes)
             .unwrap()
             .recipe,
-        id("whole")
+        row(&crossing, "whole")
     );
 }
 
@@ -1051,7 +1100,7 @@ fn a_constructors_parameters_are_the_parts() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("sample_new"))),
     );
     let recipes = builder.build(&model).expect("table");
@@ -1090,7 +1139,7 @@ fn an_accessors_return_is_the_parts_type_and_its_borrowing() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Deconstructing::Product(Deconstruct::Fields(vec![
             Reach::Accessor(ident("sample_key")),
             Reach::Accessor(ident("sample_payload")),
@@ -1122,7 +1171,7 @@ fn a_field_reach_reads_the_models_own_field() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(1), Reach::Field(0)])),
     );
     let recipes = builder.build(&model).expect("table");
@@ -1152,7 +1201,7 @@ fn an_omitted_reach_contributes_no_part() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Omit])),
     );
     let recipes = builder.build(&model).expect("table");
@@ -1179,7 +1228,11 @@ fn an_omitted_reach_contributes_no_part() {
 fn one_row_answering_three_spellings_still_builds_three_fragments() {
     let model = model(&[SAMPLE]);
     let mut builder = Recipes::builder();
-    builder.declare(ty(&model, "Sample"), id("whole"), Deconstructing::Atomic);
+    builder.declare(
+        ty(&model, "Sample"),
+        recipe_name("whole"),
+        Deconstructing::Atomic,
+    );
     let recipes = builder.build(&model).expect("table");
     let bindings = Bindings::default();
     let mut adapter = Recorder::default();
@@ -1188,7 +1241,7 @@ fn one_row_answering_three_spellings_still_builds_three_fragments() {
     for spelling in ["Sample", "&Sample", "Box<Sample>"] {
         let crossing = Crossing::new(ty(&model, spelling), Direction::Deconstruct);
         // All three find the one declared recipe …
-        assert_eq!(recipes.recipe(&crossing).0, id("whole"));
+        assert_eq!(recipes.recipe(&crossing).0, row(&crossing, "whole"));
         compiler.crossing(&mut adapter, &crossing).expect("compile");
     }
     // … and each still gets its own Rust, because taking a value out of a
@@ -1238,7 +1291,7 @@ fn a_row_is_compiled_once_however_many_sites_take_it() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("sample_new"))),
     );
     let recipes = builder.build(&model).expect("table");
@@ -1470,7 +1523,7 @@ fn every_arm_of_a_choice_reaches_the_hook_already_composed() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Reply"),
-        id("variants"),
+        recipe_name("variants"),
         Deconstructing::Choice {
             arms: vec![
                 Arm {
@@ -1556,10 +1609,14 @@ fn a_callback_argument_is_a_part_of_the_callback_row_that_names_it() {
     let callback = listen.params[0].ty.clone();
     let mut builder = Recipes::builder();
     builder
-        .declare_default(ty(&model, "Sample"), id("whole"), Deconstructing::Atomic)
+        .declare_default(
+            ty(&model, "Sample"),
+            recipe_name("whole"),
+            Deconstructing::Atomic,
+        )
         .declare(
             ty(&model, "Sample"),
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0)])),
         );
     let recipes = builder.build(&model).expect("table");
@@ -1568,13 +1625,14 @@ fn a_callback_argument_is_a_part_of_the_callback_row_that_names_it() {
     let recipe = Crossing::new(callback.clone(), Direction::Construct);
     // Built the same way the driver builds it, which is the point of the
     // helper: a per-part binding is found by this exact key or not at all.
-    let part = Site::part(&recipe, &RecipeId::derived(), 0);
+    let recipe_key = row(&recipe, "derived");
+    let part = Site::part(&recipe_key, 0);
     let mut bound = Bindings::builder();
     bound.bind(
         part,
         // The part's own crossing carries the swap; the site does not.
         Crossing::new(ty(&model, "Sample"), Direction::Deconstruct),
-        Ask::Recipe(id("fields")),
+        Ask::Recipe(recipe_name("fields")),
         Origin::Part,
     );
     let bindings = bound.build(&recipes).expect("bindings");
@@ -1605,10 +1663,14 @@ fn a_callback_argument_is_overridden_by_compiling_it_as_its_own_site() {
     ]);
     let mut builder = Recipes::builder();
     builder
-        .declare_default(ty(&model, "Sample"), id("whole"), Deconstructing::Atomic)
+        .declare_default(
+            ty(&model, "Sample"),
+            recipe_name("whole"),
+            Deconstructing::Atomic,
+        )
         .declare(
             ty(&model, "Sample"),
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0)])),
         );
     let recipes = builder.build(&model).expect("table");
@@ -1621,7 +1683,7 @@ fn a_callback_argument_is_overridden_by_compiling_it_as_its_own_site() {
     bound.bind(
         arg.clone(),
         Crossing::new(ty(&model, "Sample"), Direction::Deconstruct),
-        Ask::Recipe(id("fields")),
+        Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
     let bindings = bound.build(&recipes).expect("bindings");
@@ -1648,7 +1710,7 @@ fn a_part_that_only_lends_cannot_feed_an_edge_that_consumes() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("sample_new"))),
     );
     let recipes = builder.build(&model).expect("table");
@@ -1687,7 +1749,7 @@ fn a_part_producing_the_wrong_rust_type_is_refused() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("sample_new"))),
     );
     let recipes = builder.build(&model).expect("table");
@@ -1859,7 +1921,7 @@ fn a_part_answering_through_a_borrow_or_a_box_still_matches_its_type() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("sample_of"))),
     );
     let recipes = builder.build(&model).expect("table");
@@ -1886,7 +1948,7 @@ fn a_constructor_that_builds_another_type_is_refused() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("make_other"))),
     );
     let errors = builder
@@ -1911,7 +1973,7 @@ fn a_fallible_constructor_builds_its_success_arm() {
     let mut good = Recipes::builder();
     good.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("sample_try"))),
     );
     good.build(&model)
@@ -1920,7 +1982,7 @@ fn a_fallible_constructor_builds_its_success_arm() {
     let mut bad = Recipes::builder();
     bad.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("other_try"))),
     );
     let errors = bad.build(&model).expect_err("Result<u32, _> does not");
@@ -1936,7 +1998,7 @@ fn a_constructor_reached_through_a_borrow_or_a_box_is_accepted() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("fields"),
+        recipe_name("fields"),
         Constructing::Product(Construct::Call(ident("sample_boxed"))),
     );
     builder
@@ -2124,10 +2186,14 @@ fn a_site_takes_the_row_the_binding_names_and_others_take_the_default() {
     let model = model(&[SAMPLE]);
     let mut builder = Recipes::builder();
     builder
-        .declare_default(ty(&model, "Sample"), id("whole"), Deconstructing::Atomic)
+        .declare_default(
+            ty(&model, "Sample"),
+            recipe_name("whole"),
+            Deconstructing::Atomic,
+        )
         .declare(
             ty(&model, "Sample"),
-            id("fields"),
+            recipe_name("fields"),
             Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
         );
     let recipes = builder.build(&model).expect("table");
@@ -2135,7 +2201,7 @@ fn a_site_takes_the_row_the_binding_names_and_others_take_the_default() {
     bound.bind(
         site("z_put", 0),
         Crossing::new(ty(&model, "Sample"), Direction::Deconstruct),
-        Ask::Recipe(id("fields")),
+        Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
     let bindings = bound.build(&recipes).expect("bindings");
@@ -2171,7 +2237,7 @@ fn a_struct_with_no_constructor_is_built_from_its_own_fields() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Sample"),
-        id("literal"),
+        recipe_name("literal"),
         Constructing::Product(Construct::Fields),
     );
     let recipes = builder.build(&model).expect("table");
@@ -2199,7 +2265,7 @@ fn an_arm_is_built_from_its_own_payload_fields() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Reply"),
-        id("variants"),
+        recipe_name("variants"),
         Constructing::Choice {
             arms: vec![
                 Arm {
@@ -2243,7 +2309,7 @@ fn building_a_type_the_model_gives_no_fields_is_refused() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "u32"),
-        id("literal"),
+        recipe_name("literal"),
         Constructing::Product(Construct::Fields),
     );
     let errors = builder.build(&model).expect_err("a scalar has no fields");
@@ -2263,7 +2329,7 @@ fn a_value_form_binds_the_accessors_result_and_reads_its_fields() {
     let mut builder = Recipes::builder();
     builder.declare(
         ty(&model, "Handle"),
-        id("read"),
+        recipe_name("read"),
         Deconstructing::Product(Deconstruct::ValueForm {
             func: ident("handle_read"),
             parts: vec![Reach::Field(0), Reach::Field(1)],
@@ -2302,7 +2368,7 @@ fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
     builder.bind(
         site("z_put", 0),
         crossing.clone(),
-        Ask::Recipe(id("fields")),
+        Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
     let bindings = builder.build(&recipes).expect("bindings");
@@ -2326,7 +2392,7 @@ fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
     );
     // … and a caller holding a recipe still reaches that recipe.
     assert!(compiled
-        .recipe_fragment(&key, Direction::Deconstruct, &id("fields"))
+        .recipe_fragment(&key, &row(&crossing, "fields"))
         .is_some());
     // The other direction was never crossed, so there is no answer to give.
     assert!(compiled.fragment(&key, Direction::Construct).is_none());
@@ -2354,7 +2420,7 @@ fn compiling_a_row_by_name_refuses_a_name_the_crossing_lacks() {
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
 
     let err = compiler
-        .recipe_of(&mut adapter, &crossing, &id("nonesuch"))
+        .recipe_of(&mut adapter, &crossing, &recipe_name("nonesuch"))
         .expect_err("`Sample` declares `whole` and `fields`, and nothing else");
     let message = err.to_string();
     assert!(message.contains("nonesuch"), "{message}");
@@ -2362,19 +2428,16 @@ fn compiling_a_row_by_name_refuses_a_name_the_crossing_lacks() {
 
     // And nothing was filed under the name, so no emitter can read one back.
     let compiled = compiler.finish();
+    let missing = row(&crossing, "nonesuch");
     assert!(compiled
-        .recipe_fragment(
-            &ty(&model, "Sample").key(),
-            Direction::Deconstruct,
-            &id("nonesuch")
-        )
+        .recipe_fragment(&ty(&model, "Sample").key(), &missing)
         .is_none());
 
     // The two recipes that DO exist still compile by name.
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
     for name in ["whole", "fields"] {
         compiler
-            .recipe_of(&mut adapter, &crossing, &id(name))
+            .recipe_of(&mut adapter, &crossing, &recipe_name(name))
             .unwrap_or_else(|e| panic!("`{name}` is declared: {e}"));
     }
 }

@@ -1473,8 +1473,13 @@ impl JniGenBuilder {
                     let (dir, key) = crossing;
                     decls.compiled.borrow_mut().record(
                         key.clone(),
-                        *dir,
-                        prebindgen_registry::recipe::RecipeId::new("callback"),
+                        prebindgen_registry::recipe::RecipeKey::new(
+                            prebindgen_registry::recipe::CrossingKey {
+                                ty: key.clone(),
+                                direction: *dir,
+                            },
+                            prebindgen_registry::recipe::RecipeName::new("callback"),
+                        ),
                         crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
                     );
                 }
@@ -1573,7 +1578,7 @@ impl JniGenBuilder {
             // condition that declared it is the condition asked here.
             if decls
                 .recipe_table()
-                .get(&crossing.key(), &crate::jni::recipes::parts())
+                .key_of(&crossing.key(), &crate::jni::recipes::parts())
                 .is_none()
             {
                 continue;
@@ -1690,7 +1695,7 @@ impl Declarations {
             )
             && compiler
                 .recipes()
-                .get(&crossing.key(), &crate::jni::recipes::parts())
+                .key_of(&crossing.key(), &crate::jni::recipes::parts())
                 .is_some()
         {
             // A refusal is a bug in the composition, not a gap in the binding:
