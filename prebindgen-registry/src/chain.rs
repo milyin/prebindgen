@@ -7,7 +7,11 @@
 
 use proc_macro2::TokenStream;
 
-use crate::{flat::TypeRef, recipe::Direction, Emit};
+use crate::{
+    flat::TypeRef,
+    recipe::{Direction, Mode},
+    Emit,
+};
 
 /// The callable contract of one generated converter.
 #[derive(Clone)]
@@ -73,6 +77,15 @@ pub trait Source: Clone {
     fn read(&self, source: TokenStream) -> TokenStream {
         source
     }
+
+    /// Read one named Product field from the exact source spelling.
+    ///
+    /// The default keeps the common unwrapped access free of redundant
+    /// parentheses. Wrapper policies override this when their read expression
+    /// needs grouping before field access.
+    fn field(&self, source: TokenStream, name: &syn::Ident) -> TokenStream {
+        quote::quote!(#source.#name)
+    }
 }
 
 /// One already-planned child converter chain.
@@ -119,6 +132,34 @@ pub trait ProductBridge: Clone {
     fn build(&self, parts: &[(syn::Ident, TokenStream)]) -> TokenStream;
 }
 
+/// Registry-owned tuple representation for Product intermediates.
+///
+/// Adapters declare only the ordered child intermediate types. Tuple indexing
+/// and construction follow from `Shape::Product`, so they belong to the shared
+/// composer rather than to each language adapter.
+#[derive(Clone)]
+pub struct TupleProduct {
+    /// One intermediate type per Product position.
+    pub parts: Vec<syn::Type>,
+}
+
+impl ProductBridge for TupleProduct {
+    fn intermediate(&self) -> syn::Type {
+        let parts = &self.parts;
+        syn::parse_quote!((#(#parts,)*))
+    }
+
+    fn part(&self, value: TokenStream, index: usize, _name: &syn::Ident) -> TokenStream {
+        let index = syn::Index::from(index);
+        quote::quote!((#value).#index)
+    }
+
+    fn build(&self, parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
+        let values = parts.iter().map(|(_, value)| value);
+        quote::quote!((#(#values,)*))
+    }
+}
+
 /// One Product position and its resolved child chain.
 #[derive(Clone)]
 pub struct ProductPart<C> {
@@ -126,6 +167,8 @@ pub struct ProductPart<C> {
     pub name: syn::Ident,
     /// Child converter selected by the recipe driver.
     pub child: C,
+    /// How the part is reached through its containing source value.
+    pub mode: Mode,
     /// Wrap the converted child in `MaybeUninit` in the intermediate value.
     pub hold_uninit: bool,
 }
@@ -208,6 +251,7 @@ where
         let fallible = self.parts.iter().any(|part| part.child.call().fallible());
         let body = match self.direction {
             Direction::Construct => {
+                let canonical_source = self.source_policy.spell(self.source.unwrapped(), emit);
                 let fields: Vec<_> = self
                     .parts
                     .iter()
@@ -221,18 +265,23 @@ where
                     .collect();
                 let names = fields.iter().map(|(name, _)| name);
                 let values = fields.iter().map(|(_, value)| value);
-                let canonical = quote::quote!(#source { #(#names: #values),* });
+                let canonical = quote::quote!(#canonical_source { #(#names: #values),* });
                 let built = self.source_policy.build(canonical);
                 syn::parse2(built).expect("a Product source constructor is a valid expression")
             }
             Direction::Deconstruct => {
-                let value = self.source_policy.read(quote::quote!(v));
                 let fields: Vec<_> = self
                     .parts
                     .iter()
                     .map(|part| {
                         let name = part.name.clone();
-                        let child = child_value(&part.child, quote::quote!((#value).#name));
+                        let field = self.source_policy.field(quote::quote!(v), &name);
+                        let field = match part.mode {
+                            Mode::Owned => field,
+                            Mode::Shared => quote::quote!(&(#field)),
+                            Mode::Exclusive => quote::quote!(&mut (#field)),
+                        };
+                        let child = child_value(&part.child, field);
                         let child = if part.hold_uninit {
                             quote::quote!(::core::mem::MaybeUninit::new(#child))
                         } else {

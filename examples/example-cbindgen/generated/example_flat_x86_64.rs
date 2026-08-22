@@ -228,9 +228,9 @@ pub(crate) unsafe fn __cbg_in_Calculator(
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Caption(v: caption_t) -> example_flat::Caption {
     example_flat::Caption {
-        id: __cbg_in_u64((v).id),
-        text: __cbg_in_String_field((v).text),
-        emphatic: __cbg_in_bool((v).emphatic),
+        id: __cbg_in_u64(v.id),
+        text: __cbg_in_String_field(v.text),
+        emphatic: __cbg_in_bool(v.emphatic),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -238,16 +238,16 @@ pub(crate) unsafe fn __cbg_in_Drawing(
     v: drawing_t,
 ) -> ::core::result::Result<example_flat::Drawing, ::std::string::String> {
     ::core::result::Result::Ok(example_flat::Drawing {
-        id: __cbg_in_u64((v).id),
-        shape: __cbg_in_Shape((v).shape)?,
+        id: __cbg_in_u64(v.id),
+        shape: __cbg_in_Shape(v.shape)?,
     })
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Foo(v: foo_t) -> example_flat::Foo {
     example_flat::Foo {
-        id: __cbg_in_u64((v).id),
-        x86_64_field: __cbg_in_u64((v).x86_64_field),
-        stable_field: __cbg_in_u64((v).stable_field),
+        id: __cbg_in_u64(v.id),
+        x86_64_field: __cbg_in_u64(v.x86_64_field),
+        stable_field: __cbg_in_u64(v.stable_field),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -651,16 +651,16 @@ pub(crate) fn __cbg_out_Calculator(v: example_flat::Calculator) -> *mut calculat
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Caption(v: example_flat::Caption) -> caption_t {
     caption_t {
-        id: __cbg_out_u64((v).id),
-        text: __cbg_out_String((v).text),
-        emphatic: __cbg_out_bool_field((v).emphatic),
+        id: __cbg_out_u64(v.id),
+        text: __cbg_out_String(v.text),
+        emphatic: __cbg_out_bool_field(v.emphatic),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Drawing(v: example_flat::Drawing) -> drawing_t {
     drawing_t {
-        id: __cbg_out_u64((v).id),
-        shape: __cbg_out_Shape((v).shape),
+        id: __cbg_out_u64(v.id),
+        shape: __cbg_out_Shape(v.shape),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -670,9 +670,9 @@ pub(crate) fn __cbg_out_Error(v: example_flat::Error) -> *mut ::core::ffi::c_cha
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Foo(v: example_flat::Foo) -> foo_t {
     foo_t {
-        id: __cbg_out_u64((v).id),
-        x86_64_field: __cbg_out_u64((v).x86_64_field),
-        stable_field: __cbg_out_u64((v).stable_field),
+        id: __cbg_out_u64(v.id),
+        x86_64_field: __cbg_out_u64(v.x86_64_field),
+        stable_field: __cbg_out_u64(v.stable_field),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]

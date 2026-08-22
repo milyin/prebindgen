@@ -259,20 +259,14 @@ fn tagged_union_as_data_struct_field() {
     );
     // The field's decode carries the union's fallibility up into the struct's,
     // so a bad tag in a nested union cannot be silently skipped.
-    assert!(
-        compact.contains("shape:__cbg_in_Shape((v).shape)?,"),
-        "{src}"
-    );
+    assert!(compact.contains("shape:__cbg_in_Shape(v.shape)?,"), "{src}");
     assert!(
         compact.contains("fn__cbg_in_Drawing(v:drawing_t,)->::core::result::Result<"),
         "{src}"
     );
     // The union's own conversion already produces the `MaybeUninit` the
     // mirror field holds, so the struct passes it through.
-    assert!(
-        compact.contains("shape:__cbg_out_Shape((v).shape),"),
-        "{src}"
-    );
+    assert!(compact.contains("shape:__cbg_out_Shape(v.shape),"), "{src}");
 }
 
 /// A union nested inside a **struct payload** of another union. The record

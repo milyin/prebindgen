@@ -24,6 +24,7 @@ pub(crate) fn callback_input(
     ext: &Declarations,
     args: &[prebindgen_registry::flat::TypeRef],
     registry: &impl Conversions,
+    arg_fragments: Option<&[&crate::jni::compile::JFrag]>,
     emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     // Human-readable tag for attach/log messages.
@@ -129,7 +130,12 @@ pub(crate) fn callback_input(
             let (leaf_stmts, leaf_args) = encode_plan_leaves(
                 ext,
                 registry,
-                crate::jni::emit::Delivered::of(plan),
+                crate::jni::emit::Delivered::with_chain(
+                    plan,
+                    arg_fragments
+                        .and_then(|fragments| fragments.get(i))
+                        .and_then(|fragment| fragment.product_chain()),
+                ),
                 &obj_idents,
                 &quote!(__cb_elem),
                 &fail,
@@ -193,7 +199,12 @@ pub(crate) fn callback_input(
             let (stmts, arg_exprs) = encode_plan_leaves(
                 ext,
                 registry,
-                crate::jni::emit::Delivered::of(plan),
+                crate::jni::emit::Delivered::with_chain(
+                    plan,
+                    arg_fragments
+                        .and_then(|fragments| fragments.get(i))
+                        .and_then(|fragment| fragment.product_chain()),
+                ),
                 &obj_idents,
                 &quote!(#cb_arg),
                 &fail,

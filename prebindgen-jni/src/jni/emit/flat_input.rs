@@ -937,6 +937,8 @@ fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
 /// [`build_flat_input_plan`] and consumed by all three codegen sites.
 pub(crate) struct FlatInputPlan {
     pub leaves: Vec<FlatLeaf>,
+    /// Registry-composed source converter over those leaves, when available.
+    pub chain: Option<crate::jni::compile::ProductChain>,
     pub root: FlatStructNode,
     /// `true` when the source fn takes `&Struct` — the call site passes `&arg`.
     pub by_ref: bool,
@@ -1225,6 +1227,9 @@ pub(crate) fn build_flat_input_plan(
         return Ok(None);
     };
     let leaves: Vec<FlatLeaf> = wires.iter().map(|w| FlatLeaf::of(param_name, w)).collect();
+    let chain = ext
+        .product_chain(arg, prebindgen_registry::recipe::Direction::Construct)
+        .filter(|chain| chain.layout.leaf_count() == leaves.len());
 
     // 3. The tree the Rust side rebuilds through, over those same wires in the
     //    order the recipe states them.
@@ -1250,6 +1255,7 @@ pub(crate) fn build_flat_input_plan(
         .any(|f| matches!(f, FlatFieldNode::Nested { .. }));
     Ok(Some(FlatInputPlan {
         leaves,
+        chain,
         root,
         by_ref,
         contains_nested,
@@ -1429,18 +1435,48 @@ fn build_flat_struct_node(
     })
 }
 
-/// Render the native reconstruct for a [`FlatInputPlan`]: decode each leaf
-/// param with its per-field converter (lazily, inside the `present` branch for
-/// an `Option<struct>`) and bind the rebuilt struct to `arg_ident`. Each decode
-/// failure routes through `signal_error` (the per-call sink) and returns the
-/// function `on_err` sentinel. Returns the prelude statements and the call
-/// argument (`arg` or `&arg`).
+/// Render native reconstruction for a [`FlatInputPlan`]. A registry Product
+/// descriptor decodes and constructs the whole value in one call when the
+/// declared layout matches exactly; irregular layouts retain the leaf fallback.
+/// Failures route through `signal_error` and return the function `on_err`
+/// sentinel. Returns the prelude and call argument (`arg` or `&arg`).
 pub(crate) fn render_flat_input_decode(
     plan: &FlatInputPlan,
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
     emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, TokenStream) {
+    if let Some(chain) = &plan.chain {
+        let leaves: Vec<syn::Ident> = plan
+            .leaves
+            .iter()
+            .map(|leaf| leaf.native_ident.clone())
+            .collect();
+        let intermediate = chain.layout.expression(&leaves);
+        let converter = &chain.ident;
+        let prelude = quote! {
+            let #arg_ident = match #converter(&mut env, #intermediate) {
+                ::core::result::Result::Ok(__value) => __value,
+                ::core::result::Result::Err(__error) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__error.to_string(),
+                    );
+                    return #on_err;
+                }
+            };
+        };
+        let borrowed = if plan.by_ref {
+            quote!(&#arg_ident)
+        } else {
+            quote!(#arg_ident)
+        };
+        return (prelude, plan.target.wrap_arg(borrowed));
+    }
     let reconstruct = render_flat_struct_node(plan, &plan.root, Some(&plan.target), on_err, emit);
     let root_binding = &plan.root.binding;
     let prelude = quote! {

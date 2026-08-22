@@ -189,9 +189,16 @@ impl syn::visit_mut::VisitMut for QualifyLengthPaths<'_> {
     }
 }
 
-/// If `ty` is `JObject` / `JString` / `JByteArray` (no explicit angle args),
-/// splice in `<'<life>>`. Otherwise return `ty` unchanged.
+/// Add the generated function lifetime to every JNI reference in an
+/// intermediate type, including references nested in registry-owned tuples.
 pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn::Type {
+    if let syn::Type::Tuple(tuple) = ty {
+        let mut tuple = tuple.clone();
+        for elem in &mut tuple.elems {
+            *elem = annotate_jobject_with_lifetime(elem, life);
+        }
+        return syn::Type::Tuple(tuple);
+    }
     if let syn::Type::Path(tp) = ty {
         if let Some(last) = tp.path.segments.last() {
             if crate::jni::wire_access::is_jni_reference_wire(ty)
@@ -292,12 +299,19 @@ pub(crate) fn wire_short(wire: &syn::Type) -> String {
 }
 
 pub(crate) fn hash_pair(rust: &TokenStream, wire: &syn::Type) -> u64 {
+    hash_name_pair(&rust.to_string(), wire)
+}
+
+/// Hash the canonical source name and intermediate type used in a converter
+/// identifier. Late plans pass a `TypeKey` string so naming never requires
+/// access to Rust syntax; legacy rendered converters pass their token spelling.
+pub(crate) fn hash_name_pair(source: &str, wire: &syn::Type) -> u64 {
     use std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
     };
     let mut h = DefaultHasher::new();
-    rust.to_string().hash(&mut h);
+    source.hash(&mut h);
     "::".hash(&mut h);
     wire.to_token_stream().to_string().hash(&mut h);
     h.finish()

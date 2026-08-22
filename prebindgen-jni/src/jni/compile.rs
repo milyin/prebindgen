@@ -75,6 +75,10 @@ pub(crate) struct JFrag {
     pub(crate) conv: ConverterImpl<KotlinMeta>,
     pub(crate) rust: crate::jni::chain::JFunction,
     pub(crate) yields: Yield,
+    /// Shape of the single adapter-side intermediate over flattened ABI leaves.
+    pub(crate) layout: Option<JLayout>,
+    /// Product element retained by a containing sequence for callback folding.
+    pub(crate) nested_product: Option<ProductChain>,
     /// The wire values this crossing occupies, when it occupies more than the
     /// one `conv.destination` names.
     ///
@@ -105,6 +109,45 @@ pub(crate) struct JFrag {
     /// own conversion to emit, so "has wires" is the wrong test for what to
     /// leave out of the file.
     pub(crate) composed_only: bool,
+}
+
+/// Structural JNI intermediate layout. Leaves are ABI values; Products nest
+/// them into the one tuple type consumed or produced by the registry chain.
+#[derive(Clone)]
+pub(crate) enum JLayout {
+    Leaf,
+    Product(Vec<JLayout>),
+}
+
+impl JLayout {
+    pub(crate) fn leaf_count(&self) -> usize {
+        match self {
+            Self::Leaf => 1,
+            Self::Product(parts) => parts.iter().map(Self::leaf_count).sum(),
+        }
+    }
+
+    pub(crate) fn expression(&self, leaves: &[syn::Ident]) -> TokenStream {
+        fn build(layout: &JLayout, leaves: &[syn::Ident], next: &mut usize) -> TokenStream {
+            match layout {
+                JLayout::Leaf => {
+                    let leaf = &leaves[*next];
+                    *next += 1;
+                    quote!(#leaf)
+                }
+                JLayout::Product(parts) => {
+                    let values = parts.iter().map(|part| build(part, leaves, next));
+                    quote!((#(#values,)*))
+                }
+            }
+        }
+        assert_eq!(self.leaf_count(), leaves.len());
+        build(self, leaves, &mut 0)
+    }
+
+    pub(crate) fn pattern(&self, leaves: &[syn::Ident]) -> TokenStream {
+        self.expression(leaves)
+    }
 }
 
 /// One step of the walk from the object a site names to a wire's value.
@@ -459,19 +502,18 @@ impl Carrier for JFrag {
 }
 
 impl JFrag {
-    /// A conversion this adapter built without the compiler.
+    /// A callback conversion built by the legacy fallback.
     ///
-    /// A callback crossing is the only one: `JniGen::compile_crossing` answers
-    /// it with `dispatch_fn_input` rather than through a recipe, so there is no
-    /// `At` to take a crossing's own mode from. It is an owned, self-sufficient
-    /// value — a callback is delivered as a JVM object the wrapper holds — and
-    /// nothing composes a callback as an inner, so no recipe ever reads this
-    /// `Yield`. Goes with the derived callback recipe.
+    /// Registry recipes handle composable callback products. Irregular layouts
+    /// still enter through this compatibility path and are indexed as fragments
+    /// so downstream emitters use the same lookup in either case.
     pub(crate) fn by_hand(ty: TypeKey, conv: ConverterImpl<KotlinMeta>) -> Self {
         let rust = crate::jni::chain::JFunction::complete(conv.function.clone());
         Self {
             conv,
             rust,
+            layout: Some(JLayout::Leaf),
+            nested_product: None,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -489,6 +531,8 @@ impl JFrag {
         Self {
             conv,
             rust,
+            layout: Some(JLayout::Leaf),
+            nested_product: None,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -498,6 +542,25 @@ impl JFrag {
                 validity,
             },
         }
+    }
+
+    fn product_chain_unmarked(&self) -> Option<ProductChain> {
+        if !self.composed_only {
+            if let Some(layout @ JLayout::Product(_)) = self.layout.clone() {
+                return Some(ProductChain {
+                    ident: self.conv.converter_ident().clone(),
+                    layout,
+                    rust: self.rust.clone(),
+                });
+            }
+        }
+        self.nested_product.clone()
+    }
+
+    pub(crate) fn product_chain(&self) -> Option<ProductChain> {
+        let chain = self.product_chain_unmarked()?;
+        chain.mark_reachable();
+        Some(chain)
     }
 }
 
@@ -649,6 +712,21 @@ impl<R: Conversions> JCompile<'_, R> {
             if !writes_reach_the_caller {
                 return None;
             }
+            if ty.erased_wrappers().is_empty()
+                && self
+                    .decls
+                    .types
+                    .get(&inner.key())
+                    .is_some_and(|cfg| cfg.is_opaque())
+            {
+                let mut c = self.decls.opaque_handle_input(inner, emit);
+                c.metadata.projection = c.metadata.projection.map(|projection| Projection {
+                    owned: false,
+                    ..projection
+                });
+                c.subs = vec![inner.key()];
+                return Some(c);
+            }
             let mutable = ty.is_exclusive_borrow();
             let mut c = self.decls.input_wrapper_shape(
                 WrapperShape::Borrow { mutable },
@@ -671,6 +749,183 @@ impl<R: Conversions> JCompile<'_, R> {
         }
     }
 
+    /// Plan an owned opaque input without spelling its Rust type. Product
+    /// fields use this ordinary atomic fragment; final emission performs the
+    /// only `TypeRef` -> Rust syntax conversion.
+    fn planned_owned_handle(&self, at: At<'_>) -> Option<JFrag> {
+        if at.crossing.direction() != Direction::Construct || at.crossing.mode() != Mode::Owned {
+            return None;
+        }
+        let source = at.crossing.spelled();
+        let cfg = self.decls.types.get(&source.key())?;
+        if !cfg.is_opaque() || !source.erased_wrappers().is_empty() {
+            return None;
+        }
+        let TypeKind::Named { id, .. } = source.unwrapped().kind() else {
+            return None;
+        };
+        let source_ident = id.ident()?;
+        let module = self.decls.fn_module(self.registry, &source_ident);
+        let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
+        let base = crate::jni::chain::planned_name(Direction::Construct, source, &wire);
+        let ident = format_ident!("{base}_owned");
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let rust =
+            crate::jni::chain::JFunction::owned_handle(crate::jni::chain::JOwnedHandlePlan {
+                ident,
+                source: source.clone(),
+                module,
+            });
+        Some(JFrag {
+            conv: ConverterImpl {
+                destination: wire,
+                function: marker,
+                pre_stages: Vec::new(),
+                niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
+                metadata: self.decls.opaque_leaf_meta(source.key()),
+                subs: Vec::new(),
+            },
+            rust,
+            layout: Some(JLayout::Leaf),
+            nested_product: None,
+            wires: None,
+            out_wires: None,
+            composed_only: false,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: Mode::Owned,
+                validity: Validity::SelfSufficient,
+            },
+        })
+    }
+
+    /// Describe a Product as one tuple intermediate. The registry owns the
+    /// field walk, tuple construction/destruction, child calls and `?`
+    /// propagation; JNI contributes only child converter contracts and ABI
+    /// layout metadata.
+    fn planned_product(&self, at: At<'_>, parts: Parts<'_, Self>) -> Option<JFrag> {
+        if parts.iter().any(|(_, frag)| frag.composed_only) {
+            return None;
+        }
+        let layouts = parts
+            .iter()
+            .map(|(_, frag)| frag.layout.clone())
+            .collect::<Option<Vec<_>>>()?;
+        let source = at.crossing.value();
+        let wrappers = source.erased_wrappers();
+        let direction = at.crossing.direction();
+        if wrappers.iter().any(|wrapper| {
+            let Some(ops) = super::trait_impl::wrapper_ops(wrapper) else {
+                return true;
+            };
+            match direction {
+                Direction::Construct => ops.build.is_none(),
+                Direction::Deconstruct => at.crossing.mode() != Mode::Owned || ops.read.is_none(),
+            }
+        }) {
+            return None;
+        }
+        let TypeKind::Named { id, .. } = source.unwrapped().kind() else {
+            return None;
+        };
+        let source_ident = id.ident()?;
+        let source_module = self.decls.fn_module(self.registry, &source_ident);
+        let intermediate_parts: Vec<syn::Type> = parts
+            .iter()
+            .map(|(_, frag)| frag.conv.destination.clone())
+            .collect();
+        let intermediate: syn::Type = syn::parse_quote!((#(#intermediate_parts,)*));
+        let ident =
+            crate::jni::chain::planned_name(direction, at.crossing.spelled(), &intermediate);
+        let dependencies = parts
+            .iter()
+            .map(|(_, fragment)| fragment.rust.clone())
+            .collect();
+        let children = parts
+            .iter()
+            .map(|(part, frag)| {
+                let stages = match direction {
+                    Direction::Construct => frag
+                        .conv
+                        .input_stage_order()
+                        .map(|(_, stage)| stage.function.sig.ident.clone())
+                        .collect(),
+                    Direction::Deconstruct => frag
+                        .conv
+                        .output_stage_order()
+                        .map(|(_, stage)| stage.function.sig.ident.clone())
+                        .collect(),
+                };
+                let child = match direction {
+                    Direction::Construct => crate::jni::chain::JChild::input(
+                        frag.conv.converter_ident().clone(),
+                        stages,
+                        if matches!(frag.conv.destination, syn::Type::Ptr(_))
+                            || matches!(&frag.layout, Some(JLayout::Product(_)))
+                        {
+                            crate::jni::chain::JValueUse::Direct
+                        } else {
+                            crate::jni::chain::JValueUse::SharedRef
+                        },
+                    ),
+                    Direction::Deconstruct => crate::jni::chain::JChild::output(
+                        frag.conv.converter_ident().clone(),
+                        stages,
+                        match part.mode {
+                            Mode::Owned => crate::jni::chain::JValueUse::Direct,
+                            Mode::Shared | Mode::Exclusive => crate::jni::chain::JValueUse::Cloned,
+                        },
+                    ),
+                };
+                prebindgen_registry::chain::ProductPart {
+                    name: format_ident!("{}", part.name),
+                    child,
+                    mode: part.mode,
+                    hold_uninit: false,
+                }
+            })
+            .collect();
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let rust = crate::jni::chain::JFunction::product(crate::jni::chain::JProductPlan {
+            reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
+            dependencies,
+            ident,
+            mode: at.crossing.mode(),
+            chain: prebindgen_registry::chain::Product {
+                source: source.clone(),
+                direction,
+                source_policy: crate::jni::chain::JSource {
+                    wrappers,
+                    module: Some(source_module),
+                },
+                bridge: prebindgen_registry::chain::TupleProduct {
+                    parts: intermediate_parts,
+                },
+                parts: children,
+            },
+        });
+        Some(JFrag {
+            conv: ConverterImpl {
+                destination: intermediate,
+                function: marker,
+                pre_stages: Vec::new(),
+                niches: Niches::empty(),
+                metadata: KotlinMeta::default(),
+                subs: parts.iter().map(|(part, _)| part.ty.key()).collect(),
+            },
+            rust,
+            layout: Some(JLayout::Product(layouts)),
+            nested_product: None,
+            wires: None,
+            out_wires: None,
+            composed_only: false,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+        })
+    }
     /// Plan an ordinary single-intermediate Optional without spelling its
     /// source type or generating its Rust body.
     ///
@@ -691,7 +946,15 @@ impl<R: Conversions> JCompile<'_, R> {
         }
 
         let wrappers = source.erased_wrappers();
-        if wrappers.iter().any(|wrapper| *wrapper != "Box") {
+        if wrappers.iter().any(|wrapper| {
+            let Some(ops) = super::trait_impl::wrapper_ops(wrapper) else {
+                return true;
+            };
+            match direction {
+                Direction::Construct => ops.build.is_none(),
+                Direction::Deconstruct => ops.read.is_none(),
+            }
+        }) {
             return None;
         }
 
@@ -757,6 +1020,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         crate::jni::chain::JChild::output(
                             inner.conv.converter_ident().clone(),
                             stages,
+                            crate::jni::chain::JValueUse::Direct,
                         ),
                         inner_wire,
                         rest,
@@ -769,6 +1033,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         crate::jni::chain::JChild::output(
                             inner.conv.converter_ident().clone(),
                             stages,
+                            crate::jni::chain::JValueUse::Direct,
                         ),
                         syn::parse_quote!(jni::objects::JObject),
                         Niches::empty(),
@@ -801,17 +1066,21 @@ impl<R: Conversions> JCompile<'_, R> {
             kotlin_name
         };
         let ident = crate::jni::chain::planned_name(direction, source, &destination);
-        let marker: syn::ItemFn = syn::parse_quote!(fn #ident() {});
+        let marker = crate::jni::chain::planned_marker(&ident);
         let rust = crate::jni::chain::JFunction::optional(crate::jni::chain::JOptionalPlan {
             ident,
             chain: prebindgen_registry::chain::Optional {
                 source: source.clone(),
                 direction,
-                source_policy: crate::jni::chain::JSource { wrappers },
+                source_policy: crate::jni::chain::JSource {
+                    wrappers,
+                    module: None,
+                },
                 bridge,
                 child,
             },
         });
+        inner.rust.mark_reachable();
         Some(JFrag {
             conv: ConverterImpl {
                 destination,
@@ -825,6 +1094,8 @@ impl<R: Conversions> JCompile<'_, R> {
                 subs: vec![element.key()],
             },
             rust,
+            layout: Some(JLayout::Leaf),
+            nested_product: None,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -846,6 +1117,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let emit = cx.emit();
+        if let Some(frag) = self.planned_owned_handle(at) {
+            return Ok(frag);
+        }
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .decls
@@ -859,7 +1133,8 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     let TypeKind::Callback { args } = ty.unwrapped().kind() else {
                         return None;
                     };
-                    self.decls.dispatch_fn_input(args, self.registry, emit)
+                    self.decls
+                        .dispatch_fn_input(args, self.registry, None, emit)
                 }),
             Direction::Deconstruct => self
                 .decls
@@ -906,6 +1181,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // there is no boxed `Option` on this wire to decode.
         if at.crossing.direction() == Direction::Construct && inner.wires.is_none() {
             if let Some(pair) = self.decoupled_optional(at, inner, &frag.conv) {
+                frag.layout = None;
                 frag.wires = Some(pair);
                 return Ok(frag);
             }
@@ -935,6 +1211,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             // non-nullable slot still has to hold something when the value is
             // absent — the flag is what tells Rust to ignore it.
             wires.extend(inner_wires.iter().map(gated));
+            frag.layout = None;
             frag.wires = Some(wires);
         }
         Ok(frag)
@@ -945,7 +1222,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         cx: &mut Cx<'_>,
         at: At<'_>,
         _elements: Mode,
-        _inner: &JFrag,
+        inner: &JFrag,
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let emit = cx.emit();
@@ -966,7 +1243,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         .output_transparent_bridge(ty, self.registry, emit)
                 }),
         };
-        self.wrap(at, "no JNI representation for this run", conv)
+        let mut frag = self.wrap(at, "no JNI representation for this run", conv)?;
+        frag.nested_product = inner.product_chain_unmarked();
+        Ok(frag)
     }
 
     fn construct(
@@ -1068,19 +1347,15 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 None => wires.push(self.field_wire(part, frag)),
             }
         }
-        // Only the wire list is composed here. The conversion that reads these
-        // several values and rebuilds the struct is what the emitter switch
-        // brings; until then this recipe is compiled but never taken, so it
-        // carries a marker rather than a conversion it would have to invent.
-        // `prebindgen-c` does the same for a union arm, and for the same
-        // reason: a product's parts do not always assemble into a function of
-        // their own.
-        let mut frag = JFrag::new(
-            at,
-            self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
-        );
+        let mut frag = self.planned_product(at, parts).unwrap_or_else(|| {
+            let mut marker = JFrag::new(
+                at,
+                self.parts_marker(parts.iter().map(|(part, _)| part.ty.key()).collect()),
+            );
+            marker.composed_only = true;
+            marker
+        });
         frag.wires = Some(wires);
-        frag.composed_only = true;
         Ok(frag)
     }
 
@@ -1123,14 +1398,16 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         &mut self,
         cx: &mut Cx<'_>,
         at: At<'_>,
-        _args: &[&JFrag],
+        arg_fragments: &[&JFrag],
         _result: Option<&JFrag>,
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let TypeKind::Callback { args } = ty.unwrapped().kind() else {
             return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
-        let conv = self.decls.dispatch_fn_input(args, self.registry, cx.emit());
+        let conv =
+            self.decls
+                .dispatch_fn_input(args, self.registry, Some(arg_fragments), cx.emit());
         self.wrap(at, "undeclared callback signature", conv)
     }
 
@@ -1284,6 +1561,34 @@ impl crate::jni::Declarations {
             .or_else(|| compiled.fragment(&key, Direction::Construct))?
             .wires
             .clone()
+    }
+
+    /// The exact `parts` recipe converter for a crossing. This deliberately
+    /// does not fall back to the default row: call sites asking for a composed
+    /// Product must never accidentally invoke an unrelated terminal converter.
+    pub(crate) fn product_chain(&self, ty: &TypeRef, direction: Direction) -> Option<ProductChain> {
+        let crossing = prebindgen_registry::recipe::Crossing::new(ty.clone(), direction);
+        let row = self
+            .recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::parts())
+            .cloned()?;
+        let compiled = self.compiled.borrow();
+        let frag = compiled.recipe_fragment(&ty.key(), &row)?;
+        frag.product_chain()
+    }
+}
+
+/// Callable registry-composed Product and its ABI-leaf layout.
+#[derive(Clone)]
+pub(crate) struct ProductChain {
+    pub(crate) ident: syn::Ident,
+    rust: crate::jni::chain::JFunction,
+    pub(crate) layout: JLayout,
+}
+
+impl ProductChain {
+    fn mark_reachable(&self) {
+        self.rust.mark_reachable();
     }
 }
 
@@ -1524,28 +1829,25 @@ impl<R: Conversions> JCompile<'_, R> {
         }
     }
 
-    /// The values a `data_class` hands out, composed by
-    /// [`Declarations::struct_out_wires`].
-    ///
-    /// The part fragments are not read. Whether a field nests is the model's
-    /// answer and the declaration's, which is what lets the same composition
-    /// run before `resolve` — see that method for why that matters.
+    /// Describe a `data_class` as one tuple intermediate while retaining the
+    /// independently flattened ABI leaves used by Kotlin signatures.
     fn out_product(&self, at: At<'_>, parts: Parts<'_, Self>) -> JFrag {
-        match self
+        let Some(wires) = self
             .decls
             .struct_out_wires(self.registry, at.crossing.value())
-        {
-            Some(wires) => {
-                let mut frag = JFrag::new(
-                    at,
-                    self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
-                );
-                frag.out_wires = Some(wires);
-                frag.composed_only = true;
-                frag
-            }
-            None => JFrag::new(at, self.parts_marker(Vec::new())),
-        }
+        else {
+            return JFrag::new(at, self.parts_marker(Vec::new()));
+        };
+        let mut frag = self.planned_product(at, parts).unwrap_or_else(|| {
+            let mut marker = JFrag::new(
+                at,
+                self.parts_marker(parts.iter().map(|(part, _)| part.ty.key()).collect()),
+            );
+            marker.composed_only = true;
+            marker
+        });
+        frag.out_wires = Some(wires);
+        frag
     }
 
     /// The values a **value form** hands out: call the accessor once, then read

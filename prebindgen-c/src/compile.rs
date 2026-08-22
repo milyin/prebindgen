@@ -508,6 +508,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 ProductField {
                     name: format_ident!("{}", part.name),
                     converter: frag.function.call().clone(),
+                    mode: part.mode,
                     hold_uninit,
                 }
             })

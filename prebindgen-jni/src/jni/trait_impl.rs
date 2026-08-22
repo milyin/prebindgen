@@ -351,7 +351,7 @@ impl Declarations {
     /// plus the [`Projection`] that folds outward through wrappers (owned,
     /// [`FoldStrategy::Base`]). The single seam where a Rust type is
     /// first marked a closeable native handle.
-    fn opaque_leaf_meta(&self, key: TypeKey) -> KotlinMeta {
+    pub(crate) fn opaque_leaf_meta(&self, key: TypeKey) -> KotlinMeta {
         KotlinMeta {
             projection: Some(Projection {
                 leaf_key: key,
@@ -741,7 +741,7 @@ pub(crate) enum WrapperShape {
 /// (the adapter decides what it can rebuild); `every_erased_wrapper_has_ops`
 /// fails if the two disagree, so a wrapper cannot become transparent without
 /// this file having an answer for it.
-struct WrapperOps {
+pub(crate) struct WrapperOps {
     /// Its last path segment, as `TRANSPARENT_WRAPPERS` spells it.
     name: &'static str,
     /// Move the inner value **out**. `None` when the representation does not
@@ -753,9 +753,9 @@ struct WrapperOps {
     /// generated code runs through the consumer's own lints, where that is a
     /// denial. A consumer that splices into a tighter position (a method
     /// receiver, a field base) parenthesizes at its own site.
-    read: Option<fn(TokenStream) -> TokenStream>,
+    pub(crate) read: Option<fn(TokenStream) -> TokenStream>,
     /// Build it **from** the inner value. `None` when not supported.
-    build: Option<fn(TokenStream) -> TokenStream>,
+    pub(crate) build: Option<fn(TokenStream) -> TokenStream>,
 }
 
 /// The operations table. One recipe per wrapper the model erases.
@@ -792,7 +792,7 @@ const WRAPPER_OPS: &[WrapperOps] = &[
     },
 ];
 
-fn wrapper_ops(name: &str) -> Option<&'static WrapperOps> {
+pub(crate) fn wrapper_ops(name: &str) -> Option<&'static WrapperOps> {
     WRAPPER_OPS.iter().find(|w| w.name == name)
 }
 
@@ -1103,7 +1103,6 @@ impl Declarations {
             return None;
         }
         let inner_wire = inner.destination.clone();
-        let inner_conv = inner.function.sig.ident.clone();
         let outer_ty = produced.key();
         let outer_spelled = produced.spell(emit);
         let name = input_name(&outer_spelled, &inner_wire);
@@ -1114,9 +1113,15 @@ impl Declarations {
                 env: &mut jni::JNIEnv<'env>,
                 v: &#inner_wire,
             ) -> ::core::result::Result<Option<OwnedObject<#t1_ty>>, __JniErr> {
-                Ok({
-                    if *v == 0 { None } else { Some(#inner_conv(env, v)?) }
-                })
+                if *v == 0 {
+                    Ok(None)
+                } else if (*v & 1) == 1 {
+                    Err(<__JniErr as ::core::convert::From<String>>::from(
+                        "Operation on a closed native handle.".to_string(),
+                    ))
+                } else {
+                    Ok(Some(unsafe { OwnedObject::from_raw(*v as *const #t1_ty) }))
+                }
             }
         );
         let kotlin_name = self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
@@ -1443,11 +1448,9 @@ impl JniGenBuilder {
         // built out of the conversions for its inners, which are compiled
         // first. That is the same order the converter table was filled in, so
         // a fragment is there exactly when a table entry would have been.
-        // A callback is still answered without the compiler — see
-        // `compile_crossing` — so no fragment carries its conversion and the
-        // fragment list alone would not reach the file. Collected here rather
-        // than papered over: this list empties when the derived callback recipe
-        // takes over.
+        // Callback layouts that recipes cannot express (currently sums and other
+        // irregular arms) fall back to the legacy whole-callback emitter.
+        // Registry-composable scalar and sequence products skip this list.
         let mut uncompiled: Vec<syn::ItemFn> = Vec::new();
         // Compositions that refused. See `compile_crossing`: these are adapter
         // invariants, reported together once the walk is done.
@@ -1463,14 +1466,17 @@ impl JniGenBuilder {
                 let conv =
                     decls.compile_crossing(&mut compiler, crossing, built, emit, &mut refusals);
                 *decls.compiled.borrow_mut() = compiler.finish();
-                if let (Some(c), true) =
-                    (conv.as_ref(), decls.is_callback_crossing(crossing, built))
-                {
+                let (dir, key) = crossing;
+                let compiled_by_recipe = decls.compiled.borrow().fragment(key, *dir).is_some();
+                if let (Some(c), true, false) = (
+                    conv.as_ref(),
+                    decls.is_callback_crossing(crossing, built),
+                    compiled_by_recipe,
+                ) {
                     uncompiled.push(c.function.clone());
-                    // File it as this crossing's fragment even though no recipe
-                    // built it, so every emitter has one lookup rather than a
-                    // fall-back for the one crossing kind the compiler skips.
-                    let (dir, key) = crossing;
+                    // Index a legacy fallback with the same lookup used for
+                    // recipe-built callbacks, while keeping its complete
+                    // function in `uncompiled`.
                     decls.compiled.borrow_mut().record(
                         prebindgen_registry::recipe::CrossingKey {
                             ty: key.clone(),
@@ -1492,77 +1498,16 @@ impl JniGenBuilder {
             }
             .into());
         }
-        // What the compilation produced, kept for emission. The converter table
-        // stays the lookup index; this is what reaches the file.
-        let planned: HashMap<_, _> = decls
-            .compiled
-            .borrow()
-            .fragments()
-            .into_iter()
-            .filter(|fragment| fragment.rust.is_planned())
-            .map(|fragment| {
-                (
-                    fragment.rust.call().ident().to_string(),
-                    fragment.rust.clone(),
-                )
-            })
-            .collect();
-        decls.compiled_fns = decls
-            .compiled
-            .borrow()
-            .fragments()
-            .into_iter()
-            // A composed-only fragment has no conversion to emit: the `parts`
-            // recipe states what a `data_class` is made of, and the function that
-            // reads those several values and rebuilds the struct is what the
-            // emitter switch brings. Its marker would otherwise reach the file.
-            // Deliberately not "has wires" — an `Option<data_class>` has both a
-            // wire list and a conversion of its own.
-            .filter(|f| !f.composed_only)
-            // A JNI conversion already emits more than one function: a
-            // `convert!` with a fallible or binding-local step carries it as a
-            // pre-stage, and every one of them has to reach the file. This is
-            // the case the converter table could hold only because it kept a
-            // list beside the conversion; a fragment says it directly.
-            .flat_map(|f| {
-                std::iter::once(
-                    planned
-                        .get(&f.conv.converter_ident().to_string())
-                        .cloned()
-                        .unwrap_or_else(|| f.rust.clone()),
-                )
-                .chain(
-                    f.conv
-                        .pre_stages
-                        .iter()
-                        .map(|s| crate::jni::chain::JFunction::complete(s.function.clone())),
-                )
-            })
-            .chain(
-                uncompiled
-                    .into_iter()
-                    .map(crate::jni::chain::JFunction::complete),
-            )
-            .collect();
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
         decls
             .validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
-        // What each declared class hands out, composed last of all.
-        //
-        // Driven here rather than from `compile_crossing` because a
-        // `sealed_class` has **no** deconstructing crossing to be driven from:
-        // it is boundary-only, so nothing ever asks for its whole-value output
-        // conversion and the converter walk never reaches it. A `data_class`
-        // does have one, and goes through the same loop so that both sides of
-        // the same question are answered in one place.
-        //
-        // After `validate_resolved`, so a binding whose part simply has no
-        // output conversion gets the diagnostic that names the part rather than
-        // this one, which could only say that composing failed. Nothing reads
-        // the result yet; compiling it is what holds the composition to every
-        // binding this crate builds rather than to one fixture.
+        // Validate every declared decomposition. Product plans remain queryable
+        // descriptors rather than emission roots: final per-item planning marks only
+        // chains used by a concrete input, output or callback and activates nested
+        // dependencies transitively. Sealed classes need this pass because they have
+        // no deconstructing whole-value crossing.
         for key in decls.declared_decompositions() {
             let Some(ident) = key.ident() else { continue };
             let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
@@ -1583,9 +1528,6 @@ impl JniGenBuilder {
                     Some(prebindgen_registry::flat::Type::Struct(s)) => {
                         s.fields.iter().map(|f| &f.ty).collect()
                     }
-                    // A value form's parts belong to the struct its accessor
-                    // returns, not to this type — so there is nothing to
-                    // pre-check here, and the compiler's own deferral answers.
                     _ if decls.value_form_names(&registry, &ty).is_some() => Vec::new(),
                     _ => continue,
                 };
@@ -1626,8 +1568,7 @@ impl JniGenBuilder {
                     "`{key}` hands out its parts, but composing them failed: {e:?}"
                 ));
             }
-            let compiled = compiler.finish();
-            *decls.compiled.borrow_mut() = compiled;
+            *decls.compiled.borrow_mut() = compiler.finish();
         }
         if !refusals.is_empty() {
             return Err(prebindgen_registry::ScanError::AdapterInvariant {
@@ -1635,6 +1576,39 @@ impl JniGenBuilder {
             }
             .into());
         }
+        // What the compilation produced, kept for emission. The converter table
+        // stays the lookup index; this is what reaches the file.
+        decls.compiled_fns = decls
+            .compiled
+            .borrow()
+            .fragments()
+            .into_iter()
+            // A composed-only fragment has no conversion to emit: the `parts`
+            // recipe states what a `data_class` is made of, and the function that
+            // reads those several values and rebuilds the struct is what the
+            // emitter switch brings. Its marker would otherwise reach the file.
+            // Deliberately not "has wires" — an `Option<data_class>` has both a
+            // wire list and a conversion of its own.
+            .filter(|f| !f.composed_only)
+            // A JNI conversion already emits more than one function: a
+            // `convert!` with a fallible or binding-local step carries it as a
+            // pre-stage, and every one of them has to reach the file. This is
+            // the case the converter table could hold only because it kept a
+            // list beside the conversion; a fragment says it directly.
+            .flat_map(|f| {
+                std::iter::once(f.rust.clone()).chain(
+                    f.conv
+                        .pre_stages
+                        .iter()
+                        .map(|s| crate::jni::chain::JFunction::complete(s.function.clone())),
+                )
+            })
+            .chain(
+                uncompiled
+                    .into_iter()
+                    .map(crate::jni::chain::JFunction::complete),
+            )
+            .collect();
         Ok(JniGen { decls, registry })
     }
 }
@@ -1673,21 +1647,6 @@ impl Declarations {
         // The reading the scan already took for this crossing, fetched by the
         // key the crossing IS.
         let reading = built.reading(key)?;
-        // A callback is compiled whole rather than through the table. The
-        // registry derives a recipe that takes one apart into its arguments and
-        // compiles each of them, and a JniGen callback argument does not always
-        // have a conversion to compile: a sealed class reaches the JVM as a
-        // selector plus the live arm's slots, through a decomposition the table
-        // does not describe yet. Stating those arms as recipes is what lets the
-        // derived callback recipe take over, and it is a later stage than this
-        // one.
-        if matches!(dir, Direction::Construct) {
-            if let prebindgen_registry::flat::TypeKind::Callback { args } =
-                reading.unwrapped().kind()
-            {
-                return self.dispatch_fn_input(args, built, emit);
-            }
-        }
         let direction = *dir;
         let mut adapter = crate::jni::compile::JCompile {
             decls: self,
@@ -1696,12 +1655,20 @@ impl Declarations {
             site: None,
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(reading, direction);
-        let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
-        // A `data_class` also states a recipe that says what it is made of, and
-        // compiling it here is what holds the composition to every binding this
-        // crate builds rather than to one fixture. Nothing reads the result
-        // yet: `whole` is still the recipe every site takes, so a failure here is
-        // a failure to compose parts that already cross individually.
+        let fragment = match compiler.crossing(&mut adapter, &crossing) {
+            Ok(fragment) => fragment,
+            Err(_) => {
+                let prebindgen_registry::flat::TypeKind::Callback { args } =
+                    crossing.spelled().unwrapped().kind()
+                else {
+                    return None;
+                };
+                return self.dispatch_fn_input(args, built, None, emit);
+            }
+        };
+        // A `data_class` also states a recipe that says what it is made of.
+        // Compiling that named recipe equips whole-value input, output and
+        // callback paths with the same registry-owned Product descriptor.
         // The **stripped** key, so `Box<Payload>` and `&Payload` compile the
         // recipe too: all three spellings find one recipe and each gets its own
         // fragment, which is what a site taking a wrapped spelling reads.
@@ -1981,10 +1948,11 @@ impl Declarations {
         &self,
         args: &[prebindgen_registry::flat::TypeRef],
         registry: &impl Conversions,
+        arg_fragments: Option<&[&crate::jni::compile::JFrag]>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let outer_ty = build_fn_type(args, emit);
-        let (wire, body) = callback_input(self, args, registry, emit)?;
+        let (wire, body) = callback_input(self, args, registry, arg_fragments, emit)?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
         // (`Any`) — same as the unfold builder / error-sink params. The typed

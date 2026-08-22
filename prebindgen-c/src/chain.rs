@@ -9,6 +9,7 @@
 use prebindgen_registry::{
     chain::{self, Chain as _},
     flat::TypeRef,
+    recipe::Mode,
     write::RustFunction,
     Emit,
 };
@@ -111,6 +112,7 @@ impl RustFunction for CFunction {
 pub(crate) struct ProductField {
     pub(crate) name: syn::Ident,
     pub(crate) converter: CCall,
+    pub(crate) mode: Mode,
     pub(crate) hold_uninit: bool,
 }
 
@@ -136,7 +138,7 @@ impl chain::ProductBridge for CProductBridge {
     }
 
     fn part(&self, value: TokenStream, _index: usize, name: &syn::Ident) -> TokenStream {
-        quote!((#value).#name)
+        quote!(#value.#name)
     }
 
     fn build(&self, parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
@@ -175,6 +177,7 @@ impl ProductPlan {
                 .map(|field| chain::ProductPart {
                     name: field.name.clone(),
                     child: field.converter.clone(),
+                    mode: field.mode,
                     hold_uninit: field.hold_uninit,
                 })
                 .collect(),
@@ -251,11 +254,11 @@ impl chain::OptionalBridge for COptionalBridge {
     }
 
     fn build_absent(&self) -> TokenStream {
-        quote!(::core::unreachable!())
+        unreachable!("optional bridge operation does not match its planned direction")
     }
 
     fn build_present(&self, _child: TokenStream) -> TokenStream {
-        quote!(::core::unreachable!())
+        unreachable!("optional bridge operation does not match its planned direction")
     }
 }
 

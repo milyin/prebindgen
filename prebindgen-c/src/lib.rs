@@ -354,7 +354,7 @@ impl Cbindgen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
-        Ok(prebindgen_registry::write::write_rust_planned(
+        Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.gen,
             &self.gen.compiled_fns,

@@ -1198,6 +1198,32 @@ fn a_field_reach_reads_the_models_own_field() {
 }
 
 #[test]
+fn a_product_reached_through_a_borrow_lends_each_field() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Sample"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(1), Reach::Field(0)])),
+    );
+    let recipes = builder.build(&model).expect("table");
+    let mut adapter = Recorder::default();
+
+    let plan = compile_one(
+        &model,
+        &recipes,
+        &mut adapter,
+        Site {
+            owner: ident("z_get"),
+            role: Role::Return,
+        },
+        "&Sample",
+        Direction::Deconstruct,
+    );
+    assert!(plan.contains("payload=field1/&, key=field0/&"), "{plan}");
+}
+
+#[test]
 fn an_omitted_reach_contributes_no_part() {
     let model = model(&[SAMPLE]);
     let mut builder = Recipes::builder();
