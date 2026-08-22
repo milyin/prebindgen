@@ -557,13 +557,12 @@ impl JniGen {
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let ty: syn::Type = syn::parse_quote!(#ident);
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let row =
+            prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Deconstruct)
+                .row(crate::jni::recipes::parts());
         let compiled = self.decls.compiled.borrow();
         let wires = compiled
-            .recipe_fragment(
-                &reading.key(),
-                Direction::Deconstruct,
-                &crate::jni::recipes::parts(),
-            )?
+            .recipe_fragment(&reading.key(), &row)?
             .out_wires
             .clone()?;
         Some(
@@ -689,14 +688,15 @@ impl JniGen {
             true => Direction::Deconstruct,
             false => Direction::Construct,
         };
+        let row = prebindgen_registry::recipe::CrossingKey {
+            ty: TypeKey::from_ident(&ident),
+            direction,
+        }
+        .row(crate::jni::recipes::parts());
         self.decls
             .compiled
             .borrow()
-            .recipe_fragment(
-                &TypeKey::from_ident(&ident),
-                direction,
-                &crate::jni::recipes::parts(),
-            )
+            .recipe_fragment(&TypeKey::from_ident(&ident), &row)
             .is_some()
     }
 
@@ -709,12 +709,14 @@ impl JniGen {
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let key = reading.key();
+        let row = prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Construct)
+            .row(crate::jni::recipes::parts());
         let compiled = self.decls.compiled.borrow();
         // A declared class states its composition under `parts`; an optional
         // over one has no recipe of its own and composes on the recipe the registry
         // derived, which is the crossing's default.
         compiled
-            .recipe_fragment(&key, Direction::Construct, &crate::jni::recipes::parts())
+            .recipe_fragment(&key, &row)
             .or_else(|| compiled.fragment(&key, Direction::Construct))?
             .wires
             .clone()

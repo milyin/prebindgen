@@ -148,11 +148,16 @@ callback type takes `Invoke`, and the registry accepts no other shape there.
 makes about how values cross. `Recipes` is the type. The adapter fills the
 table before any of it is walked; the registry reads it and never adds to it.
 
-**Recipe.** One entry of the table — one such decision. Three things make one:
+**Recipe.** One row of the table — one such decision. Three things make one:
 
 * the **crossing** it answers — a Rust type and a direction;
-* a **name**, chosen by the adapter, since a crossing may have several recipes;
+* a **recipe name**, chosen by the adapter and meaningful within that crossing;
 * a **shape**.
+
+Names such as `whole` and `parts` are policy vocabulary and are deliberately
+reused under many crossings. `RecipeName` represents that local selector.
+`RecipeKey` pairs it with the crossing key and is the globally unique identity
+of one table row.
 
 *Why the adapter declares recipes and the model does not.* The model already
 knows how a Rust type **can** be taken apart: `Sample`'s fields are in it, and
@@ -409,29 +414,35 @@ pub struct CrossingKey {
 }
 ```
 
-`Crossing` is what a site hands the compiler; `CrossingKey` is what the table
-and the fragment memo are keyed by. The narrowing is deliberate and one-way —
-`key()` exists, its inverse does not — because a key names a recipe and a
-recipe is shared by every way its type can be written.
+`Crossing` is what a site hands the compiler; `CrossingKey` is what groups rows
+in the table. The narrowing is deliberate and one-way — `key()` exists, its
+inverse does not — because rows are shared by every way their type can be
+written. The fragment memo adds the spelled type to `RecipeKey`, since applying
+one row to `T`, `&T` and `Box<T>` can require different Rust.
 
 ### The recipe's name
 
 ```rust
-/// Names one of several answers a crossing may have. Adapters mint these; the
-/// table attaches no meaning to any particular name.
-pub struct RecipeId(String);
+/// An adapter-chosen row name, reusable under different crossing keys.
+pub struct RecipeName(String);
 
-impl RecipeId {
+impl RecipeName {
     pub fn new(name: impl Into<String>) -> Self;
     /// The name the table gives the recipe it derives for an undeclared crossing.
     pub fn derived() -> Self;
     pub fn as_str(&self) -> &str;
 }
+
+/// The globally unique identity of one row in the recipe table.
+pub struct RecipeKey {
+    crossing: CrossingKey,
+    name: RecipeName,
+}
 ```
 
-A crossing is identified by `CrossingKey`; one of its recipes by `(CrossingKey,
-RecipeId)`. The names are the adapter's own — `prebindgen-c` uses `whole` for
-how a type crosses on its own and `in_field` / `parts` / `payload` for how the
-same type crosses inside a container — and the registry never reads one.
-`derived()` is the single reserved name, given to the recipe the table builds
-for a crossing nobody declared.
+A crossing is identified by `CrossingKey`; one table row by `RecipeKey`, whose
+value is the pair `(CrossingKey, RecipeName)`. The names are the adapter's own —
+`prebindgen-c` uses `whole` for how many types cross on their own and `field` /
+`parts` / `payload` for contextual alternatives — and the registry never
+interprets one. `derived()` is the single reserved name, given to a row the
+table derives for a crossing nobody declared.

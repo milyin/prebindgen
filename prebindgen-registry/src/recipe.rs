@@ -15,6 +15,11 @@
 //! a recipe cannot contradict the Rust it describes. What is left is short: a
 //! whole product is one identifier.
 //!
+//! [`RecipeName`] is reusable adapter vocabulary such as `whole` or `parts`.
+//! [`RecipeKey`] pairs that name with a [`CrossingKey`] and uniquely identifies
+//! one row throughout the table. Resolved bindings and compiled fragments carry
+//! the full key rather than a context-dependent name.
+//!
 //! # What a crossing is keyed by
 //!
 //! A borrow is not part of the crossing. `Sample`, `&Sample` and `Box<Sample>`
@@ -292,6 +297,11 @@ impl Crossing {
             direction: self.direction,
         }
     }
+
+    /// The row named `name` under this crossing's normalized key.
+    pub fn row(&self, name: RecipeName) -> RecipeKey {
+        self.key().row(name)
+    }
 }
 
 /// A crossing identified rather than described.
@@ -303,20 +313,28 @@ pub struct CrossingKey {
     pub direction: Direction,
 }
 
+impl CrossingKey {
+    /// The row named `name` under this crossing key.
+    pub fn row(&self, name: RecipeName) -> RecipeKey {
+        RecipeKey::new(self.clone(), name)
+    }
+}
+
 impl fmt::Display for CrossingKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} ({})", self.ty, self.direction)
     }
 }
 
-/// Names one of several answers a crossing may have.
+/// The adapter-chosen name of a recipe row within one crossing key.
 ///
-/// Adapters mint these; the table attaches no meaning to any particular name.
+/// Names such as `whole` and `parts` are deliberately reusable across types and
+/// directions. Use [`RecipeKey`] where the identity of one table row is needed.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct RecipeId(String);
+pub struct RecipeName(String);
 
-impl RecipeId {
-    /// The name of one answer.
+impl RecipeName {
+    /// A reusable row name.
     pub fn new(name: impl Into<String>) -> Self {
         Self(name.into())
     }
@@ -332,9 +350,48 @@ impl RecipeId {
     }
 }
 
-impl fmt::Display for RecipeId {
+impl fmt::Display for RecipeName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+/// The globally unique position of one row in a [`Recipes`] table.
+///
+/// A [`RecipeKey`] identifies that position whether or not the table currently
+/// holds a row there. A row name is meaningful only under the crossing key that
+/// owns it, so the table's primary key is the pair rather than an
+/// insertion-order surrogate.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RecipeKey {
+    crossing: CrossingKey,
+    name: RecipeName,
+}
+
+impl RecipeKey {
+    /// Identify the row named `name` under `crossing`.
+    fn new(crossing: CrossingKey, name: RecipeName) -> Self {
+        Self { crossing, name }
+    }
+
+    /// The crossing key under which the row is filed.
+    pub fn crossing(&self) -> &CrossingKey {
+        &self.crossing
+    }
+
+    /// The adapter-chosen name within that crossing key.
+    pub fn name(&self) -> &RecipeName {
+        &self.name
+    }
+
+    fn derived(crossing: CrossingKey) -> Self {
+        Self::new(crossing, RecipeName::derived())
+    }
+}
+
+impl fmt::Display for RecipeKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "recipe `{}` of {}", self.name, self.crossing)
     }
 }
 
@@ -435,7 +492,7 @@ impl Recipe {
 
 #[derive(Clone, Debug)]
 struct Entry {
-    id: RecipeId,
+    key: RecipeKey,
     recipe: Recipe,
     /// The type as the declaration spelled it, which is what the checks read
     /// fields and alternatives off.
@@ -456,23 +513,32 @@ impl Recipes {
         RecipesBuilder::default()
     }
 
-    /// Which recipes this crossing has, in declaration order.
+    /// Which recipe names this crossing has, in declaration order.
     ///
     /// Empty for a crossing nobody declared, which still has the recipe
     /// [`Self::recipe`] derives.
-    pub fn names_of(&self, key: &CrossingKey) -> Vec<&RecipeId> {
+    pub fn names_of(&self, key: &CrossingKey) -> Vec<&RecipeName> {
         self.recipes
             .get(key)
-            .map(|recipes| recipes.iter().map(|e| &e.id).collect())
+            .map(|recipes| recipes.iter().map(|e| e.key.name()).collect())
             .unwrap_or_default()
     }
 
-    /// One named recipe of a crossing, or `None` if it was never declared.
-    pub fn get(&self, key: &CrossingKey, id: &RecipeId) -> Option<&Recipe> {
+    /// The key of one named row under a crossing, or `None` if it was never declared.
+    pub fn key_of(&self, crossing: &CrossingKey, name: &RecipeName) -> Option<&RecipeKey> {
         self.recipes
-            .get(key)?
+            .get(crossing)?
             .iter()
-            .find(|e| &e.id == id)
+            .find(|e| e.key.name() == name)
+            .map(|e| &e.key)
+    }
+
+    /// One row by its globally unique key.
+    pub fn get(&self, key: &RecipeKey) -> Option<&Recipe> {
+        self.recipes
+            .get(key.crossing())?
+            .iter()
+            .find(|e| &e.key == key)
             .map(|e| &e.recipe)
     }
 
@@ -481,11 +547,11 @@ impl Recipes {
     /// With one declared recipe that recipe is the default; with several it is the
     /// one declared through [`RecipesBuilder::declare_default`]. `None` for a
     /// crossing nobody declared.
-    pub fn default_of(&self, key: &CrossingKey) -> Option<&RecipeId> {
+    pub fn default_of(&self, key: &CrossingKey) -> Option<&RecipeKey> {
         let recipes = self.recipes.get(key)?;
         match recipes.as_slice() {
-            [only] => Some(&only.id),
-            many => many.iter().find(|e| e.default).map(|e| &e.id),
+            [only] => Some(&only.key),
+            many => many.iter().find(|e| e.default).map(|e| &e.key),
         }
     }
 
@@ -495,17 +561,17 @@ impl Recipes {
     /// A callback type derives [`Shape::Invoke`], the only shape such a
     /// crossing takes, so an adapter reaches one here the same way it reaches
     /// every other recipe.
-    pub fn recipe(&self, crossing: &Crossing) -> (RecipeId, Cow<'_, Recipe>) {
+    pub fn recipe(&self, crossing: &Crossing) -> (RecipeKey, Cow<'_, Recipe>) {
         let key = crossing.key();
         match self.default_of(&key) {
-            Some(id) => {
-                let id = id.clone();
+            Some(recipe_key) => {
+                let recipe_key = recipe_key.clone();
                 let recipe = self
-                    .get(&key, &id)
+                    .get(&recipe_key)
                     .expect("default names a declared recipe");
-                (id, Cow::Borrowed(recipe))
+                (recipe_key, Cow::Borrowed(recipe))
             }
-            None => (RecipeId::derived(), Cow::Owned(derive(crossing))),
+            None => (RecipeKey::derived(key), Cow::Owned(derive(crossing))),
         }
     }
 }
@@ -567,7 +633,7 @@ pub struct RecipesBuilder {
     recipes: HashMap<CrossingKey, Vec<Entry>>,
     /// A recipe declared twice under one name, reported by [`Self::build`] rather
     /// than by overwriting silently.
-    duplicates: Vec<(CrossingKey, RecipeId)>,
+    duplicates: Vec<RecipeKey>,
 }
 
 impl RecipesBuilder {
@@ -581,10 +647,10 @@ impl RecipesBuilder {
     pub fn declare<OP: Operation>(
         &mut self,
         ty: TypeRef,
-        id: RecipeId,
+        name: RecipeName,
         shape: Shape<OP>,
     ) -> &mut Self {
-        self.insert(ty, id, OP::into_recipe(shape), false)
+        self.insert(ty, name, OP::into_recipe(shape), false)
     }
 
     /// Add one recipe and make it the recipe used where a site names none.
@@ -594,21 +660,28 @@ impl RecipesBuilder {
     pub fn declare_default<OP: Operation>(
         &mut self,
         ty: TypeRef,
-        id: RecipeId,
+        name: RecipeName,
         shape: Shape<OP>,
     ) -> &mut Self {
-        self.insert(ty, id, OP::into_recipe(shape), true)
+        self.insert(ty, name, OP::into_recipe(shape), true)
     }
 
-    fn insert(&mut self, ty: TypeRef, id: RecipeId, recipe: Recipe, default: bool) -> &mut Self {
-        let key = Crossing::new(ty.clone(), recipe.direction()).key();
-        let entries = self.recipes.entry(key.clone()).or_default();
-        if entries.iter().any(|e| e.id == id) {
-            self.duplicates.push((key, id));
+    fn insert(
+        &mut self,
+        ty: TypeRef,
+        name: RecipeName,
+        recipe: Recipe,
+        default: bool,
+    ) -> &mut Self {
+        let crossing = Crossing::new(ty.clone(), recipe.direction()).key();
+        let key = crossing.row(name);
+        let entries = self.recipes.entry(crossing).or_default();
+        if entries.iter().any(|e| e.key == key) {
+            self.duplicates.push(key);
             return self;
         }
         entries.push(Entry {
-            id,
+            key,
             recipe,
             ty,
             default,
@@ -629,15 +702,15 @@ impl RecipesBuilder {
         let mut errors: Vec<RecipeError> = self
             .duplicates
             .into_iter()
-            .map(|(crossing, recipe)| RecipeError::Duplicate { crossing, recipe })
+            .map(|recipe| RecipeError::Duplicate { recipe })
             .collect();
 
         for (key, entries) in &table.recipes {
             if entries.len() > 1 {
-                let defaults: Vec<RecipeId> = entries
+                let defaults: Vec<RecipeName> = entries
                     .iter()
                     .filter(|e| e.default)
-                    .map(|e| e.id.clone())
+                    .map(|e| e.key.name().clone())
                     .collect();
                 if defaults.len() != 1 {
                     errors.push(RecipeError::NoDefault {
@@ -653,15 +726,13 @@ impl RecipesBuilder {
                 // is no second answer for such a crossing.
                 if crossing.value().callback_args().is_some() && !entry.recipe.is_invoke() {
                     errors.push(RecipeError::CallbackShape {
-                        crossing: key.clone(),
-                        recipe: entry.id.clone(),
+                        recipe: entry.key.clone(),
                     });
                     continue;
                 }
                 let mut check = Check {
                     model,
-                    crossing: key,
-                    recipe: &entry.id,
+                    recipe: &entry.key,
                     errors: &mut errors,
                     arm_fields: None,
                 };
@@ -683,8 +754,7 @@ impl RecipesBuilder {
 
 struct Check<'a, 'e> {
     model: &'a Flat,
-    crossing: &'a CrossingKey,
-    recipe: &'a RecipeId,
+    recipe: &'a RecipeKey,
     errors: &'e mut Vec<RecipeError>,
     /// The payload fields of the arm being checked, which is what a
     /// [`Reach::Field`] indexes inside a [`Shape::Choice`].
@@ -698,7 +768,6 @@ impl<'a> Check<'a, '_> {
 
     fn out_of_range(&mut self, index: usize, len: usize) {
         self.push(RecipeError::OutOfRange {
-            crossing: self.crossing.clone(),
             recipe: self.recipe.clone(),
             index,
             len,
@@ -707,14 +776,12 @@ impl<'a> Check<'a, '_> {
 
     fn not_a_product(&mut self) {
         self.push(RecipeError::NotAProduct {
-            crossing: self.crossing.clone(),
             recipe: self.recipe.clone(),
         });
     }
 
     fn not_a_callback(&mut self) {
         self.push(RecipeError::WrongShape {
-            crossing: self.crossing.clone(),
             recipe: self.recipe.clone(),
             shape: "Invoke",
             wanted: "a callback type",
@@ -728,7 +795,6 @@ impl<'a> Check<'a, '_> {
             ("Sequence", "a `Vec`, slice or array")
         };
         self.push(RecipeError::WrongShape {
-            crossing: self.crossing.clone(),
             recipe: self.recipe.clone(),
             shape,
             wanted,
@@ -849,7 +915,6 @@ impl<'a> Check<'a, '_> {
                     let parts = f.params.iter().map(|p| p.ty.clone()).collect();
                     if !constructor_of(f, ty) {
                         self.push(RecipeError::NotAConstructor {
-                            crossing: self.crossing.clone(),
                             recipe: self.recipe.clone(),
                             func: func.clone(),
                         });
@@ -878,7 +943,6 @@ impl<'a> Check<'a, '_> {
                 let bound = f.ret.clone();
                 if !accessor_of(f, ty) {
                     self.push(RecipeError::NotAnAccessor {
-                        crossing: self.crossing.clone(),
                         recipe: self.recipe.clone(),
                         func: func.clone(),
                     });
@@ -905,7 +969,6 @@ impl<'a> Check<'a, '_> {
                     let ret = f.ret.clone();
                     if !accessor_of(f, ty) {
                         self.push(RecipeError::NotAnAccessor {
-                            crossing: self.crossing.clone(),
                             recipe: self.recipe.clone(),
                             func: func.clone(),
                         });
@@ -932,7 +995,6 @@ impl<'a> Check<'a, '_> {
             Some(f) => Some(f),
             None => {
                 let error = RecipeError::UnknownFunction {
-                    crossing: self.crossing.clone(),
                     recipe: self.recipe.clone(),
                     func: name.clone(),
                 };
@@ -1071,13 +1133,13 @@ fn walk(
 /// cycle through the recipe nobody happens to default to is still a cycle.
 fn successors(model: &Flat, table: &Recipes, crossing: &Crossing) -> Vec<Crossing> {
     let key = crossing.key();
-    let recipes: Vec<(RecipeId, TypeRef, Recipe)> = match table.recipes.get(&key) {
+    let recipes: Vec<(RecipeKey, TypeRef, Recipe)> = match table.recipes.get(&key) {
         Some(entries) => entries
             .iter()
-            .map(|e| (e.id.clone(), e.ty.clone(), e.recipe.clone()))
+            .map(|e| (e.key.clone(), e.ty.clone(), e.recipe.clone()))
             .collect(),
         None => vec![(
-            RecipeId::derived(),
+            key.row(RecipeName::derived()),
             crossing.spelled().clone(),
             derive(crossing),
         )],
@@ -1087,11 +1149,10 @@ fn successors(model: &Flat, table: &Recipes, crossing: &Crossing) -> Vec<Crossin
     let mut discarded = Vec::new();
     recipes
         .into_iter()
-        .flat_map(|(id, ty, recipe)| {
+        .flat_map(|(recipe_key, ty, recipe)| {
             let mut check = Check {
                 model,
-                crossing: &key,
-                recipe: &id,
+                recipe: &recipe_key,
                 errors: &mut discarded,
                 arm_fields: None,
             };
@@ -1119,60 +1180,48 @@ pub enum RecipeError {
         /// The crossing whose recipes disagree.
         crossing: CrossingKey,
         /// The recipes that claimed to be the default.
-        defaults: Vec<RecipeId>,
+        defaults: Vec<RecipeName>,
     },
-    /// One name was declared twice for one crossing.
+    /// One row was declared twice.
     Duplicate {
-        /// The crossing declared twice.
-        crossing: CrossingKey,
-        /// The name used twice.
-        recipe: RecipeId,
+        /// The row declared twice.
+        recipe: RecipeKey,
     },
     /// A recipe named a constructor or accessor the model does not have.
     UnknownFunction {
-        /// The crossing the recipe answers.
-        crossing: CrossingKey,
-        /// Which of the crossing's recipes named it.
-        recipe: RecipeId,
+        /// The row that named it.
+        recipe: RecipeKey,
         /// The name that resolved to nothing.
         func: syn::Ident,
     },
-    /// A constructor was named where what it returns is not the recipe's type.
+    /// A constructor was named where what it returns is not the recipe type.
     ///
     /// The constructing twin of [`NotAnAccessor`](Self::NotAnAccessor). A
     /// `Result<T, E>` return counts as building a `T`, because that is where a
     /// construction's fallibility is read from.
     NotAConstructor {
-        /// The crossing the recipe answers.
-        crossing: CrossingKey,
-        /// Which of the crossing's recipes named it.
-        recipe: RecipeId,
+        /// The row that named the function.
+        recipe: RecipeKey,
         /// The function whose return type does not match.
         func: syn::Ident,
     },
-    /// An accessor was named where its first parameter is not the recipe's type.
+    /// An accessor was named where its first parameter is not the recipe type.
     NotAnAccessor {
-        /// The crossing the recipe answers.
-        crossing: CrossingKey,
-        /// Which of the crossing's recipes named it.
-        recipe: RecipeId,
+        /// The row that named the function.
+        recipe: RecipeKey,
         /// The function whose first parameter does not match.
         func: syn::Ident,
     },
     /// A [`Reach::Field`] or an [`Arm::alternative`] is past the end of what the
     /// model holds for that type.
     OutOfRange {
-        /// The crossing the recipe answers.
-        crossing: CrossingKey,
-        /// Which of the crossing's recipes names the index.
-        recipe: RecipeId,
+        /// The row that names the index.
+        recipe: RecipeKey,
         /// The index the recipe named.
         index: usize,
         /// How many the model holds.
         len: usize,
     },
-    /// A product or choice recipe was declared for a type the model gives no
-    /// parts.
     /// A shape was declared for a type that cannot take it: `Optional` on a
     /// type that is not an `Option`, `Sequence` on one that is not a run, or
     /// `Invoke` on one that is not a callback.
@@ -1180,31 +1229,26 @@ pub enum RecipeError {
     /// The arity shapes read their inner type off the crossing rather than
     /// stating it, so this is where a mismatch surfaces.
     WrongShape {
-        /// The crossing the recipe answers.
-        crossing: CrossingKey,
-        /// Which of the crossing's recipes was declared.
-        recipe: RecipeId,
+        /// The row whose shape is wrong.
+        recipe: RecipeKey,
         /// The shape as declared.
         shape: &'static str,
         /// What the type would have had to be.
         wanted: &'static str,
     },
+    /// A product or choice recipe was declared for a type the model gives no parts.
     NotAProduct {
-        /// The crossing the recipe answers.
-        crossing: CrossingKey,
-        /// Which of the crossing's recipes was declared.
-        recipe: RecipeId,
+        /// The row whose type has no parts.
+        recipe: RecipeKey,
     },
-    /// A site asked for a recipe that was never declared.
+    /// A site asked for a recipe row that was never declared.
     UnknownRecipe {
         /// Where the value crosses.
         site: Site,
-        /// The crossing that has no such recipe.
-        crossing: CrossingKey,
-        /// The name the site asked for.
-        recipe: RecipeId,
+        /// The complete key the site asked for.
+        recipe: RecipeKey,
     },
-    /// A caller named a recipe the crossing does not have.
+    /// A caller named a recipe row the table does not have.
     ///
     /// Distinct from [`UnknownRecipe`](Self::UnknownRecipe), which is a **site**
     /// asking for one. This is a caller compiling a named recipe directly through
@@ -1212,10 +1256,8 @@ pub enum RecipeError {
     /// site to name — an adapter checking a recipe it declared conditionally, and
     /// getting the condition wrong.
     NoSuchRecipe {
-        /// The crossing that has no such recipe.
-        crossing: CrossingKey,
-        /// The name the caller asked for.
-        recipe: RecipeId,
+        /// The complete key the caller asked for.
+        recipe: RecipeKey,
     },
     /// Two declarations of equal precedence bound one site to different recipes.
     Rebound {
@@ -1274,10 +1316,8 @@ pub enum RecipeError {
     /// Converting the arguments is what makes a callable callable, so taking it
     /// apart is the only thing an adapter can do with one.
     CallbackShape {
-        /// The callback crossing.
-        crossing: CrossingKey,
-        /// The recipe declared for it.
-        recipe: RecipeId,
+        /// The invalid callback row.
+        recipe: RecipeKey,
     },
 }
 
@@ -1302,73 +1342,43 @@ impl fmt::Display for RecipeError {
                     format!("{}", defaults.len())
                 }
             ),
-            RecipeError::Duplicate { crossing, recipe } => {
-                write!(f, "{crossing} declares the recipe `{recipe}` twice")
+            RecipeError::Duplicate { recipe } => {
+                write!(f, "{recipe} is declared twice")
             }
-            RecipeError::UnknownFunction {
-                crossing,
-                recipe,
-                func,
-            } => write!(
+            RecipeError::UnknownFunction { recipe, func } => write!(
                 f,
-                "recipe `{recipe}` of {crossing} names `{func}`, which no #[prebindgen] \
-                 source declares"
+                "{recipe} names `{func}`, which no #[prebindgen] source declares"
             ),
-            RecipeError::NotAConstructor {
-                crossing,
-                recipe,
-                func,
-            } => write!(
+            RecipeError::NotAConstructor { recipe, func } => write!(
                 f,
-                "recipe `{recipe}` of {crossing} builds the value with `{func}`, which does \
-                 not return that type"
+                "{recipe} builds the value with `{func}`, which does not return that type"
             ),
-            RecipeError::NotAnAccessor {
-                crossing,
-                recipe,
-                func,
-            } => write!(
+            RecipeError::NotAnAccessor { recipe, func } => write!(
                 f,
-                "recipe `{recipe}` of {crossing} reaches a part through `{func}`, whose \
-                 first parameter is not that type"
+                "{recipe} reaches a part through `{func}`, whose first parameter is not that type"
             ),
-            RecipeError::OutOfRange {
-                crossing,
-                recipe,
-                index,
-                len,
-            } => write!(
-                f,
-                "recipe `{recipe}` of {crossing} names index {index}, and the model holds {len}"
-            ),
+            RecipeError::OutOfRange { recipe, index, len } => {
+                write!(f, "{recipe} names index {index}, and the model holds {len}")
+            }
             RecipeError::WrongShape {
-                crossing,
                 recipe,
                 shape,
                 wanted,
             } => write!(
                 f,
-                "recipe `{recipe}` of {crossing} declares `{shape}`, but the type is not \
-                 {wanted}"
+                "{recipe} declares `{shape}`, but the type is not {wanted}"
             ),
-            RecipeError::NotAProduct { crossing, recipe } => write!(
+            RecipeError::NotAProduct { recipe } => write!(
                 f,
-                "recipe `{recipe}` takes {crossing} apart, and the model gives that type no \
-                 parts"
+                "{recipe} takes its type apart, and the model gives that type no parts"
             ),
-            RecipeError::NoSuchRecipe { crossing, recipe } => write!(
+            RecipeError::NoSuchRecipe { recipe } => write!(
                 f,
-                "{crossing} has no recipe `{recipe}` — it was compiled by name, not \
-                 through a site"
+                "{recipe} does not exist — it was compiled by name, not through a site"
             ),
-            RecipeError::UnknownRecipe {
-                site,
-                crossing,
-                recipe,
-            } => write!(
-                f,
-                "{site} asks for recipe `{recipe}`, which {crossing} does not have"
-            ),
+            RecipeError::UnknownRecipe { site, recipe } => {
+                write!(f, "{site} asks for {recipe}, which does not exist")
+            }
             RecipeError::Rebound { site, origin } => write!(
                 f,
                 "{site} is bound to two different recipes by {origin}; one of them has to \
@@ -1396,11 +1406,10 @@ impl fmt::Display for RecipeError {
                 f,
                 "{site} needs a {needed} value and its fragment produces a {got} one"
             ),
-            RecipeError::CallbackShape { crossing, recipe } => write!(
+            RecipeError::CallbackShape { recipe } => write!(
                 f,
-                "recipe `{recipe}` of the callback {crossing} is not `Invoke`; a callback is \
-                 always taken apart into its arguments, so that is the only shape \
-                 such a crossing takes"
+                "{recipe} is not `Invoke`; a callback is always taken apart into its \
+                 arguments, so that is the only shape such a crossing takes"
             ),
         }
     }

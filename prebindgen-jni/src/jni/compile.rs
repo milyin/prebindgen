@@ -1099,9 +1099,14 @@ impl crate::jni::Declarations {
     /// registry derived, which is that crossing's default.
     pub(crate) fn wires_of(&self, ty: &TypeRef) -> Option<Vec<Wire>> {
         let key = ty.key();
+        let crossing = prebindgen_registry::recipe::Crossing::new(ty.clone(), Direction::Construct);
+        let parts = self
+            .recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::parts())
+            .cloned();
         let compiled = self.compiled.borrow();
-        compiled
-            .recipe_fragment(&key, Direction::Construct, &crate::jni::recipes::parts())
+        parts
+            .and_then(|parts| compiled.recipe_fragment(&key, &parts))
             .or_else(|| compiled.fragment(&key, Direction::Construct))?
             .wires
             .clone()
