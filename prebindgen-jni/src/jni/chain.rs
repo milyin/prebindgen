@@ -340,6 +340,9 @@ impl JProductPlan {
 /// JNI's single-intermediate Optional representation operations.
 #[derive(Clone)]
 pub(crate) enum JOptionalBridge {
+    InputGated {
+        child: syn::Type,
+    },
     InputNiche {
         wire: syn::Type,
         absent: syn::Expr,
@@ -363,6 +366,7 @@ pub(crate) enum JOptionalBridge {
 impl shared::OptionalBridge for JOptionalBridge {
     fn intermediate(&self) -> syn::Type {
         match self {
+            Self::InputGated { child } => syn::parse_quote!((jni::sys::jboolean, #child)),
             Self::InputNiche { wire, .. } | Self::OutputNiche { wire, .. } => wire.clone(),
             Self::InputBoxed { .. } | Self::OutputBoxed { .. } => {
                 syn::parse_quote!(jni::objects::JObject)
@@ -372,6 +376,7 @@ impl shared::OptionalBridge for JOptionalBridge {
 
     fn is_absent(&self, value: TokenStream) -> TokenStream {
         match self {
+            Self::InputGated { .. } => quote!((#value).0 == 0u8),
             Self::InputNiche { absent, .. } => quote!(#absent),
             Self::InputBoxed { .. } => quote!((#value).is_null()),
             Self::OutputNiche { .. } | Self::OutputBoxed { .. } => {
@@ -382,6 +387,7 @@ impl shared::OptionalBridge for JOptionalBridge {
 
     fn present(&self, value: TokenStream) -> TokenStream {
         match self {
+            Self::InputGated { .. } => quote!((#value).1),
             Self::InputNiche { .. } => value,
             Self::InputBoxed {
                 inner_wire,
@@ -406,7 +412,7 @@ impl shared::OptionalBridge for JOptionalBridge {
         match self {
             Self::OutputNiche { absent, .. } => quote!(#absent),
             Self::OutputBoxed { .. } => quote!(jni::objects::JObject::null()),
-            Self::InputNiche { .. } | Self::InputBoxed { .. } => {
+            Self::InputGated { .. } | Self::InputNiche { .. } | Self::InputBoxed { .. } => {
                 unreachable!("optional bridge operation does not match its planned direction")
             }
         }
@@ -422,7 +428,7 @@ impl shared::OptionalBridge for JOptionalBridge {
                         format!("Option box: {}", __error)
                     ))?
             }),
-            Self::InputNiche { .. } | Self::InputBoxed { .. } => {
+            Self::InputGated { .. } | Self::InputNiche { .. } | Self::InputBoxed { .. } => {
                 unreachable!("optional bridge operation does not match its planned direction")
             }
         }
@@ -434,6 +440,7 @@ impl shared::OptionalBridge for JOptionalBridge {
 pub(crate) struct JOptionalPlan {
     pub(crate) ident: syn::Ident,
     pub(crate) chain: shared::Optional<JSource, JOptionalBridge, JChild>,
+    pub(crate) input_by_ref: bool,
 }
 
 impl JOptionalPlan {
@@ -447,11 +454,16 @@ impl JOptionalPlan {
         match self.chain.direction {
             Direction::Construct => {
                 let intermediate = annotate_jobject_with_lifetime(intermediate, "v");
+                let input = if self.input_by_ref {
+                    quote!(v: &#intermediate)
+                } else {
+                    quote!(v: #intermediate)
+                };
                 syn::parse_quote!(
                     #allow
                     pub(crate) unsafe fn #name<'env, 'v>(
                         env: &mut jni::JNIEnv<'env>,
-                        v: &#intermediate,
+                        #input,
                     ) -> ::core::result::Result<#source, __JniErr> {
                         ::core::result::Result::Ok(#body)
                     }

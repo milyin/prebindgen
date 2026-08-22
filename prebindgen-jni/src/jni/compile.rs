@@ -77,8 +77,8 @@ pub(crate) struct JFrag {
     pub(crate) yields: Yield,
     /// Shape of the single adapter-side intermediate over flattened ABI leaves.
     pub(crate) layout: Option<JLayout>,
-    /// Product element retained by a containing sequence for callback folding.
-    pub(crate) nested_product: Option<ProductChain>,
+    /// Composed element retained by a containing sequence for callback folding.
+    pub(crate) nested_chain: Option<ComposedChain>,
     /// The wire values this crossing occupies, when it occupies more than the
     /// one `conv.destination` names.
     ///
@@ -117,6 +117,7 @@ pub(crate) struct JFrag {
 pub(crate) enum JLayout {
     Leaf,
     Product(Vec<JLayout>),
+    Optional(Box<JLayout>),
 }
 
 impl JLayout {
@@ -124,6 +125,7 @@ impl JLayout {
         match self {
             Self::Leaf => 1,
             Self::Product(parts) => parts.iter().map(Self::leaf_count).sum(),
+            Self::Optional(inner) => 1 + inner.leaf_count(),
         }
     }
 
@@ -139,10 +141,19 @@ impl JLayout {
                     let values = parts.iter().map(|part| build(part, leaves, next));
                     quote!((#(#values,)*))
                 }
+                JLayout::Optional(inner) => {
+                    let present = build(&JLayout::Leaf, leaves, next);
+                    let value = build(inner, leaves, next);
+                    quote!((#present, #value))
+                }
             }
         }
         assert_eq!(self.leaf_count(), leaves.len());
         build(self, leaves, &mut 0)
+    }
+
+    pub(crate) fn is_composed(&self) -> bool {
+        matches!(self, Self::Product(_) | Self::Optional(_))
     }
 
     pub(crate) fn pattern(&self, leaves: &[syn::Ident]) -> TokenStream {
@@ -513,7 +524,7 @@ impl JFrag {
             conv,
             rust,
             layout: Some(JLayout::Leaf),
-            nested_product: None,
+            nested_chain: None,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -532,7 +543,7 @@ impl JFrag {
             conv,
             rust,
             layout: Some(JLayout::Leaf),
-            nested_product: None,
+            nested_chain: None,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -544,21 +555,21 @@ impl JFrag {
         }
     }
 
-    fn product_chain_unmarked(&self) -> Option<ProductChain> {
+    fn composed_chain_unmarked(&self) -> Option<ComposedChain> {
         if !self.composed_only {
-            if let Some(layout @ JLayout::Product(_)) = self.layout.clone() {
-                return Some(ProductChain {
+            if let Some(layout) = self.layout.clone().filter(JLayout::is_composed) {
+                return Some(ComposedChain {
                     ident: self.conv.converter_ident().clone(),
                     layout,
                     rust: self.rust.clone(),
                 });
             }
         }
-        self.nested_product.clone()
+        self.nested_chain.clone()
     }
 
-    pub(crate) fn product_chain(&self) -> Option<ProductChain> {
-        let chain = self.product_chain_unmarked()?;
+    pub(crate) fn composed_chain(&self) -> Option<ComposedChain> {
+        let chain = self.composed_chain_unmarked()?;
         chain.mark_reachable();
         Some(chain)
     }
@@ -787,7 +798,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             rust,
             layout: Some(JLayout::Leaf),
-            nested_product: None,
+            nested_chain: None,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -861,7 +872,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         frag.conv.converter_ident().clone(),
                         stages,
                         if matches!(frag.conv.destination, syn::Type::Ptr(_))
-                            || matches!(&frag.layout, Some(JLayout::Product(_)))
+                            || frag.layout.as_ref().is_some_and(JLayout::is_composed)
                         {
                             crate::jni::chain::JValueUse::Direct
                         } else {
@@ -915,7 +926,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             rust,
             layout: Some(JLayout::Product(layouts)),
-            nested_product: None,
+            nested_chain: None,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -926,17 +937,19 @@ impl<R: Conversions> JCompile<'_, R> {
             },
         })
     }
-    /// Plan an ordinary single-intermediate Optional without spelling its
-    /// source type or generating its Rust body.
+    /// Plan an Optional over one already-composed child intermediate without
+    /// spelling its source type or generating its Rust body.
     ///
     /// The deep input recipe for `Option<&opaque>` remains terminal because it
     /// deliberately yields `OwnedObject<T>` and clones the Java-owned handle.
-    /// Multi-wire products remain with the parts compiler.
+    /// Choice layouts remain with the legacy parts compiler.
     fn planned_optional(&self, at: At<'_>, inner: &JFrag) -> Option<JFrag> {
         let source = at.crossing.spelled();
         let element = source.optional_inner()?;
         let direction = at.crossing.direction();
-        if inner.wires.is_some() || inner.out_wires.is_some() {
+        if inner.out_wires.is_some()
+            || (inner.wires.is_some() && (direction != Direction::Construct || inner.composed_only))
+        {
             return None;
         }
         if direction == Direction::Construct
@@ -972,78 +985,109 @@ impl<R: Conversions> JCompile<'_, R> {
                 .collect(),
         };
 
-        let (bridge, child, destination, niches, nullable_kind) = match direction {
-            Direction::Construct => {
-                if let Some((slot, rest)) = inner.conv.niches.clone().carve() {
-                    (
-                        crate::jni::chain::JOptionalBridge::InputNiche {
-                            wire: inner_wire.clone(),
-                            absent: slot.matches,
-                        },
-                        crate::jni::chain::JChild::input(
-                            inner.conv.converter_ident().clone(),
-                            stages,
-                            crate::jni::chain::JValueUse::Direct,
-                        ),
-                        inner_wire,
-                        rest,
-                        NullableKind::Niche,
-                    )
-                } else if is_jni_primitive(&inner_wire) {
-                    (
-                        crate::jni::chain::JOptionalBridge::InputBoxed {
-                            inner_wire: inner_wire.clone(),
-                            method: jni_unbox_method(&inner_wire),
-                            signature: jni_unbox_sig(&inner_wire),
-                            getter: format_ident!("{}", jni_unbox_getter(&inner_wire)),
-                        },
-                        crate::jni::chain::JChild::input(
-                            inner.conv.converter_ident().clone(),
-                            stages,
-                            crate::jni::chain::JValueUse::SharedRef,
-                        ),
-                        syn::parse_quote!(jni::objects::JObject),
-                        Niches::empty(),
-                        NullableKind::Boxed,
-                    )
-                } else {
-                    return None;
+        let (bridge, child, destination, niches, nullable_kind, layout, input_by_ref) =
+            match direction {
+                Direction::Construct => {
+                    if inner.wires.is_some() {
+                        let inner_layout = inner.layout.clone()?;
+                        let destination: syn::Type =
+                            syn::parse_quote!((jni::sys::jboolean, #inner_wire));
+                        (
+                            crate::jni::chain::JOptionalBridge::InputGated { child: inner_wire },
+                            crate::jni::chain::JChild::input(
+                                inner.conv.converter_ident().clone(),
+                                stages,
+                                crate::jni::chain::JValueUse::Direct,
+                            ),
+                            destination,
+                            Niches::empty(),
+                            NullableKind::Boxed,
+                            JLayout::Optional(Box::new(inner_layout)),
+                            false,
+                        )
+                    } else if let Some((slot, rest)) = inner.conv.niches.clone().carve() {
+                        (
+                            crate::jni::chain::JOptionalBridge::InputNiche {
+                                wire: inner_wire.clone(),
+                                absent: slot.matches,
+                            },
+                            crate::jni::chain::JChild::input(
+                                inner.conv.converter_ident().clone(),
+                                stages,
+                                crate::jni::chain::JValueUse::Direct,
+                            ),
+                            inner_wire,
+                            rest,
+                            NullableKind::Niche,
+                            JLayout::Leaf,
+                            true,
+                        )
+                    } else if is_jni_primitive(&inner_wire) {
+                        (
+                            crate::jni::chain::JOptionalBridge::InputBoxed {
+                                inner_wire: inner_wire.clone(),
+                                method: jni_unbox_method(&inner_wire),
+                                signature: jni_unbox_sig(&inner_wire),
+                                getter: format_ident!("{}", jni_unbox_getter(&inner_wire)),
+                            },
+                            crate::jni::chain::JChild::input(
+                                inner.conv.converter_ident().clone(),
+                                stages,
+                                crate::jni::chain::JValueUse::SharedRef,
+                            ),
+                            syn::parse_quote!(jni::objects::JObject),
+                            Niches::empty(),
+                            NullableKind::Boxed,
+                            JLayout::Leaf,
+                            true,
+                        )
+                    } else {
+                        return None;
+                    }
                 }
-            }
-            Direction::Deconstruct => {
-                if let Some((slot, rest)) = inner.conv.niches.clone().carve() {
-                    (
-                        crate::jni::chain::JOptionalBridge::OutputNiche {
-                            wire: inner_wire.clone(),
-                            absent: slot.value,
-                        },
-                        crate::jni::chain::JChild::output(
-                            inner.conv.converter_ident().clone(),
-                            stages,
-                            crate::jni::chain::JValueUse::Direct,
-                        ),
-                        inner_wire,
-                        rest,
-                        NullableKind::Niche,
-                    )
-                } else {
-                    let helper = box_helper_for_wire(&inner_wire)?;
-                    (
-                        crate::jni::chain::JOptionalBridge::OutputBoxed { inner_wire, helper },
-                        crate::jni::chain::JChild::output(
-                            inner.conv.converter_ident().clone(),
-                            stages,
-                            crate::jni::chain::JValueUse::Direct,
-                        ),
-                        syn::parse_quote!(jni::objects::JObject),
-                        Niches::empty(),
-                        NullableKind::Boxed,
-                    )
+                Direction::Deconstruct => {
+                    if let Some((slot, rest)) = inner.conv.niches.clone().carve() {
+                        (
+                            crate::jni::chain::JOptionalBridge::OutputNiche {
+                                wire: inner_wire.clone(),
+                                absent: slot.value,
+                            },
+                            crate::jni::chain::JChild::output(
+                                inner.conv.converter_ident().clone(),
+                                stages,
+                                crate::jni::chain::JValueUse::Direct,
+                            ),
+                            inner_wire,
+                            rest,
+                            NullableKind::Niche,
+                            JLayout::Leaf,
+                            true,
+                        )
+                    } else {
+                        let helper = box_helper_for_wire(&inner_wire)?;
+                        (
+                            crate::jni::chain::JOptionalBridge::OutputBoxed { inner_wire, helper },
+                            crate::jni::chain::JChild::output(
+                                inner.conv.converter_ident().clone(),
+                                stages,
+                                crate::jni::chain::JValueUse::Direct,
+                            ),
+                            syn::parse_quote!(jni::objects::JObject),
+                            Niches::empty(),
+                            NullableKind::Boxed,
+                            JLayout::Leaf,
+                            true,
+                        )
+                    }
                 }
-            }
-        };
+            };
 
-        let inherited = inner.conv.metadata.kotlin_name.clone();
+        let inherited = inner
+            .conv
+            .metadata
+            .kotlin_name
+            .clone()
+            .or_else(|| self.decls.override_kotlin_name(&element.key(), None));
         let kotlin_name = self.decls.override_kotlin_name(&source.key(), inherited);
         let projection = inner
             .conv
@@ -1079,6 +1123,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 bridge,
                 child,
             },
+            input_by_ref,
         });
         inner.rust.mark_reachable();
         Some(JFrag {
@@ -1094,8 +1139,8 @@ impl<R: Conversions> JCompile<'_, R> {
                 subs: vec![element.key()],
             },
             rust,
-            layout: Some(JLayout::Leaf),
-            nested_product: None,
+            layout: Some(layout),
+            nested_chain: None,
             wires: None,
             out_wires: None,
             composed_only: false,
@@ -1211,7 +1256,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             // non-nullable slot still has to hold something when the value is
             // absent — the flag is what tells Rust to ignore it.
             wires.extend(inner_wires.iter().map(gated));
-            frag.layout = None;
+            if !matches!(frag.layout, Some(JLayout::Optional(_))) {
+                frag.layout = None;
+            }
             frag.wires = Some(wires);
         }
         Ok(frag)
@@ -1244,7 +1291,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 }),
         };
         let mut frag = self.wrap(at, "no JNI representation for this run", conv)?;
-        frag.nested_product = inner.product_chain_unmarked();
+        frag.nested_chain = inner.composed_chain_unmarked();
         Ok(frag)
     }
 
@@ -1563,30 +1610,40 @@ impl crate::jni::Declarations {
             .clone()
     }
 
-    /// The exact `parts` recipe converter for a crossing. This deliberately
-    /// does not fall back to the default row: call sites asking for a composed
-    /// Product must never accidentally invoke an unrelated terminal converter.
-    pub(crate) fn product_chain(&self, ty: &TypeRef, direction: Direction) -> Option<ProductChain> {
+    /// The exact registry-composed converter for a crossing.
+    ///
+    /// Products live in their explicit `parts` row. Optional composition is
+    /// the crossing's default row, so it is considered only when no Product row
+    /// exists. Leaf terminal converters cannot escape because a fragment must
+    /// carry a composed layout before it can return a chain.
+    pub(crate) fn composed_chain(
+        &self,
+        ty: &TypeRef,
+        direction: Direction,
+    ) -> Option<ComposedChain> {
         let crossing = prebindgen_registry::recipe::Crossing::new(ty.clone(), direction);
         let row = self
             .recipe_table()
             .key_of(&crossing.key(), &crate::jni::recipes::parts())
-            .cloned()?;
+            .cloned();
         let compiled = self.compiled.borrow();
-        let frag = compiled.recipe_fragment(&ty.key(), &row)?;
-        frag.product_chain()
+        let frag = match row {
+            Some(row) => compiled.recipe_fragment(&ty.key(), &row)?,
+            None => compiled.fragment(&ty.key(), direction)?,
+        };
+        frag.composed_chain()
     }
 }
 
-/// Callable registry-composed Product and its ABI-leaf layout.
+/// Callable registry-composed shape and its ABI-leaf layout.
 #[derive(Clone)]
-pub(crate) struct ProductChain {
+pub(crate) struct ComposedChain {
     pub(crate) ident: syn::Ident,
     rust: crate::jni::chain::JFunction,
     pub(crate) layout: JLayout,
 }
 
-impl ProductChain {
+impl ComposedChain {
     fn mark_reachable(&self) {
         self.rust.mark_reachable();
     }

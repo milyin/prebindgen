@@ -134,7 +134,7 @@ pub(crate) fn callback_input(
                     plan,
                     arg_fragments
                         .and_then(|fragments| fragments.get(i))
-                        .and_then(|fragment| fragment.product_chain()),
+                        .and_then(|fragment| fragment.composed_chain()),
                 ),
                 &obj_idents,
                 &quote!(__cb_elem),
@@ -203,7 +203,7 @@ pub(crate) fn callback_input(
                     plan,
                     arg_fragments
                         .and_then(|fragments| fragments.get(i))
-                        .and_then(|fragment| fragment.product_chain()),
+                        .and_then(|fragment| fragment.composed_chain()),
                 ),
                 &obj_idents,
                 &quote!(#cb_arg),

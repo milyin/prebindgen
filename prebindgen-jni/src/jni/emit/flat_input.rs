@@ -938,7 +938,7 @@ fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
 pub(crate) struct FlatInputPlan {
     pub leaves: Vec<FlatLeaf>,
     /// Registry-composed source converter over those leaves, when available.
-    pub chain: Option<crate::jni::compile::ProductChain>,
+    pub chain: Option<crate::jni::compile::ComposedChain>,
     pub root: FlatStructNode,
     /// `true` when the source fn takes `&Struct` — the call site passes `&arg`.
     pub by_ref: bool,
@@ -1228,7 +1228,7 @@ pub(crate) fn build_flat_input_plan(
     };
     let leaves: Vec<FlatLeaf> = wires.iter().map(|w| FlatLeaf::of(param_name, w)).collect();
     let chain = ext
-        .product_chain(arg, prebindgen_registry::recipe::Direction::Construct)
+        .composed_chain(arg, prebindgen_registry::recipe::Direction::Construct)
         .filter(|chain| chain.layout.leaf_count() == leaves.len());
 
     // 3. The tree the Rust side rebuilds through, over those same wires in the

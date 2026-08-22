@@ -545,8 +545,8 @@ pub(crate) struct Delivered<'a> {
     pub(crate) source: &'a prebindgen_registry::flat::TypeRef,
     /// True when these leaves are the model-derived data-class Product itself.
     pub(crate) fixed_product: bool,
-    /// Exact Product child handed down by an enclosing registry recipe.
-    pub(crate) chain: Option<crate::jni::compile::ProductChain>,
+    /// Exact composed child handed down by an enclosing registry recipe.
+    pub(crate) chain: Option<crate::jni::compile::ComposedChain>,
 }
 
 impl<'a> Delivered<'a> {
@@ -562,12 +562,12 @@ impl<'a> Delivered<'a> {
         }
     }
 
-    /// The same delivery with the Product fragment the registry handed to a
+    /// The same delivery with the composed fragment the registry handed to a
     /// callback's `Invoke` recipe. This is available before the compilation
     /// store is committed, so callbacks do not need an adapter-side re-query.
     pub(crate) fn with_chain(
         plan: &'a prebindgen_registry::unfold::UnfoldPlan,
-        chain: Option<crate::jni::compile::ProductChain>,
+        chain: Option<crate::jni::compile::ComposedChain>,
     ) -> Self {
         Self {
             chain,
@@ -966,7 +966,7 @@ pub(crate) fn encode_plan_leaves(
             source.clone()
         };
         let chain = chain.or_else(|| {
-            ext.product_chain(
+            ext.composed_chain(
                 &crossing,
                 prebindgen_registry::recipe::Direction::Deconstruct,
             )
