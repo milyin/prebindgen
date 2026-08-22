@@ -19,8 +19,8 @@ use std::collections::BTreeMap;
 use prebindgen_registry::{
     flat::{Flat, TypeRef},
     recipe::{
-        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeKey,
-        RecipeName, Recipes,
+        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeName,
+        Recipes,
     },
 };
 
@@ -484,7 +484,7 @@ impl Declarations {
             // it has no `parts` recipe of its own — and it is the value one layer
             // in that crosses as its parts.
             let outer = Crossing::new(outer.clone(), Direction::Construct);
-            let row = RecipeKey::new(outer.key(), RecipeName::derived());
+            let row = outer.row(RecipeName::derived());
             bound.bind(
                 Site::part(&row, 0),
                 Crossing::new(inner.clone(), Direction::Construct),
@@ -521,7 +521,7 @@ impl Declarations {
                         (&building, Direction::Construct),
                         (&handing_out, Direction::Deconstruct),
                     ] {
-                        let row = RecipeKey::new(of.key(), parts());
+                        let row = of.row(parts());
                         bound.bind(
                             Site::part(&row, index),
                             Crossing::new(field.ty.clone(), direction),

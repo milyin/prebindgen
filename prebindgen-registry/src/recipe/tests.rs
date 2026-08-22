@@ -28,11 +28,11 @@ fn recipe_name(value: &str) -> RecipeName {
 }
 
 fn row(crossing: &Crossing, name: &str) -> RecipeKey {
-    RecipeKey::new(crossing.key(), recipe_name(name))
+    crossing.row(recipe_name(name))
 }
 
 fn row_at(crossing: &CrossingKey, name: &str) -> RecipeKey {
-    RecipeKey::new(crossing.clone(), recipe_name(name))
+    crossing.row(recipe_name(name))
 }
 
 fn ident(name: &str) -> syn::Ident {
@@ -232,13 +232,14 @@ fn two_defaults_are_as_wrong_as_none() {
 fn one_name_cannot_be_declared_twice_for_one_crossing() {
     let model = model(&[SAMPLE]);
     let sample = ty(&model, "Sample");
+    let duplicate = Crossing::new(sample.clone(), Direction::Deconstruct).row(recipe_name("whole"));
     let mut builder = Recipes::builder();
     builder
         .declare(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
         .declare(sample, recipe_name("whole"), Deconstructing::Atomic);
     let errors = builder.build(&model).expect_err("declared twice");
     assert!(
-        matches!(errors.as_slice(), [RecipeError::Duplicate { recipe, .. }] if recipe == &recipe_name("whole")),
+        matches!(errors.as_slice(), [RecipeError::Duplicate { recipe, .. }] if recipe == &duplicate),
         "{errors:?}"
     );
 }
@@ -799,6 +800,7 @@ fn a_site_naming_a_row_the_crossing_lacks_is_refused() {
     let model = model(&[SAMPLE]);
     let recipes = two_recipes(&model);
     let crossing = Crossing::new(ty(&model, "Sample"), Direction::Deconstruct);
+    let missing = crossing.row(recipe_name("jobject"));
     let mut builder = Bindings::builder();
     builder.bind(
         site("z_put", 0),
@@ -808,7 +810,7 @@ fn a_site_naming_a_row_the_crossing_lacks_is_refused() {
     );
     let errors = builder.build(&recipes).expect_err("no such recipe");
     assert!(
-        matches!(errors.as_slice(), [RecipeError::UnknownRecipe { recipe, .. }] if recipe == &recipe_name("jobject")),
+        matches!(errors.as_slice(), [RecipeError::UnknownRecipe { recipe, .. }] if recipe == &missing),
         "{errors:?}"
     );
 }

@@ -1,4 +1,4 @@
-//! Which recipe a given place in the generated API uses.
+//! Which recipe-table row a given place in the generated API uses.
 //!
 //! [`Recipes`] says what rows a crossing key has; this says which row the
 //! second parameter of `z_put`, or the `Err` arm of a return, or one part of
@@ -268,8 +268,7 @@ impl BindingsBuilder {
                     let Some(recipe) = recipes.key_of(&key, name) else {
                         errors.push(RecipeError::UnknownRecipe {
                             site,
-                            crossing: key,
-                            recipe: name.clone(),
+                            recipe: key.row(name.clone()),
                         });
                         continue;
                     };
@@ -294,7 +293,7 @@ impl BindingsBuilder {
     }
 }
 
-/// Which recipe every declared site takes. Built by [`BindingsBuilder`], checked
+/// Which row every declared site takes. Built by [`BindingsBuilder`], checked
 /// once, then immutable.
 #[derive(Debug, Default)]
 pub struct Bindings {

@@ -332,7 +332,7 @@ type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>
 /// nothing and outlive any of them.
 pub struct Compiled<F> {
     fragments: HashMap<FragmentKey, Rc<F>>,
-    /// Which recipe answered when a crossing was compiled **as a whole**, rather
+    /// Which row answered when a crossing was compiled **as a whole**, rather
     /// than as one part of a container. Recorded by [`Compiler::crossing`],
     /// which is the only entry point that consults the crossing's default —
     /// so [`Compiled::fragment`] can give back that same answer instead of
@@ -403,14 +403,15 @@ impl<F> Compiled<F> {
     /// [`Self::fragment`] would have no answer to give. Recording it keeps the
     /// adapter's emitters on one lookup instead of a per-site fall-back to
     /// whatever else knows.
-    pub fn record(&mut self, ty: TypeKey, recipe: RecipeKey, fragment: F) {
+    pub fn record(&mut self, recipe: RecipeKey, fragment: F) {
+        let ty = recipe.crossing().ty.clone();
         let direction = recipe.crossing().direction;
         self.fragments
             .insert((ty.clone(), recipe.clone()), std::rc::Rc::new(fragment));
         self.defaults.insert((ty, direction), recipe);
     }
 
-    /// The fragment for one crossing and one named recipe.
+    /// The fragment for one spelled type and one row key.
     pub fn recipe_fragment(&self, ty: &TypeKey, recipe: &RecipeKey) -> Option<Rc<F>> {
         self.fragments.get(&(ty.clone(), recipe.clone())).cloned()
     }
@@ -566,8 +567,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let crossing_key = crossing.key();
         let Some(recipe) = self.recipes.key_of(&crossing_key, name).cloned() else {
             return Err(RecipeError::NoSuchRecipe {
-                crossing: crossing_key,
-                recipe: name.clone(),
+                recipe: crossing_key.row(name.clone()),
             }
             .into());
         };
@@ -602,7 +602,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
 
     /// The fragment for one part of the recipe being compiled.
     ///
-    /// Which recipe the part takes is the site machinery's answer, asked at
+    /// Which row the part takes is the site machinery's answer, asked at
     /// [`Role::Part`] — keyed by the recipe, because that is what compilation is
     /// per. A root role such as [`Role::CallbackArg`] names a place in one
     /// exported function, so it cannot answer for a recipe every function with
@@ -648,8 +648,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRecipe {
                 site,
-                crossing: crossing.key(),
-                recipe: super::RecipeName::new("<omitted>"),
+                recipe: crossing.row(super::RecipeName::new("<omitted>")),
             }
             .into());
         };
@@ -964,8 +963,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 Reach::Field(index) => {
                     let field = fields.get(*index).ok_or_else(|| {
                         CompileError::Recipe(Box::new(RecipeError::OutOfRange {
-                            crossing: at.crossing.key(),
-                            recipe: at.recipe.name().clone(),
+                            recipe: at.recipe.clone(),
                             index: *index,
                             len: fields.len(),
                         }))
@@ -1001,8 +999,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
     ) -> Result<&'a Function, CompileError<C::Error>> {
         self.model.function(name).ok_or_else(|| {
             CompileError::Recipe(Box::new(RecipeError::UnknownFunction {
-                crossing: at.crossing.key(),
-                recipe: at.recipe.name().clone(),
+                recipe: at.recipe.clone(),
                 func: name.clone(),
             }))
         })
@@ -1019,8 +1016,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         };
         alternatives.get(index).ok_or_else(|| {
             CompileError::Recipe(Box::new(RecipeError::OutOfRange {
-                crossing: at.crossing.key(),
-                recipe: at.recipe.name().clone(),
+                recipe: at.recipe.clone(),
                 index,
                 len: alternatives.len(),
             }))
@@ -1114,8 +1110,7 @@ fn element_mode(crossing: &Crossing, elem: &TypeRef) -> Mode {
 /// than stating it, so a recipe declaring one on the wrong type is caught here.
 fn wrong_shape<E>(at: At<'_>, shape: &'static str, wanted: &'static str) -> CompileError<E> {
     RecipeError::WrongShape {
-        crossing: at.crossing.key(),
-        recipe: at.recipe.name().clone(),
+        recipe: at.recipe.clone(),
         shape,
         wanted,
     }

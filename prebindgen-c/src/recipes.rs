@@ -16,7 +16,7 @@ use prebindgen_registry::{
     flat::{Flat, Type, TypeRef},
     recipe::{
         Arm, Construct, Constructing, Deconstruct, Deconstructing, Direction, Reach, RecipeError,
-        RecipeKey, RecipeName, Recipes,
+        RecipeName, Recipes,
     },
 };
 
@@ -304,7 +304,7 @@ impl CbindgenBuilder {
                     };
                     for &direction in directions {
                         let of = Crossing::new(ty.clone(), direction);
-                        let row = RecipeKey::new(of.key(), parts());
+                        let row = of.row(parts());
                         bound.bind(
                             Site::arm_part(&row, Some(arm), index),
                             Crossing::new(field.ty.clone(), direction),
@@ -351,7 +351,7 @@ impl CbindgenBuilder {
                 };
                 for &direction in directions {
                     let of = Crossing::new(ty.clone(), direction);
-                    let row = RecipeKey::new(of.key(), parts());
+                    let row = of.row(parts());
                     bound.bind(
                         Site::part(&row, index),
                         Crossing::new(field.ty.clone(), direction),

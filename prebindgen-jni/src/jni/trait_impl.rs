@@ -1472,14 +1472,11 @@ impl JniGenBuilder {
                     // fall-back for the one crossing kind the compiler skips.
                     let (dir, key) = crossing;
                     decls.compiled.borrow_mut().record(
-                        key.clone(),
-                        prebindgen_registry::recipe::RecipeKey::new(
-                            prebindgen_registry::recipe::CrossingKey {
-                                ty: key.clone(),
-                                direction: *dir,
-                            },
-                            prebindgen_registry::recipe::RecipeName::new("callback"),
-                        ),
+                        prebindgen_registry::recipe::CrossingKey {
+                            ty: key.clone(),
+                            direction: *dir,
+                        }
+                        .row(prebindgen_registry::recipe::RecipeName::new("callback")),
                         crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
                     );
                 }
