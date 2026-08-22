@@ -8,6 +8,36 @@ the machinery immediately around it.
 It describes the model, not the API surface an adapter programs against — the
 table, sites, the `Compile` hooks and the error set are documented separately.
 
+## Flat is the planning boundary
+
+**Invariant.** Code generation must not have direct access to the actual Rust
+type captured behind a `TypeRef` until final Rust emission: every declaration
+has been resolved, every fragment and site plan is fixed, validation has
+finished, and the only work left is assembling the generated file. If planning
+needs a fact that it can obtain only by inspecting or rendering that Rust type,
+the Flat model is incomplete. The fix belongs in Flat, where the fact must be
+represented losslessly and tested, not in the generator as a syntax escape.
+
+Before final emission, code may carry a `TypeRef` opaquely and use its model
+answers — `TypeKind`, `TypeKey`, crossing mode, structural children, declared
+fields and functions, and source location. It must not:
+
+* receive an `Emit` or another `RustEmitter` capability;
+* turn a source-side `TypeRef` into `syn::Type`, tokens, or text;
+* reparse or pattern-match the captured Rust spelling to make a planning
+  decision; or
+* generate a converter or wrapper body merely to discover what it depends on.
+
+Adapter-authored **wire** types are a separate matter. A C adapter is allowed to
+state `*mut c_void`, and a JNI adapter `jlong`, as Rust syntax because those are
+the adapter's output vocabulary, not source syntax hidden behind `TypeRef`.
+Source-side positions remain `TypeRef`s in plans until the final renderer spells
+them.
+
+The current implementation enforces opacity at the `TypeRef` API but violates
+the timing part of this invariant by handing `Emit` to conversion planning. The
+[generation proposal below](#proposed-generation-mechanism) closes that gap.
+
 ## Where the crates sit
 
 Four take part.
@@ -189,7 +219,7 @@ Fragment and plan are the pair to keep apart. A fragment is built once per
 recipe and reused at every site that recipe serves; a plan is built once per
 site.
 
-## How the file is built
+## How the file is built today
 
 A binding's build script constructs its adapter, hands it the model, and asks
 for a file. What comes back is Rust source, written into the binding crate and
@@ -213,12 +243,14 @@ need and in what order — inner ones first, so a recipe's parts are ready befor
 the recipe that names them — and asks the adapter for a **converter** for each,
 in that order.
 
-A converter is the Rust function that performs the crossing: a constructing one
+A converter is the Rust code that performs the crossing: a constructing one
 takes wire values and returns a Rust value, a deconstructing one takes a Rust
-value and produces wire values. The adapter builds each as a complete
-`syn::ItemFn` — which is why a converter is always exactly one function — and
-keeps it. There is one per recipe, so every site that picks that recipe calls
-the same one.
+value and produces wire values. The adapter renders that code now and keeps it.
+C stores one complete `syn::ItemFn` in each fragment. JNI stores a main function
+plus zero or more pre-stage functions, while a composed-only fragment emits no
+converter function of its own. There is one fragment per recipe, reused by
+every site that picks it, but a fragment may therefore contribute zero, one, or
+several functions to the file.
 
 What comes back to the registry is not the function. It is one fact about it:
 which other crossings that function's body calls into. A converter for
@@ -227,10 +259,11 @@ that calls no other names nothing. Those edges are what the registry asked for
 — it walks them to work out which crossings the binding actually reaches, and
 so which converters have to exist.
 
-**Then writing.** The generated code enters here. The adapter calls the writer,
-handing it three things: the resolved registry, itself, and the converters it
-has been holding since the first round. So the registry never carries the
-generated Rust at all — it goes straight from the adapter to the writer.
+**Then writing.** The rest of the generated code enters here. The adapter calls
+the writer, handing it three things: the resolved registry, itself, and the
+already-rendered converters it has been holding since the first round. So the
+registry never carries the generated Rust at all — it goes straight from the
+adapter to the writer.
 
 The writer then goes over the declared items in name order and calls the
 adapter back once per kind — `on_function`, `on_struct`, `on_enum`, `on_const`
@@ -297,6 +330,192 @@ A **site** is one position in this picture — a parameter, the return, the `Err
 arm, one argument of a callback. That is what makes a fragment per recipe and a
 plan per site: the fragment is the converter's answer and is reused wherever
 that crossing appears, while the plan is the wrapper's.
+
+## Proposed generation mechanism
+
+The two-round account above describes the output accurately, but it hides the
+most important implementation detail: resolving is already emitting Rust. That
+is not required by the model and is the source of much of the orchestration
+around generation.
+
+### What the implementation actually does
+
+The present call path is:
+
+1. `RegistryBuilder::convert_with` derives the crossing order, constructs an
+   `Emit`, and passes it into the adapter's conversion closure.
+2. `recipe::Compiler` owns another `Emit` and exposes it through every
+   `Compile` hook's context. C and JNI compile hooks use it to spell source-side
+   `TypeRef`s while recipes and sites are still being resolved.
+3. A compiled fragment holds generated syntax, including complete
+   `syn::ItemFn`s where that recipe emits conversion functions. Both adapters
+   keep the fragment memo behind
+   `Rc<RefCell<Compiled<_>>>`, repeatedly clone it into `Compiler::resume`, and
+   put the finished compiler back because later conversions consult earlier
+   ones while they are being generated.
+4. Each adapter copies the functions out again into `compiled_fns`. Its
+   `write_rust` passes that separate slice beside the resolved registry to the
+   shared writer.
+5. The writer constructs another `Emit`, appends the already-generated
+   converters, invokes the per-item emission hooks, parses each hook's
+   `TokenStream` back into `syn::Item`s, appends guards, runs
+   `post_process_item` over the whole AST, and writes the file.
+
+The capability is therefore private but not late: it prevents an ordinary
+adapter method from spelling a `TypeRef`, yet explicitly allows the adapter to
+do so inside `convert_with` and `Compiler`. The comments in
+`registry/declare.rs` call conversion an emission callback for exactly this
+reason. This is the point where the implementation differs from the Flat
+boundary stated at the start of this document.
+
+The extra state is a consequence of that timing rather than of crossings. The
+registry needs a conversion's semantic dependencies — the `Answer::over(...)`
+edges — but it never reads the generated function body to derive them. Recipe
+composition already knows those edges. Keeping a generated `ItemFn` alive
+during the dependency walk therefore couples planning and rendering without
+providing information to the registry.
+
+### Separate planning from rendering
+
+Generation should have one semantic phase and one Rust-syntax phase:
+
+```text
+captured records
+    -> Flat
+    -> declarations, recipes and bindings
+    -> ordered crossings
+    -> adapter-specific fragment and site plans
+    -> validate and freeze the complete generation plan
+    -> render Rust once, with Emit
+    -> assemble, format and write the file
+```
+
+Everything through the frozen plan is **planning**. It may inspect Flat and the
+resolved conversion table, and it may carry `TypeRef`s, but it cannot render
+their captured syntax. The last two steps are **final emission**. They may spell
+those stored `TypeRef`s, but cannot select a recipe, change a crossing, discover
+a dependency, fall back to another converter, or reject a shape. Those
+decisions are already frozen.
+
+The plan types remain adapter-specific. There is no benefit in forcing C and
+JNI into one code-generation IR. Each adapter's immutable store needs to carry,
+at least:
+
+* one fragment plan per reached recipe, including its semantic dependencies,
+  wire slots, ownership and cleanup operations, stable generated symbol, and
+  source-side positions as opaque `TypeRef`s;
+* one artifact plan per declared function, type, constant, callback and other
+  generated entry point, with the exact fragment selected for every site;
+* the complete ordered artifact set, including prerequisites and target-side
+  artifacts, so Rust and Kotlin/C output read the same frozen decisions; and
+* typed planning and validation errors, all produced before a writable output
+  path is touched.
+
+The final Rust renderer receives only one of those item-specific plans and the
+late spelling capability. It does not receive `&Registry`, a raw source
+signature from which it could re-derive a crossing, or a global store from which
+it could select a different plan. Adapter-authored wire syntax can be held in a
+plan directly; each source-side Rust type is rendered from its `TypeRef` only at
+this point.
+
+Conceptually, the ownership looks like this; the names are illustrative rather
+than a proposed public API:
+
+```rust,ignore
+struct Generation<P> {
+    plans: P,                  // complete, validated, immutable
+    artifacts: Vec<Artifact>, // already selected and ordered
+}
+
+trait RenderRust {
+    type Plans;
+
+    fn render_artifact(
+        &self,
+        plan: &ArtifactPlan<Self::Plans>,
+        emit: &Emit,
+    ) -> Result<Vec<syn::Item>, RenderError>;
+}
+```
+
+The adapter owns `Generation` and its `write_rust`; the registry is a planning
+input, not the driver of emission callbacks. The concrete API may instead use
+an item sink which owns the private capability. The invariant is the same:
+`Emit` is minted only inside final file assembly, and every adapter call that
+can reach it is a renderer over a frozen, item-specific plan.
+
+Returning `syn::Item`s (or pushing them into that sink) removes the current
+`TokenStream -> syn::File -> syn::Item` parse round trip. Source qualification
+should happen when the final renderer spells each stored `TypeRef`; once no
+generated body exists before that point, `post_process_item` should either
+disappear or become a syntax-only normalizer with no registry or planning
+access. Ordering and deduplication likewise belong to stable artifact IDs in the
+plan, not to generated function names inspected after rendering.
+
+### What this deletes, and what it keeps
+
+Moving the boundary deletes accidental coordination:
+
+* `Emit` from `RegistryBuilder::convert_with`, `recipe::Compiler`, and
+  `Compile` contexts;
+* generated `syn::ItemFn`s from fragment planning and the duplicate
+  `compiled_fns` caches;
+* the `Rc<RefCell<Compiled<_>>>` clone/resume/finish exchange used to let
+  generation observe its own partial output;
+* lazy or later compiler resumes used to build site plans after conversion
+  resolution; and
+* writer callbacks that receive a registry, token parsing, and name-based
+  converter deduplication.
+
+It does **not** delete the Flat model, crossing dependency order, the distinction
+between reusable fragments and per-site plans, adapter-specific wire layouts,
+typed failures, or validation. Those are model complexity. In particular,
+recursive crossings still require the registry's explicit cycle rule, and a
+callback's reversed inner direction remains a Flat fact rather than renderer
+logic.
+
+### Migration
+
+This can land as byte-identical stages:
+
+1. Define frozen adapter-owned generation stores and eagerly build every
+   fragment and site plan. Make both artifact writers consume the same store.
+2. Replace generated converter functions inside C fragments with semantic
+   operations and render them in C's final writer. This is the smaller adapter
+   and establishes the boundary before JNI migration.
+3. Do the same for JNI while deleting, rather than reproducing, the legacy
+   `ConverterImpl`, `Stage`, `expand`, `unfold`, and `fn_plan` carriers tracked
+   by [#506](https://github.com/milyin/prebindgen/issues/506).
+4. Remove `Emit` from `convert_with` and `recipe::Compiler`; make it impossible
+   to construct or receive a spelling capability anywhere in the planning call
+   graph.
+5. Move final file ownership to each adapter, replace per-item token callbacks
+   with direct item rendering, and remove the shared `Prebindgen` emission
+   protocol and `post_process_item`.
+
+The ordering allows temporary semantic plans to coexist with old rendered
+fragments, but the invariant is complete only after step 4. Each step keeps
+generated Rust and Kotlin/C artifacts byte-for-byte unchanged; the boundary is
+an internal simplification, not a binding ABI change.
+
+This supplies the missing mechanism behind
+[#195](https://github.com/milyin/prebindgen/issues/195)'s pure-emission rule:
+renderers consume frozen plans only, while this section additionally says when
+source Rust spelling becomes available. It also completes the emission-out
+direction left by [#251](https://github.com/milyin/prebindgen/issues/251),
+without making the legacy-plan deletion in #506 the new architecture.
+
+The exit checks are mechanical:
+
+* no function reachable from planning or validation receives `Emit`, implements
+  `RustEmitter`, or renders a source-side `TypeRef`;
+* no final renderer receives `&Registry`, rebuilds a site/fragment plan, or
+  classifies a source signature;
+* every source-side type in a plan remains a `TypeRef` until final rendering;
+* validation and every artifact writer observe the same immutable plan store;
+* all spelling sites are reachable only from final file assembly; and
+* regeneration, workspace tests, clippy/rustdoc, and the JNI JVM covertest are
+  unchanged and green.
 
 ## Directions and crossings
 
