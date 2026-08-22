@@ -8,8 +8,7 @@
 
 use prebindgen_registry::{flat::TypeRef, write::RustFunction, Emit};
 
-use super::builder::qualify_source_type;
-use super::*;
+use super::{builder::qualify_source_type, *};
 
 /// The callable facts a parent chain needs from a child converter.
 #[derive(Clone)]
