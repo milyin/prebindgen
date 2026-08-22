@@ -9,9 +9,18 @@ the [Flat planning boundary](model.md#flat-is-the-planning-boundary): captured
 Rust type syntax becomes available only after every generation decision is
 complete and validated.
 
-The target is an internal simplification. Generated Rust, C-facing application
-binary interface (ABI), Java Native Interface (JNI) ABI and generated Kotlin
-must remain byte-for-byte unchanged throughout the migration.
+The target is semantic preservation, not textual stability. The public C
+application binary interface (ABI), Java Native Interface (JNI) contract and
+generated Kotlin API must remain compatible, and existing ownership, cleanup,
+error, panic and concurrency behavior must keep working. Generated source and
+private helper structure may change. In particular, the migration may reorder,
+combine, inline or remove private converter functions when that improves the
+result without changing the public contract.
+
+Any change to a public symbol, calling convention, wire layout, Kotlin-visible
+signature or documented behavior is separate binding work and must be proposed
+and reviewed as such. A code-generation optimization is in scope when only its
+private implementation, code size or performance changes.
 
 ## Terms used here
 
@@ -179,10 +188,13 @@ Plan types remain adapter-specific. Each immutable store must contain at least:
   source-side positions stored as `TypeRef`s;
 - one site plan for every crossing position in a declared function or callback,
   with its exact selected fragment;
-- one artifact plan for every converter, wrapper, helper, constant getter,
-  callback bridge and target-language declaration that will be emitted;
-- an explicit artifact order and stable artifact identities, so ordering and
-  duplicate detection do not depend on rendered function names;
+- one artifact plan for every final top-level item. A private conversion may be
+  represented as its own helper, an operation in another artifact or a shared
+  helper; the plan need not preserve one node per converter function in the old
+  output;
+- an explicit artifact order, compatible identities for public symbols and
+  deterministic identities for private artifacts, so ordering and duplicate
+  detection do not depend on rendered function names;
 - all prerequisites needed by the selected artifacts; and
 - typed planning and validation errors, produced before an output path is
   opened.
@@ -240,6 +252,31 @@ should happen when the renderer spells each stored `TypeRef`. If a final
 syntax-only normalizer remains, it receives no registry and cannot change which
 artifacts or conversions exist.
 
+## Optimizations this boundary permits
+
+Requiring byte-identical generated files would preserve several artifacts that
+the new boundary makes unnecessary. Semantic preservation allows the planner
+and renderer to improve them:
+
+- Emit fully qualified source types directly and delete the whole-file
+  `post_process_item` rewrite, even when that changes generated spelling.
+- Return `syn::Item`s directly and let ordinary formatting determine whitespace
+  and item layout instead of preserving token-reparse artifacts.
+- Inline or combine private converters and JNI pre-stage functions when a
+  separate generated function provides no reuse or diagnostic value.
+- Remove unreachable private helpers instead of retaining them to keep a golden
+  file unchanged.
+- Deduplicate artifacts by semantic identity before rendering rather than by a
+  rendered function name afterwards.
+- Use the complete frozen plan to choose reusable helpers versus inlined code,
+  reducing generated code size or call overhead without exposing source syntax
+  to planning.
+
+An optimization that changes which artifacts exist or how they compose is a
+planning decision and must be stored in the frozen plan. The renderer only
+realizes that decision; semantic freedom does not permit it to start planning
+again.
+
 ## What the change removes and preserves
 
 The proposal removes accidental coordination:
@@ -268,27 +305,40 @@ It preserves model complexity:
 
 ## Migration
 
-The migration can be split into output-identical stages:
+The migration uses semantically preserving vertical slices. A slice changes one
+adapter all the way from planning through final emission and deletes the state
+it replaces, rather than maintaining parallel semantic and pre-rendered
+representations merely to keep generated text identical.
 
-1. Define frozen adapter-owned generation stores and eagerly build every
-   fragment, site and artifact plan. Make the Rust and target-language writers
-   consume the same store.
-2. Replace generated converter functions inside C fragments with semantic
-   operations and render them through C's final adapter renderer. C is the
-   smaller adapter and establishes the boundary first.
-3. Apply the same change to JNI while deleting, rather than reproducing, its
-   legacy carriers: `ConverterImpl` and `Stage` hold generated converter chains;
-   `expand`, `unfold` and `fn_plan` are the older decomposition and per-function
-   planning modules. Their deletion is tracked by
-   [issue #506](https://github.com/milyin/prebindgen/issues/506).
-4. Remove `Emit` from `convert_with` and `recipe::Compiler`. No function
-   reachable from planning or validation can then obtain source spelling.
-5. Reduce the shared writer to the final-assembly sequence above, replace the
-   item-kind token callbacks with the single artifact-rendering boundary, and
-   remove the `Prebindgen` emission protocol and `post_process_item`.
+1. **State and test the observable contracts.** Record the exported C symbols,
+   signatures and layouts; JNI native names and descriptors; Kotlin public
+   signatures; and ownership, cleanup, error, panic and concurrency behavior.
+   Generated-source snapshots remain change detectors, not an immutable
+   specification: an intentional private-code diff is reviewed and committed.
+2. **Migrate C end to end.** Replace generated functions inside C fragments with
+   semantic operations, eagerly freeze every C fragment, site and artifact
+   plan, and render them through the shared writer. Delete C's early `Emit`,
+   shared mutable compiler memo and `compiled_fns` in the same slice. C is the
+   smaller adapter and establishes the boundary and writer API first.
+3. **Migrate JNI end to end.** Make Rust and Kotlin consume one frozen JNI plan,
+   move source spelling to the final renderer and delete, rather than reproduce,
+   the legacy carriers. `ConverterImpl` and `Stage` hold generated converter
+   chains; `expand`, `unfold` and `fn_plan` are the older decomposition and
+   per-function planning modules. Their deletion is tracked by
+   [issue #506](https://github.com/milyin/prebindgen/issues/506). This slice may
+   be several reviewable PRs, but no completed PR keeps duplicate planning and
+   rendering stores solely for textual compatibility.
+4. **Delete and seal the old path.** Remove `Emit` from `convert_with`,
+   `recipe::Compiler` and every planning context. Reduce the shared writer to
+   the final-assembly sequence above, replace item-kind token callbacks with the
+   single artifact-rendering boundary, and remove the `Prebindgen` emission
+   protocol and `post_process_item`. Compile-fail and call-graph checks then
+   enforce that planning cannot obtain source spelling.
 
-Temporary semantic plans may coexist with old rendered fragments during the
-first three stages. The Flat boundary is fully enforced only after stage 4.
+The Flat boundary is complete after both adapter slices stop rendering during
+planning and stage 4 removes the generic escape. Generated output may evolve at
+each slice; every externally visible difference still requires an explicit
+contract change outside this proposal.
 
 ## Relation to existing work
 
@@ -316,8 +366,12 @@ The boundary and behavior are mechanically testable:
 - Validation and every artifact writer observe the same immutable plan store.
 - All source-spelling calls are reachable only from the shared Rust writer's
   final-emission boundary.
-- Every migration stage leaves generated Rust and Kotlin/C artifacts
-  byte-for-byte unchanged.
+- Exported C symbols, signatures and layouts remain compatible; JNI native names
+  and descriptors remain compatible; generated Kotlin retains its public
+  signatures and behavior.
+- Generated-source changes are classified as private restructuring,
+  qualification, formatting or an explicit optimization. No unexplained public
+  delta is accepted.
 - Workspace tests, the Rust linter (clippy), Rust documentation tests (rustdoc),
-  regeneration checks, AddressSanitizer smoke tests and the JNI end-to-end Java
-  Virtual Machine covertest harness remain green.
+  reviewed regeneration goldens, AddressSanitizer smoke tests and the JNI
+  end-to-end Java Virtual Machine covertest harness remain green.
