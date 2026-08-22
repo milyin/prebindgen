@@ -47,12 +47,12 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
         "{rust}"
     );
     assert!(
-        rc.contains("Some({let__inner_s0=jlong_to_u64_")
-            && rc.contains("let__inner_s1=u64_to_Duration_"),
+        rc.contains("Some({let__chain_s0=jlong_to_u64_")
+            && rc.contains("let__chain_s1=u64_to_Duration_"),
         "Option input must compose the raw u64 decoder with the Duration stage:\n{rust}"
     );
     assert!(
-        rc.contains("Some(value)=>{let__inner_s0=")
+        rc.contains("Some(__value)=>{{let__chain_s0=")
             && rc.contains("Duration_to_u64_")
             && rc.contains("u64_to_jlong_"),
         "Option output must compose the Duration stage with the raw u64 encoder:\n{rust}"

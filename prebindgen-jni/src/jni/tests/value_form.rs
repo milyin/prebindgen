@@ -2861,9 +2861,9 @@ fn a_whole_value_crossing_ignores_how_rust_spells_it() {
         bc.contains("v:Box<Option<myflat::ZStamp>>"),
         "the converter takes the spelled type:\n{boxed}"
     );
-    // ...and reads the canonical shape out of it before destructuring.
+    // ...and matches the canonical shape directly before destructuring.
     assert!(
-        bc.contains("letv:Option<myflat::ZStamp>="),
+        bc.contains("match*(v)"),
         "the spelling is read as the canonical shape:\n{boxed}"
     );
     // The Kotlin surface is the wrapper's business only in Rust: both
@@ -3028,13 +3028,12 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
         }
     };
 
-    // One box: bridged with one dereference. Unparenthesized — the bind is a
-    // `let` initializer, where a wrapping paren is `unused_parens`, and
-    // generated code runs through the consumer's own lints (#292).
+    // One box: bridged with one dereference in the direct shape match.
+    // Generated code still runs through the consumer's own lints (#292).
     let one = build(syn::parse_quote!(Box<Option<String>>)).expect("a single box is bridgeable");
     let oc: String = one.split_whitespace().collect();
     assert!(
-        oc.contains("letv:Option<String>=*v;"),
+        oc.contains("match*(v)"),
         "one layer, one dereference:\n{one}"
     );
 
@@ -3044,7 +3043,7 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
         build(syn::parse_quote!(Box<Box<Option<String>>>)).expect("nested boxes are bridgeable");
     let tc: String = two.split_whitespace().collect();
     assert!(
-        tc.contains("letv:Option<String>=**v;"),
+        tc.contains("match*(*(v))"),
         "two layers, two dereferences:\n{two}"
     );
 

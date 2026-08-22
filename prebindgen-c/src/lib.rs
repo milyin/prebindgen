@@ -103,9 +103,7 @@ use std::collections::{HashMap, HashSet};
 // `TypeRef` now, so what is left here serves the two node populations that
 // remain — a build-script declaration, and a converter's own generated
 // signature.
-pub(crate) use prebindgen_registry::types_util::{
-    is_result_type as is_result, path_tail_ident as type_path_tail, result_parts,
-};
+pub(crate) use prebindgen_registry::types_util::{path_tail_ident as type_path_tail, result_parts};
 use prebindgen_registry::{
     decl::{ConvertDecl, ConvertSpec},
     flat::{extract_fn_trait_args, Field, Origin, ScalarKind, TypeKind, TypeRef},
@@ -894,14 +892,6 @@ struct WireField {
 struct ValueShape {
     fields: Vec<WireField>,
     niches: Niches,
-}
-
-/// Whether a converter function's return type is `Result<_, _>` (⇒ fallible).
-fn returns_result(output: &syn::ReturnType) -> bool {
-    match output {
-        syn::ReturnType::Type(_, ty) => is_result(ty),
-        syn::ReturnType::Default => false,
-    }
 }
 
 fn route_result(call: TokenStream, route: &ErrRoute<'_>) -> TokenStream {

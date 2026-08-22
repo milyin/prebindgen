@@ -757,13 +757,12 @@ pub(crate) unsafe fn Box_Box_Option_String_to_JString_299999e0<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Box<Box<Option<String>>>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    Ok({
-        let v: Option<String> = **v;
-        {
-            match v {
-                Some(value) => String_to_JString_c7f3ca43(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match *(*(v)) {
+            ::core::option::Option::Some(__value) => {
+                String_to_JString_c7f3ca43(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -812,13 +811,12 @@ pub(crate) unsafe fn Box_Option_Summary_to_jlong_75560ba9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Box<Option<perftest_flat::Summary>>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Summary> = *v;
-        {
-            match v {
-                Some(value) => Summary_to_jlong_3cb103b9(env, value)?,
-                None => 0i64,
+    ::core::result::Result::Ok({
+        match *(v) {
+            ::core::option::Option::Some(__value) => {
+                Summary_to_jlong_3cb103b9(env, __value)?
             }
+            ::core::option::Option::None => 0i64,
         }
     })
 }
@@ -839,19 +837,16 @@ pub(crate) unsafe fn Box_Option_i64_to_JObject_cf5a3724<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Box<Option<i64>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<i64> = *v;
-        {
-            match v {
-                Some(value) => {
-                    let __raw: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, value)?;
-                    ::prebindgen_jni_runtime::box_jlong(env, __raw)
-                        .map_err(|e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(format!("Option box: {}", e)))?
-                }
-                None => jni::objects::JObject::null(),
+    ::core::result::Result::Ok({
+        match *(v) {
+            ::core::option::Option::Some(__value) => {
+                let __raw: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, __value)?;
+                ::prebindgen_jni_runtime::box_jlong(env, __raw)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option box: {}", __error)))?
             }
+            ::core::option::Option::None => jni::objects::JObject::null(),
         }
     })
 }
@@ -1859,23 +1854,25 @@ pub(crate) unsafe fn JObject_to_Box_Option_Priority_cb1cb2b5<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Box<Option<perftest_flat::Priority>>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<perftest_flat::Priority> = {
-            if !v.is_null() {
-                let __unboxed: jni::sys::jint = env
-                    .call_method(&v, "intValue", "()I", &[])
-                    .and_then(|val| val.i())
-                    .map(|__x| __x as jni::sys::jint)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Option unbox: {}", e)))?;
-                Some(jint_to_Priority_447102d2(env, &__unboxed)?)
+    ::core::result::Result::Ok(
+        ::std::boxed::Box::new({
+            if (v).is_null() {
+                ::core::option::Option::None
             } else {
-                None
+                let __present = {
+                    env.call_method(&v, "intValue", "()I", &[])
+                        .and_then(|__value| __value.i())
+                        .map(|__value| __value as jni::sys::jint)
+                        .map_err(|__error| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Option unbox: {}", __error)))?
+                };
+                ::core::option::Option::Some(
+                    jint_to_Priority_447102d2(env, &(__present))?,
+                )
             }
-        };
-        ::std::boxed::Box::new(__v)
-    })
+        }),
+    )
 }
 #[allow(
     non_snake_case,
@@ -1894,23 +1891,23 @@ pub(crate) unsafe fn JObject_to_Box_Option_i64_cf5a3724<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Box<Option<i64>>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<i64> = {
-            if !v.is_null() {
-                let __unboxed: jni::sys::jlong = env
-                    .call_method(&v, "longValue", "()J", &[])
-                    .and_then(|val| val.j())
-                    .map(|__x| __x as jni::sys::jlong)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Option unbox: {}", e)))?;
-                Some(jlong_to_i64_fbf9a9bc(env, &__unboxed)?)
+    ::core::result::Result::Ok(
+        ::std::boxed::Box::new({
+            if (v).is_null() {
+                ::core::option::Option::None
             } else {
-                None
+                let __present = {
+                    env.call_method(&v, "longValue", "()J", &[])
+                        .and_then(|__value| __value.j())
+                        .map(|__value| __value as jni::sys::jlong)
+                        .map_err(|__error| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Option unbox: {}", __error)))?
+                };
+                ::core::option::Option::Some(jlong_to_i64_fbf9a9bc(env, &(__present))?)
             }
-        };
-        ::std::boxed::Box::new(__v)
-    })
+        }),
+    )
 }
 #[allow(
     non_snake_case,
@@ -2986,11 +2983,13 @@ pub(crate) unsafe fn JObject_to_Option_Hold_230d7f9b<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Hold>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<perftest_flat::Hold> = {
-            if v.is_null() { None } else { Some(JObject_to_Hold_5f85caaf(env, v)?) }
-        };
-        __v
+    ::core::result::Result::Ok({
+        if v.is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = v;
+            ::core::option::Option::Some(JObject_to_Hold_5f85caaf(env, __present)?)
+        }
     })
 }
 #[allow(
@@ -3058,29 +3057,29 @@ pub(crate) unsafe fn JObject_to_Option_Percent_544dd364<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Percent>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<perftest_flat::Percent> = {
-            if !v.is_null() {
-                let __unboxed: jni::sys::jint = env
-                    .call_method(&v, "intValue", "()I", &[])
-                    .and_then(|val| val.i())
-                    .map(|__x| __x as jni::sys::jint)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
+    ::core::result::Result::Ok({
+        if (v).is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = {
+                env.call_method(&v, "intValue", "()I", &[])
+                    .and_then(|__value| __value.i())
+                    .map(|__value| __value as jni::sys::jint)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
                         String,
-                    >>::from(format!("Option unbox: {}", e)))?;
-                Some({
-                    let __inner_s0 = jint_to_i32_a3e3b6ef(env, &__unboxed)?;
-                    let __inner_s1 = i32_to_Percent_db3641cc(env, __inner_s0)
+                    >>::from(format!("Option unbox: {}", __error)))?
+            };
+            ::core::option::Option::Some(
+                {
+                    let __chain_s0 = jint_to_i32_a3e3b6ef(env, &(__present))?;
+                    let __chain_s1 = i32_to_Percent_db3641cc(env, __chain_s0)
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
-                    __inner_s1
-                })
-            } else {
-                None
-            }
-        };
-        __v
+                    ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
+                }?,
+            )
+        }
     })
 }
 #[allow(
@@ -3100,22 +3099,20 @@ pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Priority>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<perftest_flat::Priority> = {
-            if !v.is_null() {
-                let __unboxed: jni::sys::jint = env
-                    .call_method(&v, "intValue", "()I", &[])
-                    .and_then(|val| val.i())
-                    .map(|__x| __x as jni::sys::jint)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
+    ::core::result::Result::Ok({
+        if (v).is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = {
+                env.call_method(&v, "intValue", "()I", &[])
+                    .and_then(|__value| __value.i())
+                    .map(|__value| __value as jni::sys::jint)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
                         String,
-                    >>::from(format!("Option unbox: {}", e)))?;
-                Some(jint_to_Priority_447102d2(env, &__unboxed)?)
-            } else {
-                None
-            }
-        };
-        __v
+                    >>::from(format!("Option unbox: {}", __error)))?
+            };
+            ::core::option::Option::Some(jint_to_Priority_447102d2(env, &(__present))?)
+        }
     })
 }
 #[allow(
@@ -3159,22 +3156,20 @@ pub(crate) unsafe fn JObject_to_Option_f64_b3f3e9a9<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<f64>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<f64> = {
-            if !v.is_null() {
-                let __unboxed: jni::sys::jdouble = env
-                    .call_method(&v, "doubleValue", "()D", &[])
-                    .and_then(|val| val.d())
-                    .map(|__x| __x as jni::sys::jdouble)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
+    ::core::result::Result::Ok({
+        if (v).is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = {
+                env.call_method(&v, "doubleValue", "()D", &[])
+                    .and_then(|__value| __value.d())
+                    .map(|__value| __value as jni::sys::jdouble)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
                         String,
-                    >>::from(format!("Option unbox: {}", e)))?;
-                Some(jdouble_to_f64_9e4a8f70(env, &__unboxed)?)
-            } else {
-                None
-            }
-        };
-        __v
+                    >>::from(format!("Option unbox: {}", __error)))?
+            };
+            ::core::option::Option::Some(jdouble_to_f64_9e4a8f70(env, &(__present))?)
+        }
     })
 }
 #[allow(
@@ -3194,22 +3189,20 @@ pub(crate) unsafe fn JObject_to_Option_i64_2ba9a5ed<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<i64>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<i64> = {
-            if !v.is_null() {
-                let __unboxed: jni::sys::jlong = env
-                    .call_method(&v, "longValue", "()J", &[])
-                    .and_then(|val| val.j())
-                    .map(|__x| __x as jni::sys::jlong)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
+    ::core::result::Result::Ok({
+        if (v).is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = {
+                env.call_method(&v, "longValue", "()J", &[])
+                    .and_then(|__value| __value.j())
+                    .map(|__value| __value as jni::sys::jlong)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
                         String,
-                    >>::from(format!("Option unbox: {}", e)))?;
-                Some(jlong_to_i64_fbf9a9bc(env, &__unboxed)?)
-            } else {
-                None
-            }
-        };
-        __v
+                    >>::from(format!("Option unbox: {}", __error)))?
+            };
+            ::core::option::Option::Some(jlong_to_i64_fbf9a9bc(env, &(__present))?)
+        }
     })
 }
 #[allow(
@@ -3229,22 +3222,20 @@ pub(crate) unsafe fn JObject_to_Option_u64_32be16a2<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<u64>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<u64> = {
-            if !v.is_null() {
-                let __unboxed: jni::sys::jlong = env
-                    .call_method(&v, "longValue", "()J", &[])
-                    .and_then(|val| val.j())
-                    .map(|__x| __x as jni::sys::jlong)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
+    ::core::result::Result::Ok({
+        if (v).is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = {
+                env.call_method(&v, "longValue", "()J", &[])
+                    .and_then(|__value| __value.j())
+                    .map(|__value| __value as jni::sys::jlong)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
                         String,
-                    >>::from(format!("Option unbox: {}", e)))?;
-                Some(jlong_to_u64_4384a5d6(env, &__unboxed)?)
-            } else {
-                None
-            }
-        };
-        __v
+                    >>::from(format!("Option unbox: {}", __error)))?
+            };
+            ::core::option::Option::Some(jlong_to_u64_4384a5d6(env, &(__present))?)
+        }
     })
 }
 #[allow(
@@ -6482,12 +6473,16 @@ pub(crate) unsafe fn JString_to_Box_Option_String_caeff346<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
 ) -> ::core::result::Result<Box<Option<String>>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<String> = {
-            if v.is_null() { None } else { Some(JString_to_String_c7f3ca43(env, v)?) }
-        };
-        ::std::boxed::Box::new(__v)
-    })
+    ::core::result::Result::Ok(
+        ::std::boxed::Box::new({
+            if v.is_null() {
+                ::core::option::Option::None
+            } else {
+                let __present = v;
+                ::core::option::Option::Some(JString_to_String_c7f3ca43(env, __present)?)
+            }
+        }),
+    )
 }
 #[allow(
     non_snake_case,
@@ -6534,15 +6529,13 @@ pub(crate) unsafe fn JString_to_Option_Box_String_071e4c8c<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
 ) -> ::core::result::Result<Option<Box<String>>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<Box<String>> = {
-            if v.is_null() {
-                None
-            } else {
-                Some(JString_to_Box_String_027f6250(env, v)?)
-            }
-        };
-        __v
+    ::core::result::Result::Ok({
+        if v.is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = v;
+            ::core::option::Option::Some(JString_to_Box_String_027f6250(env, __present)?)
+        }
     })
 }
 #[allow(
@@ -6562,11 +6555,13 @@ pub(crate) unsafe fn JString_to_Option_String_56d5e304<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
 ) -> ::core::result::Result<Option<String>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<String> = {
-            if v.is_null() { None } else { Some(JString_to_String_c7f3ca43(env, v)?) }
-        };
-        __v
+    ::core::result::Result::Ok({
+        if v.is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = v;
+            ::core::option::Option::Some(JString_to_String_c7f3ca43(env, __present)?)
+        }
     })
 }
 #[allow(
@@ -9174,13 +9169,12 @@ pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Box<String>>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    Ok({
-        let v: Option<Box<String>> = v;
-        {
-            match v {
-                Some(value) => Box_String_to_JString_027f6250(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Box_String_to_JString_027f6250(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -9201,19 +9195,18 @@ pub(crate) unsafe fn Option_Duration_to_jlong_1cfa4d44<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Duration>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Duration> = v;
-        {
-            match v {
-                Some(value) => {
-                    let __inner_s0 = Duration_to_u64_e3980876(env, value)
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                {
+                    let __chain_s0 = Duration_to_u64_e3980876(env, __value)
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
-                    u64_to_jlong_4384a5d6(env, __inner_s0)?
-                }
-                None => -1i64,
+                    u64_to_jlong_4384a5d6(env, __chain_s0)
+                }?
             }
+            ::core::option::Option::None => -1i64,
         }
     })
 }
@@ -9234,13 +9227,12 @@ pub(crate) unsafe fn Option_Ingot_to_jlong_a76a8f2f<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Ingot>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Ingot> = v;
-        {
-            match v {
-                Some(value) => Ingot_to_jlong_020c3a86(env, value)?,
-                None => 0i64,
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Ingot_to_jlong_020c3a86(env, __value)?
             }
+            ::core::option::Option::None => 0i64,
         }
     })
 }
@@ -9261,13 +9253,12 @@ pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Payload>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Payload> = v;
-        {
-            match v {
-                Some(value) => Payload_to_JObject_98f64326(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Payload_to_JObject_98f64326(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -9288,25 +9279,22 @@ pub(crate) unsafe fn Option_Percent_to_JObject_544dd364<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Percent>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Percent> = v;
-        {
-            match v {
-                Some(value) => {
-                    let __raw: jni::sys::jint = {
-                        let __inner_s0 = Percent_to_i32_01484801(env, value)
-                            .map_err(|__e| <__JniErr as ::core::convert::From<
-                                String,
-                            >>::from(__e.to_string()))?;
-                        i32_to_jint_a3e3b6ef(env, __inner_s0)?
-                    };
-                    ::prebindgen_jni_runtime::box_jint(env, __raw)
-                        .map_err(|e| <__JniErr as ::core::convert::From<
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                let __raw: jni::sys::jint = {
+                    let __chain_s0 = Percent_to_i32_01484801(env, __value)
+                        .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
-                        >>::from(format!("Option box: {}", e)))?
-                }
-                None => jni::objects::JObject::null(),
+                        >>::from(__e.to_string()))?;
+                    i32_to_jint_a3e3b6ef(env, __chain_s0)
+                }?;
+                ::prebindgen_jni_runtime::box_jint(env, __raw)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option box: {}", __error)))?
             }
+            ::core::option::Option::None => jni::objects::JObject::null(),
         }
     })
 }
@@ -9327,19 +9315,16 @@ pub(crate) unsafe fn Option_Priority_to_JObject_ad5cbb32<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Priority>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Priority> = v;
-        {
-            match v {
-                Some(value) => {
-                    let __raw: jni::sys::jint = Priority_to_jint_447102d2(env, value)?;
-                    ::prebindgen_jni_runtime::box_jint(env, __raw)
-                        .map_err(|e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(format!("Option box: {}", e)))?
-                }
-                None => jni::objects::JObject::null(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                let __raw: jni::sys::jint = Priority_to_jint_447102d2(env, __value)?;
+                ::prebindgen_jni_runtime::box_jint(env, __raw)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option box: {}", __error)))?
             }
+            ::core::option::Option::None => jni::objects::JObject::null(),
         }
     })
 }
@@ -9360,13 +9345,12 @@ pub(crate) unsafe fn Option_Stamp_to_JObject_6375b503<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Stamp>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Stamp> = v;
-        {
-            match v {
-                Some(value) => Stamp_to_JObject_f6b1e942(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Stamp_to_JObject_f6b1e942(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -9387,13 +9371,12 @@ pub(crate) unsafe fn Option_String_to_JString_56d5e304<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<String>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    Ok({
-        let v: Option<String> = v;
-        {
-            match v {
-                Some(value) => String_to_JString_c7f3ca43(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                String_to_JString_c7f3ca43(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -9414,13 +9397,12 @@ pub(crate) unsafe fn Option_Summary_to_jlong_252ef2ba<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Summary>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Summary> = v;
-        {
-            match v {
-                Some(value) => Summary_to_jlong_3cb103b9(env, value)?,
-                None => 0i64,
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Summary_to_jlong_3cb103b9(env, __value)?
             }
+            ::core::option::Option::None => 0i64,
         }
     })
 }
@@ -9441,13 +9423,12 @@ pub(crate) unsafe fn Option_Summary_to_jlong_828826f3<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<&perftest_flat::Summary>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok({
-        let v: Option<&perftest_flat::Summary> = v;
-        {
-            match v {
-                Some(value) => Summary_to_jlong_ccacdeac(env, value)?,
-                None => 0i64,
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Summary_to_jlong_ccacdeac(env, __value)?
             }
+            ::core::option::Option::None => 0i64,
         }
     })
 }
@@ -9468,25 +9449,22 @@ pub(crate) unsafe fn Option_Ticks_to_JObject_95efad57<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Ticks>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<perftest_flat::Ticks> = v;
-        {
-            match v {
-                Some(value) => {
-                    let __raw: jni::sys::jlong = {
-                        let __inner_s0 = Ticks_to_u64_78fe2120(env, value)
-                            .map_err(|__e| <__JniErr as ::core::convert::From<
-                                String,
-                            >>::from(__e.to_string()))?;
-                        u64_to_jlong_4384a5d6(env, __inner_s0)?
-                    };
-                    ::prebindgen_jni_runtime::box_jlong(env, __raw)
-                        .map_err(|e| <__JniErr as ::core::convert::From<
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                let __raw: jni::sys::jlong = {
+                    let __chain_s0 = Ticks_to_u64_78fe2120(env, __value)
+                        .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
-                        >>::from(format!("Option box: {}", e)))?
-                }
-                None => jni::objects::JObject::null(),
+                        >>::from(__e.to_string()))?;
+                    u64_to_jlong_4384a5d6(env, __chain_s0)
+                }?;
+                ::prebindgen_jni_runtime::box_jlong(env, __raw)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option box: {}", __error)))?
             }
+            ::core::option::Option::None => jni::objects::JObject::null(),
         }
     })
 }
@@ -9507,13 +9485,12 @@ pub(crate) unsafe fn Option_Vec_Option_u64_to_JObject_006312b6<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Vec<Option<u64>>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<Vec<Option<u64>>> = v;
-        {
-            match v {
-                Some(value) => Vec_Option_u64_to_JObject_a34190e7(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Vec_Option_u64_to_JObject_a34190e7(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -9534,13 +9511,12 @@ pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Vec<perftest_flat::Payload>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<Vec<perftest_flat::Payload>> = v;
-        {
-            match v {
-                Some(value) => Vec_Payload_to_JObject_8b7084d2(env, value)?,
-                None => jni::objects::JObject::null().into(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Vec_Payload_to_JObject_8b7084d2(env, __value)?
             }
+            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -9561,19 +9537,16 @@ pub(crate) unsafe fn Option_f64_to_JObject_b3f3e9a9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<f64>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<f64> = v;
-        {
-            match v {
-                Some(value) => {
-                    let __raw: jni::sys::jdouble = f64_to_jdouble_9e4a8f70(env, value)?;
-                    ::prebindgen_jni_runtime::box_jdouble(env, __raw)
-                        .map_err(|e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(format!("Option box: {}", e)))?
-                }
-                None => jni::objects::JObject::null(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                let __raw: jni::sys::jdouble = f64_to_jdouble_9e4a8f70(env, __value)?;
+                ::prebindgen_jni_runtime::box_jdouble(env, __raw)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option box: {}", __error)))?
             }
+            ::core::option::Option::None => jni::objects::JObject::null(),
         }
     })
 }
@@ -9594,19 +9567,16 @@ pub(crate) unsafe fn Option_i64_to_JObject_2ba9a5ed<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<i64>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<i64> = v;
-        {
-            match v {
-                Some(value) => {
-                    let __raw: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, value)?;
-                    ::prebindgen_jni_runtime::box_jlong(env, __raw)
-                        .map_err(|e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(format!("Option box: {}", e)))?
-                }
-                None => jni::objects::JObject::null(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                let __raw: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, __value)?;
+                ::prebindgen_jni_runtime::box_jlong(env, __raw)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option box: {}", __error)))?
             }
+            ::core::option::Option::None => jni::objects::JObject::null(),
         }
     })
 }
@@ -9627,19 +9597,16 @@ pub(crate) unsafe fn Option_u64_to_JObject_32be16a2<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<u64>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Option<u64> = v;
-        {
-            match v {
-                Some(value) => {
-                    let __raw: jni::sys::jlong = u64_to_jlong_4384a5d6(env, value)?;
-                    ::prebindgen_jni_runtime::box_jlong(env, __raw)
-                        .map_err(|e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(format!("Option box: {}", e)))?
-                }
-                None => jni::objects::JObject::null(),
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                let __raw: jni::sys::jlong = u64_to_jlong_4384a5d6(env, __value)?;
+                ::prebindgen_jni_runtime::box_jlong(env, __raw)
+                    .map_err(|__error| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option box: {}", __error)))?
             }
+            ::core::option::Option::None => jni::objects::JObject::null(),
         }
     })
 }
@@ -11388,22 +11355,22 @@ pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<Option<perftest_flat::Duration>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<perftest_flat::Duration> = {
-            if *v == -1i64 {
-                None
-            } else {
-                Some({
-                    let __inner_s0 = jlong_to_u64_4384a5d6(env, v)?;
-                    let __inner_s1 = u64_to_Duration_7c0845f9(env, __inner_s0)
+    ::core::result::Result::Ok({
+        if *v == -1i64 {
+            ::core::option::Option::None
+        } else {
+            let __present = v;
+            ::core::option::Option::Some(
+                {
+                    let __chain_s0 = jlong_to_u64_4384a5d6(env, __present)?;
+                    let __chain_s1 = u64_to_Duration_7c0845f9(env, __chain_s0)
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
-                    __inner_s1
-                })
-            }
-        };
-        __v
+                    ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
+                }?,
+            )
+        }
     })
 }
 #[allow(

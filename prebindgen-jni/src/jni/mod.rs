@@ -16,6 +16,7 @@
 //   * `prim` — JNI primitive (un)boxing tables;
 //   * `kotlin_emit` / `render` / `fold` — the Kotlin source emitters.
 
+mod chain;
 mod metadata;
 pub(crate) mod wire_access;
 
@@ -747,7 +748,7 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
-        Ok(prebindgen_registry::write::write_rust(
+        Ok(prebindgen_registry::write::write_rust_planned(
             &self.registry,
             &self.decls,
             &self.decls.compiled_fns,
@@ -850,7 +851,7 @@ pub struct Declarations {
     /// looked up. The writer sorts and de-duplicates by function name, so the
     /// order here decides which of two same-named functions wins and not where
     /// any of them lands.
-    pub(crate) compiled_fns: Vec<syn::ItemFn>,
+    pub(crate) compiled_fns: Vec<chain::JFunction>,
     /// Every conversion this binding has compiled so far, keyed by crossing.
     ///
     /// What the emitters ask instead of the converter table. A table entry

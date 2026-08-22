@@ -95,6 +95,7 @@
 //! construct a typed `*Decl` for the Kotlin surface and live in the separate
 //! `prebindgen-jni` crate, which hands the result to its `JniGenBuilder`.
 
+pub mod chain;
 pub mod decl;
 pub(crate) mod declared_target;
 mod destination;
