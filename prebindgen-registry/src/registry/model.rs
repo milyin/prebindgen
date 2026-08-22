@@ -1,4 +1,20 @@
 //! Questions about the model, answered through the registry that projects it.
+//!
+//! # Flat is the planning boundary
+//!
+//! Code generation must not have direct access to the actual Rust type captured
+//! behind a [`TypeRef`] until final Rust emission: declarations, fragments and
+//! site plans are complete and validated, and only file assembly remains.
+//! Planning may carry a `TypeRef` and inspect the semantic facts Flat exposes,
+//! but it must not render the captured type into `syn`, tokens or text. If a
+//! planner needs a fact available only from that syntax, Flat is incomplete;
+//! add the fact to Flat rather than opening an emission escape.
+//!
+//! The final renderer is the sole consumer of the spelling capability. It may
+//! name source-side types stored in frozen plans, but it may not re-plan a
+//! crossing or choose a converter from their syntax. `docs/model.md` defines
+//! the model boundary; `docs/rust-writing.md` audits the current timing
+//! violation and proposes the staged mechanism that closes it.
 
 use std::collections::HashMap;
 

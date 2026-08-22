@@ -1,14 +1,15 @@
-//! The table of crossings, and the recipes that answer them.
+//! The table queried by crossings, and the recipe rows it owns.
 //!
-//! A **crossing** is one Rust type plus one of two directions — *construct* a Rust
-//! value out of the wire values that arrived, or *deconstruct* one into the
-//! wire values that leave. [`Recipes`] is the table that answers it, and a
-//! **recipe** is one answer: which `#[prebindgen]` constructor assembles the
-//! value, or which accessors take it apart.
+//! A **crossing** is one Rust type plus one direction: the query used to look up
+//! a row in [`Recipes`]. The table owns **recipes**, named rows that state one
+//! shape step. Constructing shapes assemble a Rust value from its parts;
+//! deconstructing shapes take it apart. A [`Shape::Atomic`] row ends that walk,
+//! and the adapter's fragment then decodes the terminal from wire values or
+//! encodes it into them.
 //!
-//! A recipe says nothing about the wire. How many wire values a crossing costs,
-//! how they are encoded and what they cost to clean up is the adapter's answer,
-//! and no part of it is stored here.
+//! A recipe says nothing about the wire. The compiled fragment says how many
+//! wire values the crossing occupies, how they are encoded and what they cost
+//! to clean up, and no part of that is stored here.
 //!
 //! A recipe also says nothing the model already says. Part count, part types,
 //! ownership, names and fallibility are all read off [`flat`](crate::flat), so
@@ -22,18 +23,20 @@
 //!
 //! # What a crossing is keyed by
 //!
-//! A borrow is not part of the crossing. `Sample`, `&Sample` and `Box<Sample>`
-//! are one recipe, because the same recipe assembles all three; whether the value
-//! is handed over or reached through a borrow is [`Crossing::mode`], read off
-//! the type. So an adapter declares `Sample` once and every site finds it.
+//! A borrow is not part of the table key. `Sample`, `&Sample` and `Box<Sample>`
+//! query the same recipe rows; whether the value is handed over or reached
+//! through a borrow is [`Crossing::mode`], read off the spelled type. So an
+//! adapter declares rows for `Sample` once and every spelling finds them. The
+//! compiled fragments may still differ because moving, borrowing and rebuilding
+//! a wrapper are different Rust.
 //!
 //! # Recipes nobody declares
 //!
-//! A type with no declared recipe still gets one, derived from its kind:
+//! A crossing key with no declared row still gets one, derived from its kind:
 //! `Option<T>` yields [`Shape::Optional`], `Vec<T>` and `&[T]` and `[T; N]`
 //! yield [`Shape::Sequence`], and everything else yields [`Shape::Atomic`].
-//! Nesting needs no rule of its own: a recipe names one layer, and the layer
-//! inside it is a crossing with a recipe of its own.
+//! Nesting needs no rule of its own: a recipe row names one layer, and the layer
+//! inside it is another crossing query.
 //!
 //! A callback type yields [`Shape::Invoke`], and that is the only shape such a
 //! crossing takes: converting the arguments is what makes the callable
@@ -67,9 +70,11 @@ pub use self::{
 /// Which of the two directions a crossing is, as a value.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Direction {
-    /// Build a Rust value out of the wire values that arrived.
+    /// Walk toward a Rust value: decode an atomic terminal, or construct an
+    /// enclosing value from its parts.
     Construct,
-    /// Take a Rust value apart into the wire values that leave.
+    /// Walk toward the boundary: deconstruct a value into its parts, or encode
+    /// an atomic terminal.
     Deconstruct,
 }
 
@@ -249,7 +254,7 @@ impl fmt::Display for Mode {
 
 // ── The crossing ──────────────────────────────────────────────────────────
 
-/// One Rust type and one of the two directions: the question the table answers.
+/// One Rust type and one of the two directions: a query into the recipe table.
 #[derive(Clone, Debug)]
 pub struct Crossing {
     ty: TypeRef,
@@ -397,7 +402,7 @@ impl fmt::Display for RecipeKey {
 
 // ── What a recipe says ────────────────────────────────────────────────────
 
-/// How a value gets across, in terms of its parts.
+/// How one layer relates a value to its parts, or ends at [`Shape::Atomic`].
 ///
 /// `OP` is the one thing a recipe states differently between the two directions:
 /// what assembles the parts into a value, or takes them out of it. Nothing
@@ -451,12 +456,12 @@ pub struct Arm<OP> {
     pub op: OP,
 }
 
-/// A recipe that builds a Rust value out of what arrived.
+/// A recipe row for the direction toward Rust.
 pub type Constructing = Shape<Construct>;
-/// A recipe that takes a Rust value apart into what leaves.
+/// A recipe row for the direction toward the boundary.
 pub type Deconstructing = Shape<Deconstruct>;
 
-/// One recipe, under whichever direction it takes.
+/// The shape stored in one table-owned recipe row, under its direction.
 ///
 /// The table holds recipes in this form so both directions share one map. An adapter
 /// writes a [`Constructing`] or a [`Deconstructing`] and never builds or
@@ -513,9 +518,9 @@ impl Recipes {
         RecipesBuilder::default()
     }
 
-    /// Which recipe names this crossing has, in declaration order.
+    /// Which named rows are filed under this crossing key, in declaration order.
     ///
-    /// Empty for a crossing nobody declared, which still has the recipe
+    /// Empty for a crossing key nobody declared, which still has the row
     /// [`Self::recipe`] derives.
     pub fn names_of(&self, key: &CrossingKey) -> Vec<&RecipeName> {
         self.recipes
@@ -542,11 +547,11 @@ impl Recipes {
             .map(|e| &e.recipe)
     }
 
-    /// The recipe a site uses when it names none.
+    /// The row a site uses when it names none.
     ///
-    /// With one declared recipe that recipe is the default; with several it is the
-    /// one declared through [`RecipesBuilder::declare_default`]. `None` for a
-    /// crossing nobody declared.
+    /// With one declared row that row is the default; with several it is the one
+    /// declared through [`RecipesBuilder::declare_default`]. `None` for a
+    /// crossing key nobody declared.
     pub fn default_of(&self, key: &CrossingKey) -> Option<&RecipeKey> {
         let recipes = self.recipes.get(key)?;
         match recipes.as_slice() {
@@ -555,8 +560,8 @@ impl Recipes {
         }
     }
 
-    /// The default recipe for a crossing: the declared one, or the recipe derived
-    /// from the type's kind.
+    /// The default row for a crossing query: a declared row, or one derived from
+    /// the type's kind.
     ///
     /// A callback type derives [`Shape::Invoke`], the only shape such a
     /// crossing takes, so an adapter reaches one here the same way it reaches
@@ -576,7 +581,7 @@ impl Recipes {
     }
 }
 
-/// The arity recipe a crossing gets when nobody declared one.
+/// The shape row derived when nobody declared one under a crossing key.
 fn derive(crossing: &Crossing) -> Recipe {
     let value = crossing.value();
     let kind = if value.callback_args().is_some() {
@@ -637,12 +642,12 @@ pub struct RecipesBuilder {
 }
 
 impl RecipesBuilder {
-    /// Add one recipe for `ty`.
+    /// Add one named row for `ty` under the shape's direction.
     ///
     /// Which direction the recipe is filed under is the shape's own, so nothing states
-    /// it twice and the two cannot disagree. Declaring a second recipe for one
-    /// crossing is how a type offers a choice, and the site is what picks
-    /// between them — at which point one of the recipes has to be declared through
+    /// it twice and the two cannot disagree. Filing a second row under the same
+    /// crossing key is how the table offers a choice, and the site is what picks
+    /// between them — at which point one row has to be declared through
     /// [`Self::declare_default`].
     pub fn declare<OP: Operation>(
         &mut self,
@@ -653,10 +658,10 @@ impl RecipesBuilder {
         self.insert(ty, name, OP::into_recipe(shape), false)
     }
 
-    /// Add one recipe and make it the recipe used where a site names none.
+    /// Add one row and make it the row used where a site names none.
     ///
-    /// Needed only once a crossing has more than one recipe: with a single recipe
-    /// that recipe is the default, so the common case never says so.
+    /// Needed only once a crossing key has more than one row: with a single row
+    /// that row is the default, so the common case never says so.
     pub fn declare_default<OP: Operation>(
         &mut self,
         ty: TypeRef,

@@ -1,31 +1,33 @@
 //! Turning recipes into whatever an adapter emits from.
 //!
-//! [`Recipes`] says how a value gets across in terms of its parts; an adapter
-//! says what that costs on the wire. Its answer for one recipe row is a **fragment**,
-//! a type the adapter defines and this module never looks inside. A fragment is
-//! not a wire value: it may occupy none, one or several, and the count is never
-//! asked for.
+//! [`Recipes`] owns named rows saying how one layer relates a value to its parts,
+//! or that the layer is [`Shape::Atomic`]. An adapter compiles a selected row
+//! and its children into a **fragment**, which adds the wire layout and terminal
+//! decode or encode. A fragment is a type the adapter defines and this module
+//! never looks inside. It is not a wire value: it may occupy none, one or
+//! several, and the count is never asked for.
 //!
 //! An adapter writes [`Compile`], one hook per recipe shape. [`Compiler`] drives
-//! the recursion over the table, builds each recipe's fragment **once**, and hands
-//! every hook the fragments its parts already produced — so an adapter says
-//! what one crossing means and never writes the walk.
+//! the recursion over the table, memoizes the fragment for each selected row
+//! applied to a spelled crossing, and hands every hook the fragments its parts
+//! already produced — so an adapter says what one layer costs and never writes
+//! the walk.
 //!
-//! # Per crossing, not per site
+//! # Per spelled crossing and selected row, not per site
 //!
-//! A fragment is built once per crossing and reused at every site that crossing
-//! appears at. That is what makes emitted code shared without a converter
+//! A fragment is built once per spelled type and [`RecipeKey`], then reused at
+//! matching sites. That is what makes emitted code shared without a converter
 //! table, and it rests on one assumption: **a fragment is context-free**. Where
 //! an adapter appears to need site context, the site is wrapping the fragment
 //! rather than the fragment differing, and [`Compile::plan`] — the one hook
 //! called per site — is where that wrapping belongs.
 //!
 //! A crossing here is the type **as the site spelled it**, which is finer than
-//! the [`RecipeKey`] a row is declared under. `Sample`, `&Sample` and `Box<Sample>`
-//! find one row, because the same row assembles all three — and they get
-//! three fragments, because taking a value out of a pointer, borrowing through
-//! one, and rebuilding a `Box` are three different pieces of Rust. Sharing the
-//! recipe is the declaration's business; sharing the code is not.
+//! the [`RecipeKey`] a row is declared under. `Sample`, `&Sample` and
+//! `Box<Sample>` find the same table row, but get different fragments because
+//! taking a value out of a pointer, borrowing through one and rebuilding a
+//! `Box` are different pieces of Rust. Sharing the row is the table's business;
+//! sharing the code is not.
 
 use std::{collections::HashMap, fmt, rc::Rc};
 
@@ -84,10 +86,10 @@ impl fmt::Display for Validity {
     }
 }
 
-/// Where a hook is: which recipe it is compiling.
+/// Where a hook is: which row is being applied to which spelled crossing.
 #[derive(Copy, Clone, Debug)]
 pub struct At<'a> {
-    /// The crossing the recipe answers.
+    /// The spelled crossing to which the selected row is being applied.
     pub crossing: &'a Crossing,
     /// The globally unique row being compiled.
     pub recipe: &'a RecipeKey,
@@ -178,15 +180,15 @@ pub type Parts<'a, C> = &'a [(Part<'a>, &'a <C as Compile>::Fragment)];
 /// Shorthand for what every fragment-producing hook returns.
 pub type Frag<C> = Result<<C as Compile>::Fragment, <C as Compile>::Error>;
 
-/// The adapter's half of code generation: what one crossing costs on the wire.
+/// The adapter's half of compilation: turn recipe rows into wire-bearing fragments.
 ///
 /// One hook per recipe shape, and one per operation, so an adapter never matches
 /// on [`Construct`] or [`Deconstruct`] — the registry calls only the hook that
 /// suits the recipe. Every hook is handed model elements rather than a copy of
 /// what the recipe said about them.
 pub trait Compile {
-    /// The adapter's answer for one recipe: what crosses, how it is encoded, what
-    /// it costs to clean up.
+    /// The adapter's result for one selected row applied to one spelled
+    /// crossing: its wire layout, conversion and cleanup.
     ///
     /// Opaque to the registry, which only ever asks it what Rust value it
     /// yields. Not a wire value — a fragment may occupy none, one or several.
@@ -332,11 +334,11 @@ type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>
 /// nothing and outlive any of them.
 pub struct Compiled<F> {
     fragments: HashMap<FragmentKey, Rc<F>>,
-    /// Which row answered when a crossing was compiled **as a whole**, rather
-    /// than as one part of a container. Recorded by [`Compiler::crossing`],
-    /// which is the only entry point that consults the crossing's default —
-    /// so [`Compiled::fragment`] can give back that same answer instead of
-    /// choosing between the recipes a crossing happens to have.
+    /// Which row was selected when a crossing was compiled **as a whole**,
+    /// rather than as one part of a container. Recorded by
+    /// [`Compiler::crossing`], which is the only entry point that consults the
+    /// default row under the crossing key — so [`Compiled::fragment`] can give
+    /// back that same result instead of choosing between the key's rows.
     defaults: HashMap<(TypeKey, Direction), RecipeKey>,
 }
 
@@ -380,9 +382,9 @@ impl<F> Compiled<F> {
     ///
     /// What an adapter's emitters ask once they stop reading the converter
     /// table. The answer is the one [`Compiler::crossing`] built — the
-    /// crossing's default recipe — and not one of the recipes that answer for this
-    /// type only as a part of some container. A caller that wants a particular
-    /// recipe has the recipe and asks through [`Self::recipe_fragment`].
+    /// default row under the crossing key — and not a row selected only for this
+    /// type as a part of some container. A caller that wants a particular row
+    /// asks through [`Self::recipe_fragment`].
     ///
     /// `None` means no site ever crossed this type in this direction.
     ///
@@ -436,8 +438,8 @@ impl<F> Compiled<F> {
     }
 }
 
-/// Drives an adapter over the table: one fragment per spelled crossing and
-/// globally identified row, one plan per site.
+/// Drives an adapter over the table: one memoized fragment per selected row and
+/// spelled crossing, one plan per site.
 pub struct Compiler<'a, C: Compile> {
     model: &'a Flat,
     recipes: &'a Recipes,
@@ -478,7 +480,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         self.compiled.fragments.len()
     }
 
-    /// Compile one site: pick its recipe, build the fragment, wrap it in a plan.
+    /// Compile one site: select its row, build the fragment, wrap it in a plan.
     ///
     /// `None` when a declaration bound the site to
     /// [`Ask::Omit`](super::Ask::Omit).
@@ -513,10 +515,10 @@ impl<'a, C: Compile> Compiler<'a, C> {
             .map_err(CompileError::Adapter)
     }
 
-    /// The fragment for one crossing's default recipe.
+    /// The fragment for the default row under one crossing key.
     ///
-    /// The per-recipe half of [`Self::site`], for an adapter that composes the
-    /// per-site wrapping itself. Built once and reused, like every other recipe.
+    /// The row-compilation half of [`Self::site`], for an adapter that composes
+    /// the per-site wrapping itself. Memoized like every other fragment.
     pub fn crossing(
         &mut self,
         adapter: &mut C,
@@ -525,7 +527,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let recipe = self.recipes.recipe(crossing).0;
         let fragment = self.recipe(adapter, crossing, &recipe)?;
         // The whole-crossing answer, so the emitters can ask for it back
-        // without re-deriving which recipe a crossing defaults to.
+        // without re-deriving which row the table defaults to for this key.
         self.compiled
             .defaults
             .insert((crossing.spelled().key(), crossing.direction()), recipe);
@@ -534,30 +536,30 @@ impl<'a, C: Compile> Compiler<'a, C> {
 
     /// The recipes this compilation was built against.
     ///
-    /// So a caller can ask whether a crossing has a recipe before compiling it by
-    /// name — the check [`Self::recipe_of`] enforces, available ahead of the
-    /// error rather than only through it.
+    /// So a caller can ask which rows are filed under a crossing key before
+    /// compiling one by name — the check [`Self::recipe_of`] enforces, available
+    /// ahead of the error rather than only through it.
     pub fn recipes(&self) -> &Recipes {
         self.recipes
     }
 
-    /// The fragment for one crossing under a **named** recipe, rather than the one
-    /// the crossing defaults to.
+    /// The fragment for one crossing under a **named** table row, rather than
+    /// the row the table defaults to.
     ///
-    /// For an adapter that states more than one recipe for a type and wants both:
-    /// the default answers every site, and this compiles the other so it can be
-    /// checked, or read through
+    /// For an adapter whose table has more than one row under a crossing key and
+    /// wants both: the default serves every unbound site, and this compiles the
+    /// other so it can be checked, or read through
     /// [`Compiled::recipe_fragment`](Compiled::recipe_fragment), before any site
     /// takes it.
     ///
-    /// Refuses a name the crossing does not have. Compiling a recipe falls back to
-    /// the derived recipe when the lookup misses, which is right for the two
-    /// callers that pass a name they got **from** the table — a crossing's
-    /// default, or a site's binding — and wrong here, where the name is the
-    /// caller's own claim. Without the check a conditionally-declared recipe that was not
-    /// declared compiles the default instead and files it under the asked-for
-    /// name, leaving [`Compiled::recipe_fragment`] to answer for a recipe that does
-    /// not exist.
+    /// Refuses a name not filed under the crossing key. Compiling a row falls
+    /// back to the derived row when the lookup misses, which is right for the two
+    /// callers that pass a key they got **from** the table — the key's default,
+    /// or a resolved site binding — and wrong here, where the name is the
+    /// caller's own claim. Without the check a conditionally declared row that
+    /// was not declared compiles the default instead and files it under the
+    /// asked-for key, leaving [`Compiled::recipe_fragment`] to answer for a row
+    /// that does not exist.
     pub fn recipe_of(
         &mut self,
         adapter: &mut C,
@@ -574,7 +576,8 @@ impl<'a, C: Compile> Compiler<'a, C> {
         self.recipe(adapter, crossing, &recipe)
     }
 
-    /// The fragment for one recipe, built once and reused.
+    /// The fragment for one selected row applied to one spelled crossing,
+    /// memoized and reused.
     fn recipe(&mut self, adapter: &mut C, crossing: &Crossing, recipe: &RecipeKey) -> Built<C> {
         debug_assert_eq!(recipe.crossing(), &crossing.key());
         // The row has global identity, while the fragment also needs the spelling:
