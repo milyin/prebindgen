@@ -236,6 +236,9 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         ),
         FnOutputPlan::Unfold(_) => None,
     };
+    if let Some(entry) = &output_entry {
+        entry.activate();
+    }
     let wire_ty = plan.output.wire_ty();
     let wire_return = annotate_jobject_with_lifetime(&wire_ty, "a").to_token_stream();
     let on_err = sentinel_for_wire(&wire_ty);
@@ -744,6 +747,7 @@ fn emit_input_param(
                     .message(original_ident)
                 )
             });
+            entry.activate();
             emit_plain_decode(&entry, arg_ident, arg_ty, on_err)
         }
     }

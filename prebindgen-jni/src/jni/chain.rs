@@ -38,11 +38,22 @@ impl JFunction {
     pub(crate) fn optional(plan: JOptionalPlan) -> Self {
         Self(JBody::Optional(Box::new(plan)))
     }
+
     pub(crate) fn mark_reachable(&self) {
-        if let JBody::Product(plan) = &self.0 {
-            plan.reachable.set(true);
-            for dependency in &plan.dependencies {
-                dependency.mark_reachable();
+        match &self.0 {
+            JBody::Complete(_) => {}
+            JBody::OwnedHandle(plan) => plan.reachable.set(true),
+            JBody::Product(plan) => {
+                plan.reachable.set(true);
+                for dependency in &plan.dependencies {
+                    dependency.mark_reachable();
+                }
+            }
+            JBody::Optional(plan) => {
+                plan.reachable.set(true);
+                for dependency in &plan.dependencies {
+                    dependency.mark_reachable();
+                }
             }
         }
     }
@@ -51,8 +62,10 @@ impl JFunction {
 impl RustFunction for JFunction {
     fn should_emit(&self) -> bool {
         match &self.0 {
+            JBody::Complete(_) => true,
+            JBody::OwnedHandle(plan) => plan.reachable.get(),
             JBody::Product(plan) => plan.reachable.get(),
-            _ => true,
+            JBody::Optional(plan) => plan.reachable.get(),
         }
     }
 
@@ -249,6 +262,7 @@ impl shared::Child for JChild {
 #[derive(Clone)]
 pub(crate) struct JOwnedHandlePlan {
     pub(crate) ident: syn::Ident,
+    pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) source: TypeRef,
     pub(crate) module: syn::Path,
 }
@@ -308,6 +322,7 @@ impl JProductPlan {
                 let intermediate = annotate_jobject_with_lifetime(intermediate, "a");
                 syn::parse_quote!(
                     #allow
+                    #[inline(always)]
                     pub(crate) unsafe fn #name<'env, 'a>(
                         env: &mut jni::JNIEnv<'env>,
                         v: #intermediate,
@@ -325,6 +340,7 @@ impl JProductPlan {
                 };
                 syn::parse_quote!(
                     #allow
+                    #[inline(always)]
                     pub(crate) unsafe fn #name<'a>(
                         env: &mut jni::JNIEnv<'a>,
                         #input,
@@ -370,10 +386,10 @@ impl shared::OptionalBridge for JOptionalBridge {
         }
     }
 
-    fn is_absent(&self, value: TokenStream) -> TokenStream {
+    fn is_absent(&self) -> TokenStream {
         match self {
             Self::InputNiche { absent, .. } => quote!(#absent),
-            Self::InputBoxed { .. } => quote!((#value).is_null()),
+            Self::InputBoxed { .. } => quote!((v).is_null()),
             Self::OutputNiche { .. } | Self::OutputBoxed { .. } => {
                 unreachable!("optional bridge operation does not match its planned direction")
             }
@@ -433,6 +449,8 @@ impl shared::OptionalBridge for JOptionalBridge {
 #[derive(Clone)]
 pub(crate) struct JOptionalPlan {
     pub(crate) ident: syn::Ident,
+    pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
+    pub(crate) dependencies: Vec<JFunction>,
     pub(crate) chain: shared::Optional<JSource, JOptionalBridge, JChild>,
 }
 
@@ -493,10 +511,35 @@ pub(crate) fn planned_name(
     let key = source.key();
     let source_key = key.as_str();
     let source_id = crate::jni::emit::sanitize_for_ident(source_key);
-    let wire_id = crate::jni::emit::wire_short(intermediate);
+    let wire_id = match intermediate {
+        syn::Type::Tuple(tuple) => format!("tuple{}", tuple.elems.len()),
+        _ => crate::jni::emit::wire_short(intermediate),
+    };
     let suffix = crate::jni::emit::hash_name_pair(source_key, intermediate) & 0xffff_ffff;
     match direction {
         Direction::Construct => format_ident!("{wire_id}_to_{source_id}_{suffix:08x}"),
         Direction::Deconstruct => format_ident!("{source_id}_to_{wire_id}_{suffix:08x}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use prebindgen_registry::flat::ScalarKind;
+
+    use super::*;
+
+    #[test]
+    fn planned_tuple_names_are_bounded_by_arity() {
+        let tuple = vec!["jni::sys::jlong"; 64].join(",");
+        let intermediate: syn::Type =
+            syn::parse_str(&format!("({tuple},)")).expect("parse large tuple intermediate");
+        let name = planned_name(
+            Direction::Construct,
+            &TypeRef::scalar(ScalarKind::I64),
+            &intermediate,
+        )
+        .to_string();
+        assert!(name.starts_with("tuple64_to_i64_"), "{name}");
+        assert!(name.len() < 64, "{name}");
     }
 }

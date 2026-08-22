@@ -46,6 +46,7 @@ pub(crate) fn struct_input_body(
         // reading straight to its entry — the `reading_of` hop only ever
         // recovered what the field already carried.
         let field_entry = ext.in_frag(&field.ty)?;
+        field_entry.activate();
         // The optional layer off the MODEL, asked once and reused: every site
         // below that wants "is this field optional" reads this, so they cannot
         // disagree with each other the way four independent path-segment tests
@@ -115,8 +116,10 @@ pub(crate) fn struct_input_body(
                             proj.strategy,
                             FoldStrategy::Optional(NullableKind::Niche, _)
                         );
+                        let inner_entry = ext.in_frag(inner)?;
+                        inner_entry.activate();
                         let inner_conv =
-                            composed_entry_decode(&*ext.in_frag(inner)?, &raw_ident, &fname_ident);
+                            composed_entry_decode(&inner_entry, &raw_ident, &fname_ident);
                         let tmp_ident = format_ident!("__{}_jobj", fname_ident);
                         let decode = if niche {
                             // The Kotlin data-class property is still `ULong?`
@@ -178,8 +181,9 @@ pub(crate) fn struct_input_body(
             .map(|v| v.to_string())
             {
                 let sig = format!("L{};", fqn.replace('.', "/"));
-                let inner_conv =
-                    composed_entry_decode(&*ext.in_frag(inner)?, &raw_ident, &fname_ident);
+                let inner_entry = ext.in_frag(inner)?;
+                inner_entry.activate();
+                let inner_conv = composed_entry_decode(&inner_entry, &raw_ident, &fname_ident);
                 let tmp_ident = format_ident!("__{}_jobj", fname_ident);
                 let decode = if field_optional {
                     quote! {
@@ -504,7 +508,9 @@ fn read_kotlin_property(
         // Under `Option`, JVM null is `None` and the INNER converter decodes
         // the discriminant; the outer converter would expect a boxed Integer.
         let decode = if optional {
-            let inner_conv = composed_entry_decode(&*ext.in_frag(inner)?, &raw, bind);
+            let inner_entry = ext.in_frag(inner)?;
+            inner_entry.activate();
+            let inner_conv = composed_entry_decode(&inner_entry, &raw, bind);
             quote! {
                 let #bind = if #obj.is_null() {
                     ::core::option::Option::None
@@ -1230,6 +1236,9 @@ pub(crate) fn build_flat_input_plan(
     let chain = ext
         .product_chain(arg, prebindgen_registry::recipe::Direction::Construct)
         .filter(|chain| chain.layout.leaf_count() == leaves.len());
+    if let Some(chain) = &chain {
+        chain.activate();
+    }
 
     // 3. The tree the Rust side rebuilds through, over those same wires in the
     //    order the recipe states them.

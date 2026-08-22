@@ -251,6 +251,7 @@ pub(crate) fn callback_input(
                 (quote!((#cb_arg).clone()), ext.out_frag(core)?)
             }
         };
+        arg_entry.activate();
         let arg_wire = arg_entry.destination.clone();
         let enc_ident = format_ident!("__cb{}_enc", i);
         let obj_ident = format_ident!("__cb{}_obj", i);

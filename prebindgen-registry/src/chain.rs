@@ -193,8 +193,11 @@ pub trait OptionalBridge: Clone {
     /// The one intermediate Rust type assigned to this fragment.
     fn intermediate(&self) -> syn::Type;
 
-    /// Whether an inbound intermediate represents absence.
-    fn is_absent(&self, value: TokenStream) -> TokenStream;
+    /// Whether an inbound intermediate named `v` represents absence.
+    ///
+    /// The composer binds its input as `v` before splicing this predicate,
+    /// matching the invariant carried by adapter niche predicates.
+    fn is_absent(&self) -> TokenStream;
 
     /// Extract the child intermediate from a present inbound value.
     fn present(&self, value: TokenStream) -> TokenStream;
@@ -316,7 +319,7 @@ where
         let fallible = self.child.call().fallible();
         let body = match self.direction {
             Direction::Construct => {
-                let absent = self.bridge.is_absent(quote::quote!(v));
+                let absent = self.bridge.is_absent();
                 let present = self.bridge.present(quote::quote!(v));
                 let child = child_value(&self.child, quote::quote!(__present));
                 let canonical = quote::quote!({
@@ -382,8 +385,8 @@ mod tests {
             syn::parse_quote!(i64)
         }
 
-        fn is_absent(&self, value: TokenStream) -> TokenStream {
-            quote!(*#value == 0)
+        fn is_absent(&self) -> TokenStream {
+            quote!(*v == 0)
         }
 
         fn present(&self, value: TokenStream) -> TokenStream {

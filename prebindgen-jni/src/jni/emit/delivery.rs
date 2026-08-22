@@ -972,6 +972,7 @@ pub(crate) fn encode_plan_leaves(
             )
         });
         if let Some(chain) = chain.filter(|chain| chain.layout.leaf_count() == n) {
+            chain.activate();
             let encoded: Vec<syn::Ident> = (0..n)
                 .map(|index| format_ident!("__chain_wire{index}"))
                 .collect();
@@ -1222,6 +1223,7 @@ pub(crate) fn encode_plan_leaves(
                 leaf.out_ty.key()
             )
         });
+        out_entry.activate();
         let conv_fail = fail(quote!(__e.to_string()));
         // The leaf's COMPLETE Rust -> wire chain: the rust-side stages a custom
         // `convert!` declaration inserts (`Duration -> u64`), then the
