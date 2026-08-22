@@ -356,10 +356,12 @@ impl fmt::Display for RecipeName {
     }
 }
 
-/// The globally unique identity of one row in a [`Recipes`] table.
+/// The globally unique position of one row in a [`Recipes`] table.
 ///
-/// A row name is meaningful only under the crossing key that owns it, so the
-/// table's primary key is the pair rather than an insertion-order surrogate.
+/// A [`RecipeKey`] identifies that position whether or not the table currently
+/// holds a row there. A row name is meaningful only under the crossing key that
+/// owns it, so the table's primary key is the pair rather than an
+/// insertion-order surrogate.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RecipeKey {
     crossing: CrossingKey,
@@ -1194,7 +1196,8 @@ pub enum RecipeError {
     },
     /// A constructor was named where what it returns is not the recipe type.
     ///
-    /// A `Result<T, E>` return counts as building a `T`, because that is where a
+    /// The constructing twin of [`NotAnAccessor`](Self::NotAnAccessor). A
+    /// `Result<T, E>` return counts as building a `T`, because that is where a
     /// construction's fallibility is read from.
     NotAConstructor {
         /// The row that named the function.
@@ -1222,6 +1225,9 @@ pub enum RecipeError {
     /// A shape was declared for a type that cannot take it: `Optional` on a
     /// type that is not an `Option`, `Sequence` on one that is not a run, or
     /// `Invoke` on one that is not a callback.
+    ///
+    /// The arity shapes read their inner type off the crossing rather than
+    /// stating it, so this is where a mismatch surfaces.
     WrongShape {
         /// The row whose shape is wrong.
         recipe: RecipeKey,
@@ -1247,7 +1253,8 @@ pub enum RecipeError {
     /// Distinct from [`UnknownRecipe`](Self::UnknownRecipe), which is a **site**
     /// asking for one. This is a caller compiling a named recipe directly through
     /// [`Compiler::recipe_of`](crate::recipe::Compiler::recipe_of), where there is no
-    /// site to name.
+    /// site to name — an adapter checking a recipe it declared conditionally, and
+    /// getting the condition wrong.
     NoSuchRecipe {
         /// The complete key the caller asked for.
         recipe: RecipeKey,
