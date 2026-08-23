@@ -19,10 +19,9 @@ contains nothing about any foreign language.
 `Struct`, `Variant` (an enum whose alternatives carry payloads, each an
 `Alternative`), `Enum`, `Function`, `Field`, and `TypeRef`, the model's
 reading of one Rust type. `TypeKey` is the identity that same type is stored
-under. An `Alternative` also exposes its `AlternativeForm`: unit, tuple or
-struct. Payload arity alone cannot recover this fact because `A`, `A()` and
-`A {}` are all empty but require different Rust construction and pattern
-syntax; renderers consume the Flat fact instead of inspecting source syntax.
+under. Its captured delimiters remain part of the `Alternative`; final Rust
+renderers pass the model node to Flat's shape renderer, so `A`, `A()` and
+`A {}` remain distinct without copying that syntax fact into another model.
 - **`prebindgen-registry`** — the language-agnostic half of generation. It is
 what this document describes.
 - **an adapter**, one per target language — `prebindgen-c`, whose generator type

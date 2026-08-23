@@ -75,26 +75,22 @@ fn tagged_union_mirror_and_converters() {
     );
 
     // Output: match the source enum, convert each arm's fields.
-    assert!(
-        compact.contains("example_flat::Shape::Empty=>shape_t::Empty,"),
-        "{src}"
-    );
+    assert!(compact.contains("example_flat::Shape::Empty=>"), "{src}");
     assert!(
         // The payload converts through its own scalar conversion rather than
         // passing through inline — same value, named once.
-        compact
-            .contains("example_flat::Shape::Circle(__f0)=>shape_t::Circle(__cbg_out_f64(__f0)),"),
+        compact.contains("let__built_arm=(__cbg_out_f64(__part0),);shape_t::Circle(__built_arm.0)"),
         "{src}"
     );
     assert!(
         // The `String` payload allocates through `String`'s own conversion,
         // which is where `__cbg_alloc_cstr` lives — one statement of it rather
         // than one per payload position.
-        compact.contains("shape_t::Labeled(__cbg_out_String(__f0),"),
+        compact.contains("__cbg_out_String(__part0),"),
         "{src}"
     );
     assert!(
-        compact.contains("::core::mem::MaybeUninit::new(__cbg_out_Operation(__f1)),"),
+        compact.contains("::core::mem::MaybeUninit::new(__cbg_out_Operation(__part1)),"),
         "{src}"
     );
 
@@ -106,23 +102,20 @@ fn tagged_union_mirror_and_converters() {
         "{src}"
     );
     assert!(
-        compact.contains("let__tag:::core::ffi::c_int=::core::ptr::read(v.as_ptr()"),
+        compact.contains("::core::ptr::read((v).as_ptr()as*const::core::ffi::c_int)"),
+        "{src}"
+    );
+    assert!(compact.contains("match__tag{"), "{src}");
+    assert!(
+        compact.contains("invalidtag{}for`{}`(expected0..{})"),
         "{src}"
     );
     assert!(
-        compact.contains("if!((__tagasi64)>=0&&(__tagasi64)<4i64)"),
+        compact.contains("let__choice=unsafe{(v).assume_init()};"),
         "{src}"
     );
-    assert!(
-        compact.contains("invalidtag{}for`shape_t`(expected0..4)"),
-        "{src}"
-    );
-    assert!(compact.contains("letv=v.assume_init();"), "{src}");
-    assert!(
-        compact.contains("shape_t::Empty=>example_flat::Shape::Empty,"),
-        "{src}"
-    );
-    assert!(compact.contains("__cbg_in_Operation(__f1)?,"), "{src}");
+    assert!(compact.contains("0=>example_flat::Shape::Empty"), "{src}");
+    assert!(compact.contains("__cbg_in_Operation((__arm).1)?,"), "{src}");
     // A union taken by value is a fallible input like any other: with no
     // `Result` channel the declaration had to opt into aborting.
     assert!(compact.contains("panic!("), "{src}");
@@ -570,7 +563,7 @@ fn null_opaque_payload_is_reported_not_materialised() {
     );
     assert!(compact.contains("nullpayloadfor`Blob`"), "{src}");
     assert!(
-        compact.contains("Slot::Filled(__cbg_in_Box___Blob___payload(__f0)?)"),
+        compact.contains("Slot::Filled(__cbg_in_Box___Blob___payload((__arm).0)?)"),
         "{src}"
     );
     // The `Option` arm keeps NULL as a legitimate value.
@@ -676,20 +669,14 @@ fn payload_wires_come_from_the_converter_destination() {
     assert!(compact.contains("Titled(caption_t),"), "{src}");
     assert!(compact.contains("After(u64),"), "{src}");
     // Both directions route through the payload's own converter.
+    assert!(compact.contains("__cbg_out_Caption(__part0)"), "{src}");
+    assert!(compact.contains("__cbg_out_Millis(__part0)"), "{src}");
     assert!(
-        compact.contains("note_t::Titled(__cbg_out_Caption(__f0))"),
+        compact.contains("example_flat::Note::Titled(__cbg_in_Caption((__arm).0))"),
         "{src}"
     );
     assert!(
-        compact.contains("note_t::After(__cbg_out_Millis(__f0))"),
-        "{src}"
-    );
-    assert!(
-        compact.contains("example_flat::Note::Titled(__cbg_in_Caption(__f0))"),
-        "{src}"
-    );
-    assert!(
-        compact.contains("example_flat::Note::After(__cbg_in_Millis(__f0))"),
+        compact.contains("example_flat::Note::After(__cbg_in_Millis((__arm).0))"),
         "{src}"
     );
     // The struct payload owns a `char *`, so the union's drop reaches THROUGH
@@ -764,18 +751,14 @@ fn bool_payload_is_normalised_not_materialised() {
     // The payload converts through `bool`'s own field reading rather than
     // inline: same normalisation, named once.
     assert!(
-        compact.contains("example_flat::Flagged::On(__cbg_in_bool(__f0))"),
+        compact.contains("example_flat::Flagged::On(__cbg_in_bool((__arm).0))"),
         "{src}"
     );
     assert!(
         compact.contains("__cbg_in_bool(v:::core::mem::MaybeUninit<bool>)->bool"),
         "{src}"
     );
-    assert!(
-        compact
-            .contains("example_flat::Flagged::On(__f0)=>flagged_t::On(__cbg_out_bool_field(__f0))"),
-        "{src}"
-    );
+    assert!(compact.contains("__cbg_out_bool_field(__part0)"), "{src}");
     // A bool owns nothing, so the union still gets no typed drop.
     assert!(!compact.contains("flagged_drop"), "{src}");
 }

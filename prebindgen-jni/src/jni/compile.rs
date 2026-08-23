@@ -992,9 +992,9 @@ impl<R: Conversions> JCompile<'_, R> {
             .map(|(part, frag)| {
                 let child = Self::planned_child(direction, part, frag);
                 Some(prebindgen_registry::chain::ChoicePart {
-                    member: part_member(part)?,
                     child,
                     mode: part.mode,
+                    hold_uninit: false,
                 })
             })
             .collect::<Option<Vec<_>>>()?;
@@ -1050,15 +1050,16 @@ impl<R: Conversions> JCompile<'_, R> {
         let inactive = arm_types.iter().map(Self::inactive_intermediate).collect();
         let source_name = source_ident.to_string();
         let invalid = quote!(<__JniErr as ::core::convert::From<String>>::from(format!(
-            concat!(#source_name, ": invalid tag")
+            "{}: invalid tag {}",
+            #source_name,
+            __invalid_tag,
         )));
         let choice_arms = planned
             .iter()
             .map(|(alternative, arm)| {
                 let tag = crate::jni::struct_plan::sum_tag(alternative);
                 prebindgen_registry::chain::ChoiceArm {
-                    variant: alternative.name.clone(),
-                    form: alternative.form(),
+                    alternative: (*alternative).clone(),
                     tag: syn::parse_quote!(#tag),
                     bridge: arm.bridge.clone(),
                     parts: arm.parts.clone(),

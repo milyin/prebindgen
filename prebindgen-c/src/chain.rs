@@ -8,7 +8,7 @@
 
 use prebindgen_registry::{
     chain::{self, Chain as _},
-    flat::TypeRef,
+    flat::{Alternative, TypeRef},
     recipe::Mode,
     write::RustFunction,
     Emit,
@@ -57,6 +57,7 @@ enum CBody {
     Complete(syn::ItemFn),
     Product(ProductPlan),
     Optional(OptionalPlan),
+    Choice(ChoicePlan),
 }
 
 impl CFunction {
@@ -92,6 +93,24 @@ impl CFunction {
         }
     }
 
+    pub(crate) fn choice(plan: ChoicePlan) -> Self {
+        let fallible = plan.direction == Direction::Construct
+            || plan
+                .arms
+                .iter()
+                .flat_map(|arm| &arm.parts)
+                .any(|part| part.child.fallible());
+        let call = CCall(chain::Call::new(
+            plan.ident.clone(),
+            fallible,
+            plan.direction == Direction::Construct,
+        ));
+        Self {
+            call,
+            body: CBody::Choice(plan),
+        }
+    }
+
     pub(crate) fn call(&self) -> &CCall {
         &self.call
     }
@@ -102,6 +121,7 @@ impl RustFunction for CFunction {
         match &self.body {
             CBody::Complete(function) => function.clone(),
             CBody::Product(plan) => plan.render(emit),
+            CBody::Choice(plan) => plan.render(emit),
             CBody::Optional(plan) => plan.render(emit),
         }
     }
@@ -311,6 +331,165 @@ impl OptionalPlan {
                     #body
                 }
             )
+        }
+    }
+}
+#[derive(Clone)]
+struct CChoiceBridge {
+    wire: syn::Ident,
+    alternatives: Vec<Alternative>,
+}
+
+impl chain::ChoiceBridge for CChoiceBridge {
+    fn intermediate(&self) -> syn::Type {
+        let wire = &self.wire;
+        syn::parse_quote!(::core::mem::MaybeUninit<#wire>)
+    }
+
+    fn tag(&self, value: TokenStream) -> TokenStream {
+        let wire = &self.wire;
+        let bounds_msg = format!(
+            "`{wire}`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+        );
+        quote!({
+            const _: () = {
+                assert!(
+                    ::core::mem::size_of::<#wire>()
+                        >= ::core::mem::size_of::<::core::ffi::c_int>(),
+                    #bounds_msg
+                );
+            };
+            unsafe {
+                ::core::ptr::read((#value).as_ptr() as *const ::core::ffi::c_int)
+            }
+        })
+    }
+
+    fn prepare(&self, value: TokenStream) -> TokenStream {
+        quote!(unsafe { (#value).assume_init() })
+    }
+
+    fn arm(&self, emit: &Emit, value: TokenStream, index: usize) -> TokenStream {
+        let wire = &self.wire;
+        let alternative = &self.alternatives[index];
+        let variant = &alternative.name;
+        let bindings: Vec<_> = alternative
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(index, _)| format_ident!("__wire_part{index}"))
+            .collect();
+        let bound: Vec<_> = alternative
+            .fields
+            .iter()
+            .zip(&bindings)
+            .map(|(field, binding)| field.bind(binding))
+            .collect();
+        let pattern = emit.shape_alternative(alternative, quote!(#wire::#variant), &bound);
+        quote!({
+            match #value {
+                #pattern => (#(#bindings,)*),
+                _ => unreachable!("validated Choice tag selected a different arm"),
+            }
+        })
+    }
+
+    fn build(&self, emit: &Emit, active: usize, value: TokenStream) -> TokenStream {
+        let wire = &self.wire;
+        let alternative = &self.alternatives[active];
+        let variant = &alternative.name;
+        if alternative.fields.is_empty() {
+            return emit.shape_alternative(alternative, quote!(#wire::#variant), &[]);
+        }
+        let fields: Vec<_> = alternative
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                let index = syn::Index::from(index);
+                field.bind(&quote!(__built_arm.#index))
+            })
+            .collect();
+        let built = emit.shape_alternative(alternative, quote!(#wire::#variant), &fields);
+        quote!({
+            let __built_arm = #value;
+            #built
+        })
+    }
+
+    fn finish(&self, value: TokenStream) -> TokenStream {
+        quote!(::core::mem::MaybeUninit::new(#value))
+    }
+
+    fn invalid_tag(&self, tag: TokenStream) -> TokenStream {
+        let wire = &self.wire;
+        let variants = self.alternatives.len();
+        quote!(::std::format!(
+            "invalid tag {} for `{}` (expected 0..{})",
+            #tag,
+            stringify!(#wire),
+            #variants,
+        ))
+    }
+}
+
+/// A tagged-union Choice chain. Raw C storage is represented by its bridge;
+/// source syntax remains behind `source` until `render`.
+#[derive(Clone)]
+pub(crate) struct ChoicePlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) wire: syn::Ident,
+    pub(crate) direction: Direction,
+    pub(crate) arms: Vec<chain::ChoiceArm<chain::TupleProduct, CCall>>,
+}
+
+impl ChoicePlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let composed = chain::Choice {
+            source: self.source.clone(),
+            direction: self.direction,
+            source_policy: CSource {
+                module: self.source_module.clone(),
+            },
+            bridge: CChoiceBridge {
+                wire: self.wire.clone(),
+                alternatives: self
+                    .arms
+                    .iter()
+                    .map(|arm| arm.alternative.clone())
+                    .collect(),
+            },
+            arms: self.arms.clone(),
+        };
+        let rendered = composed.render(emit);
+        let name = &self.ident;
+        let source = &rendered.source;
+        let intermediate = &rendered.intermediate;
+        let body = &rendered.body;
+
+        match self.direction {
+            Direction::Construct => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name(
+                    v: #intermediate,
+                ) -> ::core::result::Result<#source, ::std::string::String> {
+                    ::core::result::Result::Ok(#body)
+                }
+            ),
+            Direction::Deconstruct => {
+                assert!(
+                    !rendered.fallible,
+                    "fallible C Choice output must be refused while planning"
+                );
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) fn #name(v: #source) -> #intermediate {
+                        #body
+                    }
+                )
+            }
         }
     }
 }
