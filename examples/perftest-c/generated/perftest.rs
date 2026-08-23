@@ -440,6 +440,7 @@ pub(crate) fn __cbg_out_bool(v: bool) -> bool {
     v
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+#[inline(always)]
 pub(crate) fn __cbg_out_chain_vec_Payload(
     v: ::std::vec::Vec<perftest_flat::Payload>,
 ) -> ::std::vec::Vec<payload_t> {

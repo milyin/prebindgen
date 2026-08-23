@@ -424,6 +424,7 @@ impl SequencePlan {
         if rendered.fallible {
             syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
+                #[inline(always)]
                 pub(crate) #unsafe_ fn #name(v: #source)
                     -> ::core::result::Result<#intermediate, ::std::string::String>
                 {
@@ -433,6 +434,7 @@ impl SequencePlan {
         } else {
             syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
+                #[inline(always)]
                 pub(crate) #unsafe_ fn #name(v: #source) -> #intermediate {
                     #body
                 }

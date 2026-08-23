@@ -230,6 +230,11 @@ pub struct Optional<S, B, C> {
 /// child converter call. The adapter supplies only operations on its one
 /// intermediate collection value. Operation snippets use the local names
 /// documented on each method and are rendered only during final emission.
+///
+/// The composer reserves `__sequence_values`, `__sequence_part`,
+/// `__sequence_source`, and `__sequence_element`. Bridge snippets must not
+/// bind or shadow those names; they may refer to a name only where its method
+/// documents that name as an argument.
 pub trait SequenceBridge: Clone {
     /// The one intermediate Rust type assigned to the Sequence fragment.
     fn intermediate(&self) -> syn::Type;

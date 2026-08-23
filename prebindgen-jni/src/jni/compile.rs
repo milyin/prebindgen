@@ -1842,11 +1842,11 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             .site
             .as_ref()
             .ok_or_else(|| JErr::Refused("JniGen: a site compiled with no site context".into()))?;
-        if matches!(root.layout, Some(JLayout::Leaf)) {
-            root.rust.mark_reachable();
-        }
         let site = match site {
             PlanSite::Return => {
+                if matches!(root.layout, Some(JLayout::Leaf)) {
+                    root.rust.mark_reachable();
+                }
                 // A fragment that occupies several wires IS the decomposed
                 // return: the site asked for the `parts` recipe and got what that
                 // recipe states. Nothing else distinguishes the two cases, and
@@ -1910,6 +1910,17 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 None => InputKind::Plain,
             }
         };
+
+        // VecBuild constructs a Rust collection through its handle helpers and
+        // never calls the root JObject converter. Activating that converter
+        // would emit an orphan list decoder; for a bare Vec it also duplicates
+        // the legacy decoder. Other leaf parameter plans still consume their
+        // root conversion.
+        if matches!(root.layout, Some(JLayout::Leaf))
+            && !matches!(&kind, InputKind::VecBuild { .. })
+        {
+            root.rust.mark_reachable();
+        }
 
         // Typed surface: handle/value projections show their Kotlin class (from
         // the projection's leaf key); everything else the conversion's resolved

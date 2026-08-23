@@ -2116,56 +2116,6 @@ pub(crate) unsafe fn JObject_to_Box_Payload_0d2d19da<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
-pub(crate) unsafe fn JObject_to_Box_Vec_Payload_ca25c6a1<'env, 'a>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'a>,
-) -> ::core::result::Result<Box<Vec<perftest_flat::Payload>>, __JniErr> {
-    ::core::result::Result::Ok(
-        ::std::boxed::Box::new({
-            let __sequence_list = jni::objects::JList::from_env(env, v)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-            let mut __sequence_iter = __sequence_list
-                .iter(env)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-            let mut __sequence_values: ::std::vec::Vec<perftest_flat::Payload> = ::std::vec::Vec::new();
-            while let ::core::option::Option::Some(__sequence_part) = match __sequence_iter
-                .next(env)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Vec<_>: list-next: {}", e)))?
-            {
-                ::core::option::Option::Some(__sequence_object) => {
-                    let __sequence_part: jni::objects::JObject = __sequence_object
-                        .into();
-                    ::core::option::Option::Some(__sequence_part)
-                }
-                ::core::option::Option::None => ::core::option::Option::None,
-            } {
-                __sequence_values
-                    .push(JObject_to_Payload_98f64326(env, &(__sequence_part))?);
-            }
-            __sequence_values
-        }),
-    )
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn JObject_to_CacheConfig_db89a97c<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -3903,54 +3853,6 @@ pub(crate) unsafe fn JObject_to_Unsigned_7e3cc618<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
-pub(crate) unsafe fn JObject_to_Vec_Box_Payload_ae68babe<'env, 'a>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'a>,
-) -> ::core::result::Result<Vec<Box<perftest_flat::Payload>>, __JniErr> {
-    ::core::result::Result::Ok({
-        let __sequence_list = jni::objects::JList::from_env(env, v)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        let mut __sequence_iter = __sequence_list
-            .iter(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __sequence_values: ::std::vec::Vec<Box<perftest_flat::Payload>> = ::std::vec::Vec::new();
-        while let ::core::option::Option::Some(__sequence_part) = match __sequence_iter
-            .next(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-next: {}", e)))?
-        {
-            ::core::option::Option::Some(__sequence_object) => {
-                let __sequence_part: jni::objects::JObject = __sequence_object.into();
-                ::core::option::Option::Some(__sequence_part)
-            }
-            ::core::option::Option::None => ::core::option::Option::None,
-        } {
-            __sequence_values
-                .push(JObject_to_Box_Payload_0d2d19da(env, &(__sequence_part))?);
-        }
-        __sequence_values
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-#[inline(always)]
 pub(crate) unsafe fn JObject_to_Vec_Label_3fdf860d<'env, 'a>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'a>,
@@ -4050,53 +3952,6 @@ pub(crate) unsafe fn JObject_to_Vec_Option_u64_a34190e7<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
-pub(crate) unsafe fn JObject_to_Vec_Payload_64d7995c<'env, 'a>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'a>,
-) -> ::core::result::Result<Vec<perftest_flat::Payload>, __JniErr> {
-    ::core::result::Result::Ok({
-        let __sequence_list = jni::objects::JList::from_env(env, v)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        let mut __sequence_iter = __sequence_list
-            .iter(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __sequence_values: ::std::vec::Vec<perftest_flat::Payload> = ::std::vec::Vec::new();
-        while let ::core::option::Option::Some(__sequence_part) = match __sequence_iter
-            .next(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-next: {}", e)))?
-        {
-            ::core::option::Option::Some(__sequence_object) => {
-                let __sequence_part: jni::objects::JObject = __sequence_object.into();
-                ::core::option::Option::Some(__sequence_part)
-            }
-            ::core::option::Option::None => ::core::option::Option::None,
-        } {
-            __sequence_values
-                .push(JObject_to_Payload_98f64326(env, &(__sequence_part))?);
-        }
-        __sequence_values
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -4141,7 +3996,6 @@ pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
 pub(crate) unsafe fn JObject_to_Vec_Vec_u8_43404875<'env, 'a>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'a>,
@@ -11059,7 +10913,6 @@ pub(crate) unsafe fn Vault_to_jlong_4a33ea23<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
 pub(crate) unsafe fn Vec_Label_to_JObject_3fdf860d<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<perftest_flat::Label>,
@@ -11106,7 +10959,6 @@ pub(crate) unsafe fn Vec_Label_to_JObject_3fdf860d<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
 pub(crate) unsafe fn Vec_Option_Ticks_to_JObject_2f4b03da<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<Option<perftest_flat::Ticks>>,
@@ -11150,7 +11002,6 @@ pub(crate) unsafe fn Vec_Option_Ticks_to_JObject_2f4b03da<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
 pub(crate) unsafe fn Vec_Option_u64_to_JObject_a34190e7<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<Option<u64>>,
@@ -11194,7 +11045,6 @@ pub(crate) unsafe fn Vec_Option_u64_to_JObject_a34190e7<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
 pub(crate) unsafe fn Vec_Vec_Option_u64_to_JObject_342a76c6<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<Vec<Option<u64>>>,
@@ -11238,7 +11088,6 @@ pub(crate) unsafe fn Vec_Vec_Option_u64_to_JObject_342a76c6<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
 pub(crate) unsafe fn Vec_Vec_u8_to_JObject_43404875<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<Vec<u8>>,

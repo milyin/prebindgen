@@ -548,7 +548,6 @@ impl JSequencePlan {
         match self.chain.direction {
             Direction::Construct => syn::parse_quote!(
                 #allow
-                #[inline(always)]
                 pub(crate) unsafe fn #name<'env, 'a>(
                     env: &mut jni::JNIEnv<'env>,
                     v: &#intermediate,
@@ -564,7 +563,6 @@ impl JSequencePlan {
                 };
                 syn::parse_quote!(
                     #allow
-                    #[inline(always)]
                     pub(crate) unsafe fn #name<'a>(
                         env: &mut jni::JNIEnv<'a>,
                         #input,
