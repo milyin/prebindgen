@@ -1481,7 +1481,7 @@ impl JniGenBuilder {
                             ty: key.clone(),
                             direction: *dir,
                         }
-                        .row(prebindgen_registry::recipe::RecipeName::new("callback")),
+                        .row(crate::jni::recipes::callback()),
                         crate::jni::compile::JFrag::by_hand_with_rust(
                             key.clone(),
                             conv.clone(),

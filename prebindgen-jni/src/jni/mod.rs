@@ -732,12 +732,12 @@ impl JniGen {
     /// complete function rendered during resolution.
     #[cfg(test)]
     pub(crate) fn compatibility_callback_for_test(&self, spelling: &str) -> Option<(String, bool)> {
-        use prebindgen_registry::recipe::{Crossing, Direction, RecipeName};
+        use prebindgen_registry::recipe::{Crossing, Direction};
 
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let key = reading.key();
-        let row = Crossing::new(reading, Direction::Construct).row(RecipeName::new("callback"));
+        let row = Crossing::new(reading, Direction::Construct).row(crate::jni::recipes::callback());
         let compiled = self.decls.compiled.borrow();
         let fragment = compiled.recipe_fragment(&key, &row)?;
         Some((

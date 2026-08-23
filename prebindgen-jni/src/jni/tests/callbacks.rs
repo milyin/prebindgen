@@ -294,7 +294,7 @@ fn undeclared_expanded_callback_retains_its_late_compatibility_plan() {
     assert_eq!(
         rust.matches(&format!("fn {converter}")).count(),
         1,
-        "the retained callback plan is rendered exactly once:\n{rust}"
+        "the retained callback plan must be emitted:\n{rust}"
     );
     assert!(rust.contains("ledger_filed(&__cb_arg0)"), "{rust}");
     assert!(rust.contains("ledger_archived(&__cb_arg0)"), "{rust}");
