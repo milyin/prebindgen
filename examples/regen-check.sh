@@ -16,6 +16,9 @@
 #       ../../zenoh-flat-jni relative to this script) and diff ITS committed
 #       generated files. Requires that checkout to be clean in those paths.
 #
+# The in-repo check requires the `aarch64-unknown-linux-gnu` Rust target because
+# example-cbindgen commits target-specific golden Rust files.
+#
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -48,6 +51,14 @@ cargo build --release \
 # it the all-features artifacts would be committed but never checked.
 echo "== regenerating example-cbindgen (--all-features)"
 cargo build --release --all-features -p example-cbindgen
+
+# The host builds above cannot touch the committed aarch64 variants. `check`
+# runs the target-aware build script without requiring an aarch64 linker, and
+# the three invocations cover every aarch64 feature variant committed here.
+echo "== regenerating example-cbindgen (aarch64 variants)"
+cargo check -p example-cbindgen --target aarch64-unknown-linux-gnu
+cargo check -p example-cbindgen --target aarch64-unknown-linux-gnu --features unstable
+cargo check -p example-cbindgen --target aarch64-unknown-linux-gnu --all-features
 
 echo "== diffing committed generated files"
 # `git status --porcelain` catches modified AND newly created files (a new

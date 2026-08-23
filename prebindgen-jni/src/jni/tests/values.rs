@@ -2760,6 +2760,62 @@ fn a_wrapped_vec_element_keeps_the_push_path_and_shares_one_trio() {
     );
 }
 
+/// A parameter-specific Vec-build plan bypasses the root `JObject -> Vec<T>`
+/// converter. The crossing may still have a registry-composed Sequence plan,
+/// but that plan must remain unreachable or it duplicates the legacy decoder
+/// without any call site.
+#[test]
+fn a_vec_build_parameter_does_not_emit_an_unused_sequence_decoder() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn put_boxed_run(v: Box<Vec<Foo>>) {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(prebindgen_registry::fun!(put_boxed_run)),
+        );
+
+    let dir = unique_test_dir("jnigen_vec_build_sequence_reachability");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).expect("read rust");
+    let compact: String = rust.split_whitespace().collect();
+
+    assert!(
+        compact.contains("v_handleas*mutVec<myflat::Foo>"),
+        "the fixture must take the parameter-specific Vec-build path:\n{rust}"
+    );
+    assert_eq!(
+        rust.matches("Vec<_>: list-from-env").count(),
+        0,
+        "the parameter uses only its Vec-build handle; no list decoder has a \
+         call site in this fixture:\n{rust}"
+    );
+}
+
 /// An exclusive-borrow parameter resolves only over an opaque handle, whose
 /// object the JVM keeps alive on the Rust side. Over anything decoded onto the
 /// Rust stack the callee's writes are dropped with the wrapper's frame, so the

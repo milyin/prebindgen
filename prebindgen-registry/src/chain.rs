@@ -224,6 +224,69 @@ pub struct Optional<S, B, C> {
     pub child: C,
 }
 
+/// Adapter-selected representation protocol for one Sequence shape.
+///
+/// The shared composer owns the source collection, its element loop and the
+/// child converter call. The adapter supplies only operations on its one
+/// intermediate collection value. Operation snippets use the local names
+/// documented on each method and are rendered only during final emission.
+///
+/// The composer reserves `__sequence_values`, `__sequence_part`,
+/// `__sequence_source`, and `__sequence_element`. Bridge snippets must not
+/// bind or shadow those names; they may refer to a name only where its method
+/// documents that name as an argument.
+pub trait SequenceBridge: Clone {
+    /// The one intermediate Rust type assigned to the Sequence fragment.
+    fn intermediate(&self) -> syn::Type;
+
+    /// Prepare to read elements from the inbound intermediate value.
+    ///
+    /// The returned statements may bind adapter state. The next operation is
+    /// rendered in the same scope.
+    fn begin(&self, value: TokenStream) -> TokenStream;
+
+    /// Produce the next child intermediate, or None when input is exhausted.
+    ///
+    /// This expression is rendered as the condition of the registry-owned
+    /// while-let loop.
+    fn next(&self) -> TokenStream;
+
+    /// Prepare one outbound intermediate before source elements are visited.
+    /// `source` names the canonical source collection before it is consumed,
+    /// so an adapter may inspect its length or other representation metadata.
+    ///
+    /// The returned statements may bind adapter state. Push and finish are
+    /// rendered in the same scope.
+    fn begin_output(&self, source: TokenStream) -> TokenStream;
+
+    /// Append one converted child intermediate to the outbound representation.
+    fn push(&self, value: TokenStream) -> TokenStream;
+
+    /// Produce the completed outbound intermediate.
+    fn finish(&self) -> TokenStream;
+
+    /// Whether the representation operations can fail independently of the
+    /// child converter.
+    fn fallible(&self) -> bool;
+}
+
+/// Registry-composed converter plan for a Sequence recipe.
+#[derive(Clone)]
+pub struct Sequence<S, B, C> {
+    /// Exact source spelling, opaque until rendering.
+    pub source: TypeRef,
+    /// Exact element spelling, opaque until rendering.
+    pub element: TypeRef,
+    /// Direction of the source/intermediate relation.
+    pub direction: Direction,
+    /// Source spelling and transparent-wrapper policy.
+    pub source_policy: S,
+    /// Adapter collection representation operations.
+    pub bridge: B,
+    /// Resolved element converter chain.
+    pub child: C,
+}
+
 /// One source field inside one [`Choice`] arm.
 #[derive(Clone)]
 pub struct ChoicePart<C> {
@@ -492,6 +555,60 @@ where
     }
 }
 
+impl<S, B, C> Chain for Sequence<S, B, C>
+where
+    S: Source,
+    B: SequenceBridge,
+    C: Child,
+{
+    fn render(&self, emit: &Emit) -> Rendered {
+        let source = self.source_policy.spell(&self.source, emit);
+        let element = self.source_policy.spell(&self.element, emit);
+        let intermediate = self.bridge.intermediate();
+        let body = match self.direction {
+            Direction::Construct => {
+                let begin = self.bridge.begin(quote::quote!(v));
+                let next = self.bridge.next();
+                let child = child_value(&self.child, quote::quote!(__sequence_part));
+                let canonical = quote::quote!({
+                    #begin
+                    let mut __sequence_values: ::std::vec::Vec<#element> =
+                        ::std::vec::Vec::new();
+                    while let ::core::option::Option::Some(__sequence_part) = #next {
+                        __sequence_values.push(#child);
+                    }
+                    __sequence_values
+                });
+                let built = self.source_policy.build(canonical);
+                syn::parse2(built).expect("a Sequence source constructor is a valid expression")
+            }
+            Direction::Deconstruct => {
+                let value = self.source_policy.read(quote::quote!(v));
+                let begin = self.bridge.begin_output(quote::quote!(__sequence_source));
+                let child = child_value(&self.child, quote::quote!(__sequence_element));
+                let push = self.bridge.push(quote::quote!(__sequence_part));
+                let finish = self.bridge.finish();
+                syn::parse2(quote::quote!({
+                    let __sequence_source = #value;
+                    #begin
+                    for __sequence_element in __sequence_source.into_iter() {
+                        let __sequence_part = #child;
+                        #push
+                    }
+                    #finish
+                }))
+                .expect("a Sequence intermediate constructor is a valid expression")
+            }
+        };
+        Rendered {
+            source,
+            intermediate,
+            body,
+            fallible: self.bridge.fallible() || self.child.call().fallible(),
+        }
+    }
+}
+
 impl<S, B, P, C> Chain for Choice<S, B, P, C>
 where
     S: Source,
@@ -729,6 +846,83 @@ mod tests {
             "{body}"
         );
         assert!(rendered.fallible);
+    }
+
+    #[derive(Clone)]
+    struct TestSequence;
+
+    impl SequenceBridge for TestSequence {
+        fn intermediate(&self) -> syn::Type {
+            syn::parse_quote!(Vec<i32>)
+        }
+
+        fn begin(&self, value: TokenStream) -> TokenStream {
+            quote!(let mut __test_sequence = (#value).into_iter();)
+        }
+
+        fn next(&self) -> TokenStream {
+            quote!(__test_sequence.next())
+        }
+
+        fn begin_output(&self, _source: TokenStream) -> TokenStream {
+            quote!(let mut __test_sequence = Vec::new();)
+        }
+
+        fn push(&self, value: TokenStream) -> TokenStream {
+            quote!(__test_sequence.push(#value);)
+        }
+
+        fn finish(&self) -> TokenStream {
+            quote!(__test_sequence)
+        }
+
+        fn fallible(&self) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn sequence_owns_both_loops_and_child_error_propagation() {
+        for direction in [Direction::Construct, Direction::Deconstruct] {
+            let spells = Rc::new(Cell::new(0));
+            let child_name = match direction {
+                Direction::Construct => "decode",
+                Direction::Deconstruct => "encode",
+            };
+            let plan = Sequence {
+                source: TypeRef::scalar(ScalarKind::I64),
+                element: TypeRef::scalar(ScalarKind::I64),
+                direction,
+                source_policy: TestSource {
+                    spells: spells.clone(),
+                },
+                bridge: TestSequence,
+                child: Call::new(
+                    syn::Ident::new(child_name, proc_macro2::Span::call_site()),
+                    true,
+                    false,
+                ),
+            };
+
+            assert_eq!(spells.get(), 0);
+            let rendered = plan.render(&Emit::for_test());
+            assert_eq!(spells.get(), 2);
+            let body = rendered.body.to_token_stream().to_string();
+            match direction {
+                Direction::Construct => {
+                    assert!(
+                        body.contains("while let :: core :: option :: Option :: Some"),
+                        "{body}"
+                    );
+                    assert!(body.contains("decode (__sequence_part) ?"), "{body}");
+                }
+                Direction::Deconstruct => {
+                    assert!(body.contains("for __sequence_element in"), "{body}");
+                    assert!(body.contains("encode (__sequence_element) ?"), "{body}");
+                }
+            }
+            assert!(rendered.fallible);
+        }
     }
     fn choice_plan(
         direction: Direction,

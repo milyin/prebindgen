@@ -6,6 +6,7 @@
 //! its inner crossing already produced, so nothing here decides which arity
 //! layer it is looking at and nothing here recurses.
 
+use kotlin_codegen::KtType;
 use prebindgen_registry::{
     flat::{Alternative, Function, TypeKind, TypeRef},
     recipe::{
@@ -829,6 +830,14 @@ impl<R: Conversions> JCompile<'_, R> {
         part: &Part<'_>,
         frag: &JFrag,
     ) -> crate::jni::chain::JChild {
+        Self::planned_child_mode(direction, part.mode, frag)
+    }
+
+    fn planned_child_mode(
+        direction: Direction,
+        mode: Mode,
+        frag: &JFrag,
+    ) -> crate::jni::chain::JChild {
         let stages = match direction {
             Direction::Construct => frag
                 .conv
@@ -856,7 +865,7 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Deconstruct => crate::jni::chain::JChild::output(
                 frag.conv.converter_ident().clone(),
                 stages,
-                match part.mode {
+                match mode {
                     Mode::Owned => crate::jni::chain::JValueUse::Direct,
                     Mode::Shared | Mode::Exclusive => crate::jni::chain::JValueUse::Cloned,
                 },
@@ -1130,6 +1139,125 @@ impl<R: Conversions> JCompile<'_, R> {
             }
             wire => crate::jni::emit::sentinel_for_wire(wire),
         }
+    }
+
+    /// Plan a Java List-backed Sequence as one intermediate collection.
+    ///
+    /// The registry owns source collection traversal, element conversion and
+    /// collection construction. JNI supplies only its List iterator/appender
+    /// operations. Primitive arrays, handle-vector builders and multi-slot
+    /// element folds retain their specialized representations.
+    fn planned_sequence(&self, at: At<'_>, elements: Mode, inner: &JFrag) -> Option<JFrag> {
+        if inner.composed_only || inner.wires.is_some() || inner.out_wires.is_some() {
+            return None;
+        }
+        let source = at.crossing.value();
+        let element = source.sequence_elem()?.clone();
+        let direction = at.crossing.direction();
+        match (direction, source.unwrapped().kind()) {
+            (Direction::Construct, TypeKind::Vec(_))
+            | (Direction::Deconstruct, TypeKind::Vec(_) | TypeKind::Slice(_)) => {}
+            _ => return None,
+        }
+        let wrappers = source.erased_wrappers();
+        if wrappers.iter().any(|wrapper| {
+            let Some(ops) = super::trait_impl::wrapper_ops(wrapper) else {
+                return true;
+            };
+            match direction {
+                Direction::Construct => ops.build.is_none(),
+                Direction::Deconstruct => ops.read.is_none(),
+            }
+        }) {
+            return None;
+        }
+
+        let child_wire = inner.conv.destination.clone();
+        if !is_jobject_shaped_wire(&child_wire) {
+            return None;
+        }
+        if direction == Direction::Construct {
+            reject_vec_of_handle(&inner.conv.metadata.projection, &element);
+        }
+        let child = Self::planned_child_mode(direction, elements, inner);
+        let destination: syn::Type = syn::parse_quote!(jni::objects::JObject);
+        let ident = crate::jni::chain::planned_name(direction, at.crossing.spelled(), &destination);
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let bridge = match direction {
+            Direction::Construct => crate::jni::chain::JSequenceBridge::Input {
+                child: Box::new(child_wire),
+            },
+            Direction::Deconstruct => crate::jni::chain::JSequenceBridge::Output,
+        };
+        let rust = crate::jni::chain::JFunction::sequence(crate::jni::chain::JSequencePlan {
+            ident,
+            reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
+            dependencies: vec![inner.rust.clone()],
+            mode: at.crossing.mode(),
+            chain: prebindgen_registry::chain::Sequence {
+                source: source.clone(),
+                element: element.clone(),
+                direction,
+                source_policy: crate::jni::chain::JSource {
+                    wrappers,
+                    module: None,
+                },
+                bridge,
+                child,
+            },
+        });
+
+        let inner_kotlin = inner.conv.metadata.kotlin_name.clone()?;
+        let kotlin_name = self.decls.override_kotlin_name(
+            &at.crossing.spelled().key(),
+            Some(KtType::generic("List", [inner_kotlin])),
+        );
+        let projection = if direction == Direction::Deconstruct {
+            inner
+                .conv
+                .metadata
+                .projection
+                .clone()
+                .map(|projection| Projection {
+                    strategy: FoldStrategy::Iterable(Box::new(projection.strategy)),
+                    ..projection
+                })
+        } else {
+            None
+        };
+        let niches = match direction {
+            Direction::Construct => Niches::empty(),
+            Direction::Deconstruct => default_niches_for_wire(&destination),
+        };
+        Some(JFrag {
+            conv: ConverterImpl {
+                destination,
+                function: marker,
+                pre_stages: Vec::new(),
+                niches,
+                metadata: KotlinMeta {
+                    kotlin_name,
+                    value_rust_type: None,
+                    projection,
+                },
+                subs: vec![element.key()],
+            },
+            rust,
+            layout: Some(JLayout::Leaf),
+            choice_arm: None,
+            // Iterable callback delivery converts one element at a time. Keep
+            // exposing the element chain there until Invoke composition owns
+            // that site explicitly.
+            nested_chain: inner.composed_chain(),
+            wires: None,
+            out_wires: None,
+            composed_only: false,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+        })
     }
 
     /// Plan an Optional over one already-composed child intermediate without
@@ -1495,11 +1623,14 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         &mut self,
         cx: &mut Cx<'_>,
         at: At<'_>,
-        _elements: Mode,
+        elements: Mode,
         inner: &JFrag,
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let emit = cx.emit();
+        if let Some(planned) = self.planned_sequence(at, elements, inner) {
+            return Ok(planned);
+        }
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .decls
@@ -1711,11 +1842,11 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             .site
             .as_ref()
             .ok_or_else(|| JErr::Refused("JniGen: a site compiled with no site context".into()))?;
-        if matches!(root.layout, Some(JLayout::Leaf)) {
-            root.rust.mark_reachable();
-        }
         let site = match site {
             PlanSite::Return => {
+                if matches!(root.layout, Some(JLayout::Leaf)) {
+                    root.rust.mark_reachable();
+                }
                 // A fragment that occupies several wires IS the decomposed
                 // return: the site asked for the `parts` recipe and got what that
                 // recipe states. Nothing else distinguishes the two cases, and
@@ -1779,6 +1910,17 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 None => InputKind::Plain,
             }
         };
+
+        // VecBuild constructs a Rust collection through its handle helpers and
+        // never calls the root JObject converter. Activating that converter
+        // would emit an orphan list decoder; for a bare Vec it also duplicates
+        // the legacy decoder. Other leaf parameter plans still consume their
+        // root conversion.
+        if matches!(root.layout, Some(JLayout::Leaf))
+            && !matches!(&kind, InputKind::VecBuild { .. })
+        {
+            root.rust.mark_reachable();
+        }
 
         // Typed surface: handle/value projections show their Kotlin class (from
         // the projection's leaf key); everything else the conversion's resolved

@@ -2805,46 +2805,6 @@ pub(crate) unsafe fn Token_to_jlong_4f7adafa<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn Vec_Payload_to_JObject_8b7084d2<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Vec<perftest_flat::Payload>,
-) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Vec<perftest_flat::Payload> = v;
-        let __list_obj = env
-            .new_object("java/util/ArrayList", "()V", &[])
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        for __elem in v.into_iter() {
-            let __elem_wire = Payload_to_JObject_98f64326(env, __elem)?;
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Vec<_>: list-add: {}", e)))?;
-        }
-        __list_obj
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn bool_to_jboolean_31306d98<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: bool,

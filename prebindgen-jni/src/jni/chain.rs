@@ -20,6 +20,7 @@ enum JBody {
     OwnedHandle(Box<JOwnedHandlePlan>),
     Product(Box<JProductPlan>),
     Choice(Box<JChoicePlan>),
+    Sequence(Box<JSequencePlan>),
     Optional(Box<JOptionalPlan>),
 }
 
@@ -38,6 +39,10 @@ impl JFunction {
 
     pub(crate) fn optional(plan: JOptionalPlan) -> Self {
         Self(JBody::Optional(Box::new(plan)))
+    }
+
+    pub(crate) fn sequence(plan: JSequencePlan) -> Self {
+        Self(JBody::Sequence(Box::new(plan)))
     }
 
     pub(crate) fn choice(plan: JChoicePlan) -> Self {
@@ -60,6 +65,12 @@ impl JFunction {
                     dependency.mark_reachable();
                 }
             }
+            JBody::Sequence(plan) => {
+                plan.reachable.set(true);
+                for dependency in &plan.dependencies {
+                    dependency.mark_reachable();
+                }
+            }
             JBody::Optional(plan) => {
                 plan.reachable.set(true);
                 for dependency in &plan.dependencies {
@@ -77,6 +88,7 @@ impl RustFunction for JFunction {
             JBody::OwnedHandle(plan) => plan.reachable.get(),
             JBody::Product(plan) => plan.reachable.get(),
             JBody::Optional(plan) => plan.reachable.get(),
+            JBody::Sequence(plan) => plan.reachable.get(),
             JBody::Choice(plan) => plan.reachable.get(),
         }
     }
@@ -88,6 +100,7 @@ impl RustFunction for JFunction {
             JBody::Product(plan) => plan.render(emit),
             JBody::Optional(plan) => plan.render(emit),
             JBody::Choice(plan) => plan.render(emit),
+            JBody::Sequence(plan) => plan.render(emit),
         }
     }
 }
@@ -403,6 +416,153 @@ impl JChoicePlan {
                 syn::parse_quote!(
                     #allow
                     #[inline(always)]
+                    pub(crate) unsafe fn #name<'a>(
+                        env: &mut jni::JNIEnv<'a>,
+                        #input,
+                    ) -> ::core::result::Result<#intermediate, __JniErr> {
+                        ::core::result::Result::Ok(#body)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/// Java List operations for one registry-owned Sequence loop.
+#[derive(Clone)]
+pub(crate) enum JSequenceBridge {
+    Input { child: Box<syn::Type> },
+    Output,
+}
+
+impl shared::SequenceBridge for JSequenceBridge {
+    fn intermediate(&self) -> syn::Type {
+        syn::parse_quote!(jni::objects::JObject)
+    }
+
+    fn begin(&self, value: TokenStream) -> TokenStream {
+        match self {
+            Self::Input { .. } => quote! {
+                let __sequence_list = jni::objects::JList::from_env(env, #value)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                        format!("Vec<_>: list-from-env: {}", e)
+                    ))?;
+                let mut __sequence_iter = __sequence_list.iter(env)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                        format!("Vec<_>: list-iter: {}", e)
+                    ))?;
+            },
+            Self::Output => {
+                unreachable!("sequence bridge operation does not match its planned direction")
+            }
+        }
+    }
+
+    fn next(&self) -> TokenStream {
+        match self {
+            Self::Input { child } => quote! {
+                match __sequence_iter.next(env)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                        format!("Vec<_>: list-next: {}", e)
+                    ))?
+                {
+                    ::core::option::Option::Some(__sequence_object) => {
+                        let __sequence_part: #child = __sequence_object.into();
+                        ::core::option::Option::Some(__sequence_part)
+                    }
+                    ::core::option::Option::None => ::core::option::Option::None,
+                }
+            },
+            Self::Output => {
+                unreachable!("sequence bridge operation does not match its planned direction")
+            }
+        }
+    }
+
+    fn begin_output(&self, _source: TokenStream) -> TokenStream {
+        match self {
+            Self::Output => quote! {
+                let __sequence_output = env
+                    .new_object("java/util/ArrayList", "()V", &[])
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                        format!("Vec<_>: new ArrayList: {}", e)
+                    ))?;
+                let __sequence_list = jni::objects::JList::from_env(env, &__sequence_output)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                        format!("Vec<_>: list-from-env: {}", e)
+                    ))?;
+            },
+            Self::Input { .. } => {
+                unreachable!("sequence bridge operation does not match its planned direction")
+            }
+        }
+    }
+
+    fn push(&self, value: TokenStream) -> TokenStream {
+        match self {
+            Self::Output => quote! {
+                let __sequence_object: jni::objects::JObject = #value.into();
+                __sequence_list.add(env, &__sequence_object)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                        format!("Vec<_>: list-add: {}", e)
+                    ))?;
+            },
+            Self::Input { .. } => {
+                unreachable!("sequence bridge operation does not match its planned direction")
+            }
+        }
+    }
+
+    fn finish(&self) -> TokenStream {
+        match self {
+            Self::Output => quote!(__sequence_output),
+            Self::Input { .. } => {
+                unreachable!("sequence bridge operation does not match its planned direction")
+            }
+        }
+    }
+
+    fn fallible(&self) -> bool {
+        true
+    }
+}
+
+/// One late-rendered JniGen Sequence converter.
+#[derive(Clone)]
+pub(crate) struct JSequencePlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
+    pub(crate) dependencies: Vec<JFunction>,
+    pub(crate) mode: Mode,
+    pub(crate) chain: shared::Sequence<JSource, JSequenceBridge, JChild>,
+}
+
+impl JSequencePlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let rendered = self.chain.render(emit);
+        let name = &self.ident;
+        let source = &rendered.source;
+        let intermediate = annotate_jobject_with_lifetime(&rendered.intermediate, "a");
+        let body = &rendered.body;
+        let allow = crate::jni::trait_impl::generated_converter_attr();
+        match self.chain.direction {
+            Direction::Construct => syn::parse_quote!(
+                #allow
+                pub(crate) unsafe fn #name<'env, 'a>(
+                    env: &mut jni::JNIEnv<'env>,
+                    v: &#intermediate,
+                ) -> ::core::result::Result<#source, __JniErr> {
+                    ::core::result::Result::Ok(#body)
+                }
+            ),
+            Direction::Deconstruct => {
+                let input = match self.mode {
+                    Mode::Owned => quote!(v: #source),
+                    Mode::Shared => quote!(v: &#source),
+                    Mode::Exclusive => quote!(v: &mut #source),
+                };
+                syn::parse_quote!(
+                    #allow
                     pub(crate) unsafe fn #name<'a>(
                         env: &mut jni::JNIEnv<'a>,
                         #input,
