@@ -316,33 +316,77 @@ pub(crate) fn __cbg_in_Millis(v: u64) -> example_flat::Millis {
 pub(crate) unsafe fn __cbg_in_Note(
     v: ::core::mem::MaybeUninit<note_t>,
 ) -> ::core::result::Result<example_flat::Note, ::std::string::String> {
-    const _: () = {
-        assert!(
-            ::core::mem::size_of:: < note_t > () >= ::core::mem::size_of:: <
-            ::core::ffi::c_int > (),
-            "`note_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
-        );
-    };
-    let __tag: ::core::ffi::c_int = ::core::ptr::read(
-        v.as_ptr() as *const ::core::ffi::c_int,
-    );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 5i64) {
-        return ::core::result::Result::Err(
-            ::std::format!("invalid tag {} for `note_t` (expected 0..5)", __tag),
-        );
-    }
-    let v = v.assume_init();
-    ::core::result::Result::Ok(
-        match v {
-            note_t::Silent => example_flat::Note::Silent,
-            note_t::Titled(__f0) => example_flat::Note::Titled(__cbg_in_Caption(__f0)),
-            note_t::After(__f0) => example_flat::Note::After(__cbg_in_Millis(__f0)),
-            note_t::Flagged(__f0) => example_flat::Note::Flagged(__cbg_in_bool(__f0)),
-            note_t::Sketched(__f0) => {
-                example_flat::Note::Sketched(__cbg_in_Drawing(__f0)?)
+    ::core::result::Result::Ok({
+        let __tag = {
+            const _: () = {
+                assert!(
+                    ::core::mem::size_of:: < note_t > () >= ::core::mem::size_of:: <
+                    ::core::ffi::c_int > (),
+                    "`note_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+                );
+            };
+            unsafe { ::core::ptr::read((v).as_ptr() as *const ::core::ffi::c_int) }
+        };
+        match __tag {
+            0 => example_flat::Note::Silent,
+            1 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        note_t::Titled(__wire_part0) => (__wire_part0,),
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
+                example_flat::Note::Titled(__cbg_in_Caption((__arm).0))
             }
-        },
-    )
+            2 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        note_t::After(__wire_part0) => (__wire_part0,),
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
+                example_flat::Note::After(__cbg_in_Millis((__arm).0))
+            }
+            3 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        note_t::Flagged(__wire_part0) => (__wire_part0,),
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
+                example_flat::Note::Flagged(__cbg_in_bool((__arm).0))
+            }
+            4 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        note_t::Sketched(__wire_part0) => (__wire_part0,),
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
+                example_flat::Note::Sketched(__cbg_in_Drawing((__arm).0)?)
+            }
+            _ => {
+                return ::core::result::Result::Err(
+                    ::std::format!(
+                        "invalid tag {} for `{}` (expected 0..{})", __tag,
+                        stringify!(note_t), 5usize,
+                    ),
+                );
+            }
+        }
+    })
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Operation(
@@ -383,40 +427,75 @@ pub(crate) unsafe fn __cbg_in_Operation(
 pub(crate) unsafe fn __cbg_in_Shape(
     v: ::core::mem::MaybeUninit<shape_t>,
 ) -> ::core::result::Result<example_flat::Shape, ::std::string::String> {
-    const _: () = {
-        assert!(
-            ::core::mem::size_of:: < shape_t > () >= ::core::mem::size_of:: <
-            ::core::ffi::c_int > (),
-            "`shape_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
-        );
-    };
-    let __tag: ::core::ffi::c_int = ::core::ptr::read(
-        v.as_ptr() as *const ::core::ffi::c_int,
-    );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
-        return ::core::result::Result::Err(
-            ::std::format!("invalid tag {} for `shape_t` (expected 0..4)", __tag),
-        );
-    }
-    let v = v.assume_init();
-    ::core::result::Result::Ok(
-        match v {
-            shape_t::Empty => example_flat::Shape::Empty,
-            shape_t::Circle(__f0) => example_flat::Shape::Circle(__cbg_in_f64(__f0)),
-            shape_t::Rect { width: __f0, height: __f1 } => {
+    ::core::result::Result::Ok({
+        let __tag = {
+            const _: () = {
+                assert!(
+                    ::core::mem::size_of:: < shape_t > () >= ::core::mem::size_of:: <
+                    ::core::ffi::c_int > (),
+                    "`shape_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+                );
+            };
+            unsafe { ::core::ptr::read((v).as_ptr() as *const ::core::ffi::c_int) }
+        };
+        match __tag {
+            0 => example_flat::Shape::Empty,
+            1 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        shape_t::Circle(__wire_part0) => (__wire_part0,),
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
+                example_flat::Shape::Circle(__cbg_in_f64((__arm).0))
+            }
+            2 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        shape_t::Rect { width: __wire_part0, height: __wire_part1 } => {
+                            (__wire_part0, __wire_part1)
+                        }
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
                 example_flat::Shape::Rect {
-                    width: __cbg_in_f64(__f0),
-                    height: __cbg_in_f64(__f1),
+                    width: __cbg_in_f64((__arm).0),
+                    height: __cbg_in_f64((__arm).1),
                 }
             }
-            shape_t::Labeled(__f0, __f1) => {
+            3 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        shape_t::Labeled(__wire_part0, __wire_part1) => {
+                            (__wire_part0, __wire_part1)
+                        }
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
                 example_flat::Shape::Labeled(
-                    __cbg_in_String_field(__f0),
-                    __cbg_in_Operation(__f1)?,
+                    __cbg_in_String_field((__arm).0),
+                    __cbg_in_Operation((__arm).1)?,
                 )
             }
-        },
-    )
+            _ => {
+                return ::core::result::Result::Err(
+                    ::std::format!(
+                        "invalid tag {} for `{}` (expected 0..{})", __tag,
+                        stringify!(shape_t), 4usize,
+                    ),
+                );
+            }
+        }
+    })
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_String(
@@ -695,19 +774,27 @@ pub(crate) fn __cbg_out_Millis(v: example_flat::Millis) -> u64 {
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Note(v: example_flat::Note) -> ::core::mem::MaybeUninit<note_t> {
-    ::core::mem::MaybeUninit::new(
+    ::core::mem::MaybeUninit::new({
         match v {
             example_flat::Note::Silent => note_t::Silent,
-            example_flat::Note::Titled(__f0) => note_t::Titled(__cbg_out_Caption(__f0)),
-            example_flat::Note::After(__f0) => note_t::After(__cbg_out_Millis(__f0)),
-            example_flat::Note::Flagged(__f0) => {
-                note_t::Flagged(__cbg_out_bool_field(__f0))
+            example_flat::Note::Titled(__part0) => {
+                let __built_arm = (__cbg_out_Caption(__part0),);
+                note_t::Titled(__built_arm.0)
             }
-            example_flat::Note::Sketched(__f0) => {
-                note_t::Sketched(__cbg_out_Drawing(__f0))
+            example_flat::Note::After(__part0) => {
+                let __built_arm = (__cbg_out_Millis(__part0),);
+                note_t::After(__built_arm.0)
             }
-        },
-    )
+            example_flat::Note::Flagged(__part0) => {
+                let __built_arm = (__cbg_out_bool_field(__part0),);
+                note_t::Flagged(__built_arm.0)
+            }
+            example_flat::Note::Sketched(__part0) => {
+                let __built_arm = (__cbg_out_Drawing(__part0),);
+                note_t::Sketched(__built_arm.0)
+            }
+        }
+    })
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Operation(v: example_flat::Operation) -> operation_t {
@@ -722,24 +809,29 @@ pub(crate) fn __cbg_out_Operation(v: example_flat::Operation) -> operation_t {
 pub(crate) fn __cbg_out_Shape(
     v: example_flat::Shape,
 ) -> ::core::mem::MaybeUninit<shape_t> {
-    ::core::mem::MaybeUninit::new(
+    ::core::mem::MaybeUninit::new({
         match v {
             example_flat::Shape::Empty => shape_t::Empty,
-            example_flat::Shape::Circle(__f0) => shape_t::Circle(__cbg_out_f64(__f0)),
-            example_flat::Shape::Rect { width: __f0, height: __f1 } => {
+            example_flat::Shape::Circle(__part0) => {
+                let __built_arm = (__cbg_out_f64(__part0),);
+                shape_t::Circle(__built_arm.0)
+            }
+            example_flat::Shape::Rect { width: __part0, height: __part1 } => {
+                let __built_arm = (__cbg_out_f64(__part0), __cbg_out_f64(__part1));
                 shape_t::Rect {
-                    width: __cbg_out_f64(__f0),
-                    height: __cbg_out_f64(__f1),
+                    width: __built_arm.0,
+                    height: __built_arm.1,
                 }
             }
-            example_flat::Shape::Labeled(__f0, __f1) => {
-                shape_t::Labeled(
-                    __cbg_out_String(__f0),
-                    ::core::mem::MaybeUninit::new(__cbg_out_Operation(__f1)),
-                )
+            example_flat::Shape::Labeled(__part0, __part1) => {
+                let __built_arm = (
+                    __cbg_out_String(__part0),
+                    ::core::mem::MaybeUninit::new(__cbg_out_Operation(__part1)),
+                );
+                shape_t::Labeled(__built_arm.0, __built_arm.1)
             }
-        },
-    )
+        }
+    })
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_String(v: ::std::string::String) -> *mut ::core::ffi::c_char {

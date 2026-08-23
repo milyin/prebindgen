@@ -350,18 +350,6 @@ impl Variant {
     }
 }
 
-/// Delimiter form of one sum alternative.
-///
-/// This is source structure retained by Flat, not adapter rendering policy.
-/// Empty unit, tuple and struct alternatives have the same payload arity but
-/// require different construction and pattern syntax.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AlternativeForm {
-    Unit,
-    Tuple,
-    Struct,
-}
-
 /// One alternative of a [`Variant`].
 #[derive(Clone, Debug)]
 pub struct Alternative {
@@ -383,16 +371,6 @@ pub struct Alternative {
 }
 
 impl Alternative {
-    /// Whether this alternative uses no delimiters, tuple parentheses or
-    /// struct braces in source Rust.
-    pub fn form(&self) -> AlternativeForm {
-        match &self.origin.as_syn().fields {
-            syn::Fields::Unit => AlternativeForm::Unit,
-            syn::Fields::Unnamed(_) => AlternativeForm::Tuple,
-            syn::Fields::Named(_) => AlternativeForm::Struct,
-        }
-    }
-
     /// True when this alternative carries no payload.
     ///
     /// The *group* question, not the syntax one: `B`, `B()` and `B {}` are all

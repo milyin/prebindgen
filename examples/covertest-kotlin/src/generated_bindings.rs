@@ -12979,41 +12979,44 @@ pub(crate) unsafe fn tuple6_to_Reading_69702d1f<'env, 'a>(
     ),
 ) -> ::core::result::Result<perftest_flat::Reading, __JniErr> {
     ::core::result::Result::Ok({
-        match (v).0 {
-            0i32 => {
-                let __arm = (v).1;
-                perftest_flat::Reading::Missing
-            }
+        let __tag = (v).0;
+        match __tag {
+            0i32 => perftest_flat::Reading::Missing,
             1i32 => {
-                let __arm = (v).2;
+                let __choice = v;
+                let __arm = (__choice).2;
                 perftest_flat::Reading::Exact(jlong_to_i64_fbf9a9bc(env, &((__arm).0))?)
             }
             2i32 => {
-                let __arm = (v).3;
+                let __choice = v;
+                let __arm = (__choice).3;
                 perftest_flat::Reading::Range {
                     low: jlong_to_i64_fbf9a9bc(env, &((__arm).0))?,
                     high: jlong_to_i64_fbf9a9bc(env, &((__arm).1))?,
                 }
             }
             3i32 => {
-                let __arm = (v).4;
+                let __choice = v;
+                let __arm = (__choice).4;
                 perftest_flat::Reading::Labeled(
                     JString_to_String_c7f3ca43(env, &((__arm).0))?,
                     jint_to_Priority_447102d2(env, &((__arm).1))?,
                 )
             }
             4i32 => {
-                let __arm = (v).5;
+                let __choice = v;
+                let __arm = (__choice).5;
                 perftest_flat::Reading::Companion(
                     jlong_to_i64_fbf9a9bc(env, &((__arm).0))?,
                 )
             }
             _ => {
-                return ::core::result::Result::Err(
+                return ::core::result::Result::Err({
+                    let __invalid_tag = __tag;
                     <__JniErr as ::core::convert::From<
                         String,
-                    >>::from(format!(concat!("Reading", ": invalid tag"))),
-                );
+                    >>::from(format!("{}: invalid tag {}", "Reading", __invalid_tag,))
+                });
             }
         }
     })

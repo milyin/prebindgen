@@ -16,7 +16,9 @@ use prebindgen_registry::{
 };
 
 use super::*;
-use crate::chain::{CFunction, OptionalPlan, OptionalRepr, ProductField, ProductPlan};
+use crate::chain::{
+    CCall, CFunction, ChoicePlan, OptionalPlan, OptionalRepr, ProductField, ProductPlan,
+};
 
 /// The C adapter's answer for one crossing.
 #[derive(Clone)]
@@ -30,35 +32,31 @@ pub(crate) struct CFrag {
     /// Inner types this fragment composed from, which is what marks them
     /// reachable in the registry that still emits them.
     pub(crate) subs: Vec<TypeKey>,
-    /// One arm's payload, converted, for a fragment on its way from
+    /// One arm's payload plan on its way from
     /// [`Compile::fields`] to [`Compile::choice`].
     ///
-    /// A union's arm is a product whose parts do not assemble into a value of
-    /// their own — they are bound in a `match` and rebuilt on the other side —
-    /// so the arm's fragment carries the converted expressions rather than a
-    /// function. `None` for every other fragment, which is what a struct's is.
+    /// `None` for every other fragment, which is what a struct's is.
     pub(crate) arm: Option<Arm>,
     /// What the fragment produces, which is all the registry reads of it.
     pub(crate) yields: Yield,
 }
 
-/// One alternative's payload, converted in both directions.
-///
-/// What [`Compile::fields`] hands [`Compile::choice`] for a tagged union: the
-/// per-field expressions, keyed by nothing because their order is the
-/// alternative's own.
+/// One alternative's payload plan on its way to [`Compile::choice`].
 #[derive(Clone)]
 pub(crate) struct Arm {
-    /// Converted payload expressions, in field order, over the bindings
-    /// `__f0..__fN` a `match` arm introduces.
-    pub(crate) exprs: Vec<TokenStream>,
-    /// Whether any of them can fail, so the union's own converter knows
-    /// whether it needs a `Result`.
-    pub(crate) fallible: bool,
+    /// Ordered payload wires and resolved child calls.
+    pub(crate) parts: Vec<ArmPart>,
     /// Inner types the payloads composed from.
     pub(crate) subs: Vec<TypeKey>,
 }
 
+#[derive(Clone)]
+pub(crate) struct ArmPart {
+    pub(crate) wire: syn::Type,
+    pub(crate) child: CCall,
+    pub(crate) mode: Mode,
+    pub(crate) hold_uninit: bool,
+}
 impl Carrier for CFrag {
     fn yields(&self) -> Yield {
         self.yields.clone()
@@ -172,10 +170,6 @@ fn held_uninit(declared: &syn::Type, produced: &syn::Type) -> bool {
     };
     matches!(args.args.first(), Some(syn::GenericArgument::Type(inner))
         if TypeKey::from_type(inner) == TypeKey::from_type(produced))
-}
-
-fn fallible(function: &CFunction) -> bool {
-    function.call().fallible()
 }
 
 /// A refusal naming the crossing that could not be answered.
@@ -409,31 +403,22 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     );
                 }
             }
-            let exprs = parts
+            let arm_parts = parts
                 .iter()
-                .enumerate()
-                .map(|(i, (part, frag))| {
-                    let bind = format_ident!("__f{}", i);
-                    let conv = frag.function.call().ident();
-                    let call = if fallible(&frag.function) {
-                        quote!(#conv(#bind)?)
-                    } else {
-                        quote!(#conv(#bind))
-                    };
-                    // The union holds a payload whose bytes C may write —
-                    // a nested enum or a `bool` — as `MaybeUninit`, so the
-                    // decode can check them before assuming them valid. Same
-                    // holding form a struct's mirror field takes, and the same
-                    // reason: the wrap belongs to whatever holds the value, not
-                    // to the value's own conversion.
-                    match (
-                        at.crossing.direction(),
-                        self.gen.payload_field_wire(&part.ty),
-                    ) {
-                        (Direction::Deconstruct, Ok(w)) if held_uninit(&w, &frag.destination) => {
-                            quote!(::core::mem::MaybeUninit::new(#call))
-                        }
-                        _ => call,
+                .map(|(part, frag)| {
+                    // Input planning can precede the matching output fragment.
+                    // The output pass later validates the one-wire contract
+                    // and refuses fallible encoders before planning Choice.
+                    let wire = self
+                        .gen
+                        .payload_field_wire(&part.ty)
+                        .unwrap_or_else(|_| frag.destination.clone());
+                    ArmPart {
+                        hold_uninit: at.crossing.direction() == Direction::Deconstruct
+                            && held_uninit(&wire, &frag.destination),
+                        wire,
+                        child: frag.function.call().clone(),
+                        mode: part.mode,
                     }
                 })
                 .collect();
@@ -459,9 +444,8 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 niches: Niches::empty(),
                 subs: subs.clone(),
                 arm: Some(Arm {
-                    fallible: parts.iter().any(|(_, f)| fallible(&f.function)),
                     subs,
-                    exprs,
+                    parts: arm_parts,
                 }),
                 yields: Yield {
                     ty: at.crossing.value().stripped_key(),
@@ -543,118 +527,74 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
 
     fn choice(
         &mut self,
-        cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_>,
         at: At<'_>,
         arms: &[(&Alternative, &CFrag)],
     ) -> Frag<Self> {
-        let ty = at.crossing.spelled();
-        let key = ty.key();
+        let key = at.crossing.spelled().key();
         let cname = self.gen.c_type_ident(&key);
-        let src = self.gen.src_ty_of(&key);
-        let emit = cx.emit();
-        let construct = at.crossing.direction() == Direction::Construct;
-
-        let mut subs: Vec<TypeKey> = Vec::new();
-        let mut fallible_any = false;
-        let mut match_arms: Vec<TokenStream> = Vec::new();
-        for (alternative, frag) in arms {
-            let Some(arm) = frag.arm.as_ref() else {
+        let direction = at.crossing.direction();
+        let mut subs = Vec::new();
+        let mut planned_arms = Vec::with_capacity(arms.len());
+        for (alternative, fragment) in arms {
+            let Some(arm) = fragment.arm.as_ref() else {
                 return Err(refuse(at, "an arm that composed no payload"));
             };
-            subs.extend(arm.subs.iter().cloned());
-            fallible_any |= arm.fallible;
-            let vident = &alternative.name;
-            let binds: Vec<syn::Ident> = (0..alternative.fields.len())
-                .map(|i| format_ident!("__f{}", i))
-                .collect();
-            let bound: Vec<TokenStream> = alternative
-                .fields
-                .iter()
-                .zip(&binds)
-                .map(|(f, b)| f.bind(b))
-                .collect();
-            let built: Vec<TokenStream> = alternative
-                .fields
-                .iter()
-                .zip(&arm.exprs)
-                .map(|(f, e)| f.bind(e))
-                .collect();
-            // The alternative's own delimiters on both sides, so a tuple arm
-            // and a braced one each spell themselves.
-            let (from_head, to_head) = if construct {
-                (quote!(#cname::#vident), quote!(#src::#vident))
-            } else {
-                (quote!(#src::#vident), quote!(#cname::#vident))
-            };
-            let from = emit.shape_alternative(alternative, from_head, &bound);
-            let to = emit.shape_alternative(alternative, to_head, &built);
-            match_arms.push(quote!(#from => #to,));
-        }
-
-        let conv = if construct {
-            let name = CbindgenBuilder::in_name_of(&key);
-            let bad = format!(
-                "invalid tag {{}} for `{cname}` (expected 0..{})",
-                arms.len()
-            );
-            // A C-supplied mirror may hold any discriminant, so the tag is
-            // checked before the value is assumed initialised. Neither the tag
-            // nor the check is a crossing — the adapter invents both, which is
-            // why no recipe mentions them.
-            let guard = self.gen.tag_guard(
-                &cname,
-                arms.len(),
-                quote!(v),
-                quote!(return ::core::result::Result::Err(::std::format!(#bad, __tag));),
-            );
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(
-                    v: ::core::mem::MaybeUninit<#cname>,
-                ) -> ::core::result::Result<#src, ::std::string::String> {
-                    #guard
-                    let v = v.assume_init();
-                    ::core::result::Result::Ok(match v { #(#match_arms)* })
-                }
-            );
-            ConverterImpl {
-                subs,
-                destination: syn::parse_quote!(::core::mem::MaybeUninit<#cname>),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            }
-        } else {
-            if fallible_any {
+            if direction == Direction::Deconstruct
+                && arm.parts.iter().any(|part| part.child.fallible())
+            {
                 return Err(refuse(
                     at,
                     "a payload whose encode can fail, which a union has no way to report",
                 ));
             }
-            let name = CbindgenBuilder::out_name_of(&key);
-            // `MaybeUninit`, matching the wire the decode takes: one C type for
-            // both directions, so a union returned by one function can be
-            // handed straight to another that takes one. The value written is
-            // always initialised — only the *type* has room for a discriminant
-            // C might not have written.
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src) -> ::core::mem::MaybeUninit<#cname> {
-                    ::core::mem::MaybeUninit::new(match v { #(#match_arms)* })
-                }
-            );
-            ConverterImpl {
-                subs,
-                destination: syn::parse_quote!(::core::mem::MaybeUninit<#cname>),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            }
+            subs.extend(arm.subs.iter().cloned());
+            planned_arms.push(prebindgen_registry::chain::ChoiceArm {
+                alternative: (*alternative).clone(),
+                tag: {
+                    let tag =
+                        syn::LitInt::new(&alternative.index.to_string(), alternative.name.span());
+                    syn::parse_quote!(#tag)
+                },
+                bridge: prebindgen_registry::chain::TupleProduct {
+                    parts: arm.parts.iter().map(|part| part.wire.clone()).collect(),
+                },
+                parts: arm
+                    .parts
+                    .iter()
+                    .map(|part| prebindgen_registry::chain::ChoicePart {
+                        child: part.child.clone(),
+                        mode: part.mode,
+                        hold_uninit: part.hold_uninit,
+                    })
+                    .collect(),
+            });
+        }
+
+        let destination: syn::Type = syn::parse_quote!(::core::mem::MaybeUninit<#cname>);
+        let ident = match direction {
+            Direction::Construct => CbindgenBuilder::in_name_of(&key),
+            Direction::Deconstruct => CbindgenBuilder::out_name_of(&key),
         };
-        let _ = fallible_any;
-        Ok(CFrag::from_converter(at, conv))
+        Ok(CFrag {
+            destination,
+            function: CFunction::choice(ChoicePlan {
+                ident,
+                source: at.crossing.spelled().clone(),
+                source_module: self.gen.source_module.clone(),
+                wire: cname,
+                direction,
+                arms: planned_arms,
+            }),
+            niches: Niches::empty(),
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+        })
     }
 
     fn callback(

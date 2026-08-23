@@ -8,7 +8,7 @@
 use proc_macro2::TokenStream;
 
 use crate::{
-    flat::{AlternativeForm, TypeRef},
+    flat::{Alternative, TypeRef},
     recipe::{Direction, Mode},
     Emit,
 };
@@ -227,21 +227,21 @@ pub struct Optional<S, B, C> {
 /// One source field inside one [`Choice`] arm.
 #[derive(Clone)]
 pub struct ChoicePart<C> {
-    /// Named or positional Rust member, taken from the Flat model.
-    pub member: syn::Member,
     /// Child converter selected by the recipe driver.
     pub child: C,
     /// How the part is reached through its containing source value.
     pub mode: Mode,
+    /// Wrap the converted child in `MaybeUninit` in the arm intermediate.
+    pub hold_uninit: bool,
 }
 
 /// One already-composed arm of a [`Choice`] recipe.
 #[derive(Clone)]
 pub struct ChoiceArm<B, C> {
-    /// Rust variant name, taken from the Flat model.
-    pub variant: syn::Ident,
-    /// Unit, tuple or struct delimiter form, taken from Flat.
-    pub form: AlternativeForm,
+    /// The Flat alternative, including its field addresses and delimiters.
+    ///
+    /// It remains model data until [`Chain::render`] hands it to [`Emit`].
+    pub alternative: Alternative,
     /// Adapter tag pattern selecting this arm.
     pub tag: syn::Pat,
     /// Product representation of this arm's intermediate parts.
@@ -258,17 +258,31 @@ pub trait ChoiceBridge: Clone {
     /// Read the selector from an inbound intermediate value.
     fn tag(&self, value: TokenStream) -> TokenStream;
 
+    /// Prepare a validated inbound Choice representation for arm access.
+    ///
+    /// The selector is read and matched before this operation. This lets an
+    /// adapter validate raw storage before turning it into its intermediate
+    /// type, and guarantees the whole value is prepared at most once.
+    fn prepare(&self, value: TokenStream) -> TokenStream {
+        value
+    }
+
     /// Read one arm's Product intermediate from an inbound value.
-    fn arm(&self, value: TokenStream, index: usize) -> TokenStream;
+    fn arm(&self, emit: &Emit, value: TokenStream, index: usize) -> TokenStream;
 
     /// Construct the outbound Choice intermediate with `active` selected.
     ///
     /// Inactive arm storage is representation policy. Implementations must not
     /// manufacture source or child-intermediate values merely to fill it.
-    fn build(&self, active: usize, value: TokenStream) -> TokenStream;
+    fn build(&self, emit: &Emit, active: usize, value: TokenStream) -> TokenStream;
+
+    /// Finish the whole outbound representation after its active arm is built.
+    fn finish(&self, value: TokenStream) -> TokenStream {
+        value
+    }
 
     /// Error returned when an inbound selector names no arm.
-    fn invalid_tag(&self) -> TokenStream;
+    fn invalid_tag(&self, tag: TokenStream) -> TokenStream;
 }
 
 /// Registry-owned tuple representation for Choice intermediates.
@@ -301,12 +315,12 @@ impl ChoiceBridge for TupleChoice {
         quote::quote!((#value).0)
     }
 
-    fn arm(&self, value: TokenStream, index: usize) -> TokenStream {
+    fn arm(&self, _emit: &Emit, value: TokenStream, index: usize) -> TokenStream {
         let index = syn::Index::from(index + 1);
         quote::quote!((#value).#index)
     }
 
-    fn build(&self, active: usize, value: TokenStream) -> TokenStream {
+    fn build(&self, _emit: &Emit, active: usize, value: TokenStream) -> TokenStream {
         let tag = &self.tags[active];
         let arms = self.inactive.iter().enumerate().map(|(index, inactive)| {
             if index == active {
@@ -318,8 +332,12 @@ impl ChoiceBridge for TupleChoice {
         quote::quote!((#tag, #(#arms,)*))
     }
 
-    fn invalid_tag(&self) -> TokenStream {
-        self.invalid.clone()
+    fn invalid_tag(&self, tag: TokenStream) -> TokenStream {
+        let invalid = &self.invalid;
+        quote::quote!({
+            let __invalid_tag = #tag;
+            #invalid
+        })
     }
 }
 
@@ -335,6 +353,10 @@ pub struct Choice<S, B, P, C> {
     /// Adapter intermediate representation.
     pub bridge: B,
     /// Every source alternative, already composed from child chains.
+    ///
+    /// Outbound child conversion may be fallible. An adapter whose generated
+    /// boundary has no error channel must refuse that crossing before it
+    /// creates this plan; the shared composer propagates every accepted error.
     pub arms: Vec<ChoiceArm<P, C>>,
 }
 
@@ -491,49 +513,52 @@ where
                 let tag = self.bridge.tag(quote::quote!(v));
                 let arms = self.arms.iter().enumerate().map(|(arm_index, arm)| {
                     let tag_pattern = &arm.tag;
-                    let variant = &arm.variant;
-                    let arm_value = self.bridge.arm(quote::quote!(v), arm_index);
+                    let variant = &arm.alternative.name;
                     let fields: Vec<_> = arm
                         .parts
                         .iter()
                         .enumerate()
                         .map(|(part_index, part)| {
-                            let name = match &part.member {
+                            let member = arm.alternative.fields[part_index].member();
+                            let name = match &member {
                                 syn::Member::Named(name) => name.clone(),
                                 syn::Member::Unnamed(index) => {
                                     syn::Ident::new(&format!("v{}", index.index), index.span)
                                 }
                             };
                             let value = arm.bridge.part(quote::quote!(__arm), part_index, &name);
-                            (part.member.clone(), child_value(&part.child, value))
+                            child_value(&part.child, value)
                         })
                         .collect();
-                    let canonical = match arm.form {
-                        AlternativeForm::Unit => {
-                            quote::quote!(#canonical_source::#variant)
-                        }
-                        AlternativeForm::Tuple => {
-                            let values = fields.iter().map(|(_, value)| value);
-                            quote::quote!(#canonical_source::#variant(#(#values),*))
-                        }
-                        AlternativeForm::Struct => {
-                            let names = fields.iter().map(|(member, _)| match member {
-                                syn::Member::Named(name) => name,
-                                syn::Member::Unnamed(_) => unreachable!(),
-                            });
-                            let values = fields.iter().map(|(_, value)| value);
-                            quote::quote!(#canonical_source::#variant { #(#names: #values),* })
-                        }
-                    };
+                    let shaped: Vec<_> = arm
+                        .alternative
+                        .fields
+                        .iter()
+                        .zip(&fields)
+                        .map(|(field, value)| field.bind(value))
+                        .collect();
+                    let canonical = emit.shape_alternative(
+                        &arm.alternative,
+                        quote::quote!(#canonical_source::#variant),
+                        &shaped,
+                    );
                     let built = self.source_policy.build(canonical);
-                    quote::quote!(#tag_pattern => {
-                        let __arm = #arm_value;
-                        #built
-                    })
+                    if arm.parts.is_empty() {
+                        quote::quote!(#tag_pattern => #built)
+                    } else {
+                        let prepared = self.bridge.prepare(quote::quote!(v));
+                        let arm_value = self.bridge.arm(emit, quote::quote!(__choice), arm_index);
+                        quote::quote!(#tag_pattern => {
+                            let __choice = #prepared;
+                            let __arm = #arm_value;
+                            #built
+                        })
+                    }
                 });
-                let invalid = self.bridge.invalid_tag();
+                let invalid = self.bridge.invalid_tag(quote::quote!(__tag));
                 syn::parse2(quote::quote!({
-                    match #tag {
+                    let __tag = #tag;
+                    match __tag {
                         #(#arms,)*
                         _ => return ::core::result::Result::Err(#invalid),
                     }
@@ -544,7 +569,7 @@ where
                 let canonical_source = self.source_policy.spell(self.source.unwrapped(), emit);
                 let value = self.source_policy.read(quote::quote!(v));
                 let arms = self.arms.iter().enumerate().map(|(arm_index, arm)| {
-                    let variant = &arm.variant;
+                    let variant = &arm.alternative.name;
                     let bindings: Vec<_> = arm
                         .parts
                         .iter()
@@ -553,33 +578,36 @@ where
                             syn::Ident::new(&format!("__part{index}"), variant.span())
                         })
                         .collect();
-                    let pattern = match arm.form {
-                        AlternativeForm::Unit => {
-                            quote::quote!(#canonical_source::#variant)
-                        }
-                        AlternativeForm::Tuple => {
-                            quote::quote!(#canonical_source::#variant(#(#bindings),*))
-                        }
-                        AlternativeForm::Struct => {
-                            let names = arm.parts.iter().map(|part| match &part.member {
-                                syn::Member::Named(name) => name,
-                                syn::Member::Unnamed(_) => unreachable!(),
-                            });
-                            quote::quote!(#canonical_source::#variant { #(#names: #bindings),* })
-                        }
-                    };
+                    let bound: Vec<_> = arm
+                        .alternative
+                        .fields
+                        .iter()
+                        .zip(&bindings)
+                        .map(|(field, binding)| field.bind(binding))
+                        .collect();
+                    let pattern = emit.shape_alternative(
+                        &arm.alternative,
+                        quote::quote!(#canonical_source::#variant),
+                        &bound,
+                    );
                     let parts: Vec<_> = arm
                         .parts
                         .iter()
                         .zip(&bindings)
-                        .map(|(part, binding)| {
+                        .zip(&arm.alternative.fields)
+                        .map(|((part, binding), field)| {
                             let value = match part.mode {
                                 Mode::Owned => quote::quote!(#binding),
                                 Mode::Shared => quote::quote!(&*#binding),
                                 Mode::Exclusive => quote::quote!(&mut *#binding),
                             };
                             let value = child_value(&part.child, value);
-                            let name = match &part.member {
+                            let value = if part.hold_uninit {
+                                quote::quote!(::core::mem::MaybeUninit::new(#value))
+                            } else {
+                                value
+                            };
+                            let name = match field.member() {
                                 syn::Member::Named(name) => name.clone(),
                                 syn::Member::Unnamed(index) => {
                                     syn::Ident::new(&format!("v{}", index.index), index.span)
@@ -589,10 +617,12 @@ where
                         })
                         .collect();
                     let arm_value = arm.bridge.build(&parts);
-                    let built = self.bridge.build(arm_index, arm_value);
+                    let built = self.bridge.build(emit, arm_index, arm_value);
                     quote::quote!(#pattern => #built)
                 });
-                syn::parse2(quote::quote!({ match #value { #(#arms,)* } }))
+                let built = quote::quote!({ match #value { #(#arms,)* } });
+                let finished = self.bridge.finish(built);
+                syn::parse2(finished)
                     .expect("a Choice intermediate constructor is a valid expression")
             }
         };
@@ -612,7 +642,28 @@ mod tests {
     use quote::{quote, ToTokens};
 
     use super::*;
-    use crate::flat::ScalarKind;
+    use crate::flat::{Alternative, Field, Origin, ScalarKind};
+
+    fn alternative(syntax: syn::Variant, index: usize) -> Alternative {
+        let location: Rc<prebindgen::SourceLocation> = Rc::new(Default::default());
+        let fields = syntax
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| Field {
+                name: field.ident.clone(),
+                index,
+                ty: TypeRef::scalar(ScalarKind::I64),
+                origin: Origin::new(field.clone(), location.clone()),
+            })
+            .collect();
+        Alternative {
+            name: syntax.ident.clone(),
+            index,
+            fields,
+            origin: Origin::new(syntax, location),
+        }
+    }
 
     #[derive(Clone)]
     struct TestSource {
@@ -707,23 +758,21 @@ mod tests {
             },
             arms: vec![
                 ChoiceArm {
-                    variant: syn::parse_quote!(A),
-                    form: AlternativeForm::Unit,
+                    alternative: alternative(syn::parse_quote!(A), 0),
                     tag: syn::parse_quote!(0),
                     bridge: TupleProduct { parts: Vec::new() },
                     parts: Vec::new(),
                 },
                 ChoiceArm {
-                    variant: syn::parse_quote!(B),
-                    form: AlternativeForm::Tuple,
+                    alternative: alternative(syn::parse_quote!(B(i64)), 1),
                     tag: syn::parse_quote!(1),
                     bridge: TupleProduct {
                         parts: vec![syn::parse_quote!(i64)],
                     },
                     parts: vec![ChoicePart {
-                        member: syn::Member::Unnamed(syn::Index::from(0)),
                         child,
                         mode: Mode::Owned,
+                        hold_uninit: false,
                     }],
                 },
             ],
@@ -742,7 +791,8 @@ mod tests {
             let body = rendered.body.to_token_stream().to_string();
             match direction {
                 Direction::Construct => {
-                    assert!(body.contains("match (v) . 0"), "{body}");
+                    assert!(body.contains("let __tag = (v) . 0"), "{body}");
+                    assert!(body.contains("match __tag"), "{body}");
                     assert!(body.contains("i64 :: B (decode ((__arm) . 0) ?)"), "{body}");
                     assert!(
                         body.contains("return :: core :: result :: Result :: Err"),
