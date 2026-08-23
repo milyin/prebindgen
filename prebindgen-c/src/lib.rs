@@ -444,7 +444,8 @@ pub struct CbindgenBuilder {
     pub(crate) sources: prebindgen_registry::flat::FlatBuilder,
     /// Every conversion this binding compiled, keyed by crossing.
     ///
-    /// What the emitters ask instead of the converter table. The table can only
+    /// What callback compatibility emission asks instead of the frozen generation
+    /// plan. The table can only
     /// name **one** wire type per crossing, so it stops being able to answer as
     /// soon as a crossing occupies several — and the answer an emitter wants
     /// was always the adapter's own.
@@ -458,6 +459,9 @@ pub struct CbindgenBuilder {
     pub(crate) compiled: std::rc::Rc<
         std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::compile::CFrag>>,
     >,
+    /// Immutable registry-owned C generation plan for ordinary boundary sites.
+    pub(crate) generation:
+        Option<prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>>,
     /// Every converter artifact this binding planned.
     ///
     /// Filled once by [`Self::build_with`] and handed to `write_rust` directly.

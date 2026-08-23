@@ -378,3 +378,40 @@ fn no_raw_pointer_is_dereferenced_without_a_null_check() {
         "expected the corpus to exercise several pointer-reconstituting fns, saw {checked}\n{src}"
     );
 }
+
+#[test]
+fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
+    let source = include_str!("../emit.rs");
+    let wrapper = source
+        .split("pub(super) fn emit_function_wrapper")
+        .nth(1)
+        .expect("ordinary wrapper renderer")
+        .split("pub(super) fn lower_shape")
+        .next()
+        .expect("end of ordinary wrapper renderer");
+
+    for forbidden in [
+        "lower_shape(",
+        "encode_value(",
+        "output_is_fallible(",
+        ".in_frag(",
+        ".out_frag(",
+        "registry.",
+    ] {
+        assert!(
+            !wrapper.contains(forbidden),
+            "ordinary wrapper renderer resumed legacy planning through {forbidden}"
+        );
+    }
+    for required in [
+        "generation_site(",
+        "failure_route()",
+        "emit_planned_inputs(",
+        ".encode(",
+    ] {
+        assert!(
+            wrapper.contains(required),
+            "ordinary wrapper renderer stopped consuming frozen plans through {required}"
+        );
+    }
+}
