@@ -7,6 +7,7 @@ use super::*;
 
 #[derive(Clone)]
 struct JInvokePart {
+    source: syn::Ident,
     prepare: TokenStream,
     arguments: Vec<TokenStream>,
 }
@@ -14,10 +15,12 @@ struct JInvokePart {
 impl prebindgen_registry::chain::InvokePart for JInvokePart {
     fn render(
         &self,
-        _value: TokenStream,
-        _index: usize,
+        value: &syn::Ident,
+        index: usize,
         _emit: &prebindgen_registry::Emit,
     ) -> prebindgen_registry::chain::RenderedInvokePart {
+        assert_eq!(value, &callback_argument_name(index));
+        assert_eq!(value, &self.source);
         prebindgen_registry::chain::RenderedInvokePart {
             prepare: self.prepare.clone(),
             arguments: self.arguments.clone(),
@@ -34,6 +37,10 @@ struct JInvokeBridge {
     fold_setups: Vec<TokenStream>,
 }
 
+fn callback_argument_name(index: usize) -> syn::Ident {
+    format_ident!("__cb_arg{}", index)
+}
+
 /// A registry-composed callback retained until the final Rust writer runs.
 #[derive(Clone)]
 pub(crate) struct JInvokePlan {
@@ -43,6 +50,10 @@ pub(crate) struct JInvokePlan {
 }
 
 impl JInvokePlan {
+    pub(crate) fn name(&self) -> &syn::Ident {
+        &self.name
+    }
+
     pub(crate) fn render(&self, emit: &prebindgen_registry::Emit) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
         let name = &self.name;
@@ -67,13 +78,19 @@ impl prebindgen_registry::chain::InvokeBridge for JInvokeBridge {
     }
 
     fn argument_name(&self, index: usize) -> syn::Ident {
-        format_ident!("__cb_arg{}", index)
+        callback_argument_name(index)
     }
 
     fn capture(&self, value: TokenStream, closure: TokenStream) -> TokenStream {
         let name = &self.name;
         let descriptor = &self.descriptor;
         let fold_setups = &self.fold_setups;
+        // Resolve the typed callback interface's `run` method once, while the
+        // trampoline is created. `JNIEnv::call_method` reparses the descriptor
+        // and resolves the method on every call; that measured at roughly 33%
+        // of subscriber hot-path delivery time. `JMethodID` is Copy + Send +
+        // Sync and remains valid because the global ref pins the callback and
+        // therefore its class for the closure's lifetime.
         quote!({
             use std::sync::Arc;
             let java_vm = Arc::new(env.get_java_vm()
@@ -90,6 +107,15 @@ impl prebindgen_registry::chain::InvokeBridge for JInvokeBridge {
     }
 
     fn invoke(&self, arguments: &[TokenStream]) -> TokenStream {
+        // SAFETY: `__invoke_id` was resolved on this callback object's exact
+        // class with the exact descriptor represented by `arguments`; the
+        // global ref keeps that class loaded. `run` returns void, primitives
+        // occupy their matching raw jvalue fields, and exception handling is
+        // the same checked JNI path used by `call_method`.
+        //
+        // A plan-less owned-handle argument's per-invocation Box is closed by
+        // Kotlin's `asRaw` proxy in `finally { close() }` (a no-op if taken), so
+        // the Rust invocation has no matching post-call close.
         quote! {
             let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
                 env.call_method_unchecked(
@@ -116,6 +142,11 @@ impl prebindgen_registry::chain::InvokeBridge for JInvokeBridge {
     ) -> TokenStream {
         let name = &self.name;
         let frame_capacity = &self.frame_capacity;
+        // Callbacks may run on daemon-attached Zenoh receive threads that never
+        // return through a JNI stack frame. Give every invocation its own local
+        // frame so encoded leaves, handle wrappers and call temporaries cannot
+        // accumulate until `OutOfMemoryError`; pop it unconditionally after the
+        // inner Result, including every early `?`/error path.
         quote!({
             let _ = (|| -> ::core::result::Result<(), __JniErr> {
                 let mut env = java_vm
@@ -164,7 +195,7 @@ pub(crate) fn callback_input(
     registry: &impl Conversions,
     arg_fragments: Option<&[&crate::jni::compile::JFrag]>,
     emit: &prebindgen_registry::Emit,
-) -> Option<(syn::Type, syn::Type, syn::Expr, JInvokePlan)> {
+) -> Option<(syn::Type, JInvokePlan)> {
     // Human-readable tag for attach/log messages.
     let name = format!(
         "Fn({})",
@@ -184,9 +215,7 @@ pub(crate) fn callback_input(
         }
     };
 
-    let arg_names: Vec<syn::Ident> = (0..args.len())
-        .map(|i| format_ident!("__cb_arg{}", i))
-        .collect();
+    let arg_names: Vec<syn::Ident> = (0..args.len()).map(callback_argument_name).collect();
     // Per-arg encode preludes binding the typed `run`'s args in declared
     // order (a decomposed arg contributes one arg per leaf). Each entry of
     // `jvalue_exprs` is a typed `jvalue`: raw primitives for primitive-wire
@@ -518,14 +547,16 @@ pub(crate) fn callback_input(
 
     let parts = part_ranges
         .into_iter()
-        .map(|(ps, pe, as_, ae)| JInvokePart {
+        .enumerate()
+        .map(|(index, (ps, pe, as_, ae))| JInvokePart {
+            source: arg_names[index].clone(),
             prepare: {
                 let values = &preludes[ps..pe];
                 quote!(#(#values)*)
             },
             arguments: jvalue_exprs[as_..ae].to_vec(),
         })
-        .collect();
+        .collect::<Vec<_>>();
     let chain = prebindgen_registry::chain::Invoke {
         source: source.clone(),
         arguments: args.to_vec(),
@@ -541,21 +572,16 @@ pub(crate) fn callback_input(
         },
         parts,
     };
-    let rendered = chain.render(emit);
+    let intermediate: syn::Type = syn::parse_quote!(jni::objects::JObject);
     let rust_plan = JInvokePlan {
-        name: input_name(&rendered.source.to_token_stream(), &rendered.intermediate),
+        name: crate::jni::chain::planned_name(Direction::Construct, source, &intermediate),
         chain,
     };
 
     // The wire type for an `impl Fn(args)` parameter is JObject (the erased
     // Kotlin lambda). The converter returns Box<dyn Fn(args) + Send + Sync>,
     // which coerces to the source's impl-trait param type.
-    Some((
-        rendered.source,
-        rendered.intermediate,
-        rendered.body,
-        rust_plan,
-    ))
+    Some((intermediate, rust_plan))
 }
 
 /// Hard-error guard for `Vec<opaque-handle>` element types. A handle's wire is

@@ -442,10 +442,10 @@ pub struct RenderedInvokePart {
 ///
 /// The source [`TypeRef`] is deliberately absent from this hook. The shared
 /// composer spells and binds source arguments only during final rendering and
-/// hands the adapter the resulting local expression.
+/// hands the adapter the resulting local identifier.
 pub trait InvokePart: Clone {
     /// Render target-side delivery for one already-bound source argument.
-    fn render(&self, value: TokenStream, index: usize, emit: &Emit) -> RenderedInvokePart;
+    fn render(&self, value: &syn::Ident, index: usize, emit: &Emit) -> RenderedInvokePart;
 }
 
 /// Adapter-selected callable and invocation protocol for one [`Invoke`] shape.
@@ -454,6 +454,13 @@ pub trait InvokePart: Clone {
 /// runs for every invocation and receives the three ordered phases assembled
 /// by the registry. This keeps target-specific guards, local frames and error
 /// routes in the adapter without giving it ownership of the source-value walk.
+///
+/// Tokens returned by `capture`, `invoke`, and `surround` share one generated
+/// lexical scope. An adapter that coordinates those hooks through local names
+/// therefore owns those names as a reserved-identifier contract. Likewise, an
+/// adapter that prepares an [`InvokePart`] against [`Self::argument_name`] must
+/// derive both uses from one helper; the composer supplies that same identifier
+/// to [`InvokePart::render`] so the contract can be checked at final emission.
 pub trait InvokeBridge: Clone {
     /// The one intermediate callable type accepted by the converter.
     fn intermediate(&self) -> syn::Type;
@@ -863,7 +870,7 @@ where
             .iter()
             .zip(&names)
             .enumerate()
-            .map(|(index, (part, name))| part.render(quote::quote!(#name), index, emit))
+            .map(|(index, (part, name))| part.render(name, index, emit))
             .collect();
         let prepare = rendered.iter().map(|part| &part.prepare);
         let call_arguments: Vec<_> = rendered
@@ -1147,7 +1154,7 @@ mod tests {
     struct TestInvokePart(&'static str);
 
     impl InvokePart for TestInvokePart {
-        fn render(&self, value: TokenStream, _index: usize, _emit: &Emit) -> RenderedInvokePart {
+        fn render(&self, value: &syn::Ident, _index: usize, _emit: &Emit) -> RenderedInvokePart {
             let prepare = syn::Ident::new(
                 &format!("prepare_{}", self.0),
                 proc_macro2::Span::call_site(),

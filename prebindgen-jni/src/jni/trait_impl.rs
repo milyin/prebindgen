@@ -1451,8 +1451,8 @@ impl JniGenBuilder {
         // a fragment is there exactly when a table entry would have been.
         // Callback layouts whose arguments have no composable deconstructor
         // still use the shared Invoke composer, but enter it without child
-        // fragments and retain the resulting complete function here.
-        let mut uncompiled: Vec<syn::ItemFn> = Vec::new();
+        // fragments. Their late plan is recorded beside the compatibility
+        // fragment below, so neither path renders during resolution.
         // Compositions that refused. See `compile_crossing`: these are adapter
         // invariants, reported together once the walk is done.
         let mut refusals: Vec<String> = Vec::new();
@@ -1464,33 +1464,35 @@ impl JniGenBuilder {
                     decls.site_bindings(),
                     decls.compiled.borrow().clone(),
                 );
-                let conv =
+                let compiled =
                     decls.compile_crossing(&mut compiler, crossing, built, emit, &mut refusals);
                 *decls.compiled.borrow_mut() = compiler.finish();
+                let (conv, compatibility) = compiled?;
                 let (dir, key) = crossing;
                 let compiled_by_recipe = decls.compiled.borrow().fragment(key, *dir).is_some();
-                if let (Some(c), true, false) = (
-                    conv.as_ref(),
-                    decls.is_callback_crossing(crossing, built),
-                    compiled_by_recipe,
-                ) {
-                    uncompiled.push(c.function.clone());
+                if decls.is_callback_crossing(crossing, built) && !compiled_by_recipe {
+                    let rust = compatibility.expect(
+                        "a callback outside the recipe compiler retains its late Invoke plan",
+                    );
                     // Index the whole-value compatibility plan with the same
-                    // lookup used for recipe-built callbacks, while keeping
-                    // its complete function in `uncompiled`.
+                    // lookup and late renderer used for recipe-built callbacks.
                     decls.compiled.borrow_mut().record(
                         prebindgen_registry::recipe::CrossingKey {
                             ty: key.clone(),
                             direction: *dir,
                         }
                         .row(prebindgen_registry::recipe::RecipeName::new("callback")),
-                        crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
+                        crate::jni::compile::JFrag::by_hand_with_rust(
+                            key.clone(),
+                            conv.clone(),
+                            rust,
+                        ),
                     );
                 }
                 // The conversion stays here; what the registry gets back is
                 // which other crossings this one delegates to, which is what
                 // its reachability walk needs.
-                conv.map(|c| prebindgen_registry::Answer::over(c.subs))
+                Some(prebindgen_registry::Answer::over(conv.subs))
             })?
             .build()?;
         if !refusals.is_empty() {
@@ -1604,11 +1606,6 @@ impl JniGenBuilder {
                         .map(|s| crate::jni::chain::JFunction::complete(s.function.clone())),
                 )
             })
-            .chain(
-                uncompiled
-                    .into_iter()
-                    .map(crate::jni::chain::JFunction::complete),
-            )
             .collect();
         Ok(JniGen { decls, registry })
     }
@@ -1643,7 +1640,10 @@ impl Declarations {
         built: &'v R,
         emit: &prebindgen_registry::Emit,
         refusals: &mut Vec<String>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
+    ) -> Option<(
+        ConverterImpl<KotlinMeta>,
+        Option<crate::jni::chain::JFunction>,
+    )> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
         // key the crossing IS.
@@ -1668,7 +1668,7 @@ impl Declarations {
                 };
                 return self
                     .dispatch_fn_input(crossing.spelled(), args, built, None, emit)
-                    .map(|(conv, _)| conv);
+                    .map(|(conv, rust)| (conv, Some(rust)));
             }
             Err(_) => return None,
         };
@@ -1712,7 +1712,7 @@ impl Declarations {
                 ));
             }
         }
-        Some((*fragment).clone().conv)
+        Some(((*fragment).clone().conv, None))
     }
 
     pub fn declare_into(
@@ -1959,8 +1959,7 @@ impl Declarations {
         arg_fragments: Option<&[&crate::jni::compile::JFrag]>,
         emit: &prebindgen_registry::Emit,
     ) -> Option<(ConverterImpl<KotlinMeta>, crate::jni::chain::JFunction)> {
-        let (outer_ty, wire, body, plan) =
-            callback_input(self, source, args, registry, arg_fragments, emit)?;
+        let (wire, plan) = callback_input(self, source, args, registry, arg_fragments, emit)?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
         // (`Any`) — same as the unfold builder / error-sink params. The typed
@@ -1969,7 +1968,7 @@ impl Declarations {
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            function: self.build_input_fn_composed(&outer_ty, &wire, &body, None),
+            function: crate::jni::chain::planned_marker(plan.name()),
             destination: wire,
             niches,
             metadata: self.framework_meta(Some(KtType::any())),

@@ -1655,10 +1655,11 @@ impl CbindgenBuilder {
             // the call). The element wire is layout-identical to `E`, so the pointer
             // cast is sound; no per-element encode and no post-call drop.
             if let Some(elem_wire) = self.callback_slice_elem_wire_type_of(arg) {
-                let ai = format_ident!("__a{}", i);
+                let ai = crate::chain::invoke_argument_name(i);
                 call_args.push(quote!(#ai.as_ptr() as *const #elem_wire));
                 call_args.push(quote!(#ai.len()));
                 parts.push(crate::chain::InvokePart {
+                    source: ai,
                     prepare: encode_stmts,
                     arguments: call_args,
                     cleanup: post_drops,
@@ -1671,7 +1672,7 @@ impl CbindgenBuilder {
             let conv = entry.function.call().ident().clone();
             let opaque = entry.destination.clone();
             let fallible = entry.function.call().fallible();
-            let ai = format_ident!("__a{}", i);
+            let ai = crate::chain::invoke_argument_name(i);
             let wi = format_ident!("__w{}", i);
             let is_takeable = takeable.contains(&i);
             // A COMPOSITE argument — `Option<T>`, `Vec<T>`, `Cow<'_, [T]>` — has
@@ -1759,6 +1760,7 @@ impl CbindgenBuilder {
                     &ErrRoute::Panic,
                 ));
                 parts.push(crate::chain::InvokePart {
+                    source: ai.clone(),
                     prepare: encode_stmts,
                     arguments: call_args,
                     cleanup: post_drops,
@@ -1789,6 +1791,7 @@ impl CbindgenBuilder {
                 call_args.push(quote!(#wi));
             }
             parts.push(crate::chain::InvokePart {
+                source: ai.clone(),
                 prepare: encode_stmts,
                 arguments: call_args,
                 cleanup: post_drops,

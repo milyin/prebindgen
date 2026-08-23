@@ -82,6 +82,10 @@ impl JFunction {
                     dependency.mark_reachable();
                 }
             }
+            // An Invoke plan exists only for a declared callback crossing and
+            // is called directly by that crossing's wrapper. Unlike reusable
+            // child converters, it is reachable by construction and needs no
+            // later activation pass.
             JBody::Invoke(_) => {}
         }
     }
@@ -96,6 +100,8 @@ impl RustFunction for JFunction {
             JBody::Optional(plan) => plan.reachable.get(),
             JBody::Sequence(plan) => plan.reachable.get(),
             JBody::Choice(plan) => plan.reachable.get(),
+            // See `mark_reachable`: callback converters are roots, never
+            // dormant dependencies waiting for a parent to activate them.
             JBody::Invoke(_) => true,
         }
     }

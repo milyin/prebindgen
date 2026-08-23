@@ -154,18 +154,16 @@ impl RustFunction for CFunction {
 /// One C callback argument's already-resolved wire delivery.
 #[derive(Clone)]
 pub(crate) struct InvokePart {
+    pub(crate) source: syn::Ident,
     pub(crate) prepare: TokenStream,
     pub(crate) arguments: Vec<TokenStream>,
     pub(crate) cleanup: TokenStream,
 }
 
 impl chain::InvokePart for InvokePart {
-    fn render(
-        &self,
-        _value: TokenStream,
-        _index: usize,
-        _emit: &Emit,
-    ) -> chain::RenderedInvokePart {
+    fn render(&self, value: &syn::Ident, index: usize, _emit: &Emit) -> chain::RenderedInvokePart {
+        assert_eq!(value, &invoke_argument_name(index));
+        assert_eq!(value, &self.source);
         chain::RenderedInvokePart {
             prepare: self.prepare.clone(),
             arguments: self.arguments.clone(),
@@ -179,6 +177,10 @@ struct CInvokeBridge {
     wire: syn::Type,
 }
 
+pub(crate) fn invoke_argument_name(index: usize) -> syn::Ident {
+    format_ident!("__a{}", index)
+}
+
 impl chain::InvokeBridge for CInvokeBridge {
     fn intermediate(&self) -> syn::Type {
         self.wire.clone()
@@ -189,7 +191,7 @@ impl chain::InvokeBridge for CInvokeBridge {
     }
 
     fn argument_name(&self, index: usize) -> syn::Ident {
-        format_ident!("__a{}", index)
+        invoke_argument_name(index)
     }
 
     fn capture(&self, value: TokenStream, closure: TokenStream) -> TokenStream {
@@ -226,6 +228,12 @@ impl chain::InvokeBridge for CInvokeBridge {
         invoke: TokenStream,
         cleanup: TokenStream,
     ) -> TokenStream {
+        // Encode inside the NULL-call guard. A closure whose `call` is NULL
+        // receives nothing; encoding before the guard would leak every
+        // allocation produced for an undelivered value (for example a
+        // `Vec`/`Cow` array or `String` buffer). Invoke owns phase order, but
+        // this bridge must keep the whole prepare/invoke/cleanup sequence
+        // inside the target-specific guard (#428 review).
         quote!({
             if let ::core::option::Option::Some(__f) = __call {
                 #prepare
@@ -271,14 +279,11 @@ impl InvokePlan {
         let syn::Expr::Block(body) = &rendered.body else {
             unreachable!("the C Invoke bridge captures its callable in a block")
         };
-        let mut function: syn::ItemFn = syn::parse_quote!(
+        let block = &body.block;
+        syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name(c: #intermediate) -> #source {
-                unreachable!()
-            }
-        );
-        function.block = Box::new(body.block.clone());
-        function
+            pub(crate) unsafe fn #name(c: #intermediate) -> #source #block
+        )
     }
 }
 
