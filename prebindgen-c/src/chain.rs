@@ -59,6 +59,7 @@ enum CBody {
     Optional(OptionalPlan),
     Sequence(SequencePlan),
     Choice(ChoicePlan),
+    Invoke(InvokePlan),
 }
 
 impl CFunction {
@@ -124,6 +125,14 @@ impl CFunction {
         }
     }
 
+    pub(crate) fn invoke(plan: InvokePlan) -> Self {
+        let call = CCall(chain::Call::new(plan.ident.clone(), false, true));
+        Self {
+            call,
+            body: CBody::Invoke(plan),
+        }
+    }
+
     pub(crate) fn call(&self) -> &CCall {
         &self.call
     }
@@ -137,7 +146,144 @@ impl RustFunction for CFunction {
             CBody::Choice(plan) => plan.render(emit),
             CBody::Sequence(plan) => plan.render(emit),
             CBody::Optional(plan) => plan.render(emit),
+            CBody::Invoke(plan) => plan.render(emit),
         }
+    }
+}
+
+/// One C callback argument's already-resolved wire delivery.
+#[derive(Clone)]
+pub(crate) struct InvokePart {
+    pub(crate) source: syn::Ident,
+    pub(crate) prepare: TokenStream,
+    pub(crate) arguments: Vec<TokenStream>,
+    pub(crate) cleanup: TokenStream,
+}
+
+impl chain::InvokePart for InvokePart {
+    fn render(&self, value: &syn::Ident, index: usize, _emit: &Emit) -> chain::RenderedInvokePart {
+        assert_eq!(value, &invoke_argument_name(index));
+        assert_eq!(value, &self.source);
+        chain::RenderedInvokePart {
+            prepare: self.prepare.clone(),
+            arguments: self.arguments.clone(),
+            cleanup: self.cleanup.clone(),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct CInvokeBridge {
+    wire: syn::Type,
+}
+
+pub(crate) fn invoke_argument_name(index: usize) -> syn::Ident {
+    format_ident!("__a{}", index)
+}
+
+impl chain::InvokeBridge for CInvokeBridge {
+    fn intermediate(&self) -> syn::Type {
+        self.wire.clone()
+    }
+
+    fn value_name(&self) -> syn::Ident {
+        format_ident!("c")
+    }
+
+    fn argument_name(&self, index: usize) -> syn::Ident {
+        invoke_argument_name(index)
+    }
+
+    fn capture(&self, value: TokenStream, closure: TokenStream) -> TokenStream {
+        quote!({
+            struct __Ctx {
+                context: *mut ::core::ffi::c_void,
+                drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+            }
+            unsafe impl ::core::marker::Send for __Ctx {}
+            unsafe impl ::core::marker::Sync for __Ctx {}
+            impl ::core::ops::Drop for __Ctx {
+                fn drop(&mut self) {
+                    if let ::core::option::Option::Some(__d) = self.drop {
+                        unsafe { __d(self.context) }
+                    }
+                }
+            }
+            let __call = #value.call;
+            let __ctx = ::std::sync::Arc::new(__Ctx {
+                context: #value.context,
+                drop: #value.drop,
+            });
+            #closure
+        })
+    }
+
+    fn invoke(&self, arguments: &[TokenStream]) -> TokenStream {
+        quote!(unsafe { __f(#(#arguments,)* __ctx.context) })
+    }
+
+    fn surround(
+        &self,
+        prepare: TokenStream,
+        invoke: TokenStream,
+        cleanup: TokenStream,
+    ) -> TokenStream {
+        // Encode inside the NULL-call guard. A closure whose `call` is NULL
+        // receives nothing; encoding before the guard would leak every
+        // allocation produced for an undelivered value (for example a
+        // `Vec`/`Cow` array or `String` buffer). Invoke owns phase order, but
+        // this bridge must keep the whole prepare/invoke/cleanup sequence
+        // inside the target-specific guard (#428 review).
+        quote!({
+            if let ::core::option::Option::Some(__f) = __call {
+                #prepare
+                #invoke
+                #cleanup
+            }
+        })
+    }
+
+    fn fallible(&self) -> bool {
+        false
+    }
+}
+
+/// A callback chain. Its `impl Fn(..)` spelling remains opaque until render.
+#[derive(Clone)]
+pub(crate) struct InvokePlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) wire: syn::Type,
+    pub(crate) arguments: Vec<TypeRef>,
+    pub(crate) parts: Vec<InvokePart>,
+}
+
+impl InvokePlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let plan = chain::Invoke {
+            source: self.source.clone(),
+            arguments: self.arguments.clone(),
+            source_policy: CSource {
+                module: self.source_module.clone(),
+            },
+            bridge: CInvokeBridge {
+                wire: self.wire.clone(),
+            },
+            parts: self.parts.clone(),
+        };
+        let rendered = plan.render(emit);
+        let name = &self.ident;
+        let source = &rendered.source;
+        let intermediate = &rendered.intermediate;
+        let syn::Expr::Block(body) = &rendered.body else {
+            unreachable!("the C Invoke bridge captures its callable in a block")
+        };
+        let block = &body.block;
+        syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name(c: #intermediate) -> #source #block
+        )
     }
 }
 

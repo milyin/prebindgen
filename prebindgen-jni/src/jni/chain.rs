@@ -22,6 +22,7 @@ enum JBody {
     Choice(Box<JChoicePlan>),
     Sequence(Box<JSequencePlan>),
     Optional(Box<JOptionalPlan>),
+    Invoke(Box<crate::jni::emit::JInvokePlan>),
 }
 
 impl JFunction {
@@ -47,6 +48,15 @@ impl JFunction {
 
     pub(crate) fn choice(plan: JChoicePlan) -> Self {
         Self(JBody::Choice(Box::new(plan)))
+    }
+
+    pub(crate) fn invoke(plan: crate::jni::emit::JInvokePlan) -> Self {
+        Self(JBody::Invoke(Box::new(plan)))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_invoke(&self) -> bool {
+        matches!(self.0, JBody::Invoke(_))
     }
 
     pub(crate) fn mark_reachable(&self) {
@@ -77,6 +87,11 @@ impl JFunction {
                     dependency.mark_reachable();
                 }
             }
+            // An Invoke plan exists only for a declared callback crossing and
+            // is called directly by that crossing's wrapper. Unlike reusable
+            // child converters, it is reachable by construction and needs no
+            // later activation pass.
+            JBody::Invoke(_) => {}
         }
     }
 }
@@ -90,6 +105,9 @@ impl RustFunction for JFunction {
             JBody::Optional(plan) => plan.reachable.get(),
             JBody::Sequence(plan) => plan.reachable.get(),
             JBody::Choice(plan) => plan.reachable.get(),
+            // See `mark_reachable`: callback converters are roots, never
+            // dormant dependencies waiting for a parent to activate them.
+            JBody::Invoke(_) => true,
         }
     }
 
@@ -101,6 +119,7 @@ impl RustFunction for JFunction {
             JBody::Optional(plan) => plan.render(emit),
             JBody::Choice(plan) => plan.render(emit),
             JBody::Sequence(plan) => plan.render(emit),
+            JBody::Invoke(plan) => plan.render(emit),
         }
     }
 }

@@ -1625,10 +1625,11 @@ impl CbindgenBuilder {
 impl CbindgenBuilder {
     pub(crate) fn dispatch_fn_input(
         &self,
+        source: &TypeRef,
         args: &[TypeRef],
         fragments: Option<&[&crate::compile::CFrag]>,
         registry: &impl Conversions,
-    ) -> Option<ConverterImpl> {
+    ) -> Option<(syn::Type, crate::chain::CFunction)> {
         let key: CallbackKey = args.iter().map(|a| a.key()).collect();
         if !self.callbacks.contains_key(&key) {
             // Undeclared callback signature: leave unresolved so the registry
@@ -1644,20 +1645,25 @@ impl CbindgenBuilder {
         // **takeable** arg is passed as `&mut __wN` (`*mut z_x_t`) and dropped here
         // after the call (no-op if the C side took it, leaving a gravestone).
         let takeable = &self.callbacks.get(&key).expect("callback cfg").takeable;
-        let mut closure_params: Vec<TokenStream> = Vec::new();
-        let mut encode_stmts: Vec<TokenStream> = Vec::new();
-        let mut call_args: Vec<TokenStream> = Vec::new();
-        let mut post_drops: Vec<TokenStream> = Vec::new();
+        let mut parts: Vec<crate::chain::InvokePart> = Vec::new();
         for (i, arg) in args.iter().enumerate() {
+            let mut encode_stmts = TokenStream::new();
+            let mut call_args: Vec<TokenStream> = Vec::new();
+            let mut post_drops = TokenStream::new();
             // `&[E]` slice arg: deliver the slice to the C `call` **by reference** —
             // `(*const E_wire, size_t)`, zero-copy (the closure borrows the slice for
             // the call). The element wire is layout-identical to `E`, so the pointer
             // cast is sound; no per-element encode and no post-call drop.
-            if let Some((src_elem, elem_wire)) = self.callback_slice_elem_wire_of(arg) {
-                let ai = format_ident!("__a{}", i);
-                closure_params.push(quote!(#ai: &[#src_elem]));
+            if let Some(elem_wire) = self.callback_slice_elem_wire_type_of(arg) {
+                let ai = crate::chain::invoke_argument_name(i);
                 call_args.push(quote!(#ai.as_ptr() as *const #elem_wire));
                 call_args.push(quote!(#ai.len()));
+                parts.push(crate::chain::InvokePart {
+                    source: ai,
+                    prepare: encode_stmts,
+                    arguments: call_args,
+                    cleanup: post_drops,
+                });
                 continue;
             }
             let supplied = fragments.and_then(|fragments| fragments.get(i).copied());
@@ -1666,8 +1672,7 @@ impl CbindgenBuilder {
             let conv = entry.function.call().ident().clone();
             let opaque = entry.destination.clone();
             let fallible = entry.function.call().fallible();
-            let src = self.src_ty_deep_of(arg);
-            let ai = format_ident!("__a{}", i);
+            let ai = crate::chain::invoke_argument_name(i);
             let wi = format_ident!("__w{}", i);
             let is_takeable = takeable.contains(&i);
             // A COMPOSITE argument — `Option<T>`, `Vec<T>`, `Cow<'_, [T]>` — has
@@ -1712,7 +1717,6 @@ impl CbindgenBuilder {
                 && self.is_lowered_composite(arg);
             if composite {
                 let shape = self.lower_shape(arg, registry);
-                closure_params.push(quote!(#ai: #src));
                 let mut targets = Vec::new();
                 for (f, field) in shape.fields.iter().enumerate() {
                     let fi = if shape.fields.len() == 1 {
@@ -1741,26 +1745,31 @@ impl CbindgenBuilder {
                     // writes, which is the encoder's business and not this
                     // caller's.
                     encode_stmts
-                        .push(quote!(let mut #fi = ::core::mem::MaybeUninit::<#wire>::zeroed();));
+                        .extend(quote!(let mut #fi = ::core::mem::MaybeUninit::<#wire>::zeroed();));
                     targets.push(quote!(*#fi.as_mut_ptr()));
                     call_args.push(quote!(#fi));
                 }
                 // A firing callback has no error channel, so a fallible
                 // converter aborts — the same answer the single-value path
                 // below gives, spelled by the route the emitters share.
-                encode_stmts.push(self.encode_value(
+                encode_stmts.extend(self.encode_value(
                     arg,
                     quote!(#ai),
                     &targets,
                     registry,
                     &ErrRoute::Panic,
                 ));
+                parts.push(crate::chain::InvokePart {
+                    source: ai.clone(),
+                    prepare: encode_stmts,
+                    arguments: call_args,
+                    cleanup: post_drops,
+                });
                 continue;
             }
-            closure_params.push(quote!(#ai: #src));
             let mut_kw = if is_takeable { quote!(mut) } else { quote!() };
             if fallible {
-                encode_stmts.push(quote!(
+                encode_stmts.extend(quote!(
                     let #mut_kw #wi = match #conv(#ai) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
@@ -1769,70 +1778,37 @@ impl CbindgenBuilder {
                     };
                 ));
             } else {
-                encode_stmts.push(quote!(let #mut_kw #wi = #conv(#ai);));
+                encode_stmts.extend(quote!(let #mut_kw #wi = #conv(#ai);));
             }
             if is_takeable {
                 call_args.push(quote!(&mut #wi as *mut #opaque));
                 // Always drop after the call (leak-safe): live value if untaken,
                 // gravestone (no-op) if the C side took it via `z_x_take`.
-                post_drops.push(
+                post_drops.extend(
                     quote!(let _ = <#opaque as ::prebindgen_c_runtime::Transmute>::into_rust(#wi);),
                 );
             } else {
                 call_args.push(quote!(#wi));
             }
+            parts.push(crate::chain::InvokePart {
+                source: ai.clone(),
+                prepare: encode_stmts,
+                arguments: call_args,
+                cleanup: post_drops,
+            });
         }
 
-        let fn_ty = callback_fn_type(
-            &args
-                .iter()
-                .map(|a| self.src_ty_deep_of(a))
-                .collect::<Vec<_>>(),
-        );
         let name = format_ident!("__cbg_in_{}", self.callback_c_name(&key));
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name(c: #c_struct) -> #fn_ty {
-                struct __Ctx {
-                    context: *mut ::core::ffi::c_void,
-                    drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-                }
-                unsafe impl ::core::marker::Send for __Ctx {}
-                unsafe impl ::core::marker::Sync for __Ctx {}
-                impl ::core::ops::Drop for __Ctx {
-                    fn drop(&mut self) {
-                        if let ::core::option::Option::Some(__d) = self.drop {
-                            unsafe { __d(self.context) }
-                        }
-                    }
-                }
-                let __call = c.call;
-                let __ctx = ::std::sync::Arc::new(__Ctx { context: c.context, drop: c.drop });
-                move |#(#closure_params),*| {
-                    // Encode INSIDE the guard: a closure struct whose `call` is
-                    // NULL receives nothing, and a converter that allocates —
-                    // `Vec`/`Cow` into a malloc'd array, a `String` into a
-                    // malloc'd `char *` — would hand that allocation to nobody
-                    // on every invocation (#428 review). Not converting at all
-                    // is also what the argument's own `Drop` expects: the value
-                    // is simply dropped, which is neither a leak nor a double
-                    // free.
-                    if let ::core::option::Option::Some(__f) = __call {
-                        #(#encode_stmts)*
-                        unsafe { __f(#(#call_args,)* __ctx.context) }
-                        #(#post_drops)*
-                    }
-                }
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: syn::parse_quote!(#c_struct),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
+        let wire: syn::Type = syn::parse_quote!(#c_struct);
+        let function = crate::chain::CFunction::invoke(crate::chain::InvokePlan {
+            ident: name,
+            source: source.clone(),
+            source_module: self.source_module.clone(),
+            wire: wire.clone(),
+            arguments: args.to_vec(),
+            parts,
+        });
+        Some((wire, function))
     }
 }
 

@@ -237,13 +237,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 .or_else(|| self.gen.in_str(ty))
                 .or_else(|| self.gen.in_bool(ty))
                 .or_else(|| self.gen.in_scalar(ty))
-                .or_else(|| self.gen.in_borrow(ty))
-                .or_else(|| {
-                    // A callback whose signature was declared: its own
-                    // `#[repr(C)]` closure struct.
-                    let args = ty.callback_args()?;
-                    self.gen.dispatch_fn_input(args, None, self.registry)
-                }),
+                .or_else(|| self.gen.in_borrow(ty)),
             Direction::Deconstruct => self
                 .gen
                 .out_custom(ty, self.registry, cx.emit())
@@ -634,10 +628,22 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         let Some(args) = at.crossing.value().callback_args() else {
             return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
-        let conv = self
+        let (destination, function) = self
             .gen
-            .dispatch_fn_input(args, Some(fragments), self.registry);
-        self.wrap(at, "undeclared callback signature", conv)
+            .dispatch_fn_input(at.crossing.spelled(), args, Some(fragments), self.registry)
+            .ok_or_else(|| refuse(at, "undeclared callback signature"))?;
+        Ok(CFrag {
+            destination,
+            function,
+            niches: Niches::empty(),
+            subs: Vec::new(),
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+        })
     }
 
     /// C hands out borrows deliberately, so a returned one is not an error.

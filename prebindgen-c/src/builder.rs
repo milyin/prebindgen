@@ -725,53 +725,16 @@ impl CbindgenBuilder {
         scalar_slice_elem(ty).map(|elem| (elem.clone(), elem))
     }
 
-    /// [`Self::callback_slice_elem_wire`] off the classification, for the
-    /// resolver side — the declaration side keeps the node peer above, because
-    /// a `.callback(...)` argument is written by the build script and the model
-    /// may never have interned it.
-    pub(super) fn callback_slice_elem_wire_of(
-        &self,
-        ty: &TypeRef,
-    ) -> Option<(syn::Type, syn::Type)> {
-        let elem = super::r_shared_slice_elem(ty)?;
-        let key = elem.key();
-        if let Some(wire) = self.value_opaque_ty_of(&key) {
-            return Some((self.src_ty_of(&key), wire.clone()));
-        }
-        super::scalar_ty(elem).map(|s| (s.clone(), s))
-    }
-
-    /// Like [`Self::src_ty`], but recurses into reference and slice element types so
-    /// `&ZSample` becomes `&zenoh_flat::ZSample` and `&[Payload]` becomes
-    /// `&[perftest_flat::Payload]` (needed so a callback's `Fn(&[E])` closure type
-    /// names the qualified element).
-    /// [`Self::src_ty`], recursing into a borrow's and a slice's element — off
-    /// the classification. `&ZSample` becomes `&zenoh_flat::ZSample` and
-    /// `&[Payload]` becomes `&[perftest_flat::Payload]`, so a callback's
-    /// `Fn(&[E])` closure type names the qualified element.
+    /// Wire-only callback-slice classification for the Invoke planner.
     ///
-    /// The two recursing forms are `TypeKind::Ref` and `TypeKind::Slice`, which
-    /// is what the `syn::Type::Reference` / `syn::Type::Slice` match this
-    /// replaces was reading — and the borrow's lifetime and mutability are on
-    /// the kind, so the rebuilt spelling says what the source said.
-    pub(super) fn src_ty_deep_of(&self, ty: &TypeRef) -> syn::Type {
-        match ty.kind() {
-            TypeKind::Ref {
-                lifetime,
-                mutable,
-                inner,
-            } => {
-                let inner = self.src_ty_deep_of(inner);
-                let lt = lifetime.as_ref().map(|l| quote!(#l)).unwrap_or_default();
-                let m = if *mutable { quote!(mut) } else { quote!() };
-                syn::parse_quote!(& #lt #m #inner)
-            }
-            TypeKind::Slice(elem) => {
-                let elem = self.src_ty_deep_of(elem);
-                syn::parse_quote!([#elem])
-            }
-            _ => self.src_ty_of(&ty.key()),
-        }
+    /// The declaration-side [`Self::callback_slice_elem_wire`] also returns a
+    /// source element spelling. Resolution deliberately does not: the shared
+    /// Invoke composer owns that spelling at final render time.
+    pub(super) fn callback_slice_elem_wire_type_of(&self, ty: &TypeRef) -> Option<syn::Type> {
+        let elem = super::r_shared_slice_elem(ty)?;
+        self.value_opaque_ty_of(&elem.key())
+            .cloned()
+            .or_else(|| super::scalar_ty(elem))
     }
 
     /// [`Self::in_name`] off the **identity**, for a caller holding a reading

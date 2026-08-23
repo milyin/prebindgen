@@ -536,8 +536,17 @@ impl JFrag {
     /// Registry recipes handle composable callback products. Irregular layouts
     /// still enter through this compatibility path and are indexed as fragments
     /// so downstream emitters use the same lookup in either case.
+    #[cfg(test)]
     pub(crate) fn by_hand(ty: TypeKey, conv: ConverterImpl<KotlinMeta>) -> Self {
         let rust = crate::jni::chain::JFunction::complete(conv.function.clone());
+        Self::by_hand_with_rust(ty, conv, rust)
+    }
+
+    pub(crate) fn by_hand_with_rust(
+        ty: TypeKey,
+        conv: ConverterImpl<KotlinMeta>,
+        rust: crate::jni::chain::JFunction,
+    ) -> Self {
         Self {
             conv,
             rust,
@@ -1525,22 +1534,24 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(frag) = self.planned_owned_handle(at) {
             return Ok(frag);
         }
+        if at.crossing.direction() == Direction::Construct {
+            if let TypeKind::Callback { args } = ty.unwrapped().kind() {
+                if let Some((conv, rust)) =
+                    self.decls
+                        .dispatch_fn_input(ty, args, self.registry, None, emit)
+                {
+                    let mut fragment = JFrag::new(at, conv);
+                    fragment.rust = rust;
+                    return Ok(fragment);
+                }
+            }
+        }
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
                 .or_else(|| self.borrow(ty, emit, true))
-                .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit))
-                .or_else(|| {
-                    // `impl Fn(args)` that nothing else claimed. Callback args
-                    // cross in the opposite direction, which is why their
-                    // required-ness rides `immediate_edges` rather than `subs`.
-                    let TypeKind::Callback { args } = ty.unwrapped().kind() else {
-                        return None;
-                    };
-                    self.decls
-                        .dispatch_fn_input(args, self.registry, None, emit)
-                }),
+                .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit)),
             Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
@@ -1820,10 +1831,13 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let TypeKind::Callback { args } = ty.unwrapped().kind() else {
             return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
-        let conv =
+        let planned =
             self.decls
-                .dispatch_fn_input(args, self.registry, Some(arg_fragments), cx.emit());
-        self.wrap(at, "undeclared callback signature", conv)
+                .dispatch_fn_input(ty, args, self.registry, Some(arg_fragments), cx.emit());
+        let (conv, rust) = planned.ok_or_else(|| refuse(at, "undeclared callback signature"))?;
+        let mut fragment = JFrag::new(at, conv);
+        fragment.rust = rust;
+        Ok(fragment)
     }
 
     /// One site: which of the seven wire layouts this parameter takes, and the
