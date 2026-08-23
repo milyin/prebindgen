@@ -722,6 +722,29 @@ impl JniGen {
             .wires
             .clone()
     }
+
+    /// The whole-value callback compatibility row, when one was required.
+    ///
+    /// Recipe-built callbacks occupy their ordinary crossing row. Only the
+    /// adapter-refusal fallback records this deliberately named row, so asking
+    /// for it pins the compatibility seam rather than callback generation in
+    /// general. The boolean distinguishes the retained late plan from a
+    /// complete function rendered during resolution.
+    #[cfg(test)]
+    pub(crate) fn compatibility_callback_for_test(&self, spelling: &str) -> Option<(String, bool)> {
+        use prebindgen_registry::recipe::{Crossing, Direction, RecipeName};
+
+        let ty: syn::Type = syn::parse_str(spelling).ok()?;
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let key = reading.key();
+        let row = Crossing::new(reading, Direction::Construct).row(RecipeName::new("callback"));
+        let compiled = self.decls.compiled.borrow();
+        let fragment = compiled.recipe_fragment(&key, &row)?;
+        Some((
+            fragment.conv.converter_ident().to_string(),
+            fragment.rust.is_invoke(),
+        ))
+    }
 }
 
 // Opaque — exists so `Result<JniGen, _>::expect_err` works in tests.

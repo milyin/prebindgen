@@ -239,6 +239,67 @@ fn declared_optional_conversion_callback_falls_back_to_whole_value() {
     assert!(!kc.contains("payloadPresent:Boolean"), "{kotlin}");
 }
 
+/// `Ledger` has an output expansion but is deliberately not a declared Kotlin
+/// class. Its fields reach a consuming `Report` value form through two
+/// conditional (`Option`) accessors. The recipe compiler cannot turn that
+/// irregular callback argument into a reusable parts converter, so callback
+/// delivery takes the whole-value compatibility seam. That seam must keep the
+/// `Invoke` plan late and pair it with the conversion the resolver returns.
+#[test]
+fn undeclared_expanded_callback_retains_its_late_compatibility_plan() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct ReportStruct { pub label: String }",
+        "pub fn report_into_struct(r: Report) -> ReportStruct { unimplemented!() }",
+        "pub fn ledger_filed(l: &Ledger) -> Option<&Report> { unimplemented!() }",
+        "pub fn ledger_archived(l: &Ledger) -> Option<Report> { unimplemented!() }",
+        "pub fn ledger_each(sink: impl Fn(Ledger) + Send + Sync + 'static) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Report))
+                .fun(prebindgen_registry::fun!(ledger_each)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(Report)
+                .fields_self_into(prebindgen_registry::fields!(report_into_struct)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(Ledger)
+                .field(prebindgen_registry::fun!(ledger_filed))
+                .field(prebindgen_registry::fun!(ledger_archived)),
+        );
+
+    let dir = unique_test_dir("jnigen_ledger_callback_compatibility");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let callback = "impl Fn(Ledger) + Send + Sync + 'static";
+    let (converter, is_late_invoke) = generation
+        .compatibility_callback_for_test(callback)
+        .expect("Ledger callback uses the whole-value compatibility row");
+    assert!(
+        is_late_invoke,
+        "the compatibility row must retain an unrendered Invoke plan"
+    );
+
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    assert_eq!(
+        rust.matches(&format!("fn {converter}")).count(),
+        1,
+        "the retained callback plan is rendered exactly once:\n{rust}"
+    );
+    assert!(rust.contains("ledger_filed(&__cb_arg0)"), "{rust}");
+    assert!(rust.contains("ledger_archived(&__cb_arg0)"), "{rust}");
+}
+
 /// Regression: a callback-delivered type that has BOTH a nested handle identity
 /// (a child `ptr_class` reached by an accessor) AND its own root identity
 /// (`expand_return!` `.field_self()`) must emit the root MOVE after every borrow of

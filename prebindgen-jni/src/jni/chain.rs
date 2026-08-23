@@ -54,6 +54,11 @@ impl JFunction {
         Self(JBody::Invoke(Box::new(plan)))
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_invoke(&self) -> bool {
+        matches!(self.0, JBody::Invoke(_))
+    }
+
     pub(crate) fn mark_reachable(&self) {
         match &self.0 {
             JBody::Complete(_) => {}
