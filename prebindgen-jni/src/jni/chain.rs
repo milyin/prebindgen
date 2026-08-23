@@ -19,6 +19,7 @@ enum JBody {
     Complete(Box<syn::ItemFn>),
     OwnedHandle(Box<JOwnedHandlePlan>),
     Product(Box<JProductPlan>),
+    Choice(Box<JChoicePlan>),
     Optional(Box<JOptionalPlan>),
 }
 
@@ -39,11 +40,21 @@ impl JFunction {
         Self(JBody::Optional(Box::new(plan)))
     }
 
+    pub(crate) fn choice(plan: JChoicePlan) -> Self {
+        Self(JBody::Choice(Box::new(plan)))
+    }
+
     pub(crate) fn mark_reachable(&self) {
         match &self.0 {
             JBody::Complete(_) => {}
             JBody::OwnedHandle(plan) => plan.reachable.set(true),
             JBody::Product(plan) => {
+                plan.reachable.set(true);
+                for dependency in &plan.dependencies {
+                    dependency.mark_reachable();
+                }
+            }
+            JBody::Choice(plan) => {
                 plan.reachable.set(true);
                 for dependency in &plan.dependencies {
                     dependency.mark_reachable();
@@ -66,6 +77,7 @@ impl RustFunction for JFunction {
             JBody::OwnedHandle(plan) => plan.reachable.get(),
             JBody::Product(plan) => plan.reachable.get(),
             JBody::Optional(plan) => plan.reachable.get(),
+            JBody::Choice(plan) => plan.reachable.get(),
         }
     }
 
@@ -75,6 +87,7 @@ impl RustFunction for JFunction {
             JBody::OwnedHandle(plan) => plan.render(emit),
             JBody::Product(plan) => plan.render(emit),
             JBody::Optional(plan) => plan.render(emit),
+            JBody::Choice(plan) => plan.render(emit),
         }
     }
 }
@@ -333,6 +346,55 @@ impl JProductPlan {
             }
             Direction::Deconstruct => {
                 let intermediate = annotate_jobject_with_lifetime(intermediate, "a");
+                let input = match self.mode {
+                    Mode::Owned => quote!(v: #source),
+                    Mode::Shared => quote!(v: &#source),
+                    Mode::Exclusive => quote!(v: &mut #source),
+                };
+                syn::parse_quote!(
+                    #allow
+                    #[inline(always)]
+                    pub(crate) unsafe fn #name<'a>(
+                        env: &mut jni::JNIEnv<'a>,
+                        #input,
+                    ) -> ::core::result::Result<#intermediate, __JniErr> {
+                        ::core::result::Result::Ok(#body)
+                    }
+                )
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct JChoicePlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
+    pub(crate) dependencies: Vec<JFunction>,
+    pub(crate) mode: Mode,
+    pub(crate) chain: shared::Choice<JSource, shared::TupleChoice, shared::TupleProduct, JChild>,
+}
+
+impl JChoicePlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let rendered = self.chain.render(emit);
+        let name = &self.ident;
+        let source = &rendered.source;
+        let intermediate = annotate_jobject_with_lifetime(&rendered.intermediate, "a");
+        let body = &rendered.body;
+        let allow = crate::jni::trait_impl::generated_converter_attr();
+        match self.chain.direction {
+            Direction::Construct => syn::parse_quote!(
+                #allow
+                #[inline(always)]
+                pub(crate) unsafe fn #name<'env, 'a>(
+                    env: &mut jni::JNIEnv<'env>,
+                    v: #intermediate,
+                ) -> ::core::result::Result<#source, __JniErr> {
+                    ::core::result::Result::Ok(#body)
+                }
+            ),
+            Direction::Deconstruct => {
                 let input = match self.mode {
                     Mode::Owned => quote!(v: #source),
                     Mode::Shared => quote!(v: &#source),

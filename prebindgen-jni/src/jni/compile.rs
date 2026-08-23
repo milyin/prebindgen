@@ -77,6 +77,8 @@ pub(crate) struct JFrag {
     pub(crate) yields: Yield,
     /// Shape of the single adapter-side intermediate over flattened ABI leaves.
     pub(crate) layout: Option<JLayout>,
+    /// Payload composition retained until `choice` supplies the variant.
+    choice_arm: Option<JChoiceArmPlan>,
     /// Composed element retained by a containing sequence for callback folding.
     pub(crate) nested_chain: Option<ComposedChain>,
     /// The wire values this crossing occupies, when it occupies more than the
@@ -118,6 +120,7 @@ pub(crate) enum JLayout {
     Leaf,
     Product(Vec<JLayout>),
     Optional(Box<JLayout>),
+    Choice(Vec<JLayout>),
 }
 
 impl JLayout {
@@ -126,6 +129,7 @@ impl JLayout {
             Self::Leaf => 1,
             Self::Product(parts) => parts.iter().map(Self::leaf_count).sum(),
             Self::Optional(inner) => 1 + inner.leaf_count(),
+            Self::Choice(arms) => 1 + arms.iter().map(Self::leaf_count).sum::<usize>(),
         }
     }
 
@@ -146,6 +150,11 @@ impl JLayout {
                     let value = build(inner, leaves, next);
                     quote!((#present, #value))
                 }
+                JLayout::Choice(arms) => {
+                    let tag = build(&JLayout::Leaf, leaves, next);
+                    let arms = arms.iter().map(|arm| build(arm, leaves, next));
+                    quote!((#tag, #(#arms,)*))
+                }
             }
         }
         assert_eq!(self.leaf_count(), leaves.len());
@@ -153,12 +162,20 @@ impl JLayout {
     }
 
     pub(crate) fn is_composed(&self) -> bool {
-        matches!(self, Self::Product(_) | Self::Optional(_))
+        matches!(self, Self::Product(_) | Self::Optional(_) | Self::Choice(_))
     }
 
     pub(crate) fn pattern(&self, leaves: &[syn::Ident]) -> TokenStream {
         self.expression(leaves)
     }
+}
+
+#[derive(Clone)]
+struct JChoiceArmPlan {
+    dependencies: Vec<crate::jni::chain::JFunction>,
+    bridge: prebindgen_registry::chain::TupleProduct,
+    parts: Vec<prebindgen_registry::chain::ChoicePart<crate::jni::chain::JChild>>,
+    layout: JLayout,
 }
 
 /// One step of the walk from the object a site names to a wire's value.
@@ -524,6 +541,7 @@ impl JFrag {
             conv,
             rust,
             layout: Some(JLayout::Leaf),
+            choice_arm: None,
             nested_chain: None,
             wires: None,
             out_wires: None,
@@ -542,6 +560,7 @@ impl JFrag {
         Self {
             conv,
             rust,
+            choice_arm: None,
             layout: Some(JLayout::Leaf),
             nested_chain: None,
             wires: None,
@@ -791,6 +810,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 metadata: self.decls.opaque_leaf_meta(source.key()),
                 subs: Vec::new(),
             },
+            choice_arm: None,
             rust,
             layout: Some(JLayout::Leaf),
             nested_chain: None,
@@ -803,6 +823,45 @@ impl<R: Conversions> JCompile<'_, R> {
                 validity: Validity::SelfSufficient,
             },
         })
+    }
+    fn planned_child(
+        direction: Direction,
+        part: &Part<'_>,
+        frag: &JFrag,
+    ) -> crate::jni::chain::JChild {
+        let stages = match direction {
+            Direction::Construct => frag
+                .conv
+                .input_stage_order()
+                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .collect(),
+            Direction::Deconstruct => frag
+                .conv
+                .output_stage_order()
+                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .collect(),
+        };
+        match direction {
+            Direction::Construct => crate::jni::chain::JChild::input(
+                frag.conv.converter_ident().clone(),
+                stages,
+                if matches!(frag.conv.destination, syn::Type::Ptr(_))
+                    || frag.layout.as_ref().is_some_and(JLayout::is_composed)
+                {
+                    crate::jni::chain::JValueUse::Direct
+                } else {
+                    crate::jni::chain::JValueUse::SharedRef
+                },
+            ),
+            Direction::Deconstruct => crate::jni::chain::JChild::output(
+                frag.conv.converter_ident().clone(),
+                stages,
+                match part.mode {
+                    Mode::Owned => crate::jni::chain::JValueUse::Direct,
+                    Mode::Shared | Mode::Exclusive => crate::jni::chain::JValueUse::Cloned,
+                },
+            ),
+        }
     }
 
     /// Describe a Product as one tuple intermediate. The registry owns the
@@ -850,39 +909,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let children = parts
             .iter()
             .map(|(part, frag)| {
-                let stages = match direction {
-                    Direction::Construct => frag
-                        .conv
-                        .input_stage_order()
-                        .map(|(_, stage)| stage.function.sig.ident.clone())
-                        .collect(),
-                    Direction::Deconstruct => frag
-                        .conv
-                        .output_stage_order()
-                        .map(|(_, stage)| stage.function.sig.ident.clone())
-                        .collect(),
-                };
-                let child = match direction {
-                    Direction::Construct => crate::jni::chain::JChild::input(
-                        frag.conv.converter_ident().clone(),
-                        stages,
-                        if matches!(frag.conv.destination, syn::Type::Ptr(_))
-                            || frag.layout.as_ref().is_some_and(JLayout::is_composed)
-                        {
-                            crate::jni::chain::JValueUse::Direct
-                        } else {
-                            crate::jni::chain::JValueUse::SharedRef
-                        },
-                    ),
-                    Direction::Deconstruct => crate::jni::chain::JChild::output(
-                        frag.conv.converter_ident().clone(),
-                        stages,
-                        match part.mode {
-                            Mode::Owned => crate::jni::chain::JValueUse::Direct,
-                            Mode::Shared | Mode::Exclusive => crate::jni::chain::JValueUse::Cloned,
-                        },
-                    ),
-                };
+                let child = Self::planned_child(direction, part, frag);
                 prebindgen_registry::chain::ProductPart {
                     name: format_ident!("{}", part.name),
                     child,
@@ -921,9 +948,167 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             rust,
             layout: Some(JLayout::Product(layouts)),
+            choice_arm: None,
             nested_chain: None,
             wires: None,
             out_wires: None,
+            composed_only: false,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+        })
+    }
+
+    /// Retain one sum arm's child chains until `choice` supplies its variant
+    /// and tag. The current sealed-class ABI gives each payload field one slot,
+    /// so composed child layouts remain a later stage.
+    fn planned_choice_arm(&self, at: At<'_>, parts: Parts<'_, Self>) -> Option<JChoiceArmPlan> {
+        if parts.iter().any(|(_, frag)| frag.composed_only) {
+            return None;
+        }
+        let layouts = parts
+            .iter()
+            .map(|(_, frag)| frag.layout.clone())
+            .collect::<Option<Vec<_>>>()?;
+        if layouts
+            .iter()
+            .any(|layout| !matches!(layout, JLayout::Leaf))
+        {
+            return None;
+        }
+        let direction = at.crossing.direction();
+        let intermediate_parts: Vec<syn::Type> = parts
+            .iter()
+            .map(|(_, frag)| frag.conv.destination.clone())
+            .collect();
+        let dependencies = parts
+            .iter()
+            .map(|(_, fragment)| fragment.rust.clone())
+            .collect();
+        let children = parts
+            .iter()
+            .map(|(part, frag)| {
+                let child = Self::planned_child(direction, part, frag);
+                Some(prebindgen_registry::chain::ChoicePart {
+                    member: part_member(part)?,
+                    child,
+                    mode: part.mode,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(JChoiceArmPlan {
+            dependencies,
+            bridge: prebindgen_registry::chain::TupleProduct {
+                parts: intermediate_parts,
+            },
+            parts: children,
+            layout: JLayout::Product(layouts),
+        })
+    }
+
+    /// Finish the arm plans the registry handed to `choice` as one tuple
+    /// intermediate. The plan keeps only Flat identities and adapter
+    /// representation data; the source enum is spelled by the final renderer.
+    fn planned_choice(
+        &self,
+        at: At<'_>,
+        arms: &[(&Alternative, &JFrag)],
+        wires: Option<Vec<Wire>>,
+        out_wires: Option<Vec<OutWire>>,
+    ) -> Option<JFrag> {
+        let planned = arms
+            .iter()
+            .map(|(alternative, fragment)| Some((*alternative, fragment.choice_arm.clone()?)))
+            .collect::<Option<Vec<_>>>()?;
+        let source = at.crossing.value();
+        let TypeKind::Named { id, .. } = source.unwrapped().kind() else {
+            return None;
+        };
+        let source_ident = id.ident()?;
+        let source_module = self.decls.fn_module(self.registry, &source_ident);
+        let direction = at.crossing.direction();
+        let arm_types: Vec<syn::Type> = planned
+            .iter()
+            .map(|(_, arm)| {
+                let parts = &arm.bridge.parts;
+                syn::parse_quote!((#(#parts,)*))
+            })
+            .collect();
+        let destination: syn::Type = {
+            let arms = &arm_types;
+            syn::parse_quote!((jni::sys::jint, #(#arms,)*))
+        };
+        let tags: Vec<syn::Expr> = planned
+            .iter()
+            .map(|(alternative, _)| {
+                let tag = crate::jni::struct_plan::sum_tag(alternative);
+                syn::parse_quote!(#tag)
+            })
+            .collect();
+        let inactive = arm_types.iter().map(Self::inactive_intermediate).collect();
+        let source_name = source_ident.to_string();
+        let invalid = quote!(<__JniErr as ::core::convert::From<String>>::from(format!(
+            concat!(#source_name, ": invalid tag")
+        )));
+        let choice_arms = planned
+            .iter()
+            .map(|(alternative, arm)| {
+                let tag = crate::jni::struct_plan::sum_tag(alternative);
+                prebindgen_registry::chain::ChoiceArm {
+                    variant: alternative.name.clone(),
+                    form: alternative.form(),
+                    tag: syn::parse_quote!(#tag),
+                    bridge: arm.bridge.clone(),
+                    parts: arm.parts.clone(),
+                }
+            })
+            .collect();
+        let dependencies = planned
+            .iter()
+            .flat_map(|(_, arm)| arm.dependencies.iter().cloned())
+            .collect();
+        let layouts = planned.iter().map(|(_, arm)| arm.layout.clone()).collect();
+        let ident = crate::jni::chain::planned_name(direction, at.crossing.spelled(), &destination);
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let rust = crate::jni::chain::JFunction::choice(crate::jni::chain::JChoicePlan {
+            ident,
+            reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
+            dependencies,
+            mode: at.crossing.mode(),
+            chain: prebindgen_registry::chain::Choice {
+                source: source.clone(),
+                direction,
+                source_policy: crate::jni::chain::JSource {
+                    wrappers: source.erased_wrappers(),
+                    module: Some(source_module),
+                },
+                bridge: prebindgen_registry::chain::TupleChoice {
+                    tag: syn::parse_quote!(jni::sys::jint),
+                    arms: arm_types,
+                    tags,
+                    inactive,
+                    invalid,
+                },
+                arms: choice_arms,
+            },
+        });
+        Some(JFrag {
+            conv: ConverterImpl {
+                destination,
+                function: marker,
+                pre_stages: Vec::new(),
+                niches: Niches::empty(),
+                metadata: KotlinMeta::default(),
+                subs: parts_subs(arms),
+            },
+            rust,
+            layout: Some(JLayout::Choice(layouts)),
+            choice_arm: None,
+            nested_chain: None,
+            wires,
+            out_wires,
             composed_only: false,
             yields: Yield {
                 ty: at.crossing.value().stripped_key(),
@@ -1185,6 +1370,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             rust,
             layout: Some(layout),
+            choice_arm: None,
             nested_chain: None,
             wires: None,
             out_wires,
@@ -1367,16 +1553,23 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // to `choice`. Which alternative that is stays `choice`'s to fill in,
         // being the only hook told — so both directions leave a hole here.
         let sum = self.is_sum(cx, at);
-        if at.crossing.direction() != Direction::Construct {
-            return match sum {
-                true => Ok(self.out_arm(at, parts)),
-                false => Ok(self.out_product(at, parts)),
-            };
-        }
         if sum {
-            // Its parts are read off a cast rather than off the value, so they
-            // take the slot form.
-            return Ok(self.arm(at, parts));
+            let direction = at.crossing.direction();
+            let mut frag = match direction {
+                Direction::Construct => self.arm(at, parts),
+                Direction::Deconstruct => self.out_arm(at, parts),
+            };
+            let represented = match direction {
+                Direction::Construct => frag.wires.is_some(),
+                Direction::Deconstruct => frag.out_wires.is_some(),
+            };
+            if represented {
+                frag.choice_arm = self.planned_choice_arm(at, parts);
+            }
+            return Ok(frag);
+        }
+        if at.crossing.direction() == Direction::Deconstruct {
+            return Ok(self.out_product(at, parts));
         }
         // A `data_class` crosses as its fields, and a field that is itself one
         // contributes its own several — which is the recursion, stated once
@@ -1452,31 +1645,34 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         at: At<'_>,
         arms: &[(&Alternative, &JFrag)],
     ) -> Frag<Self> {
-        if at.crossing.direction() != Direction::Construct {
-            return self.selected_out(at, arms);
-        }
-        // Which alternative is live crosses as its own `jint`, and every
-        // alternative's slots cross on every call — the inert ones carrying the
-        // literal their wire takes when the cast finds nothing. The N-way form
-        // of the presence flag an optional already uses.
-        match self.selected(at, arms) {
-            Some(wires) => {
-                let mut frag = JFrag::new(at, self.parts_marker(parts_subs(arms)));
-                frag.wires = Some(wires);
-                frag.composed_only = true;
-                Ok(frag)
-            }
-            // A payload this adapter has no slot for — a nested object, a
-            // handle — leaves the whole sum object-shaped, which is the recipe it
-            // already had. Stated as a fragment with no wires rather than as a
-            // refusal: the site that asked composes it as one value, exactly as
-            // it did before a `parts` recipe existed.
-            None => {
-                let conv = self
-                    .decls
-                    .in_frag(at.crossing.spelled())
-                    .ok_or_else(|| refuse(at, "no JNI representation for this sum"))?;
-                Ok(JFrag::new(at, (*conv).clone()))
+        match at.crossing.direction() {
+            Direction::Construct => match self.selected(at, arms) {
+                Some(wires) => {
+                    if let Some(planned) = self.planned_choice(at, arms, Some(wires.clone()), None)
+                    {
+                        return Ok(planned);
+                    }
+                    let mut legacy = JFrag::new(at, self.parts_marker(parts_subs(arms)));
+                    legacy.wires = Some(wires);
+                    legacy.composed_only = true;
+                    Ok(legacy)
+                }
+                // A payload this adapter has no slot for — a nested object or
+                // handle — keeps the explicit whole-value sealed-class decoder.
+                None => {
+                    let conv = self
+                        .decls
+                        .in_frag(at.crossing.spelled())
+                        .ok_or_else(|| refuse(at, "no JNI representation for this sum"))?;
+                    Ok(JFrag::new(at, (*conv).clone()))
+                }
+            },
+            Direction::Deconstruct => {
+                let legacy = self.selected_out(at, arms)?;
+                let out_wires = legacy.out_wires.clone();
+                Ok(self
+                    .planned_choice(at, arms, None, out_wires)
+                    .unwrap_or(legacy))
             }
         }
     }

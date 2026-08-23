@@ -2392,6 +2392,23 @@ fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
             "oFallbackTaggedV1: Int = (o.fallback as? io.test.jni.Reading.Tagged)?.v1?.value ?: 0",
         ],
     );
+
+    let dir = unique_test_dir("sealed_choice_input_chain");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write Rust"))
+        .expect("read Rust");
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("reading:tuple5_to_Reading_")
+            && rc.contains("fallback:tuple2_to_Option_Reading_")
+            && rc.contains("::core::option::Option::Some(tuple5_to_Reading_"),
+        "Product and Optional parents must delegate the sum walk to the Choice converter:\n{rust}"
+    );
+    assert!(
+        !rc.contains("matcho_reading__tag"),
+        "the exported wrapper must not reconstruct the sum inline:\n{rust}"
+    );
 }
 
 /// Every spelling the walk flattens states the same recipe.

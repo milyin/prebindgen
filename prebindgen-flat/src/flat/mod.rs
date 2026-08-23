@@ -203,8 +203,8 @@ use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
     element::{
-        Alternative, Constant, Element, Enum, EnumValue, Extern, Field, Function, Guard, Param,
-        Struct, Type, Unsupported, Variant,
+        Alternative, AlternativeForm, Constant, Element, Enum, EnumValue, Extern, Field, Function,
+        Guard, Param, Struct, Type, Unsupported, Variant,
     },
     key::{TypeKey, TypeKeyParseError},
     origin::Origin,

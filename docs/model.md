@@ -17,8 +17,12 @@ item of the source crate into a data file at build time. The source crate
 contains nothing about any foreign language.
 - **`prebindgen-flat`** — parses those records into **the model**, `Flat`:
 `Struct`, `Variant` (an enum whose alternatives carry payloads, each an
-`Alternative`), `Enum`, `Function`, `Field`, and `TypeRef`, the model's reading
-of one Rust type. `TypeKey` is the identity that same type is stored under.
+`Alternative`), `Enum`, `Function`, `Field`, and `TypeRef`, the model's
+reading of one Rust type. `TypeKey` is the identity that same type is stored
+under. An `Alternative` also exposes its `AlternativeForm`: unit, tuple or
+struct. Payload arity alone cannot recover this fact because `A`, `A()` and
+`A {}` are all empty but require different Rust construction and pattern
+syntax; renderers consume the Flat fact instead of inspecting source syntax.
 - **`prebindgen-registry`** — the language-agnostic half of generation. It is
 what this document describes.
 - **an adapter**, one per target language — `prebindgen-c`, whose generator type
