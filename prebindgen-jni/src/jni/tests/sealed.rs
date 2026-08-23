@@ -2656,3 +2656,80 @@ fn a_decomposed_return_is_a_site_asking_for_the_parts_row() {
         "the site and the expansion plan disagree",
     );
 }
+
+/// A composed chain refuses a wrapper it cannot peel and put back, and refuses
+/// to read one it does not own — for a choice exactly as for a product.
+///
+/// Three planners state that rule: `planned_product`, `planned_choice` and
+/// `planned_sequence`. It is one rule, so they share one function; stated three
+/// times, the choice copy omitted it entirely and the sequence copy omitted the
+/// ownership half.
+///
+/// Both halves have a failure mode, and neither is caught by a test that only
+/// checks the plan was made.
+///
+/// * `&Box<Reading>` going out: reading peels with `*v`, so a chain composed
+///   over a shared borrow moves `Reading` out of the `Box` — E0507 in the
+///   consumer's crate, not here.
+/// * `Cow<'_, Reading>` coming in: `Cow` has no build operation, so planning
+///   would succeed and `JSource::build` would hit its `expect` while
+///   `write_rust` renders — a panic in the generator, after every check has
+///   passed.
+///
+/// Refusing returns the crossing to the legacy path, which is what handled
+/// these shapes before any chain existed.
+#[test]
+fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
+    use prebindgen_registry::recipe::{Crossing, Direction};
+
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_one(which: i32) -> Reading {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(prebindgen_registry::fun!(read_one)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let flat = prebindgen_registry::Conversions::flat(gen.registry());
+    let composable = |spelling: &str, direction: Direction| -> bool {
+        let ty: syn::Type = syn::parse_str(spelling).expect("a type");
+        let reading = flat.classify(&ty).expect("the model knows this shape");
+        crate::jni::compile::composable_for_test(&Crossing::new(reading, direction))
+    };
+
+    // The bare sum composes in both directions, and so does a `Box` it owns.
+    assert!(composable("Reading", Direction::Deconstruct));
+    assert!(composable("Reading", Direction::Construct));
+    assert!(composable("Box<Reading>", Direction::Deconstruct));
+    assert!(composable("Box<Reading>", Direction::Construct));
+
+    // A `Box` reached through a shared borrow is not ours to read out of.
+    assert!(!composable("&Box<Reading>", Direction::Deconstruct));
+
+    // `Cow` has no build operation, so it cannot be put back.
+    assert!(!composable("Cow<'_, Reading>", Direction::Construct));
+}
