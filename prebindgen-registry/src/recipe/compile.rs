@@ -35,7 +35,7 @@ use super::{
 };
 use crate::{
     flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef},
-    Emit,
+    Emit, FragmentId,
 };
 
 /// What a fragment produces, which is the only thing the registry reads out of
@@ -331,7 +331,7 @@ type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>
 /// and so cannot keep one [`Compiler`], but the fragments it built borrow
 /// nothing and outlive any of them.
 pub struct Compiled<F> {
-    fragments: HashMap<FragmentKey, Rc<F>>,
+    fragments: HashMap<FragmentId, Rc<F>>,
     /// Which row answered when a crossing was compiled **as a whole**, rather
     /// than as one part of a container. Recorded by [`Compiler::crossing`],
     /// which is the only entry point that consults the crossing's default —
@@ -339,11 +339,6 @@ pub struct Compiled<F> {
     /// choosing between the recipes a crossing happens to have.
     defaults: HashMap<(TypeKey, Direction), RecipeKey>,
 }
-
-/// What a fragment is memoised under: the type **as the site spelled it**, the
-/// row key. The spelling remains separate because one normalized row can serve
-/// `T`, `&T` and `Box<T>`, whose generated Rust differs.
-type FragmentKey = (TypeKey, RecipeKey);
 
 impl<F> Default for Compiled<F> {
     fn default() -> Self {
@@ -406,14 +401,18 @@ impl<F> Compiled<F> {
     pub fn record(&mut self, recipe: RecipeKey, fragment: F) {
         let ty = recipe.crossing().ty.clone();
         let direction = recipe.crossing().direction;
-        self.fragments
-            .insert((ty.clone(), recipe.clone()), std::rc::Rc::new(fragment));
+        self.fragments.insert(
+            FragmentId::new(ty.clone(), recipe.clone()),
+            std::rc::Rc::new(fragment),
+        );
         self.defaults.insert((ty, direction), recipe);
     }
 
     /// The fragment for one spelled type and one row key.
     pub fn recipe_fragment(&self, ty: &TypeKey, recipe: &RecipeKey) -> Option<Rc<F>> {
-        self.fragments.get(&(ty.clone(), recipe.clone())).cloned()
+        self.fragments
+            .get(&FragmentId::new(ty.clone(), recipe.clone()))
+            .cloned()
     }
 
     /// Every fragment this compilation built, in a deterministic order.
@@ -424,12 +423,12 @@ impl<F> Compiled<F> {
     /// crossing key and then by recipe name, so a file written from this is
     /// stable across runs.
     pub fn fragments(&self) -> Vec<&F> {
-        let mut keyed: Vec<(&FragmentKey, &Rc<F>)> = self.fragments.iter().collect();
+        let mut keyed: Vec<(&FragmentId, &Rc<F>)> = self.fragments.iter().collect();
         keyed.sort_by(|a, b| {
-            (a.0 .0.as_str(), a.0 .1.crossing().direction, a.0 .1.name()).cmp(&(
-                b.0 .0.as_str(),
-                b.0 .1.crossing().direction,
-                b.0 .1.name(),
+            (a.0.spelling(), a.0.direction(), a.0.recipe().name()).cmp(&(
+                b.0.spelling(),
+                b.0.direction(),
+                b.0.recipe().name(),
             ))
         });
         keyed.into_iter().map(|(_, f)| &**f).collect()
@@ -579,7 +578,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         debug_assert_eq!(recipe.crossing(), &crossing.key());
         // The row has global identity, while the fragment also needs the spelling:
         // one row can serve `T`, `&T` and `Box<T>`, whose Rust differs.
-        let key = (crossing.spelled().key(), recipe.clone());
+        let key = FragmentId::new(crossing.spelled().key(), recipe.clone());
         if let Some(built) = self.compiled.fragments.get(&key) {
             return Ok(built.clone());
         }
