@@ -440,6 +440,23 @@ pub(crate) fn __cbg_out_bool(v: bool) -> bool {
     v
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+#[inline(always)]
+pub(crate) fn __cbg_out_chain_vec_Payload(
+    v: ::std::vec::Vec<perftest_flat::Payload>,
+) -> ::std::vec::Vec<payload_t> {
+    {
+        let __sequence_source = v;
+        let mut __sequence_output: ::std::vec::Vec<payload_t> = ::std::vec::Vec::with_capacity(
+            (__sequence_source).len(),
+        );
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = __cbg_out_Payload(__sequence_element);
+            __sequence_output.push(__sequence_part);
+        }
+        __sequence_output
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_f64(v: f64) -> f64 {
     v
 }
@@ -619,10 +636,7 @@ pub unsafe extern "C" fn storage_get_vec(
     match __v {
         ::core::option::Option::Some(__x) => {
             __ret = true;
-            let __arr: ::std::vec::Vec<payload_t> = __x
-                .into_iter()
-                .map(__cbg_out_Payload)
-                .collect();
+            let __arr: ::std::vec::Vec<payload_t> = __cbg_out_chain_vec_Payload(__x);
             let (__p, __n) = __cbg_alloc_array(__arr);
             *out = __p;
             *out_len = __n;

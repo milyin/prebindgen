@@ -18,6 +18,7 @@ use prebindgen_registry::{
 use super::*;
 use crate::chain::{
     CCall, CFunction, ChoicePlan, OptionalPlan, OptionalRepr, ProductField, ProductPlan,
+    SequencePlan,
 };
 
 /// The C adapter's answer for one crossing.
@@ -317,9 +318,35 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         _cx: &mut Cx<'_>,
         at: At<'_>,
         _elements: Mode,
-        _inner: &CFrag,
+        inner: &CFrag,
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
+        if at.crossing.direction() == Direction::Deconstruct {
+            if let TypeKind::Vec(element) = at.crossing.value().kind() {
+                if !marker_destination(&inner.destination) {
+                    let function = CFunction::sequence(SequencePlan {
+                        ident: format_ident!("__cbg_out_chain_vec_{}", sanitize(&element.key())),
+                        source: ty.clone(),
+                        element: (**element).clone(),
+                        source_module: self.gen.source_module.clone(),
+                        child_wire: inner.destination.clone(),
+                        child: inner.function.call().clone(),
+                    });
+                    return Ok(CFrag {
+                        destination: syn::parse_quote!(()),
+                        function,
+                        niches: Niches::empty(),
+                        subs: vec![element.key()],
+                        arm: None,
+                        yields: Yield {
+                            ty: at.crossing.value().stripped_key(),
+                            mode: at.crossing.mode(),
+                            validity: Validity::SelfSufficient,
+                        },
+                    });
+                }
+            }
+        }
         let conv = match at.crossing.direction() {
             // A `&[E]` is the only run C builds a Rust value out of, and it does
             // it zero-copy from the caller's own block.

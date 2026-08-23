@@ -595,10 +595,7 @@ pub(crate) unsafe fn __cbg_in_closure_history_batch_t(
         if let ::core::option::Option::Some(__f) = __call {
             let mut __w0_0 = ::core::mem::MaybeUninit::<*mut f64>::zeroed();
             let mut __w0_1 = ::core::mem::MaybeUninit::<usize>::zeroed();
-            let __arr: ::std::vec::Vec<f64> = __a0
-                .into_iter()
-                .map(__cbg_out_f64)
-                .collect();
+            let __arr: ::std::vec::Vec<f64> = __cbg_out_chain_vec_f64(__a0);
             let (__p, __n) = __cbg_alloc_array(__arr);
             *__w0_0.as_mut_ptr() = __p;
             *__w0_1.as_mut_ptr() = __n;
@@ -846,6 +843,21 @@ pub(crate) fn __cbg_out_bool_field(v: bool) -> ::core::mem::MaybeUninit<bool> {
     ::core::mem::MaybeUninit::new(v)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+#[inline(always)]
+pub(crate) fn __cbg_out_chain_vec_f64(v: ::std::vec::Vec<f64>) -> ::std::vec::Vec<f64> {
+    {
+        let __sequence_source = v;
+        let mut __sequence_output: ::std::vec::Vec<f64> = ::std::vec::Vec::with_capacity(
+            (__sequence_source).len(),
+        );
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = __cbg_out_f64(__sequence_element);
+            __sequence_output.push(__sequence_part);
+        }
+        __sequence_output
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_f64(v: f64) -> f64 {
     v
 }
@@ -863,8 +875,6 @@ pub(crate) fn __cbg_out_unit(v: ()) {}
 pub(crate) fn __cbg_outmark_option_Grade() {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __cbg_outmark_option_f64() {}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) fn __cbg_outmark_vec_f64() {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __cbg_result_Result___Calculator___Error__() {}
 #[allow(non_snake_case, dead_code, unused)]
@@ -1021,7 +1031,7 @@ pub unsafe extern "C" fn calculator_get_history(
     };
     let __v = example_flat::calculator_get_history(c);
     let __ret: *mut f64;
-    let __arr: ::std::vec::Vec<f64> = __v.into_iter().map(__cbg_out_f64).collect();
+    let __arr: ::std::vec::Vec<f64> = __cbg_out_chain_vec_f64(__v);
     let (__p, __n) = __cbg_alloc_array(__arr);
     __ret = __p;
     *len = __n;

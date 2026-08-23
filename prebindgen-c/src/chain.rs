@@ -57,6 +57,7 @@ enum CBody {
     Complete(syn::ItemFn),
     Product(ProductPlan),
     Optional(OptionalPlan),
+    Sequence(SequencePlan),
     Choice(ChoicePlan),
 }
 
@@ -93,6 +94,18 @@ impl CFunction {
         }
     }
 
+    pub(crate) fn sequence(plan: SequencePlan) -> Self {
+        let call = CCall(chain::Call::new(
+            plan.ident.clone(),
+            plan.child.fallible(),
+            plan.child.unsafe_(),
+        ));
+        Self {
+            call,
+            body: CBody::Sequence(plan),
+        }
+    }
+
     pub(crate) fn choice(plan: ChoicePlan) -> Self {
         let fallible = plan.direction == Direction::Construct
             || plan
@@ -122,6 +135,7 @@ impl RustFunction for CFunction {
             CBody::Complete(function) => function.clone(),
             CBody::Product(plan) => plan.render(emit),
             CBody::Choice(plan) => plan.render(emit),
+            CBody::Sequence(plan) => plan.render(emit),
             CBody::Optional(plan) => plan.render(emit),
         }
     }
@@ -328,6 +342,100 @@ impl OptionalPlan {
             syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
                 pub(crate) unsafe fn #name #lifetime(v: #intermediate) -> #source {
+                    #body
+                }
+            )
+        }
+    }
+}
+
+/// A Vec of one child wire for one registry-owned Sequence loop.
+#[derive(Clone)]
+struct CSequenceBridge {
+    child: syn::Type,
+}
+
+impl chain::SequenceBridge for CSequenceBridge {
+    fn intermediate(&self) -> syn::Type {
+        let child = &self.child;
+        syn::parse_quote!(::std::vec::Vec<#child>)
+    }
+
+    fn begin(&self, _value: TokenStream) -> TokenStream {
+        unreachable!("C Sequence input is represented by the specialized slice path")
+    }
+
+    fn next(&self) -> TokenStream {
+        unreachable!("C Sequence input is represented by the specialized slice path")
+    }
+
+    fn begin_output(&self, source: TokenStream) -> TokenStream {
+        let child = &self.child;
+        quote!(
+            let mut __sequence_output: ::std::vec::Vec<#child> =
+                ::std::vec::Vec::with_capacity((#source).len());
+        )
+    }
+
+    fn push(&self, value: TokenStream) -> TokenStream {
+        quote!(__sequence_output.push(#value);)
+    }
+
+    fn finish(&self) -> TokenStream {
+        quote!(__sequence_output)
+    }
+
+    fn fallible(&self) -> bool {
+        false
+    }
+}
+
+/// One C Vec-output converter composed by the registry.
+#[derive(Clone)]
+pub(crate) struct SequencePlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) element: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) child_wire: syn::Type,
+    pub(crate) child: CCall,
+}
+
+impl SequencePlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let composed = chain::Sequence {
+            source: self.source.clone(),
+            element: self.element.clone(),
+            direction: Direction::Deconstruct,
+            source_policy: CSource {
+                module: self.source_module.clone(),
+            },
+            bridge: CSequenceBridge {
+                child: self.child_wire.clone(),
+            },
+            child: self.child.clone(),
+        };
+        let rendered = composed.render(emit);
+        let name = &self.ident;
+        let source = &rendered.source;
+        let intermediate = &rendered.intermediate;
+        let body = &rendered.body;
+        let unsafe_ = self.child.unsafe_().then(|| quote!(unsafe));
+        if rendered.fallible {
+            syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                #[inline(always)]
+                pub(crate) #unsafe_ fn #name(v: #source)
+                    -> ::core::result::Result<#intermediate, ::std::string::String>
+                {
+                    ::core::result::Result::Ok(#body)
+                }
+            )
+        } else {
+            syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                #[inline(always)]
+                pub(crate) #unsafe_ fn #name(v: #source) -> #intermediate {
                     #body
                 }
             )

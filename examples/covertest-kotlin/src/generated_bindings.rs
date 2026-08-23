@@ -2116,50 +2116,6 @@ pub(crate) unsafe fn JObject_to_Box_Payload_0d2d19da<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn JObject_to_Box_Vec_Payload_ca25c6a1<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Box<Vec<perftest_flat::Payload>>, __JniErr> {
-    Ok({
-        let __list = jni::objects::JList::from_env(env, v)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        let mut __it = __list
-            .iter(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __out: Vec<perftest_flat::Payload> = Vec::new();
-        while let Some(__obj) = __it
-            .next(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-next: {}", e)))?
-        {
-            let __elem_wire: jni::objects::JObject = __obj.into();
-            let __elem: perftest_flat::Payload = JObject_to_Payload_98f64326(
-                env,
-                &__elem_wire,
-            )?;
-            __out.push(__elem);
-        }
-        ::std::boxed::Box::new(__out)
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn JObject_to_CacheConfig_db89a97c<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -3897,83 +3853,49 @@ pub(crate) unsafe fn JObject_to_Unsigned_7e3cc618<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn JObject_to_Vec_Box_Payload_ae68babe<'env, 'v>(
+pub(crate) unsafe fn JObject_to_Vec_Label_3fdf860d<'env, 'a>(
     env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Vec<Box<perftest_flat::Payload>>, __JniErr> {
-    Ok({
-        let __list = jni::objects::JList::from_env(env, v)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        let mut __it = __list
-            .iter(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __out: Vec<Box<perftest_flat::Payload>> = Vec::new();
-        while let Some(__obj) = __it
-            .next(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-next: {}", e)))?
-        {
-            let __elem_wire: jni::objects::JObject = __obj.into();
-            let __elem: Box<perftest_flat::Payload> = JObject_to_Box_Payload_0d2d19da(
-                env,
-                &__elem_wire,
-            )?;
-            __out.push(__elem);
-        }
-        __out
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn JObject_to_Vec_Label_3fdf860d<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
+    v: &jni::objects::JObject<'a>,
 ) -> ::core::result::Result<Vec<perftest_flat::Label>, __JniErr> {
-    Ok({
-        let __list = jni::objects::JList::from_env(env, v)
+    ::core::result::Result::Ok({
+        let __sequence_list = jni::objects::JList::from_env(env, v)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        let mut __it = __list
+        let mut __sequence_iter = __sequence_list
             .iter(env)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __out: Vec<perftest_flat::Label> = Vec::new();
-        while let Some(__obj) = __it
+        let mut __sequence_values: ::std::vec::Vec<perftest_flat::Label> = ::std::vec::Vec::new();
+        while let ::core::option::Option::Some(__sequence_part) = match __sequence_iter
             .next(env)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-next: {}", e)))?
         {
-            let __elem_wire: jni::objects::JString = __obj.into();
-            let __elem: perftest_flat::Label = {
-                let __inner_s0 = JString_to_String_c7f3ca43(env, &__elem_wire)?;
-                let __inner_s1 = String_to_Label_c1a79668(env, __inner_s0)
-                    .map_err(|__e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(__e.to_string()))?;
-                __inner_s1
-            };
-            __out.push(__elem);
+            ::core::option::Option::Some(__sequence_object) => {
+                let __sequence_part: jni::objects::JString = __sequence_object.into();
+                ::core::option::Option::Some(__sequence_part)
+            }
+            ::core::option::Option::None => ::core::option::Option::None,
+        } {
+            __sequence_values
+                .push(
+                    {
+                        let __chain_s0 = JString_to_String_c7f3ca43(
+                            env,
+                            &(__sequence_part),
+                        )?;
+                        let __chain_s1 = String_to_Label_c1a79668(env, __chain_s0)
+                            .map_err(|__e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(__e.to_string()))?;
+                        ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
+                    }?,
+                );
         }
-        __out
+        __sequence_values
     })
 }
 #[allow(
@@ -4074,76 +3996,37 @@ pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn JObject_to_Vec_Vec_Option_u64_342a76c6<'env, 'v>(
+pub(crate) unsafe fn JObject_to_Vec_Vec_u8_43404875<'env, 'a>(
     env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Vec<Vec<Option<u64>>>, __JniErr> {
-    Ok({
-        let __list = jni::objects::JList::from_env(env, v)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        let mut __it = __list
-            .iter(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __out: Vec<Vec<Option<u64>>> = Vec::new();
-        while let Some(__obj) = __it
-            .next(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-next: {}", e)))?
-        {
-            let __elem_wire: jni::objects::JObject = __obj.into();
-            let __elem: Vec<Option<u64>> = JObject_to_Vec_Option_u64_a34190e7(
-                env,
-                &__elem_wire,
-            )?;
-            __out.push(__elem);
-        }
-        __out
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn JObject_to_Vec_Vec_u8_43404875<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
+    v: &jni::objects::JObject<'a>,
 ) -> ::core::result::Result<Vec<Vec<u8>>, __JniErr> {
-    Ok({
-        let __list = jni::objects::JList::from_env(env, v)
+    ::core::result::Result::Ok({
+        let __sequence_list = jni::objects::JList::from_env(env, v)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        let mut __it = __list
+        let mut __sequence_iter = __sequence_list
             .iter(env)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __out: Vec<Vec<u8>> = Vec::new();
-        while let Some(__obj) = __it
+        let mut __sequence_values: ::std::vec::Vec<Vec<u8>> = ::std::vec::Vec::new();
+        while let ::core::option::Option::Some(__sequence_part) = match __sequence_iter
             .next(env)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-next: {}", e)))?
         {
-            let __elem_wire: jni::objects::JByteArray = __obj.into();
-            let __elem: Vec<u8> = JByteArray_to_Vec_u8_7936d5de(env, &__elem_wire)?;
-            __out.push(__elem);
+            ::core::option::Option::Some(__sequence_object) => {
+                let __sequence_part: jni::objects::JByteArray = __sequence_object.into();
+                ::core::option::Option::Some(__sequence_part)
+            }
+            ::core::option::Option::None => ::core::option::Option::None,
+        } {
+            __sequence_values
+                .push(JByteArray_to_Vec_u8_7936d5de(env, &(__sequence_part))?);
         }
-        __out
+        __sequence_values
     })
 }
 #[allow(
@@ -11034,33 +10917,33 @@ pub(crate) unsafe fn Vec_Label_to_JObject_3fdf860d<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<perftest_flat::Label>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Vec<perftest_flat::Label> = v;
-        let __list_obj = env
+    ::core::result::Result::Ok({
+        let __sequence_source = v;
+        let __sequence_output = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
+        let __sequence_list = jni::objects::JList::from_env(env, &__sequence_output)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        for __elem in v.into_iter() {
-            let __elem_wire = {
-                let __inner_s0 = Label_to_String_63dec766(env, __elem)
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = {
+                let __chain_s0 = Label_to_String_63dec766(env, __sequence_element)
                     .map_err(|__e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(__e.to_string()))?;
-                String_to_JString_c7f3ca43(env, __inner_s0)?
-            };
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
+                String_to_JString_c7f3ca43(env, __chain_s0)
+            }?;
+            let __sequence_object: jni::objects::JObject = __sequence_part.into();
+            __sequence_list
+                .add(env, &__sequence_object)
                 .map_err(|e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(format!("Vec<_>: list-add: {}", e)))?;
         }
-        __list_obj
+        __sequence_output
     })
 }
 #[allow(
@@ -11080,27 +10963,30 @@ pub(crate) unsafe fn Vec_Option_Ticks_to_JObject_2f4b03da<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<Option<perftest_flat::Ticks>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Vec<Option<perftest_flat::Ticks>> = v;
-        let __list_obj = env
+    ::core::result::Result::Ok({
+        let __sequence_source = v;
+        let __sequence_output = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
+        let __sequence_list = jni::objects::JList::from_env(env, &__sequence_output)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        for __elem in v.into_iter() {
-            let __elem_wire = Option_Ticks_to_JObject_95efad57(env, __elem)?;
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = Option_Ticks_to_JObject_95efad57(
+                env,
+                __sequence_element,
+            )?;
+            let __sequence_object: jni::objects::JObject = __sequence_part.into();
+            __sequence_list
+                .add(env, &__sequence_object)
                 .map_err(|e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(format!("Vec<_>: list-add: {}", e)))?;
         }
-        __list_obj
+        __sequence_output
     })
 }
 #[allow(
@@ -11120,147 +11006,30 @@ pub(crate) unsafe fn Vec_Option_u64_to_JObject_a34190e7<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<Option<u64>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Vec<Option<u64>> = v;
-        let __list_obj = env
+    ::core::result::Result::Ok({
+        let __sequence_source = v;
+        let __sequence_output = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
+        let __sequence_list = jni::objects::JList::from_env(env, &__sequence_output)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        for __elem in v.into_iter() {
-            let __elem_wire = Option_u64_to_JObject_32be16a2(env, __elem)?;
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = Option_u64_to_JObject_32be16a2(
+                env,
+                __sequence_element,
+            )?;
+            let __sequence_object: jni::objects::JObject = __sequence_part.into();
+            __sequence_list
+                .add(env, &__sequence_object)
                 .map_err(|e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(format!("Vec<_>: list-add: {}", e)))?;
         }
-        __list_obj
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Vec_Payload_to_JObject_8b7084d2<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Vec<perftest_flat::Payload>,
-) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Vec<perftest_flat::Payload> = v;
-        let __list_obj = env
-            .new_object("java/util/ArrayList", "()V", &[])
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        for __elem in v.into_iter() {
-            let __elem_wire = Payload_to_JObject_98f64326(env, __elem)?;
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Vec<_>: list-add: {}", e)))?;
-        }
-        __list_obj
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Vec_Stamp_to_JObject_8954d9be<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Vec<perftest_flat::Stamp>,
-) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Vec<perftest_flat::Stamp> = v;
-        let __list_obj = env
-            .new_object("java/util/ArrayList", "()V", &[])
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        for __elem in v.into_iter() {
-            let __elem_wire = Stamp_to_JObject_f6b1e942(env, __elem)?;
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Vec<_>: list-add: {}", e)))?;
-        }
-        __list_obj
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Vec_String_to_JObject_1e282499<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Vec<String>,
-) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Vec<String> = v;
-        let __list_obj = env
-            .new_object("java/util/ArrayList", "()V", &[])
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        for __elem in v.into_iter() {
-            let __elem_wire = String_to_JString_c7f3ca43(env, __elem)?;
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Vec<_>: list-add: {}", e)))?;
-        }
-        __list_obj
+        __sequence_output
     })
 }
 #[allow(
@@ -11280,27 +11049,30 @@ pub(crate) unsafe fn Vec_Vec_Option_u64_to_JObject_342a76c6<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<Vec<Option<u64>>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Vec<Vec<Option<u64>>> = v;
-        let __list_obj = env
+    ::core::result::Result::Ok({
+        let __sequence_source = v;
+        let __sequence_output = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
+        let __sequence_list = jni::objects::JList::from_env(env, &__sequence_output)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        for __elem in v.into_iter() {
-            let __elem_wire = Vec_Option_u64_to_JObject_a34190e7(env, __elem)?;
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = Vec_Option_u64_to_JObject_a34190e7(
+                env,
+                __sequence_element,
+            )?;
+            let __sequence_object: jni::objects::JObject = __sequence_part.into();
+            __sequence_list
+                .add(env, &__sequence_object)
                 .map_err(|e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(format!("Vec<_>: list-add: {}", e)))?;
         }
-        __list_obj
+        __sequence_output
     })
 }
 #[allow(
@@ -11320,27 +11092,30 @@ pub(crate) unsafe fn Vec_Vec_u8_to_JObject_43404875<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<Vec<u8>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let v: Vec<Vec<u8>> = v;
-        let __list_obj = env
+    ::core::result::Result::Ok({
+        let __sequence_source = v;
+        let __sequence_output = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
+        let __sequence_list = jni::objects::JList::from_env(env, &__sequence_output)
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        for __elem in v.into_iter() {
-            let __elem_wire = Vec_u8_to_JByteArray_7936d5de(env, __elem)?;
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = Vec_u8_to_JByteArray_7936d5de(
+                env,
+                __sequence_element,
+            )?;
+            let __sequence_object: jni::objects::JObject = __sequence_part.into();
+            __sequence_list
+                .add(env, &__sequence_object)
                 .map_err(|e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(format!("Vec<_>: list-add: {}", e)))?;
         }
-        __list_obj
+        __sequence_output
     })
 }
 #[allow(
