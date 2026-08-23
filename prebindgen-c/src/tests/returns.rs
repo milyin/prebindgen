@@ -204,9 +204,17 @@ fn vec_string_returns_ptr_and_len() {
     assert!(compact.contains("->*mut*mut::core::ffi::c_char"), "{src}");
     assert!(compact.contains("len:*mutusize"), "{src}");
     assert!(!compact.contains("e:*mut"), "{src}");
-    // Built from the element converter via the malloc'd array helper.
+    // The registry-owned Sequence loop invokes the element converter; the ABI
+    // wrapper only transfers its one Vec intermediate to the array helper.
+    assert!(compact.contains("fn__cbg_out_chain_vec_String("), "{src}");
     assert!(
-        compact.contains(".map(__cbg_out_String).collect()"),
+        compact.contains("__cbg_out_String(__sequence_element)"),
+        "{src}"
+    );
+    assert!(
+        compact.contains(
+            "let__arr:::std::vec::Vec<*mut::core::ffi::c_char>=__cbg_out_chain_vec_String("
+        ),
         "{src}"
     );
     assert!(
@@ -358,7 +366,11 @@ fn vec_of_borrows_calls_the_unsafe_element_converter() {
 
     assert!(compact.contains("->*mut*constz_handle"), "{src}");
     assert!(
-        compact.contains(".map(|__value|__cbg_out_ref_ZHandle(__value))"),
+        compact.contains("unsafefn__cbg_out_chain_vec____static_ZHandle("),
+        "{src}"
+    );
+    assert!(
+        compact.contains("__cbg_out_ref_ZHandle(__sequence_element)"),
         "{src}"
     );
 }

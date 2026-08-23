@@ -849,32 +849,23 @@ impl CbindgenBuilder {
         // same value and must stop at the same places (#428 review).
         if !self.has_own_wire(ty) {
             if let TypeKind::Vec(elem) = ty.kind() {
-                let entry = self.out_frag(elem).expect("Vec element converter");
-                let elem_conv = entry.function.call().ident().clone();
-                let elem_map = map_arg(&elem_conv, entry.function.call().unsafe_());
-                let elem_wire = entry.destination.clone();
+                let element = self.out_frag(elem).expect("Vec element converter");
+                let elem_wire = element.destination.clone();
+                let sequence = self.out_frag(ty).expect("Vec Sequence converter");
+                let sequence_conv = sequence.function.call().ident();
+                let converted = if sequence.function.call().fallible() {
+                    route_result(quote!(#sequence_conv(#val)), route)
+                } else {
+                    quote!(#sequence_conv(#val))
+                };
                 let t_ptr = &targets[0];
                 let t_len = &targets[1];
-                if entry.function.call().fallible() {
-                    let converted = route_result(quote!(#elem_conv(__value)), route);
-                    return quote!(
-                        let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
-                        for __value in #val {
-                            __arr.push(#converted);
-                        }
-                        let (__p, __n) = __cbg_alloc_array(__arr);
-                        #t_ptr = __p;
-                        #t_len = __n;
-                    );
-                } else {
-                    return quote!(
-                        let __arr: ::std::vec::Vec<#elem_wire> =
-                            #val.into_iter().map(#elem_map).collect();
-                        let (__p, __n) = __cbg_alloc_array(__arr);
-                        #t_ptr = __p;
-                        #t_len = __n;
-                    );
-                }
+                return quote!(
+                    let __arr: ::std::vec::Vec<#elem_wire> = #converted;
+                    let (__p, __n) = __cbg_alloc_array(__arr);
+                    #t_ptr = __p;
+                    #t_len = __n;
+                );
             }
             if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
                 let entry = self.out_frag(elem).expect("slice element converter");
