@@ -843,6 +843,7 @@ pub(crate) fn __cbg_out_bool_field(v: bool) -> ::core::mem::MaybeUninit<bool> {
     ::core::mem::MaybeUninit::new(v)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+#[inline(always)]
 pub(crate) fn __cbg_out_chain_vec_f64(v: ::std::vec::Vec<f64>) -> ::std::vec::Vec<f64> {
     {
         let __sequence_source = v;
