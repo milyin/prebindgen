@@ -351,7 +351,7 @@ fn duplicate_and_cyclic_artifact_identities_are_rejected() {
 }
 
 #[test]
-fn staged_conversion_is_one_ordered_fragment_chain() {
+fn atomic_codec_and_staged_chain_are_distinct_operations() {
     let model = model();
     let leaf = fragment_id(&model, "Leaf", Direction::Construct);
     let fragment = FragmentPlan::new(
@@ -359,7 +359,7 @@ fn staged_conversion_is_one_ordered_fragment_chain() {
         ty(&model, "Leaf"),
         "jint",
         ConverterPlan::with_chain(
-            ShapePlan::Atomic("jni scalar"),
+            ShapePlan::Atomic("read jint wire"),
             ConversionChain::Steps(vec![
                 ConverterStep::new(
                     ChainValue::Intermediate("jint"),
@@ -388,8 +388,14 @@ fn staged_conversion_is_one_ordered_fragment_chain() {
         .site(site(&model, &leaf, Some("throw"), 1));
     let plan = builder.build().unwrap();
 
-    let chain = plan.fragment(&leaf).unwrap().converter().chain();
-    assert_eq!(plan.fragment(&leaf).unwrap().intermediate(), &"jint");
+    let fragment = plan.fragment(&leaf).unwrap();
+    let converter = fragment.converter();
+    let ShapePlan::Atomic(codec) = converter.shape() else {
+        panic!("staged leaf must retain its terminal wire codec");
+    };
+    assert_eq!(*codec, "read jint wire");
+    assert_eq!(fragment.intermediate(), &"jint");
+    let chain = converter.chain();
     assert_eq!(chain.steps().len(), 2);
     assert_eq!(*chain.steps()[0].operation(), "normalize jint");
     assert_eq!(*chain.steps()[1].operation(), "construct Percent");

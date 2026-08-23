@@ -387,9 +387,11 @@ impl<R: Representation> ConverterStep<R> {
 
 /// Directional steps between the source value and the selected shape.
 ///
-/// Steps are stored in execution order. A construct fragment starts at the
-/// fragment's intermediate and ends at [`ChainValue::Source`]; a deconstruct
-/// fragment starts at the source and ends at the fragment's intermediate.
+/// [`ShapePlan`] owns the wire-to-intermediate boundary. An atomic shape
+/// retains its terminal codec even when that operation is an identity. This
+/// chain never converts wire values: its steps are stored in execution order
+/// from the fragment's shape-adjacent intermediate to [`ChainValue::Source`]
+/// when constructing, and in the opposite direction when deconstructing.
 /// [`Self::Direct`] means the shape itself consumes or produces the source value.
 pub enum ConversionChain<R: Representation> {
     /// No adapter conversion lies between the shape and source value.
@@ -410,7 +412,10 @@ impl<R: Representation> ConversionChain<R> {
 
 /// The registry-composed converter operation for one fragment.
 pub enum ShapePlan<R: Representation> {
-    /// Adapter terminal conversion; the recursive shape walk ends here.
+    /// Convert one wire leaf to or from the fragment's intermediate.
+    ///
+    /// The codec remains present when the fragment has a staged
+    /// [`ConversionChain`]; it may be an identity operation at this boundary.
     Atomic(R::TerminalCodec),
     /// Pack or unpack all fixed positions.
     Product {
