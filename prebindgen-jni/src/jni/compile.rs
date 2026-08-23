@@ -1530,7 +1530,15 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 .decls
                 .input_terminal(ty, self.registry, emit)
                 .or_else(|| self.borrow(ty, emit, true))
-                .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit)),
+                .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit))
+                .or_else(|| {
+                    let TypeKind::Callback { args } = ty.unwrapped().kind() else {
+                        return None;
+                    };
+                    self.decls
+                        .dispatch_fn_input(ty, args, self.registry, None, emit)
+                        .map(|(conv, _)| conv)
+                }),
             Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)

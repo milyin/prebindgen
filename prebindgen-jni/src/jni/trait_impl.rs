@@ -1449,22 +1449,23 @@ impl JniGenBuilder {
         // built out of the conversions for its inners, which are compiled
         // first. That is the same order the converter table was filled in, so
         // a fragment is there exactly when a table entry would have been.
-        // Callback layouts that recipes cannot express (currently sums and other
-        // irregular arms) fall back to the legacy whole-callback emitter.
-        // Registry-composable scalar and sequence products skip this list.
+        // Callback layouts whose arguments have no composable deconstructor
+        // still use the shared Invoke composer, but enter it without child
+        // fragments and retain the resulting complete function here.
         let mut uncompiled: Vec<syn::ItemFn> = Vec::new();
         // Compositions that refused. See `compile_crossing`: these are adapter
         // invariants, reported together once the walk is done.
         let mut refusals: Vec<String> = Vec::new();
         let registry = declared
-            .convert_with(|crossing, built, _emit| {
+            .convert_with(|crossing, built, emit| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     decls.recipe_table(),
                     decls.site_bindings(),
                     decls.compiled.borrow().clone(),
                 );
-                let conv = decls.compile_crossing(&mut compiler, crossing, built, &mut refusals);
+                let conv =
+                    decls.compile_crossing(&mut compiler, crossing, built, emit, &mut refusals);
                 *decls.compiled.borrow_mut() = compiler.finish();
                 let (dir, key) = crossing;
                 let compiled_by_recipe = decls.compiled.borrow().fragment(key, *dir).is_some();
@@ -1474,9 +1475,9 @@ impl JniGenBuilder {
                     compiled_by_recipe,
                 ) {
                     uncompiled.push(c.function.clone());
-                    // Index a legacy fallback with the same lookup used for
-                    // recipe-built callbacks, while keeping its complete
-                    // function in `uncompiled`.
+                    // Index the whole-value compatibility plan with the same
+                    // lookup used for recipe-built callbacks, while keeping
+                    // its complete function in `uncompiled`.
                     decls.compiled.borrow_mut().record(
                         prebindgen_registry::recipe::CrossingKey {
                             ty: key.clone(),
@@ -1640,6 +1641,7 @@ impl Declarations {
         >,
         crossing: &Crossing,
         built: &'v R,
+        emit: &prebindgen_registry::Emit,
         refusals: &mut Vec<String>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
@@ -1654,7 +1656,22 @@ impl Declarations {
             site: None,
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(reading, direction);
-        let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
+        let fragment = match compiler.crossing(&mut adapter, &crossing) {
+            Ok(fragment) => fragment,
+            Err(prebindgen_registry::recipe::CompileError::Adapter(
+                crate::jni::compile::JErr::Refused(_),
+            )) => {
+                let prebindgen_registry::flat::TypeKind::Callback { args } =
+                    crossing.spelled().unwrapped().kind()
+                else {
+                    return None;
+                };
+                return self
+                    .dispatch_fn_input(crossing.spelled(), args, built, None, emit)
+                    .map(|(conv, _)| conv);
+            }
+            Err(_) => return None,
+        };
         // A `data_class` also states a recipe that says what it is made of.
         // Compiling that named recipe equips whole-value input, output and
         // callback paths with the same registry-owned Product descriptor.

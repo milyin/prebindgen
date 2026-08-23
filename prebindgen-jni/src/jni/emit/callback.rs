@@ -55,7 +55,7 @@ impl JInvokePlan {
                 env: &mut jni::JNIEnv<'env>,
                 v: &jni::objects::JObject<'v>,
             ) -> ::core::result::Result<#source, __JniErr> {
-                ::core::result::Result::Ok(#body)
+                Ok(#body)
             }
         )
     }
