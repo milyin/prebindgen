@@ -14,7 +14,7 @@ use std::{
 
 use crate::{
     flat::{TypeKey, TypeRef},
-    recipe::{Bound, Crossing, CrossingKey, Direction, Mode, RecipeKey, Site, Yield},
+    recipe::{Bound, Crossing, Direction, Mode, RecipeKey, Site, Yield},
 };
 
 #[cfg(test)]
@@ -28,21 +28,8 @@ pub struct FragmentId {
 }
 
 impl FragmentId {
-    /// Identify the fragment for `crossing` using `recipe`.
-    pub fn new(crossing: &Crossing, recipe: RecipeKey) -> Result<Self, IdentityError> {
-        if recipe.crossing() != &crossing.key() {
-            return Err(IdentityError::RecipeCrossing {
-                recipe,
-                crossing: crossing.key(),
-            });
-        }
-        Ok(Self {
-            spelling: crossing.spelled().key(),
-            recipe,
-        })
-    }
-
-    pub(crate) fn from_parts(spelling: TypeKey, recipe: RecipeKey) -> Self {
+    /// Identify the fragment for an exact source spelling and recipe row.
+    pub fn new(spelling: TypeKey, recipe: RecipeKey) -> Self {
         Self { spelling, recipe }
     }
 
@@ -145,13 +132,6 @@ impl fmt::Display for ArtifactId {
 /// Failure to construct a semantic identity.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IdentityError {
-    /// A recipe row was paired with a different crossing.
-    RecipeCrossing {
-        /// The row supplied by the caller.
-        recipe: RecipeKey,
-        /// The crossing the fragment was requested for.
-        crossing: CrossingKey,
-    },
     /// An artifact identity must have both components.
     EmptyArtifact {
         /// The invalid kind.
@@ -164,9 +144,6 @@ pub enum IdentityError {
 impl fmt::Display for IdentityError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::RecipeCrossing { recipe, crossing } => {
-                write!(f, "{recipe} does not answer crossing {crossing}")
-            }
             Self::EmptyArtifact { kind, name } => write!(
                 f,
                 "artifact identity needs a non-empty kind and name (got `{kind}` / `{name}`)"
@@ -182,8 +159,10 @@ impl std::error::Error for IdentityError {}
 /// Associated values describe semantics, never rendered source items. The
 /// registry compares niche identities and treats every other payload as opaque.
 pub trait Representation {
-    /// The single private Rust carrier assigned to a fragment.
-    type Intermediate;
+    /// A syntax-free identity for a private Rust carrier in a converter graph.
+    type Intermediate: Clone + Eq;
+    /// One adapter-declared conversion between two graph values.
+    type Step;
     /// Terminal conversion at an [`Atomic`](ShapePlan::Atomic) shape.
     type TerminalCodec;
     /// Packing or unpacking a fixed product.
@@ -255,13 +234,13 @@ impl<P> FixedArity<P> {
     }
 }
 
-/// Choice operation plus the exact arity of every arm.
-pub struct ChoiceBridge<P> {
+/// Choice bridge payload plus the exact arity of every arm.
+pub struct ChoiceArity<P> {
     arm_arities: Vec<usize>,
     payload: P,
 }
 
-impl<P> ChoiceBridge<P> {
+impl<P> ChoiceArity<P> {
     /// Declare one ordered arity per choice arm.
     pub fn new(arm_arities: Vec<usize>, payload: P) -> Self {
         Self {
@@ -340,6 +319,95 @@ pub enum Cleanup<C> {
     UnlessTransferred(C),
 }
 
+/// One endpoint in a fragment's directional conversion chain.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ChainValue<I> {
+    /// The source Rust value denoted by the fragment's opaque `TypeRef`.
+    Source,
+    /// An adapter-declared internal carrier, without source type syntax.
+    Intermediate(I),
+}
+
+/// One explicit adapter conversion between values in a fragment graph.
+///
+/// A step has no fragment identity of its own: it is an internal node of the
+/// selected fragment, which is how conversions such as
+/// `jint -> i32 -> Percent` remain one recipe answer.
+pub struct ConverterStep<R: Representation> {
+    from: ChainValue<R::Intermediate>,
+    into: ChainValue<R::Intermediate>,
+    operation: R::Step,
+    failure: Failure,
+    cleanup: Cleanup<R::Cleanup>,
+}
+
+impl<R: Representation> ConverterStep<R> {
+    /// Describe one directional conversion step.
+    pub fn new(
+        from: ChainValue<R::Intermediate>,
+        into: ChainValue<R::Intermediate>,
+        operation: R::Step,
+        failure: Failure,
+        cleanup: Cleanup<R::Cleanup>,
+    ) -> Self {
+        Self {
+            from,
+            into,
+            operation,
+            failure,
+            cleanup,
+        }
+    }
+
+    /// Value consumed by this step.
+    pub fn from(&self) -> &ChainValue<R::Intermediate> {
+        &self.from
+    }
+
+    /// Value produced by this step.
+    pub fn into(&self) -> &ChainValue<R::Intermediate> {
+        &self.into
+    }
+
+    /// Adapter-owned semantic operation.
+    pub fn operation(&self) -> &R::Step {
+        &self.operation
+    }
+
+    /// Whether this step can fail.
+    pub fn failure(&self) -> Failure {
+        self.failure
+    }
+
+    /// Cleanup attached to this step's failure and success edges.
+    pub fn cleanup(&self) -> &Cleanup<R::Cleanup> {
+        &self.cleanup
+    }
+}
+
+/// Directional steps between the source value and the selected shape.
+///
+/// Steps are stored in execution order. A construct fragment starts at the
+/// fragment's intermediate and ends at [`ChainValue::Source`]; a deconstruct
+/// fragment starts at the source and ends at the fragment's intermediate.
+/// [`Self::Direct`] means the shape itself consumes or produces the source value.
+pub enum ConversionChain<R: Representation> {
+    /// No adapter conversion lies between the shape and source value.
+    Direct,
+    /// One or more explicit internal conversions.
+    Steps(Vec<ConverterStep<R>>),
+}
+
+impl<R: Representation> ConversionChain<R> {
+    /// Explicit steps in execution order.
+    pub fn steps(&self) -> &[ConverterStep<R>] {
+        match self {
+            Self::Direct => &[],
+            Self::Steps(steps) => steps,
+        }
+    }
+}
+
 /// The registry-composed converter operation for one fragment.
 pub enum ShapePlan<R: Representation> {
     /// Adapter terminal conversion; the recursive shape walk ends here.
@@ -368,7 +436,7 @@ pub enum ShapePlan<R: Representation> {
     /// Tagged selection among ordered arms.
     Choice {
         /// Adapter representation operation and arm contracts.
-        bridge: ChoiceBridge<R::ChoiceBridge>,
+        bridge: ChoiceArity<R::ChoiceBridge>,
         /// Parts in every arm, in tag and then position order.
         arms: Vec<Vec<FragmentUse>>,
     },
@@ -404,6 +472,7 @@ impl<R: Representation> ShapePlan<R> {
 /// Complete syntax-free converter graph for one fragment.
 pub struct ConverterPlan<R: Representation> {
     shape: ShapePlan<R>,
+    chain: ConversionChain<R>,
     niches: NichePlan<R::Niche>,
     failure: Failure,
     cleanup: Cleanup<R::Cleanup>,
@@ -419,10 +488,34 @@ impl<R: Representation> ConverterPlan<R> {
     ) -> Self {
         Self {
             shape,
+            chain: ConversionChain::Direct,
             niches,
             failure,
             cleanup,
         }
+    }
+
+    /// Freeze a converter whose selected shape is joined to the source by
+    /// explicit adapter conversion steps.
+    pub fn with_chain(
+        shape: ShapePlan<R>,
+        chain: ConversionChain<R>,
+        niches: NichePlan<R::Niche>,
+        failure: Failure,
+        cleanup: Cleanup<R::Cleanup>,
+    ) -> Self {
+        Self {
+            shape,
+            chain,
+            niches,
+            failure,
+            cleanup,
+        }
+    }
+
+    /// Directional internal conversions between the shape and source value.
+    pub fn chain(&self) -> &ConversionChain<R> {
+        &self.chain
     }
 
     /// The selected shape and representation operation.
@@ -483,7 +576,7 @@ impl<R: Representation> FragmentPlan<R> {
         &self.source
     }
 
-    /// Adapter-selected single intermediate type.
+    /// Adapter-selected carrier adjacent to the shape.
     pub fn intermediate(&self) -> &R::Intermediate {
         &self.intermediate
     }
@@ -721,7 +814,7 @@ impl<R: Representation> GenerationPlanBuilder<R> {
                 ArtifactInput::Site { .. } => None,
             })
         }));
-        roots.sort_by_key(FragmentId::stable_key);
+        roots.sort_by_cached_key(FragmentId::stable_key);
         roots.dedup();
         let reachable = reachable_fragments(&self.fragments, roots);
         let fragment_order = fragment_order
@@ -731,7 +824,7 @@ impl<R: Representation> GenerationPlanBuilder<R> {
         self.fragments.retain(|id, _| reachable.contains(id));
 
         let mut site_order: Vec<_> = self.sites.keys().cloned().collect();
-        site_order.sort_by_key(SiteId::stable_key);
+        site_order.sort_by_cached_key(SiteId::stable_key);
         Ok(GenerationPlan {
             fragments: self.fragments,
             fragment_order,
@@ -775,6 +868,7 @@ impl<R: Representation> GenerationPlanBuilder<R> {
                 }
                 _ => {}
             }
+            validate_chain(&mut self.errors, fragment);
             let niches = fragment.converter().niches();
             if niches.consumed().len() < niches.discriminants() {
                 self.errors.push(PlanError::InsufficientNiches(id.clone()));
@@ -981,6 +1075,9 @@ pub enum PlanError {
     FragmentSpelling(FragmentId),
     FragmentCrossing(FragmentId),
     YieldType(FragmentId),
+    EmptyConversionChain(FragmentId),
+    BrokenConversionChain(FragmentId),
+    UnreportedStepFailure(FragmentId),
     Arity(FragmentId),
     InsufficientNiches(FragmentId),
     OverlappingNiches(FragmentId),
@@ -1040,6 +1137,19 @@ impl fmt::Display for PlanError {
             FragmentSpelling(id) => write!(f, "{id} stores a different source spelling"),
             FragmentCrossing(id) => write!(f, "{id} stores a source type outside its crossing"),
             YieldType(id) => write!(f, "{id} yields a type outside its crossing"),
+            EmptyConversionChain(id) => write!(f, "{id} declares an empty conversion chain"),
+            BrokenConversionChain(id) => {
+                write!(
+                    f,
+                    "{id} has a disconnected or misplaced conversion-chain endpoint"
+                )
+            }
+            UnreportedStepFailure(id) => {
+                write!(
+                    f,
+                    "{id} contains a fallible step but is declared infallible"
+                )
+            }
             Arity(id) => write!(f, "{id} operation arity does not match its children"),
             InsufficientNiches(id) => write!(f, "{id} has too few niches for its discriminants"),
             OverlappingNiches(id) => write!(f, "{id} consumes or exposes a niche more than once"),
@@ -1092,12 +1202,66 @@ fn validate_yield(errors: &mut Vec<PlanError>, at: ContractAt, got: &Yield, need
     }
 }
 
+fn validate_chain<R: Representation>(errors: &mut Vec<PlanError>, fragment: &FragmentPlan<R>) {
+    let id = fragment.id();
+    let converter = fragment.converter();
+    let ConversionChain::Steps(steps) = converter.chain() else {
+        return;
+    };
+    if steps.is_empty() {
+        errors.push(PlanError::EmptyConversionChain(id.clone()));
+        return;
+    }
+
+    let (start, end) = match id.direction() {
+        Direction::Construct => (
+            ChainValue::Intermediate(fragment.intermediate().clone()),
+            ChainValue::Source,
+        ),
+        Direction::Deconstruct => (
+            ChainValue::Source,
+            ChainValue::Intermediate(fragment.intermediate().clone()),
+        ),
+    };
+    let mut cursor = start;
+    let mut broken = false;
+    let mut unreported_failure = false;
+    for (index, step) in steps.iter().enumerate() {
+        if step.from() != &cursor {
+            broken = true;
+        }
+        if matches!(step.from(), ChainValue::Source)
+            && !(id.direction() == Direction::Deconstruct && index == 0)
+        {
+            broken = true;
+        }
+        if matches!(step.into(), ChainValue::Source)
+            && !(id.direction() == Direction::Construct && index + 1 == steps.len())
+        {
+            broken = true;
+        }
+        if step.failure() == Failure::Fallible && converter.failure() == Failure::Infallible {
+            unreported_failure = true;
+        }
+        cursor = step.into().clone();
+    }
+    if cursor != end {
+        broken = true;
+    }
+    if broken {
+        errors.push(PlanError::BrokenConversionChain(id.clone()));
+    }
+    if unreported_failure {
+        errors.push(PlanError::UnreportedStepFailure(id.clone()));
+    }
+}
+
 fn topo_fragments<R: Representation>(
     plans: &HashMap<FragmentId, FragmentPlan<R>>,
     errors: &mut Vec<PlanError>,
 ) -> Vec<FragmentId> {
     let mut roots: Vec<_> = plans.keys().cloned().collect();
-    roots.sort_by_key(FragmentId::stable_key);
+    roots.sort_by_cached_key(FragmentId::stable_key);
     let mut state = HashMap::new();
     let mut order = Vec::new();
     for root in roots {
@@ -1131,7 +1295,7 @@ fn visit_fragment<R: Representation>(
             .map(|usage| usage.fragment().clone())
             .filter(|child| plans.contains_key(child))
             .collect();
-        children.sort_by_key(FragmentId::stable_key);
+        children.sort_by_cached_key(FragmentId::stable_key);
         children.dedup();
         for child in children {
             visit_fragment(&child, plans, state, order, errors);

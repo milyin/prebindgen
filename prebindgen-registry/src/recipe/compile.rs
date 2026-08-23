@@ -402,7 +402,7 @@ impl<F> Compiled<F> {
         let ty = recipe.crossing().ty.clone();
         let direction = recipe.crossing().direction;
         self.fragments.insert(
-            FragmentId::from_parts(ty.clone(), recipe.clone()),
+            FragmentId::new(ty.clone(), recipe.clone()),
             std::rc::Rc::new(fragment),
         );
         self.defaults.insert((ty, direction), recipe);
@@ -411,7 +411,7 @@ impl<F> Compiled<F> {
     /// The fragment for one spelled type and one row key.
     pub fn recipe_fragment(&self, ty: &TypeKey, recipe: &RecipeKey) -> Option<Rc<F>> {
         self.fragments
-            .get(&FragmentId::from_parts(ty.clone(), recipe.clone()))
+            .get(&FragmentId::new(ty.clone(), recipe.clone()))
             .cloned()
     }
 
@@ -578,8 +578,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         debug_assert_eq!(recipe.crossing(), &crossing.key());
         // The row has global identity, while the fragment also needs the spelling:
         // one row can serve `T`, `&T` and `Box<T>`, whose Rust differs.
-        let key = FragmentId::new(crossing, recipe.clone())
-            .expect("compiler recipe always answers its crossing");
+        let key = FragmentId::new(crossing.spelled().key(), recipe.clone());
         if let Some(built) = self.compiled.fragments.get(&key) {
             return Ok(built.clone());
         }
