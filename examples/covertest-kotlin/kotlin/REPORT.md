@@ -4,6 +4,7 @@ Base package: `io.prebindgen.covertest`
 
 ## package `io.prebindgen.covertest`
 
+- `callback_holder_optional_emit` — `fun callbackHolderOptionalEmit(present: Boolean, f: CallbackHolderOptionalCallback, onError: JniErrorHandler<Unit>)`
 - `string_new` — `fun stringNew(s: String, onError: JniErrorHandler<String?>): String?`
 - `val COVER_BANNER: String` — binding expression
 - `val COVER_MAGIC` — `#[prebindgen]` const `COVER_MAGIC`
@@ -216,6 +217,7 @@ Base package: `io.prebindgen.covertest`
 - `Arrays`: data_class → `io.prebindgen.covertest.model.Arrays` (wire `jni :: objects :: JObject`)
 - `BlobValue`: data_class → `io.prebindgen.covertest.model.BlobValue` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `CacheConfig`: data_class → `io.prebindgen.covertest.model.CacheConfig` (wire `jni :: objects :: JObject`)
+- `CallbackHolder`: data_class → `io.prebindgen.covertest.CallbackHolder` (wire `jni :: objects :: JObject`)
 - `Dossier`: data_class → `io.prebindgen.covertest.Dossier` (wire `jni :: objects :: JObject`)
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
@@ -261,6 +263,7 @@ Base package: `io.prebindgen.covertest`
 
 ## conversions
 
+- `convert!(CallbackToken)`: output `#[prebindgen]` fn `callback_token_into_ingot`
 - `convert!(Celsius)`: input `Into` ⇄ `i32`, output `Into` ⇄ `i32`
 - `convert!(Duration)`: input `#[prebindgen]` fn `duration_from_millis`, output `#[prebindgen]` fn `duration_to_millis`
 - `convert!(Label)`: input `#[prebindgen]` fn `label_in`, output `#[prebindgen]` fn `label_out`

@@ -573,11 +573,7 @@ impl<'a> Delivered<'a> {
             source: &plan.source,
             chain: None,
             fixed_product: plan.fixed_builder,
-            optional: matches!(
-                &plan.shape,
-                prebindgen_registry::unfold::UnfoldShape::Optional((), inner)
-                    if matches!(**inner, prebindgen_registry::unfold::UnfoldShape::Base)
-            ),
+            optional: plan.is_optional_base(),
         }
     }
 

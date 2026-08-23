@@ -1333,6 +1333,28 @@ fn fixed_reassembly(
     (when, imports.into_iter().collect())
 }
 
+/// The callback plan this adapter can actually deliver for `ty`.
+///
+/// An explicit conversion of the whole optional intentionally suppresses the
+/// Optional `parts` row. In that case the registry still knows the model shape,
+/// but JniGen must honor the terminal declaration and deliver the value whole.
+pub(crate) fn effective_callback_plan<'a>(
+    ext: &Declarations,
+    registry: &'a impl Conversions,
+    ty: &prebindgen_registry::flat::TypeRef,
+) -> Option<&'a UnfoldPlan> {
+    let plan = registry.callback_arg_plan(&ty.key())?;
+    if plan.is_optional_base() {
+        let crossing = prebindgen_registry::recipe::Crossing::new(
+            plan.source.clone().optional(),
+            prebindgen_registry::recipe::Direction::Deconstruct,
+        );
+        ext.recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::parts())?;
+    }
+    Some(plan)
+}
+
 /// Interface for an `impl Fn(args)` delivery: one `run` parameter per
 /// flattened leaf of each arg's callback plan (the arg whole when plan-less),
 /// returning `Unit`. Named `<ArgShorts>Callback` (`Fn()` → `VoidCallback`),
@@ -1396,16 +1418,10 @@ pub(crate) fn callback_iface_spec(
         // `List<Element>`, so it takes the plain whole-value path below (no leaf
         // params, no reassembly group). Only `Base`/accessor plans decompose the
         // arg into the callback's `run` params here.
-        let plan = registry
-            .callback_arg_plans()
-            .get(&t.key())
+        let plan = effective_callback_plan(ext, registry, t)
             .filter(|p| !super::render::is_iterable_fold(&p.shape));
         if let Some(plan) = plan {
-            let optional = matches!(
-                &plan.shape,
-                prebindgen_registry::unfold::UnfoldShape::Optional((), inner)
-                    if matches!(**inner, prebindgen_registry::unfold::UnfoldShape::Base)
-            );
+            let optional = plan.is_optional_base();
             let whole_name = whole_value_name(t, i);
             if optional {
                 leaf_tys.push(LeafDesc::Presence(format!("{whole_name}Present")));
@@ -1594,15 +1610,8 @@ pub(crate) fn callback_iface_spec(
                 .iter()
                 .map(|ty| {
                     let short = subject_short(ty);
-                    let optional = registry
-                        .callback_arg_plans()
-                        .get(&ty.key())
-                        .is_some_and(|p| {
-                            matches!(
-                                &p.shape,
-                                prebindgen_registry::unfold::UnfoldShape::Optional((), _)
-                            )
-                        });
+                    let optional = effective_callback_plan(ext, registry, ty)
+                        .is_some_and(UnfoldPlan::is_optional_base);
                     if optional {
                         format!("{short}Optional")
                     } else {

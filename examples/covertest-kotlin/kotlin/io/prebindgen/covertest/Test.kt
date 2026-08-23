@@ -32,6 +32,7 @@ import io.prebindgen.covertest.model.ObjectBoundary8
 import io.prebindgen.covertest.model.ObjectBoundary16
 import io.prebindgen.covertest.model.ObjectBoundary32
 import io.prebindgen.covertest.model.ObjectBoundary63
+import io.prebindgen.covertest.model.Ingot
 import io.prebindgen.covertest.model.ObjectBoundary64
 import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
@@ -1274,6 +1275,24 @@ fun main() {
         payloadOptionalEmit(true, optionalCb, boom)
         payloadOptionalEmit(false, optionalCb, boom)
         check(optionalSeen == listOf(payload(91L, 7, 2.5, true, "optional-callback"), null))
+
+        // The optional chain still owns the handles nested in a delivered data
+        // class. The callback may use them, but the bridge closes untaken
+        // ownership after the callback returns. The absent arm owns nothing.
+        val escapedTokens = mutableListOf<Ingot>()
+        val holderSeen = mutableListOf<Long?>()
+        callbackHolderOptionalEmit(true, CallbackHolderOptionalCallback { holder ->
+            val value = holder ?: error("present CallbackHolder was delivered as null")
+            check(value.token.grams(boom) == 23L)
+            holderSeen += value.tag
+            escapedTokens += value.token
+        }, boom)
+        check(escapedTokens.single().isClosed())
+        callbackHolderOptionalEmit(false, CallbackHolderOptionalCallback { holder ->
+            check(holder == null)
+            holderSeen += null
+        }, boom)
+        check(holderSeen == listOf(17L, null))
 
         // payload_vec_handler_new: whole batch delivered once as List<Payload>.
         var batchSize = -1

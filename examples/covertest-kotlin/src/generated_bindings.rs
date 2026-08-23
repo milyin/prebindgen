@@ -1000,6 +1000,97 @@ pub(crate) unsafe fn CacheConfig_to_JObject_db89a97c<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn CallbackHolder_to_JObject_81e45598<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::CallbackHolder,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___tag: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.tag.clone())?;
+        let ___token: jni::sys::jlong = {
+            let ___token_s0 = CallbackToken_to_Ingot_c7696aa6(env, v.token.clone())
+                .map_err(|__e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(__e.to_string()))?;
+            Ingot_to_jlong_020c3a86(env, ___token_s0)?
+        };
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/CallbackHolder",
+                "fromParts",
+                "(JJ)Lio/prebindgen/covertest/CallbackHolder;",
+                &[
+                    jni::objects::JValue::from(___tag),
+                    jni::objects::JValue::from(___token),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn CallbackHolder_to_tuple2_14aebb91<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::CallbackHolder,
+) -> ::core::result::Result<(jni::sys::jlong, jni::sys::jlong), __JniErr> {
+    ::core::result::Result::Ok((
+        i64_to_jlong_fbf9a9bc(env, v.tag)?,
+        {
+            let __chain_s0 = CallbackToken_to_Ingot_c7696aa6(env, v.token)
+                .map_err(|__e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(__e.to_string()))?;
+            Ingot_to_jlong_020c3a86(env, __chain_s0)
+        }?,
+    ))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn CallbackToken_to_Ingot_c7696aa6<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::CallbackToken,
+) -> ::core::result::Result<perftest_flat::Ingot, __JniErr> {
+    Ok(perftest_flat::callback_token_into_ingot(v))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Celsius_to_i32_88c8e884<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Celsius,
@@ -2052,6 +2143,92 @@ pub(crate) unsafe fn JObject_to_CacheConfig_db89a97c<'env, 'v>(
         perftest_flat::CacheConfig {
             replies,
             ttl,
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_CallbackHolder_81e45598<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::CallbackHolder, __JniErr> {
+    Ok({
+        let __tag_raw: jni::sys::jlong = env
+            .get_field(v, "tag", "J")
+            .and_then(|val| val.j())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("CallbackHolder.tag: {}", e)))? as _;
+        let tag = jlong_to_i64_fbf9a9bc(env, &__tag_raw)?;
+        let __token_raw: jni::objects::JObject = env
+            .get_field(v, "token", "Ljava/lang/Object;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("CallbackHolder.token: {}", e)))?;
+        let token = JObject_to_CallbackToken_432e8cc0(env, &__token_raw)?;
+        perftest_flat::CallbackHolder {
+            tag,
+            token,
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_CallbackToken_432e8cc0<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::CallbackToken, __JniErr> {
+    Ok({
+        let __ingot_jobj: jni::objects::JObject = env
+            .get_field(v, "ingot", "Lio/prebindgen/covertest/model/Ingot;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("CallbackToken.ingot: {}", e)))?;
+        let __ingot_raw: jni::sys::jlong = if __ingot_jobj.is_null() {
+            0
+        } else {
+            env.call_method(&__ingot_jobj, "peek", "()J", &[])
+                .and_then(|val| val.j())
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("CallbackToken.ingot: {}", e)))?
+        };
+        if __ingot_raw == 0 || (__ingot_raw & 1) == 1 {
+            return ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from("Operation on a closed native handle.".to_string()),
+            );
+        }
+        let ingot: perftest_flat::Ingot = unsafe {
+            *std::boxed::Box::from_raw(__ingot_raw as *mut perftest_flat::Ingot)
+        };
+        perftest_flat::CallbackToken {
+            ingot,
         }
     })
 }
@@ -4961,6 +5138,142 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Lookup_Send_Sync_static_4a65bc23<'env, '
                 Ok(())
             })()
                 .map_err(|e| tracing::error!("{} callback error: {e}", "Fn(Lookup)"));
+        })
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_impl_Fn_Option_CallbackHolder_Send_Sync_static_b3ec3f73<
+    'env,
+    'v,
+>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<
+    impl Fn(Option<perftest_flat::CallbackHolder>) + Send + Sync + 'static,
+    __JniErr,
+> {
+    Ok({
+        use std::sync::Arc;
+        let java_vm = Arc::new(
+            env
+                .get_java_vm()
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Unable to retrieve JVM: {}", e)))?,
+        );
+        let callback_global_ref = env
+            .new_global_ref(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Unable to global-ref callback: {}", e)))?;
+        let __invoke_class = env
+            .get_object_class(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(
+                format!(
+                    "Unable to get callback class for {}: {}",
+                    "Fn(Option < CallbackHolder >)", e
+                ),
+            ))?;
+        let __invoke_id = env
+            .get_method_id(&__invoke_class, "run", "(ZJJ)V")
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(
+                format!(
+                    "Unable to resolve run for {}: {}", "Fn(Option < CallbackHolder >)",
+                    e
+                ),
+            ))?;
+        Box::new(move |__cb_arg0: Option<perftest_flat::CallbackHolder>| {
+            let _ = (|| -> ::core::result::Result<(), __JniErr> {
+                let mut env = java_vm
+                    .attach_current_thread_as_daemon()
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Attach thread for {}: {}", "Fn(Option < CallbackHolder >)",
+                            e
+                        ),
+                    ))?;
+                env.push_local_frame(16)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "push local frame for {}: {}",
+                            "Fn(Option < CallbackHolder >)", e
+                        ),
+                    ))?;
+                let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
+                    let (__chain_present, (__chain_wire0, __chain_wire1)) = match Option_CallbackHolder_to_tuple2_6762df4a(
+                        &mut env,
+                        __cb_arg0,
+                    ) {
+                        ::core::result::Result::Ok(__intermediate) => __intermediate,
+                        ::core::result::Result::Err(__chain_error) => {
+                            return ::core::result::Result::Err(
+                                <__JniErr as ::core::convert::From<
+                                    String,
+                                >>::from(__chain_error.to_string()),
+                            );
+                        }
+                    };
+                    let __cb0_obj0 = jni::sys::jvalue {
+                        j: __chain_wire0,
+                    };
+                    let __cb0_obj1 = jni::sys::jvalue {
+                        j: __chain_wire1,
+                    };
+                    let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
+                        env.call_method_unchecked(
+                            &callback_global_ref,
+                            __invoke_id,
+                            jni::signature::ReturnType::Primitive(
+                                jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                jni::sys::jvalue {
+                                    z: __chain_present,
+                                },
+                                __cb0_obj0,
+                                __cb0_obj1,
+                            ],
+                        )
+                    }
+                        .map(|_| ())
+                        .map_err(|e| {
+                            let _ = env.exception_describe();
+                            <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(e.to_string())
+                        });
+                    __call_res?;
+                    Ok(())
+                })();
+                let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                __frame_res?;
+                Ok(())
+            })()
+                .map_err(|e| {
+                    tracing::error!(
+                        "{} callback error: {e}", "Fn(Option < CallbackHolder >)"
+                    )
+                });
         })
     })
 }
@@ -9248,6 +9561,37 @@ pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Option_CallbackHolder_to_tuple2_6762df4a<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<perftest_flat::CallbackHolder>,
+) -> ::core::result::Result<
+    (jni::sys::jboolean, (jni::sys::jlong, jni::sys::jlong)),
+    __JniErr,
+> {
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                (1u8, CallbackHolder_to_tuple2_14aebb91(env, __value)?)
+            }
+            ::core::option::Option::None => {
+                (0u8, (0 as jni::sys::jlong, 0 as jni::sys::jlong))
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Duration_to_jlong_1cfa4d44<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Duration>,
@@ -11547,6 +11891,34 @@ pub(crate) unsafe fn jlong_to_Ingot_020c3a86<'env, 'v>(
         );
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Ingot) })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn jlong_to_Ingot_020c3a86_owned<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<perftest_flat::Ingot, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
+    ::core::result::Result::Ok(unsafe {
+        *::std::boxed::Box::from_raw(*v as *mut perftest_flat::Ingot)
+    })
 }
 #[allow(
     non_snake_case,
@@ -15256,6 +15628,68 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_cacheConfigWeigh
                 &__e.to_string(),
             );
             0 as jni::sys::jint
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_callbackHolderOptionalEmit<
+    'a,
+>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    present: jni::sys::jboolean,
+    f: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> () {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let present = match jboolean_to_bool_31306d98(&mut env, &present) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let f = match JObject_to_impl_Fn_Option_CallbackHolder_Send_Sync_static_b3ec3f73(
+        &mut env,
+        &f,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let __out = perftest_flat::callback_holder_optional_emit(present, f);
+    match unit_to_unit_9ecccf8e(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            ()
         }
     }
 }

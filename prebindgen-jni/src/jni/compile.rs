@@ -1242,6 +1242,10 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     fn optional(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &JFrag) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let emit = cx.emit();
+        // Declared whole-Optional converters are selected as terminal recipes
+        // before structural compilation. If this hook runs, the recipe table
+        // has already chosen Optional composition or its legacy structural
+        // fallback, so repeating the terminal lookup here was dead code.
         let mut frag = if let Some(planned) = self.planned_optional(at, inner) {
             planned
         } else {

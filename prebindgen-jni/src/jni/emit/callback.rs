@@ -180,7 +180,7 @@ pub(crate) fn callback_input(
 
         // Decomposed arg: deliver the leaves of its type-level canonical
         // output, exactly like a return delivery.
-        if let Some(plan) = registry.callback_arg_plan(&arg_ty.key()) {
+        if let Some(plan) = effective_callback_plan(ext, registry, arg_ty) {
             // Deferral safety: every leaf converter (and identity-leaf
             // projection) must already be resolved — return None so the rank
             // resolver retries this converter later otherwise. A synthesized
@@ -210,11 +210,7 @@ pub(crate) fn callback_input(
                 &fail,
                 emit,
             );
-            let optional = matches!(
-                &plan.shape,
-                prebindgen_registry::unfold::UnfoldShape::Optional((), inner)
-                    if matches!(**inner, prebindgen_registry::unfold::UnfoldShape::Base)
-            );
+            let optional = plan.is_optional_base();
             if optional && present.is_none() {
                 return None;
             }

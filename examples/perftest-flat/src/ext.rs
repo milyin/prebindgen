@@ -2044,6 +2044,42 @@ pub struct Holder {
     pub summary: Summary,
 }
 
+/// A semantic wrapper whose declared representation is an opaque handle.
+#[prebindgen]
+#[derive(Clone)]
+pub struct CallbackToken {
+    pub ingot: Ingot,
+}
+
+#[prebindgen]
+pub fn callback_token_into_ingot(token: CallbackToken) -> Ingot {
+    token.ingot
+}
+
+/// A product that owns the converted handle.
+#[prebindgen]
+pub struct CallbackHolder {
+    pub tag: i64,
+    pub token: CallbackToken,
+}
+
+/// Deliver a present or absent handle-owning data class to a callback.
+///
+/// The generated Kotlin bridge must close `token` after the callback unless
+/// user code has already taken ownership of it.
+#[prebindgen]
+pub fn callback_holder_optional_emit(
+    present: bool,
+    f: impl Fn(Option<CallbackHolder>) + Send + Sync + 'static,
+) {
+    f(present.then_some(CallbackHolder {
+        tag: 17,
+        token: CallbackToken {
+            ingot: handles::Ingot { grams: 23 },
+        },
+    }));
+}
+
 /// `tag` when the holder is present, `fallback` when it is absent — so the
 /// absent arm is observable as a **value** rather than as an error.
 #[prebindgen]
