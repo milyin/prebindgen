@@ -895,19 +895,8 @@ impl<R: Conversions> JCompile<'_, R> {
             .map(|(_, frag)| frag.layout.clone())
             .collect::<Option<Vec<_>>>()?;
         let source = at.crossing.value();
-        let wrappers = source.erased_wrappers();
+        let wrappers = composable_wrappers(at.crossing)?;
         let direction = at.crossing.direction();
-        if wrappers.iter().any(|wrapper| {
-            let Some(ops) = super::trait_impl::wrapper_ops(wrapper) else {
-                return true;
-            };
-            match direction {
-                Direction::Construct => ops.build.is_none(),
-                Direction::Deconstruct => at.crossing.mode() != Mode::Owned || ops.read.is_none(),
-            }
-        }) {
-            return None;
-        }
         let TypeKind::Named { id, .. } = source.unwrapped().kind() else {
             return None;
         };
@@ -1041,6 +1030,10 @@ impl<R: Conversions> JCompile<'_, R> {
             .map(|(alternative, fragment)| Some((*alternative, fragment.choice_arm.clone()?)))
             .collect::<Option<Vec<_>>>()?;
         let source = at.crossing.value();
+        // The same gate `planned_product` applies, and for the same reasons: a
+        // choice chain peels the value's wrappers and puts them back exactly as
+        // a product chain does.
+        let wrappers = composable_wrappers(at.crossing)?;
         let TypeKind::Named { id, .. } = source.unwrapped().kind() else {
             return None;
         };
@@ -1100,7 +1093,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 source: source.clone(),
                 direction,
                 source_policy: crate::jni::chain::JSource {
-                    wrappers: source.erased_wrappers(),
+                    wrappers,
                     module: Some(source_module),
                 },
                 bridge: prebindgen_registry::chain::TupleChoice {
@@ -1168,18 +1161,12 @@ impl<R: Conversions> JCompile<'_, R> {
             | (Direction::Deconstruct, TypeKind::Vec(_) | TypeKind::Slice(_)) => {}
             _ => return None,
         }
-        let wrappers = source.erased_wrappers();
-        if wrappers.iter().any(|wrapper| {
-            let Some(ops) = super::trait_impl::wrapper_ops(wrapper) else {
-                return true;
-            };
-            match direction {
-                Direction::Construct => ops.build.is_none(),
-                Direction::Deconstruct => ops.read.is_none(),
-            }
-        }) {
-            return None;
-        }
+        // The same gate the product and choice planners apply. This one used to
+        // omit the ownership clause, which a deconstructing `&Box<Vec<T>>`
+        // needs: the emitted loop reads the source with `*v` and then consumes
+        // it with `into_iter`, so a shared borrow would move the `Vec` out of
+        // the `Box`.
+        let wrappers = composable_wrappers(at.crossing)?;
 
         let child_wire = inner.conv.destination.clone();
         if !is_jobject_shaped_wire(&child_wire) {
@@ -1300,18 +1287,7 @@ impl<R: Conversions> JCompile<'_, R> {
             return None;
         }
 
-        let wrappers = source.erased_wrappers();
-        if wrappers.iter().any(|wrapper| {
-            let Some(ops) = super::trait_impl::wrapper_ops(wrapper) else {
-                return true;
-            };
-            match direction {
-                Direction::Construct => ops.build.is_none(),
-                Direction::Deconstruct => ops.read.is_none(),
-            }
-        }) {
-            return None;
-        }
+        let wrappers = composable_wrappers(at.crossing)?;
 
         let inner_wire = inner.conv.destination.clone();
         let stages = match direction {
@@ -2775,6 +2751,43 @@ impl Declarations {
 /// one is a shape the compositions decline.
 fn field_step(ident: &syn::Ident) -> prebindgen_registry::unfold::PathStep {
     prebindgen_registry::unfold::PathStep::field(ident.clone(), false)
+}
+
+/// The transparent wrappers over a crossing's value, or `None` when a composed
+/// chain cannot go through one of them.
+///
+/// A chain reaches the canonical value by peeling every wrapper and puts them
+/// back afterwards, so it needs the operation for the direction it is going:
+/// `Box::new` to build, `*b` to read. A wrapper missing that operation — `Cow`,
+/// which has no read — is not composable, and neither is a wrapper this adapter
+/// has no entry for at all.
+///
+/// Deconstructing additionally needs the crossing to **own** what it takes
+/// apart. Reading through a shared borrow would move the value out of the
+/// wrapper, which is what a `&Box<T>` would do.
+///
+/// Refusing here is what keeps the legacy path in control. `JSource::build` and
+/// `JSource::read` expect the rejection to have happened while planning: past
+/// this point an unsupported wrapper is a panic during `write_rust`, or
+/// generated Rust that does not compile in the consumer's crate.
+///
+/// One function because it is one rule. Stated per planner, the choice copy
+/// omitted it, while the sequence and Optional copies omitted the ownership
+/// half.
+fn composable_wrappers(
+    crossing: &prebindgen_registry::recipe::Crossing,
+) -> Option<Vec<&'static str>> {
+    let wrappers = crossing.value().erased_wrappers();
+    let usable = |wrapper: &&'static str| -> bool {
+        let Some(ops) = crate::jni::trait_impl::wrapper_ops(wrapper) else {
+            return false;
+        };
+        match crossing.direction() {
+            Direction::Construct => ops.build.is_some(),
+            Direction::Deconstruct => crossing.mode() == Mode::Owned && ops.read.is_some(),
+        }
+    };
+    wrappers.iter().all(usable).then_some(wrappers)
 }
 
 /// The model field one part reads, or `None` for a part that is not a field.

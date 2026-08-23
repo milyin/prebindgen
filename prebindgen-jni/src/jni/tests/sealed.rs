@@ -2656,3 +2656,342 @@ fn a_decomposed_return_is_a_site_asking_for_the_parts_row() {
         "the site and the expansion plan disagree",
     );
 }
+
+/// Generate one Optional crossing through the real recipe driver and Rust
+/// writer. Keeping the crossing isolated lets a refused composed planner fall
+/// back without another function making the whole fixture ambiguous.
+fn optional_wrapper_rust(
+    ty: syn::Type,
+    direction: prebindgen_registry::recipe::Direction,
+    case: &str,
+) -> Result<String, String> {
+    use prebindgen_registry::recipe::Direction;
+
+    let loc = myflat_loc();
+    let gen = match direction {
+        Direction::Construct => {
+            let items: Vec<(syn::Item, SourceLocation)> = vec![(
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn cross(v: #ty) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            )];
+            let registry = crate::test_util::reg_from_items(declare_referenced(items))
+                .map_err(|e| e.to_string())?;
+            JniGenBuilder::new()
+                .set_package_prefix("io.test.jni")
+                .package(crate::package!().fun(prebindgen_registry::fun!(cross)))
+                .build_with(registry)
+                .map_err(|e| e.to_string())?
+        }
+        Direction::Deconstruct => {
+            let items: Vec<(syn::Item, SourceLocation)> = vec![
+                (
+                    syn::Item::Struct(syn::parse_quote!(
+                        pub struct Holder {
+                            pub reading: #ty,
+                        }
+                    )),
+                    loc.clone(),
+                ),
+                (
+                    syn::Item::Fn(syn::parse_quote!(
+                        pub fn z_sample_to_holder(s: &ZSample) -> Holder {
+                            unimplemented!()
+                        }
+                    )),
+                    loc.clone(),
+                ),
+                (
+                    syn::Item::Fn(syn::parse_quote!(
+                        pub fn z_sample_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) {
+                            unimplemented!()
+                        }
+                    )),
+                    loc.clone(),
+                ),
+            ];
+            let registry = crate::test_util::reg_from_items(declare_referenced(items))
+                .map_err(|e| e.to_string())?;
+            JniGenBuilder::new()
+                .set_package_prefix("io.test.jni")
+                .package(
+                    crate::package!()
+                        .class(crate::ptr_class!(ZSample))
+                        .fun(prebindgen_registry::fun!(z_sample_sub)),
+                )
+                .expand(
+                    prebindgen_registry::expand_return!(ZSample)
+                        .fields(prebindgen_registry::fields!(z_sample_to_holder)),
+                )
+                .build_with(registry)
+                .map_err(|e| e.to_string())?
+        }
+    };
+    let dir = unique_test_dir(case);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = gen
+        .write_rust(dir.join("g.rs"))
+        .map_err(|e| e.to_string())?;
+    std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+/// Compile and render one Choice crossing through the real recipe driver.
+fn choice_wrapper_plan(
+    ty: syn::Type,
+    direction: prebindgen_registry::recipe::Direction,
+) -> Result<(bool, String, String), String> {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn seed(n: i32, sink: impl Fn(Reading) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).map_err(|e| e.to_string())?;
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(prebindgen_registry::fun!(seed)),
+        )
+        .build_with(registry)
+        .map_err(|e| e.to_string())?;
+    gen.parts_plan_for_test(ty, direction)
+}
+
+fn product_wrapper_plan(
+    ty: syn::Type,
+    direction: prebindgen_registry::recipe::Direction,
+) -> Result<(bool, String, String), String> {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Sample {
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn seed(v: Sample) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).map_err(|e| e.to_string())?;
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Sample))
+                .fun(prebindgen_registry::fun!(seed)),
+        )
+        .build_with(registry)
+        .map_err(|e| e.to_string())?;
+    gen.parts_plan_for_test(ty, direction)
+}
+
+fn sequence_wrapper_plan(
+    ty: syn::Type,
+    direction: prebindgen_registry::recipe::Direction,
+) -> Result<(bool, String, String), String> {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn seed(v: Vec<String>) {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).map_err(|e| e.to_string())?;
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(seed)))
+        .build_with(registry)
+        .map_err(|e| e.to_string())?;
+    gen.crossing_plan_for_test(ty, direction)
+}
+
+/// Every composed planner refuses a wrapper it cannot peel and put back, and
+/// refuses to read one it does not own.
+///
+/// Optional goes through public binding resolution and `write_rust`. Product
+/// and Choice ask their declared `parts` rows, while Sequence asks its default
+/// row; each then renders the JFunction the actual planner retained. Choice
+/// needs the explicit row because sealed-class inputs intentionally retain a
+/// whole-JObject compatibility row.
+///
+/// Both directions exercise a supported `Box` first, proving that the composed
+/// Optional route is available rather than merely asserting every wrapper is
+/// refused. Their unsupported twins then exercise each half of the gate:
+///
+/// * `&Box<Option<String>>` going out: reading peels with `*v`, so a chain
+///   composed over a shared borrow moves the `Option` out of the `Box` — E0507
+///   in the consumer's crate, not here.
+/// * `Cow<'_, Option<String>>` coming in: `Cow` has no build operation, so
+///   planning would succeed and `JSource::build` would hit its `expect` while
+///   `write_rust` renders — a panic in the generator, after every check has
+///   passed.
+///
+/// Product, Sequence and Optional have no legacy JNI representation for the
+/// refused input spellings, so resolution names the unsupported type. Choice
+/// does have one: its refused crossings must retain `__jni_parts`, while an
+/// owned `Box<Reading>` renders the chain converter.
+#[test]
+fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
+    use prebindgen_registry::recipe::Direction;
+
+    let output = optional_wrapper_rust(
+        syn::parse_quote!(Box<Option<String>>),
+        Direction::Deconstruct,
+        "jnigen_chain_wrapper_output",
+    )
+    .expect("an owned Box output composes");
+    let output_compact: String = output.split_whitespace().collect();
+    assert!(
+        output_compact.contains("fnBox_Option_String_to_JString"),
+        "the output uses the composed Optional converter:\n{output}"
+    );
+    assert!(
+        output_compact.contains("match*v{"),
+        "the owned wrapper is peeled inside that converter:\n{output}"
+    );
+
+    let borrowed = optional_wrapper_rust(
+        syn::parse_quote!(&'static Box<Option<String>>),
+        Direction::Deconstruct,
+        "jnigen_chain_wrapper_borrowed_output",
+    );
+    let borrowed = borrowed.expect_err("a shared Box output must refuse composition");
+    assert!(
+        borrowed.contains("unresolved prebindgen output type")
+            && borrowed.contains("Box < Option < String > >"),
+        "the refusal names the unsupported borrowed output: {borrowed}"
+    );
+
+    let input = optional_wrapper_rust(
+        syn::parse_quote!(Box<Option<String>>),
+        Direction::Construct,
+        "jnigen_chain_wrapper_input",
+    )
+    .expect("an owned Box input composes");
+    let input_compact: String = input.split_whitespace().collect();
+    assert!(
+        input_compact.contains("fnJString_to_Box_Option_String"),
+        "the input uses the composed Optional converter:\n{input}"
+    );
+    assert!(
+        input_compact.contains("Box::new({ifv.is_null()"),
+        "the canonical Optional is put back in its owned wrapper:\n{input}"
+    );
+
+    let cow = optional_wrapper_rust(
+        syn::parse_quote!(Cow<'static, Option<String>>),
+        Direction::Construct,
+        "jnigen_chain_wrapper_cow_input",
+    );
+    let cow = cow.expect_err("a Cow input must refuse composition");
+    assert!(
+        cow.contains("unresolved prebindgen input type")
+            && cow.contains("Cow < 'static , Option < String > >"),
+        "the refusal names the unsupported Cow input: {cow}"
+    );
+
+    let (legacy, ident, rendered) =
+        product_wrapper_plan(syn::parse_quote!(Box<Sample>), Direction::Construct)
+            .expect("an owned Box Product composes");
+    assert!(
+        !legacy
+            && ident.starts_with("tuple1_to_Box_Sample_")
+            && rendered
+                .replace(' ', "")
+                .contains("Box::new(myflat::Sample{"),
+        "the Product parts row must retain its wrapper-aware plan: {ident}\n{rendered}"
+    );
+    let (legacy, ident, _) = product_wrapper_plan(
+        syn::parse_quote!(Cow<'static, Sample>),
+        Direction::Construct,
+    )
+    .expect("a Cow Product keeps its compatibility fragment");
+    assert!(
+        legacy && ident == "__jni_parts",
+        "the Cow Product must retain the legacy parts fragment, got {ident}"
+    );
+
+    let (legacy, ident, rendered) =
+        sequence_wrapper_plan(syn::parse_quote!(Box<Vec<String>>), Direction::Construct)
+            .expect("an owned Box Sequence composes");
+    assert!(
+        !legacy
+            && ident.starts_with("JObject_to_Box_Vec_String_")
+            && rendered
+                .replace(' ', "")
+                .contains("Box::new({let__sequence_list="),
+        "the Sequence default row must retain its wrapper-aware plan: {ident}\n{rendered}"
+    );
+    let refused = sequence_wrapper_plan(
+        syn::parse_quote!(Cow<'static, Vec<String>>),
+        Direction::Construct,
+    )
+    .expect_err("a Cow Sequence must refuse composition");
+    assert!(
+        refused.contains("no JNI representation for this run"),
+        "the Sequence refusal names its missing compatibility path: {refused}"
+    );
+
+    let (legacy, ident, rendered) =
+        choice_wrapper_plan(syn::parse_quote!(Box<Reading>), Direction::Deconstruct)
+            .expect("an owned Box Choice composes");
+    let rendered_compact: String = rendered.split_whitespace().collect();
+    assert!(!legacy, "the owned Choice must select its composed plan");
+    assert!(
+        ident.starts_with("Box_Reading_to_tuple3_") && rendered_compact.contains("match*v{"),
+        "the owned Choice renders its wrapper-aware converter: {ident}\n{rendered}"
+    );
+
+    for (label, ty, direction) in [
+        (
+            "borrowed",
+            syn::parse_quote!(&'static Box<Reading>),
+            Direction::Deconstruct,
+        ),
+        (
+            "cow",
+            syn::parse_quote!(Cow<'static, Reading>),
+            Direction::Construct,
+        ),
+    ] {
+        let (legacy, ident, _) = choice_wrapper_plan(ty, direction)
+            .unwrap_or_else(|error| panic!("the {label} Choice keeps its fallback: {error}"));
+        assert!(
+            legacy && ident == "__jni_parts",
+            "the {label} Choice must retain the legacy parts fragment, got {ident}"
+        );
+    }
+}
