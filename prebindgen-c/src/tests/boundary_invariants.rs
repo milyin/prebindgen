@@ -396,7 +396,6 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
         "output_is_fallible(",
         ".in_frag(",
         ".out_frag(",
-        "registry.",
     ] {
         assert!(
             !wrapper.contains(forbidden),

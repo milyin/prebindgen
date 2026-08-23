@@ -506,7 +506,6 @@ impl CbindgenBuilder {
     pub(super) fn emit_function_wrapper(
         &self,
         f: &prebindgen_registry::flat::Function,
-        _registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         let orig = &f.name;

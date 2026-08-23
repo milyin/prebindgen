@@ -1904,10 +1904,10 @@ impl Prebindgen for CbindgenBuilder {
     fn on_function(
         &self,
         f: &prebindgen_registry::flat::Function,
-        registry: &Registry,
+        _registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
-        self.emit_function_wrapper(f, registry, emit)
+        self.emit_function_wrapper(f, emit)
     }
 
     fn on_struct(
