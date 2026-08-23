@@ -1121,19 +1121,17 @@ fn sum_from_parts_stays_the_property_typed_convenience() {
     );
 }
 
-/// The Rust side emits ONE `match` over the returned value: the live arm
-/// converts its own group's payloads and every other slot takes the wire
-/// default. No leaf is an independent expression — that is what a product
-/// decomposition does, and a sum is not one.
+/// The registry-composed Choice converter emits one `match` over the returned
+/// value: the live arm invokes its child chains and every other arm
+/// intermediate takes the adapter's inactive value. The exported wrapper calls
+/// that converter instead of reconstructing the sum walk itself.
 #[test]
 fn sum_return_emits_one_match_with_wire_defaults() {
     let (rust, _) = sum_returns("jnigen_sum_match");
-    let at = rust
-        .find("fn Java_io_test_jni_JNINative_readOne")
-        .expect("extern");
-    let body = &rust[at..at + 4000];
+    let at = rust.find("fn Reading_to_tuple").expect("Choice converter");
+    let body = &rust[at..(at + 5000).min(rust.len())];
     assert!(
-        body.contains("match &__out"),
+        body.contains("match v"),
         "one match over the value:\n{body}"
     );
     assert!(
@@ -1141,10 +1139,18 @@ fn sum_return_emits_one_match_with_wire_defaults() {
             && body.contains("myflat::Reading::Range { low"),
         "arms bind each variant's payload by pattern:\n{body}"
     );
-    // The payload-less arm assigns the tag and defaults every group slot.
     assert!(
         body.contains("jni :: objects :: JObject :: null ()") || body.contains("JObject::null()"),
-        "an inert object slot is wire-defaulted to null:\n{body}"
+        "an inactive object arm is wire-defaulted to null:\n{body}"
+    );
+
+    let wrapper_at = rust
+        .find("fn Java_io_test_jni_JNINative_readOne")
+        .expect("extern");
+    let wrapper = &rust[wrapper_at..];
+    assert!(
+        wrapper.contains("Reading_to_tuple"),
+        "the wrapper delegates to the Choice converter:\n{wrapper}"
     );
 }
 

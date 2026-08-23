@@ -971,9 +971,9 @@ pub(crate) fn encode_plan_leaves(
         }
     }
 
-    // A synthesized data-class decomposition is exactly the Product recipe.
-    // Invoke that converter once, then adapt its intermediate leaves to the
-    // JNI call ABI. Callback and ordinary output delivery therefore share the
+    // A fixed decomposition has one Product, Optional or Choice intermediate.
+    // Invoke its converter once, then adapt the intermediate leaves to the JNI
+    // call ABI. Callback and ordinary output delivery therefore share the
     // same Rust-value walk; only the final delivery remains JNI-specific.
     if fixed_product && hoists.is_empty() {
         let crossing = if by_ref {
@@ -1020,9 +1020,15 @@ pub(crate) fn encode_plan_leaves(
             for (index, leaf) in wires.iter().enumerate() {
                 let encoded = &encoded[index];
                 let object = &obj_idents[index];
+                if leaf.is_tag() {
+                    stmts.extend(quote! {
+                        let #object = jni::sys::jvalue { i: #encoded };
+                    });
+                    continue;
+                }
                 let out_entry = ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
                     panic!(
-                        "jnigen Product leaf `{}` has no registered output converter",
+                        "jnigen composed leaf `{}` has no registered output converter",
                         leaf.out_ty.key()
                     )
                 });

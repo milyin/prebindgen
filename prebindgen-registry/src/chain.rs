@@ -8,7 +8,7 @@
 use proc_macro2::TokenStream;
 
 use crate::{
-    flat::TypeRef,
+    flat::{AlternativeForm, TypeRef},
     recipe::{Direction, Mode},
     Emit,
 };
@@ -224,6 +224,120 @@ pub struct Optional<S, B, C> {
     pub child: C,
 }
 
+/// One source field inside one [`Choice`] arm.
+#[derive(Clone)]
+pub struct ChoicePart<C> {
+    /// Named or positional Rust member, taken from the Flat model.
+    pub member: syn::Member,
+    /// Child converter selected by the recipe driver.
+    pub child: C,
+    /// How the part is reached through its containing source value.
+    pub mode: Mode,
+}
+
+/// One already-composed arm of a [`Choice`] recipe.
+#[derive(Clone)]
+pub struct ChoiceArm<B, C> {
+    /// Rust variant name, taken from the Flat model.
+    pub variant: syn::Ident,
+    /// Unit, tuple or struct delimiter form, taken from Flat.
+    pub form: AlternativeForm,
+    /// Adapter tag pattern selecting this arm.
+    pub tag: syn::Pat,
+    /// Product representation of this arm's intermediate parts.
+    pub bridge: B,
+    /// Ordered payload parts and their resolved child chains.
+    pub parts: Vec<ChoicePart<C>>,
+}
+
+/// Adapter-selected representation protocol for one Choice shape.
+pub trait ChoiceBridge: Clone {
+    /// The one intermediate Rust type assigned to the Choice fragment.
+    fn intermediate(&self) -> syn::Type;
+
+    /// Read the selector from an inbound intermediate value.
+    fn tag(&self, value: TokenStream) -> TokenStream;
+
+    /// Read one arm's Product intermediate from an inbound value.
+    fn arm(&self, value: TokenStream, index: usize) -> TokenStream;
+
+    /// Construct the outbound Choice intermediate with `active` selected.
+    ///
+    /// Inactive arm storage is representation policy. Implementations must not
+    /// manufacture source or child-intermediate values merely to fill it.
+    fn build(&self, active: usize, value: TokenStream) -> TokenStream;
+
+    /// Error returned when an inbound selector names no arm.
+    fn invalid_tag(&self) -> TokenStream;
+}
+
+/// Registry-owned tuple representation for Choice intermediates.
+///
+/// Position zero is the selector. Every remaining position holds one arm's
+/// Product intermediate. Inactive values are adapter-provided ABI-safe storage,
+/// not values of the source type.
+#[derive(Clone)]
+pub struct TupleChoice {
+    /// Selector type.
+    pub tag: syn::Type,
+    /// One Product intermediate type per arm.
+    pub arms: Vec<syn::Type>,
+    /// Selector value emitted for each arm.
+    pub tags: Vec<syn::Expr>,
+    /// ABI-safe inactive storage for each arm.
+    pub inactive: Vec<TokenStream>,
+    /// Adapter error expression for an invalid inbound selector.
+    pub invalid: TokenStream,
+}
+
+impl ChoiceBridge for TupleChoice {
+    fn intermediate(&self) -> syn::Type {
+        let tag = &self.tag;
+        let arms = &self.arms;
+        syn::parse_quote!((#tag, #(#arms,)*))
+    }
+
+    fn tag(&self, value: TokenStream) -> TokenStream {
+        quote::quote!((#value).0)
+    }
+
+    fn arm(&self, value: TokenStream, index: usize) -> TokenStream {
+        let index = syn::Index::from(index + 1);
+        quote::quote!((#value).#index)
+    }
+
+    fn build(&self, active: usize, value: TokenStream) -> TokenStream {
+        let tag = &self.tags[active];
+        let arms = self.inactive.iter().enumerate().map(|(index, inactive)| {
+            if index == active {
+                value.clone()
+            } else {
+                inactive.clone()
+            }
+        });
+        quote::quote!((#tag, #(#arms,)*))
+    }
+
+    fn invalid_tag(&self) -> TokenStream {
+        self.invalid.clone()
+    }
+}
+
+/// Registry-composed converter plan for a Choice recipe.
+#[derive(Clone)]
+pub struct Choice<S, B, P, C> {
+    /// Exact source spelling, opaque until rendering.
+    pub source: TypeRef,
+    /// Direction of the source/intermediate relation.
+    pub direction: Direction,
+    /// Source spelling and transparent-wrapper policy.
+    pub source_policy: S,
+    /// Adapter intermediate representation.
+    pub bridge: B,
+    /// Every source alternative, already composed from child chains.
+    pub arms: Vec<ChoiceArm<P, C>>,
+}
+
 /// A rendered chain body and the types needed to put a function around it.
 pub struct Rendered {
     /// Exact source type, spelled only at final emission.
@@ -356,6 +470,141 @@ where
     }
 }
 
+impl<S, B, P, C> Chain for Choice<S, B, P, C>
+where
+    S: Source,
+    B: ChoiceBridge,
+    P: ProductBridge,
+    C: Child,
+{
+    fn render(&self, emit: &Emit) -> Rendered {
+        let source = self.source_policy.spell(&self.source, emit);
+        let intermediate = self.bridge.intermediate();
+        let child_fallible = self
+            .arms
+            .iter()
+            .flat_map(|arm| &arm.parts)
+            .any(|part| part.child.call().fallible());
+        let body = match self.direction {
+            Direction::Construct => {
+                let canonical_source = self.source_policy.spell(self.source.unwrapped(), emit);
+                let tag = self.bridge.tag(quote::quote!(v));
+                let arms = self.arms.iter().enumerate().map(|(arm_index, arm)| {
+                    let tag_pattern = &arm.tag;
+                    let variant = &arm.variant;
+                    let arm_value = self.bridge.arm(quote::quote!(v), arm_index);
+                    let fields: Vec<_> = arm
+                        .parts
+                        .iter()
+                        .enumerate()
+                        .map(|(part_index, part)| {
+                            let name = match &part.member {
+                                syn::Member::Named(name) => name.clone(),
+                                syn::Member::Unnamed(index) => {
+                                    syn::Ident::new(&format!("v{}", index.index), index.span)
+                                }
+                            };
+                            let value = arm.bridge.part(quote::quote!(__arm), part_index, &name);
+                            (part.member.clone(), child_value(&part.child, value))
+                        })
+                        .collect();
+                    let canonical = match arm.form {
+                        AlternativeForm::Unit => {
+                            quote::quote!(#canonical_source::#variant)
+                        }
+                        AlternativeForm::Tuple => {
+                            let values = fields.iter().map(|(_, value)| value);
+                            quote::quote!(#canonical_source::#variant(#(#values),*))
+                        }
+                        AlternativeForm::Struct => {
+                            let names = fields.iter().map(|(member, _)| match member {
+                                syn::Member::Named(name) => name,
+                                syn::Member::Unnamed(_) => unreachable!(),
+                            });
+                            let values = fields.iter().map(|(_, value)| value);
+                            quote::quote!(#canonical_source::#variant { #(#names: #values),* })
+                        }
+                    };
+                    let built = self.source_policy.build(canonical);
+                    quote::quote!(#tag_pattern => {
+                        let __arm = #arm_value;
+                        #built
+                    })
+                });
+                let invalid = self.bridge.invalid_tag();
+                syn::parse2(quote::quote!({
+                    match #tag {
+                        #(#arms,)*
+                        _ => return ::core::result::Result::Err(#invalid),
+                    }
+                }))
+                .expect("a Choice source constructor is a valid expression")
+            }
+            Direction::Deconstruct => {
+                let canonical_source = self.source_policy.spell(self.source.unwrapped(), emit);
+                let value = self.source_policy.read(quote::quote!(v));
+                let arms = self.arms.iter().enumerate().map(|(arm_index, arm)| {
+                    let variant = &arm.variant;
+                    let bindings: Vec<_> = arm
+                        .parts
+                        .iter()
+                        .enumerate()
+                        .map(|(index, _)| {
+                            syn::Ident::new(&format!("__part{index}"), variant.span())
+                        })
+                        .collect();
+                    let pattern = match arm.form {
+                        AlternativeForm::Unit => {
+                            quote::quote!(#canonical_source::#variant)
+                        }
+                        AlternativeForm::Tuple => {
+                            quote::quote!(#canonical_source::#variant(#(#bindings),*))
+                        }
+                        AlternativeForm::Struct => {
+                            let names = arm.parts.iter().map(|part| match &part.member {
+                                syn::Member::Named(name) => name,
+                                syn::Member::Unnamed(_) => unreachable!(),
+                            });
+                            quote::quote!(#canonical_source::#variant { #(#names: #bindings),* })
+                        }
+                    };
+                    let parts: Vec<_> = arm
+                        .parts
+                        .iter()
+                        .zip(&bindings)
+                        .map(|(part, binding)| {
+                            let value = match part.mode {
+                                Mode::Owned => quote::quote!(#binding),
+                                Mode::Shared => quote::quote!(&*#binding),
+                                Mode::Exclusive => quote::quote!(&mut *#binding),
+                            };
+                            let value = child_value(&part.child, value);
+                            let name = match &part.member {
+                                syn::Member::Named(name) => name.clone(),
+                                syn::Member::Unnamed(index) => {
+                                    syn::Ident::new(&format!("v{}", index.index), index.span)
+                                }
+                            };
+                            (name, value)
+                        })
+                        .collect();
+                    let arm_value = arm.bridge.build(&parts);
+                    let built = self.bridge.build(arm_index, arm_value);
+                    quote::quote!(#pattern => #built)
+                });
+                syn::parse2(quote::quote!({ match #value { #(#arms,)* } }))
+                    .expect("a Choice intermediate constructor is a valid expression")
+            }
+        };
+        Rendered {
+            source,
+            intermediate,
+            body,
+            fallible: child_fallible || self.direction == Direction::Construct,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{cell::Cell, rc::Rc};
@@ -429,5 +678,88 @@ mod tests {
             "{body}"
         );
         assert!(rendered.fallible);
+    }
+    fn choice_plan(
+        direction: Direction,
+        spells: Rc<Cell<usize>>,
+    ) -> Choice<TestSource, TupleChoice, TupleProduct, Call> {
+        let child = Call::new(
+            syn::Ident::new(
+                match direction {
+                    Direction::Construct => "decode",
+                    Direction::Deconstruct => "encode",
+                },
+                proc_macro2::Span::call_site(),
+            ),
+            true,
+            false,
+        );
+        Choice {
+            source: TypeRef::scalar(ScalarKind::I64),
+            direction,
+            source_policy: TestSource { spells },
+            bridge: TupleChoice {
+                tag: syn::parse_quote!(i32),
+                arms: vec![syn::parse_quote!(()), syn::parse_quote!((i64,))],
+                tags: vec![syn::parse_quote!(0), syn::parse_quote!(1)],
+                inactive: vec![quote!(()), quote!((0,))],
+                invalid: quote!("invalid tag"),
+            },
+            arms: vec![
+                ChoiceArm {
+                    variant: syn::parse_quote!(A),
+                    form: AlternativeForm::Unit,
+                    tag: syn::parse_quote!(0),
+                    bridge: TupleProduct { parts: Vec::new() },
+                    parts: Vec::new(),
+                },
+                ChoiceArm {
+                    variant: syn::parse_quote!(B),
+                    form: AlternativeForm::Tuple,
+                    tag: syn::parse_quote!(1),
+                    bridge: TupleProduct {
+                        parts: vec![syn::parse_quote!(i64)],
+                    },
+                    parts: vec![ChoicePart {
+                        member: syn::Member::Unnamed(syn::Index::from(0)),
+                        child,
+                        mode: Mode::Owned,
+                    }],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn choice_spells_only_at_render_and_owns_arm_control_flow() {
+        for direction in [Direction::Construct, Direction::Deconstruct] {
+            let spells = Rc::new(Cell::new(0));
+            let plan = choice_plan(direction, spells.clone());
+
+            assert_eq!(spells.get(), 0, "planning must not spell the TypeRef");
+            let rendered = plan.render(&Emit::for_test());
+            assert_eq!(spells.get(), 2);
+            let body = rendered.body.to_token_stream().to_string();
+            match direction {
+                Direction::Construct => {
+                    assert!(body.contains("match (v) . 0"), "{body}");
+                    assert!(body.contains("i64 :: B (decode ((__arm) . 0) ?)"), "{body}");
+                    assert!(
+                        body.contains("return :: core :: result :: Result :: Err"),
+                        "{body}"
+                    );
+                }
+                Direction::Deconstruct => {
+                    assert!(body.contains("match v"), "{body}");
+                    assert!(body.contains("i64 :: B (__part0)"), "{body}");
+                    assert!(body.contains("encode (__part0) ?"), "{body}");
+                    assert!(
+                        body.contains("(1 , () , (encode (__part0) ? ,) ,)"),
+                        "{body}"
+                    );
+                }
+            }
+            assert!(rendered.fallible);
+        }
     }
 }
