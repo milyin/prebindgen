@@ -877,24 +877,6 @@ impl<R: Conversions> JCompile<'_, R> {
     /// field walk, tuple construction/destruction, child calls and `?`
     /// propagation; JNI contributes only child converter contracts and ABI
     /// layout metadata.
-    /// The transparent wrappers over a crossing's value, or `None` when this
-    /// planner cannot compose through one of them.
-    ///
-    /// A composed chain reaches the canonical value by peeling every wrapper
-    /// and puts them back afterwards, so it needs the operation for the
-    /// direction it is going: `Box::new` to build, `*b` to read. A wrapper
-    /// missing that operation — `Cow`, which has no read — is not composable,
-    /// and neither is a wrapper this adapter has no entry for at all.
-    ///
-    /// Deconstructing additionally needs the crossing to **own** what it takes
-    /// apart. Reading through a shared borrow would move the value out of the
-    /// wrapper, which is what `&Box<Reading>` would do.
-    ///
-    /// Refusing here is what keeps the legacy path in control. `JSource::build`
-    /// and `JSource::read` expect the rejection to have happened while
-    /// planning: past this point an unsupported wrapper is a panic during
-    /// `write_rust`, or generated Rust that does not compile in the consumer's
-    /// crate.
     fn planned_product(&self, at: At<'_>, parts: Parts<'_, Self>) -> Option<JFrag> {
         if parts.iter().any(|(_, frag)| frag.composed_only) {
             return None;
@@ -1296,18 +1278,7 @@ impl<R: Conversions> JCompile<'_, R> {
             return None;
         }
 
-        let wrappers = source.erased_wrappers();
-        if wrappers.iter().any(|wrapper| {
-            let Some(ops) = super::trait_impl::wrapper_ops(wrapper) else {
-                return true;
-            };
-            match direction {
-                Direction::Construct => ops.build.is_none(),
-                Direction::Deconstruct => ops.read.is_none(),
-            }
-        }) {
-            return None;
-        }
+        let wrappers = composable_wrappers(at.crossing)?;
 
         let inner_wire = inner.conv.destination.clone();
         let stages = match direction {
@@ -2787,7 +2758,8 @@ fn field_step(ident: &syn::Ident) -> prebindgen_registry::unfold::PathStep {
 /// generated Rust that does not compile in the consumer's crate.
 ///
 /// One function because it is one rule. Stated per planner, the choice copy
-/// omitted it and the sequence copy omitted the ownership half.
+/// omitted it, while the sequence and Optional copies omitted the ownership
+/// half.
 fn composable_wrappers(
     crossing: &prebindgen_registry::recipe::Crossing,
 ) -> Option<Vec<&'static str>> {
@@ -2802,15 +2774,6 @@ fn composable_wrappers(
         }
     };
     wrappers.iter().all(usable).then_some(wrappers)
-}
-
-/// Whether a composed chain can peel and restore this crossing's wrappers.
-///
-/// Test support: the three planners share one gate, and this is it, asked
-/// without building a fragment.
-#[cfg(test)]
-pub(crate) fn composable_for_test(crossing: &prebindgen_registry::recipe::Crossing) -> bool {
-    composable_wrappers(crossing).is_some()
 }
 
 /// The model field one part reads, or `None` for a part that is not a field.
