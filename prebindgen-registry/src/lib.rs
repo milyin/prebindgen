@@ -103,6 +103,7 @@ pub mod diagnostics;
 pub mod domain;
 mod emit;
 pub mod expand;
+pub mod generation;
 pub mod niches;
 pub mod prebindgen;
 pub mod recipe;
@@ -129,6 +130,12 @@ pub use self::{
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
     emit::Emit,
+    generation::{
+        AbiLayout, ArtifactId, ArtifactInput, ArtifactPlan, ChoiceBridge, Cleanup, ContractAt,
+        ConverterPlan, Failure, FixedArity, FragmentId, FragmentPlan, FragmentUse, GenerationPlan,
+        GenerationPlanBuilder, IdentityError, NichePlan, PlanError, PlanErrors, Representation,
+        ShapePlan, SiteId, SitePlan,
+    },
     niches::{NicheSlot, Niches},
     prebindgen::{ConverterImpl, NamePredicate, Prebindgen, Stage},
     registry::{
