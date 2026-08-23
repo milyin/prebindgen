@@ -423,6 +423,89 @@ pub struct Choice<S, B, P, C> {
     pub arms: Vec<ChoiceArm<P, C>>,
 }
 
+/// One callback argument after its adapter-owned delivery has been rendered.
+///
+/// A source callback argument may occupy any number of target-language call
+/// arguments. The registry owns their ordering and the lifetime of the
+/// preparation/cleanup around the foreign invocation; the adapter owns only
+/// how its intermediate values are represented.
+pub struct RenderedInvokePart {
+    /// Statements that turn one source callback argument into intermediates.
+    pub prepare: TokenStream,
+    /// Target-language call arguments contributed by this source argument.
+    pub arguments: Vec<TokenStream>,
+    /// Statements run after the target-language invocation.
+    pub cleanup: TokenStream,
+}
+
+/// Adapter plan for delivering one argument of an [`Invoke`] shape.
+///
+/// The source [`TypeRef`] is deliberately absent from this hook. The shared
+/// composer spells and binds source arguments only during final rendering and
+/// hands the adapter the resulting local expression.
+pub trait InvokePart: Clone {
+    /// Render target-side delivery for one already-bound source argument.
+    fn render(&self, value: TokenStream, index: usize, emit: &Emit) -> RenderedInvokePart;
+}
+
+/// Adapter-selected callable and invocation protocol for one [`Invoke`] shape.
+///
+/// `capture` runs once while the source callback is constructed. `surround`
+/// runs for every invocation and receives the three ordered phases assembled
+/// by the registry. This keeps target-specific guards, local frames and error
+/// routes in the adapter without giving it ownership of the source-value walk.
+pub trait InvokeBridge: Clone {
+    /// The one intermediate callable type accepted by the converter.
+    fn intermediate(&self) -> syn::Type;
+
+    /// Stable local name for the inbound target callable.
+    fn value_name(&self) -> syn::Ident {
+        syn::Ident::new("v", proc_macro2::Span::call_site())
+    }
+
+    /// Stable local name for one source callback argument.
+    fn argument_name(&self, index: usize) -> syn::Ident {
+        syn::Ident::new(
+            &format!("__invoke_arg{index}"),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    /// Capture the target callable and produce the source callback value.
+    fn capture(&self, value: TokenStream, closure: TokenStream) -> TokenStream;
+
+    /// Invoke the captured target callable with the flattened arguments.
+    fn invoke(&self, arguments: &[TokenStream]) -> TokenStream;
+
+    /// Bracket one invocation with adapter-specific control flow.
+    fn surround(
+        &self,
+        prepare: TokenStream,
+        invoke: TokenStream,
+        cleanup: TokenStream,
+    ) -> TokenStream {
+        quote::quote!({ #prepare #invoke #cleanup })
+    }
+
+    /// Whether constructing the source callback can fail.
+    fn fallible(&self) -> bool;
+}
+
+/// Registry-composed converter plan for an Invoke recipe.
+#[derive(Clone)]
+pub struct Invoke<S, B, P> {
+    /// Exact callback spelling, opaque until rendering.
+    pub source: TypeRef,
+    /// Exact callback argument spellings, opaque until rendering.
+    pub arguments: Vec<TypeRef>,
+    /// Source spelling and transparent-wrapper policy.
+    pub source_policy: S,
+    /// Adapter callable/call-site protocol.
+    pub bridge: B,
+    /// Ordered adapter delivery plans, one per callback argument.
+    pub parts: Vec<P>,
+}
+
 /// A rendered chain body and the types needed to put a function around it.
 pub struct Rendered {
     /// Exact source type, spelled only at final emission.
@@ -752,6 +835,59 @@ where
     }
 }
 
+impl<S, B, P> Chain for Invoke<S, B, P>
+where
+    S: Source,
+    B: InvokeBridge,
+    P: InvokePart,
+{
+    fn render(&self, emit: &Emit) -> Rendered {
+        assert_eq!(
+            self.arguments.len(),
+            self.parts.len(),
+            "an Invoke plan has one delivery plan per callback argument"
+        );
+        let source = self.source_policy.spell(&self.source, emit);
+        let intermediate = self.bridge.intermediate();
+        let value_name = self.bridge.value_name();
+        let names: Vec<_> = (0..self.arguments.len())
+            .map(|index| self.bridge.argument_name(index))
+            .collect();
+        let types: Vec<_> = self
+            .arguments
+            .iter()
+            .map(|argument| self.source_policy.spell(argument, emit))
+            .collect();
+        let rendered: Vec<_> = self
+            .parts
+            .iter()
+            .zip(&names)
+            .enumerate()
+            .map(|(index, (part, name))| part.render(quote::quote!(#name), index, emit))
+            .collect();
+        let prepare = rendered.iter().map(|part| &part.prepare);
+        let call_arguments: Vec<_> = rendered
+            .iter()
+            .flat_map(|part| part.arguments.iter().cloned())
+            .collect();
+        let cleanup = rendered.iter().map(|part| &part.cleanup);
+        let invocation = self.bridge.invoke(&call_arguments);
+        let surrounded = self.bridge.surround(
+            quote::quote!(#(#prepare)*),
+            invocation,
+            quote::quote!(#(#cleanup)*),
+        );
+        let closure = quote::quote!(move |#(#names: #types),*| #surrounded);
+        let body = self.bridge.capture(quote::quote!(#value_name), closure);
+        Rendered {
+            source,
+            intermediate,
+            body: syn::parse2(body).expect("an Invoke callback constructor is a valid expression"),
+            fallible: self.bridge.fallible(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{cell::Cell, rc::Rc};
@@ -1005,5 +1141,81 @@ mod tests {
             }
             assert!(rendered.fallible);
         }
+    }
+
+    #[derive(Clone)]
+    struct TestInvokePart(&'static str);
+
+    impl InvokePart for TestInvokePart {
+        fn render(&self, value: TokenStream, _index: usize, _emit: &Emit) -> RenderedInvokePart {
+            let prepare = syn::Ident::new(
+                &format!("prepare_{}", self.0),
+                proc_macro2::Span::call_site(),
+            );
+            let cleanup = syn::Ident::new(
+                &format!("cleanup_{}", self.0),
+                proc_macro2::Span::call_site(),
+            );
+            RenderedInvokePart {
+                prepare: quote!(let #prepare = deliver(#value);),
+                arguments: vec![quote!(#prepare)],
+                cleanup: quote!(#cleanup();),
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct TestInvoke;
+
+    impl InvokeBridge for TestInvoke {
+        fn intermediate(&self) -> syn::Type {
+            syn::parse_quote!(Callable)
+        }
+
+        fn capture(&self, value: TokenStream, closure: TokenStream) -> TokenStream {
+            quote!(capture(#value, #closure))
+        }
+
+        fn invoke(&self, arguments: &[TokenStream]) -> TokenStream {
+            quote!(call(#(#arguments),*);)
+        }
+
+        fn fallible(&self) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn invoke_spells_only_at_render_and_owns_delivery_order() {
+        let spells = Rc::new(Cell::new(0));
+        let plan = Invoke {
+            source: TypeRef::scalar(ScalarKind::I64),
+            arguments: vec![
+                TypeRef::scalar(ScalarKind::I32),
+                TypeRef::scalar(ScalarKind::U64),
+            ],
+            source_policy: TestSource {
+                spells: spells.clone(),
+            },
+            bridge: TestInvoke,
+            parts: vec![TestInvokePart("a"), TestInvokePart("b")],
+        };
+
+        assert_eq!(spells.get(), 0, "planning must not spell callback types");
+        let rendered = plan.render(&Emit::for_test());
+        assert_eq!(spells.get(), 3);
+        let body = rendered.body.to_token_stream().to_string();
+        let prepare_a = body.find("prepare_a").unwrap();
+        let prepare_b = body.find("prepare_b").unwrap();
+        let call = body.find("call (prepare_a , prepare_b)").unwrap();
+        let cleanup_a = body.find("cleanup_a").unwrap();
+        let cleanup_b = body.find("cleanup_b").unwrap();
+        assert!(prepare_a < prepare_b && prepare_b < call);
+        assert!(call < cleanup_a && cleanup_a < cleanup_b);
+        assert_eq!(
+            rendered.intermediate.to_token_stream().to_string(),
+            "Callable"
+        );
+        assert!(!rendered.fallible);
     }
 }

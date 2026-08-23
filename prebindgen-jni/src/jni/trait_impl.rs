@@ -1457,15 +1457,14 @@ impl JniGenBuilder {
         // invariants, reported together once the walk is done.
         let mut refusals: Vec<String> = Vec::new();
         let registry = declared
-            .convert_with(|crossing, built, emit| {
+            .convert_with(|crossing, built, _emit| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     decls.recipe_table(),
                     decls.site_bindings(),
                     decls.compiled.borrow().clone(),
                 );
-                let conv =
-                    decls.compile_crossing(&mut compiler, crossing, built, emit, &mut refusals);
+                let conv = decls.compile_crossing(&mut compiler, crossing, built, &mut refusals);
                 *decls.compiled.borrow_mut() = compiler.finish();
                 let (dir, key) = crossing;
                 let compiled_by_recipe = decls.compiled.borrow().fragment(key, *dir).is_some();
@@ -1641,7 +1640,6 @@ impl Declarations {
         >,
         crossing: &Crossing,
         built: &'v R,
-        emit: &prebindgen_registry::Emit,
         refusals: &mut Vec<String>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
@@ -1656,17 +1654,7 @@ impl Declarations {
             site: None,
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(reading, direction);
-        let fragment = match compiler.crossing(&mut adapter, &crossing) {
-            Ok(fragment) => fragment,
-            Err(_) => {
-                let prebindgen_registry::flat::TypeKind::Callback { args } =
-                    crossing.spelled().unwrapped().kind()
-                else {
-                    return None;
-                };
-                return self.dispatch_fn_input(args, built, None, emit);
-            }
-        };
+        let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
         // A `data_class` also states a recipe that says what it is made of.
         // Compiling that named recipe equips whole-value input, output and
         // callback paths with the same registry-owned Product descriptor.
@@ -1948,26 +1936,28 @@ fn flat_unit_enum<'r>(
 impl Declarations {
     pub(crate) fn dispatch_fn_input(
         &self,
+        source: &prebindgen_registry::flat::TypeRef,
         args: &[prebindgen_registry::flat::TypeRef],
         registry: &impl Conversions,
         arg_fragments: Option<&[&crate::jni::compile::JFrag]>,
         emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let outer_ty = build_fn_type(args, emit);
-        let (wire, body) = callback_input(self, args, registry, arg_fragments, emit)?;
+    ) -> Option<(ConverterImpl<KotlinMeta>, crate::jni::chain::JFunction)> {
+        let (outer_ty, wire, body, plan) =
+            callback_input(self, source, args, registry, arg_fragments, emit)?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
         // (`Any`) — same as the unfold builder / error-sink params. The typed
         // wrapper-level lambda signature is computed at render time from the
         // arg types' callback plans, not carried in metadata.
-        Some(ConverterImpl {
+        let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
             function: self.build_input_fn_composed(&outer_ty, &wire, &body, None),
             destination: wire,
             niches,
             metadata: self.framework_meta(Some(KtType::any())),
-        })
+        };
+        Some((conv, crate::jni::chain::JFunction::invoke(plan)))
     }
 }
 

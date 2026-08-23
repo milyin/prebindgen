@@ -42,7 +42,7 @@ fn takeable_callback_param() {
     // Trampoline passes `&mut __w0` and drops it after the call.
     assert!(compact.contains("&mut__w0as*mutz_sample_t"), "{src}");
     assert!(
-        compact.contains("<z_sample_tas::prebindgen_c_runtime::Transmute>::into_rust(__w0)"),
+        compact.contains("<z_sample_tas::prebindgen_c_runtime::Transmute>::into_rust(__w0"),
         "{src}"
     );
     // Public take (move) function emitted (no name mangler in this test ⇒

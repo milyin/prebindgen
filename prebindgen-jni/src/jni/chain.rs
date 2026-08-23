@@ -22,6 +22,7 @@ enum JBody {
     Choice(Box<JChoicePlan>),
     Sequence(Box<JSequencePlan>),
     Optional(Box<JOptionalPlan>),
+    Invoke(Box<crate::jni::emit::JInvokePlan>),
 }
 
 impl JFunction {
@@ -47,6 +48,10 @@ impl JFunction {
 
     pub(crate) fn choice(plan: JChoicePlan) -> Self {
         Self(JBody::Choice(Box::new(plan)))
+    }
+
+    pub(crate) fn invoke(plan: crate::jni::emit::JInvokePlan) -> Self {
+        Self(JBody::Invoke(Box::new(plan)))
     }
 
     pub(crate) fn mark_reachable(&self) {
@@ -77,6 +82,7 @@ impl JFunction {
                     dependency.mark_reachable();
                 }
             }
+            JBody::Invoke(_) => {}
         }
     }
 }
@@ -90,6 +96,7 @@ impl RustFunction for JFunction {
             JBody::Optional(plan) => plan.reachable.get(),
             JBody::Sequence(plan) => plan.reachable.get(),
             JBody::Choice(plan) => plan.reachable.get(),
+            JBody::Invoke(_) => true,
         }
     }
 
@@ -101,6 +108,7 @@ impl RustFunction for JFunction {
             JBody::Optional(plan) => plan.render(emit),
             JBody::Choice(plan) => plan.render(emit),
             JBody::Sequence(plan) => plan.render(emit),
+            JBody::Invoke(plan) => plan.render(emit),
         }
     }
 }
