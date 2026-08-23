@@ -508,6 +508,73 @@ fn leaf_reach(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> String {
 
 #[cfg(test)]
 impl JniGen {
+    /// Compile one arbitrary crossing's declared `parts` row through the real
+    /// recipe driver, then render the JFunction the selected planner retained.
+    ///
+    /// Test support for planner gates: a public binding may fall back before a
+    /// late plan becomes reachable, but the recipe driver still has to select
+    /// the right fragment for that crossing.
+    pub(crate) fn parts_plan_for_test(
+        &self,
+        ty: syn::Type,
+        direction: prebindgen_registry::recipe::Direction,
+    ) -> Result<(bool, String, String), String> {
+        self.render_plan_for_test(ty, direction, true)
+    }
+
+    /// Compile and render the crossing's default row.
+    pub(crate) fn crossing_plan_for_test(
+        &self,
+        ty: syn::Type,
+        direction: prebindgen_registry::recipe::Direction,
+    ) -> Result<(bool, String, String), String> {
+        self.render_plan_for_test(ty, direction, false)
+    }
+
+    fn render_plan_for_test(
+        &self,
+        ty: syn::Type,
+        direction: prebindgen_registry::recipe::Direction,
+        parts: bool,
+    ) -> Result<(bool, String, String), String> {
+        use prebindgen_registry::{
+            recipe::{Compiler, Crossing},
+            write::RustFunction,
+        };
+
+        let reading = self
+            .registry
+            .flat()
+            .classify(&ty)
+            .map_err(|e| format!("the model does not classify {}: {e}", quote::quote!(#ty)))?;
+        let crossing = Crossing::new(reading, direction);
+        let mut compiler = Compiler::resume(
+            self.registry.flat(),
+            self.decls.recipe_table(),
+            self.decls.site_bindings(),
+            self.decls.compiled.borrow().clone(),
+        );
+        let mut adapter = crate::jni::compile::JCompile {
+            decls: &self.decls,
+            registry: &self.registry,
+            declared_return: None,
+            site: None,
+        };
+        let fragment = if parts {
+            compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
+        } else {
+            compiler.crossing(&mut adapter, &crossing)
+        }
+        .map_err(|e| e.to_string())?;
+        fragment.rust.mark_reachable();
+        let rendered = fragment.rust.render(&prebindgen_registry::Emit::for_test());
+        Ok((
+            fragment.composed_only,
+            fragment.conv.converter_ident().to_string(),
+            quote::quote!(#rendered).to_string(),
+        ))
+    }
+
     /// What one crossing occupies on the wire, named the way a parameter
     /// names it.
     ///
