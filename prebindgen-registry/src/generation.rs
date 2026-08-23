@@ -4,7 +4,9 @@
 //! module can spell it. Adapter-owned associated types describe target
 //! representations and operations; the registry owns identity, composition,
 //! reachability, ordering, and the contracts that can be checked without Rust
-//! source syntax.
+//! source syntax. Those opaque payloads may use syntax for types invented by
+//! the target adapter, such as a C wire type; they must not contain source Rust
+//! syntax obtained by spelling a [`TypeRef`] before final emission.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -158,6 +160,9 @@ impl std::error::Error for IdentityError {}
 ///
 /// Associated values describe semantics, never rendered source items. The
 /// registry compares niche identities and treats every other payload as opaque.
+/// A payload may retain target-language syntax owned by the adapter. Source
+/// Rust syntax remains forbidden until final emission spells an opaque
+/// [`TypeRef`].
 pub trait Representation {
     /// A syntax-free identity for a private Rust carrier in a converter graph.
     type Intermediate: Clone + Eq;

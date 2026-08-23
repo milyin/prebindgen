@@ -478,10 +478,34 @@ impl CbindgenBuilder {
     }
 
     /// Assemble the `#[no_mangle] extern "C"` wrapper for one declared fn.
+    fn generation_site(
+        &self,
+        owner: &syn::Ident,
+        role: prebindgen_registry::recipe::Role,
+    ) -> &prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation> {
+        let id = prebindgen_registry::generation::SiteId::new(prebindgen_registry::recipe::Site {
+            owner: owner.clone(),
+            role,
+        });
+        let site = self
+            .generation
+            .as_ref()
+            .expect("C generation plan was not frozen")
+            .site(&id)
+            .unwrap_or_else(|| panic!("C generation plan has no site {id}"));
+        assert!(
+            matches!(
+                site.cleanup(),
+                prebindgen_registry::generation::Cleanup::None
+            ),
+            "ordinary C sites cannot carry a deferred cleanup operation"
+        );
+        site
+    }
+
     pub(super) fn emit_function_wrapper(
         &self,
         f: &prebindgen_registry::flat::Function,
-        registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         let orig = &f.name;
@@ -492,10 +516,12 @@ impl CbindgenBuilder {
         // already classified. An elided return is `TypeKind::Unit`, which is
         // the `ReturnType::Default` arm this used to write.
 
-        let has_fallible_input = f.params.iter().any(|p| {
-            self.in_frag(&p.ty)
-                .map(|e| e.function.call().fallible())
-                .unwrap_or(false)
+        let has_fallible_input = f.params.iter().enumerate().any(|(index, _)| {
+            self.generation_site(orig, prebindgen_registry::recipe::Role::Param { index })
+                .abi()
+                .payload()
+                .failure()
+                == prebindgen_registry::generation::Failure::Fallible
         });
 
         // Peel an outer `Result<_, E>`; `value_ty` is the success/return value.
@@ -507,7 +533,11 @@ impl CbindgenBuilder {
             None => (&f.ret, None),
         };
         let err_ty: Option<syn::Type> = err_reading.map(|t| spelled(t, emit));
-        let has_fallible_output = self.output_is_fallible(value_ty);
+        let value_site = (!matches!(value_ty.kind(), TypeKind::Unit))
+            .then(|| self.generation_site(orig, prebindgen_registry::recipe::Role::Return));
+        let has_fallible_output = value_site.is_some_and(|site| {
+            site.abi().payload().failure() == prebindgen_registry::generation::Failure::Fallible
+        });
 
         // Error wiring: the error type must be declared via `.error()`.
         let err_bits = err_ty.as_ref().map(|err_ty| {
@@ -520,21 +550,14 @@ impl CbindgenBuilder {
                 TypeKey::from_type(err_ty),
                 TypeKey::from_type(err_ty),
             );
-            let entry = registry
-                .reading_of(err_ty)
-                .and_then(|tr| self.out_frag(&tr))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Cbindgen::on_function: error type `{}` of `{}` has no output converter",
-                        TypeKey::from_type(err_ty),
-                        orig
-                    )
-                });
-            (
-                entry.destination.clone(),
-                entry.function.call().ident().clone(),
-                self.src_ty(err_ty),
-            )
+            let site = self.generation_site(orig, prebindgen_registry::recipe::Role::Error);
+            let crate::compile::CValue::Direct {
+                wire, converter, ..
+            } = site.abi().payload()
+            else {
+                panic!("C error site must have one direct wire");
+            };
+            (wire.clone(), converter.ident().clone(), self.src_ty(err_ty))
         });
 
         // No `Result` channel ⇒ a fallible input must be declared `.panic()`.
@@ -554,7 +577,16 @@ impl CbindgenBuilder {
         //   * Result + a free pointer niche  → NULL marks `Err` (value in-band);
         //   * Result without a free niche     → `bool` status, value to out-params;
         //   * no Result                       → field 0 is the C return, rest out.
-        let shape = self.lower_shape(value_ty, registry);
+        let shape = value_site.map_or(
+            ValueShape {
+                fields: Vec::new(),
+                niches: Niches::empty(),
+            },
+            |site| ValueShape {
+                fields: site.abi().payload().fields(),
+                niches: site.abi().payload().effective_niches(),
+            },
+        );
         let result_slot = shape.niches.clone().carve().map(|(slot, _)| slot);
         let result_in_band = err_ty.is_some() && result_slot.is_some();
         let field0_is_return = result_in_band || err_ty.is_none();
@@ -612,6 +644,49 @@ impl CbindgenBuilder {
         } else {
             quote!(false)
         };
+        let mut planned_routes = f
+            .params
+            .iter()
+            .enumerate()
+            .filter_map(|(index, _)| {
+                self.generation_site(orig, prebindgen_registry::recipe::Role::Param { index })
+                    .failure_route()
+            })
+            .chain(
+                value_site
+                    .into_iter()
+                    .filter_map(|site| site.failure_route()),
+            );
+        let planned_route = planned_routes.next();
+        assert!(
+            planned_routes.all(|route| Some(route) == planned_route),
+            "C function sites disagree on their frozen failure route"
+        );
+        match planned_route {
+            Some(crate::compile::CFailureRoute::Panic) => {
+                assert!(
+                    err_bits.is_none(),
+                    "panic route attached to a Result function"
+                );
+            }
+            Some(crate::compile::CFailureRoute::Error(error_site)) => {
+                assert!(
+                    err_bits.is_some(),
+                    "error route attached without a Result channel"
+                );
+                let expected = prebindgen_registry::generation::SiteId::new(
+                    prebindgen_registry::recipe::Site {
+                        owner: orig.clone(),
+                        role: prebindgen_registry::recipe::Role::Error,
+                    },
+                );
+                assert_eq!(
+                    error_site, &expected,
+                    "failure route names the wrong error site"
+                );
+            }
+            None => {}
+        }
         let input_route = match &err_bits {
             Some((_, e_conv, e_ty_src)) => ErrRoute::Result {
                 e_conv,
@@ -620,8 +695,7 @@ impl CbindgenBuilder {
             },
             None => ErrRoute::Panic,
         };
-        let (in_params, decodes, call_args) =
-            self.emit_inputs(orig, f, registry, &input_route, emit);
+        let (in_params, decodes, call_args) = self.emit_planned_inputs(orig, f, &input_route, emit);
         let call = quote!(#call_path(#(#call_args),*));
 
         let e_param = err_bits
@@ -634,8 +708,11 @@ impl CbindgenBuilder {
             // No `Result`: straight-line. `void` when there are no fields.
             (None, _) => {
                 if let Some(field0_wire) = field0_wire.as_ref() {
-                    let enc =
-                        self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
+                    let enc = value_site.map_or_else(TokenStream::new, |site| {
+                        site.abi()
+                            .payload()
+                            .encode(quote!(__v), &targets, &input_route)
+                    });
                     quote!(
                         #(#decodes)*
                         let __v = #call;
@@ -654,8 +731,11 @@ impl CbindgenBuilder {
                     .as_ref()
                     .expect("in-band result has a niche")
                     .value;
-                let enc =
-                    self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
+                let enc = value_site.map_or_else(TokenStream::new, |site| {
+                    site.abi()
+                        .payload()
+                        .encode(quote!(__v), &targets, &input_route)
+                });
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -669,8 +749,11 @@ impl CbindgenBuilder {
             }
             // `Result` without a free niche: `bool` status, value to out-params.
             (Some((_, e_conv, _)), false) => {
-                let enc =
-                    self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
+                let enc = value_site.map_or_else(TokenStream::new, |site| {
+                    site.abi()
+                        .payload()
+                        .encode(quote!(__v), &targets, &input_route)
+                });
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -934,32 +1017,6 @@ impl CbindgenBuilder {
         }
     }
 
-    fn output_is_fallible(&self, ty: &TypeRef) -> bool {
-        // The third walk over the same value, and it stops where the other two
-        // do: a node with a wire of its own is encoded by its own converter, so
-        // whether the encode can fail is THAT converter's answer. Peeling past
-        // it asks about a converter that never runs — which decides whether the
-        // binding needs `.panic()`, so the two disagreeing is a wrapper that
-        // aborts where nothing opted in, or an opt-in demanded for a conversion
-        // that cannot fail (#428 review).
-        if !self.has_own_wire(ty) {
-            let vec_elem = match ty.kind() {
-                TypeKind::Vec(e) => Some(&**e),
-                _ => None,
-            };
-            if let Some(inner) = ty
-                .optional_inner()
-                .or(vec_elem)
-                .or_else(|| r_cow_slice_elem(ty))
-                .or_else(|| r_scalar_slice_elem(ty))
-            {
-                return self.output_is_fallible(inner);
-            }
-        }
-        self.out_frag(ty)
-            .is_some_and(|entry| entry.function.call().fallible())
-    }
-
     /// How one parameter *uses* the resource it names — the axis the alias rule
     /// is stated on. `None` ⇒ the parameter names no single owned resource (a
     /// scalar, a string, a slice block, an undeclared type), so it cannot alias
@@ -1073,104 +1130,66 @@ impl CbindgenBuilder {
     /// argument expressions. Fallible inputs (converter returns `Result<_,
     /// String>`) route their `Err(msg)` per `route`; infallible inputs decode
     /// directly.
-    pub(super) fn emit_inputs(
+    pub(super) fn emit_planned_inputs(
         &self,
         orig: &syn::Ident,
         f: &prebindgen_registry::flat::Function,
-        registry: &Registry,
-        route: &ErrRoute,
+        route: &ErrRoute<'_>,
         emit: &prebindgen_registry::Emit,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
         let mut params = Vec::new();
-        // The alias preflight runs BEFORE every decode, which is the whole
-        // point: by the time the first converter has run, one of the aliased
-        // arguments has already been consumed.
         let mut decodes: Vec<TokenStream> = self.alias_preflight(f, route).into_iter().collect();
         let mut call_args = Vec::new();
 
-        for param in &f.params {
+        for (index, param) in f.params.iter().enumerate() {
             let ident = &param.name;
-            let arg_reading = &param.ty;
-            let arg_ty = &emit.spell_ty(arg_reading);
-
-            // `&[E]` slice (scalar `E`): two wire params (`*const E`, `usize`),
-            // decoded zero-copy. NULL pointer ⇒ empty slice (not an error).
-            if let Some(elem) = r_scalar_slice_elem(arg_reading).map(|t| spelled(t, emit)) {
-                let len_id = format_ident!("{}_len", ident);
-                params.push(quote!(#ident: *const #elem));
-                params.push(quote!(#len_id: usize));
-                decodes.push(quote!(
-                    let #ident: &[#elem] = if #ident.is_null() {
-                        &[]
+            let site =
+                self.generation_site(orig, prebindgen_registry::recipe::Role::Param { index });
+            match site.abi().payload() {
+                crate::compile::CValue::BorrowedInput {
+                    element,
+                    wire,
+                    reinterpret,
+                } => {
+                    let len_id = format_ident!("{}_len", ident);
+                    let source = self.src_ty(&spelled(element, emit));
+                    params.push(quote!(#ident: #wire));
+                    params.push(quote!(#len_id: usize));
+                    let from_parts = if *reinterpret {
+                        quote!(::core::slice::from_raw_parts(
+                            #ident as *const #source,
+                            #len_id,
+                        ))
                     } else {
-                        ::core::slice::from_raw_parts(#ident, #len_id)
+                        quote!(::core::slice::from_raw_parts(#ident, #len_id))
                     };
-                ));
-                call_args.push(quote!(#ident));
-                continue;
-            }
-
-            // `&[E]` slice (inline-opaque by-value `E`, e.g. a `repr_c_struct`):
-            // two wire params (`*const E_counterpart`, `usize`), reinterpreted to
-            // `&[E]` zero-copy. The counterpart is layout-identical to `E` (asserted
-            // by a generated `const _`), so the whole block transmutes in one shot —
-            // the slice analogue of the single-`&E` `__cbg_in_*` converter. NULL ⇒
-            // empty slice.
-            if let Some(elem) = self
-                .r_value_opaque_slice_elem(arg_reading)
-                .map(|t| spelled(t, emit))
-            {
-                // The C wire element is the inline-opaque counterpart (e.g. the
-                // generated `payload_t` mirror), layout-identical to the Rust value.
-                let elem_wire = self
-                    .value_opaque_ty(&elem)
-                    .expect("value_opaque_slice_elem guaranteed a value_opaque element")
-                    .clone();
-                let src = self.src_ty(&elem);
-                let len_id = format_ident!("{}_len", ident);
-                params.push(quote!(#ident: *const #elem_wire));
-                params.push(quote!(#len_id: usize));
-                decodes.push(quote!(
-                    let #ident: &[#src] = if #ident.is_null() {
-                        &[]
+                    decodes.push(quote!(
+                        let #ident: &[#source] = if #ident.is_null() {
+                            &[]
+                        } else {
+                            #from_parts
+                        };
+                    ));
+                }
+                crate::compile::CValue::Direct {
+                    wire, converter, ..
+                } => {
+                    let conv = converter.ident();
+                    params.push(quote!(#ident: #wire));
+                    if converter.fallible() {
+                        let on_err = route_message(route);
+                        decodes.push(quote!(
+                            let #ident = match #conv(#ident) {
+                                ::core::result::Result::Ok(__v) => __v,
+                                ::core::result::Result::Err(__msg) => { #on_err }
+                            };
+                        ));
                     } else {
-                        ::core::slice::from_raw_parts(#ident as *const #src, #len_id)
-                    };
-                ));
-                call_args.push(quote!(#ident));
-                continue;
+                        decodes.push(quote!(let #ident = #conv(#ident);));
+                    }
+                }
+                _ => panic!("C input site has an output-only ABI plan"),
             }
-
-            let entry = registry
-                .reading_of(arg_ty)
-                .and_then(|tr| self.in_frag(&tr))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Cbindgen::on_function: input type `{}` of `{}` has no input converter",
-                        TypeKey::from_type(arg_ty),
-                        orig
-                    )
-                });
-            let wire = &entry.destination;
-            let conv = entry.function.call().ident();
-
-            params.push(quote!(#ident: #wire));
-
-            if entry.function.call().fallible() {
-                let on_err = route_message(route);
-                decodes.push(quote!(
-                    let #ident = match #conv(#ident) {
-                        ::core::result::Result::Ok(__v) => __v,
-                        ::core::result::Result::Err(__msg) => { #on_err }
-                    };
-                ));
-            } else {
-                decodes.push(quote!(let #ident = #conv(#ident);));
-            }
-
-            // Each input converter produces exactly the source param type
-            // (`String` by value, `&T` for borrows, owned `T` for consume), so
-            // the decoded binding is passed straight through.
             call_args.push(quote!(#ident));
         }
 

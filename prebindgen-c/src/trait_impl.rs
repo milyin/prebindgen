@@ -388,22 +388,26 @@ impl CbindgenBuilder {
     /// rather than by luck, and the composition contracts — a part's type and
     /// how it is held — are what actually run.
     ///
-    /// The plans are discarded. C's per-item emitter still builds each wrapper
-    /// from the converter table, and moving that is a change of its own.
-    fn check_sites<'v>(
+    /// The returned plans become the immutable site store consumed by ordinary
+    /// wrapper emission. Callback delivery is frozen separately in the next stage.
+    fn compile_sites<'v>(
         &'v self,
         compiler: &mut prebindgen_registry::recipe::Compiler<
             '_,
             crate::compile::CCompile<'v, Registry>,
         >,
         registry: &'v Registry,
-    ) -> Result<(), String> {
+    ) -> Result<
+        Vec<prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation>>,
+        String,
+    > {
         use prebindgen_registry::recipe::{Crossing, Direction, Role, Site};
 
         let mut adapter = crate::compile::CCompile {
             gen: self,
             registry,
         };
+        let mut plans = Vec::new();
         let declared = self.declared_functions();
         let mut names: Vec<&syn::Ident> = declared.iter().collect();
         names.sort_by_key(|i| i.to_string());
@@ -417,9 +421,12 @@ impl CbindgenBuilder {
                     role: Role::Param { index },
                 };
                 let crossing = Crossing::new(param.ty.clone(), Direction::Construct);
-                compiler
+                if let Some(plan) = compiler
                     .site(&mut adapter, site, crossing)
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e| e.to_string())?
+                {
+                    plans.push(plan);
+                }
             }
             // A `Result`'s arms are their own sites; the whole `Result` is not
             // a value C ever holds, so it is not one.
@@ -437,12 +444,15 @@ impl CbindgenBuilder {
                     role,
                 };
                 let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
-                compiler
+                if let Some(plan) = compiler
                     .site(&mut adapter, site, crossing)
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e| e.to_string())?
+                {
+                    plans.push(plan);
+                }
             }
         }
-        Ok(())
+        Ok(plans)
     }
 
     /// Which alternative of `key` these parts came from, by matching their
@@ -1543,23 +1553,32 @@ impl CbindgenBuilder {
                 conv.map(|c| prebindgen_registry::Answer::over(c.subs))
             })?
             .build()?;
-        // Every site of every exported function, compiled. Nothing consumes
-        // the plans yet — C's per-item emitter still builds each wrapper — but
-        // it is what makes the contracts a site owns run against real positions
-        // rather than only inside a product. What each one demands is the
-        // target's answer: see `CCompile::tolerates` for why C accepts a
-        // borrowed return where the JVM must not.
-        {
+        // Freeze every ordinary function position and the fragment graph it reaches.
+        let sites = {
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                 &model,
                 &recipes,
                 &bindings,
                 self.compiled.borrow().clone(),
             );
-            self.check_sites(&mut compiler, &registry)
+            let sites = self
+                .compile_sites(&mut compiler, &registry)
                 .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
             *self.compiled.borrow_mut() = compiler.finish();
+            sites
+        };
+        let mut generation = prebindgen_registry::generation::GenerationPlanBuilder::new();
+        for fragment in self.compiled.borrow().fragments() {
+            generation.fragment(fragment.freeze());
         }
+        for site in sites {
+            generation.site(site);
+        }
+        self.generation = Some(generation.build().map_err(|errors| {
+            prebindgen_registry::ScanError::AdapterInvariant {
+                message: errors.to_string(),
+            }
+        })?);
         // What the compilation produced, kept for emission and for lookup.
         self.compiled_fns = self
             .compiled
@@ -1885,10 +1904,10 @@ impl Prebindgen for CbindgenBuilder {
     fn on_function(
         &self,
         f: &prebindgen_registry::flat::Function,
-        registry: &Registry,
+        _registry: &Registry,
         emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
-        self.emit_function_wrapper(f, registry, emit)
+        self.emit_function_wrapper(f, emit)
     }
 
     fn on_struct(
@@ -2095,8 +2114,9 @@ impl CbindgenBuilder {
 /// peels `ty`'s outermost layer and composes the inner's converter; `subs`
 /// lists the immediate inner(s) it looked up.
 impl CbindgenBuilder {
-    /// `&[E]` slice **input**: marker only — the two-param (`*const E_wire`,
-    /// `usize`) lowering is done structurally in `emit_inputs`.
+    /// `&[E]` slice **input**: marker only for converter-artifact compatibility.
+    /// The frozen site plan owns the two-parameter (`*const E_wire`, `usize`)
+    /// ABI and zero-copy decode.
     pub(crate) fn in_slice(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         let e = r_shared_slice_elem(ty)?;
         // #170, the slice instance. The two-param lowering builds the
