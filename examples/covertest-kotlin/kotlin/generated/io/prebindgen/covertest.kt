@@ -8,6 +8,7 @@ import io.prebindgen.covertest.model.BlobValue
 import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.Hold
 import io.prebindgen.covertest.model.HoldPolicy
+import io.prebindgen.covertest.model.Ingot
 import io.prebindgen.covertest.model.Lookup
 import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.ObjectBoundary
@@ -191,6 +192,20 @@ internal inline fun <R> withSortedHandleLocks(
     if ((y.ptr and -2L) > (z.ptr and -2L)) { val t = y; y = z; z = t }
     if ((x.ptr and -2L) > (y.ptr and -2L)) { val t = x; x = y; y = t }
     return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }
+}
+
+/** A product that owns the converted handle. */
+public data class CallbackHolder(val tag: Long, val token: Ingot) : AutoCloseable {
+    override fun close() {
+        token.close()
+    }
+
+    public companion object {
+        @JvmSynthetic
+        @io.prebindgen.covertest.UnsafeNativeApi
+        @JvmStatic
+        public fun fromParts(tag: Long, token: Long): CallbackHolder = CallbackHolder(tag, Ingot.fromRawPtr(token))
+    }
 }
 
 /**
@@ -657,6 +672,57 @@ internal fun LedgerCallback.asRaw(): LedgerCallbackRaw =
         }
     }
 
+public fun interface CallbackHolderOptionalCallback {
+    public fun run(callbackHolder: CallbackHolder?)
+}
+
+internal fun interface CallbackHolderOptionalCallbackRaw {
+    public fun run(callbackHolderPresent: Boolean, tag: Long, token: Long)
+}
+
+@JvmSynthetic
+internal fun CallbackHolderOptionalCallback.asRaw(): CallbackHolderOptionalCallbackRaw =
+    CallbackHolderOptionalCallbackRaw {
+        callbackHolderPresent,
+        tag,
+        token ->
+        val __own0 = if (callbackHolderPresent) { CallbackHolder.fromParts(tag, token) } else null
+        try {
+            run(__own0)
+        } finally {
+            __own0?.close()
+        }
+    }
+
+public fun interface PayloadOptionalCallback {
+    public fun run(payload: Payload?)
+}
+
+internal fun interface PayloadOptionalCallbackRaw {
+    public fun run(
+        payloadPresent: Boolean,
+        id: Long,
+        seq: Int,
+        value: Double,
+        flag: Boolean,
+        label: String?,
+    )
+}
+
+@JvmSynthetic
+internal fun PayloadOptionalCallback.asRaw(): PayloadOptionalCallbackRaw =
+    PayloadOptionalCallbackRaw {
+        payloadPresent,
+        id,
+        seq,
+        value,
+        flag,
+        label ->
+        run(
+            if (payloadPresent) { Payload.fromParts(id, seq, value, flag, label) } else null
+        )
+    }
+
 public fun interface StorageCallback {
     public fun run(storage: Storage)
 }
@@ -879,6 +945,22 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
             return c
         }
     }
+}
+
+/**
+ * Deliver a present or absent handle-owning data class to a callback.
+ *
+ * The generated Kotlin bridge must close `token` after the callback unless
+ * user code has already taken ownership of it.
+ */
+public fun callbackHolderOptionalEmit(
+    present: Boolean,
+    f: CallbackHolderOptionalCallback,
+    onError: JniErrorHandler<Unit>,
+) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.callbackHolderOptionalEmit(present, f.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
 /**
@@ -1163,6 +1245,9 @@ internal object CovNative {
     ): Int
 
     @JvmSynthetic
+    external fun callbackHolderOptionalEmit(present: Boolean, f: Any, errorSink: Any)
+
+    @JvmSynthetic
     external fun celsiusDouble(c: Int, errorSink: Any): Int
 
     @JvmSynthetic
@@ -1293,6 +1378,9 @@ internal object CovNative {
         pLabel: String?,
         errorSink: Any,
     ): Long?
+
+    @JvmSynthetic
+    external fun payloadOptionalEmit(present: Boolean, f: Any, errorSink: Any)
 
     @JvmSynthetic
     external fun payloadPriority(

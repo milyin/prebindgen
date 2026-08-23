@@ -342,7 +342,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                 return #on_err;
             }
         };
-        let (ze_stmts, ze_args) = encode_plan_leaves(
+        let (ze_stmts, ze_args, _) = encode_plan_leaves(
             ext,
             registry,
             crate::jni::emit::Delivered::of(ep),

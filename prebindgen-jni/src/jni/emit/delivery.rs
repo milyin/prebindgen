@@ -23,8 +23,9 @@ use super::*;
 /// leaf order regardless of encode order.
 ///
 /// Shape handling: [`UnfoldShape::Base`] decomposes the returned value
-/// directly; [`UnfoldShape::Optional`] matches `Some(__inner)` ⇒ decompose the
-/// inner, `None` ⇒ null result (builder skipped). Leaf wires may be object
+/// directly; [`UnfoldShape::Optional`] uses the registry's Optional-over-Product
+/// chain when available, yielding one presence wire plus the child's wires.
+/// Absence skips the builder and delivers null. Leaf wires may be object
 /// (JString/JByteArray/JObject — cast via `.into()`) or primitive (boxed to
 /// `java.lang.*` via the cached `box_helper_for_wire` runtime helpers).
 ///
@@ -61,16 +62,10 @@ pub(crate) fn emit_unfold_delivery(
     // Encode a value's leaves (`__out`, a `Some`-bound `__inner`, or a Vec
     // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
     // yielding the per-leaf typed jvalue arg expressions.
-    let encode_leaves = |value: &TokenStream| -> (TokenStream, Vec<TokenStream>) {
-        encode_plan_leaves(
-            ext,
-            registry,
-            Delivered::of(plan),
-            &obj_idents,
-            value,
-            &fail,
-            emit,
-        )
+    let encode_leaves = |value: &TokenStream, optional: bool| {
+        let mut delivered = Delivered::of(plan);
+        delivered.optional = optional;
+        encode_plan_leaves(ext, registry, delivered, &obj_idents, value, &fail, emit)
     };
 
     // Cached-interface call statics for the builder / folder `run`.
@@ -109,7 +104,7 @@ pub(crate) fn emit_unfold_delivery(
     // Decompose a value into leaves then invoke the builder once (`Decompose`/
     // `Optional`).
     let emit_decompose = |value: &TokenStream| -> TokenStream {
-        let (leaves, arg_exprs) = encode_leaves(value);
+        let (leaves, arg_exprs, _) = encode_leaves(value, false);
         let invoke = builder_invoke(&arg_exprs);
         quote! { #leaves #invoke }
     };
@@ -219,7 +214,7 @@ pub(crate) fn emit_unfold_delivery(
             }
         } else {
             // Decomposed (M5): encode each element's leaves, fold over them.
-            let (leaves, arg_exprs) = encode_leaves(&quote!(__elem));
+            let (leaves, arg_exprs, _) = encode_leaves(&quote!(__elem), false);
             let invoke = fold_invoke(&arg_exprs);
             quote! {
                 #leaves
@@ -278,14 +273,30 @@ pub(crate) fn emit_unfold_delivery(
             let statics = iface_statics(
                 iface.expect("builder interface spec derivable for a registered declaration"),
             );
-            // `None` ⇒ null result (builder skipped); `Some` ⇒ decompose inner.
-            let body = emit_decompose(&quote!(__inner));
-            quote! {
-                #statics
-                let __out = #call_expr;
-                match __out {
-                    ::core::option::Option::Some(__inner) => { #body }
-                    ::core::option::Option::None => #on_err,
+            let (leaves, arg_exprs, present) = encode_leaves(&quote!(__out), true);
+            if let Some(present) = present {
+                let invoke = builder_invoke(&arg_exprs);
+                quote! {
+                    #statics
+                    let __out = #call_expr;
+                    #leaves
+                    if #present != 0 {
+                        #invoke
+                    } else {
+                        #on_err
+                    }
+                }
+            } else {
+                // A non-composed declaration keeps the established delivery
+                // path until its shape has a registry recipe.
+                let body = emit_decompose(&quote!(__inner));
+                quote! {
+                    #statics
+                    let __out = #call_expr;
+                    match __out {
+                        ::core::option::Option::Some(__inner) => { #body }
+                        ::core::option::Option::None => #on_err,
+                    }
                 }
             }
         }
@@ -545,8 +556,11 @@ pub(crate) struct Delivered<'a> {
     pub(crate) source: &'a prebindgen_registry::flat::TypeRef,
     /// True when these leaves are the model-derived data-class Product itself.
     pub(crate) fixed_product: bool,
-    /// Exact Product child handed down by an enclosing registry recipe.
-    pub(crate) chain: Option<crate::jni::compile::ProductChain>,
+    /// Whether the fixed Product is wrapped in one outer Optional shape.
+    pub(crate) optional: bool,
+
+    /// Exact composed child handed down by an enclosing registry recipe.
+    pub(crate) chain: Option<crate::jni::compile::ComposedChain>,
 }
 
 impl<'a> Delivered<'a> {
@@ -559,15 +573,16 @@ impl<'a> Delivered<'a> {
             source: &plan.source,
             chain: None,
             fixed_product: plan.fixed_builder,
+            optional: plan.is_optional_base(),
         }
     }
 
-    /// The same delivery with the Product fragment the registry handed to a
+    /// The same delivery with the composed fragment the registry handed to a
     /// callback's `Invoke` recipe. This is available before the compilation
     /// store is committed, so callbacks do not need an adapter-side re-query.
     pub(crate) fn with_chain(
         plan: &'a prebindgen_registry::unfold::UnfoldPlan,
-        chain: Option<crate::jni::compile::ProductChain>,
+        chain: Option<crate::jni::compile::ComposedChain>,
     ) -> Self {
         Self {
             chain,
@@ -926,7 +941,7 @@ pub(crate) fn encode_plan_leaves(
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
     emit: &prebindgen_registry::Emit,
-) -> (TokenStream, Vec<TokenStream>) {
+) -> (TokenStream, Vec<TokenStream>, Option<syn::Ident>) {
     let Delivered {
         wires,
         hoists,
@@ -934,6 +949,7 @@ pub(crate) fn encode_plan_leaves(
         source,
         chain,
         fixed_product,
+        optional,
     } = site;
     // Per-fn origin qualification: each accessor call is prefixed with the
     // module of the crate that defines it (multi-source bindings).
@@ -965,18 +981,32 @@ pub(crate) fn encode_plan_leaves(
         } else {
             source.clone()
         };
+        let crossing = if optional {
+            crossing.optional()
+        } else {
+            crossing
+        };
         let chain = chain.or_else(|| {
-            ext.product_chain(
+            ext.composed_chain(
                 &crossing,
                 prebindgen_registry::recipe::Direction::Deconstruct,
             )
         });
-        if let Some(chain) = chain.filter(|chain| chain.layout.leaf_count() == n) {
+        if let Some(chain) = chain.filter(|chain| match &chain.layout {
+            crate::jni::compile::JLayout::Optional(inner) => optional && inner.leaf_count() == n,
+            layout => !optional && layout.leaf_count() == n,
+        }) {
             chain.activate();
             let encoded: Vec<syn::Ident> = (0..n)
                 .map(|index| format_ident!("__chain_wire{index}"))
                 .collect();
-            let pattern = chain.layout.pattern(&encoded);
+            let present = optional.then(|| format_ident!("__chain_present"));
+            let pattern_values: Vec<syn::Ident> = present
+                .iter()
+                .cloned()
+                .chain(encoded.iter().cloned())
+                .collect();
+            let pattern = chain.layout.pattern(&pattern_values);
             let converter = chain.ident;
             let on_chain_error = fail(quote!(__chain_error.to_string()));
             let mut stmts = quote! {
@@ -1009,7 +1039,7 @@ pub(crate) fn encode_plan_leaves(
                     });
                 }
             }
-            return (stmts, arg_exprs);
+            return (stmts, arg_exprs, present);
         }
     }
     let hoisted = bind_hoists(&qualify, hoists, value, by_ref);
@@ -1577,7 +1607,7 @@ pub(crate) fn encode_plan_leaves(
             };
         });
     }
-    (stmts, arg_exprs)
+    (stmts, arg_exprs, None)
 }
 
 /// True when a plan leaf crosses the typed `run` as a **raw primitive**

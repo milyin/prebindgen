@@ -127,14 +127,14 @@ pub(crate) fn callback_input(
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cbfold{}_obj{}", i, k))
                 .collect();
-            let (leaf_stmts, leaf_args) = encode_plan_leaves(
+            let (leaf_stmts, leaf_args, _) = encode_plan_leaves(
                 ext,
                 registry,
                 crate::jni::emit::Delivered::with_chain(
                     plan,
                     arg_fragments
                         .and_then(|fragments| fragments.get(i))
-                        .and_then(|fragment| fragment.product_chain()),
+                        .and_then(|fragment| fragment.composed_chain()),
                 ),
                 &obj_idents,
                 &quote!(__cb_elem),
@@ -180,7 +180,7 @@ pub(crate) fn callback_input(
 
         // Decomposed arg: deliver the leaves of its type-level canonical
         // output, exactly like a return delivery.
-        if let Some(plan) = registry.callback_arg_plan(&arg_ty.key()) {
+        if let Some(plan) = effective_callback_plan(ext, registry, arg_ty) {
             // Deferral safety: every leaf converter (and identity-leaf
             // projection) must already be resolved — return None so the rank
             // resolver retries this converter later otherwise. A synthesized
@@ -196,20 +196,27 @@ pub(crate) fn callback_input(
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cb{}_obj{}", i, k))
                 .collect();
-            let (stmts, arg_exprs) = encode_plan_leaves(
+            let (stmts, mut arg_exprs, present) = encode_plan_leaves(
                 ext,
                 registry,
                 crate::jni::emit::Delivered::with_chain(
                     plan,
                     arg_fragments
                         .and_then(|fragments| fragments.get(i))
-                        .and_then(|fragment| fragment.product_chain()),
+                        .and_then(|fragment| fragment.composed_chain()),
                 ),
                 &obj_idents,
                 &quote!(#cb_arg),
                 &fail,
                 emit,
             );
+            let optional = plan.is_optional_base();
+            if optional && present.is_none() {
+                return None;
+            }
+            if let Some(present) = present {
+                arg_exprs.insert(0, quote!(jni::sys::jvalue { z: #present }));
+            }
             preludes.push(stmts);
             total += arg_exprs.len();
             jvalue_exprs.extend(arg_exprs);

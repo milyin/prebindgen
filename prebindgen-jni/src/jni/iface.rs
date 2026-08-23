@@ -1315,8 +1315,11 @@ fn fixed_reassembly(
     source: &TypeKey,
     wires: &[crate::jni::compile::OutWire],
     class_fqn: &str,
+    first_slot: usize,
 ) -> (String, Vec<String>) {
-    let slots: Vec<String> = (0..wires.len()).map(|i| format!("${i}")).collect();
+    let slots: Vec<String> = (0..wires.len())
+        .map(|i| format!("${}", i + first_slot))
+        .collect();
     if !is_sum_row(wires) {
         let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
         return (
@@ -1328,6 +1331,28 @@ fn fixed_reassembly(
     let mut imports: BTreeSet<String> = BTreeSet::new();
     let (_, when) = ext.sum_reconstruct(registry, source, wires, &params, &slots, &mut imports);
     (when, imports.into_iter().collect())
+}
+
+/// The callback plan this adapter can actually deliver for `ty`.
+///
+/// An explicit conversion of the whole optional intentionally suppresses the
+/// Optional `parts` row. In that case the registry still knows the model shape,
+/// but JniGen must honor the terminal declaration and deliver the value whole.
+pub(crate) fn effective_callback_plan<'a>(
+    ext: &Declarations,
+    registry: &'a impl Conversions,
+    ty: &prebindgen_registry::flat::TypeRef,
+) -> Option<&'a UnfoldPlan> {
+    let plan = registry.callback_arg_plan(&ty.key())?;
+    if plan.is_optional_base() {
+        let crossing = prebindgen_registry::recipe::Crossing::new(
+            plan.source.clone().optional(),
+            prebindgen_registry::recipe::Direction::Deconstruct,
+        );
+        ext.recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::parts())?;
+    }
+    Some(plan)
 }
 
 /// Interface for an `impl Fn(args)` delivery: one `run` parameter per
@@ -1365,6 +1390,7 @@ pub(crate) fn callback_iface_spec(
     /// and `owned_handle` marks a plan-less opaque handle delivered as a raw
     /// `jlong` and wrapped + closed Kotlin-side (Phase 3).
     enum LeafDesc {
+        Presence(String),
         Plan(String, crate::jni::compile::OutWire),
         Whole {
             name: String,
@@ -1377,6 +1403,7 @@ pub(crate) fn callback_iface_spec(
         fn name(&self) -> &str {
             match self {
                 LeafDesc::Plan(n, _) => n,
+                LeafDesc::Presence(n) => n,
                 LeafDesc::Whole { name, .. } => name,
             }
         }
@@ -1391,11 +1418,14 @@ pub(crate) fn callback_iface_spec(
         // `List<Element>`, so it takes the plain whole-value path below (no leaf
         // params, no reassembly group). Only `Base`/accessor plans decompose the
         // arg into the callback's `run` params here.
-        let plan = registry
-            .callback_arg_plans()
-            .get(&t.key())
+        let plan = effective_callback_plan(ext, registry, t)
             .filter(|p| !super::render::is_iterable_fold(&p.shape));
         if let Some(plan) = plan {
+            let optional = plan.is_optional_base();
+            let whole_name = whole_value_name(t, i);
+            if optional {
+                leaf_tys.push(LeafDesc::Presence(format!("{whole_name}Present")));
+            }
             let wires = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
             let leaf_names = plan_leaf_names(&wires);
             for (n, l) in leaf_names.iter().zip(wires.iter()) {
@@ -1405,17 +1435,30 @@ pub(crate) fn callback_iface_spec(
                 any_fixed = true;
                 // Peeled off the reading — `borrow_target` is the model's
                 // answer to "is this a borrow", not a syn match.
-                let core = t.borrow_target().unwrap_or(t);
+                let crossed = t.borrow_target().unwrap_or(t);
+                let core = crossed.optional_inner().unwrap_or(crossed);
                 let fqn = ext.kotlin_fqn(&core.key())?;
-                let (reassemble, imports) =
-                    fixed_reassembly(ext, registry, &core.key(), &wires, &fqn);
+                let (mut reassemble, imports) = fixed_reassembly(
+                    ext,
+                    registry,
+                    &core.key(),
+                    &wires,
+                    &fqn,
+                    usize::from(optional),
+                );
+                if optional {
+                    reassemble = format!("if ($0) {{ {reassemble} }} else null");
+                }
+                let typed = KtType::cls(fqn.to_string());
+                let typed = if optional { typed.nullable() } else { typed };
+                let close_ty = if optional { t } else { core };
                 groups.push(GroupDesc {
-                    name: whole_value_name(t, i),
-                    typed: Some(KtType::cls(fqn.to_string())),
+                    name: whole_name,
+                    typed: Some(typed),
                     reassemble: Some(reassemble),
                     imports,
-                    leaf_count: wires.len(),
-                    close: crate::jni::struct_plan::type_close_strategy(ext, registry, core, 0),
+                    leaf_count: wires.len() + usize::from(optional),
+                    close: crate::jni::struct_plan::type_close_strategy(ext, registry, close_ty, 0),
                 });
             } else {
                 // Accessor-plan arg: each leaf is its own passthrough group, so
@@ -1447,6 +1490,7 @@ pub(crate) fn callback_iface_spec(
                             &leaf.out_ty.key(),
                             &wires[k..seg],
                             &fqn,
+                            0,
                         );
                         groups.push(GroupDesc {
                             // The tag leaf is named `<field>__tag`; the value it
@@ -1519,6 +1563,7 @@ pub(crate) fn callback_iface_spec(
     for (k, desc) in leaf_tys.iter().enumerate() {
         let name = names[k].clone();
         let param = match desc {
+            LeafDesc::Presence(_) => IfaceParam::same(name, KtType::boolean()),
             LeafDesc::Plan(_, leaf) => plan_leaf_param(ext, name, leaf)?,
             LeafDesc::Whole {
                 ty,
@@ -1563,7 +1608,16 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(subject_short)
+                .map(|ty| {
+                    let short = subject_short(ty);
+                    let optional = effective_callback_plan(ext, registry, ty)
+                        .is_some_and(UnfoldPlan::is_optional_base);
+                    if optional {
+                        format!("{short}Optional")
+                    } else {
+                        short
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join("")
         )
@@ -1712,6 +1766,7 @@ pub(crate) fn fixed_folder_typed_groups(
         &spec.source.key(),
         &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
         &fqn,
+        0,
     );
     Some(vec![
         TypedGroup {

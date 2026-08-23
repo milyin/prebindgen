@@ -201,6 +201,10 @@ fn main() {
                 )
                 .valid_range(0u64..=86_400_000u64),
         )
+        // Output-only semantic wrapper over an owned opaque handle, used to
+        // verify callback cleanup through an Optional(Product) chain.
+        .convert(convert!(CallbackToken).output(fun!(callback_token_into_ingot)))
+        .ignore(ty!(CallbackToken))
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
         // reassembled via a generated `fromParts`). A data class can carry
@@ -221,7 +225,12 @@ fn main() {
         // absent case passes pointer 0 for it, so the field decodes must stay
         // inside the presence gate or `null` becomes a binding error instead of
         // `None` (PR#294 review).
-        .package(package!().class(data_class!(Holder)))
+        .package(
+            package!()
+                .class(data_class!(Holder))
+                .class(data_class!(CallbackHolder))
+                .fun(fun!(callback_holder_optional_emit)),
+        )
         // #218's last row: a data class that only REACHES a handle, through
         // another data class. `Dossier`'s cascade is a one-liner that assumes
         // `Holder` above was independently made `AutoCloseable` — the JVM
@@ -815,6 +824,8 @@ fn main() {
                 .fun(fun!(storage_labels))
                 // Option<data-class> input.
                 .fun(fun!(storage_put_opt))
+                // Option<data-class> callback output in both presence states.
+                .fun(fun!(payload_optional_emit))
                 // `.name(...)`: per-function Kotlin rename override. The default name
                 // would be `millisAdd`; force it to `addMillis` to exercise the
                 // override path (the Rust symbol/extern is unaffected).

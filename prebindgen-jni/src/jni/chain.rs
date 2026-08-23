@@ -356,6 +356,9 @@ impl JProductPlan {
 /// JNI's single-intermediate Optional representation operations.
 #[derive(Clone)]
 pub(crate) enum JOptionalBridge {
+    InputGated {
+        child: syn::Type,
+    },
     InputNiche {
         wire: syn::Type,
         absent: syn::Expr,
@@ -365,6 +368,10 @@ pub(crate) enum JOptionalBridge {
         method: &'static str,
         signature: &'static str,
         getter: syn::Ident,
+    },
+    OutputGated {
+        child: syn::Type,
+        absent: TokenStream,
     },
     OutputNiche {
         wire: syn::Type,
@@ -379,6 +386,9 @@ pub(crate) enum JOptionalBridge {
 impl shared::OptionalBridge for JOptionalBridge {
     fn intermediate(&self) -> syn::Type {
         match self {
+            Self::InputGated { child } | Self::OutputGated { child, .. } => {
+                syn::parse_quote!((jni::sys::jboolean, #child))
+            }
             Self::InputNiche { wire, .. } | Self::OutputNiche { wire, .. } => wire.clone(),
             Self::InputBoxed { .. } | Self::OutputBoxed { .. } => {
                 syn::parse_quote!(jni::objects::JObject)
@@ -388,9 +398,10 @@ impl shared::OptionalBridge for JOptionalBridge {
 
     fn is_absent(&self) -> TokenStream {
         match self {
+            Self::InputGated { .. } => quote!((v).0 == 0u8),
             Self::InputNiche { absent, .. } => quote!(#absent),
             Self::InputBoxed { .. } => quote!((v).is_null()),
-            Self::OutputNiche { .. } | Self::OutputBoxed { .. } => {
+            Self::OutputGated { .. } | Self::OutputNiche { .. } | Self::OutputBoxed { .. } => {
                 unreachable!("optional bridge operation does not match its planned direction")
             }
         }
@@ -398,6 +409,7 @@ impl shared::OptionalBridge for JOptionalBridge {
 
     fn present(&self, value: TokenStream) -> TokenStream {
         match self {
+            Self::InputGated { .. } => quote!((#value).1),
             Self::InputNiche { .. } => value,
             Self::InputBoxed {
                 inner_wire,
@@ -412,7 +424,7 @@ impl shared::OptionalBridge for JOptionalBridge {
                         format!("Option unbox: {}", __error)
                     ))?
             }),
-            Self::OutputNiche { .. } | Self::OutputBoxed { .. } => {
+            Self::OutputGated { .. } | Self::OutputNiche { .. } | Self::OutputBoxed { .. } => {
                 unreachable!("optional bridge operation does not match its planned direction")
             }
         }
@@ -421,8 +433,9 @@ impl shared::OptionalBridge for JOptionalBridge {
     fn build_absent(&self) -> TokenStream {
         match self {
             Self::OutputNiche { absent, .. } => quote!(#absent),
+            Self::OutputGated { absent, .. } => quote!((0u8, #absent)),
             Self::OutputBoxed { .. } => quote!(jni::objects::JObject::null()),
-            Self::InputNiche { .. } | Self::InputBoxed { .. } => {
+            Self::InputGated { .. } | Self::InputNiche { .. } | Self::InputBoxed { .. } => {
                 unreachable!("optional bridge operation does not match its planned direction")
             }
         }
@@ -431,6 +444,7 @@ impl shared::OptionalBridge for JOptionalBridge {
     fn build_present(&self, child: TokenStream) -> TokenStream {
         match self {
             Self::OutputNiche { .. } => child,
+            Self::OutputGated { .. } => quote!((1u8, #child)),
             Self::OutputBoxed { inner_wire, helper } => quote!({
                 let __raw: #inner_wire = #child;
                 ::prebindgen_jni_runtime::#helper(env, __raw)
@@ -438,7 +452,7 @@ impl shared::OptionalBridge for JOptionalBridge {
                         format!("Option box: {}", __error)
                     ))?
             }),
-            Self::InputNiche { .. } | Self::InputBoxed { .. } => {
+            Self::InputGated { .. } | Self::InputNiche { .. } | Self::InputBoxed { .. } => {
                 unreachable!("optional bridge operation does not match its planned direction")
             }
         }
@@ -452,6 +466,7 @@ pub(crate) struct JOptionalPlan {
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) dependencies: Vec<JFunction>,
     pub(crate) chain: shared::Optional<JSource, JOptionalBridge, JChild>,
+    pub(crate) input_by_ref: bool,
 }
 
 impl JOptionalPlan {
@@ -465,11 +480,16 @@ impl JOptionalPlan {
         match self.chain.direction {
             Direction::Construct => {
                 let intermediate = annotate_jobject_with_lifetime(intermediate, "v");
+                let input = if self.input_by_ref {
+                    quote!(v: &#intermediate)
+                } else {
+                    quote!(v: #intermediate)
+                };
                 syn::parse_quote!(
                     #allow
                     pub(crate) unsafe fn #name<'env, 'v>(
                         env: &mut jni::JNIEnv<'env>,
-                        v: &#intermediate,
+                        #input,
                     ) -> ::core::result::Result<#source, __JniErr> {
                         ::core::result::Result::Ok(#body)
                     }

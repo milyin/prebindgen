@@ -1072,10 +1072,18 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     assert!(kc.contains("h?.object_"), "{kotlin}");
     assert!(rc.contains("JObject_to_ObjectChild"), "{rust}");
     assert!(
-        rc.contains(
-            "myflat::Hybrid{flat:__flat_h_flat,maybe:__flat_h_maybe,object:__flat_h_object"
-        ),
-        "{rust}"
+        rc.contains("_to_Option_Hybrid_") && rc.contains("(&mutenv,(h_present,((h_flat_id,),"),
+        "the wrapper must pass the gate and nested Product tuple to one Optional chain:\n{rust}"
+    );
+    assert!(
+        rc.contains("if(v).0==0u8")
+            && rc.contains("::core::option::Option::Some(")
+            && rc.contains("_to_Hybrid_"),
+        "the Optional chain must guard and delegate its present child to the Product chain:\n{rust}"
+    );
+    assert!(
+        !rc.contains("__flat_h_"),
+        "the adapter-side reconstruction fallback must disappear:\n{rust}"
     );
     assert!(generation.report().contains("input `JObject` opt-in"));
 }

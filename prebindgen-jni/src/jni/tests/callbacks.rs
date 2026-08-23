@@ -180,6 +180,64 @@ fn callback_snapshot_kotlin_side() {
     assert!(pc.contains("onClose:VoidCallback"), "{pkg}");
     assert!(pc.contains("cb:ZOtherCallback"), "{pkg}");
 }
+#[test]
+
+fn declared_optional_conversion_callback_falls_back_to_whole_value() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Payload { pub id: i64 }",
+        "pub fn optional_from_wire(v: i64) -> Option<Payload> { unimplemented!() }",
+        "pub fn optional_to_wire(v: &Option<Payload>) -> i64 { unimplemented!() }",
+        "pub fn optional_sub(cb: impl Fn(Option<Payload>) + Send + Sync + 'static) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            prebindgen_registry::convert!(Option<Payload>)
+                .input(prebindgen_registry::fun!(optional_from_wire))
+                .output(prebindgen_registry::fun!(optional_to_wire)),
+        )
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Payload))
+                .fun(prebindgen_registry::fun!(optional_sub)),
+        );
+
+    let dir = unique_test_dir("jnigen_declared_optional_callback");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let kotlin = generation
+        .write_kotlin(&dir.join("kotlin"))
+        .unwrap()
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let rc: String = rust.split_whitespace().collect();
+    let kc: String = kotlin.split_whitespace().collect();
+
+    assert!(
+        rc.contains("optional_to_wire"),
+        "the callback must use the declared whole Optional conversion:\n{rust}"
+    );
+    assert!(
+        !rc.contains("Option_Payload_to_tuple"),
+        "the suppressed parts row must not be synthesized:\n{rust}"
+    );
+    assert!(
+        kc.contains("funinterfacePayloadCallback"),
+        "whole-value fallback keeps the established callback identity:\n{kotlin}"
+    );
+    assert!(!kc.contains("PayloadOptionalCallback"), "{kotlin}");
+    assert!(!kc.contains("payloadPresent:Boolean"), "{kotlin}");
+}
 
 /// Regression: a callback-delivered type that has BOTH a nested handle identity
 /// (a child `ptr_class` reached by an accessor) AND its own root identity

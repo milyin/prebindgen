@@ -274,6 +274,17 @@ pub struct UnfoldPlan {
     pub hoists: Vec<Hoist>,
 }
 
+impl UnfoldPlan {
+    /// Whether this plan is exactly one Optional layer over one scalar/product
+    /// decomposition. Iterable and future composed inner shapes answer false.
+    pub fn is_optional_base(&self) -> bool {
+        matches!(
+            &self.shape,
+            UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)
+        )
+    }
+}
+
 /// One hoisted value form: where it sits, and whether it **consumes** the value
 /// it decomposes.
 #[derive(Clone)]

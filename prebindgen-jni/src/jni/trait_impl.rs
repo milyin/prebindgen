@@ -1678,13 +1678,14 @@ impl Declarations {
         // where it was declared. `recipe_of` refuses an absent name rather than
         // answering with the default, which is what makes that condition the
         // one that has to match.
-        if direction == prebindgen_registry::recipe::Direction::Construct
+        if (direction == prebindgen_registry::recipe::Direction::Construct
             && matches!(
                 self.types
                     .get(&crossing.value().stripped_key())
                     .map(|c| &c.kind),
                 Some(DeclaredKind::Data)
             )
+            || crossing.value().optional_inner().is_some())
             && compiler
                 .recipes()
                 .key_of(&crossing.key(), &crate::jni::recipes::parts())

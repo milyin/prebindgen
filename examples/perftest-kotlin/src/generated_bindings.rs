@@ -2499,6 +2499,55 @@ pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Option_Payload_to_tuple2_af2bd54b<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<perftest_flat::Payload>,
+) -> ::core::result::Result<
+    (
+        jni::sys::jboolean,
+        (
+            jni::sys::jlong,
+            jni::sys::jint,
+            jni::sys::jdouble,
+            jni::sys::jboolean,
+            jni::objects::JString<'a>,
+        ),
+    ),
+    __JniErr,
+> {
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                (1u8, Payload_to_tuple5_bbb055bc(env, __value)?)
+            }
+            ::core::option::Option::None => {
+                (
+                    0u8,
+                    (
+                        0 as jni::sys::jlong,
+                        0 as jni::sys::jint,
+                        0.0 as jni::sys::jdouble,
+                        0 as jni::sys::jboolean,
+                        jni::objects::JObject::null().into(),
+                    ),
+                )
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn PayloadHandler_to_jlong_d61fd890<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::PayloadHandler,
@@ -4048,78 +4097,74 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGet<'a>(
     const __CB_FQN: &str = "io/prebindgen/perftest/PayloadBuilder";
     const __CB_DESCR: &str = "(JIDZLjava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::storage_get(&s);
-    match __out {
-        ::core::option::Option::Some(__inner) => {
-            let (
-                __chain_wire0,
-                __chain_wire1,
-                __chain_wire2,
-                __chain_wire3,
-                __chain_wire4,
-            ) = match Payload_to_tuple5_bbb055bc(&mut env, __inner) {
-                ::core::result::Result::Ok(__intermediate) => __intermediate,
-                ::core::result::Result::Err(__chain_error) => {
-                    signal_binding_error(
-                        &mut env,
-                        &__error_sink,
-                        &__SINK_MID,
-                        __SINK_FQN,
-                        __SINK_DESCR,
-                        &__chain_error.to_string(),
-                    );
-                    return jni::objects::JObject::null().into();
-                }
-            };
-            let __obj0 = jni::sys::jvalue {
-                j: __chain_wire0,
-            };
-            let __obj1 = jni::sys::jvalue {
-                i: __chain_wire1,
-            };
-            let __obj2 = jni::sys::jvalue {
-                d: __chain_wire2,
-            };
-            let __obj3 = jni::sys::jvalue {
-                z: __chain_wire3,
-            };
-            let __obj4: jni::objects::JObject = __chain_wire4.into();
-            match __CB_MID
-                .call_object(
+    let (
+        __chain_present,
+        (__chain_wire0, __chain_wire1, __chain_wire2, __chain_wire3, __chain_wire4),
+    ) = match Option_Payload_to_tuple2_af2bd54b(&mut env, __out) {
+        ::core::result::Result::Ok(__intermediate) => __intermediate,
+        ::core::result::Result::Err(__chain_error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__chain_error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __obj0 = jni::sys::jvalue {
+        j: __chain_wire0,
+    };
+    let __obj1 = jni::sys::jvalue {
+        i: __chain_wire1,
+    };
+    let __obj2 = jni::sys::jvalue {
+        d: __chain_wire2,
+    };
+    let __obj3 = jni::sys::jvalue {
+        z: __chain_wire3,
+    };
+    let __obj4: jni::objects::JObject = __chain_wire4.into();
+    if __chain_present != 0 {
+        match __CB_MID
+            .call_object(
+                &mut env,
+                __CB_FQN,
+                "run",
+                __CB_DESCR,
+                &__builder,
+                &[
+                    __obj0,
+                    __obj1,
+                    __obj2,
+                    __obj3,
+                    jni::sys::jvalue {
+                        l: __obj4.as_raw(),
+                    },
+                ],
+            )
+        {
+            ::core::result::Result::Ok(__o) => __o,
+            ::core::result::Result::Err(__e) => {
+                let _ = env.exception_describe();
+                let __e2 = <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(__e.to_string());
+                signal_binding_error(
                     &mut env,
-                    __CB_FQN,
-                    "run",
-                    __CB_DESCR,
-                    &__builder,
-                    &[
-                        __obj0,
-                        __obj1,
-                        __obj2,
-                        __obj3,
-                        jni::sys::jvalue {
-                            l: __obj4.as_raw(),
-                        },
-                    ],
-                )
-            {
-                ::core::result::Result::Ok(__o) => __o,
-                ::core::result::Result::Err(__e) => {
-                    let _ = env.exception_describe();
-                    let __e2 = <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(__e.to_string());
-                    signal_binding_error(
-                        &mut env,
-                        &__error_sink,
-                        &__SINK_MID,
-                        __SINK_FQN,
-                        __SINK_DESCR,
-                        &__e2.to_string(),
-                    );
-                    jni::objects::JObject::null().into()
-                }
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e2.to_string(),
+                );
+                jni::objects::JObject::null().into()
             }
         }
-        ::core::option::Option::None => jni::objects::JObject::null().into(),
+    } else {
+        jni::objects::JObject::null().into()
     }
 }
 #[no_mangle]
