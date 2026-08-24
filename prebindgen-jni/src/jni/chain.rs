@@ -207,6 +207,18 @@ pub(crate) enum JValueUse {
     Cloned,
 }
 
+/// Borrow a rendered value without adding noise to the common identifier case.
+/// Parentheses remain mandatory for compound expressions so `&` applies to the
+/// whole planned value rather than only its first syntactic component.
+fn shared_ref(value: TokenStream) -> TokenStream {
+    let mut tokens = value.clone().into_iter();
+    if matches!(tokens.next(), Some(proc_macro2::TokenTree::Ident(_))) && tokens.next().is_none() {
+        quote!(&#value)
+    } else {
+        quote!(&(#value))
+    }
+}
+
 /// A JNI child's complete converter pipeline, including semantic pre-stages.
 #[derive(Clone)]
 pub(crate) struct JChild {
@@ -286,7 +298,7 @@ impl JChild {
             Direction::Construct => {
                 let value = match self.value_use {
                     JValueUse::Direct => value,
-                    JValueUse::SharedRef => quote!(&(#value)),
+                    JValueUse::SharedRef => shared_ref(value),
                     JValueUse::Cloned => quote!((*#value).clone()),
                 };
                 let first = quote!(#converter(#env, #value));
@@ -310,7 +322,7 @@ impl JChild {
             Direction::Deconstruct => {
                 let value = match self.value_use {
                     JValueUse::Direct => value,
-                    JValueUse::SharedRef => quote!(&(#value)),
+                    JValueUse::SharedRef => shared_ref(value),
                     JValueUse::Cloned => quote!((*#value).clone()),
                 };
                 if self.stages.is_empty() {
@@ -843,5 +855,14 @@ mod tests {
         .to_string();
         assert!(name.starts_with("tuple64_to_i64_"), "{name}");
         assert!(name.len() < 64, "{name}");
+    }
+
+    #[test]
+    fn shared_refs_parenthesize_only_compound_values() {
+        let bare: syn::ExprReference = syn::parse2(shared_ref(quote!(value))).unwrap();
+        assert!(matches!(*bare.expr, syn::Expr::Path(_)));
+
+        let compound: syn::ExprReference = syn::parse2(shared_ref(quote!(value.0))).unwrap();
+        assert!(matches!(*compound.expr, syn::Expr::Paren(_)));
     }
 }

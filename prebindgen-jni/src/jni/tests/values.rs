@@ -1686,6 +1686,67 @@ fn convert_via_local_fns() {
     );
 }
 
+/// A nested pair of declared conversions accumulates two semantic stages.
+/// The frozen pipeline must retain registry order in both directions: terminal
+/// wire decode, then inner-to-outer construction; outer-to-inner deconstruction,
+/// then terminal wire encode.
+#[test]
+fn multi_stage_pipeline_preserves_registry_order() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn tag_id(t: Tag) -> Tag { unimplemented!() }").unwrap();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            prebindgen_registry::convert!(Label)
+                .input(
+                    prebindgen_registry::fun!(crate::conv::label_in)
+                        .sig(prebindgen_registry::sig!((s: String) -> Label)),
+                )
+                .output(
+                    prebindgen_registry::fun!(crate::conv::label_out)
+                        .sig(prebindgen_registry::sig!((l: Label) -> String)),
+                ),
+        )
+        .convert(
+            prebindgen_registry::convert!(Tag)
+                .input(
+                    prebindgen_registry::fun!(crate::conv::tag_in)
+                        .sig(prebindgen_registry::sig!((l: Label) -> Tag)),
+                )
+                .output(
+                    prebindgen_registry::fun!(crate::conv::tag_out)
+                        .sig(prebindgen_registry::sig!((t: Tag) -> Label)),
+                ),
+        )
+        .package(crate::package!("m").fun(prebindgen_registry::fun!(tag_id)));
+    let dir = unique_test_dir("jnigen_convert_two_stages");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    assert!(
+        rc.contains("let__chain_s0=JString_to_String_")
+            && rc.contains("let__chain_s1=String_to_Label_")
+            && rc.contains("let__chain_s2=Label_to_Tag_")
+            && rc.contains("Result::<_,__JniErr>::Ok(__chain_s2)"),
+        "construct must run terminal, inner stage, then outer stage:\n{rust}"
+    );
+    assert!(
+        rc.contains("let__chain_s0=Tag_to_Label_")
+            && rc.contains("let__chain_s1=Label_to_String_")
+            && rc.contains("String_to_JString_")
+            && rc.contains("env,__chain_s1)"),
+        "deconstruct must run outer stage, inner stage, then terminal:\n{rust}"
+    );
+}
+
 /// Two input conversions on one decl are contradictory — decl-time panic.
 #[test]
 #[should_panic(expected = "input conversion is already declared")]
