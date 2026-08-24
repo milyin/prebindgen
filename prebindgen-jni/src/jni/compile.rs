@@ -1720,6 +1720,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // leaves afterwards; recomputing it at either layer would restore the
         // split planning this migration removes.
         let pair_recipe = at.recipe.name() == &crate::jni::recipes::pair();
+        let parts_recipe = at.recipe.name() == &crate::jni::recipes::parts();
         let pair_wires = pair_recipe
             .then(|| self.decoupled_optional(at, inner, None))
             .flatten();
@@ -1753,6 +1754,17 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         }
         if at.crossing.direction() == Direction::Construct && inner.wires.is_none() {
             if let Some(pair) = self.decoupled_optional(at, inner, Some(&frag.conv)) {
+                // A Product child takes the Optional's `parts` row. Re-plan that
+                // row around the two-leaf intermediate now that the compiled
+                // child proves a niche-free primitive representation. The
+                // default row keeps its historical whole-value converter.
+                if parts_recipe {
+                    frag = self.planned_optional(at, inner, true).ok_or_else(|| {
+                        refuse(at, "the Optional parts recipe could not compose its pair")
+                    })?;
+                    frag.wires = Some(pair);
+                    return Ok(frag);
+                }
                 frag.layout = None;
                 frag.wires = Some(pair);
                 return Ok(frag);
@@ -2073,7 +2085,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     bound.site
                 ))
             })?;
-            InputKind::OptionalPair(plan)
+            InputKind::OptionalPair(Box::new(plan))
         } else if let Some(plan) = flat_plan {
             InputKind::FlattenStruct(plan)
         } else {
