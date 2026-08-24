@@ -547,6 +547,7 @@ pub(crate) fn owned_object_prerequisite_items() -> Vec<syn::Item> {
         syn::parse_quote!(
             impl<T: ?Sized> std::ops::Deref for OwnedObject<T> {
                 type Target = T;
+                #[inline]
                 fn deref(&self) -> &Self::Target {
                     unsafe { &*self.ptr }
                 }

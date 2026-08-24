@@ -623,6 +623,10 @@ fn slice_input_builds_vec_handle() {
         "{rust}"
     );
     assert!(
+        rc.contains("#[inline]fnderef(&self)->&Self::Target"),
+        "the non-owning carrier's dereference must be explicitly inline:\n{rust}"
+    );
+    assert!(
         rc.contains("mem::take(&mut*(v_handleas*mutVec<myflat::Foo>))"),
         "{rust}"
     );
