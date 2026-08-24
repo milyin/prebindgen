@@ -9,6 +9,7 @@
 use prebindgen_registry::{
     chain::{self, Chain as _},
     flat::{Alternative, TypeRef},
+    generation::{GenerationPlan, SiteId},
     recipe::Mode,
     write::RustFunction,
     Emit,
@@ -59,7 +60,9 @@ enum CBody {
     Optional(OptionalPlan),
     Sequence(SequencePlan),
     Choice(ChoicePlan),
-    Invoke(InvokePlan),
+    /// The callable contract for an Invoke fragment. The actual helper is
+    /// rendered from the callback artifact that consumes frozen callback sites.
+    DeferredInvoke,
 }
 
 impl CFunction {
@@ -125,12 +128,15 @@ impl CFunction {
         }
     }
 
-    pub(crate) fn invoke(plan: InvokePlan) -> Self {
-        let call = CCall(chain::Call::new(plan.ident.clone(), false, true));
+    pub(crate) fn deferred_invoke(ident: syn::Ident) -> Self {
         Self {
-            call,
-            body: CBody::Invoke(plan),
+            call: CCall(chain::Call::new(ident, false, true)),
+            body: CBody::DeferredInvoke,
         }
+    }
+
+    pub(crate) fn is_deferred_invoke(&self) -> bool {
+        matches!(self.body, CBody::DeferredInvoke)
     }
 
     pub(crate) fn call(&self) -> &CCall {
@@ -146,9 +152,230 @@ impl RustFunction for CFunction {
             CBody::Choice(plan) => plan.render(emit),
             CBody::Sequence(plan) => plan.render(emit),
             CBody::Optional(plan) => plan.render(emit),
-            CBody::Invoke(plan) => plan.render(emit),
+            CBody::DeferredInvoke => {
+                unreachable!("a deferred C Invoke helper is rendered by its callback artifact")
+            }
         }
     }
+}
+
+/// One callback argument tied to the frozen deconstruction site that supplies
+/// both its C ABI leaves and its encoder.
+#[derive(Clone)]
+pub(crate) struct CallbackArgument {
+    pub(crate) site: SiteId,
+    pub(crate) value: crate::compile::CValue,
+    pub(crate) zero_copy_element: Option<syn::Type>,
+    pub(crate) takeable: bool,
+}
+
+impl CallbackArgument {
+    fn direct_wire(&self) -> Option<&syn::Type> {
+        self.value.direct().map(|(wire, _)| wire)
+    }
+
+    pub(crate) fn wires(&self) -> Vec<syn::Type> {
+        if let Some(element) = &self.zero_copy_element {
+            return vec![syn::parse_quote!(*const #element), syn::parse_quote!(usize)];
+        }
+        if self.takeable {
+            let wire = self
+                .direct_wire()
+                .expect("a takeable callback argument must have one direct wire");
+            return vec![syn::parse_quote!(*mut #wire)];
+        }
+        let fields = self.value.fields();
+        if self.direct_wire().is_some() {
+            return fields.into_iter().map(|field| field.wire).collect();
+        }
+        fields
+            .into_iter()
+            .map(|field| {
+                let wire = field.wire;
+                syn::parse_quote!(::core::mem::MaybeUninit<#wire>)
+            })
+            .collect()
+    }
+
+    fn invoke_part(&self, index: usize) -> InvokePart {
+        let source = invoke_argument_name(index);
+        if let Some(element) = &self.zero_copy_element {
+            return InvokePart {
+                source: source.clone(),
+                prepare: TokenStream::new(),
+                arguments: vec![
+                    quote!(#source.as_ptr() as *const #element),
+                    quote!(#source.len()),
+                ],
+                cleanup: TokenStream::new(),
+            };
+        }
+
+        let mut prepare = TokenStream::new();
+        let mut arguments = Vec::new();
+        let mut cleanup = TokenStream::new();
+        if self.takeable {
+            let (wire, converter) = self
+                .value
+                .direct()
+                .expect("a takeable callback argument must have one direct wire");
+            let target = format_ident!("__w{index}");
+            let conv = converter.ident();
+            let converted = if converter.fallible() {
+                quote!(match #conv(#source) {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__e) => {
+                        ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
+                    }
+                })
+            } else {
+                quote!(#conv(#source))
+            };
+            prepare.extend(quote!(let mut #target = #converted;));
+            arguments.push(quote!(&mut #target as *mut #wire));
+            cleanup.extend(quote!(
+                let _ = <#wire as ::prebindgen_c_runtime::Transmute>::into_rust(#target);
+            ));
+        } else if let Some((_, converter)) = self.value.direct() {
+            let target = format_ident!("__w{index}");
+            let conv = converter.ident();
+            let converted = if converter.fallible() {
+                quote!(match #conv(#source) {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__e) => {
+                        ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
+                    }
+                })
+            } else {
+                quote!(#conv(#source))
+            };
+            prepare.extend(quote!(let #target = #converted;));
+            arguments.push(quote!(#target));
+        } else {
+            let fields = self.value.fields();
+            let mut targets = Vec::new();
+            for (field_index, field) in fields.iter().enumerate() {
+                let target = if fields.len() == 1 {
+                    format_ident!("__w{index}")
+                } else {
+                    format_ident!("__w{index}_{field_index}")
+                };
+                let wire = &field.wire;
+                prepare
+                    .extend(quote!(let mut #target = ::core::mem::MaybeUninit::<#wire>::zeroed();));
+                targets.push(quote!(*#target.as_mut_ptr()));
+                arguments.push(quote!(#target));
+            }
+            prepare.extend(
+                self.value
+                    .encode(quote!(#source), &targets, &ErrRoute::Panic),
+            );
+        }
+        InvokePart {
+            source,
+            prepare,
+            arguments,
+            cleanup,
+        }
+    }
+}
+
+/// A callback declaration and its Invoke helper, frozen as one final artifact.
+#[derive(Clone)]
+pub(crate) struct CallbackArtifact {
+    pub(crate) c_struct: syn::Ident,
+    pub(crate) invoke: InvokePlan,
+    pub(crate) arguments: Vec<CallbackArgument>,
+}
+
+impl CallbackArtifact {
+    pub(crate) fn new(
+        c_struct: syn::Ident,
+        ident: syn::Ident,
+        source: TypeRef,
+        source_module: Option<syn::Path>,
+        arguments: Vec<TypeRef>,
+        planned: Vec<CallbackArgument>,
+    ) -> Self {
+        let wire = syn::parse_quote!(#c_struct);
+        let parts = planned
+            .iter()
+            .enumerate()
+            .map(|(index, argument)| argument.invoke_part(index))
+            .collect();
+        Self {
+            c_struct,
+            invoke: InvokePlan {
+                ident,
+                source,
+                source_module,
+                wire,
+                arguments,
+                parts,
+            },
+            arguments: planned,
+        }
+    }
+
+    pub(crate) fn signature(&self) -> Vec<String> {
+        self.arguments
+            .iter()
+            .flat_map(CallbackArgument::wires)
+            .map(|wire| TypeKey::from_type(&wire).as_str().to_owned())
+            .collect()
+    }
+
+    pub(crate) fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+        let c_struct = &self.c_struct;
+        let arg_wires: Vec<syn::Type> = self
+            .arguments
+            .iter()
+            .flat_map(CallbackArgument::wires)
+            .collect();
+        let declaration = syn::parse_quote!(
+            #[repr(C)]
+            #[allow(non_camel_case_types)]
+            pub struct #c_struct {
+                pub context: *mut ::core::ffi::c_void,
+                pub call: ::core::option::Option<
+                    unsafe extern "C" fn(#(#arg_wires,)* *mut ::core::ffi::c_void),
+                >,
+                pub drop: ::core::option::Option<
+                    unsafe extern "C" fn(*mut ::core::ffi::c_void),
+                >,
+            }
+        );
+        vec![declaration, syn::Item::Fn(self.invoke.render(emit))]
+    }
+}
+
+/// Adapter-owned final artifacts stored and ordered by the registry plan.
+pub(crate) enum CArtifact {
+    Callback(CallbackArtifact),
+}
+
+impl CArtifact {
+    pub(crate) fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+        match self {
+            Self::Callback(callback) => callback.render(emit),
+        }
+    }
+}
+
+/// Render the C callback artifacts from the frozen registry plan.
+///
+/// The deliberately narrow signature is the callback-rendering boundary: final
+/// emission can spell retained source types through [`Emit`], but it cannot
+/// reopen the registry or the adapter's mutable compilation cache.
+pub(crate) fn render_callback_artifacts(
+    generation: &GenerationPlan<crate::compile::CRepresentation>,
+    emit: &Emit,
+) -> Vec<syn::Item> {
+    generation
+        .artifacts()
+        .filter(|artifact| artifact.id().kind() == "c-callback")
+        .flat_map(|artifact| artifact.payload().render(emit))
+        .collect()
 }
 
 /// One C callback argument's already-resolved wire delivery.

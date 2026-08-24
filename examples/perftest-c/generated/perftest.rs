@@ -144,6 +144,35 @@ pub struct closure_payload_t {
     >,
     pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_closure_payload_t(
+    c: closure_payload_t,
+) -> impl Fn(&perftest_flat::Payload) + Send + Sync + 'static {
+    struct __Ctx {
+        context: *mut ::core::ffi::c_void,
+        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    }
+    unsafe impl ::core::marker::Send for __Ctx {}
+    unsafe impl ::core::marker::Sync for __Ctx {}
+    impl ::core::ops::Drop for __Ctx {
+        fn drop(&mut self) {
+            if let ::core::option::Option::Some(__d) = self.drop {
+                unsafe { __d(self.context) }
+            }
+        }
+    }
+    let __call = c.call;
+    let __ctx = ::std::sync::Arc::new(__Ctx {
+        context: c.context,
+        drop: c.drop,
+    });
+    move |__a0: &perftest_flat::Payload| {
+        if let ::core::option::Option::Some(__f) = __call {
+            let __w0 = __cbg_out_ref_Payload(__a0);
+            unsafe { __f(__w0, __ctx.context) }
+        }
+    }
+}
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub struct closure_payload_vec_t {
@@ -152,6 +181,34 @@ pub struct closure_payload_vec_t {
         unsafe extern "C" fn(*const payload_t, usize, *mut ::core::ffi::c_void),
     >,
     pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_closure_payload_vec_t(
+    c: closure_payload_vec_t,
+) -> impl Fn(&[perftest_flat::Payload]) + Send + Sync + 'static {
+    struct __Ctx {
+        context: *mut ::core::ffi::c_void,
+        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    }
+    unsafe impl ::core::marker::Send for __Ctx {}
+    unsafe impl ::core::marker::Sync for __Ctx {}
+    impl ::core::ops::Drop for __Ctx {
+        fn drop(&mut self) {
+            if let ::core::option::Option::Some(__d) = self.drop {
+                unsafe { __d(self.context) }
+            }
+        }
+    }
+    let __call = c.call;
+    let __ctx = ::std::sync::Arc::new(__Ctx {
+        context: c.context,
+        drop: c.drop,
+    });
+    move |__a0: &[perftest_flat::Payload]| {
+        if let ::core::option::Option::Some(__f) = __call {
+            unsafe { __f(__a0.as_ptr() as *const payload_t, __a0.len(), __ctx.context) }
+        }
+    }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Payload(
@@ -339,63 +396,6 @@ pub(crate) unsafe fn __cbg_in_bool(v: ::core::mem::MaybeUninit<bool>) -> bool {
     ::core::ptr::read(v.as_ptr() as *const u8) != 0
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_closure_payload_t(
-    c: closure_payload_t,
-) -> impl Fn(&perftest_flat::Payload) + Send + Sync + 'static {
-    struct __Ctx {
-        context: *mut ::core::ffi::c_void,
-        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-    }
-    unsafe impl ::core::marker::Send for __Ctx {}
-    unsafe impl ::core::marker::Sync for __Ctx {}
-    impl ::core::ops::Drop for __Ctx {
-        fn drop(&mut self) {
-            if let ::core::option::Option::Some(__d) = self.drop {
-                unsafe { __d(self.context) }
-            }
-        }
-    }
-    let __call = c.call;
-    let __ctx = ::std::sync::Arc::new(__Ctx {
-        context: c.context,
-        drop: c.drop,
-    });
-    move |__a0: &perftest_flat::Payload| {
-        if let ::core::option::Option::Some(__f) = __call {
-            let __w0 = __cbg_out_ref_Payload(__a0);
-            unsafe { __f(__w0, __ctx.context) }
-        }
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_closure_payload_vec_t(
-    c: closure_payload_vec_t,
-) -> impl Fn(&[perftest_flat::Payload]) + Send + Sync + 'static {
-    struct __Ctx {
-        context: *mut ::core::ffi::c_void,
-        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-    }
-    unsafe impl ::core::marker::Send for __Ctx {}
-    unsafe impl ::core::marker::Sync for __Ctx {}
-    impl ::core::ops::Drop for __Ctx {
-        fn drop(&mut self) {
-            if let ::core::option::Option::Some(__d) = self.drop {
-                unsafe { __d(self.context) }
-            }
-        }
-    }
-    let __call = c.call;
-    let __ctx = ::std::sync::Arc::new(__Ctx {
-        context: c.context,
-        drop: c.drop,
-    });
-    move |__a0: &[perftest_flat::Payload]| {
-        if let ::core::option::Option::Some(__f) = __call {
-            unsafe { __f(__a0.as_ptr() as *const payload_t, __a0.len(), __ctx.context) }
-        }
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_in_f64(v: f64) -> f64 {
     v
 }
@@ -484,8 +484,6 @@ pub(crate) fn __cbg_out_usize(v: usize) -> usize {
 pub(crate) fn __cbg_outmark_option_Payload() {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __cbg_outmark_option_Vec___Payload__() {}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) fn __cbg_outmark_slice_Payload() {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __cbg_outmark_vec_Payload() {}
 #[no_mangle]

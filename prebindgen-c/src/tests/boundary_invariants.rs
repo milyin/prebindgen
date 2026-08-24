@@ -382,13 +382,23 @@ fn no_raw_pointer_is_dereferenced_without_a_null_check() {
 #[test]
 fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
     let source = include_str!("../emit.rs");
-    let wrapper = source
-        .split("pub(super) fn emit_function_wrapper")
-        .nth(1)
-        .expect("ordinary wrapper renderer")
-        .split("pub(super) fn lower_shape")
-        .next()
-        .expect("end of ordinary wrapper renderer");
+    let file = syn::parse_file(source).expect("C emitter parses");
+    let wrapper = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(item) => Some(item),
+            _ => None,
+        })
+        .flat_map(|item| &item.items)
+        .find_map(|item| match item {
+            syn::ImplItem::Fn(method) if method.sig.ident == "emit_function_wrapper" => {
+                Some(method.block.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("ordinary wrapper renderer");
+    let wrapper: String = wrapper.split_whitespace().collect();
 
     for forbidden in [
         "lower_shape(",
@@ -411,6 +421,43 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
         assert!(
             wrapper.contains(required),
             "ordinary wrapper renderer stopped consuming frozen plans through {required}"
+        );
+    }
+}
+
+#[test]
+fn callback_renderer_accepts_only_the_frozen_plan() {
+    let renderer: fn(
+        &prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>,
+        &prebindgen_registry::Emit,
+    ) -> Vec<syn::Item> = crate::chain::render_callback_artifacts;
+    let _ = renderer;
+}
+
+#[test]
+fn legacy_c_shape_and_callback_planners_are_deleted() {
+    let sources = [
+        include_str!("../lib.rs"),
+        include_str!("../builder.rs"),
+        include_str!("../chain.rs"),
+        include_str!("../compile.rs"),
+        include_str!("../emit.rs"),
+        include_str!("../trait_impl.rs"),
+    ]
+    .join("\n");
+    for deleted in [
+        "fn lower_shape",
+        "fn encode_value",
+        "dispatch_fn_input",
+        "prereq_callback_structs",
+        "out_slice_marker",
+        "shape_is_lowerable",
+        "is_lowered_composite",
+        "has_own_wire",
+    ] {
+        assert!(
+            !sources.contains(deleted),
+            "deleted C compatibility planner returned through {deleted}"
         );
     }
 }

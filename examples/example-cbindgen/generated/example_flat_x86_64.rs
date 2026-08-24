@@ -177,6 +177,40 @@ pub struct closure_history_batch_t {
     >,
     pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_closure_history_batch_t(
+    c: closure_history_batch_t,
+) -> impl Fn(::std::vec::Vec<f64>) + Send + Sync + 'static {
+    struct __Ctx {
+        context: *mut ::core::ffi::c_void,
+        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    }
+    unsafe impl ::core::marker::Send for __Ctx {}
+    unsafe impl ::core::marker::Sync for __Ctx {}
+    impl ::core::ops::Drop for __Ctx {
+        fn drop(&mut self) {
+            if let ::core::option::Option::Some(__d) = self.drop {
+                unsafe { __d(self.context) }
+            }
+        }
+    }
+    let __call = c.call;
+    let __ctx = ::std::sync::Arc::new(__Ctx {
+        context: c.context,
+        drop: c.drop,
+    });
+    move |__a0: ::std::vec::Vec<f64>| {
+        if let ::core::option::Option::Some(__f) = __call {
+            let mut __w0_0 = ::core::mem::MaybeUninit::<*mut f64>::zeroed();
+            let mut __w0_1 = ::core::mem::MaybeUninit::<usize>::zeroed();
+            let __arr: ::std::vec::Vec<f64> = __cbg_out_chain_vec_f64(__a0);
+            let (__p, __n) = __cbg_alloc_array(__arr);
+            *__w0_0.as_mut_ptr() = __p;
+            *__w0_1.as_mut_ptr() = __n;
+            unsafe { __f(__w0_0, __w0_1, __ctx.context) }
+        }
+    }
+}
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub struct closure_maybe_grade_t {
@@ -189,6 +223,45 @@ pub struct closure_maybe_grade_t {
         ),
     >,
     pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_closure_maybe_grade_t(
+    c: closure_maybe_grade_t,
+) -> impl Fn(::core::option::Option<example_flat::Grade>) + Send + Sync + 'static {
+    struct __Ctx {
+        context: *mut ::core::ffi::c_void,
+        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    }
+    unsafe impl ::core::marker::Send for __Ctx {}
+    unsafe impl ::core::marker::Sync for __Ctx {}
+    impl ::core::ops::Drop for __Ctx {
+        fn drop(&mut self) {
+            if let ::core::option::Option::Some(__d) = self.drop {
+                unsafe { __d(self.context) }
+            }
+        }
+    }
+    let __call = c.call;
+    let __ctx = ::std::sync::Arc::new(__Ctx {
+        context: c.context,
+        drop: c.drop,
+    });
+    move |__a0: ::core::option::Option<example_flat::Grade>| {
+        if let ::core::option::Option::Some(__f) = __call {
+            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::zeroed();
+            let mut __w0_1 = ::core::mem::MaybeUninit::<grade_t>::zeroed();
+            match __a0 {
+                ::core::option::Option::Some(__x) => {
+                    *__w0_0.as_mut_ptr() = true;
+                    *__w0_1.as_mut_ptr() = __cbg_out_Grade(__x);
+                }
+                ::core::option::Option::None => {
+                    *__w0_0.as_mut_ptr() = false;
+                }
+            }
+            unsafe { __f(__w0_0, __w0_1, __ctx.context) }
+        }
+    }
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -203,6 +276,45 @@ pub struct closure_maybe_value_t {
     >,
     pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_closure_maybe_value_t(
+    c: closure_maybe_value_t,
+) -> impl Fn(::core::option::Option<f64>) + Send + Sync + 'static {
+    struct __Ctx {
+        context: *mut ::core::ffi::c_void,
+        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    }
+    unsafe impl ::core::marker::Send for __Ctx {}
+    unsafe impl ::core::marker::Sync for __Ctx {}
+    impl ::core::ops::Drop for __Ctx {
+        fn drop(&mut self) {
+            if let ::core::option::Option::Some(__d) = self.drop {
+                unsafe { __d(self.context) }
+            }
+        }
+    }
+    let __call = c.call;
+    let __ctx = ::std::sync::Arc::new(__Ctx {
+        context: c.context,
+        drop: c.drop,
+    });
+    move |__a0: ::core::option::Option<f64>| {
+        if let ::core::option::Option::Some(__f) = __call {
+            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::zeroed();
+            let mut __w0_1 = ::core::mem::MaybeUninit::<f64>::zeroed();
+            match __a0 {
+                ::core::option::Option::Some(__x) => {
+                    *__w0_0.as_mut_ptr() = true;
+                    *__w0_1.as_mut_ptr() = __cbg_out_f64(__x);
+                }
+                ::core::option::Option::None => {
+                    *__w0_0.as_mut_ptr() = false;
+                }
+            }
+            unsafe { __f(__w0_0, __w0_1, __ctx.context) }
+        }
+    }
+}
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub struct closure_value_t {
@@ -211,6 +323,35 @@ pub struct closure_value_t {
         unsafe extern "C" fn(f64, *mut ::core::ffi::c_void),
     >,
     pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_closure_value_t(
+    c: closure_value_t,
+) -> impl Fn(f64) + Send + Sync + 'static {
+    struct __Ctx {
+        context: *mut ::core::ffi::c_void,
+        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    }
+    unsafe impl ::core::marker::Send for __Ctx {}
+    unsafe impl ::core::marker::Sync for __Ctx {}
+    impl ::core::ops::Drop for __Ctx {
+        fn drop(&mut self) {
+            if let ::core::option::Option::Some(__d) = self.drop {
+                unsafe { __d(self.context) }
+            }
+        }
+    }
+    let __call = c.call;
+    let __ctx = ::std::sync::Arc::new(__Ctx {
+        context: c.context,
+        drop: c.drop,
+    });
+    move |__a0: f64| {
+        if let ::core::option::Option::Some(__f) = __call {
+            let __w0 = __cbg_out_f64(__a0);
+            unsafe { __f(__w0, __ctx.context) }
+        }
+    }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Calculator(
@@ -568,147 +709,6 @@ pub(crate) unsafe fn __cbg_in___str<'a>(
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_bool(v: ::core::mem::MaybeUninit<bool>) -> bool {
     ::core::ptr::read(v.as_ptr() as *const u8) != 0
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_closure_history_batch_t(
-    c: closure_history_batch_t,
-) -> impl Fn(::std::vec::Vec<f64>) + Send + Sync + 'static {
-    struct __Ctx {
-        context: *mut ::core::ffi::c_void,
-        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-    }
-    unsafe impl ::core::marker::Send for __Ctx {}
-    unsafe impl ::core::marker::Sync for __Ctx {}
-    impl ::core::ops::Drop for __Ctx {
-        fn drop(&mut self) {
-            if let ::core::option::Option::Some(__d) = self.drop {
-                unsafe { __d(self.context) }
-            }
-        }
-    }
-    let __call = c.call;
-    let __ctx = ::std::sync::Arc::new(__Ctx {
-        context: c.context,
-        drop: c.drop,
-    });
-    move |__a0: ::std::vec::Vec<f64>| {
-        if let ::core::option::Option::Some(__f) = __call {
-            let mut __w0_0 = ::core::mem::MaybeUninit::<*mut f64>::zeroed();
-            let mut __w0_1 = ::core::mem::MaybeUninit::<usize>::zeroed();
-            let __arr: ::std::vec::Vec<f64> = __cbg_out_chain_vec_f64(__a0);
-            let (__p, __n) = __cbg_alloc_array(__arr);
-            *__w0_0.as_mut_ptr() = __p;
-            *__w0_1.as_mut_ptr() = __n;
-            unsafe { __f(__w0_0, __w0_1, __ctx.context) }
-        }
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_closure_maybe_grade_t(
-    c: closure_maybe_grade_t,
-) -> impl Fn(::core::option::Option<example_flat::Grade>) + Send + Sync + 'static {
-    struct __Ctx {
-        context: *mut ::core::ffi::c_void,
-        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-    }
-    unsafe impl ::core::marker::Send for __Ctx {}
-    unsafe impl ::core::marker::Sync for __Ctx {}
-    impl ::core::ops::Drop for __Ctx {
-        fn drop(&mut self) {
-            if let ::core::option::Option::Some(__d) = self.drop {
-                unsafe { __d(self.context) }
-            }
-        }
-    }
-    let __call = c.call;
-    let __ctx = ::std::sync::Arc::new(__Ctx {
-        context: c.context,
-        drop: c.drop,
-    });
-    move |__a0: ::core::option::Option<example_flat::Grade>| {
-        if let ::core::option::Option::Some(__f) = __call {
-            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::zeroed();
-            let mut __w0_1 = ::core::mem::MaybeUninit::<grade_t>::zeroed();
-            match __a0 {
-                ::core::option::Option::Some(__x) => {
-                    *__w0_0.as_mut_ptr() = true;
-                    *__w0_1.as_mut_ptr() = __cbg_out_Grade(__x);
-                }
-                ::core::option::Option::None => {
-                    *__w0_0.as_mut_ptr() = false;
-                }
-            }
-            unsafe { __f(__w0_0, __w0_1, __ctx.context) }
-        }
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_closure_maybe_value_t(
-    c: closure_maybe_value_t,
-) -> impl Fn(::core::option::Option<f64>) + Send + Sync + 'static {
-    struct __Ctx {
-        context: *mut ::core::ffi::c_void,
-        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-    }
-    unsafe impl ::core::marker::Send for __Ctx {}
-    unsafe impl ::core::marker::Sync for __Ctx {}
-    impl ::core::ops::Drop for __Ctx {
-        fn drop(&mut self) {
-            if let ::core::option::Option::Some(__d) = self.drop {
-                unsafe { __d(self.context) }
-            }
-        }
-    }
-    let __call = c.call;
-    let __ctx = ::std::sync::Arc::new(__Ctx {
-        context: c.context,
-        drop: c.drop,
-    });
-    move |__a0: ::core::option::Option<f64>| {
-        if let ::core::option::Option::Some(__f) = __call {
-            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::zeroed();
-            let mut __w0_1 = ::core::mem::MaybeUninit::<f64>::zeroed();
-            match __a0 {
-                ::core::option::Option::Some(__x) => {
-                    *__w0_0.as_mut_ptr() = true;
-                    *__w0_1.as_mut_ptr() = __cbg_out_f64(__x);
-                }
-                ::core::option::Option::None => {
-                    *__w0_0.as_mut_ptr() = false;
-                }
-            }
-            unsafe { __f(__w0_0, __w0_1, __ctx.context) }
-        }
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_closure_value_t(
-    c: closure_value_t,
-) -> impl Fn(f64) + Send + Sync + 'static {
-    struct __Ctx {
-        context: *mut ::core::ffi::c_void,
-        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-    }
-    unsafe impl ::core::marker::Send for __Ctx {}
-    unsafe impl ::core::marker::Sync for __Ctx {}
-    impl ::core::ops::Drop for __Ctx {
-        fn drop(&mut self) {
-            if let ::core::option::Option::Some(__d) = self.drop {
-                unsafe { __d(self.context) }
-            }
-        }
-    }
-    let __call = c.call;
-    let __ctx = ::std::sync::Arc::new(__Ctx {
-        context: c.context,
-        drop: c.drop,
-    });
-    move |__a0: f64| {
-        if let ::core::option::Option::Some(__f) = __call {
-            let __w0 = __cbg_out_f64(__a0);
-            unsafe { __f(__w0, __ctx.context) }
-        }
-    }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_in_f64(v: f64) -> f64 {
