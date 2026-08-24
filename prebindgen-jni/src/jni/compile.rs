@@ -68,6 +68,82 @@ impl JPlan {
     }
 }
 
+/// The ABI payload for an allocation-free Optional input site.
+///
+/// The registry fragment owns construction of the Rust `Option`; this payload
+/// only names the two JNI leaves and describes how Kotlin supplies them.
+pub(crate) struct OptionalPairPlan {
+    pub(crate) present_ident: syn::Ident,
+    pub(crate) value_ident: syn::Ident,
+    pub(crate) value_wire: syn::Type,
+    pub(crate) chain: ComposedChain,
+    pub(crate) present_kt: String,
+    pub(crate) value_kt: String,
+    pub(crate) value_kt_type: String,
+    pub(crate) value_kt_zero: String,
+    pub(crate) is_enum: bool,
+}
+
+/// Whether this input can select the registry's allocation-free Optional
+/// `pair` row.
+///
+/// This predicate intentionally reads the already-compiled payload fragment:
+/// niches, projections, and converter stages are destination facts and cannot
+/// be inferred correctly from Flat syntax.
+pub(crate) fn optional_pair_plan_candidate(ext: &Declarations, arg: &TypeRef) -> bool {
+    // A wrapper outside Optional is accepted only when the composed source
+    // policy can rebuild it. Ask before peeling, because Flat deliberately
+    // erases transparent wrappers from the structural kind.
+    if crate::jni::trait_impl::build_through_erased_wrappers(arg, quote!(__probe)).is_none() {
+        return false;
+    }
+    let Some(inner) = arg.optional_inner() else {
+        return false;
+    };
+    if inner.borrow_target().is_some() {
+        return false;
+    }
+    let Some(inner_entry) = ext.in_frag(inner) else {
+        return false;
+    };
+    JniPrim::from_wire(&inner_entry.destination).is_some()
+        && inner_entry.niches.clone().carve().is_none()
+        && inner_entry.metadata.projection.is_none()
+        && inner_entry.pre_stages.is_empty()
+}
+
+/// Describe the two-leaf ABI of a bare `Option<primitive>` / `Option<enum>`
+/// input, or leave the crossing on its one-value representation.
+pub(crate) fn optional_pair_plan(
+    ext: &Declarations,
+    param_name: &syn::Ident,
+    arg: &TypeRef,
+    root: &JFrag,
+) -> Option<OptionalPairPlan> {
+    optional_pair_plan_candidate(ext, arg).then_some(())?;
+    let inner = arg.optional_inner()?;
+    let inner_entry = ext.in_frag(inner)?;
+    let value_wire = inner_entry.destination.clone();
+    let prim = JniPrim::from_wire(&value_wire)?;
+    let is_enum = ext.is_kotlin_enum_reading(inner);
+    let chain = root.composed_chain()?;
+    if chain.layout.leaf_count() != 2 {
+        return None;
+    }
+    chain.activate();
+    Some(OptionalPairPlan {
+        present_ident: format_ident!("{}_present", param_name),
+        value_ident: format_ident!("{}_value", param_name),
+        value_wire,
+        chain,
+        present_kt: snake_to_camel(&format!("{}_present", param_name)),
+        value_kt: snake_to_camel(&format!("{}_value", param_name)),
+        value_kt_type: prim.kotlin_type().to_string(),
+        value_kt_zero: prim.kotlin_zero().to_string(),
+        is_enum,
+    })
+}
+
 /// The JNI adapter's answer for one crossing.
 ///
 /// What a `ConverterImpl` was, minus the bookkeeping the table now does.
@@ -1262,7 +1338,7 @@ impl<R: Conversions> JCompile<'_, R> {
     /// The deep input recipe for `Option<&opaque>` remains terminal because it
     /// deliberately yields `OwnedObject<T>` and clones the Java-owned handle.
     /// Choice layouts remain with the legacy parts compiler.
-    fn planned_optional(&self, at: At<'_>, inner: &JFrag) -> Option<JFrag> {
+    fn planned_optional(&self, at: At<'_>, inner: &JFrag, decoupled: bool) -> Option<JFrag> {
         let source = at.crossing.spelled();
         let element = source.optional_inner()?;
         let direction = at.crossing.direction();
@@ -1306,7 +1382,23 @@ impl<R: Conversions> JCompile<'_, R> {
         let (bridge, child, destination, niches, nullable_kind, layout, input_by_ref) =
             match direction {
                 Direction::Construct => {
-                    if inner.wires.is_some() {
+                    if decoupled {
+                        let destination: syn::Type =
+                            syn::parse_quote!((jni::sys::jboolean, #inner_wire));
+                        (
+                            crate::jni::chain::JOptionalBridge::InputGated { child: inner_wire },
+                            crate::jni::chain::JChild::input(
+                                inner.conv.converter_ident().clone(),
+                                stages,
+                                crate::jni::chain::JValueUse::SharedRef,
+                            ),
+                            destination,
+                            Niches::empty(),
+                            NullableKind::Boxed,
+                            JLayout::Optional(Box::new(JLayout::Leaf)),
+                            false,
+                        )
+                    } else if inner.wires.is_some() {
                         let inner_layout = inner.layout.clone()?;
                         let destination: syn::Type =
                             syn::parse_quote!((jni::sys::jboolean, #inner_wire));
@@ -1548,7 +1640,21 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // before structural compilation. If this hook runs, the recipe table
         // has already chosen Optional composition or its legacy structural
         // fallback, so repeating the terminal lookup here was dead code.
-        let mut frag = if let Some(planned) = self.planned_optional(at, inner) {
+        // Decide the allocation-free primitive ABI once. The same answer
+        // selects the Optional bridge below and supplies the site's two wire
+        // leaves afterwards; recomputing it at either layer would restore the
+        // split planning this migration removes.
+        let pair_recipe = at.recipe.name() == &crate::jni::recipes::pair();
+        let pair_wires = pair_recipe
+            .then(|| self.decoupled_optional(at, inner, None))
+            .flatten();
+        if pair_recipe && pair_wires.is_none() {
+            return Err(refuse(
+                at,
+                "the Optional pair recipe requires one unprojected primitive payload",
+            ));
+        }
+        let mut frag = if let Some(planned) = self.planned_optional(at, inner, pair_recipe) {
             planned
         } else {
             let legacy = match at.crossing.direction() {
@@ -1566,8 +1672,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // is read on the Rust side and the slot carries the raw value. The
         // value crosses through the INNER's conversion, not the optional's —
         // there is no boxed `Option` on this wire to decode.
+        if let Some(pair) = pair_wires {
+            frag.wires = Some(pair);
+            return Ok(frag);
+        }
         if at.crossing.direction() == Direction::Construct && inner.wires.is_none() {
-            if let Some(pair) = self.decoupled_optional(at, inner, &frag.conv) {
+            if let Some(pair) = self.decoupled_optional(at, inner, Some(&frag.conv)) {
                 frag.layout = None;
                 frag.wires = Some(pair);
                 return Ok(frag);
@@ -1878,10 +1988,14 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 elem_wrappers: v.elem_wrappers,
                 helpers: v.helpers,
             }
-        } else if let Some(sp) =
-            crate::jni::emit::build_option_scalar_input_plan(ext, ident, reading)
-        {
-            InputKind::OptionScalar(sp)
+        } else if bound.recipe.name() == &crate::jni::recipes::pair() {
+            let plan = optional_pair_plan(ext, ident, reading, root).ok_or_else(|| {
+                JErr::Refused(format!(
+                    "JniGen: {} selected an Optional pair recipe without a pair fragment",
+                    bound.site
+                ))
+            })?;
+            InputKind::OptionalPair(plan)
         } else if let Some(plan) = flat_plan {
             InputKind::FlattenStruct(plan)
         } else {
@@ -2500,7 +2614,7 @@ impl<R: Conversions> JCompile<'_, R> {
         &self,
         at: At<'_>,
         inner: &JFrag,
-        outer: &ConverterImpl<KotlinMeta>,
+        outer: Option<&ConverterImpl<KotlinMeta>>,
     ) -> Option<Vec<Wire>> {
         let inner_reading = at.crossing.value().optional_inner()?;
         if inner_reading.borrow_target().is_some() {
@@ -2520,7 +2634,9 @@ impl<R: Conversions> JCompile<'_, R> {
         let unsigned = match c.metadata.projection.as_ref().map(|p| &p.kind) {
             None => false,
             Some(ProjectionKind::Unsigned64)
-                if crate::jni::JniPrim::from_wire(&outer.destination).is_none() =>
+                if outer.is_some_and(|outer| {
+                    crate::jni::JniPrim::from_wire(&outer.destination).is_none()
+                }) =>
             {
                 true
             }

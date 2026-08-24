@@ -254,6 +254,12 @@ pub(crate) fn parts() -> RecipeName {
     RecipeName::new("parts")
 }
 
+/// The allocation-free `(present, value)` input row for an Optional whose
+/// destination payload is a JNI primitive.
+pub(crate) fn pair() -> RecipeName {
+    RecipeName::new("pair")
+}
+
 /// The compatibility row for a callback whose arguments cannot be composed.
 pub(crate) fn callback() -> RecipeName {
     RecipeName::new("callback")
@@ -381,14 +387,24 @@ impl Declarations {
             }
         }
 
-        // An optional whose payload has a Product shape offers two rows. Its
-        // established whole/default row preserves object-backed class fields;
-        // `parts` is the registry-composed `(presence, intermediate)` route used
-        // only by sites that explicitly flatten or deconstruct the value.
-        for (outer, _) in self.flattenable_optionals(model).into_values() {
+        // Every implicit Optional keeps its established whole/default input
+        // row and also offers the allocation-free primitive `pair` row. A
+        // parameter site selects `pair` only after the compiled payload proves
+        // that it is one JNI primitive with no niche, projection, or stage.
+        //
+        // Product-shaped payloads additionally offer `parts`; that row is
+        // selected by the existing flattening bindings below.
+        let flattenable = self.flattenable_optionals(model);
+        for (key, (outer, _)) in self.implicit_optionals(model) {
             recipes
                 .declare_default(outer.clone(), whole(), Constructing::Optional)
-                .declare(outer.clone(), parts(), Constructing::Optional)
+                .declare(outer.clone(), pair(), Constructing::Optional);
+            if flattenable.contains_key(&key) {
+                recipes.declare(outer.clone(), parts(), Constructing::Optional);
+            }
+        }
+        for (outer, _) in flattenable.into_values() {
+            recipes
                 .declare_default(outer.clone(), whole(), Deconstructing::Optional)
                 .declare(outer.clone(), parts(), Deconstructing::Optional);
         }
@@ -459,7 +475,7 @@ impl Declarations {
     /// Explicit declarations keep full control of the outer crossing: a
     /// `convert!(Option<T> => ..)` is an atomic recipe, not an implicit request
     /// to flatten `T`.
-    fn flattenable_optionals<'a>(
+    fn implicit_optionals<'a>(
         &self,
         model: &'a Flat,
     ) -> BTreeMap<TypeKey, (&'a TypeRef, &'a TypeRef)> {
@@ -479,11 +495,21 @@ impl Declarations {
             let Some(inner) = ty.optional_inner() else {
                 continue;
             };
-            if !explicitly_declared(ty) && self.field_crosses_as_its_fields(inner) {
+            if !explicitly_declared(ty) {
                 optionals.entry(ty.stripped_key()).or_insert((ty, inner));
             }
         }
         optionals
+    }
+
+    fn flattenable_optionals<'a>(
+        &self,
+        model: &'a Flat,
+    ) -> BTreeMap<TypeKey, (&'a TypeRef, &'a TypeRef)> {
+        self.implicit_optionals(model)
+            .into_iter()
+            .filter(|(_, (_, inner))| self.field_crosses_as_its_fields(inner))
+            .collect()
     }
 
     pub(crate) fn bindings(

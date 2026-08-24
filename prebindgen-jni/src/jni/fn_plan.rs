@@ -143,7 +143,7 @@ pub(crate) enum InputKind {
     },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
-    OptionScalar(OptionScalarInputPlan),
+    OptionalPair(crate::jni::compile::OptionalPairPlan),
     /// Flattenable data_class: the field leaves cross as separate wire params.
     FlattenStruct(FlatInputPlan),
     /// Lockable opaque-handle projection (`jlong` wire). `direct` is
@@ -608,7 +608,7 @@ impl JniFunctionPlan {
                     .iter()
                     .map(|l| kotlin_jvm_slots(l.kt_wire_ty()))
                     .sum(),
-                InputKind::OptionScalar(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
+                InputKind::OptionalPair(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
                 InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
                 InputKind::Callback { .. } => 1,
                 InputKind::Unsigned64 { .. } | InputKind::Plain => ext
@@ -706,7 +706,16 @@ fn classify_leaf(
         role: Role::Param { index: 0 },
     };
     let crossing = Crossing::new(reading.clone(), Direction::Construct);
-    let planned = compiler.site(&mut adapter, site, crossing);
+    let use_pair = crate::jni::compile::optional_pair_plan_candidate(ext, reading)
+        && ext
+            .recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::pair())
+            .is_some();
+    let planned = if use_pair {
+        compiler.site_recipe(&mut adapter, site, crossing, &crate::jni::recipes::pair())
+    } else {
+        compiler.site(&mut adapter, site, crossing)
+    };
     *ext.compiled.borrow_mut() = compiler.finish();
     match planned {
         Ok(Some(plan)) => plan.param().ok_or_else(|| PlanError::Unresolved {

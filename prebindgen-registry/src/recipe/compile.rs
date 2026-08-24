@@ -30,8 +30,8 @@
 use std::{collections::HashMap, fmt, rc::Rc};
 
 use super::{
-    Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Reach, Recipe, RecipeError,
-    RecipeKey, RecipeName, Recipes, Role, Shape, Site,
+    Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Origin, Reach, Recipe,
+    RecipeError, RecipeKey, RecipeName, Recipes, Role, Shape, Site,
 };
 use crate::{
     flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef},
@@ -490,6 +490,46 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Ok(None);
         };
+        self.plan(adapter, bound)
+    }
+
+    /// Compile one site through a named recipe chosen by the adapter.
+    ///
+    /// This is the dynamic counterpart of a binding-table
+    /// `Ask::Recipe`: useful where the choice follows from a compiled
+    /// destination fragment rather than from the Flat model alone. The row
+    /// must still be declared in the recipe table, so choosing it cannot
+    /// invent a representation outside the registry's model.
+    pub fn site_recipe(
+        &mut self,
+        adapter: &mut C,
+        site: Site,
+        crossing: Crossing,
+        name: &RecipeName,
+    ) -> Result<Option<C::Plan>, CompileError<C::Error>> {
+        let crossing_key = crossing.key();
+        let Some(recipe) = self.recipes.key_of(&crossing_key, name).cloned() else {
+            return Err(RecipeError::NoSuchRecipe {
+                recipe: crossing_key.row(name.clone()),
+            }
+            .into());
+        };
+        self.plan(
+            adapter,
+            Bound {
+                site,
+                crossing,
+                recipe,
+                origin: Origin::Adapter,
+            },
+        )
+    }
+
+    fn plan(
+        &mut self,
+        adapter: &mut C,
+        bound: Bound,
+    ) -> Result<Option<C::Plan>, CompileError<C::Error>> {
         let root = self.recipe(adapter, &bound.crossing, &bound.recipe)?;
         let needed = adapter.tolerates(&bound.site.role);
         let got = root.yields().validity;

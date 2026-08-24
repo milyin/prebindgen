@@ -567,9 +567,9 @@ fn conversion_domain_must_match_the_representation() {
 
 /// Phase 4: a bare `Option<primitive>` / `Option<enum>` **input** parameter
 /// crosses as a decoupled `(present: Boolean, value: <prim>)` pair instead of a
-/// boxed `java.lang.*` `JObject`. The Rust side reassembles the `Option` from
-/// two raw scalars (`if <p>_present != 0u8 { Some(..) } else { None }`) with no
-/// reflective `intValue()`/`longValue()` unbox. The public Kotlin signature
+/// boxed `java.lang.*` `JObject`. The registry-composed Optional converter
+/// reassembles the value from two raw scalars with no reflective
+/// `intValue()`/`longValue()` unbox. The public Kotlin signature
 /// keeps `T?`; the call site passes `<name> != null` and `<name> ?: <zero>`
 /// (`<name>?.value ?: 0` for an enum).
 #[test]
@@ -640,16 +640,17 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     assert!(kc.contains("count?:0"), "{kotlin}");
     assert!(kc.contains("mode?.value?:0"), "{kotlin}");
 
-    // Rust native wrapper takes the two raw scalars and rebuilds the `Option`
-    // with no boxed-object unbox, then passes the rebuilt values to the source
-    // fn. (The `Option<i64>`/`Option<i32>`/`Option<Mode>` boxed converters are
-    // still emitted but are now dead `#[allow(dead_code)]` — the param path no
-    // longer references them, exactly like the Phase-1 dead Vec converters.)
+    // Rust native wrapper takes the two raw scalars and delegates each pair to
+    // the registry-composed Optional converter. The public ABI is unchanged;
+    // the former inline `if <param>_present` reconstruction is gone.
     assert!(rc.contains("ms_present:jni::sys::jboolean"), "{rust}");
     assert!(rc.contains("ms_value:jni::sys::jlong"), "{rust}");
     assert!(rc.contains("count_value:jni::sys::jint"), "{rust}");
     assert!(rc.contains("mode_value:jni::sys::jint"), "{rust}");
-    assert!(rc.contains("ifms_present!=0u8"), "{rust}");
+    assert!(rc.contains("letms=matchtuple2_to_Option_i64_"), "{rust}");
+    assert!(rc.contains("letcount=matchtuple2_to_Option_i32_"), "{rust}");
+    assert!(rc.contains("letmode=matchtuple2_to_Option_Mode_"), "{rust}");
+    assert!(rc.contains("if(v).0==0u8"), "{rust}");
     // The live path feeds the three rebuilt `Option`s straight to the source
     // call — no boxed `JObject` param anywhere in the wrapper.
     assert!(
@@ -2283,15 +2284,14 @@ fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
     assert!(ext.is_kotlin_enum_key(&field("plain").key()));
 }
 
-/// A **transparently-wrapped** parameter takes the same specialized lowering as
-/// its bare twin, and the emitter puts the wrapper back.
+/// A **transparently-wrapped** parameter takes the same registry-composed
+/// Optional lowering as its bare twin, and that converter puts the wrapper back.
 ///
 /// The model erases `Box`/`Cow` ([`TRANSPARENT_WRAPPERS`]), so
 /// `Box<Option<Mode>>` classifies as `Optional` exactly as `Option<Mode>` does.
-/// But `build_option_scalar_input_plan` does not *decode* the parameter, it
-/// **rebuilds** it: the emitter writes a literal `Option::Some(v)` /
-/// `Option::None` and hands that to the source function, and handing a bare
-/// `Option<Mode>` to a parameter spelled `Box<Option<Mode>>` is an `E0308`.
+/// The composed converter rebuilds the value: its source policy writes the
+/// `Option` shape and restores `Box`, so handing a bare `Option<Mode>` to a
+/// parameter spelled `Box<Option<Mode>>` remains impossible.
 ///
 /// #290 closed that by **declining** the wrapped spelling. #292 item 3 replaced
 /// the refusal with the rebuild — `Box::new(..)` is exactly what the syntax
@@ -2382,21 +2382,21 @@ fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() 
     );
 
     // The Rust half, which is what makes taking that lowering legal: the
-    // rebuilt `Option` is wrapped back up before it reaches the source fn.
-    // Without this the extern hands an `Option<Mode>` to a parameter spelled
+    // registry-composed converter restores the transparent wrapper. Without
+    // this the extern hands an `Option<Mode>` to a parameter spelled
     // `Box<Option<Mode>>` — `E0308`, and no Kotlin assertion could see it.
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
         .expect("read rust");
     let rc: String = rust.split_whitespace().collect();
     assert!(
-        rc.contains("letmode=::std::boxed::Box::new(if"),
-        "the rebuilt `Option` must be re-wrapped for the spelling:\n{rust}"
+        rc.contains("::std::boxed::Box::new({if(v).0==0u8"),
+        "the Optional converter must re-wrap the source spelling:\n{rust}"
     );
     // The control on the Rust side too: exactly ONE of the two externs wraps,
     // so the assertion above is about the spelling and not an unconditional
     // `Box` the emitter adds to everything.
     assert_eq!(
-        rc.matches("::std::boxed::Box::new(if").count(),
+        rc.matches("::std::boxed::Box::new({if(v).0==0u8").count(),
         1,
         "only the wrapped spelling gets a `Box::new`; the bare twin builds the \
          `Option` and passes it as is:\n{rust}"

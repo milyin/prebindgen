@@ -536,7 +536,7 @@ pub(crate) fn render_extern_decl(
             }
             // Bare `Option<primitive>` / `Option<enum>` param → a `(present:
             // Boolean, value: <Prim>)` pair (no boxed `java.lang.*` wire).
-            InputKind::OptionScalar(sp) => {
+            InputKind::OptionalPair(sp) => {
                 params.push(KtParam::new(sp.present_kt.clone(), KtType::boolean()));
                 params.push(KtParam::new(
                     sp.value_kt.clone(),
@@ -693,8 +693,8 @@ enum ParamMode {
     /// crosses (and the Rust side does no `intValue()` unboxing). The public
     /// Kotlin signature keeps `T?`; the call site passes `present_expr`
     /// (`<name> != null`) then `value_expr` (`<name> ?: 0` / `<name>?.value ?:
-    /// 0`). See [`crate::jni::OptionScalarInputPlan`].
-    OptionScalar {
+    /// 0`). See [`crate::jni::compile::OptionalPairPlan`].
+    OptionalPair {
         present_expr: String,
         value_expr: String,
     },
@@ -1285,7 +1285,7 @@ fn classify_params(
                     elem_accesses,
                 }
             }
-            InputKind::OptionScalar(sp) => {
+            InputKind::OptionalPair(sp) => {
                 // Bare `Option<primitive>` / `Option<enum>`: cross as a
                 // `(present, value)` pair (no boxed object). The high-level
                 // signature keeps `T?`; only the call-site args split in two.
@@ -1295,7 +1295,7 @@ fn classify_params(
                 } else {
                     format!("{name} ?: {}", sp.value_kt_zero)
                 };
-                ParamMode::OptionScalar {
+                ParamMode::OptionalPair {
                     present_expr,
                     value_expr,
                 }
@@ -1574,9 +1574,9 @@ fn build_native_call(
             args.push(format!("__vec_{}", p.kt_name));
             continue;
         }
-        // OptionScalar param expands into two call args: the present flag
+        // An Optional pair expands into two call args: the present flag
         // and the value-or-zero expression (in that order).
-        if let ParamMode::OptionScalar {
+        if let ParamMode::OptionalPair {
             present_expr,
             value_expr,
         } = &p.mode
@@ -1622,8 +1622,8 @@ fn build_native_call(
             ParamMode::VecBuild { .. } => {
                 unreachable!("VecBuild expanded before the single-arg match")
             }
-            ParamMode::OptionScalar { .. } => {
-                unreachable!("OptionScalar expanded before the single-arg match")
+            ParamMode::OptionalPair { .. } => {
+                unreachable!("OptionalPair expanded before the single-arg match")
             }
         };
         args.push(arg);

@@ -691,6 +691,33 @@ fn a_site_takes_the_row_it_names() {
 }
 
 #[test]
+fn an_adapter_can_select_one_declared_row_for_one_site() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_recipes(&model);
+    let bindings = Bindings::default();
+    let crossing = Crossing::new(ty(&model, "Sample"), Direction::Deconstruct);
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let selected = compiler
+        .site_recipe(
+            &mut adapter,
+            site("z_put", 0),
+            crossing.clone(),
+            &recipe_name("fields"),
+        )
+        .expect("declared row")
+        .expect("site plan");
+    assert!(selected.contains("recipe `fields`"), "{selected}");
+
+    let default = compiler
+        .site(&mut adapter, site("z_get", 0), crossing)
+        .expect("default row")
+        .expect("site plan");
+    assert!(default.contains("recipe `whole`"), "{default}");
+}
+
+#[test]
 fn the_higher_precedence_declaration_wins_whichever_was_written_first() {
     let model = model(&[SAMPLE]);
     let recipes = two_recipes(&model);

@@ -12312,6 +12312,36 @@ pub(crate) unsafe fn tuple2_to_Box_Option_Payload_0aa97b23<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn tuple2_to_Box_Option_Priority_b03d39db<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (jni::sys::jboolean, jni::sys::jint),
+) -> ::core::result::Result<Box<Option<perftest_flat::Priority>>, __JniErr> {
+    ::core::result::Result::Ok(
+        ::std::boxed::Box::new({
+            if (v).0 == 0u8 {
+                ::core::option::Option::None
+            } else {
+                let __present = (v).1;
+                ::core::option::Option::Some(
+                    jint_to_Priority_447102d2(env, &(__present))?,
+                )
+            }
+        }),
+    )
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 #[inline(always)]
 pub(crate) unsafe fn tuple2_to_CacheConfig_fcb43e74<'env, 'a>(
     env: &mut jni::JNIEnv<'env>,
@@ -12468,6 +12498,32 @@ pub(crate) unsafe fn tuple2_to_Option_Payload_af2bd54b<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn tuple2_to_Option_Priority_2ab1de45<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (jni::sys::jboolean, jni::sys::jint),
+) -> ::core::result::Result<Option<perftest_flat::Priority>, __JniErr> {
+    ::core::result::Result::Ok({
+        if (v).0 == 0u8 {
+            ::core::option::Option::None
+        } else {
+            let __present = (v).1;
+            ::core::option::Option::Some(jint_to_Priority_447102d2(env, &(__present))?)
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn tuple2_to_Option_Reading_550e9a70<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: (
@@ -12488,6 +12544,58 @@ pub(crate) unsafe fn tuple2_to_Option_Reading_550e9a70<'env, 'v>(
         } else {
             let __present = (v).1;
             ::core::option::Option::Some(tuple6_to_Reading_69702d1f(env, __present)?)
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn tuple2_to_Option_f64_49db5632<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (jni::sys::jboolean, jni::sys::jdouble),
+) -> ::core::result::Result<Option<f64>, __JniErr> {
+    ::core::result::Result::Ok({
+        if (v).0 == 0u8 {
+            ::core::option::Option::None
+        } else {
+            let __present = (v).1;
+            ::core::option::Option::Some(jdouble_to_f64_9e4a8f70(env, &(__present))?)
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn tuple2_to_Option_i64_b2611839<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (jni::sys::jboolean, jni::sys::jlong),
+) -> ::core::result::Result<Option<i64>, __JniErr> {
+    ::core::result::Result::Ok({
+        if (v).0 == 0u8 {
+            ::core::option::Option::None
+        } else {
+            let __present = (v).1;
+            ::core::option::Option::Some(jlong_to_i64_fbf9a9bc(env, &(__present))?)
         }
     })
 }
@@ -13335,43 +13443,36 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let ttl = if ttl_present != 0u8 {
-        let __ttl_val = match jlong_to_i64_fbf9a9bc(&mut env, &ttl_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__ttl_val)
-    } else {
-        ::core::option::Option::None
+    let ttl = match tuple2_to_Option_i64_b2611839(&mut env, (ttl_present, ttl_value)) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
-    let priority = if priority_present != 0u8 {
-        let __priority_val = match jint_to_Priority_447102d2(&mut env, &priority_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__priority_val)
-    } else {
-        ::core::option::Option::None
+    let priority = match tuple2_to_Option_Priority_2ab1de45(
+        &mut env,
+        (priority_present, priority_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
     let __out = perftest_flat::annotated_new(payload, ttl, priority);
     match Annotated_to_JObject_b543f0d9(&mut env, __out) {
@@ -14841,43 +14942,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
             return ();
         }
     };
-    let __exp_s_0_0: Option<i64> = if s_0_0_present != 0u8 {
-        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &s_0_0_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return ();
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_s_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (s_0_0_present, s_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return ();
+        }
     };
-    let __exp_s_0_1: Option<f64> = if s_0_1_present != 0u8 {
-        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &s_0_1_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return ();
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_s_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (s_0_1_present, s_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return ();
+        }
     };
     let __exp_s_1 = match jlong_to_Option_Summary_252ef2ba(&mut env, &s_1) {
         ::core::result::Result::Ok(__v) => __v,
@@ -15589,27 +15686,23 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedOptPriority
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let p = ::std::boxed::Box::new(
-        if p_present != 0u8 {
-            let __p_val = match jint_to_Priority_447102d2(&mut env, &p_value) {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(
-                        &mut env,
-                        &__error_sink,
-                        &__SINK_MID,
-                        __SINK_FQN,
-                        __SINK_DESCR,
-                        &__e.to_string(),
-                    );
-                    return 0 as jni::sys::jlong;
-                }
-            };
-            ::core::option::Option::Some(__p_val)
-        } else {
-            ::core::option::Option::None
-        },
-    );
+    let p = match tuple2_to_Box_Option_Priority_b03d39db(
+        &mut env,
+        (p_present, p_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
     let __out = perftest_flat::boxed_opt_priority_weight(p);
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -18660,24 +18753,19 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityOr<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let p = if p_present != 0u8 {
-        let __p_val = match jint_to_Priority_447102d2(&mut env, &p_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jint;
-            }
-        };
-        ::core::option::Option::Some(__p_val)
-    } else {
-        ::core::option::Option::None
+    let p = match tuple2_to_Option_Priority_2ab1de45(&mut env, (p_present, p_value)) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jint;
+        }
     };
     let fallback = match jint_to_Priority_447102d2(&mut env, &fallback) {
         ::core::result::Result::Ok(__v) => __v,
@@ -20377,43 +20465,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
             return 0 as jni::sys::jboolean;
         }
     };
-    let __exp_expected_0_0: Option<i64> = if expected_0_0_present != 0u8 {
-        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &expected_0_0_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jboolean;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_expected_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (expected_0_0_present, expected_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jboolean;
+        }
     };
-    let __exp_expected_0_1: Option<f64> = if expected_0_1_present != 0u8 {
-        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &expected_0_1_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jboolean;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_expected_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (expected_0_1_present, expected_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jboolean;
+        }
     };
     let __exp_expected_1 = match jlong_to_Option_Summary_252ef2ba(
         &mut env,
@@ -20939,43 +21023,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
             return 0 as jni::sys::jboolean;
         }
     };
-    let __exp_expected_0_0: Option<i64> = if expected_0_0_present != 0u8 {
-        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &expected_0_0_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jboolean;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_expected_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (expected_0_0_present, expected_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jboolean;
+        }
     };
-    let __exp_expected_0_1: Option<f64> = if expected_0_1_present != 0u8 {
-        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &expected_0_1_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jboolean;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_expected_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (expected_0_1_present, expected_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jboolean;
+        }
     };
     let __exp_expected_1 = match jlong_to_Option_Summary_252ef2ba(
         &mut env,
@@ -22350,43 +22430,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
             return jni::objects::JObject::null().into();
         }
     };
-    let __exp_s_0_0: Option<i64> = if s_0_0_present != 0u8 {
-        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &s_0_0_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_s_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (s_0_0_present, s_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
-    let __exp_s_0_1: Option<f64> = if s_0_1_present != 0u8 {
-        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &s_0_1_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_s_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (s_0_1_present, s_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
     let __exp_s_1 = match jlong_to_Option_Summary_828826f3(&mut env, &s_1) {
         ::core::result::Result::Ok(__v) => __v,
@@ -22639,43 +22715,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __exp_primary_0_0: Option<i64> = if primary_0_0_present != 0u8 {
-        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &primary_0_0_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_primary_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (primary_0_0_present, primary_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
-    let __exp_primary_0_1: Option<f64> = if primary_0_1_present != 0u8 {
-        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &primary_0_1_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_primary_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (primary_0_1_present, primary_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
     let __exp_primary_1 = match jlong_to_Option_Summary_252ef2ba(&mut env, &primary_1) {
         ::core::result::Result::Ok(__v) => __v,
@@ -22759,43 +22831,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __exp_fallback_0_0: Option<i64> = if fallback_0_0_present != 0u8 {
-        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &fallback_0_0_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_fallback_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (fallback_0_0_present, fallback_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
-    let __exp_fallback_0_1: Option<f64> = if fallback_0_1_present != 0u8 {
-        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &fallback_0_1_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_fallback_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (fallback_0_1_present, fallback_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
     let __exp_fallback_1 = match jlong_to_Option_Summary_252ef2ba(
         &mut env,
@@ -23035,43 +23103,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
             return 0 as jni::sys::jlong;
         }
     };
-    let __exp_primary_0_0: Option<i64> = if primary_0_0_present != 0u8 {
-        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &primary_0_0_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jlong;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_primary_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (primary_0_0_present, primary_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
     };
-    let __exp_primary_0_1: Option<f64> = if primary_0_1_present != 0u8 {
-        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &primary_0_1_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jlong;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_primary_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (primary_0_1_present, primary_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
     };
     let __exp_primary_1 = match jlong_to_Option_Summary_252ef2ba(&mut env, &primary_1) {
         ::core::result::Result::Ok(__v) => __v,
@@ -23155,43 +23219,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
             return 0 as jni::sys::jlong;
         }
     };
-    let __exp_fallback_0_0: Option<i64> = if fallback_0_0_present != 0u8 {
-        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &fallback_0_0_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jlong;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_fallback_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (fallback_0_0_present, fallback_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
     };
-    let __exp_fallback_0_1: Option<f64> = if fallback_0_1_present != 0u8 {
-        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &fallback_0_1_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jlong;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_fallback_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (fallback_0_1_present, fallback_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
     };
     let __exp_fallback_1 = match jlong_to_Option_Summary_252ef2ba(
         &mut env,
@@ -23667,43 +23727,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
             return 0.0 as jni::sys::jdouble;
         }
     };
-    let __exp_s_0_0: Option<i64> = if s_0_0_present != 0u8 {
-        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &s_0_0_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0.0 as jni::sys::jdouble;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_s_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (s_0_0_present, s_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0.0 as jni::sys::jdouble;
+        }
     };
-    let __exp_s_0_1: Option<f64> = if s_0_1_present != 0u8 {
-        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &s_0_1_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0.0 as jni::sys::jdouble;
-            }
-        };
-        ::core::option::Option::Some(__v)
-    } else {
-        ::core::option::Option::None
+    let __exp_s_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (s_0_1_present, s_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0.0 as jni::sys::jdouble;
+        }
     };
     let __exp_s_1 = match jlong_to_Option_Summary_828826f3(&mut env, &s_1) {
         ::core::result::Result::Ok(__v) => __v,
