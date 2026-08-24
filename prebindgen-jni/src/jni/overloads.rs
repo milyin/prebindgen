@@ -325,7 +325,7 @@ fn resolve_split<'a>(
         .iter()
         .find(|planned| planned.ident == param)
         .and_then(|planned| match &planned.form {
-            ParamForm::Expanded { plan, .. } => Some(plan.as_ref()),
+            ParamForm::Expanded { plan, .. } => Some(plan.fold()),
             ParamForm::Single(_) => None,
         })
         .unwrap_or_else(|| {

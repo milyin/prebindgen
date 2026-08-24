@@ -20,6 +20,7 @@ import io.prebindgen.covertest.analytics.summarySeriesOpt
 import io.prebindgen.covertest.analytics.summaryTotalOpt
 import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.analytics.selectorCodeScore
+import io.prebindgen.covertest.analytics.summaryEnvelopeScore
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
@@ -1435,6 +1436,15 @@ fun main() {
         val code = SelectorCode.new(50, byteArrayOf(1, 2, 3), boom).orThrow()
         check(selectorCodeScore(1, null, null, code, boom) == 53L)
         code.close()
+    }
+
+    // ── recursive constructor expansion: nested build and identity arms ─────
+    section("recursive constructor expansion freezes nested constructors") {
+        // The outer SummaryEnvelope constructor receives a Summary. Exercise
+        // both variants of that nested Summary build before the outer call.
+        check(summaryEnvelopeScore(0, 4L, 10.0, null, 3L, boom) == 17L)
+        val nested = Summary.of(5L, 12.0, boom).orThrow()
+        check(summaryEnvelopeScore(1, null, null, nested, 2L, boom) == 19L)
     }
 
     // ── flatten input on Summary: default + with, both selectors ─────────────

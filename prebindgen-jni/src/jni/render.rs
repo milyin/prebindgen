@@ -2395,7 +2395,7 @@ fn shape_notes(fplan: &JniFunctionPlan) -> Option<String> {
         .params
         .iter()
         .filter_map(|param| match &param.form {
-            ParamForm::Expanded { plan, .. } => Some((&param.ident, plan.as_ref())),
+            ParamForm::Expanded { plan, .. } => Some((&param.ident, plan.fold())),
             ParamForm::Single(_) => None,
         })
         .collect();

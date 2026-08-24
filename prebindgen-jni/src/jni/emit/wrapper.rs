@@ -229,7 +229,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     let on_err = sentinel_for_wire(&wire_ty);
 
     for param in &plan.params {
-        let (wp, pre, call_arg) = emit_input_param(ext, registry, param, &on_err, emit);
+        let (wp, pre, call_arg) = emit_input_param(param, &on_err, emit);
         wire_params.extend(wp);
         prelude.extend(pre);
         call_args.push(call_arg);
@@ -502,8 +502,6 @@ fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
 /// site only renders each [`InputKind`]'s decode.
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
-    ext: &Declarations,
-    registry: &Registry,
     param: &PlanParam,
     on_err: &TokenStream,
     emit: &prebindgen_registry::Emit,
@@ -513,7 +511,7 @@ fn emit_input_param(
     // (pure-Rust) fold to build the value, then pass it to the call.
     let leaf = match &param.form {
         ParamForm::Expanded { plan: fold, leaves } => {
-            return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err, emit);
+            return emit_expanded_param(fold, leaves, &param.ident, on_err, emit);
         }
         ParamForm::Single(leaf) => &**leaf,
     };
@@ -687,20 +685,19 @@ fn emit_plain_decode(
 /// through the same error sink as any fallible input. The returned call
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
-    ext: &Declarations,
-    registry: &Registry,
-    plan: &prebindgen_registry::expand::FoldPlan,
+    plan: &ExpandedParamPlan,
     leaves: &[PlanLeaf],
     orig_param: &syn::Ident,
     on_err: &TokenStream,
     emit: &prebindgen_registry::Emit,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     let mut wire_params: Vec<TokenStream> = Vec::new();
+    let fold = plan.fold();
     let mut prelude: Vec<TokenStream> = Vec::new();
     let mut leaf_locals: Vec<syn::Ident> = Vec::new();
 
-    debug_assert_eq!(plan.leaves.len(), leaves.len());
-    for (leaf, classified) in plan.leaves.iter().zip(leaves) {
+    debug_assert_eq!(fold.leaves.len(), leaves.len());
+    for (leaf, classified) in fold.leaves.iter().zip(leaves) {
         let leaf_ty = &leaf.ty;
         // The ascription generated Rust writes for this leaf's local.
         let leaf_ty_tokens = emit.spell(leaf_ty);
@@ -782,11 +779,7 @@ pub(crate) fn emit_expanded_param(
 
     // The fold itself (language-agnostic). Its `Err(String)` is lifted into
     // `__JniErr` and routed through the same sink as fallible inputs.
-    let qualify = |id: &syn::Ident| -> syn::Path {
-        let m = ext.fn_module(registry, id);
-        syn::parse_quote!(#m::#id)
-    };
-    let fold_expr = prebindgen_registry::expand::emit_fold(plan, &leaf_locals, &qualify);
+    let fold_expr = plan.emit(&leaf_locals);
     let folded = format_ident!("__folded_{}", orig_param);
     prelude.push(quote!(
         let #folded = match #fold_expr {
@@ -801,7 +794,7 @@ pub(crate) fn emit_expanded_param(
 
     // `Option<&T>` ⇒ `folded.as_ref()`; `&T` ⇒ `&folded`; by-value (incl.
     // `Option<T>`) ⇒ `folded`.
-    let call_arg = match (plan.produces_option(), plan.by_ref) {
+    let call_arg = match (fold.produces_option(), fold.by_ref) {
         (true, true) => quote!(#folded.as_ref()),
         (false, true) => quote!(&#folded),
         (_, false) => quote!(#folded),

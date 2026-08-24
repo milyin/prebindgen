@@ -29,6 +29,7 @@
 //! | bounded conversion domains + niches | `Option<Duration>` ⇄ bounded millisecond `ULong?`; raw JNI remains primitive `Long`, `None` uses an invalid `u64`, invalid input/output routes to `onError`; `DurationBoundary` composes the niche through a data-class field and whole-object decode |
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
+//! | recursive `expand_param!` constructor input | `SummaryEnvelope` folds the nested Summary build/identity selector before its outer constructor |
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones; `selector_code_score(Option<&SelectorCode>)` lowers its synthetic `Option<u16>` build-arm leaf to a primitive presence/value pair |
 //! | `FunctionDecl::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
 //! | split × builder-delivered return (#87) | `summaryMerge` — cartesian split + generic `<R>` wrapper; every overload re-declares `<R>` |
@@ -428,6 +429,10 @@ fn main() {
                 // registry pair recipe at the native ABI (#525 follow-up).
                 .class(ptr_class!(SelectorCode).constructor(fun!(selector_code_new)))
                 .fun(fun!(selector_code_score))
+                // `SummaryEnvelope` has no Kotlin class. Its sole constructor
+                // takes `Summary`, so the registry recursively folds Summary's
+                // own selector expansion before building the outer Rust value.
+                .fun(fun!(summary_envelope_score))
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
@@ -446,6 +451,7 @@ fn main() {
                 .variant(fun!(summary_new))
                 .variant_self(),
         )
+        .expand(expand_param!(SummaryEnvelope).variant(fun!(summary_envelope_new)))
         .expand(
             expand_param!(SelectorCode)
                 .variant(fun!(selector_code_new))

@@ -215,7 +215,7 @@ impl super::JniGen {
             .params
             .iter()
             .filter_map(|param| match &param.form {
-                crate::jni::ParamForm::Expanded { plan, .. } => Some((&param.ident, plan.as_ref())),
+                crate::jni::ParamForm::Expanded { plan, .. } => Some((&param.ident, plan.fold())),
                 crate::jni::ParamForm::Single(_) => None,
             })
             .collect();

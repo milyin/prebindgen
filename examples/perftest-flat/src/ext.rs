@@ -42,6 +42,11 @@ mod handles {
         pub(super) total: f64,
     }
 
+    pub struct SummaryEnvelope {
+        pub(super) summary: Summary,
+        pub(super) bonus: i64,
+    }
+
     #[derive(Clone)]
     pub struct SelectorCode {
         pub(super) id: u16,
@@ -806,6 +811,24 @@ pub fn summary_count(s: &Summary) -> i64 {
 #[prebindgen]
 pub fn summary_total(s: &Summary) -> f64 {
     s.total
+}
+
+/// Rust-side-only aggregate used to exercise recursive input expansion: its
+/// constructor receives a [`Summary`], whose own default constructor expansion
+/// must be folded before this outer constructor is called.
+#[prebindgen]
+pub type SummaryEnvelope = handles::SummaryEnvelope;
+
+/// Construct the outer half of the recursive input-expansion fixture.
+#[prebindgen]
+pub fn summary_envelope_new(summary: Summary, bonus: i64) -> SummaryEnvelope {
+    SummaryEnvelope { summary, bonus }
+}
+
+/// Observe a recursively reconstructed [`SummaryEnvelope`].
+#[prebindgen]
+pub fn summary_envelope_score(value: SummaryEnvelope) -> i64 {
+    value.summary.count + value.summary.total as i64 + value.bonus
 }
 
 /// Total scaled by a factor (an instance **method**: `&Self` receiver + arg).
