@@ -69,33 +69,6 @@ pub(crate) fn struct_input_body(
                     let java_path = handle_field_fqn(ext, proj).replace('.', "/");
                     let sig = format!("L{};", java_path);
                     let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                    // Struct fields are owned, so a non-`Option` handle field
-                    // owns its native object: decode by consuming
-                    // (`Box::from_raw` → owned `T`), mirroring
-                    // `struct_output_body`'s `Box::into_raw`. The borrow
-                    // converter would yield `OwnedObject<T>`, which can't
-                    // populate an owned field. `Option<_>` handle fields keep
-                    // the niche-aware converter (jlong 0 ⇒ `None`).
-                    let field_ty = emit.spell(&field.ty);
-                    let decode = if field_optional {
-                        quote! { let #fname_ident = #field_conv; }
-                    } else {
-                        quote! {
-                            // Null or closed handle in a required field —
-                            // reject before any dereference (`peek()`
-                            // normalizes closed handles to 0).
-                            if #raw_ident == 0 || (#raw_ident & 1) == 1 {
-                                return ::core::result::Result::Err(
-                                    <__JniErr as ::core::convert::From<String>>::from(
-                                        "Operation on a closed native handle.".to_string(),
-                                    ),
-                                );
-                            }
-                            let #fname_ident: #field_ty = unsafe {
-                                *std::boxed::Box::from_raw(#raw_ident as *mut #field_ty)
-                            };
-                        }
-                    };
                     field_preludes.push(quote! {
                         let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
                             .and_then(|val| val.l())
@@ -107,7 +80,7 @@ pub(crate) fn struct_input_body(
                                 .and_then(|val| val.j())
                                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
                         };
-                        #decode
+                        let #fname_ident = #field_conv;
                     });
                 }
                 ProjectionKind::Unsigned64 => {
@@ -351,15 +324,8 @@ pub(crate) fn sum_input_body(
             let prop = crate::jni::struct_plan::sum_field_prop_name(&field.member());
             let bind = format_ident!("__p_{}", prop);
             let err_prefix = format!("{enum_name}.{kotlin_name}.{prop}: {{}}");
-            let (pre, value) = read_kotlin_property(
-                ext,
-                &quote!(__obj),
-                &prop,
-                &field.ty,
-                &bind,
-                &err_prefix,
-                emit,
-            )?;
+            let (pre, value) =
+                read_kotlin_property(ext, &quote!(__obj), &prop, &field.ty, &bind, &err_prefix)?;
             preludes.push(pre);
             inits.push(field.bind(&value));
         }
@@ -420,14 +386,13 @@ fn read_kotlin_property(
     reading: &TypeRef,
     bind: &syn::Ident,
     err_prefix: &str,
-    emit: &prebindgen_registry::Emit,
 ) -> Option<(TokenStream, TokenStream)> {
     // The payload's own reading straight to its entry, and the layer questions
     // below asked of it once — `option_inner_type` compared the last path
     // segment, so a payload spelled `Box<Option<T>>` answered "not optional"
     // four separate times here (#289).
     let entry = ext.in_frag(reading)?;
-    let ty = emit.spell(reading);
+    entry.activate();
     let optional = reading.optional_inner().is_some();
     let inner = reading.optional_inner().unwrap_or(reading);
     let wire = entry.destination.clone();
@@ -447,30 +412,6 @@ fn read_kotlin_property(
             let fqn = handle_field_fqn(ext, proj).replace('.', "/");
             let sig = format!("L{fqn};");
             let obj = format_ident!("{}_obj", bind);
-            // A required (non-`Option`) handle payload is OWNED by the variant
-            // it builds, so it is decoded by CONSUMING the native object
-            // (`Box::from_raw`) — the mirror of the output side's
-            // `Box::into_raw`. The borrow converter would yield
-            // `OwnedObject<T>`, which cannot populate an owned field. Same rule
-            // (and same reasoning) as an owned handle field of a data class;
-            // `Option<_>` keeps the niche-aware converter (jlong 0 ⇒ `None`).
-            let closed_msg = "Operation on a closed native handle.";
-            let decode = if optional {
-                quote! { let #bind = #conv; }
-            } else {
-                quote! {
-                    if #raw == 0 || (#raw & 1) == 1 {
-                        return ::core::result::Result::Err(
-                            <__JniErr as ::core::convert::From<String>>::from(
-                                #closed_msg.to_string(),
-                            ),
-                        );
-                    }
-                    let #bind: #ty = unsafe {
-                        *std::boxed::Box::from_raw(#raw as *mut #ty)
-                    };
-                }
-            };
             return Some((
                 quote! {
                     let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
@@ -483,7 +424,7 @@ fn read_kotlin_property(
                             .and_then(|val| val.j())
                             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
                     };
-                    #decode
+                    let #bind = #conv;
                 },
                 quote!(#bind),
             ));

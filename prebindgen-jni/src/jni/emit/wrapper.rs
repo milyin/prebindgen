@@ -646,45 +646,10 @@ fn emit_input_param(
             (wire_params, prelude, quote!(#arg_ident))
         }
 
-        // By-value `T` opaque-handle parameter: emit the consume
-        // converter inline, bypassing `OwnedObject`. The Java side
-        // holds the handle's monitor and passes the pointer here;
-        // `Box::from_raw` reconstructs the unique owner and `*box`
-        // moves `T` out, dropping the heap allocation. The
-        // unique-ownership invariant is upheld by the Kotlin wrapper
-        // (monitor + tag-bit close in `finally`), which ensures the
-        // same live pointer cannot be passed twice. No `T: Clone`
-        // bound, so non-Clone handles (e.g. `Publisher<'a>`) work too.
-        // A null or tagged (closed) pointer — a close that raced past
-        // the pre-lock guard — is rejected before any dereference.
-        InputKind::Handle { direct: true, .. }
-            if !matches!(
-                arg_ty.kind(),
-                prebindgen_registry::flat::TypeKind::Ref { .. }
-            ) =>
-        {
-            let wire_ident = if matches!(leaf.pipeline.wire(), syn::Type::Ptr(_)) {
-                format_ident!("{}_ptr", arg_ident)
-            } else {
-                arg_ident.clone()
-            };
-            wire_params.push(quote!(#wire_ident: jni::sys::jlong));
-            let arg_ty = emit.spell(arg_ty);
-            prelude.push(quote!(
-                if #wire_ident == 0 || (#wire_ident & 1) == 1 {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
-                    return #on_err;
-                }
-                let #arg_ident: #arg_ty = unsafe {
-                    *std::boxed::Box::from_raw(#wire_ident as *mut #arg_ty)
-                };
-            ));
-            (wire_params, prelude, quote!(#arg_ident))
-        }
-
-        // Everything else — borrowed/composed handles, value projections,
-        // callbacks, plain types — decodes through the resolved entry's
-        // ordinary converter chain.
+        // Handles, value projections, callbacks, and plain types all decode
+        // through the frozen site pipeline. In particular, a direct owned
+        // handle now reaches the registry-planned `JOwnedHandlePlan`; wrapper
+        // emission no longer repeats its null/tag guard and `Box::from_raw`.
         InputKind::Callback { .. }
         | InputKind::Handle { .. }
         | InputKind::Unsigned64 { .. }
@@ -841,30 +806,6 @@ pub(crate) fn emit_expanded_param(
                         );
                         return #on_err;
                     }
-                };
-            ));
-            leaf_locals.push(local);
-            continue;
-        }
-
-        // Direct owned-handle leaf (e.g. an identity-variant `T`): consume the
-        // jlong handle inline, mirroring the normal by-value-handle path —
-        // including its null/tagged (closed) pointer guard.
-        let is_consume = matches!(classified.kind, InputKind::Handle { direct: true, .. })
-            && !matches!(
-                leaf_ty.kind(),
-                prebindgen_registry::flat::TypeKind::Ref { .. }
-            );
-        if is_consume {
-            let wire_ident = format_ident!("{}_ptr", leaf.name);
-            wire_params.push(quote!(#wire_ident: jni::sys::jlong));
-            prelude.push(quote!(
-                if #wire_ident == 0 || (#wire_ident & 1) == 1 {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
-                    return #on_err;
-                }
-                let #local: #leaf_ty_tokens = unsafe {
-                    *std::boxed::Box::from_raw(#wire_ident as *mut #leaf_ty_tokens)
                 };
             ));
             leaf_locals.push(local);

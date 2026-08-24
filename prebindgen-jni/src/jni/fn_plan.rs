@@ -153,10 +153,10 @@ pub(crate) enum InputKind {
     OptionalPair(crate::jni::compile::OptionalPairPlan),
     /// Flattenable data_class: the field leaves cross as separate wire params.
     FlattenStruct(FlatInputPlan),
-    /// Lockable opaque-handle projection (`jlong` wire). `direct` is
-    /// [`KotlinMeta::is_direct_handle`] — `true` only for the bare
-    /// `T`/`&T` shape, the by-value consume fast-path trigger.
-    Handle { direct: bool, mode: HandleMode },
+    /// Lockable opaque-handle projection (`jlong` wire). Ownership and
+    /// nullability are Kotlin locking policy; Rust conversion is already
+    /// frozen in the leaf pipeline.
+    Handle { mode: HandleMode },
     /// Rust `u64`: typed Kotlin `ULong`, raw JNI `Long`. The wrapper passes
     /// the bit-preserving `toLong()` representation and takes no lock.
     Unsigned64 { niche: Option<String> },

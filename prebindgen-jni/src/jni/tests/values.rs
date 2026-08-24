@@ -1365,6 +1365,189 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     );
 }
 
+/// Direct owned handles in ordinary and constructor-expanded parameter sites
+/// must both call the one registry-planned converter. Reintroducing either
+/// wrapper-local `Box::from_raw` fast path makes this test lose one call.
+#[test]
+fn owned_handle_sites_reuse_the_frozen_pipeline() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Token {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn request_new(token: Token) -> Request {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn consume_owned(token: Token, request: Request) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Token))
+                .fun(prebindgen_registry::fun!(consume_owned)),
+        )
+        .expand(
+            prebindgen_registry::expand_param!(Request)
+                .variant(prebindgen_registry::fun!(request_new)),
+        );
+    let dir = unique_test_dir("jnigen_owned_handle_site_pipeline");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let file = syn::parse_file(&rust).expect("generated Rust parses");
+
+    let helper = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Fn(function) => Some(function),
+            _ => None,
+        })
+        .find(|function| {
+            let name = function.sig.ident.to_string();
+            name.starts_with("jlong_to_Token_") && name.ends_with("_owned")
+        })
+        .expect("the reached owned-handle plan must be emitted");
+    let helper_name = helper.sig.ident.to_string();
+    let helper_body = quote::ToTokens::to_token_stream(&helper.block).to_string();
+    assert!(
+        helper_body.contains("Box :: from_raw")
+            && helper_body.contains("* v == 0")
+            && helper_body.contains("* v & 1"),
+        "the planned helper owns the consume guard and reconstruction:\n{rust}"
+    );
+
+    let wrapper = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Fn(function) => Some(function),
+            _ => None,
+        })
+        .find(|function| function.sig.ident.to_string().ends_with("_consumeOwned"))
+        .expect("consumeOwned JNI wrapper");
+    let wrapper_body = quote::ToTokens::to_token_stream(&wrapper.block).to_string();
+    assert_eq!(
+        wrapper_body.matches(&helper_name).count(),
+        2,
+        "ordinary and expanded owned-handle sites must call the same planned helper:\n{rust}"
+    );
+    assert!(
+        !wrapper_body.contains("Box :: from_raw"),
+        "wrapper emission must not reconstruct owned handles itself:\n{rust}"
+    );
+}
+
+/// A required handle read out of a whole Kotlin object is another owned-input
+/// site. It must call the reached plan instead of emitting a second local
+/// guard and `Box::from_raw`, which also left the reached helper uncalled.
+#[test]
+fn whole_object_handle_field_calls_its_reached_owned_plan() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Token {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Container {
+                    pub token: Token,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn consume_container(container: Container) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Token))
+                .class(crate::data_class!(Container).jobject_input())
+                .fun(prebindgen_registry::fun!(consume_container)),
+        );
+    let dir = unique_test_dir("jnigen_whole_object_owned_handle_plan");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let file = syn::parse_file(&rust).expect("generated Rust parses");
+
+    let functions = file.items.iter().filter_map(|item| match item {
+        syn::Item::Fn(function) => Some(function),
+        _ => None,
+    });
+    let helper = functions
+        .clone()
+        .find(|function| {
+            let name = function.sig.ident.to_string();
+            name.starts_with("jlong_to_Token_") && name.ends_with("_owned")
+        })
+        .expect("the reached owned-handle plan must be emitted");
+    let helper_name = helper.sig.ident.to_string();
+    let decoder = functions
+        .clone()
+        .find(|function| {
+            function
+                .sig
+                .ident
+                .to_string()
+                .starts_with("JObject_to_Container_")
+        })
+        .expect("Container whole-object decoder");
+    let decoder_body = quote::ToTokens::to_token_stream(&decoder.block).to_string();
+    assert_eq!(
+        decoder_body.matches(&helper_name).count(),
+        1,
+        "the handle field must call its planned owned converter:\n{rust}"
+    );
+    assert!(
+        !decoder_body.contains("Box :: from_raw"),
+        "whole-object emission must not reconstruct the handle itself:\n{rust}"
+    );
+    let all_rust = quote::ToTokens::to_token_stream(&file).to_string();
+    assert_eq!(
+        all_rust.matches(&helper_name).count(),
+        2,
+        "the emitted helper must have exactly one call site in this fixture:\n{rust}"
+    );
+}
+
 #[test]
 fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
     let fields = (0..127)

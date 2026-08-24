@@ -2077,7 +2077,6 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         } else {
             match entry.metadata.projection.as_ref().map(|p| p.kind.clone()) {
                 Some(ProjectionKind::Handle) => InputKind::Handle {
-                    direct: entry.metadata.is_direct_handle(),
                     mode: if reading
                         .optional_inner()
                         .is_some_and(|inner| inner.borrow_target().is_some())
