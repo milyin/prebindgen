@@ -606,13 +606,17 @@ pub(crate) fn render_extern_decl(
             // The plan classified the declared surface once — `convert_out_ty`
             // for a `convert_output` (Return), else the function's own return.
             let (kt_return, projection) = render_return_surface(&v.surface)?;
-            // JNI extern's wire return: projections wire as `Long` folded
-            // through the projection strategy; enums wire as `Int`
-            // (`Int?` under `Option`); everything else is the declared return.
+            // JNI extern's wire return: projections state their folded wire;
+            // otherwise a primitive destination comes directly from the
+            // frozen Rust-side conversion plan. This ordering matters for
+            // nested optionals: enum niches can collapse every Optional layer
+            // to one `jint`, although the deliberately lossy public surface is
+            // still `Priority?`. Object wires retain their declared reference
+            // type so the wrapper receives the useful boxed/static type.
             match &projection {
                 Some(p) => Some(projection_wire_return(p)),
+                None if JniPrim::from_wire(&v.wire_ty).is_some() => kotlin_for_wire(&v.wire_ty),
                 None if v.is_enum => Some(KtType::int()),
-                None if v.is_option_enum && v.enum_niche.is_some() => Some(KtType::int()),
                 None if v.is_option_enum => Some(KtType::int().nullable()),
                 None => kt_return,
             }
@@ -638,7 +642,7 @@ struct Param {
     /// underlying JNI `external fun` declares the param as `Int` (jint wire).
     /// The wrapper bridges the two by passing `<name>.value` at the call site.
     as_enum_value: bool,
-    /// `None` for boxed nullable enums; otherwise the primitive absent value.
+    /// Primitive sentinel used when an optional enum parameter is absent.
     enum_niche: Option<String>,
 }
 
@@ -1173,8 +1177,8 @@ struct OutputPlan {
     is_enum_return: bool,
     /// `Option<enum>` return crossing — map its primitive niche or boxed null.
     is_option_enum_return: bool,
-    /// `None` for boxed nullable enums; otherwise the primitive absent value.
-    enum_niche: Option<String>,
+    /// Primitive absent values consumed by nested Optional enum layers.
+    enum_niches: Vec<String>,
 }
 
 /// The error-callback wiring for a wrapper. Every wrapper has a **binding**
@@ -1538,11 +1542,11 @@ fn classify_output(
     // with `fromInt`. The plan's probes run over the convert-peeled declared type;
     // the wrapper surface keeps the historical `unfold.is_none()` mask
     // (`Value` ∧ ¬`is_convert` ⟺ no unfold plan).
-    let (is_enum_return, is_option_enum_return, enum_niche) = match &fplan.output {
+    let (is_enum_return, is_option_enum_return, enum_niches) = match &fplan.output {
         FnOutputPlan::Value(v) if !v.is_convert => {
-            (v.is_enum, v.is_option_enum, v.enum_niche.clone())
+            (v.is_enum, v.is_option_enum, v.enum_niches.clone())
         }
-        _ => (false, false, None),
+        _ => (false, false, Vec::new()),
     };
 
     Some(OutputPlan {
@@ -1555,7 +1559,7 @@ fn classify_output(
         cast_return: matches!(&fplan.output, FnOutputPlan::Unfold(_)),
         is_enum_return,
         is_option_enum_return,
-        enum_niche,
+        enum_niches,
     })
 }
 
@@ -1692,9 +1696,16 @@ fn build_success_return(ext: &Declarations, out: &OutputPlan, raw: &str) -> Stri
             .expect("Option<enum> return has a Kotlin type")
             .to_string();
         let enum_kt = enum_kt.trim_end_matches('?');
-        match &out.enum_niche {
-            Some(niche) => format!("if ({raw} == {niche}) null else {enum_kt}.fromInt({raw})"),
-            None => format!("{raw}?.let {{ {enum_kt}.fromInt(it) }}"),
+        if out.enum_niches.is_empty() {
+            format!("{raw}?.let {{ {enum_kt}.fromInt(it) }}")
+        } else {
+            let absent = out
+                .enum_niches
+                .iter()
+                .map(|niche| format!("{raw} == {niche}"))
+                .collect::<Vec<_>>()
+                .join(" || ");
+            format!("if ({absent}) null else {enum_kt}.fromInt({raw})")
         }
     } else if out.cast_return {
         let cast_kt = out

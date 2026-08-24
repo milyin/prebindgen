@@ -121,15 +121,39 @@ pub(crate) fn option_enum_niche(
     reading: &TypeRef,
     direction: Direction,
 ) -> Option<String> {
-    let inner = reading.optional_inner()?;
-    if !ext.is_kotlin_enum_reading(inner) {
-        return None;
+    option_enum_niches(ext, reading, direction)
+        .into_iter()
+        .next()
+}
+
+/// Kotlin spellings of every niche consumed by nested Optional enum layers,
+/// outside-in. Input sites use the first one to encode Kotlin `null` as the
+/// outer `None`; output wrappers accept all of them because the deliberately
+/// collapsed Kotlin surface cannot distinguish `None` from `Some(None)`.
+pub(crate) fn option_enum_niches(
+    ext: &Declarations,
+    reading: &TypeRef,
+    direction: Direction,
+) -> Vec<String> {
+    let mut current = reading;
+    let mut sentinels = Vec::new();
+    while let Some(inner) = current.optional_inner() {
+        if !ext.is_kotlin_enum_reading(inner) {
+            break;
+        }
+        let fragment = match direction {
+            Direction::Construct => ext.in_frag(inner),
+            Direction::Deconstruct => ext.out_frag(inner),
+        };
+        let Some(sentinel) =
+            fragment.and_then(|fragment| fragment.metadata.niche_sentinels.first().cloned())
+        else {
+            break;
+        };
+        sentinels.push(sentinel);
+        current = inner;
     }
-    let fragment = match direction {
-        Direction::Construct => ext.in_frag(inner),
-        Direction::Deconstruct => ext.out_frag(inner),
-    }?;
-    fragment.metadata.niche_sentinels.first().cloned()
+    sentinels
 }
 
 /// Describe the two-leaf ABI of a bare `Option<primitive>` / `Option<enum>`
@@ -2425,7 +2449,7 @@ impl<R: Conversions> JCompile<'_, R> {
             surface,
             is_enum: enums.is_enum,
             is_option_enum: enums.is_option_enum,
-            enum_niche: option_enum_niche(self.decls, declared, Direction::Deconstruct),
+            enum_niches: option_enum_niches(self.decls, declared, Direction::Deconstruct),
         }
     }
 

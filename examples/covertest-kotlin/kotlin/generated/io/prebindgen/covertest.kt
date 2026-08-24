@@ -1402,6 +1402,9 @@ internal object CovNative {
     external fun plainNoteEcho(note: String?, errorSink: Any): String?
 
     @JvmSynthetic
+    external fun priorityNested(which: Int, errorSink: Any): Int
+
+    @JvmSynthetic
     external fun priorityOr(p: Int, fallback: Int, errorSink: Any): Int
 
     @JvmSynthetic

@@ -9603,6 +9603,32 @@ pub(crate) unsafe fn Option_Ingot_to_jlong_a76a8f2f<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Option_Option_Priority_to_jint_156f825d<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<Option<perftest_flat::Priority>>,
+) -> ::core::result::Result<jni::sys::jint, __JniErr> {
+    ::core::result::Result::Ok({
+        match v {
+            ::core::option::Option::Some(__value) => {
+                Option_Priority_to_jint_3d9b4399(env, __value)?
+            }
+            ::core::option::Option::None => -2147483647i32,
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Payload>,
@@ -18697,6 +18723,48 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_plainNoteEcho<'a
                 &__e.to_string(),
             );
             jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityNested<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    which: jni::sys::jint,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jint {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let which = match jint_to_u8_553cf6ec(&mut env, &which) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let __out = perftest_flat::priority_nested(which);
+    match Option_Option_Priority_to_jint_156f825d(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jint
         }
     }
 }

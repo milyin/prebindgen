@@ -238,8 +238,9 @@ pub(crate) struct ValueOutputPlan {
     /// `unfold.is_none()` gate).
     pub is_enum: bool,
     pub is_option_enum: bool,
-    /// Primitive sentinel carved by the outer Optional enum layer.
-    pub enum_niche: Option<String>,
+    /// Primitive sentinels consumed by nested Optional enum layers,
+    /// outside-in. Every one collapses to Kotlin `null` on output.
+    pub enum_niches: Vec<String>,
 }
 
 /// The pure classification core of `classify_return` — no import
@@ -927,7 +928,7 @@ fn build_output(
         surface,
         is_enum,
         is_option_enum,
-        enum_niche,
+        enum_niches,
         ..
     } = plan;
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
@@ -937,7 +938,7 @@ fn build_output(
         surface,
         is_enum,
         is_option_enum,
-        enum_niche,
+        enum_niches,
     })))
 }
 
@@ -987,24 +988,33 @@ impl ReturnSurface {
         // node-shaped answer; with no metadata the reading answers directly.
         let enum_probe = |t: &syn::Type| ext.is_kotlin_enum(t);
         let (is_enum, is_option_enum) = match stored {
-            Some(t) => (
-                enum_probe(t),
-                prebindgen_registry::types_util::option_inner_type(t)
-                    .map(|inner| enum_probe(&inner))
-                    .unwrap_or(false),
-            ),
+            Some(t) => {
+                let mut inner = t.clone();
+                let mut optional = false;
+                while let Some(next) = prebindgen_registry::types_util::option_inner_type(&inner) {
+                    optional = true;
+                    inner = next;
+                }
+                (enum_probe(t), optional && enum_probe(&inner))
+            }
             // `is_kotlin_enum_reading` is NOT the peer here: it probes THROUGH
             // the layers, so `Option<Level>` answers true for the first
             // question, where the node version keys on the whole type and
-            // answers false. Both questions want the exact type's identity —
-            // the second asks it of the optional's inner, which is what
-            // `option_inner_type` did to the spelling.
-            None => (
-                ext.is_kotlin_enum_key(&ret.key()),
-                ret.optional_inner()
-                    .map(|inner| ext.is_kotlin_enum_key(&inner.key()))
-                    .unwrap_or(false),
-            ),
+            // answers false. The first question wants the exact type's
+            // identity; the second requires at least one Optional and asks the
+            // terminal inner type after peeling every Optional layer.
+            None => {
+                let mut inner = ret;
+                let mut optional = false;
+                while let Some(next) = inner.optional_inner() {
+                    optional = true;
+                    inner = next;
+                }
+                (
+                    ext.is_kotlin_enum_key(&ret.key()),
+                    optional && ext.is_kotlin_enum_key(&inner.key()),
+                )
+            }
         };
         let canonical = EnumSurface {
             is_enum,

@@ -111,6 +111,7 @@ import io.prebindgen.covertest.model.taggedNew
 import io.prebindgen.covertest.model.taggedRank
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
+import io.prebindgen.covertest.model.priorityNested
 import io.prebindgen.covertest.model.priorityWeight
 import io.prebindgen.covertest.model.stampNew
 import io.prebindgen.covertest.model.stampSeries
@@ -375,6 +376,11 @@ fun main() {
         // Option<enum>: null falls back, present overrides.
         check(priorityOr(null, Priority.NORMAL, boom) == Priority.NORMAL)
         check(priorityOr(Priority.LOW, Priority.HIGH, boom) == Priority.LOW)
+        // Nested Option layers share one primitive wire. Kotlin deliberately
+        // collapses both absent Rust states to null, while preserving values.
+        check(priorityNested(0, boom) == null)
+        check(priorityNested(1, boom) == null)
+        check(priorityNested(2, boom) == Priority.HIGH)
         // enum_class surface: value + fromInt round-trip.
         check(Priority.HIGH.value == 2)
         check(Priority.fromInt(0) == Priority.LOW)

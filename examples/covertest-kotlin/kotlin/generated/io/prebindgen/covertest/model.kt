@@ -1618,6 +1618,18 @@ public fun priorityOr(
 }
 
 /**
+ * Exercise the intentionally collapsed Kotlin surface for nested optional
+ * enums: both absent Rust states become Kotlin `null`, while a present enum
+ * remains typed.
+ */
+public fun priorityNested(which: Int, onError: JniErrorHandler<Priority?>): Priority? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.priorityNested(which, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return if (__ret == -2147483647 || __ret == Int.MIN_VALUE) null else io.prebindgen.covertest.model.Priority.fromInt(__ret)
+}
+
+/**
  * Build a [`Stamp`] (data-class **return**).
  *
  * The Rust `Stamp` result is delivered decomposed: the builder callback receives (`secs`, `nanos`).

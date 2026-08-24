@@ -162,6 +162,18 @@ pub fn priority_or(p: Option<Priority>, fallback: Priority) -> Priority {
     p.unwrap_or(fallback)
 }
 
+/// Exercise the intentionally collapsed Kotlin surface for nested optional
+/// enums: both absent Rust states become Kotlin `null`, while a present enum
+/// remains typed.
+#[prebindgen]
+pub fn priority_nested(which: u8) -> Option<Option<Priority>> {
+    match which {
+        0 => None,
+        1 => Some(None),
+        _ => Some(Some(Priority::High)),
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Reading — a data-carrying enum, i.e. a sum type (→ Kotlin `sealed interface`).
 // ─────────────────────────────────────────────────────────────────────────────

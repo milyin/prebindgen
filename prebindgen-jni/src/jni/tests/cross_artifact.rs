@@ -372,6 +372,76 @@ fn cross_artifact_representative_shapes_agree() {
     assert_cross_artifact(&rust, &kotlin);
 }
 
+/// Optional enum niches are primitive JNI wires at every reserved nesting
+/// depth. The Kotlin extern must consume that frozen wire decision rather than
+/// inferring a reference return from the intentionally lossy `Priority?`
+/// public surface.
+#[test]
+fn optional_enum_nesting_keeps_rust_and_kotlin_return_wires_equal() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    Normal = 1,
+                    High = 2,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn priority_optional() -> Option<Priority> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn priority_nested_optional() -> Option<Option<Priority>> {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .fun(prebindgen_registry::fun!(priority_optional))
+                .fun(prebindgen_registry::fun!(priority_nested_optional)),
+        );
+    let (rust, kotlin) = run_pipeline("jnigen_xart_optional_enum", items, jni);
+
+    assert_cross_artifact(&rust, &kotlin);
+
+    let rust: String = rust.split_whitespace().collect();
+    let kotlin: String = kotlin
+        .values()
+        .flat_map(|source| source.split_whitespace())
+        .collect();
+    assert!(
+        rust.matches("->jni::sys::jint").count() >= 2,
+        "both enum option depths must return jint:\n{rust}"
+    );
+    assert!(
+        kotlin.contains("externalfunpriorityOptional(")
+            && kotlin.contains("externalfunpriorityNestedOptional(")
+            && kotlin.matches("):Int").count() >= 2,
+        "both Kotlin externs must declare the same primitive wire:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains(
+            "returnif(__ret==-2147483647||__ret==Int.MIN_VALUE)nullelseio.test.jni.Priority.fromInt(__ret)"
+        ),
+        "the collapsed Kotlin surface must map both nested absent values to null:\n{kotlin}"
+    );
+}
+
 /// Flattenable data-class inputs, `&[T]` vec-build helper externs,
 /// `impl Fn(...)` callbacks, and a builder-delivered (`expand_return`)
 /// return — the multi-param / synthetic-extern shapes, checked
