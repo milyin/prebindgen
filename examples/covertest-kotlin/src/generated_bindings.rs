@@ -2212,16 +2212,7 @@ pub(crate) unsafe fn JObject_to_CallbackToken_432e8cc0<'env, 'v>(
                     String,
                 >>::from(format!("CallbackToken.ingot: {}", e)))?
         };
-        if __ingot_raw == 0 || (__ingot_raw & 1) == 1 {
-            return ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from("Operation on a closed native handle.".to_string()),
-            );
-        }
-        let ingot: perftest_flat::Ingot = unsafe {
-            *std::boxed::Box::from_raw(__ingot_raw as *mut perftest_flat::Ingot)
-        };
+        let ingot = jlong_to_Ingot_020c3a86_owned(env, &__ingot_raw)?;
         perftest_flat::CallbackToken {
             ingot,
         }
@@ -2473,16 +2464,7 @@ pub(crate) unsafe fn JObject_to_Holder_c36a9705<'env, 'v>(
                     String,
                 >>::from(format!("Holder.summary: {}", e)))?
         };
-        if __summary_raw == 0 || (__summary_raw & 1) == 1 {
-            return ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from("Operation on a closed native handle.".to_string()),
-            );
-        }
-        let summary: perftest_flat::Summary = unsafe {
-            *std::boxed::Box::from_raw(__summary_raw as *mut perftest_flat::Summary)
-        };
+        let summary = jlong_to_Summary_3cb103b9_owned(env, &__summary_raw)?;
         perftest_flat::Holder {
             tag,
             summary,
@@ -2561,16 +2543,7 @@ pub(crate) unsafe fn JObject_to_Lookup_94ada15e<'env, 'v>(
                             String,
                         >>::from(format!("Lookup.Found.v0: {}", e)))?
                 };
-                if __p_v0_raw == 0 || (__p_v0_raw & 1) == 1 {
-                    return ::core::result::Result::Err(
-                        <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from("Operation on a closed native handle.".to_string()),
-                    );
-                }
-                let __p_v0: perftest_flat::Summary = unsafe {
-                    *std::boxed::Box::from_raw(__p_v0_raw as *mut perftest_flat::Summary)
-                };
+                let __p_v0 = jlong_to_Summary_3cb103b9_owned(env, &__p_v0_raw)?;
                 return ::core::result::Result::Ok(perftest_flat::Lookup::Found(__p_v0));
             }
             if env
