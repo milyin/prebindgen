@@ -123,7 +123,9 @@ fn main() {
         .join("src")
         .join("generated_bindings.rs");
     let jni = binding.build().expect("build failed");
-    let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
+    let rust_path = jni
+        .write_rust(&rust_dest)
+        .unwrap_or_else(|error| panic!("write_rust failed: {error}"));
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()

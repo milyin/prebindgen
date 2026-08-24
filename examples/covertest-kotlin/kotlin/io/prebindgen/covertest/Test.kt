@@ -2,6 +2,7 @@ package io.prebindgen.covertest
 
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryVault
+import io.prebindgen.covertest.analytics.SelectorCode
 import io.prebindgen.covertest.analytics.archiveLatest
 import io.prebindgen.covertest.analytics.archiveNew
 import io.prebindgen.covertest.analytics.archiveStore
@@ -18,6 +19,7 @@ import io.prebindgen.covertest.analytics.summarySeries
 import io.prebindgen.covertest.analytics.summarySeriesOpt
 import io.prebindgen.covertest.analytics.summaryTotalOpt
 import io.prebindgen.covertest.analytics.summaryTotalRaw
+import io.prebindgen.covertest.analytics.selectorCodeScore
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
@@ -1418,6 +1420,21 @@ fun main() {
         check(describeSummary(0, 2L, 8.0, null, false, boom) == "2/8")
         check(describeSummary(1, null, null, m, true, boom) == "summary of 4 payloads totalling 10")
         m.close()
+    }
+
+    // ── expanded nullable u16 leaf: primitive native pair, never JObject ────
+    section("expanded selector keeps nullable scalar off JObject") {
+        // -1 skips every arm; 0 rebuilds from the nullable constructor slots.
+        // The latter crosses JNI as Boolean + Int and executes the registry
+        // Optional chain, without allocating/unboxing java.lang.Integer.
+        check(selectorCodeScore(-1, null, null, null, boom) == -1L)
+        check(selectorCodeScore(0, 41, byteArrayOf(1, 2), null, boom) == 43L)
+
+        // The identity arm uses the same expansion and proves its handle slot
+        // remains independent of the primitive build-arm leaves.
+        val code = SelectorCode.new(50, byteArrayOf(1, 2, 3), boom).orThrow()
+        check(selectorCodeScore(1, null, null, code, boom) == 53L)
+        code.close()
     }
 
     // ── flatten input on Summary: default + with, both selectors ─────────────

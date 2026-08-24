@@ -145,6 +145,10 @@ impl CFunction {
 }
 
 impl RustFunction for CFunction {
+    fn ident(&self) -> &syn::Ident {
+        self.call.ident()
+    }
+
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         match &self.body {
             CBody::Complete(function) => function.clone(),

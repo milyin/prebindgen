@@ -29,7 +29,7 @@
 //! | bounded conversion domains + niches | `Option<Duration>` ⇄ bounded millisecond `ULong?`; raw JNI remains primitive `Long`, `None` uses an invalid `u64`, invalid input/output routes to `onError`; `DurationBoundary` composes the niche through a data-class field and whole-object decode |
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
-//! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
+//! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones; `selector_code_score(Option<&SelectorCode>)` lowers its synthetic `Option<u16>` build-arm leaf to a primitive presence/value pair |
 //! | `FunctionDecl::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
 //! | split × builder-delivered return (#87) | `summaryMerge` — cartesian split + generic `<R>` wrapper; every overload re-declares `<R>` |
 //! | JNI native-symbol escaping (#86)      | `esc_pkg.Esc_Probe` — underscored subpackage + class (escaped `freePtr` symbol) + hook-mangled `escape_probe_value` harness extern |
@@ -422,6 +422,12 @@ fn main() {
                                 .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>)),
                         ),
                 )
+                // A multi-variant Optional input whose required `u16` build-arm
+                // leaf is nullable on the public surface. Its synthetic
+                // `Option<u16>` reading must still select the allocation-free
+                // registry pair recipe at the native ABI (#525 follow-up).
+                .class(ptr_class!(SelectorCode).constructor(fun!(selector_code_new)))
+                .fun(fun!(selector_code_score))
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
@@ -438,6 +444,11 @@ fn main() {
         .expand(
             expand_param!(Summary)
                 .variant(fun!(summary_new))
+                .variant_self(),
+        )
+        .expand(
+            expand_param!(SelectorCode)
+                .variant(fun!(selector_code_new))
                 .variant_self(),
         )
         // `Summary` default output: decomposed `(count, total)` leaves, names
@@ -857,7 +868,9 @@ fn main() {
         .join("src")
         .join("generated_bindings.rs");
     let jni = binding.build().expect("build failed");
-    let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
+    let rust_path = jni
+        .write_rust(&rust_dest)
+        .unwrap_or_else(|error| panic!("write_rust failed: {error}"));
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()

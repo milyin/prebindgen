@@ -66,23 +66,31 @@ impl Prebindgen for IdentityExt {
 
 #[derive(Clone)]
 struct LatePlan {
+    ident: syn::Ident,
     reachable: Rc<Cell<bool>>,
 }
 
 impl RustFunction for LatePlan {
+    fn ident(&self) -> &syn::Ident {
+        &self.ident
+    }
+
     fn should_emit(&self) -> bool {
         self.reachable.get()
     }
 
     fn render(&self, _emit: &crate::Emit) -> syn::ItemFn {
+        let ident = &self.ident;
         syn::parse_quote!(
-            fn late_converter() {}
+            fn #ident() {}
         )
     }
 }
 
 struct LateExt {
     reachable: Rc<Cell<bool>>,
+    activate: bool,
+    call_converter: bool,
 }
 
 impl Prebindgen for LateExt {
@@ -92,8 +100,15 @@ impl Prebindgen for LateExt {
         _registry: &Registry,
         emit: &crate::Emit,
     ) -> TokenStream {
-        self.reachable.set(true);
-        emit.verbatim_fn(f)
+        if self.activate {
+            self.reachable.set(true);
+        }
+        if self.call_converter {
+            let ident = &f.name;
+            quote::quote!(fn #ident() { late_converter(); })
+        } else {
+            emit.verbatim_fn(f)
+        }
     }
 
     fn on_struct(
@@ -139,8 +154,13 @@ fn per_item_planning_precedes_late_converter_filtering() {
     let reachable = Rc::new(Cell::new(false));
     let ext = LateExt {
         reachable: reachable.clone(),
+        activate: true,
+        call_converter: false,
     };
-    let plan = LatePlan { reachable };
+    let plan = LatePlan {
+        ident: syn::parse_quote!(late_converter),
+        reachable,
+    };
     let dir = crate::test_util::unique_test_dir("write_late_plan");
     std::fs::create_dir_all(&dir).unwrap();
 
@@ -150,6 +170,51 @@ fn per_item_planning_precedes_late_converter_filtering() {
     assert!(source.contains("fn late_converter()"), "{source}");
     assert!(source.find("fn late_converter").unwrap() < source.find("fn a_fn").unwrap());
 }
+
+#[test]
+fn a_call_to_a_filtered_converter_is_a_writer_error() {
+    let item: syn::ItemFn = syn::parse_quote!(
+        fn a_fn() {}
+    );
+    let ident: syn::Ident = syn::parse_quote!(a_fn);
+    let registry =
+        crate::test_util::reg_from_items(vec![(syn::Item::Fn(item), SourceLocation::default())])
+            .expect("index")
+            .export(&ident)
+            .scanned()
+            .expect("scan");
+    let reachable = Rc::new(Cell::new(false));
+    let ext = LateExt {
+        reachable: reachable.clone(),
+        activate: false,
+        call_converter: true,
+    };
+    let plan = LatePlan {
+        ident: syn::parse_quote!(late_converter),
+        reachable,
+    };
+    let dir = crate::test_util::unique_test_dir("write_missing_converter");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("gen.rs");
+
+    let err = write_rust(&registry, &ext, &[plan], &path)
+        .expect_err("a call to a filtered private converter must fail in the writer");
+
+    match err {
+        WriteError::UnrenderedConverterCalls { calls } => {
+            assert_eq!(
+                calls,
+                vec![("a_fn".to_string(), "late_converter".to_string())]
+            );
+        }
+        other => panic!("unexpected writer error: {other}"),
+    }
+    assert!(
+        !path.exists(),
+        "an invalid generated file must not reach the destination"
+    );
+}
+
 #[test]
 fn dedup_and_sort() {
     // Two crossings can compile the same conversion, and an adapter hands over

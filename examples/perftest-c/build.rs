@@ -133,7 +133,7 @@ fn generate_ffi_bindings() -> PathBuf {
         .build()
         .expect("build prebindgen items")
         .write_rust("perftest.rs")
-        .expect("write generated bindings");
+        .unwrap_or_else(|error| panic!("write generated bindings: {error}"));
 
     // Publish the generated Rust into the crate tree (committed artifact `lib.rs`
     // `include!`s; regenerated on every build).

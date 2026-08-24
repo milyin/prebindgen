@@ -97,6 +97,8 @@ fn main() {
     let dest = std::path::Path::new(&manifest_dir)
         .join("src")
         .join("generated_bindings.rs");
-    let written = generation.write_rust(&dest).expect("write_rust failed");
+    let written = generation
+        .write_rust(&dest)
+        .unwrap_or_else(|error| panic!("write_rust failed: {error}"));
     println!("cargo:warning=emitcheck: wrote {}", written.display());
 }

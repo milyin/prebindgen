@@ -274,6 +274,7 @@ impl Declarations {
     pub(crate) fn recipes(
         &self,
         model: &Flat,
+        expansion_leaves: &[TypeRef],
         registry: &impl prebindgen_registry::Conversions,
     ) -> Result<Recipes, Vec<RecipeError>> {
         let mut recipes = Recipes::builder();
@@ -394,8 +395,28 @@ impl Declarations {
         //
         // Product-shaped payloads additionally offer `parts`; that row is
         // selected by the existing flattening bindings below.
-        let implicit = self.implicit_optionals(model);
-        for outer in implicit.values().map(|(outer, _)| *outer) {
+        let mut implicit: BTreeMap<TypeKey, (TypeRef, TypeRef)> = self
+            .implicit_optionals(model)
+            .into_iter()
+            .map(|(key, (outer, inner))| (key, (outer.clone(), inner.clone())))
+            .collect();
+        // A combined constructor expansion represents an inactive arm by
+        // Option-wrapping each required leaf. Those readings are synthesized
+        // after the Flat model was built, so a model walk cannot discover
+        // them. File them in the same table as source-written implicit
+        // Optionals: otherwise a nullable primitive leaf falls back to a boxed
+        // JObject and Rust has to call `intValue()`/`longValue()` across JNI.
+        for leaf in expansion_leaves {
+            let Some(inner) = leaf.optional_inner() else {
+                continue;
+            };
+            if !self.explicitly_declares(leaf) {
+                implicit
+                    .entry(leaf.stripped_key())
+                    .or_insert_with(|| (leaf.clone(), inner.clone()));
+            }
+        }
+        for (outer, _) in implicit.values() {
             recipes
                 .declare_default(outer.clone(), whole(), Constructing::Optional)
                 .declare(outer.clone(), pair(), Constructing::Optional)
@@ -477,13 +498,6 @@ impl Declarations {
         &self,
         model: &'a Flat,
     ) -> BTreeMap<TypeKey, (&'a TypeRef, &'a TypeRef)> {
-        let explicitly_declared = |ty: &TypeRef| {
-            self.types.contains_key(&ty.key())
-                || self
-                    .convert_decls
-                    .iter()
-                    .any(|decl| decl.key() == &ty.key() || decl.key() == &ty.stripped_key())
-        };
         let mut optionals = BTreeMap::new();
         for ty in model
             .elements()
@@ -493,11 +507,19 @@ impl Declarations {
             let Some(inner) = ty.optional_inner() else {
                 continue;
             };
-            if !explicitly_declared(ty) {
+            if !self.explicitly_declares(ty) {
                 optionals.entry(ty.stripped_key()).or_insert((ty, inner));
             }
         }
         optionals
+    }
+
+    fn explicitly_declares(&self, ty: &TypeRef) -> bool {
+        self.types.contains_key(&ty.key())
+            || self
+                .convert_decls
+                .iter()
+                .any(|decl| decl.key() == &ty.key() || decl.key() == &ty.stripped_key())
     }
 
     pub(crate) fn bindings(

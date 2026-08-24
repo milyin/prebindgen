@@ -31,7 +31,7 @@ re-runs `build.rs` to regenerate both sides of the binding
 the Kotlin asserts. Expected output ends with:
 
 ```
-PASS - 35 sections, every JniGen feature exercised
+PASS - 58 sections, every JniGen feature exercised
 ```
 
 (One section deliberately provokes callback exceptions; the stack traces it
@@ -87,6 +87,11 @@ for the full table; in brief:
   raw `TryFrom::Error` input stage and a raw `String` output stage. The runtime
   checks null/value round trips and verifies both stage errors normalize to
   `JniErrorHandler`.
+- **expanded selector scalar leaves:** `Option<&SelectorCode>` has a build arm
+  with a required `u16` that is nullable on the public selector surface. The
+  runtime exercises absent, build, and identity arms; the committed native ABI
+  proves the synthetic `Option<u16>` selects the registry pair recipe and
+  crosses as `Boolean + Int`, without `JObject` allocation or `intValue()`.
 - **type mappings:** primitives, `String`/`&str` (incl. a bare `String`
   return), `Option<T>` (param / return / **field**, incl. `Option<enum>` in
   all three positions and `Option<Payload>` in both directions),

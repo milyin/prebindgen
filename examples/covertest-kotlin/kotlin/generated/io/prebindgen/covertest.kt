@@ -1438,6 +1438,19 @@ internal object CovNative {
     external fun reportEach(n: Long, sink: Any, errorSink: Any)
 
     @JvmSynthetic
+    external fun selectorCodeNew(id: Int, schema: ByteArray?, errorSink: Any): Long
+
+    @JvmSynthetic
+    external fun selectorCodeScore(
+        valueSel: Int,
+        value00Present: Boolean,
+        value00Value: Int,
+        value01: ByteArray?,
+        value1: Long,
+        errorSink: Any,
+    ): Long
+
+    @JvmSynthetic
     external fun sliceIdSum(ps: Long, errorSink: Any): Long
 
     @JvmSynthetic

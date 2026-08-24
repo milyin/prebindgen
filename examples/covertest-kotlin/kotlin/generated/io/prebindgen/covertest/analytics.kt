@@ -41,6 +41,50 @@ public class SummaryVault private constructor(initialPtr: Long) : NativeHandle(i
     }
 }
 
+/** Typed handle for a native Zenoh `SelectorCode`. */
+public class SelectorCode private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): SelectorCode {
+        val p = ptr
+        ptr = p or 1L
+        return SelectorCode.fromRawPtr(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        @JvmSynthetic
+        external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): SelectorCode = SelectorCode(initialPtr)
+
+        /**
+         * Construct a [`SelectorCode`] from the same scalar-plus-optional-vector shape
+         * used by zenoh's expanded `Encoding` input.
+         */
+        public fun new(
+            id: Int,
+            schema: ByteArray?,
+            onError: JniErrorHandler<SelectorCode?>,
+        ): SelectorCode? {
+            val __bcap = JniErrorHandlerCapture.acquire()
+            val __ret = CovNative.selectorCodeNew(id, schema, __bcap)
+            if (__bcap.failed) return onError.run(__bcap.ze0)
+            return SelectorCode.fromRawPtr(__ret)
+        }
+    }
+}
+
 /** Typed handle for a native Zenoh `Summary`. */
 public class Summary private constructor(initialPtr: Long) : GcNativeHandle(initialPtr) {
     private val __cleanable = registerGcHandle(this) { freePtr(it) }
@@ -183,6 +227,40 @@ internal fun <R> SummaryStorageSummaryProbeBuilder<R>.asRaw(): SummaryStorageSum
 
 public fun interface SummaryFolder<A> {
     public fun run(acc: A, count: Long, total: Double): A
+}
+
+/**
+ * Observe all three selector states: absent, rebuilt from leaves, and supplied
+ * as an existing handle.
+ *
+ * Parameter `value` is the Rust `SelectorCode` argument, expanded: pass EITHER its `selector_code_new` inputs OR an existing `SelectorCode` — the selector chooses the arm, `-1` = absent (crosses as `valueSel`, `value00`, `value01`, `value1`).
+ */
+public fun selectorCodeScore(
+    valueSel: Int,
+    value00: Int?,
+    value01: ByteArray?,
+    value1: SelectorCode?,
+    onError: JniErrorHandler<Long>,
+): Long {
+    if (value1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = run {
+        val __locks = ArrayList<NativeHandle>()
+        value1?.let { __locks.add(it) }
+        withSortedHandleLocks(__locks) {
+            val value1_ptr = value1?.ptr ?: 0L
+            CovNative.selectorCodeScore(
+                valueSel,
+                value00 != null,
+                value00 ?: 0,
+                value01,
+                value1_ptr,
+                __bcap,
+            )
+        }
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
 }
 
 /**

@@ -1420,19 +1420,20 @@ impl JniGenBuilder {
         registry: prebindgen_registry::RegistryBuilder,
     ) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let mut decls = self.decls;
-        let declared = decls.declare_into(registry)?.validate_with(&decls)?;
+        let mut declared = decls.declare_into(registry)?.validate_with(&decls)?;
         // A second holding of the model: `convert_with` consumes the builder,
         // and the table outlives that call.
         let model = declared.flat().clone();
-        let recipes = decls.recipes(&model, &declared).map_err(|errors| {
-            prebindgen_registry::ScanError::AdapterInvariant {
+        let expansion_leaves: Vec<_> = declared.expansion_leaf_readings()?.cloned().collect();
+        let recipes = decls
+            .recipes(&model, &expansion_leaves, &declared)
+            .map_err(|errors| prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors
                     .iter()
                     .map(|e| e.to_string())
                     .collect::<Vec<_>>()
                     .join("; "),
-            }
-        })?;
+            })?;
         // A `data_class` field that is itself one takes the `parts` recipe rather
         // than its own default — see `Declarations::bindings`.
         let bindings = decls

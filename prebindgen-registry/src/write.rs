@@ -15,7 +15,7 @@
 //! adapters migrating incrementally.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
 
@@ -33,6 +33,8 @@ use crate::{
 /// [`RegistryBuilder::build`](crate::RegistryBuilder::build)
 /// (see [`Prebindgen::validate_resolved`]), so an invalid binding fails
 /// before a built generator exists and never reaches a writer.
+/// Emission-integrity checks still run here because reachability is finalized
+/// while per-item output is assembled.
 #[derive(Debug)]
 pub enum WriteError {
     /// A `TokenStream` produced by an `on_*` trait method failed to parse
@@ -40,6 +42,12 @@ pub enum WriteError {
     BadTokens {
         phase: &'static str,
         source: syn::Error,
+    },
+    /// Generated code calls a planned private converter whose function was
+    /// removed by reachability filtering.
+    UnrenderedConverterCalls {
+        /// `(caller, missing converter)` pairs, sorted and de-duplicated.
+        calls: Vec<(String, String)>,
     },
 }
 
@@ -51,6 +59,19 @@ impl std::fmt::Display for WriteError {
                     f,
                     "generated tokens from {} did not parse: {}",
                     phase, source
+                )
+            }
+            WriteError::UnrenderedConverterCalls { calls } => {
+                write!(
+                    f,
+                    "generated code calls private converters that were not rendered:"
+                )?;
+                for (caller, converter) in calls {
+                    write!(f, "\n  - `{caller}` calls `{converter}`")?;
+                }
+                write!(
+                    f,
+                    "\nconverter reachability or dependency planning is incomplete"
                 )
             }
         }
@@ -66,6 +87,11 @@ impl std::error::Error for WriteError {}
 /// validation are complete, with the same [`crate::Emit`] capability used for
 /// the rest of final Rust emission.
 pub trait RustFunction {
+    /// The private function name this plan renders. Naming the plan before
+    /// rendering lets the writer validate reachability without granting source
+    /// spelling capability to planning.
+    fn ident(&self) -> &syn::Ident;
+
     /// Whether this plan is reachable from the generated adapter surface.
     /// Validation-only plans may return false and remain available for diagnostics.
     fn should_emit(&self) -> bool {
@@ -77,6 +103,10 @@ pub trait RustFunction {
 }
 
 impl RustFunction for syn::ItemFn {
+    fn ident(&self) -> &syn::Ident {
+        &self.sig.ident
+    }
+
     fn render(&self, _emit: &crate::Emit) -> syn::ItemFn {
         self.clone()
     }
@@ -105,13 +135,19 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
 ) -> Result<PathBuf, WriteError> {
     // Validation already ran ONCE in the generator's `build` — a built generator
     // (the only source of a resolved registry) is valid by construction, so
-    // this writer is a pure emission.
+    // this writer does no binding resolution. It does validate the assembled
+    // private call graph before handing the file to the destination.
     // The capability, minted here and nowhere else in this function's reach.
     // Every callback below is handed a borrow; nothing else in the pipeline is.
     // See `prebindgen_flat::flat::emit` for what that buys and what it
     // deliberately does not.
     let emit = crate::Emit::new();
     let mut items: Vec<syn::Item> = Vec::new();
+
+    let converter_names: BTreeSet<String> = conversions
+        .iter()
+        .map(|plan| plan.ident().to_string())
+        .collect();
 
     // 0. Adapter prerequisites — runtime-support items (helper structs,
     //    type aliases) the converter bodies depend on. Emitted first so
@@ -206,6 +242,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
         ext.post_process_item(item, registry, &emit);
     }
 
+    validate_converter_calls(&mut items, &converter_names)?;
     let dest: Destination = items.into_iter().collect();
     Ok(dest.write(out_path))
 }
@@ -240,6 +277,73 @@ fn parse_items_from_tokens<I: IntoIterator<Item = TokenStream>>(
         out.extend(file.items);
     }
     Ok(out)
+}
+
+/// Refuse a generated file whose rendered functions still call a private
+/// converter plan removed by reachability filtering.
+///
+/// This is deliberately an integrity check for planned converter functions,
+/// not a general unresolved-name check. Calls to missing prerequisites or
+/// arbitrary external functions remain rustc's responsibility.
+fn validate_converter_calls(
+    items: &mut [syn::Item],
+    candidates: &BTreeSet<String>,
+) -> Result<(), WriteError> {
+    let rendered: BTreeSet<String> = items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Fn(function) => Some(function.sig.ident.to_string()),
+            _ => None,
+        })
+        .collect();
+    let mut visitor = ConverterCallValidator {
+        candidates,
+        rendered: &rendered,
+        caller: None,
+        calls: BTreeSet::new(),
+    };
+    for item in items {
+        syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
+    }
+    if visitor.calls.is_empty() {
+        Ok(())
+    } else {
+        Err(WriteError::UnrenderedConverterCalls {
+            calls: visitor.calls.into_iter().collect(),
+        })
+    }
+}
+
+struct ConverterCallValidator<'a> {
+    candidates: &'a BTreeSet<String>,
+    rendered: &'a BTreeSet<String>,
+    caller: Option<String>,
+    calls: BTreeSet<(String, String)>,
+}
+
+impl syn::visit_mut::VisitMut for ConverterCallValidator<'_> {
+    fn visit_item_fn_mut(&mut self, function: &mut syn::ItemFn) {
+        let previous = self.caller.replace(function.sig.ident.to_string());
+        syn::visit_mut::visit_item_fn_mut(self, function);
+        self.caller = previous;
+    }
+
+    fn visit_expr_call_mut(&mut self, call: &mut syn::ExprCall) {
+        if let syn::Expr::Path(path) = call.func.as_ref() {
+            if let Some(segment) = path.path.segments.last() {
+                let name = segment.ident.to_string();
+                if self.candidates.contains(&name) && !self.rendered.contains(&name) {
+                    self.calls.insert((
+                        self.caller
+                            .clone()
+                            .unwrap_or_else(|| "<generated item>".to_string()),
+                        name,
+                    ));
+                }
+            }
+        }
+        syn::visit_mut::visit_expr_call_mut(self, call);
+    }
 }
 
 #[cfg(test)]
