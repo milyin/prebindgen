@@ -791,6 +791,22 @@ impl JniGen {
             .clone()
     }
 
+    /// Whether an ordinary input crossing retained the borrowed-Optional-handle plan.
+    ///
+    /// Test support for the late-render seam: rendering this plan and storing a
+    /// completed function produce identical Rust, so output assertions alone cannot
+    /// prove resolution did not regain direct type access.
+    #[cfg(test)]
+    pub(crate) fn borrowed_optional_handle_plan_for_test(&self, spelling: &str) -> Option<bool> {
+        use prebindgen_registry::recipe::Direction;
+
+        let ty: syn::Type = syn::parse_str(spelling).ok()?;
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let compiled = self.decls.compiled.borrow();
+        let fragment = compiled.fragment(&reading.key(), Direction::Construct)?;
+        Some(fragment.rust.is_borrowed_optional_handle())
+    }
+
     /// The whole-value callback compatibility row, when one was required.
     ///
     /// Recipe-built callbacks occupy their ordinary crossing row. Only the

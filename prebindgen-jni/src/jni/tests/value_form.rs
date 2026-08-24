@@ -3190,7 +3190,8 @@ fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
 #[test]
 fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
     let loc = myflat_loc();
-    let build = |param_ty: syn::Type| -> Result<String, String> {
+    let build = |param_ty: syn::Type| -> Result<(String, bool), String> {
+        let spelling = param_ty.to_token_stream().to_string();
         let items = vec![
             (
                 syn::Item::Struct(syn::parse_quote!(
@@ -3222,24 +3223,52 @@ fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         match jni.build_with(registry) {
-            Ok(g) => Ok(std::fs::read_to_string(
-                g.write_rust(dir.join("g.rs")).expect("write_rust"),
-            )
-            .expect("read rust")),
+            Ok(g) => {
+                let planned = g
+                    .borrowed_optional_handle_plan_for_test(&spelling)
+                    .unwrap_or(false);
+                Ok((
+                    std::fs::read_to_string(g.write_rust(dir.join("g.rs")).expect("write_rust"))
+                        .expect("read rust"),
+                    planned,
+                ))
+            }
             Err(e) => Err(format!("{e}")),
         }
     };
 
     // The canonical borrows still resolve, and still adapt at the call site.
-    let borrowed = build(syn::parse_quote!(&ZThing)).expect("a plain borrow resolves");
+    let (borrowed, borrowed_is_plan) =
+        build(syn::parse_quote!(&ZThing)).expect("a plain borrow resolves");
+    assert!(!borrowed_is_plan, "a plain borrow is not the Optional plan");
     assert!(
         borrowed.contains("myflat::z_take(&t)"),
         "the call site adds the borrow:\n{borrowed}"
     );
-    let opt = build(syn::parse_quote!(Option<&ZThing>)).expect("an optional borrow resolves");
+    let (opt, opt_is_plan) =
+        build(syn::parse_quote!(Option<&ZThing>)).expect("an optional borrow resolves");
+    assert!(
+        opt_is_plan,
+        "the optional borrow must retain an unrendered borrowed-handle plan"
+    );
     assert!(
         opt.contains("myflat::z_take(t.as_deref())"),
         "the call site derefs the OwnedObject:\n{opt}"
+    );
+    assert!(
+        opt.contains("OwnedObject::from_raw"),
+        "the plan renders the non-owning carrier:\n{opt}"
+    );
+
+    let (mutable, mutable_is_plan) =
+        build(syn::parse_quote!(Option<&mut ZThing>)).expect("an optional mutable borrow resolves");
+    assert!(
+        mutable_is_plan,
+        "the optional mutable borrow must retain the same late plan"
+    );
+    assert!(
+        mutable.contains("myflat::z_take(t.as_deref_mut())"),
+        "the call site mutably derefs the OwnedObject:\n{mutable}"
     );
 
     // Wrapped, they have nothing to bridge and must not resolve.

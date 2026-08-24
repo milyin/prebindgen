@@ -41,9 +41,9 @@ fn is_unsized_spelling(ty: &prebindgen_registry::flat::TypeRef) -> bool {
 impl Declarations {
     /// The `Option<X>` **input** shape.
     ///
-    /// `Option<&T>` tries the deep `OptionRef` — a borrowed handle decoded to
-    /// `Option<OwnedObject<T>>` — before the shallow `Optional`; the shape that
-    /// resolves correctly wins.
+    /// Borrowed opaque handles are intercepted by the registry compiler and kept as
+    /// a frozen non-owning-carrier plan; this legacy selector now handles only the
+    /// structural Optional fallback.
     pub(crate) fn input_optional(
         &self,
         ty: &prebindgen_registry::flat::TypeRef,
@@ -53,24 +53,9 @@ impl Declarations {
         // `Box<Option<T>>` crossing produces a `Box<Option<T>>`.
         let produced = crate::jni::trait_impl::Produced::Reading(ty);
         let inner = ty.optional_inner()?;
-        if let Some(target) = inner.borrow_target() {
-            let mutable = inner.is_exclusive_borrow();
-            if let Some(mut c) = self.input_wrapper_shape(
-                WrapperShape::OptionRef { mutable },
-                &produced,
-                target,
-                emit,
-            ) {
-                c.subs = vec![target.key()];
-                return Some(c);
-            }
-        }
-        // An optional BORROW is the deep handler's alone. It declined — either
-        // the inner is not a handle (then the shallow handler below is right,
-        // and only for the canonical spelling) or the spelling carries a
-        // wrapper it cannot bridge. The shallow handler cannot tell those apart
-        // and would decode the jlong as a `*mut &T`, so a wrapped optional
-        // borrow stops here rather than resolving wrong.
+        // A wrapped optional borrow has no value the fallback can rebuild. Letting
+        // the shallow handler decode it would treat the jlong as a `*mut &T`, so
+        // it still stops here rather than resolving wrong.
         if inner.borrow_target().is_some() && !ty.erased_wrappers().is_empty() {
             return None;
         }

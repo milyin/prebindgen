@@ -1395,16 +1395,99 @@ impl<R: Conversions> JCompile<'_, R> {
         })
     }
 
+    /// Plan the soundness carrier for an optional borrowed opaque handle.
+    ///
+    /// The model crossing is `Option<&T>`, but the converter must keep only a
+    /// non-owning pointer carrier until the wrapper immediately borrows it. This
+    /// is therefore a frozen adapter plan rather than ordinary Optional-child
+    /// composition: calling the child owned-handle converter would consume `T`.
+    fn planned_borrowed_optional_handle(&self, at: At<'_>, inner: &JFrag) -> Option<JFrag> {
+        if at.crossing.direction() != Direction::Construct {
+            return None;
+        }
+        let source = at.crossing.spelled();
+        if !source.erased_wrappers().is_empty() {
+            return None;
+        }
+        let element = source.optional_inner()?;
+        let target = element.borrow_target()?;
+        let cfg = self.decls.types.get(&target.key())?;
+        if !cfg.is_opaque() || !inner.conv.metadata.is_direct_handle() {
+            return None;
+        }
+        let TypeKind::Named { id, .. } = target.unwrapped().kind() else {
+            return None;
+        };
+        let source_ident = id.ident()?;
+        let module = self.decls.fn_module(self.registry, &source_ident);
+        let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
+        let ident = crate::jni::chain::planned_name(Direction::Construct, source, &wire);
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let rust = crate::jni::chain::JFunction::borrowed_optional_handle(
+            crate::jni::chain::JBorrowedOptionalHandlePlan {
+                ident,
+                reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
+                target: target.clone(),
+                module,
+            },
+        );
+        let kotlin_name = self
+            .decls
+            .override_kotlin_name(&source.key(), inner.conv.metadata.kotlin_name.clone());
+        let projection = inner
+            .conv
+            .metadata
+            .projection
+            .clone()
+            .map(|projection| Projection {
+                owned: false,
+                strategy: FoldStrategy::Optional(
+                    NullableKind::Niche,
+                    Box::new(projection.strategy),
+                ),
+                ..projection
+            });
+        Some(JFrag {
+            conv: ConverterImpl {
+                destination: wire,
+                function: marker,
+                pre_stages: Vec::new(),
+                niches: Niches::empty(),
+                metadata: KotlinMeta {
+                    kotlin_name,
+                    value_rust_type: None,
+                    projection,
+                    niche_sentinels: Vec::new(),
+                },
+                subs: vec![target.key()],
+            },
+            rust,
+            layout: Some(JLayout::Leaf),
+            choice_arm: None,
+            nested_chain: None,
+            wires: None,
+            out_wires: None,
+            composed_only: false,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+        })
+    }
+
     /// Plan an Optional over one already-composed child intermediate without
     /// spelling its source type or generating its Rust body.
     ///
-    /// The deep input recipe for `Option<&opaque>` remains terminal because it
-    /// deliberately yields `OwnedObject<T>` and clones the Java-owned handle.
+    /// Borrowed opaque handles use a dedicated frozen soundness-carrier plan;
     /// Choice layouts remain with the legacy parts compiler.
     fn planned_optional(&self, at: At<'_>, inner: &JFrag, decoupled: bool) -> Option<JFrag> {
         let source = at.crossing.spelled();
         let element = source.optional_inner()?;
         let direction = at.crossing.direction();
+        if let Some(plan) = self.planned_borrowed_optional_handle(at, inner) {
+            return Some(plan);
+        }
         let composed_child =
             !inner.composed_only && inner.layout.as_ref().is_some_and(JLayout::is_composed);
         match direction {
@@ -1420,9 +1503,7 @@ impl<R: Conversions> JCompile<'_, R> {
             }
             _ => {}
         }
-        if direction == Direction::Construct
-            && (element.borrow_target().is_some() || inner.conv.metadata.is_direct_handle())
-        {
+        if direction == Direction::Construct && inner.conv.metadata.is_direct_handle() {
             return None;
         }
 

@@ -718,9 +718,6 @@ pub(crate) fn build_handle_destructor_items(
 pub(crate) enum WrapperShape {
     /// `Ref` — a borrow of its inner.
     Borrow { mutable: bool },
-    /// `Optional` whose inner is a `Ref` — the deep handle-borrow form, tried
-    /// before [`Self::Optional`].
-    OptionRef { mutable: bool },
     /// `Sequence` — a run of its element.
     Sequence,
     /// `Optional` — its inner, or absent.
@@ -1008,7 +1005,7 @@ pub(crate) fn build_through_wrappers(
     Some(out)
 }
 
-/// Per-shape **input** wrapper converter builders (`&`/`Option<&>`/`Vec`/
+/// Per-shape **input** wrapper converter builders (`&`/`Vec`/
 /// `Option`). Each returns `Some(ConverterImpl)` only for the [`WrapperShape`]
 /// it claims; [`Declarations::input_wrapper_shape`] chains them in priority
 /// order. The shapes are disjoint — except the two `Optional` sub-cases
@@ -1069,82 +1066,6 @@ impl Declarations {
                 value_rust_type: None,
                 projection,
                 niche_sentinels: inner.metadata.niche_sentinels.clone(),
-            },
-        })
-    }
-
-    /// `Option<&T>` / `Option<&mut T>` for opaque T: returns
-    /// `Option<OwnedObject<T>>` (the call site `.as_deref()` coerces back).
-    /// `None` for non-opaque inners — the resolver then offers `Option<_>`
-    /// over `&T` and the general handler takes it.
-    fn input_option_ref(
-        &self,
-        shape: WrapperShape,
-        produced: &Produced<'_>,
-        t1: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions — the
-        // canonical form a produced spelling is compared against, and the
-        // type ascriptions the generated body writes. Everything else takes
-        // the READING itself (#284).
-        let t1_ty = emit.spell(t1);
-        let WrapperShape::OptionRef { .. } = shape else {
-            return None;
-        };
-        // Produces `Option<OwnedObject<T>>`, which the call site adapts with
-        // `.as_deref()` — again not the spelled type, so a wrapped spelling has
-        // nothing to bridge and must not resolve. See `input_borrow`.
-        if !produced.is_canonical() {
-            return None;
-        }
-        let inner = self.in_frag(t1)?;
-        if !inner.metadata.is_direct_handle() {
-            // Non-opaque: let the general `Option<_>` handler take it.
-            return None;
-        }
-        let inner_wire = inner.destination.clone();
-        let outer_ty = produced.key();
-        let outer_spelled = produced.spell(emit);
-        let name = input_name(&outer_spelled, &inner_wire);
-        let gen_allow = generated_converter_attr();
-        let function: syn::ItemFn = syn::parse_quote!(
-            #gen_allow
-            pub(crate) unsafe fn #name<'env, 'v>(
-                env: &mut jni::JNIEnv<'env>,
-                v: &#inner_wire,
-            ) -> ::core::result::Result<Option<OwnedObject<#t1_ty>>, __JniErr> {
-                if *v == 0 {
-                    Ok(None)
-                } else if (*v & 1) == 1 {
-                    Err(<__JniErr as ::core::convert::From<String>>::from(
-                        "Operation on a closed native handle.".to_string(),
-                    ))
-                } else {
-                    Ok(Some(unsafe { OwnedObject::from_raw(*v as *const #t1_ty) }))
-                }
-            }
-        );
-        let kotlin_name = self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
-        let projection = inner.metadata.projection.clone().map(|h| Projection {
-            owned: false,
-            // `Option<&Handle>` always rides the inner's `*v == 0` niche
-            // (body is `if *v == 0 { None } else { ... }` above), so
-            // null is the `0i64` sentinel — never JVM boxed.
-            strategy: FoldStrategy::Optional(NullableKind::Niche, Box::new(h.strategy)),
-            ..h
-        });
-        Some(ConverterImpl {
-            subs: vec![],
-            pre_stages: vec![],
-            function,
-            destination: inner_wire,
-            niches: Niches::empty(),
-            metadata: KotlinMeta {
-                kotlin_name,
-                value_rust_type: None,
-                projection,
-                niche_sentinels: Vec::new(),
             },
         })
     }
@@ -2737,10 +2658,9 @@ impl Declarations {
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
-        // borrow/option-ref/vec shapes are mutually exclusive; the two
+        // borrow/vec shapes are mutually exclusive; the two
         // `Optional` sub-cases share a method.
         self.input_borrow(shape, produced, t1)
-            .or_else(|| self.input_option_ref(shape, produced, t1, emit))
             .or_else(|| self.input_vec(shape, produced, t1, emit))
             .or_else(|| self.input_option(shape, produced, t1, emit))
     }
