@@ -39,6 +39,13 @@ pub(crate) struct JniFunctionPlan {
     /// cannot drift. `None` = the domain channel is underivable (the Rust
     /// emitter panics, the Kotlin renderer skips).
     pub onerror_iface: Option<ErrorIfaces>,
+    /// Registry-resolved output decomposition selected for this function.
+    /// Rust delivery, Kotlin surface/KDoc, and the report all consume this
+    /// owned plan after the registry phase is closed.
+    pub unfold: Option<prebindgen_registry::unfold::UnfoldPlan>,
+    /// Registry-resolved domain-error decomposition selected for this
+    /// function. Rust encoding and every Kotlin artifact share this value.
+    pub error: Option<prebindgen_registry::unfold::UnfoldPlan>,
     pub params: Vec<PlanParam>,
     pub output: FnOutputPlan,
 }
@@ -66,7 +73,13 @@ pub(crate) enum ParamForm {
     /// same recursive data-class probe as ordinary parameters (vec-build
     /// remains a source-parameter-only collection optimization), so all three
     /// sites agree on the leaf wire.
-    Expanded(Vec<PlanLeaf>),
+    Expanded {
+        /// The registry-built constructor plan. Keeping it beside its lowered
+        /// leaves lets Rust reconstruction and Kotlin/report descriptions use
+        /// the same decision after resolution.
+        plan: Box<prebindgen_registry::expand::FoldPlan>,
+        leaves: Vec<PlanLeaf>,
+    },
 }
 
 /// One classified effective parameter (a source param, or one expansion leaf).
@@ -126,6 +139,7 @@ pub(crate) enum InputKind {
         elem: TypeRef,
         by_ref: bool,
         elem_wrappers: Vec<&'static str>,
+        helpers: std::rc::Rc<VecBuildHelpers>,
     },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
@@ -135,12 +149,20 @@ pub(crate) enum InputKind {
     /// Lockable opaque-handle projection (`jlong` wire). `direct` is
     /// [`KotlinMeta::is_direct_handle`] — `true` only for the bare
     /// `T`/`&T` shape, the by-value consume fast-path trigger.
-    Handle { direct: bool },
+    Handle { direct: bool, mode: HandleMode },
     /// Rust `u64`: typed Kotlin `ULong`, raw JNI `Long`. The wrapper passes
     /// the bit-preserving `toLong()` representation and takes no lock.
     Unsigned64 { niche: Option<String> },
     /// Everything else: the resolved entry's converter/wire as-is.
     Plain,
+}
+
+/// Frozen Kotlin ownership/locking mode for an opaque-handle leaf.
+pub(crate) enum HandleMode {
+    Borrow,
+    Consume,
+    BorrowNullable,
+    ConsumeNullable,
 }
 
 /// How the return value crosses the boundary. Mirrors the unfold plan's
@@ -168,6 +190,10 @@ pub(crate) struct UnfoldOutputPlan {
     pub fixed_builder: bool,
     /// `plan.element.is_some()` — whole-element (M4) vs decomposed (M5) fold.
     pub whole_element: bool,
+    /// Declaration-normalized decomposition used by fixed Kotlin
+    /// builder/folder singletons. `None` for a whole-element fold, which has
+    /// no deconstructor declaration.
+    pub decon: Option<std::rc::Rc<prebindgen_registry::unfold::DeconSpec>>,
     /// Kotlin type variable of the wrapper: `None` for a fixed builder,
     /// `"A"` for an `Iterable` fold (bare or `Optional`-wrapped), `"R"`
     /// otherwise.
@@ -469,13 +495,22 @@ impl Declarations {
     /// (an unresolved converter) is passed through — it only occurs at the
     /// validation phase, which reports it and fails `resolve` before any
     /// emitter runs. Same interior-mutable contract as
-    /// [`Declarations::iface_spec`]; drift is guarded externally by the byte-identity
-    /// regen check (a plan change alters generated code).
+    /// [`Declarations::iface_spec`]. Once resolution finishes both memos are
+    /// drained into [`crate::jni::generation::JniGenerationPlan`], so emission
+    /// cannot resume either derivation.
     pub(crate) fn fn_plan(
         &self,
         registry: &Registry,
         f: &prebindgen_registry::flat::Function,
     ) -> Result<std::rc::Rc<JniFunctionPlan>, PlanError> {
+        if let Some(generation) = &self.generation {
+            return Ok(generation.function(&f.name).unwrap_or_else(|| {
+                panic!(
+                    "frozen JNI generation plan has no function entry for `{}`",
+                    f.name
+                )
+            }));
+        }
         if let Some(hit) = self.fn_plans.borrow().get(&f.name).cloned() {
             return Ok(hit);
         }
@@ -498,11 +533,13 @@ impl JniFunctionPlan {
     ) -> Result<Self, PlanError> {
         let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.name.to_string()));
         let native_symbol = ext.native_method_symbol(&jni_method);
+        let unfold = registry.unfold_plans().get(&f.name).cloned();
+        let error = registry.error_plans().get(&f.name).cloned();
         let onerror_iface = onerror_iface_spec(ext, registry, &f.name);
         // Output first: the Rust emitter historically resolved the output
         // before the inputs, so an unresolved-output failure takes precedence
         // over an unresolved-input one.
-        let output = build_output(ext, registry, f)?;
+        let output = build_output(ext, registry, f, unfold.as_ref(), error.as_ref())?;
         let mut params = Vec::new();
         // The element's parameters: each already a name and a `TypeRef`, so
         // there is no `FnArg`/`Pat` destructuring and no position that could
@@ -524,7 +561,10 @@ impl JniFunctionPlan {
                         ext, registry, &leaf.name, &leaf.ty, /*expanded=*/ true, &ident,
                     )?);
                 }
-                ParamForm::Expanded(leaves)
+                ParamForm::Expanded {
+                    plan: Box::new(plan.clone()),
+                    leaves,
+                }
             } else {
                 ParamForm::Single(Box::new(classify_leaf(
                     ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident,
@@ -536,10 +576,12 @@ impl JniFunctionPlan {
             jni_method,
             native_symbol,
             onerror_iface,
+            unfold,
+            error,
             params,
             output,
         };
-        let slots = result.jvm_parameter_slots(ext, registry, f);
+        let slots = result.jvm_parameter_slots(ext);
         if slots > 255 {
             return Err(PlanError::JvmParameterLimit { slots });
         }
@@ -551,16 +593,11 @@ impl JniFunctionPlan {
     pub fn leaves(&self) -> impl Iterator<Item = &PlanLeaf> {
         self.params.iter().flat_map(|p| match &p.form {
             ParamForm::Single(l) => std::slice::from_ref(&**l).iter(),
-            ParamForm::Expanded(ls) => ls.iter(),
+            ParamForm::Expanded { leaves, .. } => leaves.iter(),
         })
     }
 
-    fn jvm_parameter_slots(
-        &self,
-        ext: &Declarations,
-        registry: &Registry,
-        f: &prebindgen_registry::flat::Function,
-    ) -> usize {
+    fn jvm_parameter_slots(&self, ext: &Declarations) -> usize {
         // `JNINative` is a Kotlin object, so its external methods are instance
         // methods and the JVM counts the implicit receiver as one unit.
         let mut slots = 1usize;
@@ -589,7 +626,7 @@ impl JniFunctionPlan {
             FnOutputPlan::Value(_) => 0,
         };
         slots += 1; // binding-error sink
-        if registry.error_plans().contains_key(&f.name) {
+        if self.error.is_some() {
             slots += 1;
         }
         slots
@@ -761,10 +798,11 @@ fn build_output(
     ext: &Declarations,
     registry: &Registry,
     f: &prebindgen_registry::flat::Function,
+    unfold_plan: Option<&prebindgen_registry::unfold::UnfoldPlan>,
+    error_plan: Option<&prebindgen_registry::unfold::UnfoldPlan>,
 ) -> Result<FnOutputPlan, PlanError> {
     use prebindgen_registry::unfold::{Delivery, UnfoldShape};
     let ident = &f.name;
-    let unfold_plan = registry.unfold_plans().get(ident);
 
     // Callback delivery: the return is decomposed to a foreign builder/fold
     // lambda; no output converter runs and the wire is the erased `JObject`.
@@ -792,11 +830,21 @@ fn build_output(
                 .expect("record-built plan carries its DeconId");
             ext.iface_spec(registry, &SpecKey::Builder(decon))
         };
+        let decon = plan.decon.as_ref().map(|id| {
+            std::rc::Rc::new(
+                registry
+                    .decon_plans()
+                    .get(id)
+                    .unwrap_or_else(|| panic!("unfold plan names unknown deconstructor `{id:?}`"))
+                    .clone(),
+            )
+        });
         return Ok(FnOutputPlan::Unfold(UnfoldOutputPlan {
             iterable_fold,
             optional,
             fixed_builder,
             whole_element: plan.element.is_some(),
+            decon,
             generic,
             iface,
         }));
@@ -808,7 +856,6 @@ fn build_output(
     let is_convert = unfold_plan.is_some();
     // The element normalizes an elided return and a written `-> ()` to one
     // `Unit` reading, so there is no `ReturnType` match here.
-    let error_plan = registry.error_plans().get(ident);
     // The `Ok` side off `TypeKind::Fallible`, where `result_ok_type` found the
     // `Result` in a path first.
     let ok_ty = error_plan

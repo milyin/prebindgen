@@ -1607,6 +1607,8 @@ impl JniGenBuilder {
                 )
             })
             .collect();
+        let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry);
+        decls.generation = Some(std::rc::Rc::new(generation));
         Ok(JniGen { decls, registry })
     }
 }
@@ -2226,7 +2228,7 @@ impl Prebindgen for Declarations {
         // Rust-side `Vec` by pushing each element's decoupled leaves, then passes
         // the handle (see `ParamMode::VecBuild`), avoiding per-element
         // `env.get_field(...)` upcalls on the Rust side.
-        items.extend(build_vec_build_helper_items(self, registry, emit));
+        items.extend(build_vec_build_helper_items(self, emit));
         // Expression constants — one nullary JNI getter extern per
         // `PackageDecl::constant_expr`, its value the binding-defined
         // expression evaluated with a glob import of every source module (so

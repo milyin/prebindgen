@@ -197,7 +197,7 @@ pub(crate) fn flatten_struct_factory(
     imports: &mut BTreeSet<String>,
     depth: usize,
 ) -> Option<StructFactory> {
-    let plan = build_struct_plan(ext, registry, s, depth)?;
+    let plan = ext.struct_plan(registry, s, depth)?;
     let (params, reconstruct) = factory_from_plan(&plan, prefix, class_name, imports)?;
     Some((params, reconstruct, plan_mints_handle(&plan)))
 }

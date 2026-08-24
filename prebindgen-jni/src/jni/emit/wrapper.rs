@@ -218,13 +218,13 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     //     value is **returned** directly through its ordinary output
     //     converter — the wrapper behaves exactly like a normal function
     //     whose return type is `convert_out_ty`.
-    let unfold_plan = registry.unfold_plans().get(original_ident);
+    let unfold_plan = plan.unfold.as_ref();
     // Error-position expansion: when the fn returns `Result<T, E>` and an error
     // plan is declared, the **`?`** is applied here — the extern peels the
     // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
     // typed DOMAIN handler), and the success path uses `T`'s converter (not the
     // `Result<T, E>` rank-2 wrapper).
-    let error_plan = registry.error_plans().get(original_ident);
+    let error_plan = plan.error.as_ref();
     let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
     // The output converter entry (`None` for callback delivery). The lookup
     // was validated at plan build; re-resolving here keeps the plan free of
@@ -543,11 +543,7 @@ fn emit_input_param(
     // flattened leaves. Decode each leaf with its own converter, run the
     // (pure-Rust) fold to build the value, then pass it to the call.
     let leaf = match &param.form {
-        ParamForm::Expanded(leaves) => {
-            let fold = registry
-                .expansion_plans()
-                .get(&(original_ident.clone(), param.ident.clone()))
-                .expect("ParamForm::Expanded ⇒ expansion plan present");
+        ParamForm::Expanded { plan: fold, leaves } => {
             return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err, emit);
         }
         ParamForm::Single(leaf) => &**leaf,
@@ -623,6 +619,7 @@ fn emit_input_param(
             elem,
             by_ref,
             elem_wrappers,
+            ..
         } => {
             // Generated Rust spells the reading's own tokens. This is the
             // CANONICAL element, which is what the helper trio stores — so the
@@ -698,7 +695,7 @@ fn emit_input_param(
         // bound, so non-Clone handles (e.g. `Publisher<'a>`) work too.
         // A null or tagged (closed) pointer — a close that raced past
         // the pre-lock guard — is rejected before any dereference.
-        InputKind::Handle { direct: true }
+        InputKind::Handle { direct: true, .. }
             if !matches!(
                 arg_ty.kind(),
                 prebindgen_registry::flat::TypeKind::Ref { .. }
@@ -986,7 +983,7 @@ pub(crate) fn emit_expanded_param(
         // Direct owned-handle leaf (e.g. an identity-variant `T`): consume the
         // jlong handle inline, mirroring the normal by-value-handle path —
         // including its null/tagged (closed) pointer guard.
-        let is_consume = matches!(classified.kind, InputKind::Handle { direct: true })
+        let is_consume = matches!(classified.kind, InputKind::Handle { direct: true, .. })
             && !matches!(
                 leaf_ty.kind(),
                 prebindgen_registry::flat::TypeKind::Ref { .. }

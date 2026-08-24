@@ -17,6 +17,7 @@
 //   * `kotlin_emit` / `render` / `fold` — the Kotlin source emitters.
 
 mod chain;
+mod generation;
 mod metadata;
 pub(crate) mod wire_access;
 
@@ -855,6 +856,15 @@ impl JniGen {
     pub fn declarations(&self) -> &Declarations {
         &self.decls
     }
+
+    /// The immutable cross-artifact plan shared by Rust and Kotlin emission.
+    #[cfg(test)]
+    pub(crate) fn generation_plan(&self) -> &generation::JniGenerationPlan {
+        self.decls
+            .generation
+            .as_deref()
+            .expect("resolved JniGen has no frozen generation plan")
+    }
 }
 
 /// Everything a binding **declared**, once it is done declaring.
@@ -1069,6 +1079,25 @@ pub struct Declarations {
     /// "derived state, keyed by `(self, registry)`" contract as
     /// [`Self::iface_specs`].
     pub(crate) fn_plans: std::cell::RefCell<HashMap<syn::Ident, std::rc::Rc<JniFunctionPlan>>>,
+
+    /// Whole-value struct layouts accumulated during resolution. The frozen
+    /// generation plan drains this store together with the function and
+    /// interface memos, so Rust and Kotlin cannot rebuild the layout apart.
+    pub(crate) struct_plans: std::cell::RefCell<HashMap<TypeKey, Option<std::rc::Rc<StructPlan>>>>,
+
+    /// Sealed-class payload/ownership layouts accumulated during resolution.
+    pub(crate) sum_plans:
+        std::cell::RefCell<HashMap<TypeKey, std::rc::Rc<kotlin_emit::SealedClassPlan>>>,
+
+    /// Synthetic `Vec<T>` helper ABI plans, interned by canonical element
+    /// type while function sites are compiled and drained into the frozen
+    /// generation plan before any artifact writer runs.
+    pub(crate) vec_build_plans: std::cell::RefCell<HashMap<TypeKey, std::rc::Rc<VecBuildHelpers>>>,
+
+    /// Present only after resolution has finished. All artifact writers reach
+    /// derived JNI decisions through this one immutable store; the mutable
+    /// memos above are empty after it is installed.
+    pub(crate) generation: Option<std::rc::Rc<generation::JniGenerationPlan>>,
 }
 
 /// Describe a JNI binding: state the Kotlin surface, then [`build`](Self::build).

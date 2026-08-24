@@ -313,15 +313,21 @@ fn find_block(params: &[KtParam], leaf_names: &[String]) -> Option<usize> {
 /// hard errors — the user explicitly asked to split it).
 fn resolve_split<'a>(
     registry: &'a Registry,
+    fplan: &'a JniFunctionPlan,
     f: &prebindgen_registry::flat::Function,
     sel_fun: &KtFun,
     param_name: &str,
     multi: bool,
 ) -> Split<'a> {
     let param = syn::Ident::new(param_name, Span::call_site());
-    let plan = registry
-        .expansion_plans()
-        .get(&(f.name.clone(), param.clone()))
+    let plan = fplan
+        .params
+        .iter()
+        .find(|planned| planned.ident == param)
+        .and_then(|planned| match &planned.form {
+            ParamForm::Expanded { plan, .. } => Some(plan.as_ref()),
+            ParamForm::Single(_) => None,
+        })
         .unwrap_or_else(|| {
             panic!(
                 "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` is not an expandable \
@@ -433,10 +439,16 @@ pub(crate) fn render_param_overloads(
         }
     }
 
+    let fplan = ext.fn_plan(registry, f).unwrap_or_else(|_| {
+        panic!(
+            "fun!({}): its frozen JNI generation plan is unavailable",
+            f.name
+        )
+    });
     let multi = requested.len() > 1;
     let splits: Vec<Split> = requested
         .iter()
-        .map(|name| resolve_split(registry, f, sel_fun, name, multi))
+        .map(|name| resolve_split(registry, &fplan, f, sel_fun, name, multi))
         .collect();
 
     // Cartesian product of arm indices across all split params.

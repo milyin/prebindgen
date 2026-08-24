@@ -121,7 +121,7 @@ pub(crate) fn flatten_struct_encode(
     depth: usize,
     env_expr: &TokenStream,
 ) -> Option<(TokenStream, Vec<EncSlot>)> {
-    let plan = build_struct_plan(ext, registry, s, depth)?;
+    let plan = ext.struct_plan(registry, s, depth)?;
     Some(encode_plan(&plan, access, prefix, depth, env_expr))
 }
 
