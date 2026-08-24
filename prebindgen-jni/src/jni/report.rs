@@ -204,15 +204,20 @@ impl super::JniGen {
         let Some(f) = render_wrapper_fn(ext, item_fn, registry, kotlin_name, receiver_key) else {
             return;
         };
+        let fplan = ext
+            .fn_plan(registry, item_fn)
+            .expect("resolved function has a frozen JNI plan");
         out.push_str(&format!("- `{}` — `{}`\n", rust_ident, signature(&f)));
 
         // Param expansions.
         let mut shaped: Vec<String> = Vec::new();
-        let mut plans: Vec<(&syn::Ident, &prebindgen_registry::expand::FoldPlan)> = registry
-            .expansion_plans()
+        let mut plans: Vec<(&syn::Ident, &prebindgen_registry::expand::FoldPlan)> = fplan
+            .params
             .iter()
-            .filter(|((func, _), _)| func == rust_ident)
-            .map(|((_, param), plan)| (param, plan))
+            .filter_map(|param| match &param.form {
+                crate::jni::ParamForm::Expanded { plan, .. } => Some((&param.ident, plan.as_ref())),
+                crate::jni::ParamForm::Single(_) => None,
+            })
             .collect();
         plans.sort_by_key(|(p, _)| p.to_string());
         for (param, plan) in plans {
@@ -230,7 +235,7 @@ impl super::JniGen {
                 variants.join(", ")
             ));
         }
-        if let Some(plan) = registry.unfold_plans().get(rust_ident) {
+        if let Some(plan) = &fplan.unfold {
             let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "return `{}` decomposed → [{}] ({:?} delivery)",
@@ -239,7 +244,7 @@ impl super::JniGen {
                 plan.delivery
             ));
         }
-        if let Some(plan) = registry.error_plans().get(rust_ident) {
+        if let Some(plan) = &fplan.error {
             let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "domain error `{}` decomposed → onError [{}] (binding failures → onBindingError)",

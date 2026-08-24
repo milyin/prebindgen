@@ -207,6 +207,30 @@ pub(crate) fn build_struct_plan(
     Some(StructPlan { fields })
 }
 
+impl Declarations {
+    /// The one whole-value struct layout used by Rust encoding and Kotlin
+    /// declaration/factory emission. During resolution it is memoized; after
+    /// resolution the lookup is served exclusively by
+    /// [`crate::jni::generation::JniGenerationPlan`].
+    pub(crate) fn struct_plan(
+        &self,
+        registry: &impl Conversions,
+        s: &prebindgen_registry::flat::Struct,
+        depth: usize,
+    ) -> Option<std::rc::Rc<StructPlan>> {
+        let key = s.type_ref().key();
+        if let Some(generation) = &self.generation {
+            return generation.struct_plan(&key);
+        }
+        if let Some(hit) = self.struct_plans.borrow().get(&key) {
+            return hit.clone();
+        }
+        let plan = build_struct_plan(self, registry, s, depth).map(std::rc::Rc::new);
+        self.struct_plans.borrow_mut().insert(key, plan.clone());
+        plan
+    }
+}
+
 /// True when this plan's flattened `fromParts` takes at least one **raw
 /// native pointer** leaf — an opaque-handle projection, whose wire slot is a
 /// bare `jlong` the factory mints a handle from.

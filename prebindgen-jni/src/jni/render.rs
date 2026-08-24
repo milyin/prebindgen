@@ -8,7 +8,6 @@ use kotlin_codegen::{
     KtClass, KtCode, KtCompanion, KtCtorParam, KtEnumEntry, KtFun, KtParam, KtProperty, KtType,
     KtVis,
 };
-use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -98,15 +97,17 @@ pub(crate) fn build_data_class(
     // factory and the Rust encoder walk. Deriving it separately — a third
     // classification with its own rules — is what let a property's type
     // disagree with its own factory parameter (#156).
-    let plan = build_struct_plan(ext, registry, item_struct, 0).unwrap_or_else(|| {
-        panic!(
-            "data class `{}`: could not classify every field for the fromParts bridge. Each \
+    let plan = ext
+        .struct_plan(registry, item_struct, 0)
+        .unwrap_or_else(|| {
+            panic!(
+                "data class `{}`: could not classify every field for the fromParts bridge. Each \
              field needs a resolved OUTPUT converter (that direction declares the slot the \
              encoder fills) AND the Kotlin metadata that converter carries — a `kotlin_name`, \
              or a registered class for a projection leaf",
-            item_struct.name
-        )
-    });
+                item_struct.name
+            )
+        });
 
     let mut ctor_params: Vec<KtCtorParam> = Vec::new();
     // Property (name, type) pairs, for the content-equality members an
@@ -594,7 +595,7 @@ pub(crate) fn render_extern_decl(
     // erased to `Any` (JObject) on the wire; the wrapper passes a capture for
     // each. A domain plan ⇒ `error_plans` has this fn.
     params.push(KtParam::new("errorSink", KtType::any()));
-    if registry.error_plans().contains_key(&f.name) {
+    if fplan.error.is_some() {
         params.push(KtParam::new("domainSink", KtType::any()));
     }
 
@@ -861,11 +862,10 @@ fn build_wrapper_surface_with_recovery(
         None => kt_snake_to_camel(&f.name.to_string()),
     };
     let jni_call = fplan.jni_method.clone();
-    let (params, receiver_idx) =
-        classify_params(ext, &fplan, registry, &mut body_imports, receiver_key)?;
-    let out = classify_output(ext, f, &fplan, registry, &mut body_imports)?;
+    let (params, receiver_idx) = classify_params(&fplan, &mut body_imports, receiver_key)?;
+    let out = classify_output(ext, &fplan, &mut body_imports)?;
     let r_ty = recovery_return_type(&out, recovery);
-    let sink = error_sink_parts(f, &fplan, registry, &mut body_imports, &r_ty)?;
+    let sink = error_sink_parts(&fplan, &mut body_imports, &r_ty)?;
 
     let mut fun = KtFun::new(&kt_name).vis(KtVis::Public);
     if let Some(g) = &out.generic {
@@ -963,7 +963,8 @@ fn render_wrapper_fn_with_recovery(
     // KDoc: the Rust fn's `///` prose first, then generated notes for every
     // position an expansion reshaped away from the Rust signature (N1).
     // Emission-only — the validator skips it.
-    if let Some(doc) = wrapper_kdoc(f, registry) {
+    let fplan = ext.fn_plan(registry, f).ok()?;
+    if let Some(doc) = wrapper_kdoc(f, &fplan) {
         fun = fun.kdoc(doc);
     }
     // Collect the opaque-handle params so we can scaffold pointer-ordered
@@ -1209,9 +1210,7 @@ struct DomainSink {
 /// instance-method receiver (the first param whose peeled type matches
 /// `receiver_key`), which is bound to `this` and dropped from the signature.
 fn classify_params(
-    ext: &Declarations,
     fplan: &JniFunctionPlan,
-    registry: &Registry,
     imports: &mut BTreeSet<String>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<(Vec<Param>, Option<usize>)> {
@@ -1269,14 +1268,12 @@ fn classify_params(
 
         // Map the plan's crossing form to the Kotlin call-site mode.
         let mode = match &leaf.kind {
-            InputKind::VecBuild { elem, .. } => {
+            InputKind::VecBuild { helpers, .. } => {
                 // Slice/Vec of a flattenable data_class: build the Rust-side
                 // Vec by pushing each element's leaves, pass the handle (see
                 // the body direction + `build_vec_build_helper_items`). The
                 // high-level signature stays `List<T>` (registered below).
-                let h = crate::jni::vec_build_helpers(ext, registry, elem)
-                    .expect("vec_build_elem Some ⇒ vec_build_helpers Some");
-                let elem_accesses = h
+                let elem_accesses = helpers
                     .plan
                     .leaves
                     .iter()
@@ -1284,7 +1281,7 @@ fn classify_params(
                     .map(|l| l.kt_access("__e"))
                     .collect();
                 ParamMode::VecBuild {
-                    base: h.base,
+                    base: helpers.base.clone(),
                     elem_accesses,
                 }
             }
@@ -1342,27 +1339,12 @@ fn classify_params(
                     handles,
                 }
             }
-            InputKind::Handle { .. } => {
-                // Handle → Borrow/Consume by Rust syntactic shape (locked);
-                // `Option<&T>` / by-value `Option<T>` mark the param nullable
-                // and the wrapper body branches on null before lock selection.
-                // Both read off the leaf's own reading — no lookup, and a
-                // wrapped spelling answers as the bare one does.
-                if leaf
-                    .reading
-                    .optional_inner()
-                    .is_some_and(|i| i.borrow_target().is_some())
-                {
-                    ParamMode::BorrowNullable
-                } else if leaf.reading.optional_inner().is_some() {
-                    // by-value `Option<T>` opaque → nullable consume
-                    ParamMode::ConsumeNullable
-                } else if leaf.reading.borrow_target().is_some() {
-                    ParamMode::Borrow
-                } else {
-                    ParamMode::Consume
-                }
-            }
+            InputKind::Handle { mode, .. } => match mode {
+                HandleMode::Borrow => ParamMode::Borrow,
+                HandleMode::Consume => ParamMode::Consume,
+                HandleMode::BorrowNullable => ParamMode::BorrowNullable,
+                HandleMode::ConsumeNullable => ParamMode::ConsumeNullable,
+            },
             InputKind::Unsigned64 { niche } => ParamMode::Unsigned64 {
                 niche: niche.clone(),
             },
@@ -1405,12 +1387,10 @@ fn classify_params(
 /// unchanged).
 fn classify_output(
     ext: &Declarations,
-    f: &prebindgen_registry::flat::Function,
     fplan: &JniFunctionPlan,
-    registry: &Registry,
     imports: &mut BTreeSet<String>,
 ) -> Option<OutputPlan> {
-    let unfold = registry.unfold_plans().get(&f.name);
+    let unfold = fplan.unfold.as_ref();
     // `builder_param` is the trailing **lambda** param (build / fold) as a
     // `(name, function-type)` pair. For the `Iterable` shape, the non-lambda
     // accumulator (`acc: A`) goes in `builder_lead` — it must precede
@@ -1752,9 +1732,7 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
 /// separate SAM param; the wrapper passes a per-thread capture to the extern,
 /// then after the native call redispatches to whichever channel fired.
 fn error_sink_parts(
-    f: &prebindgen_registry::flat::Function,
     fplan: &JniFunctionPlan,
-    registry: &Registry,
     imports: &mut BTreeSet<String>,
     r_ty: &KtType,
 ) -> Option<ErrorSink> {
@@ -1767,10 +1745,10 @@ fn error_sink_parts(
     // The typed domain channel exists only for a fallible fn with an error
     // plan; when present, both the interface spec and the error plan are.
     let domain = if let Some(domain_spec) = &ifaces.domain {
-        let error_plan = registry
-            .error_plans()
-            .get(&f.name)
-            .expect("domain handler ⇒ error plan");
+        let error_plan = fplan
+            .error
+            .as_ref()
+            .expect("domain handler ⇒ frozen error plan");
         // Per ze leaf: (raw capture Kotlin type, raw→typed wrap). The CAPTURE
         // is the raw twin (what the native side calls); the user's handler is
         // the TYPED interface — the redispatch wraps each raw slot.
@@ -2361,9 +2339,12 @@ pub(crate) fn kt_param_name(rust_ident: &str) -> String {
 /// documenting the REAL prototype after all expansions — one note per
 /// position a plan reshaped, phrased for the caller. `None` for an
 /// undocumented, unshaped fn.
-fn wrapper_kdoc(f: &prebindgen_registry::flat::Function, registry: &Registry) -> Option<String> {
+fn wrapper_kdoc(
+    f: &prebindgen_registry::flat::Function,
+    fplan: &JniFunctionPlan,
+) -> Option<String> {
     let prose = f.docs();
-    let notes = shape_notes(f, registry);
+    let notes = shape_notes(fplan);
     match (prose, notes) {
         (Some(p), Some(n)) => Some(format!("{p}\n\n{n}")),
         (Some(p), None) => Some(p),
@@ -2375,17 +2356,18 @@ fn wrapper_kdoc(f: &prebindgen_registry::flat::Function, registry: &Registry) ->
 /// Caller-facing notes for every boundary position an expansion reshaped:
 /// expanded params (what to pass instead of the Rust argument), decomposed
 /// returns (what the builder/fold receives), and error decompositions
-/// (what `onError` receives). Reads the same resolved plan maps the C7
-/// report uses.
-fn shape_notes(f: &prebindgen_registry::flat::Function, registry: &Registry) -> Option<String> {
-    let fn_ident = &f.name;
+/// (what `onError` receives). Reads the same frozen function plan the report
+/// uses.
+fn shape_notes(fplan: &JniFunctionPlan) -> Option<String> {
     let mut notes: Vec<String> = Vec::new();
 
-    let mut plans: Vec<(&syn::Ident, &prebindgen_registry::expand::FoldPlan)> = registry
-        .expansion_plans()
+    let mut plans: Vec<(&syn::Ident, &prebindgen_registry::expand::FoldPlan)> = fplan
+        .params
         .iter()
-        .filter(|((func, _), _)| func == fn_ident)
-        .map(|((_, param), plan)| (param, plan))
+        .filter_map(|param| match &param.form {
+            ParamForm::Expanded { plan, .. } => Some((&param.ident, plan.as_ref())),
+            ParamForm::Single(_) => None,
+        })
         .collect();
     plans.sort_by_key(|(p, _)| p.to_string());
     for (param, plan) in plans {
@@ -2425,7 +2407,7 @@ fn shape_notes(f: &prebindgen_registry::flat::Function, registry: &Registry) -> 
         ));
     }
 
-    if let Some(plan) = registry.unfold_plans().get(fn_ident) {
+    if let Some(plan) = &fplan.unfold {
         let source = plan.source.to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         match plan.delivery {
@@ -2445,7 +2427,7 @@ fn shape_notes(f: &prebindgen_registry::flat::Function, registry: &Registry) -> 
         }
     }
 
-    if let Some(plan) = registry.error_plans().get(fn_ident) {
+    if let Some(plan) = &fplan.error {
         let source = plan.source.to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         notes.push(format!(

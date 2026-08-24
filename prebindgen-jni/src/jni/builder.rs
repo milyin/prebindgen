@@ -172,6 +172,10 @@ impl Default for Declarations {
             local_fns: Vec::new(),
             iface_specs: Default::default(),
             fn_plans: Default::default(),
+            struct_plans: Default::default(),
+            sum_plans: Default::default(),
+            vec_build_plans: Default::default(),
+            generation: None,
         }
     }
 }

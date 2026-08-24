@@ -1201,20 +1201,6 @@ pub(crate) fn fixed_decon_ids(registry: &impl Conversions) -> std::collections::
     fixed
 }
 
-/// Element type keys whose whole-element fold is fixed (a synthesized
-/// single-leaf `Vec<T>` fold) — the leaf dual of [`fixed_decon_ids`], used
-/// by the declaration emitter for the hoisted appender singleton.
-pub(crate) fn fixed_leaf_element_keys(registry: &Registry) -> std::collections::HashSet<TypeKey> {
-    registry
-        .unfold_plans()
-        .values()
-        .chain(registry.callback_arg_plans().values())
-        .filter(|p| p.fixed_builder)
-        .filter_map(|p| p.element.as_ref())
-        .map(|el| el.key())
-        .collect()
-}
-
 /// Derive the spec for one identity — the SINGLE construction point behind
 /// [`Declarations::iface_spec`]. Any `syn` context is **looked up**, never
 /// rebuilt from the key: `Registry::reading` answers from the type table, and a
@@ -1279,6 +1265,9 @@ impl Declarations {
         registry: &impl Conversions,
         key: &SpecKey,
     ) -> Option<std::sync::Arc<IfaceSpec>> {
+        if let Some(generation) = &self.generation {
+            return generation.interface(key);
+        }
         let hit = self.iface_specs.borrow().get(key).cloned();
         if let Some(hit) = hit {
             #[cfg(debug_assertions)]

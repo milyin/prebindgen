@@ -1876,6 +1876,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 elem: v.elem,
                 by_ref: v.by_ref,
                 elem_wrappers: v.elem_wrappers,
+                helpers: v.helpers,
             }
         } else if let Some(sp) =
             crate::jni::emit::build_option_scalar_input_plan(ext, ident, reading)
@@ -1887,6 +1888,18 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             match entry.metadata.projection.as_ref().map(|p| p.kind.clone()) {
                 Some(ProjectionKind::Handle) => InputKind::Handle {
                     direct: entry.metadata.is_direct_handle(),
+                    mode: if reading
+                        .optional_inner()
+                        .is_some_and(|inner| inner.borrow_target().is_some())
+                    {
+                        crate::jni::HandleMode::BorrowNullable
+                    } else if reading.optional_inner().is_some() {
+                        crate::jni::HandleMode::ConsumeNullable
+                    } else if reading.borrow_target().is_some() {
+                        crate::jni::HandleMode::Borrow
+                    } else {
+                        crate::jni::HandleMode::Consume
+                    },
                 },
                 Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64 {
                     niche: entry.metadata.projection.as_ref().and_then(|p| {

@@ -687,12 +687,12 @@ fn iface_spec_memo_shares_one_derivation() {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// Function-plan memo (the #90 "build once, store" capstone): validation
-// and every emitter share ONE `JniFunctionPlan` per function ident.
+// Frozen generation-plan boundary: resolution drains every mutable planning
+// memo, and every emitter shares the immutable allocations thereafter.
 // ────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn fn_plan_memo_shares_one_derivation() {
+fn generation_plan_freezes_and_drains_derivations() {
     use prebindgen::SourceLocation;
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![(
@@ -708,21 +708,31 @@ fn fn_plan_memo_shares_one_derivation() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_do_thing)));
-    // resolve runs validation, which builds and stores every function's plan.
+    // Resolve runs validation, builds every function plan, then freezes and
+    // drains the mutable planning memos before returning the generator.
     let gen = jni.build_with(registry).expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
     let f = registry.flat().function("z_do_thing").expect("indexed");
 
-    // The plan is already in the memo (populated at resolve by validation) —
-    // repeated lookups return the SAME allocation, and it equals what a fresh
-    // `JniFunctionPlan::build` derives.
+    assert!(ext.fn_plans.borrow().is_empty());
+    assert!(ext.iface_specs.borrow().is_empty());
+    assert!(ext.struct_plans.borrow().is_empty());
+    assert!(ext.sum_plans.borrow().is_empty());
+    assert!(ext.vec_build_plans.borrow().is_empty());
+    let (functions, interfaces, structs, sums, vec_builds) = gen.generation_plan().counts();
+    assert_eq!(functions, 1);
+    assert!(interfaces >= 1, "the binding error interface is frozen");
+    assert_eq!(structs, 0);
+    assert_eq!(sums, 0);
+    assert_eq!(vec_builds, 0);
+
+    // Repeated writer-facing lookups return the same frozen allocation. A
+    // post-freeze fallback derivation would repopulate a memo and fail above.
     let a = ext.fn_plan(registry, f).expect("plan");
     let b = ext.fn_plan(registry, f).expect("plan");
     assert!(std::rc::Rc::ptr_eq(&a, &b), "one plan per function ident");
     assert_eq!(a.native_symbol, b.native_symbol);
-    let fresh = JniFunctionPlan::build(ext, registry, f).expect("fresh build");
-    assert_eq!(a.native_symbol, fresh.native_symbol);
-    assert_eq!(a.jni_method, fresh.jni_method);
+    assert!(ext.fn_plans.borrow().is_empty());
 }
 
 /// A callback identity is the same whether its args come from the **reading**

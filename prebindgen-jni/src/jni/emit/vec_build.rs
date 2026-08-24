@@ -39,6 +39,9 @@ pub(crate) struct VecBuildElem {
     /// only part a rebuild uses, and it rides in [`InputKind::VecBuild`], whose
     /// size every variant pays.
     pub elem_wrappers: Vec<&'static str>,
+    /// The canonical helper ABI shared by every function using this element
+    /// and by both the Rust and Kotlin synthetic-helper writers.
+    pub helpers: std::rc::Rc<VecBuildHelpers>,
 }
 
 /// `Some(..)` when `arg_ty` is a slice/`Vec` input whose element is a
@@ -147,27 +150,12 @@ pub(crate) fn vec_build_elem(
     // business. `unwrapped` and not `stripped_syntax` because this stays a model
     // node — it still has to answer `key`, `kind` and its own spelling.
     let elem = elem.unwrapped();
-    // The element must flatten; the probe ident is irrelevant here.
-    let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)
-        .ok()
-        .flatten()?;
-    // Recursive/optional element decomposition is intentionally outside this
-    // increment: retain the existing List/JObject collection path rather than
-    // silently changing the Vec helper ABI.
-    if plan.contains_nested
-        || plan.leaves.iter().any(|l| {
-            l.is_present_flag()
-                || l.wire.handle_target.is_some()
-                || l.entry().is_none()
-                || l.wire.staged()
-        })
-    {
-        return None;
-    }
+    let helpers = ext.vec_build_helpers(registry, elem)?;
     Some(VecBuildElem {
         elem: elem.clone(),
         by_ref,
         elem_wrappers,
+        helpers,
     })
 }
 
@@ -181,31 +169,19 @@ pub(crate) fn vec_build_elem(
 /// [`vec_build_elem`] answers with — so `Vec<Payload>` and `Vec<Box<Payload>>`
 /// land on one entry and get one trio, rather than two storages contending for
 /// the name `payloadVec` (#296).
-pub(crate) fn collect_vec_build_elem_types(
-    ext: &Declarations,
-    registry: &Registry,
-) -> Vec<TypeRef> {
-    let declared = ext.declared_functions();
-    let mut seen: std::collections::BTreeMap<String, TypeRef> = std::collections::BTreeMap::new();
-    // Over the model's params, which already carry a reading each — the
-    // `sig.inputs` walk had to re-derive one per argument.
-    for f in registry.flat().functions() {
-        if !declared.contains(&f.name) {
-            continue;
-        }
-        for p in &f.params {
-            if let Some(v) = vec_build_elem(ext, registry, &p.ty) {
-                seen.insert(v.elem.key().as_str().to_string(), v.elem);
-            }
-        }
-    }
-    seen.into_values().collect()
+pub(crate) fn collect_vec_build_helpers(ext: &Declarations) -> Vec<std::rc::Rc<VecBuildHelpers>> {
+    ext.generation
+        .as_deref()
+        .expect("Vec helper emission requires a frozen JNI generation plan")
+        .vec_builds()
 }
 
 /// One element type's `…VecNew/Push/Free` helper trio: the flatten plan whose
 /// leaves are the per-element push params, plus the camelCase base name
 /// (`payloadVec`) the Kotlin methods and Rust JNI symbols share.
 pub(crate) struct VecBuildHelpers {
+    /// Canonical element reading stored by the Rust helper trio.
+    pub elem: TypeRef,
     /// camelCase base, e.g. `"payloadVec"` (Kotlin method = `<base>New/Push/Free`).
     pub base: String,
     /// Element flatten plan (built with the synthetic param ident `e`).
@@ -216,40 +192,53 @@ pub(crate) struct VecBuildHelpers {
 /// doesn't flatten (caller keeps the `input_vec` path). The base name is derived
 /// from the element's **Kotlin** data-class short name (first char lowercased) so
 /// the generated methods read naturally (`Payload` → `payloadVec`).
-pub(crate) fn vec_build_helpers(
-    ext: &Declarations,
-    registry: &Registry,
-    elem: &TypeRef,
-) -> Option<VecBuildHelpers> {
-    let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)
-        .ok()
-        .flatten()?;
-    if plan.contains_nested
-        || plan.leaves.iter().any(|l| {
-            l.is_present_flag()
-                || l.wire.handle_target.is_some()
-                || l.entry().is_none()
-                || l.wire.staged()
-        })
-    {
-        return None;
+impl Declarations {
+    pub(crate) fn vec_build_helpers(
+        &self,
+        registry: &impl prebindgen_registry::Conversions,
+        elem: &TypeRef,
+    ) -> Option<std::rc::Rc<VecBuildHelpers>> {
+        let key = elem.key();
+        if let Some(generation) = &self.generation {
+            return generation.vec_build(&key);
+        }
+        if let Some(hit) = self.vec_build_plans.borrow().get(&key).cloned() {
+            return Some(hit);
+        }
+        let plan = build_flat_input_plan(self, registry, &format_ident!("e"), elem)
+            .ok()
+            .flatten()?;
+        if plan.contains_nested
+            || plan.leaves.iter().any(|l| {
+                l.is_present_flag()
+                    || l.wire.handle_target.is_some()
+                    || l.entry().is_none()
+                    || l.wire.staged()
+            })
+        {
+            return None;
+        }
+        let kt_fqn = self
+            .types
+            .get(&key)
+            .and_then(|c| c.name_spec.as_ref())
+            .map(|s| self.fqn_of(s))?;
+        let short = kt_fqn.rsplit('.').next().unwrap_or(&kt_fqn);
+        let mut chars = short.chars();
+        let base_lc = match chars.next() {
+            Some(f) => format!("{}{}", f.to_lowercase(), chars.as_str()),
+            None => short.to_string(),
+        };
+        let helper = std::rc::Rc::new(VecBuildHelpers {
+            elem: elem.clone(),
+            base: format!("{base_lc}Vec"),
+            plan,
+        });
+        self.vec_build_plans
+            .borrow_mut()
+            .insert(key, helper.clone());
+        Some(helper)
     }
-    let key = elem.key();
-    let kt_fqn = ext
-        .types
-        .get(&key)
-        .and_then(|c| c.name_spec.as_ref())
-        .map(|s| ext.fqn_of(s))?;
-    let short = kt_fqn.rsplit('.').next().unwrap_or(&kt_fqn);
-    let mut chars = short.chars();
-    let base_lc = match chars.next() {
-        Some(f) => format!("{}{}", f.to_lowercase(), chars.as_str()),
-        None => short.to_string(),
-    };
-    Some(VecBuildHelpers {
-        base: format!("{base_lc}Vec"),
-        plan,
-    })
 }
 
 /// Kotlin `external fun` short name for a vec helper (`payloadVecNew`), routed
@@ -284,17 +273,13 @@ fn vec_helper_symbol(ext: &Declarations, base: &str, suffix: &str) -> String {
 /// push loop free of a per-element failure check.
 pub(crate) fn build_vec_build_helper_items(
     ext: &Declarations,
-    registry: &Registry,
     emit: &prebindgen_registry::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
-    for elem_reading in collect_vec_build_elem_types(ext, registry) {
+    for h in collect_vec_build_helpers(ext) {
         // Generated Rust spells `spell()`; the reading is what the plan
         // and the key are taken from.
-        let elem = emit.spell(&elem_reading);
-        let Some(h) = vec_build_helpers(ext, registry, &elem_reading) else {
-            continue;
-        };
+        let elem = emit.spell(&h.elem);
         let new_sym = vec_helper_symbol(ext, &h.base, "New");
         let push_sym = vec_helper_symbol(ext, &h.base, "Push");
         let free_sym = vec_helper_symbol(ext, &h.base, "Free");
