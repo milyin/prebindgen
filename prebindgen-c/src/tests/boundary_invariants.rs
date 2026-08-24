@@ -382,13 +382,23 @@ fn no_raw_pointer_is_dereferenced_without_a_null_check() {
 #[test]
 fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
     let source = include_str!("../emit.rs");
-    let wrapper = source
-        .split("pub(super) fn emit_function_wrapper")
-        .nth(1)
-        .expect("ordinary wrapper renderer")
-        .split("fn alias_slot_of")
-        .next()
-        .expect("end of ordinary wrapper renderer");
+    let file = syn::parse_file(source).expect("C emitter parses");
+    let wrapper = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(item) => Some(item),
+            _ => None,
+        })
+        .flat_map(|item| &item.items)
+        .find_map(|item| match item {
+            syn::ImplItem::Fn(method) if method.sig.ident == "emit_function_wrapper" => {
+                Some(method.block.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("ordinary wrapper renderer");
+    let wrapper: String = wrapper.split_whitespace().collect();
 
     for forbidden in [
         "lower_shape(",
@@ -416,34 +426,12 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
 }
 
 #[test]
-fn callback_rendering_consumes_only_frozen_artifacts() {
-    let source = include_str!("../trait_impl.rs");
-    let renderer = source
-        .split("fn prereq_callback_artifacts")
-        .nth(1)
-        .expect("callback artifact renderer")
-        .split("\n}\n\nimpl CbindgenBuilder")
-        .next()
-        .expect("end of callback artifact renderer");
-
-    for forbidden in [
-        "Registry",
-        "compiled",
-        "in_frag(",
-        "out_frag(",
-        "reading_of(",
-    ] {
-        assert!(
-            !renderer.contains(forbidden),
-            "callback renderer resumed planning through {forbidden}"
-        );
-    }
-    for required in [".generation", ".artifacts()", ".payload().render(emit)"] {
-        assert!(
-            renderer.contains(required),
-            "callback renderer stopped consuming frozen artifacts through {required}"
-        );
-    }
+fn callback_renderer_accepts_only_the_frozen_plan() {
+    let renderer: fn(
+        &prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>,
+        &prebindgen_registry::Emit,
+    ) -> Vec<syn::Item> = crate::chain::render_callback_artifacts;
+    let _ = renderer;
 }
 
 #[test]
@@ -451,6 +439,8 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
     let sources = [
         include_str!("../lib.rs"),
         include_str!("../builder.rs"),
+        include_str!("../chain.rs"),
+        include_str!("../compile.rs"),
         include_str!("../emit.rs"),
         include_str!("../trait_impl.rs"),
     ]

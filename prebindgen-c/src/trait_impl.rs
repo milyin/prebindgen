@@ -404,8 +404,10 @@ impl CbindgenBuilder {
         >,
         registry: &'v Registry,
     ) -> Result<CPlanParts, String> {
-        use prebindgen_registry::generation::{ArtifactId, ArtifactInput, ArtifactPlan};
-        use prebindgen_registry::recipe::{Crossing, Direction, Role, Site};
+        use prebindgen_registry::{
+            generation::{ArtifactId, ArtifactInput, ArtifactPlan},
+            recipe::{Crossing, Direction, Role, Site},
+        };
 
         struct PendingCallback {
             callback: crate::chain::CallbackArtifact,
@@ -1478,19 +1480,6 @@ impl CbindgenBuilder {
             }
         )
     }
-
-    /// Render callback declarations and Invoke helpers from the registry-owned
-    /// immutable artifacts. No model or conversion-table access is available
-    /// here; each artifact already names and carries its callback-argument sites.
-    fn prereq_callback_artifacts(&self, emit: &prebindgen_registry::Emit) -> Vec<syn::Item> {
-        self.generation
-            .as_ref()
-            .expect("C generation plan was not frozen")
-            .artifacts()
-            .filter(|artifact| artifact.id().kind() == "c-callback")
-            .flat_map(|artifact| artifact.payload().render(emit))
-            .collect()
-    }
 }
 
 impl CbindgenBuilder {
@@ -1739,7 +1728,12 @@ impl Prebindgen for CbindgenBuilder {
         items.extend(self.prereq_value_opaque(registry));
         items.extend(self.prereq_enums(registry, emit));
         items.extend(self.prereq_tagged_unions(registry, emit));
-        items.extend(self.prereq_callback_artifacts(emit));
+        items.extend(crate::chain::render_callback_artifacts(
+            self.generation
+                .as_ref()
+                .expect("C generation plan was not frozen"),
+            emit,
+        ));
         items.extend(self.prereq_domain_constants(registry));
         items
     }

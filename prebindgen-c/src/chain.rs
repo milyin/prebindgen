@@ -9,7 +9,7 @@
 use prebindgen_registry::{
     chain::{self, Chain as _},
     flat::{Alternative, TypeRef},
-    generation::SiteId,
+    generation::{GenerationPlan, SiteId},
     recipe::Mode,
     write::RustFunction,
     Emit,
@@ -360,6 +360,22 @@ impl CArtifact {
             Self::Callback(callback) => callback.render(emit),
         }
     }
+}
+
+/// Render the C callback artifacts from the frozen registry plan.
+///
+/// The deliberately narrow signature is the callback-rendering boundary: final
+/// emission can spell retained source types through [`Emit`], but it cannot
+/// reopen the registry or the adapter's mutable compilation cache.
+pub(crate) fn render_callback_artifacts(
+    generation: &GenerationPlan<crate::compile::CRepresentation>,
+    emit: &Emit,
+) -> Vec<syn::Item> {
+    generation
+        .artifacts()
+        .filter(|artifact| artifact.id().kind() == "c-callback")
+        .flat_map(|artifact| artifact.payload().render(emit))
+        .collect()
 }
 
 /// One C callback argument's already-resolved wire delivery.
