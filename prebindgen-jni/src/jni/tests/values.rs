@@ -1672,6 +1672,18 @@ fn convert_via_local_fns() {
     let rc: String = rust.split_whitespace().collect();
     assert!(rc.contains("crate::conv::label_in("), "{rust}");
     assert!(rc.contains("crate::conv::label_out("), "{rust}");
+    assert!(
+        rc.contains("let__chain_s0=JString_to_String_")
+            && rc.contains("let__chain_s1=String_to_Label_")
+            && rc.contains("Result::<_,__JniErr>::Ok(__chain_s1)"),
+        "the ordinary input must invoke its frozen terminal-then-stage pipeline:\n{rust}"
+    );
+    assert!(
+        rc.contains("let__chain_s0=Label_to_String_")
+            && rc.contains("String_to_JString_")
+            && rc.contains("env,__chain_s0)"),
+        "the ordinary output must invoke its frozen stage-then-terminal pipeline:\n{rust}"
+    );
 }
 
 /// Two input conversions on one decl are contradictory — decl-time panic.

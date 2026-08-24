@@ -1002,6 +1002,24 @@ impl<R: Conversions> JCompile<'_, R> {
         }
     }
 
+    fn planned_pipeline(
+        direction: Direction,
+        mode: Mode,
+        frag: &JFrag,
+    ) -> crate::jni::chain::JPipeline {
+        // A root output is already the source call's exact return spelling.
+        // Child composition may need to clone a borrowed projection before an
+        // owned converter consumes it; the root must pass its borrow through.
+        let mode = match direction {
+            Direction::Construct => mode,
+            Direction::Deconstruct => Mode::Owned,
+        };
+        crate::jni::chain::JPipeline::new(
+            frag.conv.destination.clone(),
+            Self::planned_child_mode(direction, mode, frag),
+        )
+    }
+
     /// Describe a Product as one tuple intermediate. The registry owns the
     /// field walk, tuple construction/destruction, child calls and `?`
     /// propagation; JNI contributes only child converter contracts and ABI
@@ -2114,6 +2132,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             optional,
             as_enum_value,
             enum_niche,
+            pipeline: Self::planned_pipeline(Direction::Construct, bound.crossing.mode(), root),
             kind,
         })))
     }
@@ -2218,6 +2237,15 @@ pub(crate) struct Conv(std::rc::Rc<JFrag>);
 impl Conv {
     pub(crate) fn activate(&self) {
         self.0.rust.mark_reachable();
+    }
+
+    pub(crate) fn pipeline(
+        &self,
+        direction: Direction,
+        mode: Mode,
+    ) -> crate::jni::chain::JPipeline {
+        self.activate();
+        JCompile::<Registry>::planned_pipeline(direction, mode, &self.0)
     }
 }
 
@@ -2444,8 +2472,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let (surface, enums) = crate::jni::fn_plan::ReturnSurface::classify(self.decls, declared);
         crate::jni::fn_plan::ValueOutputPlan {
             is_convert: self.declared_return.is_some(),
-            target_ty: bound.crossing.spelled().clone(),
-            wire_ty: root.conv.destination.clone(),
+            pipeline: Self::planned_pipeline(Direction::Deconstruct, bound.crossing.mode(), root),
             surface,
             is_enum: enums.is_enum,
             is_option_enum: enums.is_option_enum,

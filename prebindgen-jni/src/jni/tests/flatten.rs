@@ -392,7 +392,7 @@ fn rust_side_only_error_type() {
 fn rust_side_only_input_type() {
     let loc = myflat_loc();
     let fns: &[&str] = &[
-        "pub fn z_opts_new(retries: i32, verbose: bool) -> ZOpts { unimplemented!() }",
+        "pub fn z_opts_new(retries: i32, label: Label, verbose: bool) -> ZOpts { unimplemented!() }",
         "pub fn z_run(opts: ZOpts) -> i64 { unimplemented!() }",
     ];
     let items: Vec<(syn::Item, SourceLocation)> = fns
@@ -407,6 +407,12 @@ fn rust_side_only_input_type() {
 
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
+        .convert(
+            prebindgen_registry::convert!(Label).input(
+                prebindgen_registry::fun!(crate::label_in)
+                    .sig(prebindgen_registry::sig!((s: String) -> Label)),
+            ),
+        )
         .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_run)))
         .expand(
             prebindgen_registry::expand_param!(ZOpts)
@@ -422,6 +428,11 @@ fn rust_side_only_input_type() {
     let rc: String = rust.split_whitespace().collect();
     // The wrapper folds the ctor Rust-side.
     assert!(rc.contains("myflat::z_opts_new("), "{rust}");
+    assert!(
+        rc.contains("let__chain_s0=JString_to_String_")
+            && rc.contains("let__chain_s1=String_to_Label_"),
+        "the expansion leaf must invoke its frozen terminal-then-stage pipeline:\n{rust}"
+    );
 
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
@@ -435,7 +446,7 @@ fn rust_side_only_input_type() {
     // The Kotlin wrapper takes the ctor's flattened ingredients (prefixed by
     // the param name), not a ZOpts object; no ZOpts class exists.
     assert!(
-        all.contains("funzRun(optsRetries:Int,optsVerbose:Boolean"),
+        all.contains("funzRun(optsRetries:Int,optsLabel:String,optsVerbose:Boolean"),
         "{all}"
     );
     assert!(!all.contains("classZOpts("), "{all}");

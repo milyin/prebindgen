@@ -615,7 +615,9 @@ pub(crate) fn render_extern_decl(
             // type so the wrapper receives the useful boxed/static type.
             match &projection {
                 Some(p) => Some(projection_wire_return(p)),
-                None if JniPrim::from_wire(&v.wire_ty).is_some() => kotlin_for_wire(&v.wire_ty),
+                None if JniPrim::from_wire(v.pipeline.wire()).is_some() => {
+                    kotlin_for_wire(v.pipeline.wire())
+                }
                 None if v.is_enum => Some(KtType::int()),
                 None if v.is_option_enum => Some(KtType::int().nullable()),
                 None => kt_return,

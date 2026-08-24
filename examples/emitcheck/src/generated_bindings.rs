@@ -591,7 +591,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_emitcheck_JNINative_zSampleSub<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/emitcheck/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let cb = match JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15(&mut env, &cb) {
+    let cb = match JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15(
+        &mut env,
+        &(cb),
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(

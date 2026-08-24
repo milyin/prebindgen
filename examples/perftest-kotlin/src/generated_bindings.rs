@@ -3797,7 +3797,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_largeObjectInputS
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let value = match JObject_to_ObjectBoundary64Object_ecaf00ac(&mut env, &value) {
+    let value = match JObject_to_ObjectBoundary64Object_ecaf00ac(&mut env, &(value)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3839,7 +3839,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadHandlerNew
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let f = match JObject_to_impl_Fn_Payload_Send_Sync_static_96d50906(&mut env, &f) {
+    let f = match JObject_to_impl_Fn_Payload_Send_Sync_static_96d50906(&mut env, &(f)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3881,7 +3881,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadVecHandler
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let f = match JObject_to_impl_Fn_Payload_Send_Sync_static_95073668(&mut env, &f) {
+    let f = match JObject_to_impl_Fn_Payload_Send_Sync_static_95073668(&mut env, &(f)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3924,7 +3924,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallback<'
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+    let s = match jlong_to_Storage_1b233abd(&mut env, &(s)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3938,7 +3938,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallback<'
             return ();
         }
     };
-    let handler = match jlong_to_PayloadHandler_d61fd890(&mut env, &handler) {
+    let handler = match jlong_to_PayloadHandler_d61fd890(&mut env, &(handler)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3981,7 +3981,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallbackVe
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+    let s = match jlong_to_Storage_1b233abd(&mut env, &(s)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3995,7 +3995,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallbackVe
             return ();
         }
     };
-    let handler = match jlong_to_PayloadVecHandler_b32d2812(&mut env, &handler) {
+    let handler = match jlong_to_PayloadVecHandler_b32d2812(&mut env, &(handler)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4038,7 +4038,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGet<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+    let s = match jlong_to_Storage_1b233abd(&mut env, &(s)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4141,7 +4141,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGetVec<'a>
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+    let s = match jlong_to_Storage_1b233abd(&mut env, &(s)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4285,7 +4285,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+    let mut s = match jlong_to_Storage_1b233abd(&mut env, &(s)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4349,7 +4349,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+    let mut s = match jlong_to_Storage_1b233abd(&mut env, &(s)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4409,7 +4409,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutSlice<'
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+    let mut s = match jlong_to_Storage_1b233abd(&mut env, &(s)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4452,7 +4452,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenGcNew<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let value = match jlong_to_i64_fbf9a9bc(&mut env, &value) {
+    let value = match jlong_to_i64_fbf9a9bc(&mut env, &(value)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4494,7 +4494,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenGcValue<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let t = match jlong_to_TokenGc_5e58352a(&mut env, &t) {
+    let t = match jlong_to_TokenGc_5e58352a(&mut env, &(t)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4536,7 +4536,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenNew<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let value = match jlong_to_i64_fbf9a9bc(&mut env, &value) {
+    let value = match jlong_to_i64_fbf9a9bc(&mut env, &(value)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4578,7 +4578,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenValue<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let t = match jlong_to_Token_4f7adafa(&mut env, &t) {
+    let t = match jlong_to_Token_4f7adafa(&mut env, &(t)) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
