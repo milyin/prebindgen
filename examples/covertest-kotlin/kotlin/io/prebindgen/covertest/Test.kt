@@ -112,6 +112,7 @@ import io.prebindgen.covertest.model.taggedRank
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
 import io.prebindgen.covertest.model.priorityNested
+import io.prebindgen.covertest.model.priorityNestedState
 import io.prebindgen.covertest.model.priorityWeight
 import io.prebindgen.covertest.model.stampNew
 import io.prebindgen.covertest.model.stampSeries
@@ -381,6 +382,10 @@ fun main() {
         check(priorityNested(0, boom) == null)
         check(priorityNested(1, boom) == null)
         check(priorityNested(2, boom) == Priority.HIGH)
+        // On input, null selects the outer None sentinel. The collapsed
+        // Priority? surface cannot construct Rust's inner Some(None) state.
+        check(priorityNestedState(null, boom) == 0)
+        check(priorityNestedState(Priority.HIGH, boom) == 2)
         // enum_class surface: value + fromInt round-trip.
         check(Priority.HIGH.value == 2)
         check(Priority.fromInt(0) == Priority.LOW)

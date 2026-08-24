@@ -174,6 +174,18 @@ pub fn priority_nested(which: u8) -> Option<Option<Priority>> {
     }
 }
 
+/// Report which nested optional state arrived through the JNI input. Kotlin's
+/// collapsed `Priority?` surface can express the outer `None` and
+/// `Some(Some(_))`, but not the inner `Some(None)` state.
+#[prebindgen]
+pub fn priority_nested_state(p: Option<Option<Priority>>) -> i32 {
+    match p {
+        None => 0,
+        Some(None) => 1,
+        Some(Some(_)) => 2,
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Reading — a data-carrying enum, i.e. a sum type (→ Kotlin `sealed interface`).
 // ─────────────────────────────────────────────────────────────────────────────

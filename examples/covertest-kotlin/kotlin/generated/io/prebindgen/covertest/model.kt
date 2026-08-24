@@ -1630,6 +1630,18 @@ public fun priorityNested(which: Int, onError: JniErrorHandler<Priority?>): Prio
 }
 
 /**
+ * Report which nested optional state arrived through the JNI input. Kotlin's
+ * collapsed `Priority?` surface can express the outer `None` and
+ * `Some(Some(_))`, but not the inner `Some(None)` state.
+ */
+public fun priorityNestedState(p: Priority?, onError: JniErrorHandler<Int>): Int {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.priorityNestedState(p?.value ?: -2147483647, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * Build a [`Stamp`] (data-class **return**).
  *
  * The Rust `Stamp` result is delivered decomposed: the builder callback receives (`secs`, `nanos`).

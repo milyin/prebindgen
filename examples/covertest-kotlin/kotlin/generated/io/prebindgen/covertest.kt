@@ -1405,6 +1405,9 @@ internal object CovNative {
     external fun priorityNested(which: Int, errorSink: Any): Int
 
     @JvmSynthetic
+    external fun priorityNestedState(p: Int, errorSink: Any): Int
+
+    @JvmSynthetic
     external fun priorityOr(p: Int, fallback: Int, errorSink: Any): Int
 
     @JvmSynthetic

@@ -554,6 +554,7 @@ fn main() {
                 .fun(fun!(priority_weight))
                 .fun(fun!(priority_or))
                 .fun(fun!(priority_nested))
+                .fun(fun!(priority_nested_state))
                 .fun(fun!(stamp_new))
                 .fun(fun!(stamp_series))
                 // The three convert!-source-kind fns (conversions declared
