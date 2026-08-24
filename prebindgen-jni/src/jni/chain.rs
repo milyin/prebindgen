@@ -265,26 +265,112 @@ impl JChild {
 #[derive(Clone)]
 pub(crate) struct JPipeline {
     wire: syn::Type,
-    child: JChild,
+    body: JPipelineBody,
+}
+
+#[derive(Clone)]
+enum JPipelineBody {
+    Converter(JChild),
+    VecHandle(Box<JVecHandleInput>),
+}
+
+/// A parameter-site ABI that borrows or consumes the transient `Vec<T>` built
+/// by Kotlin's push-helper trio. The site retains model readings and wrapper
+/// policy only; Rust types are spelled when the final wrapper is rendered.
+#[derive(Clone)]
+struct JVecHandleInput {
+    source: TypeRef,
+    elem: TypeRef,
+    by_ref: bool,
+    elem_wrappers: Vec<&'static str>,
 }
 
 impl JPipeline {
     pub(crate) fn new(wire: syn::Type, child: JChild) -> Self {
-        Self { wire, child }
+        Self {
+            wire,
+            body: JPipelineBody::Converter(child),
+        }
+    }
+
+    pub(crate) fn vec_handle(
+        source: TypeRef,
+        elem: TypeRef,
+        by_ref: bool,
+        elem_wrappers: Vec<&'static str>,
+    ) -> Self {
+        Self {
+            wire: syn::parse_quote!(jni::sys::jlong),
+            body: JPipelineBody::VecHandle(Box::new(JVecHandleInput {
+                source,
+                elem,
+                by_ref,
+                elem_wrappers,
+            })),
+        }
     }
 
     pub(crate) fn wire(&self) -> &syn::Type {
         &self.wire
     }
 
-    /// Render the already-planned call graph around `value`.
-    pub(crate) fn invoke(&self, value: TokenStream) -> TokenStream {
-        let call = self.child.invoke_with_env(quote!(&mut env), value);
-        if self.child.stages.is_empty() {
-            call
-        } else {
-            quote!((|| -> ::core::result::Result<_, __JniErr> { #call })())
+    /// Render a site operation that cannot fail. Terminal converters keep
+    /// their `Result` contract; the transient Vec-handle ABI is a direct
+    /// borrow or move and should not acquire an unreachable error branch just
+    /// because it now shares the ordinary decode scaffold.
+    pub(crate) fn invoke_infallible(&self, value: TokenStream, emit: &Emit) -> Option<TokenStream> {
+        match &self.body {
+            JPipelineBody::VecHandle(plan) => Some(plan.invoke(value, emit)),
+            JPipelineBody::Converter(_) => None,
         }
+    }
+
+    /// Render the already-planned call graph around `value`.
+    pub(crate) fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream {
+        match &self.body {
+            JPipelineBody::Converter(child) => {
+                let call = child.invoke_with_env(quote!(&mut env), value);
+                if child.stages.is_empty() {
+                    call
+                } else {
+                    quote!((|| -> ::core::result::Result<_, __JniErr> { #call })())
+                }
+            }
+            JPipelineBody::VecHandle(plan) => {
+                let value = plan.invoke(value, emit);
+                quote!(::core::result::Result::<_, __JniErr>::Ok(#value))
+            }
+        }
+    }
+}
+
+impl JVecHandleInput {
+    fn invoke(&self, handle: TokenStream, emit: &Emit) -> TokenStream {
+        let elem = emit.spell_ty(&self.elem);
+        if self.by_ref {
+            return quote!(unsafe {
+                OwnedObject::from_raw(#handle as *const Vec<#elem>)
+            });
+        }
+
+        let taken = quote!(unsafe {
+            ::core::mem::take(&mut *(#handle as *mut Vec<#elem>))
+        });
+        let taken = if self.elem_wrappers.is_empty() {
+            taken
+        } else {
+            let wrapped =
+                super::trait_impl::build_through_wrappers(&self.elem_wrappers, quote!(__e))
+                    .expect("Vec-handle planning accepted this element spelling");
+            quote!(
+                #taken
+                    .into_iter()
+                    .map(|__e| #wrapped)
+                    .collect::<Vec<_>>()
+            )
+        };
+        super::trait_impl::build_through_erased_wrappers(&self.source, taken)
+            .expect("Vec-handle planning accepted this run spelling")
     }
 }
 

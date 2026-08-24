@@ -7,6 +7,7 @@ pub(crate) struct OwnedObject<T: ?Sized> {
 }
 impl<T: ?Sized> std::ops::Deref for OwnedObject<T> {
     type Target = T;
+    #[inline]
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.ptr }
     }

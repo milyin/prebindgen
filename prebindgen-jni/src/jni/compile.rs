@@ -2054,16 +2054,18 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
 
         let flat_plan = crate::jni::emit::build_flat_input_plan(ext, registry, ident, reading)
             .map_err(|e| plan_error(crate::jni::fn_plan::PlanError::UnflattenableDataClass(e)))?;
+        let mut site_pipeline = None;
         let kind = if let Some(v) = (!expanded)
             .then(|| crate::jni::emit::vec_build_elem(ext, registry, reading))
             .flatten()
         {
-            InputKind::VecBuild {
-                elem: v.elem,
-                by_ref: v.by_ref,
-                elem_wrappers: v.elem_wrappers,
-                helpers: v.helpers,
-            }
+            site_pipeline = Some(crate::jni::chain::JPipeline::vec_handle(
+                reading.clone(),
+                v.elem,
+                v.by_ref,
+                v.elem_wrappers,
+            ));
+            InputKind::VecBuild { helpers: v.helpers }
         } else if bound.recipe.name() == &crate::jni::recipes::pair() {
             let plan = optional_pair_plan(ext, ident, reading, root).ok_or_else(|| {
                 JErr::Refused(format!(
@@ -2131,7 +2133,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             optional,
             as_enum_value,
             enum_niche,
-            pipeline: Self::planned_pipeline(Direction::Construct, bound.crossing.mode(), root),
+            pipeline: site_pipeline.unwrap_or_else(|| {
+                Self::planned_pipeline(Direction::Construct, bound.crossing.mode(), root)
+            }),
             kind,
         })))
     }
