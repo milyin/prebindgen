@@ -607,7 +607,7 @@ impl CbindgenBuilder {
             )
         });
         let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
-        self.callbacks.insert(key.clone(), CbCfg::new(args));
+        self.callbacks.insert(key.clone(), CbCfg::new());
         self.current = Some(CurrentDecl::Callback(key));
         self
     }
@@ -680,56 +680,10 @@ impl CbindgenBuilder {
         }
     }
 
-    /// If `ty` is `&[E]` (a shared slice borrow) whose element `E` is a declared
-    /// **inline-opaque by-value** type ([`Self::repr_c_struct`] /
-    /// [`Self::opaque_data_struct`] / [`Self::opaque_owned_struct`] — all in
-    /// `value_opaque`), return `E`. Such a type's C counterpart is layout-identical
-    /// to the Rust value (size+align asserted by a generated `const _`), so a
-    /// `*const counterpart` block reinterprets to `&[E]` zero-copy — exactly as the
-    /// single-`&E` input converter reinterprets one element. Scalar slices take the
-    /// separate [`scalar_slice_elem`](super::scalar_slice_elem) path; other element
-    /// kinds (e.g. `data_struct`, whose wire copies each field) are unsupported here.
-    pub(super) fn value_opaque_slice_elem(&self, ty: &syn::Type) -> Option<syn::Type> {
-        let syn::Type::Reference(r) = ty else {
-            return None;
-        };
-        if r.mutability.is_some() {
-            return None;
-        }
-        let syn::Type::Slice(s) = &*r.elem else {
-            return None;
-        };
-        let elem = (*s.elem).clone();
-        self.value_opaque
-            .contains_key(&TypeKey::from_type(&elem))
-            .then_some(elem)
-    }
-
-    /// For a `&[E]` callback-argument slice, return `(src_elem, c_elem_wire)`:
-    /// the fully-qualified Rust element type and the C element wire it crosses as
-    /// (a scalar crosses as itself; an inline-opaque `E` crosses as its layout-
-    /// identical counterpart, e.g. `payload_t`). Drives the two-component
-    /// `(*const c_elem_wire, size_t)` lowering of the closure `call` param in
-    /// `prereq_callback_structs` / `dispatch_fn_input`. `None` for non-slice args.
-    pub(super) fn callback_slice_elem_wire(
-        &self,
-        ty: &syn::Type,
-    ) -> Option<(syn::Type, syn::Type)> {
-        if let Some(elem) = self.value_opaque_slice_elem(ty) {
-            let wire = self
-                .value_opaque_ty(&elem)
-                .expect("value_opaque_slice_elem guaranteed a value_opaque element")
-                .clone();
-            return Some((self.src_ty(&elem), wire));
-        }
-        scalar_slice_elem(ty).map(|elem| (elem.clone(), elem))
-    }
-
     /// Wire-only callback-slice classification for the Invoke planner.
     ///
-    /// The declaration-side [`Self::callback_slice_elem_wire`] also returns a
-    /// source element spelling. Resolution deliberately does not: the shared
-    /// Invoke composer owns that spelling at final render time.
+    /// Resolution retains only the adapter-owned wire; the shared Invoke
+    /// composer owns the source spelling until final render time.
     pub(super) fn callback_slice_elem_wire_type_of(&self, ty: &TypeRef) -> Option<syn::Type> {
         let elem = super::r_shared_slice_elem(ty)?;
         self.value_opaque_ty_of(&elem.key())
@@ -758,20 +712,9 @@ impl CbindgenBuilder {
             .or_else(|| self.tagged_unions.get(key))
     }
 
-    /// The opaque counterpart type of a declared inline-opaque type, if any.
-    pub(super) fn value_opaque_ty(&self, ty: &syn::Type) -> Option<&syn::Type> {
-        self.value_opaque_ty_of(&TypeKey::from_type(ty))
-    }
-
-    /// [`Self::value_opaque_ty`] off the **identity**, for a caller holding a
-    /// reading — which is the whole selector chain.
+    /// The inline-opaque C wire type by semantic identity.
     pub(super) fn value_opaque_ty_of(&self, key: &TypeKey) -> Option<&syn::Type> {
         self.value_opaque.get(key).map(|c| &c.opaque)
-    }
-
-    /// [`Self::value_opaque_slice_elem`] off the classification.
-    pub(super) fn r_value_opaque_slice_elem<'t>(&self, t: &'t TypeRef) -> Option<&'t TypeRef> {
-        super::r_shared_slice_elem(t).filter(|e| self.value_opaque.contains_key(&e.key()))
     }
 
     /// Type keys used as a takeable callback parameter (any `.takeable_param(idx)`
@@ -873,13 +816,6 @@ impl CbindgenBuilder {
     pub(super) fn callback_c_ident(&self, key: &CallbackKey) -> syn::Ident {
         format_ident!("{}", self.callback_c_name(key))
     }
-}
-
-/// Rebuild the canonical `impl Fn(args...) + Send + Sync + 'static` type from an
-/// argument list (matching the source spelling so its [`TypeKey`] round-trips —
-/// see `core::resolve`'s reconstruction).
-pub(super) fn callback_fn_type(args: &[syn::Type]) -> syn::Type {
-    syn::parse_quote!(impl Fn(#(#args),*) + Send + Sync + 'static)
 }
 
 /// Human-readable description of the current declaration, for panic messages.

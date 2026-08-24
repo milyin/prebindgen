@@ -37,7 +37,7 @@ pub(crate) enum CShape {
     Invoke(Vec<FragmentUse>),
 }
 
-/// One already-composed C wire-value operation used by an ordinary boundary site.
+/// One already-composed C wire-value operation reused by ordinary and callback sites.
 #[derive(Clone)]
 pub(crate) enum CValue {
     Direct {
@@ -65,6 +65,27 @@ pub(crate) enum CValue {
 }
 
 impl CValue {
+    pub(crate) fn direct(&self) -> Option<(&syn::Type, &CCall)> {
+        match self {
+            Self::Direct {
+                wire, converter, ..
+            } => Some((wire, converter)),
+            _ => None,
+        }
+    }
+
+    /// Whether every terminal leaf occupies a real C wire. Structural values
+    /// are valid only when the registry-composed children they terminate in are.
+    pub(crate) fn has_abi(&self) -> bool {
+        match self {
+            Self::Direct { wire, .. } => !marker_destination(wire),
+            Self::Optional { inner, .. } => inner.has_abi(),
+            Self::OwnedSequence { element_wire, .. }
+            | Self::BorrowedSequence { element_wire, .. } => !marker_destination(element_wire),
+            Self::BorrowedInput { .. } => true,
+        }
+    }
+
     pub(crate) fn slots(&self) -> usize {
         match self {
             Self::Direct { .. } => 1,
@@ -288,7 +309,7 @@ impl Representation for CRepresentation {
     type Cleanup = ();
     type FailureRoute = CFailureRoute;
     type AbiLayout = CValue;
-    type Artifact = ();
+    type Artifact = crate::chain::CArtifact;
 }
 
 /// The C adapter's answer for one crossing.
@@ -315,7 +336,7 @@ pub(crate) struct CFrag {
     pub(crate) yields: Yield,
     /// Registry-checkable shape edges retained beside the C operation payload.
     pub(crate) shape: CShape,
-    /// Frozen ordinary-site wire lowering. Callback delivery has its own stage.
+    /// Frozen site wire layout and encoder, shared by ordinary and callback sites.
     pub(crate) value: CValue,
 }
 
@@ -541,8 +562,8 @@ impl<R: Conversions> CCompile<'_, R> {
 
 impl<R: Conversions> Compile for CCompile<'_, R> {
     type Fragment = CFrag;
-    /// Ordinary C signatures and calls render from this immutable site plan.
-    /// Callback delivery is the next migration boundary.
+    /// C signatures, calls, and callback arguments render from this immutable
+    /// site plan.
     type Plan = SitePlan<CRepresentation>;
     type Error = String;
 
@@ -721,13 +742,9 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             // A `&[E]` is the only run C builds a Rust value out of, and it does
             // it zero-copy from the caller's own block.
             Direction::Construct => self.gen.in_slice(ty),
-            // A `&[E]` callback argument is delivered by reference and has its
-            // own marker; every other run is lowered structurally from the
-            // element's.
-            Direction::Deconstruct => self
-                .gen
-                .out_slice_marker(ty)
-                .or_else(|| Some(self.gen.out_arity_marker("vec", ty.sequence_elem()?))),
+            // A deconstructed run has no single wire of its own. The frozen
+            // CValue below carries its pointer-plus-length ABI and encoder.
+            Direction::Deconstruct => Some(self.gen.out_arity_marker("vec", &inner.source)),
         };
         let mut fragment = self.wrap(at, "no C representation for this run", conv)?;
         fragment.shape = CShape::Sequence(fragment_use(inner));
@@ -1062,10 +1079,16 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         let Some(args) = at.crossing.value().callback_args() else {
             return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
-        let (destination, function) = self
-            .gen
-            .dispatch_fn_input(at.crossing.spelled(), args, Some(fragments), self.registry)
-            .ok_or_else(|| refuse(at, "undeclared callback signature"))?;
+        let key: CallbackKey = args.iter().map(|arg| arg.key()).collect();
+        if !self.gen.callbacks.contains_key(&key) {
+            return Err(refuse(at, "undeclared callback signature"));
+        }
+        let c_struct = self.gen.callback_c_ident(&key);
+        let destination: syn::Type = syn::parse_quote!(#c_struct);
+        let function = CFunction::deferred_invoke(format_ident!(
+            "__cbg_in_{}",
+            self.gen.callback_c_name(&key)
+        ));
         let value = CValue::Direct {
             wire: destination.clone(),
             converter: function.call().clone(),

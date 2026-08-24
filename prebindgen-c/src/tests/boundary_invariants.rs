@@ -386,7 +386,7 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
         .split("pub(super) fn emit_function_wrapper")
         .nth(1)
         .expect("ordinary wrapper renderer")
-        .split("pub(super) fn lower_shape")
+        .split("fn alias_slot_of")
         .next()
         .expect("end of ordinary wrapper renderer");
 
@@ -411,6 +411,63 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
         assert!(
             wrapper.contains(required),
             "ordinary wrapper renderer stopped consuming frozen plans through {required}"
+        );
+    }
+}
+
+#[test]
+fn callback_rendering_consumes_only_frozen_artifacts() {
+    let source = include_str!("../trait_impl.rs");
+    let renderer = source
+        .split("fn prereq_callback_artifacts")
+        .nth(1)
+        .expect("callback artifact renderer")
+        .split("\n}\n\nimpl CbindgenBuilder")
+        .next()
+        .expect("end of callback artifact renderer");
+
+    for forbidden in [
+        "Registry",
+        "compiled",
+        "in_frag(",
+        "out_frag(",
+        "reading_of(",
+    ] {
+        assert!(
+            !renderer.contains(forbidden),
+            "callback renderer resumed planning through {forbidden}"
+        );
+    }
+    for required in [".generation", ".artifacts()", ".payload().render(emit)"] {
+        assert!(
+            renderer.contains(required),
+            "callback renderer stopped consuming frozen artifacts through {required}"
+        );
+    }
+}
+
+#[test]
+fn legacy_c_shape_and_callback_planners_are_deleted() {
+    let sources = [
+        include_str!("../lib.rs"),
+        include_str!("../builder.rs"),
+        include_str!("../emit.rs"),
+        include_str!("../trait_impl.rs"),
+    ]
+    .join("\n");
+    for deleted in [
+        "fn lower_shape",
+        "fn encode_value",
+        "dispatch_fn_input",
+        "prereq_callback_structs",
+        "out_slice_marker",
+        "shape_is_lowerable",
+        "is_lowered_composite",
+        "has_own_wire",
+    ] {
+        assert!(
+            !sources.contains(deleted),
+            "deleted C compatibility planner returned through {deleted}"
         );
     }
 }

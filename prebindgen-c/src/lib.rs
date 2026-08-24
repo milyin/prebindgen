@@ -201,12 +201,6 @@ struct ValueOpaqueCfg {
 /// Per-declared-callback configuration.
 #[derive(Clone)]
 struct CbCfg {
-    /// The argument types this callback was declared with, in order.
-    ///
-    /// `CallbackKey` is a `Vec<TypeKey>` — a list of identities, which is what
-    /// the map is keyed by. Emission needs the argument *types*, and these are
-    /// the ones `extract_fn_trait_args` produced at declaration time (#291).
-    args: Vec<syn::Type>,
     /// Per-declaration **base** token override fed to `mangle_callback` (as the
     /// sole base, replacing the args' derived bases). Set by
     /// [`CbindgenBuilder::base_name`]. `None` ⇒ bases come from the arguments.
@@ -222,9 +216,8 @@ struct CbCfg {
 
 impl CbCfg {
     /// A freshly declared callback signature, no naming or takeable overrides yet.
-    fn new(args: Vec<syn::Type>) -> Self {
+    fn new() -> Self {
         Self {
-            args,
             base: None,
             takeable: std::collections::BTreeSet::new(),
         }
@@ -442,24 +435,14 @@ pub struct CbindgenBuilder {
     /// Where the `#[prebindgen]` items come from — see
     /// `JniGenBuilder::source`.
     pub(crate) sources: prebindgen_registry::flat::FlatBuilder,
-    /// Every conversion this binding compiled, keyed by crossing.
-    ///
-    /// What callback compatibility emission asks instead of the frozen generation
-    /// plan. The table can only
-    /// name **one** wire type per crossing, so it stops being able to answer as
-    /// soon as a crossing occupies several — and the answer an emitter wants
-    /// was always the adapter's own.
-    ///
-    /// Shared and interior-mutable because the emitters that run *during*
-    /// compilation read it too: `dispatch_fn_input` builds a callback's closure
-    /// struct out of `lower_shape` and `encode_value`, and those ask what a
-    /// type crosses as. A conversion for one type is built out of the
-    /// conversions for its inners, which the resolver compiles first, so a
-    /// fragment is there exactly when a table entry would have been.
+    /// Every conversion this binding compiled, keyed by crossing. This mutable
+    /// compilation cache is frozen into [`Self::generation`] before any C
+    /// wrapper or callback artifact renders; later stages remove the cache itself.
     pub(crate) compiled: std::rc::Rc<
         std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::compile::CFrag>>,
     >,
-    /// Immutable registry-owned C generation plan for ordinary boundary sites.
+    /// Immutable registry-owned C generation plan for ordinary sites, callback
+    /// argument sites, and callback artifacts.
     pub(crate) generation:
         Option<prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>>,
     /// Every converter artifact this binding planned.
@@ -645,74 +628,6 @@ fn marker_destination(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
 }
 
-/// The composite shapes [`Cbindgen::lower_shape`] decomposes: a value with no
-/// wire of its own, whose ABI is the fields it lowers to.
-///
-/// Read off the model rather than off the marker converter's `()` destination.
-/// `out_wrappers` gives that destination to a `Result` too, and no arm lowers
-/// one — so a destination test answers `yes` for a shape nothing can emit, and
-/// the caller ends up calling the marker it was trying to avoid (#428 review).
-impl CbindgenBuilder {
-    fn is_lowered_composite(&self, t: &TypeRef) -> bool {
-        let composite =
-            t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some();
-        composite && self.shape_is_lowerable(t)
-    }
-}
-
-/// Whether this node already has a wire of its own: a real converter rather
-/// than the marker that stands in for a shape with none.
-///
-/// `select_output_type` tries `out_custom` before `out_wrappers`, so a declared
-/// conversion answers here — and the shape lowering has to agree with the
-/// converter table at **every** level, not only the outermost, or the two
-/// describe different ABIs for the same argument (#428 review).
-impl CbindgenBuilder {
-    fn has_own_wire(&self, t: &TypeRef) -> bool {
-        self.out_frag(t)
-            .is_some_and(|e| !marker_destination(&e.destination))
-    }
-}
-
-/// Whether [`Cbindgen::lower_shape`] decomposes `t` **all the way down**.
-///
-/// Asking only about the outermost layer is not enough: `Option<Result<T, E>>`
-/// is an optional, so a shallow test admits it, and then the lowering reaches
-/// the `Result` as a base field and emits a call to *its* marker — the same
-/// failure one layer in (#428 review).
-///
-/// Every layer below the composite has to end at a value with a **wire of its
-/// own**, and that is a question for the converter table rather than a list of
-/// shapes: a marker destination means "no wire", whatever put it there.
-/// Enumerating the wrapper kinds instead missed `Vec<&'static [u8]>`, whose
-/// element is a plain borrow by every shape test and a shared-slice marker in
-/// the table (#428 review).
-impl CbindgenBuilder {
-    fn shape_is_lowerable(&self, t: &TypeRef) -> bool {
-        // A node with a wire of its own IS the bottom: `lower_shape` stops
-        // there too, so the recursion must not walk past it into a shape that
-        // node no longer describes.
-        if self.has_own_wire(t) {
-            return true;
-        }
-        if let Some(inner) = t.optional_inner() {
-            return self.shape_is_lowerable(inner);
-        }
-        // A run's element must lower to one wire of its own — the same rule
-        // `lower_shape` asserts when it builds the `(ptr, len)` pair.
-        let leaf = r_vec_elem(t).or_else(|| r_cow_slice_elem(t)).unwrap_or(t);
-        self.has_own_wire(leaf)
-    }
-}
-
-/// The element of a `Vec<E>`.
-fn r_vec_elem(t: &TypeRef) -> Option<&TypeRef> {
-    match t.kind() {
-        TypeKind::Vec(elem) => Some(elem),
-        _ => None,
-    }
-}
-
 /// The opaque-pointer payload shape — `Box<T>` or `Option<Box<T>>` — off the
 /// classification, returning the reading of `T`.
 ///
@@ -832,37 +747,6 @@ fn r_shared_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
     }
 }
 
-/// [`cow_slice_elem`] off the classification: `Cow<'_, [E]>` with scalar `E`.
-fn r_cow_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
-    let TypeKind::Cow { inner, .. } = t.kind() else {
-        return None;
-    };
-    match inner.kind() {
-        TypeKind::Slice(e) if r_is_scalar(e) => Some(e),
-        _ => None,
-    }
-}
-
-/// [`scalar_slice_elem`] off the classification.
-fn r_scalar_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
-    r_shared_slice_elem(t).filter(|e| r_is_scalar(e))
-}
-
-/// If `ty` is `&[E]` (a shared slice borrow) with scalar `E`, return `E`.
-fn scalar_slice_elem(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Reference(r) = ty else {
-        return None;
-    };
-    if r.mutability.is_some() {
-        return None;
-    }
-    let syn::Type::Slice(s) = &*r.elem else {
-        return None;
-    };
-    let elem = (*s.elem).clone();
-    is_scalar(&elem).then_some(elem)
-}
-
 /// C name for an out-parameter field. When the value's primary field (suffix
 /// `""`) is itself an out-param the whole group is `out`-prefixed (`out`,
 /// `out_len`, `out_present`); otherwise the accompanying fields use bare names
@@ -883,17 +767,16 @@ fn null_for(wire: &syn::Type) -> TokenStream {
     }
 }
 
-/// One C-ABI wire component of a lowered return value. `suffix` names it
+/// One C-ABI wire component of a frozen site value. `suffix` names it
 /// relative to a base (`""` → `out`, `"_len"` → `len`, `"_present"` → `present`).
 struct WireField {
     suffix: &'static str,
     wire: syn::Type,
 }
 
-/// How a *present / ok* value of a return type is carried over the C ABI: an
-/// ordered list of wire components plus the representation niches still free
-/// for enclosing `Option`/`Result` layers.
-struct ValueShape {
+/// The already-frozen fields and remaining niches an ordinary return wrapper
+/// partitions into its return slot and out-parameters.
+struct FrozenValueLayout {
     fields: Vec<WireField>,
     niches: Niches,
 }
