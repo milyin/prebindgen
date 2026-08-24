@@ -236,8 +236,8 @@ fn encode_field(
                     default: quote!(0i32),
                 });
             }
-            // `Option<enum>` uses the enum's primitive niche when available;
-            // the boxed Integer remains the fallback for an exhausted domain.
+            // `Option<enum>` uses the enum's frozen primitive niche. Keep the
+            // boxed Integer branch for plans produced without niche metadata.
             PlanFieldKind::OptionEnum { conv, niche, .. } => {
                 let value_expr = conv_value(conv);
                 if niche.is_some() {
