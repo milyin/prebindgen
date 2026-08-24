@@ -107,10 +107,6 @@ impl JniGenerationPlan {
             .clone()
     }
 
-    pub(crate) fn vec_build(&self, key: &TypeKey) -> Option<Rc<VecBuildHelpers>> {
-        self.vec_builds.get(key).cloned()
-    }
-
     pub(crate) fn sealed_class_plan(
         &self,
         key: &TypeKey,

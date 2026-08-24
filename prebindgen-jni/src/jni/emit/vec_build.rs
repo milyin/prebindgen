@@ -188,20 +188,23 @@ pub(crate) struct VecBuildHelpers {
     pub plan: FlatInputPlan,
 }
 
-/// Build the helper descriptor for one flattenable element type, or `None` if it
-/// doesn't flatten (caller keeps the `input_vec` path). The base name is derived
-/// from the element's **Kotlin** data-class short name (first char lowercased) so
-/// the generated methods read naturally (`Payload` → `payloadVec`).
+/// During resolution, build the helper descriptor for one flattenable element
+/// type, or `None` if it doesn't flatten (caller keeps the `input_vec` path).
+/// The artifact writers enumerate the frozen generation plan directly; they
+/// cannot call this constructor and resume planning. The base name is derived
+/// from the element's **Kotlin** data-class short name (first char lowercased)
+/// so the generated methods read naturally (`Payload` → `payloadVec`).
 impl Declarations {
     pub(crate) fn vec_build_helpers(
         &self,
         registry: &impl prebindgen_registry::Conversions,
         elem: &TypeRef,
     ) -> Option<std::rc::Rc<VecBuildHelpers>> {
+        assert!(
+            self.generation.is_none(),
+            "Vec helper construction is resolution-only"
+        );
         let key = elem.key();
-        if let Some(generation) = &self.generation {
-            return generation.vec_build(&key);
-        }
         if let Some(hit) = self.vec_build_plans.borrow().get(&key).cloned() {
             return Some(hit);
         }
