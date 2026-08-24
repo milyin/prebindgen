@@ -695,19 +695,43 @@ fn iface_spec_memo_shares_one_derivation() {
 fn generation_plan_freezes_and_drains_derivations() {
     use prebindgen::SourceLocation;
     let loc = myflat_loc();
-    let items: Vec<(syn::Item, SourceLocation)> = vec![(
-        syn::Item::Fn(syn::parse_quote!(
-            pub fn z_do_thing(x: i64) -> i64 {
-                unimplemented!()
-            }
-        )),
-        loc.clone(),
-    )];
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Record {
+                    pub value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Outcome {
+                    Empty,
+                    Value { record: Record },
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_do_thing(records: Vec<Record>, outcome: Outcome) -> Outcome {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
     let registry =
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_do_thing)));
+        .package(
+            crate::package!("thing")
+                .class(crate::data_class!(Record))
+                .class(crate::sealed_class!(Outcome))
+                .fun(prebindgen_registry::fun!(z_do_thing)),
+        );
     // Resolve runs validation, builds every function plan, then freezes and
     // drains the mutable planning memos before returning the generator.
     let gen = jni.build_with(registry).expect("resolve");
@@ -722,17 +746,33 @@ fn generation_plan_freezes_and_drains_derivations() {
     let (functions, interfaces, structs, sums, vec_builds) = gen.generation_plan().counts();
     assert_eq!(functions, 1);
     assert!(interfaces >= 1, "the binding error interface is frozen");
-    assert_eq!(structs, 0);
-    assert_eq!(sums, 0);
-    assert_eq!(vec_builds, 0);
+    assert_eq!(structs, 1);
+    assert_eq!(sums, 1);
+    assert_eq!(vec_builds, 1);
 
     // Repeated writer-facing lookups return the same frozen allocation. A
-    // post-freeze fallback derivation would repopulate a memo and fail above.
+    // post-freeze fallback derivation would repopulate a memo and fail the
+    // final assertions below.
     let a = ext.fn_plan(registry, f).expect("plan");
     let b = ext.fn_plan(registry, f).expect("plan");
     assert!(std::rc::Rc::ptr_eq(&a, &b), "one plan per function ident");
     assert_eq!(a.native_symbol, b.native_symbol);
+
+    // Exercise both artifact writers. None of the recursively used struct,
+    // sum, interface, function, or Vec-helper lookups may resume planning.
+    let dir = unique_test_dir("jnigen_frozen_generation");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("create generation directory");
+    gen.write_rust(dir.join("generated.rs"))
+        .expect("write frozen Rust plan");
+    gen.write_kotlin(&dir.join("kotlin"))
+        .expect("write frozen Kotlin plan");
+
     assert!(ext.fn_plans.borrow().is_empty());
+    assert!(ext.iface_specs.borrow().is_empty());
+    assert!(ext.struct_plans.borrow().is_empty());
+    assert!(ext.sum_plans.borrow().is_empty());
+    assert!(ext.vec_build_plans.borrow().is_empty());
 }
 
 /// A callback identity is the same whether its args come from the **reading**

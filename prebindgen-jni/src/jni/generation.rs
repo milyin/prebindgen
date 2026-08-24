@@ -38,6 +38,10 @@ impl JniGenerationPlan {
         // declared data class before the mutable planning store is drained.
         // Planning every source struct would activate converters for types the
         // adapter never declared, changing otherwise unrelated generated Rust.
+        // The panic-backed frozen lookup is sound only while this filter
+        // matches every top-level struct key a writer can request. Nested
+        // layouts are embedded in their parent's `StructPlan`; a nested type
+        // that is independently declared is also enumerated here.
         let data_classes: Vec<_> = decls
             .types
             .iter()
@@ -67,6 +71,8 @@ impl JniGenerationPlan {
                 _ => None,
             })
             .collect();
+        // As with data classes, every writer-visible sealed-class key must be
+        // covered here before lookup becomes panic-backed after the freeze.
         for item in &sealed_classes {
             let _ = decls.sealed_class_plan(registry, item);
         }
