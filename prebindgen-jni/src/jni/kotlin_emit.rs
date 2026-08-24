@@ -1703,6 +1703,22 @@ impl Declarations {
         imports: &mut BTreeSet<String>,
     ) -> String {
         if let Some(inner) = ty.optional_inner() {
+            if let Some(niche) = crate::jni::compile::option_enum_niche(
+                self,
+                ty,
+                prebindgen_registry::recipe::Direction::Deconstruct,
+            ) {
+                let present = self.carry_layers(
+                    wrap,
+                    slot_nullable,
+                    inner,
+                    recv.clone(),
+                    false,
+                    depth,
+                    imports,
+                );
+                return format!("if ({recv} == {niche}) null else {present}");
+            }
             return self.carry_layers(wrap, slot_nullable, inner, recv, true, depth, imports);
         }
         if let Some(elem) = ty.sequence_elem() {

@@ -1787,7 +1787,94 @@ impl Declarations {
             kotlin_name,
             value_rust_type: None,
             projection: None,
+            niche_sentinels: Vec::new(),
         }
+    }
+
+    /// Maximum number of `Option` layers placed over `key` in one crossing
+    /// direction. This is representation demand, not a spelling probe: the
+    /// registry's readings already account for transparent wrappers.
+    pub(crate) fn optional_niche_demand(
+        &self,
+        key: &TypeKey,
+        registry: &impl Conversions,
+        direction: Direction,
+    ) -> usize {
+        registry
+            .crossing_keys(direction)
+            .iter()
+            .map(|candidate| {
+                let Some(mut reading) = registry.reading(candidate) else {
+                    return 0;
+                };
+                let mut depth = 0;
+                while let Some(inner) = reading.optional_inner().cloned() {
+                    reading = inner;
+                    depth += 1;
+                }
+                if reading.key() == *key {
+                    depth
+                } else {
+                    0
+                }
+            })
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Allocate unused `jint` discriminants for an `enum_class` terminal.
+    /// One slot is exposed per Optional layer that the registry will compose;
+    /// the ordered slots let nested options remain a single primitive wire.
+    pub(crate) fn enum_niches(
+        &self,
+        e: &prebindgen_registry::flat::Enum,
+        registry: &impl Conversions,
+        direction: Direction,
+    ) -> (Niches, Vec<String>) {
+        let key = TypeKey::from_ident(&e.name);
+        let demand = self.optional_niche_demand(&key, registry, direction);
+        if demand == 0 {
+            return (Niches::empty(), Vec::new());
+        }
+        let used: std::collections::BTreeSet<i64> = e
+            .discriminant_values()
+            .unwrap_or_else(|name| {
+                panic!(
+                    "enum `{}` variant `{name}` has a non-literal discriminant; use a literal \
+                     integer value (e.g. `= 1`) or an implicit discriminant",
+                    e.name
+                )
+            })
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect();
+        let mut raw = i32::MIN;
+        let mut slots = Vec::with_capacity(demand);
+        let mut kotlin = Vec::with_capacity(demand);
+        while slots.len() < demand {
+            if !used.contains(&i64::from(raw)) {
+                slots.push(NicheSlot {
+                    value: syn::parse_quote!(#raw),
+                    matches: syn::parse_quote!(*v == #raw),
+                });
+                kotlin.push(if raw == i32::MIN {
+                    "Int.MIN_VALUE".to_string()
+                } else {
+                    raw.to_string()
+                });
+                if slots.len() == demand {
+                    break;
+                }
+            }
+            raw = raw.checked_add(1).unwrap_or_else(|| {
+                panic!(
+                    "enum `{}` does not leave {demand} free jint discriminants for Optional \
+                     composition",
+                    e.name
+                )
+            });
+        }
+        (Niches::from_slots(slots), kotlin)
     }
 
     fn conversion_domain_niches(
@@ -1811,31 +1898,10 @@ impl Declarations {
         {
             return (Niches::empty(), Vec::new());
         }
-        let demand = registry
-            .crossing_keys(direction)
-            .iter()
-            .map(|candidate| {
-                // How many `Option` layers this crossing puts over `key` — the
-                // model's count, so a wrapped spelling contributes the same
-                // demand a bare one does. Walking the reading also drops the
-                // re-lookup the old loop did: it peeled a spelling and re-keyed
-                // each result, where the layers are already right here (#273).
-                let Some(mut reading) = registry.reading(candidate) else {
-                    return 0;
-                };
-                let mut depth = 0;
-                while let Some(inner) = reading.optional_inner().cloned() {
-                    reading = inner;
-                    depth += 1;
-                }
-                if reading.key() == *key {
-                    depth
-                } else {
-                    0
-                }
-            })
-            .max()
-            .unwrap_or(0);
+        // How many `Option` layers this crossing puts over `key` — the
+        // model's count, so a wrapped spelling contributes the same demand a
+        // bare one does (#273).
+        let demand = self.optional_niche_demand(key, registry, direction);
         let mut slots = Vec::new();
         let mut kotlin = Vec::new();
         for value in domain.niche_values(demand) {
@@ -1976,6 +2042,7 @@ impl Declarations {
                         // Terminal: body produces the wire directly, no inner
                         // converter composed, so no handle to carry.
                         projection: None,
+                        niche_sentinels: Vec::new(),
                     },
                 })
             }
@@ -2009,6 +2076,7 @@ impl Declarations {
                     kotlin_name,
                     value_rust_type,
                     projection: inner.metadata.projection.clone(),
+                    niche_sentinels: Vec::new(),
                 };
                 Self::attach_domain_sentinels(&mut metadata, sentinels);
                 Some(ConverterImpl {
@@ -2137,6 +2205,7 @@ impl Declarations {
                         // Terminal: body produces the wire directly, no inner
                         // converter composed, so no handle to carry.
                         projection: None,
+                        niche_sentinels: Vec::new(),
                     },
                 })
             }
@@ -2165,6 +2234,7 @@ impl Declarations {
                     kotlin_name,
                     value_rust_type,
                     projection: inner.metadata.projection.clone(),
+                    niche_sentinels: Vec::new(),
                 };
                 Self::attach_domain_sentinels(&mut metadata, sentinels);
                 Some(ConverterImpl {

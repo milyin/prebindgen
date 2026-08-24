@@ -111,6 +111,8 @@ import io.prebindgen.covertest.model.taggedNew
 import io.prebindgen.covertest.model.taggedRank
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
+import io.prebindgen.covertest.model.priorityNested
+import io.prebindgen.covertest.model.priorityNestedState
 import io.prebindgen.covertest.model.priorityWeight
 import io.prebindgen.covertest.model.stampNew
 import io.prebindgen.covertest.model.stampSeries
@@ -375,6 +377,15 @@ fun main() {
         // Option<enum>: null falls back, present overrides.
         check(priorityOr(null, Priority.NORMAL, boom) == Priority.NORMAL)
         check(priorityOr(Priority.LOW, Priority.HIGH, boom) == Priority.LOW)
+        // Nested Option layers share one primitive wire. Kotlin deliberately
+        // collapses both absent Rust states to null, while preserving values.
+        check(priorityNested(0, boom) == null)
+        check(priorityNested(1, boom) == null)
+        check(priorityNested(2, boom) == Priority.HIGH)
+        // On input, null selects the outer None sentinel. The collapsed
+        // Priority? surface cannot construct Rust's inner Some(None) state.
+        check(priorityNestedState(null, boom) == 0)
+        check(priorityNestedState(Priority.HIGH, boom) == 2)
         // enum_class surface: value + fromInt round-trip.
         check(Priority.HIGH.value == 2)
         check(Priority.fromInt(0) == Priority.LOW)
@@ -915,13 +926,11 @@ fun main() {
         vault.close()
     }
 
-    // ── a sum whose payload is NOT leaf-shaped ────────────────────────────────
-    // `Marker.Ranked` carries `Option<Priority>` — an enum object or null in the
-    // JVM slot, which tag-gated groups cannot express. The sum degrades to a
-    // whole-object crossing rather than failing the build, and that path is what
-    // reads an enum property back (bare and optional read differently: the slot
-    // holds the enum OBJECT, not a boxed Int).
-    section("sum with a non-leaf payload (whole-object crossing, Option<enum>)") {
+    // ── a sum whose payload uses an enum niche ────────────────────────────────
+    // `Marker.Ranked` carries `Option<Priority>` in one primitive jint. An
+    // unused discriminant represents null, while the independent sum tag keeps
+    // `Marker.None_` distinct from `Marker.Ranked(null)`.
+    section("sum with a niche-backed Option<enum> payload") {
         check(taggedRank(taggedNew(0, boom).orThrow(), boom) == -1)
         check(taggedRank(taggedNew(1, boom).orThrow(), boom) == 0)
         check(taggedRank(taggedNew(2, boom).orThrow(), boom) == 10)
@@ -934,13 +943,9 @@ fun main() {
     }
 
     // ── the same Option<enum> payload in RETURN position ──────────────────────
-    // The field above degrades to the whole-object crossing, so it never reaches
-    // `synth_sum_leaves` — which hardcodes `nullable: false` on every group leaf
-    // and lets `plan_leaf_param` widen from the inert side. Two nullabilities
-    // meet in this one slot and must not collapse into each other: the payload's
-    // own `None`, and the slot being inert because the OTHER variant is live.
-    // Both arrive as a JVM null, so only the tag tells `Ranked(null)` from
-    // `None_`.
+    // The optional payload uses its reserved enum discriminant for null. The
+    // sum tag separately identifies the active variant, so `Ranked(null)` and
+    // `None_` remain distinct in both directions.
     section("Option<enum> payload in a returned sum") {
         check(markerOf(0, boom).orThrow() === Marker.None_)
 

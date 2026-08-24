@@ -536,7 +536,7 @@ pub(crate) fn render_extern_decl(
             }
             // Bare `Option<primitive>` / `Option<enum>` param → a `(present:
             // Boolean, value: <Prim>)` pair (no boxed `java.lang.*` wire).
-            InputKind::OptionScalar(sp) => {
+            InputKind::OptionalPair(sp) => {
                 params.push(KtParam::new(sp.present_kt.clone(), KtType::boolean()));
                 params.push(KtParam::new(
                     sp.value_kt.clone(),
@@ -560,14 +560,15 @@ pub(crate) fn render_extern_decl(
                 let ty = if leaf.as_enum_value {
                     // Enum (incl. `Option<enum>`) crosses as jint → Kotlin
                     // `Int`; the wrapper passes `.value` / `?.value`. The Rust
-                    // converter unboxes a `java.lang.Integer`, so the extern
-                    // declares `Int`/`Int?`, never the enum object.
+                    // converter consumes that discriminant directly when a
+                    // niche exists, and boxes only as a fallback. The extern
+                    // never declares the enum object.
                     KtType::int()
                 } else {
                     leaf.kt_meta.clone()?
                 };
-                let niche_primitive =
-                    matches!(&leaf.kind, InputKind::Unsigned64 { niche: Some(_) });
+                let niche_primitive = leaf.enum_niche.is_some()
+                    || matches!(&leaf.kind, InputKind::Unsigned64 { niche: Some(_) });
                 let ty = if leaf.optional && !niche_primitive {
                     ty.nullable()
                 } else {
@@ -605,11 +606,16 @@ pub(crate) fn render_extern_decl(
             // The plan classified the declared surface once — `convert_out_ty`
             // for a `convert_output` (Return), else the function's own return.
             let (kt_return, projection) = render_return_surface(&v.surface)?;
-            // JNI extern's wire return: projections wire as `Long` folded
-            // through the projection strategy; enums wire as `Int`
-            // (`Int?` under `Option`); everything else is the declared return.
+            // JNI extern's wire return: projections state their folded wire;
+            // otherwise a primitive destination comes directly from the
+            // frozen Rust-side conversion plan. This ordering matters for
+            // nested optionals: enum niches can collapse every Optional layer
+            // to one `jint`, although the deliberately lossy public surface is
+            // still `Priority?`. Object wires retain their declared reference
+            // type so the wrapper receives the useful boxed/static type.
             match &projection {
                 Some(p) => Some(projection_wire_return(p)),
+                None if JniPrim::from_wire(&v.wire_ty).is_some() => kotlin_for_wire(&v.wire_ty),
                 None if v.is_enum => Some(KtType::int()),
                 None if v.is_option_enum => Some(KtType::int().nullable()),
                 None => kt_return,
@@ -636,6 +642,8 @@ struct Param {
     /// underlying JNI `external fun` declares the param as `Int` (jint wire).
     /// The wrapper bridges the two by passing `<name>.value` at the call site.
     as_enum_value: bool,
+    /// Primitive sentinel used when an optional enum parameter is absent.
+    enum_niche: Option<String>,
 }
 
 enum ParamMode {
@@ -693,8 +701,8 @@ enum ParamMode {
     /// crosses (and the Rust side does no `intValue()` unboxing). The public
     /// Kotlin signature keeps `T?`; the call site passes `present_expr`
     /// (`<name> != null`) then `value_expr` (`<name> ?: 0` / `<name>?.value ?:
-    /// 0`). See [`crate::jni::OptionScalarInputPlan`].
-    OptionScalar {
+    /// 0`). See [`crate::jni::compile::OptionalPairPlan`].
+    OptionalPair {
         present_expr: String,
         value_expr: String,
     },
@@ -1167,8 +1175,10 @@ struct OutputPlan {
     cast_return: bool,
     /// enum_class return crossing as jint — wrap with `fromInt`.
     is_enum_return: bool,
-    /// `Option<enum>` return crossing boxed — `?.let { fromInt(it) }`.
+    /// `Option<enum>` return crossing — map its primitive niche or boxed null.
     is_option_enum_return: bool,
+    /// Primitive absent values consumed by nested Optional enum layers.
+    enum_niches: Vec<String>,
 }
 
 /// The error-callback wiring for a wrapper. Every wrapper has a **binding**
@@ -1255,6 +1265,7 @@ fn classify_params(
                 kt_type,
                 mode: ParamMode::Callback { call_arg },
                 as_enum_value: false,
+                enum_niche: None,
             });
             continue;
         }
@@ -1285,7 +1296,7 @@ fn classify_params(
                     elem_accesses,
                 }
             }
-            InputKind::OptionScalar(sp) => {
+            InputKind::OptionalPair(sp) => {
                 // Bare `Option<primitive>` / `Option<enum>`: cross as a
                 // `(present, value)` pair (no boxed object). The high-level
                 // signature keeps `T?`; only the call-site args split in two.
@@ -1295,7 +1306,7 @@ fn classify_params(
                 } else {
                     format!("{name} ?: {}", sp.value_kt_zero)
                 };
-                ParamMode::OptionScalar {
+                ParamMode::OptionalPair {
                     present_expr,
                     value_expr,
                 }
@@ -1366,6 +1377,7 @@ fn classify_params(
             kt_type,
             mode,
             as_enum_value: leaf.as_enum_value,
+            enum_niche: leaf.enum_niche.clone(),
         });
     }
     Some((params, receiver_idx))
@@ -1526,13 +1538,15 @@ fn classify_output(
         unreachable!("FnOutputPlan is either Value or Unfold-with-plan")
     };
     // enum_class returns cross the JNI wire as jint → Kotlin `Int` (`Int?`
-    // boxed for `Option<enum>`) — so `build_call` can wrap the result with
-    // `fromInt`. The plan's probes run over the convert-peeled declared type;
+    // niche-backed for `Option<enum>`) — so `build_call` can wrap the result
+    // with `fromInt`. The plan's probes run over the convert-peeled declared type;
     // the wrapper surface keeps the historical `unfold.is_none()` mask
     // (`Value` ∧ ¬`is_convert` ⟺ no unfold plan).
-    let (is_enum_return, is_option_enum_return) = match &fplan.output {
-        FnOutputPlan::Value(v) if !v.is_convert => (v.is_enum, v.is_option_enum),
-        _ => (false, false),
+    let (is_enum_return, is_option_enum_return, enum_niches) = match &fplan.output {
+        FnOutputPlan::Value(v) if !v.is_convert => {
+            (v.is_enum, v.is_option_enum, v.enum_niches.clone())
+        }
+        _ => (false, false, Vec::new()),
     };
 
     Some(OutputPlan {
@@ -1545,6 +1559,7 @@ fn classify_output(
         cast_return: matches!(&fplan.output, FnOutputPlan::Unfold(_)),
         is_enum_return,
         is_option_enum_return,
+        enum_niches,
     })
 }
 
@@ -1574,9 +1589,9 @@ fn build_native_call(
             args.push(format!("__vec_{}", p.kt_name));
             continue;
         }
-        // OptionScalar param expands into two call args: the present flag
+        // An Optional pair expands into two call args: the present flag
         // and the value-or-zero expression (in that order).
-        if let ParamMode::OptionScalar {
+        if let ParamMode::OptionalPair {
             present_expr,
             value_expr,
         } = &p.mode
@@ -1605,7 +1620,10 @@ fn build_native_call(
                     // Enum → its `Int` discriminant for the extern. Nullable
                     // enum (`Enum?`) uses `?.value` so it stays `Int?`.
                     if p.kt_type.is_nullable() {
-                        format!("{}?.value", p.kt_name)
+                        match &p.enum_niche {
+                            Some(niche) => format!("{}?.value ?: {}", p.kt_name, niche),
+                            None => format!("{}?.value", p.kt_name),
+                        }
                     } else {
                         format!("{}.value", p.kt_name)
                     }
@@ -1622,8 +1640,8 @@ fn build_native_call(
             ParamMode::VecBuild { .. } => {
                 unreachable!("VecBuild expanded before the single-arg match")
             }
-            ParamMode::OptionScalar { .. } => {
-                unreachable!("OptionScalar expanded before the single-arg match")
+            ParamMode::OptionalPair { .. } => {
+                unreachable!("OptionalPair expanded before the single-arg match")
             }
         };
         args.push(arg);
@@ -1678,7 +1696,17 @@ fn build_success_return(ext: &Declarations, out: &OutputPlan, raw: &str) -> Stri
             .expect("Option<enum> return has a Kotlin type")
             .to_string();
         let enum_kt = enum_kt.trim_end_matches('?');
-        format!("{raw}?.let {{ {enum_kt}.fromInt(it) }}")
+        if out.enum_niches.is_empty() {
+            format!("{raw}?.let {{ {enum_kt}.fromInt(it) }}")
+        } else {
+            let absent = out
+                .enum_niches
+                .iter()
+                .map(|niche| format!("{raw} == {niche}"))
+                .collect::<Vec<_>>()
+                .join(" || ");
+            format!("if ({absent}) null else {enum_kt}.fromInt({raw})")
+        }
     } else if out.cast_return {
         let cast_kt = out
             .kt_return

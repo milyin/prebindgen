@@ -2629,8 +2629,7 @@ fn every_field_shape_the_walk_reads_specially_states_the_same_row() {
         wire_lines(&gen, "Bits", "b"),
         vec![
             "bPri: Int = b.pri.value",
-            "bMaybePriPresent: Boolean = b.maybePri != null",
-            "bMaybePriValue: Int = b.maybePri?.value ?: 0",
+            "bMaybePri: Int = b.maybePri?.value ?: Int.MIN_VALUE",
             "bBig: Long = b.big.toLong()",
             "bMaybeBigPresent: Boolean = b.maybeBig != null",
             "bMaybeBigValue: Long = b.maybeBig?.toLong() ?: 0L",
@@ -2656,8 +2655,7 @@ fn every_field_shape_the_walk_reads_specially_states_the_same_row() {
         vec![
             "bPresent: Boolean = b != null",
             "bPri: Int = b?.pri?.value ?: 0",
-            "bMaybePriPresent: Boolean = b?.maybePri != null",
-            "bMaybePriValue: Int = b?.maybePri?.value ?: 0",
+            "bMaybePri: Int = b?.maybePri?.value ?: Int.MIN_VALUE",
             "bBig: Long = b?.big?.toLong() ?: 0L",
             "bMaybeBigPresent: Boolean = b?.maybeBig != null",
             "bMaybeBigValue: Long = b?.maybeBig?.toLong() ?: 0L",

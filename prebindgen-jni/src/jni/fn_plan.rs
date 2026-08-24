@@ -115,6 +115,9 @@ pub(crate) struct PlanLeaf {
     /// `enum_class` enum: surface keeps the typed enum, the extern declares
     /// `Int`/`Int?`, and the call site passes `.value` / `?.value`.
     pub as_enum_value: bool,
+    /// Primitive sentinel carved by this Optional enum layer. When present,
+    /// the JNI extern keeps `Int` non-null and Kotlin maps `null` to this value.
+    pub enum_niche: Option<String>,
     pub kind: InputKind,
 }
 
@@ -143,7 +146,7 @@ pub(crate) enum InputKind {
     },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
-    OptionScalar(OptionScalarInputPlan),
+    OptionalPair(crate::jni::compile::OptionalPairPlan),
     /// Flattenable data_class: the field leaves cross as separate wire params.
     FlattenStruct(FlatInputPlan),
     /// Lockable opaque-handle projection (`jlong` wire). `direct` is
@@ -235,6 +238,9 @@ pub(crate) struct ValueOutputPlan {
     /// `unfold.is_none()` gate).
     pub is_enum: bool,
     pub is_option_enum: bool,
+    /// Primitive sentinels consumed by nested Optional enum layers,
+    /// outside-in. Every one collapses to Kotlin `null` on output.
+    pub enum_niches: Vec<String>,
 }
 
 /// The pure classification core of `classify_return` — no import
@@ -608,7 +614,7 @@ impl JniFunctionPlan {
                     .iter()
                     .map(|l| kotlin_jvm_slots(l.kt_wire_ty()))
                     .sum(),
-                InputKind::OptionScalar(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
+                InputKind::OptionalPair(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
                 InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
                 InputKind::Callback { .. } => 1,
                 InputKind::Unsigned64 { .. } | InputKind::Plain => ext
@@ -673,6 +679,11 @@ fn classify_leaf(
                 .and_then(|e| e.metadata.kotlin_name.clone()),
             optional: reading.optional_inner().is_some(),
             as_enum_value: ext.is_kotlin_enum_reading(reading),
+            enum_niche: crate::jni::compile::option_enum_niche(
+                ext,
+                reading,
+                prebindgen_registry::recipe::Direction::Construct,
+            ),
             kind: InputKind::Callback { iface },
         });
     }
@@ -706,7 +717,16 @@ fn classify_leaf(
         role: Role::Param { index: 0 },
     };
     let crossing = Crossing::new(reading.clone(), Direction::Construct);
-    let planned = compiler.site(&mut adapter, site, crossing);
+    let use_pair = crate::jni::compile::optional_pair_plan_candidate(ext, reading)
+        && ext
+            .recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::pair())
+            .is_some();
+    let planned = if use_pair {
+        compiler.site_recipe(&mut adapter, site, crossing, &crate::jni::recipes::pair())
+    } else {
+        compiler.site(&mut adapter, site, crossing)
+    };
     *ext.compiled.borrow_mut() = compiler.finish();
     match planned {
         Ok(Some(plan)) => plan.param().ok_or_else(|| PlanError::Unresolved {
@@ -908,6 +928,7 @@ fn build_output(
         surface,
         is_enum,
         is_option_enum,
+        enum_niches,
         ..
     } = plan;
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
@@ -917,6 +938,7 @@ fn build_output(
         surface,
         is_enum,
         is_option_enum,
+        enum_niches,
     })))
 }
 
@@ -966,24 +988,33 @@ impl ReturnSurface {
         // node-shaped answer; with no metadata the reading answers directly.
         let enum_probe = |t: &syn::Type| ext.is_kotlin_enum(t);
         let (is_enum, is_option_enum) = match stored {
-            Some(t) => (
-                enum_probe(t),
-                prebindgen_registry::types_util::option_inner_type(t)
-                    .map(|inner| enum_probe(&inner))
-                    .unwrap_or(false),
-            ),
+            Some(t) => {
+                let mut inner = t.clone();
+                let mut optional = false;
+                while let Some(next) = prebindgen_registry::types_util::option_inner_type(&inner) {
+                    optional = true;
+                    inner = next;
+                }
+                (enum_probe(t), optional && enum_probe(&inner))
+            }
             // `is_kotlin_enum_reading` is NOT the peer here: it probes THROUGH
             // the layers, so `Option<Level>` answers true for the first
             // question, where the node version keys on the whole type and
-            // answers false. Both questions want the exact type's identity —
-            // the second asks it of the optional's inner, which is what
-            // `option_inner_type` did to the spelling.
-            None => (
-                ext.is_kotlin_enum_key(&ret.key()),
-                ret.optional_inner()
-                    .map(|inner| ext.is_kotlin_enum_key(&inner.key()))
-                    .unwrap_or(false),
-            ),
+            // answers false. The first question wants the exact type's
+            // identity; the second requires at least one Optional and asks the
+            // terminal inner type after peeling every Optional layer.
+            None => {
+                let mut inner = ret;
+                let mut optional = false;
+                while let Some(next) = inner.optional_inner() {
+                    optional = true;
+                    inner = next;
+                }
+                (
+                    ext.is_kotlin_enum_key(&ret.key()),
+                    optional && ext.is_kotlin_enum_key(&inner.key()),
+                )
+            }
         };
         let canonical = EnumSurface {
             is_enum,

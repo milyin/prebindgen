@@ -245,11 +245,10 @@ public sealed interface Lookup : AutoCloseable {
 }
 
 /**
- * A second sum whose payload is **not leaf-shaped**: `Option<Priority>` is an
- * enum object (or null) in the JVM slot, which the tag-gated flat form cannot
- * express. The binding therefore lets this one cross as a whole object through
- * its own converter rather than failing — the degradation path — which is also
- * what exercises the `Option<enum>` property read.
+ * A second sum whose payload uses an enum niche: `Option<Priority>` occupies
+ * one primitive `jint`, with an unused discriminant representing `None`.
+ * Together with the sum tag, this keeps `None_`, `Ranked(None)`, and
+ * `Ranked(Some(_))` distinct without a boxed enum object.
  *
  * JVM-side surface for the native Rust `Marker` sum: exactly one alternative is live.
  */
@@ -349,8 +348,8 @@ public data class Annotated(val payload: Payload, val alternate: Payload?, val t
             alternate_flag: Boolean,
             alternate_label: String?,
             ttl: Long?,
-            priority: Int?,
-        ): Annotated = Annotated(Payload.fromParts(payload_id, payload_seq, payload_value, payload_flag, payload_label), if (alternate__present) Payload.fromParts(alternate_id, alternate_seq, alternate_value, alternate_flag, alternate_label) else null, ttl, priority?.let { Priority.fromInt(it) })
+            priority: Int,
+        ): Annotated = Annotated(Payload.fromParts(payload_id, payload_seq, payload_value, payload_flag, payload_label), if (alternate__present) Payload.fromParts(alternate_id, alternate_seq, alternate_value, alternate_flag, alternate_label) else null, ttl, if (priority == Int.MIN_VALUE) null else Priority.fromInt(priority))
     }
 }
 
@@ -980,7 +979,7 @@ public data class Stamp(val secs: Long, val nanos: Long) {
 public data class Tagged(val id: Long, val marker: Marker) {
     public companion object {
         @JvmStatic
-        public fun fromParts(id: Long, marker__tag: Int, marker_ranked_v0: Int?): Tagged = Tagged(id, when (marker__tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(marker_ranked_v0?.let { Priority.fromInt(it) }); else -> throw IllegalArgumentException("Marker: invalid tag $marker__tag") })
+        public fun fromParts(id: Long, marker__tag: Int, marker_ranked_v0: Int): Tagged = Tagged(id, when (marker__tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(if (marker_ranked_v0 == Int.MIN_VALUE) null else Priority.fromInt(marker_ranked_v0)); else -> throw IllegalArgumentException("Marker: invalid tag $marker__tag") })
     }
 }
 
@@ -1445,13 +1444,13 @@ LookupBuilderRaw { tag, found_v0, failed_v0 ->
 }
 
 public fun interface MarkerBuilder<out R> {
-    public fun run(tag: Int, ranked_v0: Int?): R
+    public fun run(tag: Int, ranked_v0: Int): R
 }
 
 @get:JvmSynthetic
 internal val __MarkerBuilder: MarkerBuilder<Marker> =
 MarkerBuilder { tag, ranked_v0 ->
-    when (tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(ranked_v0?.let { Priority.fromInt(it) }); else -> throw IllegalArgumentException("Marker: invalid tag $tag") }
+    when (tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(if (ranked_v0 == Int.MIN_VALUE) null else Priority.fromInt(ranked_v0)); else -> throw IllegalArgumentException("Marker: invalid tag $tag") }
 }
 
 public fun interface ProbeBuilder<out R> {
@@ -1613,9 +1612,33 @@ public fun priorityOr(
     onError: JniErrorHandler<Priority?>,
 ): Priority? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.priorityOr(p != null, p?.value ?: 0, fallback.value, __bcap)
+    val __ret = CovNative.priorityOr(p?.value ?: Int.MIN_VALUE, fallback.value, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return io.prebindgen.covertest.model.Priority.fromInt(__ret)
+}
+
+/**
+ * Exercise the intentionally collapsed Kotlin surface for nested optional
+ * enums: both absent Rust states become Kotlin `null`, while a present enum
+ * remains typed.
+ */
+public fun priorityNested(which: Int, onError: JniErrorHandler<Priority?>): Priority? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.priorityNested(which, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return if (__ret == -2147483647 || __ret == Int.MIN_VALUE) null else io.prebindgen.covertest.model.Priority.fromInt(__ret)
+}
+
+/**
+ * Report which nested optional state arrived through the JNI input. Kotlin's
+ * collapsed `Priority?` surface can express the outer `None` and
+ * `Some(Some(_))`, but not the inner `Some(None)` state.
+ */
+public fun priorityNestedState(p: Priority?, onError: JniErrorHandler<Int>): Int {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.priorityNestedState(p?.value ?: -2147483647, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
 }
 
 /**
@@ -1746,8 +1769,7 @@ public fun annotatedNew(
         payload.label,
         ttl != null,
         ttl ?: 0L,
-        priority != null,
-        priority?.value ?: 0,
+        priority?.value ?: Int.MIN_VALUE,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1775,8 +1797,7 @@ public fun annotatedAlternateValue(a: Annotated, onError: JniErrorHandler<Double
         a.alternate?.label,
         a.ttl != null,
         a.ttl ?: 0L,
-        a.priority != null,
-        a.priority?.value ?: 0,
+        a.priority?.value ?: Int.MIN_VALUE,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1803,8 +1824,7 @@ public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
         a.alternate?.label,
         a.ttl != null,
         a.ttl ?: 0L,
-        a.priority != null,
-        a.priority?.value ?: 0,
+        a.priority?.value ?: Int.MIN_VALUE,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1828,12 +1848,11 @@ public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>):
         a.alternate?.label,
         a.ttl != null,
         a.ttl ?: 0L,
-        a.priority != null,
-        a.priority?.value ?: 0,
+        a.priority?.value ?: Int.MIN_VALUE,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret?.let { io.prebindgen.covertest.model.Priority.fromInt(it) }
+    return if (__ret == Int.MIN_VALUE) null else io.prebindgen.covertest.model.Priority.fromInt(__ret)
 }
 
 /**
@@ -1856,8 +1875,7 @@ public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>)
         a.alternate?.label,
         a.ttl != null,
         a.ttl ?: 0L,
-        a.priority != null,
-        a.priority?.value ?: 0,
+        a.priority?.value ?: Int.MIN_VALUE,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1927,27 +1945,30 @@ public fun taggedNew(which: Int, onError: JniErrorHandler<Tagged?>): Tagged? {
 }
 
 /**
- * Read it back — the whole-object sum decode, including the `Option<enum>`
- * payload, crossing Kotlin → Rust.
+ * Read it back, including the niche-backed `Option<enum>` payload crossing
+ * Kotlin → Rust as one primitive discriminant.
  */
 public fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.taggedRank(t.id, t.marker, __bcap)
+    val __ret = CovNative.taggedRank(
+        t.id,
+        when (t.marker) {
+            is io.prebindgen.covertest.model.Marker.None_,
+            ->
+            0; is io.prebindgen.covertest.model.Marker.Ranked -> 1
+        },
+        (t.marker as? io.prebindgen.covertest.model.Marker.Ranked)?.v0?.value ?: Int.MIN_VALUE,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
 /**
- * The same `Option<enum>` payload with the sum in **return** position rather
- * than as a struct field. Only this reaches `synth_sum_leaves`, which hardcodes
- * `nullable: false` on every group leaf and lets `plan_leaf_param` widen from
- * the inert side; a struct field takes `PlanFieldKind::Sum` and, for this
- * payload, degrades to the whole-object crossing instead.
- *
- * Two nullabilities meet in one slot and must not collapse into each other:
- * the payload's own `None`, and the slot being inert because the other variant
- * is live. Both arrive as a JVM null, so `Ranked(null)` and `None_` are only
- * told apart by the tag.
+ * The same niche-backed `Option<enum>` payload with the sum in **return**
+ * position rather than as a struct field. The payload's `None` uses its enum
+ * sentinel; the sum tag independently selects whether the `Ranked` slot is
+ * active, so the two concepts cannot collapse into one JVM null.
  *
  * The Rust `Marker` result is delivered decomposed: the builder callback receives (`tag`, `ranked_v0`).
  */
@@ -2362,7 +2383,7 @@ public fun boxedOptPayloadId(p: Payload?, onError: JniErrorHandler<Long>): Long 
  */
 public fun boxedOptPriorityWeight(p: Priority?, onError: JniErrorHandler<Long>): Long {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.boxedOptPriorityWeight(p != null, p?.value ?: 0, __bcap)
+    val __ret = CovNative.boxedOptPriorityWeight(p?.value ?: Int.MIN_VALUE, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }

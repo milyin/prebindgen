@@ -167,8 +167,8 @@ pub(crate) fn struct_input_body(
         // stores the TYPED enum object (`Priority` / `Priority?`), so read the
         // slot with the enum-class descriptor and decode the discriminant via
         // its `value` getter (`getValue()I`); a null object is the `None` arm.
-        // (The generic converters can't be used here: the bare-enum one is
-        // jint-keyed, the `Option<enum>` one unboxes `java.lang.Integer`.)
+        // (The generic converters can't be used here: both are jint-keyed,
+        // while this Kotlin property is an enum object or null.)
         if ext.is_kotlin_enum_reading(inner) {
             // The NAME off the classification, not off the last path segment:
             // `Box<T>` IS `T` here, and taking the spelling apart would answer
@@ -491,9 +491,8 @@ fn read_kotlin_property(
     }
     // An enum property — bare or under `Option` — is stored as the Kotlin
     // **enum object**, so it is read through `getValue`, NOT through the
-    // generic converters: the bare-enum one is `jint`-keyed and the
-    // `Option<enum>` one unboxes a `java.lang.Integer`, and neither matches
-    // what the JVM slot actually holds. `struct_input_body` makes the same
+    // generic converters: both are `jint`-keyed, and neither matches what the
+    // JVM slot actually holds. `struct_input_body` makes the same
     // distinction for data-class fields; this is that logic for a property.
     if ext.is_kotlin_enum_reading(inner) {
         // The NAME off the classification, not off the last path segment.
@@ -1772,109 +1771,6 @@ fn render_flat_struct_node(
             let #binding = #value;
         }
     }
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Bare `Option<primitive>` / `Option<enum>` input → (present, value) leaves
-// ──────────────────────────────────────────────────────────────────────
-
-/// A decomposed plan for an `Option<primitive>` / `Option<enum>` **input**
-/// parameter that would otherwise box into a `java.lang.*` and cross as a
-/// single `JObject` (decoded with a reflective `intValue()`/`longValue()`
-/// unbox). Instead the value crosses as a
-/// `(<param>_present: jboolean, <param>_value: <wire>)` pair — no boxed object
-/// on the wire, and the Rust side reassembles the `Option` from two raw scalars
-/// with zero `env.call_method(...)`. The single-scalar dual of
-/// [`FlatInputPlan`]'s `Option<struct>` present-gate path.
-pub(crate) struct OptionScalarInputPlan {
-    /// Native `<param>_present: jboolean` ident.
-    pub present_ident: syn::Ident,
-    /// Native `<param>_value: <wire>` ident.
-    pub value_ident: syn::Ident,
-    /// JNI primitive wire of the inner value (`jint`/`jlong`/`jboolean`/…).
-    pub value_wire: syn::Type,
-    /// Inner converter (`<wire> -> T`), called inside the `present` branch.
-    pub inner_conv: syn::Ident,
-    /// Kotlin camelCase extern param name for the present flag.
-    pub present_kt: String,
-    /// Kotlin camelCase extern param name for the value.
-    pub value_kt: String,
-    /// Non-null Kotlin type of the value leaf (`Int`/`Long`/…) for the extern.
-    pub value_kt_type: String,
-    /// Kotlin zero literal filling the value leaf when the option is absent.
-    pub value_kt_zero: String,
-    /// The transparent wrappers the parameter's spelling adds over `Optional`,
-    /// outermost first — what the emitter puts back.
-    ///
-    /// This plan **rebuilds** its parameter — the emitter writes a literal
-    /// `Option::Some(v)` / `Option::None` and hands it to the source fn — so a
-    /// parameter spelled `Box<Option<T>>` must receive a `Box`, not the bare
-    /// `Option` the classification names. Carried rather than re-derived at the
-    /// two emission sites, which would be the same rule stated twice; the list
-    /// rather than the reading, because that is all a rebuild uses and this
-    /// plan sits in `InputKind`, whose size every variant pays.
-    pub arg_wrappers: Vec<&'static str>,
-    /// `true` when the inner is an `enum_class` — the call site reads `?.value`.
-    pub is_enum: bool,
-}
-
-/// Build an [`OptionScalarInputPlan`] for a bare `Option<primitive>` /
-/// `Option<enum>` parameter, or `None` to keep the existing single-`JObject`
-/// boxed path. Mirrors exactly the boxed-fallback condition of [`option_input`]
-/// (primitive inner wire, no niche, no projection, no composed pre-stages) so
-/// only the cases that *would* box are intercepted — niche cases (already
-/// unboxed / ABI-clean) and opaque/value projections are left untouched.
-pub(crate) fn build_option_scalar_input_plan(
-    ext: &Declarations,
-    param_name: &syn::Ident,
-    arg: &TypeRef,
-) -> Option<OptionScalarInputPlan> {
-    // The wrappers this spelling adds over `Optional` have to be BUILDABLE, not
-    // absent: the emitter rebuilds a bare `Option::Some(v)` and hands it to the
-    // source fn, so a parameter spelled `Box<Option<T>>` receives a `Box`.
-    // Asked here, before the peel, because an erasure sits outside the layer it
-    // wraps — and asked as "can I build it" rather than "is there one", so the
-    // only refusal left is a wrapper `WRAPPER_OPS` declines (`Cow`).
-    build_through_erased_wrappers(arg, quote!(__probe))?;
-    let inner = arg.optional_inner()?;
-    // `Option<&T>` is the nullable-borrow / handle path, not a scalar.
-    if inner.borrow_target().is_some() {
-        return None;
-    }
-    // The layer's own reading straight to its entry — no spell-and-look-back.
-    let inner_entry = ext.in_frag(inner)?;
-    let value_wire = inner_entry.destination.clone();
-    // Only the boxed-primitive fallback shape: primitive wire, no niche,
-    // no projection, no composed pre-stages.
-    let prim = JniPrim::from_wire(&value_wire)?;
-    if inner_entry.niches.clone().carve().is_some() {
-        return None;
-    }
-    if inner_entry.metadata.projection.is_some() {
-        return None;
-    }
-    if !inner_entry.pre_stages.is_empty() {
-        return None;
-    }
-    // The reading-taking probe: `Option<Box<Priority>>` now answers TRUE, where
-    // keying on the spelling asked about `Box < Priority >` and found nothing —
-    // the #270/#272 family again. The probe also peels an optional, which cannot
-    // matter here: a nested `Option<Option<enum>>` has a BOXED wire, and
-    // `JniPrim::from_wire` above accepts only the eight `j*` primitives, so it
-    // has already returned by this line.
-    let is_enum = ext.is_kotlin_enum_reading(inner);
-    Some(OptionScalarInputPlan {
-        present_ident: format_ident!("{}_present", param_name),
-        value_ident: format_ident!("{}_value", param_name),
-        value_wire,
-        inner_conv: inner_entry.function.sig.ident.clone(),
-        present_kt: snake_to_camel(&format!("{}_present", param_name)),
-        value_kt: snake_to_camel(&format!("{}_value", param_name)),
-        value_kt_type: prim.kotlin_type().to_string(),
-        value_kt_zero: prim.kotlin_zero().to_string(),
-        is_enum,
-        arg_wrappers: arg.erased_wrappers(),
-    })
 }
 
 // ──────────────────────────────────────────────────────────────────────

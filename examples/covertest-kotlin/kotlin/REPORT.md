@@ -106,6 +106,8 @@ Base package: `io.prebindgen.covertest`
 - `percent_optional` — `fun percentOptional(p: Int?, onError: JniErrorHandler<Int?>): Int?`
 - `percent_scale` — `fun percentScale(p: Int, factor: Int, onError: JniErrorHandler<Int>): Int`
 - `plain_note_echo` — `fun plainNoteEcho(note: String?, onError: JniErrorHandler<String?>): String?`
+- `priority_nested` — `fun priorityNested(which: Int, onError: JniErrorHandler<Priority?>): Priority?`
+- `priority_nested_state` — `fun priorityNestedState(p: Priority?, onError: JniErrorHandler<Int>): Int`
 - `priority_or` — `fun priorityOr(p: Priority?, fallback: Priority, onError: JniErrorHandler<Priority?>): Priority?`
 - `priority_weight` — `fun priorityWeight(p: Priority, onError: JniErrorHandler<Int>): Int`
 - `probe_each` — `fun probeEach(n: Long, total: Double, sink: ProbeCallback, onError: JniErrorHandler<Unit>)`

@@ -117,6 +117,10 @@ pub struct KotlinMeta {
     /// wrappers and the `lookup_*` composed branches. The single source of truth
     /// for typed-handle rendering and `close()` generation — see [`Projection`].
     pub projection: Option<Projection>,
+    /// Target-language spellings for the currently exposed niche slots, in
+    /// the same carve order as `ConverterImpl::niches`. Optional composition
+    /// removes the spelling for every slot it consumes.
+    pub niche_sentinels: Vec<String>,
 }
 
 impl KotlinMeta {
@@ -125,6 +129,7 @@ impl KotlinMeta {
             kotlin_name: Some(KtType::cls(name)),
             value_rust_type: None,
             projection: None,
+            niche_sentinels: Vec::new(),
         }
     }
 

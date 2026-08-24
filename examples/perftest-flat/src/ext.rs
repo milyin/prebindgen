@@ -162,6 +162,30 @@ pub fn priority_or(p: Option<Priority>, fallback: Priority) -> Priority {
     p.unwrap_or(fallback)
 }
 
+/// Exercise the intentionally collapsed Kotlin surface for nested optional
+/// enums: both absent Rust states become Kotlin `null`, while a present enum
+/// remains typed.
+#[prebindgen]
+pub fn priority_nested(which: u8) -> Option<Option<Priority>> {
+    match which {
+        0 => None,
+        1 => Some(None),
+        _ => Some(Some(Priority::High)),
+    }
+}
+
+/// Report which nested optional state arrived through the JNI input. Kotlin's
+/// collapsed `Priority?` surface can express the outer `None` and
+/// `Some(Some(_))`, but not the inner `Some(None)` state.
+#[prebindgen]
+pub fn priority_nested_state(p: Option<Option<Priority>>) -> i32 {
+    match p {
+        None => 0,
+        Some(None) => 1,
+        Some(Some(_)) => 2,
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Reading — a data-carrying enum, i.e. a sum type (→ Kotlin `sealed interface`).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -238,11 +262,10 @@ pub fn observation_new(which: i32, with_fallback: bool) -> Observation {
     }
 }
 
-/// A second sum whose payload is **not leaf-shaped**: `Option<Priority>` is an
-/// enum object (or null) in the JVM slot, which the tag-gated flat form cannot
-/// express. The binding therefore lets this one cross as a whole object through
-/// its own converter rather than failing — the degradation path — which is also
-/// what exercises the `Option<enum>` property read.
+/// A second sum whose payload uses an enum niche: `Option<Priority>` occupies
+/// one primitive `jint`, with an unused discriminant representing `None`.
+/// Together with the sum tag, this keeps `None_`, `Ranked(None)`, and
+/// `Ranked(Some(_))` distinct without a boxed enum object.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Marker {
@@ -271,16 +294,10 @@ pub fn tagged_new(which: i32) -> Tagged {
     }
 }
 
-/// The same `Option<enum>` payload with the sum in **return** position rather
-/// than as a struct field. Only this reaches `synth_sum_leaves`, which hardcodes
-/// `nullable: false` on every group leaf and lets `plan_leaf_param` widen from
-/// the inert side; a struct field takes `PlanFieldKind::Sum` and, for this
-/// payload, degrades to the whole-object crossing instead.
-///
-/// Two nullabilities meet in one slot and must not collapse into each other:
-/// the payload's own `None`, and the slot being inert because the other variant
-/// is live. Both arrive as a JVM null, so `Ranked(null)` and `None_` are only
-/// told apart by the tag.
+/// The same niche-backed `Option<enum>` payload with the sum in **return**
+/// position rather than as a struct field. The payload's `None` uses its enum
+/// sentinel; the sum tag independently selects whether the `Ranked` slot is
+/// active, so the two concepts cannot collapse into one JVM null.
 #[prebindgen]
 pub fn marker_of(which: i32) -> Marker {
     match which {
@@ -290,8 +307,8 @@ pub fn marker_of(which: i32) -> Marker {
     }
 }
 
-/// Read it back — the whole-object sum decode, including the `Option<enum>`
-/// payload, crossing Kotlin → Rust.
+/// Read it back, including the niche-backed `Option<enum>` payload crossing
+/// Kotlin → Rust as one primitive discriminant.
 #[prebindgen]
 pub fn tagged_rank(t: Tagged) -> i32 {
     match t.marker {

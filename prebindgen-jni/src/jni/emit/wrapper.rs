@@ -573,40 +573,31 @@ fn emit_input_param(
 
         // Bare `Option<primitive>` / `Option<enum>` param: cross as a
         // `(present: jboolean, value: <wire>)` pair instead of a boxed
-        // `java.lang.*` `JObject`. The Rust side rebuilds the `Option` from
-        // two raw scalars — no `env.call_method("intValue", …)` unbox.
-        InputKind::OptionScalar(sp) => {
+        // `java.lang.*` `JObject`. The registry's selected Optional fragment
+        // rebuilds the value from two raw scalars — no
+        // `env.call_method("intValue", …)` unbox.
+        InputKind::OptionalPair(sp) => {
             let pid = &sp.present_ident;
             let vid = &sp.value_ident;
             let vwire = &sp.value_wire;
             wire_params.push(quote!(#pid: jni::sys::jboolean));
             wire_params.push(quote!(#vid: #vwire));
-            let conv = &sp.inner_conv;
-            let tmp = format_ident!("__{}_val", arg_ident);
-            // The rebuilt `Option`, then the wrappers the parameter's spelling
-            // adds over it — `Box<Option<T>>` gets its `Box` back here, because
-            // nothing between this and the source call re-spells the value.
-            // The plan only exists when the build resolves, so this cannot fail.
-            let built = build_through_wrappers(
-                &sp.arg_wrappers,
-                quote! {
-                    if #pid != 0u8 {
-                        let #tmp = match #conv(&mut env, &#vid) {
-                            ::core::result::Result::Ok(__v) => __v,
-                            ::core::result::Result::Err(__e) => {
-                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                                return #on_err;
-                            }
-                        };
-                        ::core::option::Option::Some(#tmp)
-                    } else {
-                        ::core::option::Option::None
-                    }
-                },
-            )
-            .expect("an option-scalar plan is built only for a buildable spelling");
+            let converter = &sp.chain.ident;
             prelude.push(quote! {
-                let #arg_ident = #built;
+                let #arg_ident = match #converter(&mut env, (#pid, #vid)) {
+                    ::core::result::Result::Ok(__value) => __value,
+                    ::core::result::Result::Err(__error) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__error.to_string(),
+                        );
+                        return #on_err;
+                    }
+                };
             });
             (wire_params, prelude, quote!(#arg_ident))
         }
@@ -943,38 +934,31 @@ pub(crate) fn emit_expanded_param(
         // `java.lang.*` `JObject`. The Kotlin extern and call site consume
         // the same classified plan, so the JNI arity/types agree on both
         // sides of the wire.
-        if let InputKind::OptionScalar(sp) = &classified.kind {
+        if let InputKind::OptionalPair(sp) = &classified.kind {
             let present_ident = &sp.present_ident;
             let value_ident = &sp.value_ident;
             let value_wire = &sp.value_wire;
-            let inner_conv = &sp.inner_conv;
+            let converter = &sp.chain.ident;
             wire_params.push(quote!(#present_ident: jni::sys::jboolean));
             wire_params.push(quote!(#value_ident: #value_wire));
-            // The local is ascribed the leaf's own SPELLING (`leaf_ty`), so the
-            // rebuilt `Option` has to be wrapped back up to match it — the same
-            // rule as the parameter path above, and the reason the ascription
-            // can stay as written rather than being weakened to the stripped
-            // type.
-            let built = build_through_wrappers(
-                &sp.arg_wrappers,
-                quote! {
-                    if #present_ident != 0u8 {
-                        let __v = match #inner_conv(&mut env, &#value_ident) {
-                            ::core::result::Result::Ok(__v) => __v,
-                            ::core::result::Result::Err(__e) => {
-                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                                return #on_err;
-                            }
-                        };
-                        ::core::option::Option::Some(__v)
-                    } else {
-                        ::core::option::Option::None
-                    }
-                },
-            )
-            .expect("an option-scalar plan is built only for a buildable spelling");
             prelude.push(quote!(
-                let #local: #leaf_ty_tokens = #built;
+                let #local: #leaf_ty_tokens = match #converter(
+                    &mut env,
+                    (#present_ident, #value_ident),
+                ) {
+                    ::core::result::Result::Ok(__value) => __value,
+                    ::core::result::Result::Err(__error) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__error.to_string(),
+                        );
+                        return #on_err;
+                    }
+                };
             ));
             leaf_locals.push(local);
             continue;
