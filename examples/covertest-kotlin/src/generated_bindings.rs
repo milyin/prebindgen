@@ -560,7 +560,7 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
             env,
             v.ttl.clone(),
         )?;
-        let ___priority: jni::objects::JObject = Option_Priority_to_JObject_ad5cbb32(
+        let ___priority: jni::sys::jint = Option_Priority_to_jint_3d9b4399(
             env,
             v.priority.clone(),
         )?;
@@ -568,7 +568,7 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
             .call_static_method(
                 "io/prebindgen/covertest/model/Annotated",
                 "fromParts",
-                "(JIDZLjava/lang/String;ZJIDZLjava/lang/String;Ljava/lang/Long;Ljava/lang/Integer;)Lio/prebindgen/covertest/model/Annotated;",
+                "(JIDZLjava/lang/String;ZJIDZLjava/lang/String;Ljava/lang/Long;I)Lio/prebindgen/covertest/model/Annotated;",
                 &[
                     jni::objects::JValue::from(___payload_id),
                     jni::objects::JValue::from(___payload_seq),
@@ -582,7 +582,7 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
                     jni::objects::JValue::from(___alternate_o3),
                     jni::objects::JValue::Object(&___alternate_o4),
                     jni::objects::JValue::Object(&___ttl),
-                    jni::objects::JValue::Object(&___priority),
+                    jni::objects::JValue::from(___priority),
                 ],
             )
             .and_then(|__v| __v.l())
@@ -3297,39 +3297,6 @@ pub(crate) unsafe fn JObject_to_Option_Percent_544dd364<'env, 'v>(
                     ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
                 }?,
             )
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Option<perftest_flat::Priority>, __JniErr> {
-    ::core::result::Result::Ok({
-        if (v).is_null() {
-            ::core::option::Option::None
-        } else {
-            let __present = {
-                env.call_method(&v, "intValue", "()I", &[])
-                    .and_then(|__value| __value.i())
-                    .map(|__value| __value as jni::sys::jint)
-                    .map_err(|__error| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Option unbox: {}", __error)))?
-            };
-            ::core::option::Option::Some(jint_to_Priority_447102d2(env, &(__present))?)
         }
     })
 }
@@ -6954,20 +6921,15 @@ pub(crate) unsafe fn Lookup_to_tuple4_68d54df3<'a>(
     clippy::eq_op
 )]
 #[inline(always)]
-pub(crate) unsafe fn Marker_to_tuple3_8b7f3646<'a>(
+pub(crate) unsafe fn Marker_to_tuple3_8345c1e1<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Marker,
-) -> ::core::result::Result<
-    (jni::sys::jint, (), (jni::objects::JObject<'a>,)),
-    __JniErr,
-> {
+) -> ::core::result::Result<(jni::sys::jint, (), (jni::sys::jint,)), __JniErr> {
     ::core::result::Result::Ok({
         match v {
-            perftest_flat::Marker::None_ => {
-                (0i32, (), (jni::objects::JObject::null().into(),))
-            }
+            perftest_flat::Marker::None_ => (0i32, (), (0 as jni::sys::jint,)),
             perftest_flat::Marker::Ranked(__part0) => {
-                (1i32, (), (Option_Priority_to_JObject_ad5cbb32(env, __part0)?,))
+                (1i32, (), (Option_Priority_to_jint_3d9b4399(env, __part0)?,))
             }
         }
     })
@@ -9752,20 +9714,16 @@ pub(crate) unsafe fn Option_Percent_to_JObject_544dd364<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn Option_Priority_to_JObject_ad5cbb32<'a>(
+pub(crate) unsafe fn Option_Priority_to_jint_3d9b4399<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Priority>,
-) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+) -> ::core::result::Result<jni::sys::jint, __JniErr> {
     ::core::result::Result::Ok({
         match v {
             ::core::option::Option::Some(__value) => {
-                let __raw: jni::sys::jint = Priority_to_jint_447102d2(env, __value)?;
-                ::prebindgen_jni_runtime::box_jint(env, __raw)
-                    .map_err(|__error| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Option box: {}", __error)))?
+                Priority_to_jint_447102d2(env, __value)?
             }
-            ::core::option::Option::None => jni::objects::JObject::null(),
+            ::core::option::Option::None => -2147483648i32,
         }
     })
 }
@@ -10729,14 +10687,14 @@ pub(crate) unsafe fn Tagged_to_JObject_641b984c<'a>(
     Ok({
         let ___id: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.id.clone())?;
         let ___marker__tag: jni::sys::jint;
-        let ___marker_g0: jni::objects::JObject;
+        let ___marker_g0: jni::sys::jint;
         match &v.marker {
             perftest_flat::Marker::None_ => {
                 ___marker__tag = 0;
-                ___marker_g0 = jni::objects::JObject::null();
+                ___marker_g0 = 0i32;
             }
             perftest_flat::Marker::Ranked(__s0_0) => {
-                let ___marker_ranked_v0: jni::objects::JObject = Option_Priority_to_JObject_ad5cbb32(
+                let ___marker_ranked_v0: jni::sys::jint = Option_Priority_to_jint_3d9b4399(
                     env,
                     __s0_0.clone(),
                 )?;
@@ -10748,11 +10706,11 @@ pub(crate) unsafe fn Tagged_to_JObject_641b984c<'a>(
             .call_static_method(
                 "io/prebindgen/covertest/model/Tagged",
                 "fromParts",
-                "(JILjava/lang/Integer;)Lio/prebindgen/covertest/model/Tagged;",
+                "(JII)Lio/prebindgen/covertest/model/Tagged;",
                 &[
                     jni::objects::JValue::from(___id),
                     jni::objects::JValue::from(___marker__tag),
-                    jni::objects::JValue::Object(&___marker_g0),
+                    jni::objects::JValue::from(___marker_g0),
                 ],
             )
             .and_then(|__v| __v.l())
@@ -11645,6 +11603,34 @@ pub(crate) unsafe fn jdouble_to_f64_9e4a8f70<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn jint_to_Box_Option_Priority_2f024ff7<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jint,
+) -> ::core::result::Result<Box<Option<perftest_flat::Priority>>, __JniErr> {
+    ::core::result::Result::Ok(
+        ::std::boxed::Box::new({
+            if *v == -2147483648i32 {
+                ::core::option::Option::None
+            } else {
+                let __present = v;
+                ::core::option::Option::Some(jint_to_Priority_447102d2(env, __present)?)
+            }
+        }),
+    )
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jint_to_Box_Priority_a16653ae<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
@@ -11652,6 +11638,32 @@ pub(crate) unsafe fn jint_to_Box_Priority_a16653ae<'env, 'v>(
     Ok({
         let __inner = jint_to_Priority_447102d2(env, v)?;
         ::std::boxed::Box::new(__inner)
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn jint_to_Option_Priority_3d9b4399<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jint,
+) -> ::core::result::Result<Option<perftest_flat::Priority>, __JniErr> {
+    ::core::result::Result::Ok({
+        if *v == -2147483648i32 {
+            ::core::option::Option::None
+        } else {
+            let __present = v;
+            ::core::option::Option::Some(jint_to_Priority_447102d2(env, __present)?)
+        }
     })
 }
 #[allow(
@@ -12312,36 +12324,6 @@ pub(crate) unsafe fn tuple2_to_Box_Option_Payload_0aa97b23<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn tuple2_to_Box_Option_Priority_b03d39db<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: (jni::sys::jboolean, jni::sys::jint),
-) -> ::core::result::Result<Box<Option<perftest_flat::Priority>>, __JniErr> {
-    ::core::result::Result::Ok(
-        ::std::boxed::Box::new({
-            if (v).0 == 0u8 {
-                ::core::option::Option::None
-            } else {
-                let __present = (v).1;
-                ::core::option::Option::Some(
-                    jint_to_Priority_447102d2(env, &(__present))?,
-                )
-            }
-        }),
-    )
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 #[inline(always)]
 pub(crate) unsafe fn tuple2_to_CacheConfig_fcb43e74<'env, 'a>(
     env: &mut jni::JNIEnv<'env>,
@@ -12482,32 +12464,6 @@ pub(crate) unsafe fn tuple2_to_Option_Payload_af2bd54b<'env, 'v>(
         } else {
             let __present = (v).1;
             ::core::option::Option::Some(tuple5_to_Payload_bbb055bc(env, __present)?)
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn tuple2_to_Option_Priority_2ab1de45<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: (jni::sys::jboolean, jni::sys::jint),
-) -> ::core::result::Result<Option<perftest_flat::Priority>, __JniErr> {
-    ::core::result::Result::Ok({
-        if (v).0 == 0u8 {
-            ::core::option::Option::None
-        } else {
-            let __present = (v).1;
-            ::core::option::Option::Some(jint_to_Priority_447102d2(env, &(__present))?)
         }
     })
 }
@@ -12682,13 +12638,53 @@ pub(crate) unsafe fn tuple2_to_Stamp_8d33d015<'env, 'a>(
     clippy::eq_op
 )]
 #[inline(always)]
-pub(crate) unsafe fn tuple2_to_Tagged_b68a6969<'env, 'a>(
+pub(crate) unsafe fn tuple2_to_Tagged_5d7eb8fa<'env, 'a>(
     env: &mut jni::JNIEnv<'env>,
-    v: (jni::sys::jlong, jni::objects::JObject<'a>),
+    v: (jni::sys::jlong, (jni::sys::jint, (), (jni::sys::jint,))),
 ) -> ::core::result::Result<perftest_flat::Tagged, __JniErr> {
     ::core::result::Result::Ok(perftest_flat::Tagged {
         id: jlong_to_i64_fbf9a9bc(env, &((v).0))?,
-        marker: JObject_to_Marker_3dc81334(env, &((v).1))?,
+        marker: tuple3_to_Marker_8345c1e1(env, (v).1)?,
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn tuple3_to_Marker_8345c1e1<'env, 'a>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (jni::sys::jint, (), (jni::sys::jint,)),
+) -> ::core::result::Result<perftest_flat::Marker, __JniErr> {
+    ::core::result::Result::Ok({
+        let __tag = (v).0;
+        match __tag {
+            0i32 => perftest_flat::Marker::None_,
+            1i32 => {
+                let __choice = v;
+                let __arm = (__choice).2;
+                perftest_flat::Marker::Ranked(
+                    jint_to_Option_Priority_3d9b4399(env, &((__arm).0))?,
+                )
+            }
+            _ => {
+                return ::core::result::Result::Err({
+                    let __invalid_tag = __tag;
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("{}: invalid tag {}", "Marker", __invalid_tag,))
+                });
+            }
+        }
     })
 }
 #[allow(
@@ -13152,8 +13148,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedAlterna
     a_alternate_label: jni::objects::JString<'a>,
     a_ttl_present: jni::sys::jboolean,
     a_ttl_value: jni::sys::jlong,
-    a_priority_present: jni::sys::jboolean,
-    a_priority_value: jni::sys::jint,
+    a_priority: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
@@ -13361,27 +13356,22 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedAlterna
     } else {
         ::core::option::Option::None
     };
-    let __flat_a_priority = if a_priority_present != 0u8 {
-        let __flat_a_priority_value = match jint_to_Priority_447102d2(
-            &mut env,
-            &a_priority_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__flat_a_priority_value)
-    } else {
-        ::core::option::Option::None
+    let __flat_a_priority = match jint_to_Option_Priority_3d9b4399(
+        &mut env,
+        &a_priority,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
     let __flat_a = perftest_flat::Annotated {
         payload: __flat_a_payload,
@@ -13418,8 +13408,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
     payload_label: jni::objects::JString<'a>,
     ttl_present: jni::sys::jboolean,
     ttl_value: jni::sys::jlong,
-    priority_present: jni::sys::jboolean,
-    priority_value: jni::sys::jint,
+    priority: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
@@ -13457,19 +13446,16 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let priority = match tuple2_to_Option_Priority_2ab1de45(
-        &mut env,
-        (priority_present, priority_value),
-    ) {
-        ::core::result::Result::Ok(__value) => __value,
-        ::core::result::Result::Err(__error) => {
+    let priority = match jint_to_Option_Priority_3d9b4399(&mut env, &priority) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__error.to_string(),
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -13510,8 +13496,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPayload
     a_alternate_label: jni::objects::JString<'a>,
     a_ttl_present: jni::sys::jboolean,
     a_ttl_value: jni::sys::jlong,
-    a_priority_present: jni::sys::jboolean,
-    a_priority_value: jni::sys::jint,
+    a_priority: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jdouble {
     #[allow(non_upper_case_globals)]
@@ -13719,27 +13704,22 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPayload
     } else {
         ::core::option::Option::None
     };
-    let __flat_a_priority = if a_priority_present != 0u8 {
-        let __flat_a_priority_value = match jint_to_Priority_447102d2(
-            &mut env,
-            &a_priority_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0.0 as jni::sys::jdouble;
-            }
-        };
-        ::core::option::Option::Some(__flat_a_priority_value)
-    } else {
-        ::core::option::Option::None
+    let __flat_a_priority = match jint_to_Option_Priority_3d9b4399(
+        &mut env,
+        &a_priority,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0.0 as jni::sys::jdouble;
+        }
     };
     let __flat_a = perftest_flat::Annotated {
         payload: __flat_a_payload,
@@ -13782,10 +13762,9 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
     a_alternate_label: jni::objects::JString<'a>,
     a_ttl_present: jni::sys::jboolean,
     a_ttl_value: jni::sys::jlong,
-    a_priority_present: jni::sys::jboolean,
-    a_priority_value: jni::sys::jint,
+    a_priority: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
-) -> jni::objects::JObject<'a> {
+) -> jni::sys::jint {
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -13801,7 +13780,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                 __SINK_DESCR,
                 &__e.to_string(),
             );
-            return jni::objects::JObject::null().into();
+            return 0 as jni::sys::jint;
         }
     };
     let __flat_a_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &a_payload_seq) {
@@ -13815,7 +13794,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                 __SINK_DESCR,
                 &__e.to_string(),
             );
-            return jni::objects::JObject::null().into();
+            return 0 as jni::sys::jint;
         }
     };
     let __flat_a_payload_value = match jdouble_to_f64_9e4a8f70(
@@ -13832,7 +13811,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                 __SINK_DESCR,
                 &__e.to_string(),
             );
-            return jni::objects::JObject::null().into();
+            return 0 as jni::sys::jint;
         }
     };
     let __flat_a_payload_flag = match jboolean_to_bool_31306d98(
@@ -13849,7 +13828,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                 __SINK_DESCR,
                 &__e.to_string(),
             );
-            return jni::objects::JObject::null().into();
+            return 0 as jni::sys::jint;
         }
     };
     let __flat_a_payload_label = match JString_to_Option_Box_String_071e4c8c(
@@ -13866,7 +13845,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                 __SINK_DESCR,
                 &__e.to_string(),
             );
-            return jni::objects::JObject::null().into();
+            return 0 as jni::sys::jint;
         }
     };
     let __flat_a_payload = perftest_flat::Payload {
@@ -13891,7 +13870,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                     __SINK_DESCR,
                     &__e.to_string(),
                 );
-                return jni::objects::JObject::null().into();
+                return 0 as jni::sys::jint;
             }
         };
         let __flat_a_alternate_seq = match jint_to_i32_a3e3b6ef(
@@ -13908,7 +13887,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                     __SINK_DESCR,
                     &__e.to_string(),
                 );
-                return jni::objects::JObject::null().into();
+                return 0 as jni::sys::jint;
             }
         };
         let __flat_a_alternate_value = match jdouble_to_f64_9e4a8f70(
@@ -13925,7 +13904,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                     __SINK_DESCR,
                     &__e.to_string(),
                 );
-                return jni::objects::JObject::null().into();
+                return 0 as jni::sys::jint;
             }
         };
         let __flat_a_alternate_flag = match jboolean_to_bool_31306d98(
@@ -13942,7 +13921,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                     __SINK_DESCR,
                     &__e.to_string(),
                 );
-                return jni::objects::JObject::null().into();
+                return 0 as jni::sys::jint;
             }
         };
         let __flat_a_alternate_label = match JString_to_Option_Box_String_071e4c8c(
@@ -13959,7 +13938,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                     __SINK_DESCR,
                     &__e.to_string(),
                 );
-                return jni::objects::JObject::null().into();
+                return 0 as jni::sys::jint;
             }
         };
         ::core::option::Option::Some(perftest_flat::Payload {
@@ -13984,34 +13963,29 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                     __SINK_DESCR,
                     &__e.to_string(),
                 );
-                return jni::objects::JObject::null().into();
+                return 0 as jni::sys::jint;
             }
         };
         ::core::option::Option::Some(__flat_a_ttl_value)
     } else {
         ::core::option::Option::None
     };
-    let __flat_a_priority = if a_priority_present != 0u8 {
-        let __flat_a_priority_value = match jint_to_Priority_447102d2(
-            &mut env,
-            &a_priority_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__flat_a_priority_value)
-    } else {
-        ::core::option::Option::None
+    let __flat_a_priority = match jint_to_Option_Priority_3d9b4399(
+        &mut env,
+        &a_priority,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jint;
+        }
     };
     let __flat_a = perftest_flat::Annotated {
         payload: __flat_a_payload,
@@ -14021,7 +13995,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
     };
     let a = __flat_a;
     let __out = perftest_flat::annotated_priority(&a);
-    match Option_Priority_to_JObject_ad5cbb32(&mut env, __out) {
+    match Option_Priority_to_jint_3d9b4399(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -14032,7 +14006,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
                 __SINK_DESCR,
                 &__e.to_string(),
             );
-            jni::objects::JObject::null().into()
+            0 as jni::sys::jint
         }
     }
 }
@@ -14054,8 +14028,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedTtl<'a>
     a_alternate_label: jni::objects::JString<'a>,
     a_ttl_present: jni::sys::jboolean,
     a_ttl_value: jni::sys::jlong,
-    a_priority_present: jni::sys::jboolean,
-    a_priority_value: jni::sys::jint,
+    a_priority: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
@@ -14263,27 +14236,22 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedTtl<'a>
     } else {
         ::core::option::Option::None
     };
-    let __flat_a_priority = if a_priority_present != 0u8 {
-        let __flat_a_priority_value = match jint_to_Priority_447102d2(
-            &mut env,
-            &a_priority_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__flat_a_priority_value)
-    } else {
-        ::core::option::Option::None
+    let __flat_a_priority = match jint_to_Option_Priority_3d9b4399(
+        &mut env,
+        &a_priority,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
     };
     let __flat_a = perftest_flat::Annotated {
         payload: __flat_a_payload,
@@ -15678,27 +15646,23 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedOptPriority
 >(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
-    p_present: jni::sys::jboolean,
-    p_value: jni::sys::jint,
+    p: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let p = match tuple2_to_Box_Option_Priority_b03d39db(
-        &mut env,
-        (p_present, p_value),
-    ) {
-        ::core::result::Result::Ok(__value) => __value,
-        ::core::result::Result::Err(__error) => {
+    let p = match jint_to_Box_Option_Priority_2f024ff7(&mut env, &p) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__error.to_string(),
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -17877,9 +17841,9 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_markerOf<'a>(
     #[allow(non_upper_case_globals)]
     static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __CB_FQN: &str = "io/prebindgen/covertest/model/MarkerBuilder";
-    const __CB_DESCR: &str = "(ILjava/lang/Integer;)Ljava/lang/Object;";
+    const __CB_DESCR: &str = "(II)Ljava/lang/Object;";
     let __out = perftest_flat::marker_of(which);
-    let (__chain_wire0, (), (__chain_wire1,)) = match Marker_to_tuple3_8b7f3646(
+    let (__chain_wire0, (), (__chain_wire1,)) = match Marker_to_tuple3_8345c1e1(
         &mut env,
         __out,
     ) {
@@ -17899,7 +17863,9 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_markerOf<'a>(
     let __obj0 = jni::sys::jvalue {
         i: __chain_wire0,
     };
-    let __obj1: jni::objects::JObject = __chain_wire1;
+    let __obj1 = jni::sys::jvalue {
+        i: __chain_wire1,
+    };
     match __CB_MID
         .call_object(
             &mut env,
@@ -17907,12 +17873,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_markerOf<'a>(
             "run",
             __CB_DESCR,
             &__builder,
-            &[
-                __obj0,
-                jni::sys::jvalue {
-                    l: __obj1.as_raw(),
-                },
-            ],
+            &[__obj0, __obj1],
         )
     {
         ::core::result::Result::Ok(__o) => __o,
@@ -18744,8 +18705,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_plainNoteEcho<'a
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityOr<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
-    p_present: jni::sys::jboolean,
-    p_value: jni::sys::jint,
+    p: jni::sys::jint,
     fallback: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jint {
@@ -18753,16 +18713,16 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityOr<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let p = match tuple2_to_Option_Priority_2ab1de45(&mut env, (p_present, p_value)) {
-        ::core::result::Result::Ok(__value) => __value,
-        ::core::result::Result::Err(__error) => {
+    let p = match jint_to_Option_Priority_3d9b4399(&mut env, &p) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__error.to_string(),
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -23946,14 +23906,18 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_taggedRank<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
     t_id: jni::sys::jlong,
-    t_marker: jni::objects::JObject<'a>,
+    t_marker__tag: jni::sys::jint,
+    t_marker_ranked_v0: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jint {
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let t = match tuple2_to_Tagged_b68a6969(&mut env, (t_id, t_marker)) {
+    let t = match tuple2_to_Tagged_5d7eb8fa(
+        &mut env,
+        (t_id, (t_marker__tag, (), (t_marker_ranked_v0,))),
+    ) {
         ::core::result::Result::Ok(__value) => __value,
         ::core::result::Result::Err(__error) => {
             signal_binding_error(

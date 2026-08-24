@@ -115,6 +115,9 @@ pub(crate) struct PlanLeaf {
     /// `enum_class` enum: surface keeps the typed enum, the extern declares
     /// `Int`/`Int?`, and the call site passes `.value` / `?.value`.
     pub as_enum_value: bool,
+    /// Primitive sentinel carved by this Optional enum layer. When present,
+    /// the JNI extern keeps `Int` non-null and Kotlin maps `null` to this value.
+    pub enum_niche: Option<String>,
     pub kind: InputKind,
 }
 
@@ -235,6 +238,8 @@ pub(crate) struct ValueOutputPlan {
     /// `unfold.is_none()` gate).
     pub is_enum: bool,
     pub is_option_enum: bool,
+    /// Primitive sentinel carved by the outer Optional enum layer.
+    pub enum_niche: Option<String>,
 }
 
 /// The pure classification core of `classify_return` — no import
@@ -673,6 +678,11 @@ fn classify_leaf(
                 .and_then(|e| e.metadata.kotlin_name.clone()),
             optional: reading.optional_inner().is_some(),
             as_enum_value: ext.is_kotlin_enum_reading(reading),
+            enum_niche: crate::jni::compile::option_enum_niche(
+                ext,
+                reading,
+                prebindgen_registry::recipe::Direction::Construct,
+            ),
             kind: InputKind::Callback { iface },
         });
     }
@@ -917,6 +927,7 @@ fn build_output(
         surface,
         is_enum,
         is_option_enum,
+        enum_niche,
         ..
     } = plan;
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
@@ -926,6 +937,7 @@ fn build_output(
         surface,
         is_enum,
         is_option_enum,
+        enum_niche,
     })))
 }
 

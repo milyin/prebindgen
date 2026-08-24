@@ -10,7 +10,6 @@ import io.prebindgen.covertest.model.Hold
 import io.prebindgen.covertest.model.HoldPolicy
 import io.prebindgen.covertest.model.Ingot
 import io.prebindgen.covertest.model.Lookup
-import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.ObjectBoundary
 import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.Priority
@@ -1065,8 +1064,7 @@ internal object CovNative {
         aAlternateLabel: String?,
         aTtlPresent: Boolean,
         aTtlValue: Long,
-        aPriorityPresent: Boolean,
-        aPriorityValue: Int,
+        aPriority: Int,
         errorSink: Any,
     ): Double?
 
@@ -1079,8 +1077,7 @@ internal object CovNative {
         payloadLabel: String?,
         ttlPresent: Boolean,
         ttlValue: Long,
-        priorityPresent: Boolean,
-        priorityValue: Int,
+        priority: Int,
         errorSink: Any,
     ): Annotated
 
@@ -1099,8 +1096,7 @@ internal object CovNative {
         aAlternateLabel: String?,
         aTtlPresent: Boolean,
         aTtlValue: Long,
-        aPriorityPresent: Boolean,
-        aPriorityValue: Int,
+        aPriority: Int,
         errorSink: Any,
     ): Double
 
@@ -1119,10 +1115,9 @@ internal object CovNative {
         aAlternateLabel: String?,
         aTtlPresent: Boolean,
         aTtlValue: Long,
-        aPriorityPresent: Boolean,
-        aPriorityValue: Int,
+        aPriority: Int,
         errorSink: Any,
-    ): Int?
+    ): Int
 
     @JvmSynthetic
     external fun annotatedTtl(
@@ -1139,8 +1134,7 @@ internal object CovNative {
         aAlternateLabel: String?,
         aTtlPresent: Boolean,
         aTtlValue: Long,
-        aPriorityPresent: Boolean,
-        aPriorityValue: Int,
+        aPriority: Int,
         errorSink: Any,
     ): Long?
 
@@ -1220,7 +1214,7 @@ internal object CovNative {
     ): Long
 
     @JvmSynthetic
-    external fun boxedOptPriorityWeight(pPresent: Boolean, pValue: Int, errorSink: Any): Long
+    external fun boxedOptPriorityWeight(p: Int, errorSink: Any): Long
 
     @JvmSynthetic
     external fun boxedPayloadId(
@@ -1408,7 +1402,7 @@ internal object CovNative {
     external fun plainNoteEcho(note: String?, errorSink: Any): String?
 
     @JvmSynthetic
-    external fun priorityOr(pPresent: Boolean, pValue: Int, fallback: Int, errorSink: Any): Int
+    external fun priorityOr(p: Int, fallback: Int, errorSink: Any): Int
 
     @JvmSynthetic
     external fun priorityWeight(p: Int, errorSink: Any): Int
@@ -1702,7 +1696,7 @@ internal object CovNative {
     external fun taggedNew(which: Int, errorSink: Any): Tagged
 
     @JvmSynthetic
-    external fun taggedRank(tId: Long, tMarker: Marker, errorSink: Any): Int
+    external fun taggedRank(tId: Long, tMarkerTag: Int, tMarkerRankedV0: Int, errorSink: Any): Int
 
     @JvmSynthetic
     external fun ticksEmit(f: Any, errorSink: Any)

@@ -560,14 +560,15 @@ pub(crate) fn render_extern_decl(
                 let ty = if leaf.as_enum_value {
                     // Enum (incl. `Option<enum>`) crosses as jint → Kotlin
                     // `Int`; the wrapper passes `.value` / `?.value`. The Rust
-                    // converter unboxes a `java.lang.Integer`, so the extern
-                    // declares `Int`/`Int?`, never the enum object.
+                    // converter consumes that discriminant directly when a
+                    // niche exists, and boxes only as a fallback. The extern
+                    // never declares the enum object.
                     KtType::int()
                 } else {
                     leaf.kt_meta.clone()?
                 };
-                let niche_primitive =
-                    matches!(&leaf.kind, InputKind::Unsigned64 { niche: Some(_) });
+                let niche_primitive = leaf.enum_niche.is_some()
+                    || matches!(&leaf.kind, InputKind::Unsigned64 { niche: Some(_) });
                 let ty = if leaf.optional && !niche_primitive {
                     ty.nullable()
                 } else {
@@ -611,6 +612,7 @@ pub(crate) fn render_extern_decl(
             match &projection {
                 Some(p) => Some(projection_wire_return(p)),
                 None if v.is_enum => Some(KtType::int()),
+                None if v.is_option_enum && v.enum_niche.is_some() => Some(KtType::int()),
                 None if v.is_option_enum => Some(KtType::int().nullable()),
                 None => kt_return,
             }
@@ -636,6 +638,8 @@ struct Param {
     /// underlying JNI `external fun` declares the param as `Int` (jint wire).
     /// The wrapper bridges the two by passing `<name>.value` at the call site.
     as_enum_value: bool,
+    /// `None` for boxed nullable enums; otherwise the primitive absent value.
+    enum_niche: Option<String>,
 }
 
 enum ParamMode {
@@ -1167,8 +1171,10 @@ struct OutputPlan {
     cast_return: bool,
     /// enum_class return crossing as jint — wrap with `fromInt`.
     is_enum_return: bool,
-    /// `Option<enum>` return crossing boxed — `?.let { fromInt(it) }`.
+    /// `Option<enum>` return crossing — map its primitive niche or boxed null.
     is_option_enum_return: bool,
+    /// `None` for boxed nullable enums; otherwise the primitive absent value.
+    enum_niche: Option<String>,
 }
 
 /// The error-callback wiring for a wrapper. Every wrapper has a **binding**
@@ -1255,6 +1261,7 @@ fn classify_params(
                 kt_type,
                 mode: ParamMode::Callback { call_arg },
                 as_enum_value: false,
+                enum_niche: None,
             });
             continue;
         }
@@ -1366,6 +1373,7 @@ fn classify_params(
             kt_type,
             mode,
             as_enum_value: leaf.as_enum_value,
+            enum_niche: leaf.enum_niche.clone(),
         });
     }
     Some((params, receiver_idx))
@@ -1526,13 +1534,15 @@ fn classify_output(
         unreachable!("FnOutputPlan is either Value or Unfold-with-plan")
     };
     // enum_class returns cross the JNI wire as jint → Kotlin `Int` (`Int?`
-    // boxed for `Option<enum>`) — so `build_call` can wrap the result with
-    // `fromInt`. The plan's probes run over the convert-peeled declared type;
+    // niche-backed for `Option<enum>`) — so `build_call` can wrap the result
+    // with `fromInt`. The plan's probes run over the convert-peeled declared type;
     // the wrapper surface keeps the historical `unfold.is_none()` mask
     // (`Value` ∧ ¬`is_convert` ⟺ no unfold plan).
-    let (is_enum_return, is_option_enum_return) = match &fplan.output {
-        FnOutputPlan::Value(v) if !v.is_convert => (v.is_enum, v.is_option_enum),
-        _ => (false, false),
+    let (is_enum_return, is_option_enum_return, enum_niche) = match &fplan.output {
+        FnOutputPlan::Value(v) if !v.is_convert => {
+            (v.is_enum, v.is_option_enum, v.enum_niche.clone())
+        }
+        _ => (false, false, None),
     };
 
     Some(OutputPlan {
@@ -1545,6 +1555,7 @@ fn classify_output(
         cast_return: matches!(&fplan.output, FnOutputPlan::Unfold(_)),
         is_enum_return,
         is_option_enum_return,
+        enum_niche,
     })
 }
 
@@ -1605,7 +1616,10 @@ fn build_native_call(
                     // Enum → its `Int` discriminant for the extern. Nullable
                     // enum (`Enum?`) uses `?.value` so it stays `Int?`.
                     if p.kt_type.is_nullable() {
-                        format!("{}?.value", p.kt_name)
+                        match &p.enum_niche {
+                            Some(niche) => format!("{}?.value ?: {}", p.kt_name, niche),
+                            None => format!("{}?.value", p.kt_name),
+                        }
                     } else {
                         format!("{}.value", p.kt_name)
                     }
@@ -1678,7 +1692,10 @@ fn build_success_return(ext: &Declarations, out: &OutputPlan, raw: &str) -> Stri
             .expect("Option<enum> return has a Kotlin type")
             .to_string();
         let enum_kt = enum_kt.trim_end_matches('?');
-        format!("{raw}?.let {{ {enum_kt}.fromInt(it) }}")
+        match &out.enum_niche {
+            Some(niche) => format!("if ({raw} == {niche}) null else {enum_kt}.fromInt({raw})"),
+            None => format!("{raw}?.let {{ {enum_kt}.fromInt(it) }}"),
+        }
     } else if out.cast_return {
         let cast_kt = out
             .kt_return

@@ -12,9 +12,9 @@ use super::*;
 /// Peel the layers that never change whether a value's core is a Kotlin enum,
 /// **off the model**: a borrow and an optional, in any nesting. So `&Priority`,
 /// `Priority`, `Option<Priority>` and `Option<&Priority>` all probe as
-/// `Priority` — letting nullable enum params (`Option<enum>`) wire as `Int?` +
-/// `?.value` just like a non-null enum wires as `Int` + `.value`, instead of
-/// leaking the enum object to the (boxed-int-expecting) Rust converter.
+/// `Priority` — letting nullable enum params (`Option<enum>`) wire as the raw
+/// `Int` discriminant plus an allocated niche, instead of leaking the enum
+/// object to the Rust converter.
 ///
 /// A **run is not peeled**. `Vec<Priority>` is a `List<Priority>`, not an enum,
 /// so this is deliberately not [`TypeRef::layer_stack`], which strips the
@@ -259,13 +259,22 @@ fn factory_field(
                 params.push((base.clone(), KtType::int()));
                 parts.push(format!("{short}.fromInt({base})"));
             }
-            // `Option<enum>` leaf: the native encoder delivers the discriminant
-            // `box_jint`-boxed (JVM `Ljava/lang/Integer;`, null for `None`), so
-            // the factory takes `Int?` and rebuilds the nullable enum.
-            PlanFieldKind::OptionEnum { kotlin, .. } => {
+            // `Option<enum>` leaf: prefer the primitive niche selected by the
+            // registry; retain nullable boxed-Int rendering as the fallback.
+            PlanFieldKind::OptionEnum { kotlin, niche, .. } => {
                 let short = register_fqn(kotlin.leaf_name()?, imports);
-                params.push((base.clone(), KtType::int().nullable()));
-                parts.push(format!("{base}?.let {{ {short}.fromInt(it) }}"));
+                match niche {
+                    Some(niche) => {
+                        params.push((base.clone(), KtType::int()));
+                        parts.push(format!(
+                            "if ({base} == {niche}) null else {short}.fromInt({base})"
+                        ));
+                    }
+                    None => {
+                        params.push((base.clone(), KtType::int().nullable()));
+                        parts.push(format!("{base}?.let {{ {short}.fromInt(it) }}"));
+                    }
+                }
             }
             // Data-carrying enum — the tag slot plus every variant's group
             // side by side, rebuilt by an inlined `when` (no JNI crossing,

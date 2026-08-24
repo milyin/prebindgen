@@ -106,9 +106,14 @@ pub(crate) enum PlanFieldKind {
     },
     /// Bare enum → `jint` discriminant (`"I"`); factory calls `fromInt`.
     Enum { conv: ConvChain, kotlin: KtType },
-    /// `Option<enum>` → `box_jint`-boxed discriminant
-    /// (`"Ljava/lang/Integer;"`, JVM null = `None`); factory takes `Int?`.
-    OptionEnum { conv: ConvChain, kotlin: KtType },
+    /// `Option<enum>` → primitive discriminant when the enum contributes a
+    /// niche, boxed `Integer` otherwise. The frozen Kotlin sentinel is the
+    /// same slot the registry-composed converter carved.
+    OptionEnum {
+        conv: ConvChain,
+        kotlin: KtType,
+        niche: Option<String>,
+    },
     /// Nested plain data-class: its leaves inline here. `optional` prepends
     /// a `present: Boolean` flag (`"Z"`) and defaults the child slots in the
     /// `None` arm; the factory guards `Child.fromParts(…)` on the flag.
@@ -364,7 +369,16 @@ pub(crate) fn classify_field(
                 }
                 Some(inner) => {
                     let kotlin = ext.out_frag(inner)?.metadata.kotlin_name.clone()?;
-                    Some(PlanFieldKind::OptionEnum { conv, kotlin })
+                    let niche = crate::jni::compile::option_enum_niche(
+                        ext,
+                        reading,
+                        prebindgen_registry::recipe::Direction::Deconstruct,
+                    );
+                    Some(PlanFieldKind::OptionEnum {
+                        conv,
+                        kotlin,
+                        niche,
+                    })
                 }
             };
         }

@@ -1,4 +1,5 @@
 use super::*;
+use prebindgen_registry::Conversions;
 
 #[test]
 fn bounded_duration_option_uses_u64_niche_without_boxing() {
@@ -61,6 +62,123 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
     assert!(kc.contains("v:ULong?"), "{kotlin}");
     assert!(kc.contains("v?.toLong()?:-1L"), "{kotlin}");
     assert!(kc.contains("v:Long"), "{kotlin}");
+}
+
+#[test]
+fn enum_terminal_allocates_one_niche_per_optional_layer() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    Normal = 1,
+                    High = 2,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn priority_nested(
+                    value: Option<Option<Priority>>,
+                ) -> Option<Option<Priority>> {
+                    value
+                }
+            ),
+            loc,
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::enum_class!(Priority)))
+        .package(crate::package!().fun(prebindgen_registry::fun!(priority_nested)));
+    let gen = jni
+        .build_with(registry)
+        .expect("resolve nested enum options");
+
+    let key = TypeKey::from_type(&syn::parse_quote!(Priority));
+    let reading = gen.registry.reading(&key).expect("Priority reading");
+    let input = gen.decls.in_frag(&reading).expect("Priority input");
+    let output = gen.decls.out_frag(&reading).expect("Priority output");
+    assert_eq!(input.niches.len(), 2);
+    assert_eq!(output.niches.len(), 2);
+    assert_eq!(
+        input.metadata.niche_sentinels,
+        ["Int.MIN_VALUE", "-2147483647"]
+    );
+    assert_eq!(
+        input.metadata.niche_sentinels,
+        output.metadata.niche_sentinels
+    );
+    let input_values: Vec<String> = input
+        .niches
+        .slots
+        .iter()
+        .map(|slot| slot.value.to_token_stream().to_string())
+        .collect();
+    let output_values: Vec<String> = output
+        .niches
+        .slots
+        .iter()
+        .map(|slot| slot.value.to_token_stream().to_string())
+        .collect();
+    assert_eq!(
+        input_values, output_values,
+        "directions must allocate identically"
+    );
+    assert_eq!(
+        input_values,
+        ["- 2147483648i32", "- 2147483647i32"],
+        "unused discriminants are allocated in stable order"
+    );
+
+    let option_key = TypeKey::from_type(&syn::parse_quote!(Option<Priority>));
+    let option = gen.registry.reading(&option_key).expect("Option reading");
+    assert_eq!(
+        gen.decls
+            .in_frag(&option)
+            .expect("Option input")
+            .niches
+            .len(),
+        1,
+        "the first Optional layer carves one slot and re-exports the other"
+    );
+    assert_eq!(
+        gen.decls
+            .out_frag(&option)
+            .expect("Option output")
+            .niches
+            .len(),
+        1,
+        "input and output composition must expose the same remainder"
+    );
+    assert_eq!(
+        crate::jni::compile::option_enum_niche(
+            &gen.decls,
+            &option,
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .as_deref(),
+        Some("Int.MIN_VALUE"),
+        "the inner Optional layer consumes the first enum niche"
+    );
+    let nested_key = TypeKey::from_type(&syn::parse_quote!(Option<Option<Priority>>));
+    let nested = gen
+        .registry
+        .reading(&nested_key)
+        .expect("nested Option reading");
+    assert_eq!(
+        crate::jni::compile::option_enum_niche(
+            &gen.decls,
+            &nested,
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .as_deref(),
+        Some("-2147483647"),
+        "the outer Optional layer consumes the second enum niche"
+    );
 }
 
 #[test]
@@ -565,13 +683,11 @@ fn conversion_domain_must_match_the_representation() {
     let _ = jni.build_with(registry);
 }
 
-/// Phase 4: a bare `Option<primitive>` / `Option<enum>` **input** parameter
-/// crosses as a decoupled `(present: Boolean, value: <prim>)` pair instead of a
-/// boxed `java.lang.*` `JObject`. The registry-composed Optional converter
-/// reassembles the value from two raw scalars with no reflective
-/// `intValue()`/`longValue()` unbox. The public Kotlin signature
-/// keeps `T?`; the call site passes `<name> != null` and `<name> ?: <zero>`
-/// (`<name>?.value ?: 0` for an enum).
+/// Phase 4: a bare `Option<primitive>` with no niche crosses as a decoupled
+/// `(present: Boolean, value: <prim>)` pair instead of a boxed
+/// `java.lang.*` `JObject`. An enum terminal contributes unused discriminants,
+/// so `Option<enum>` stays one primitive. Both paths are registry-composed and
+/// the public Kotlin signature remains nullable.
 #[test]
 fn option_scalar_param_crosses_as_present_value_pair() {
     let loc = myflat_loc();
@@ -624,21 +740,20 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     assert!(kc.contains("count:Int?"), "{kotlin}");
     assert!(kc.contains("mode:Mode?"), "{kotlin}");
 
-    // Extern declares the decomposed `(present, value)` pairs, never a boxed
-    // `Long?`/`Int?` value wire.
+    // Ordinary primitives have no niche and use decomposed `(present, value)`
+    // pairs. The enum uses one non-null Int with an unused discriminant.
     assert!(kc.contains("msPresent:Boolean"), "{kotlin}");
     assert!(kc.contains("msValue:Long"), "{kotlin}");
     assert!(kc.contains("countPresent:Boolean"), "{kotlin}");
     assert!(kc.contains("countValue:Int"), "{kotlin}");
-    assert!(kc.contains("modePresent:Boolean"), "{kotlin}");
-    assert!(kc.contains("modeValue:Int"), "{kotlin}");
+    assert!(kc.contains("mode:Int"), "{kotlin}");
+    assert!(!kc.contains("modePresent:Boolean"), "{kotlin}");
 
-    // Call site splits each param into present-flag + value-or-zero (enum reads
-    // `?.value`).
+    // Primitive call sites split; the enum maps null to its allocated niche.
     assert!(kc.contains("ms!=null"), "{kotlin}");
     assert!(kc.contains("ms?:0L"), "{kotlin}");
     assert!(kc.contains("count?:0"), "{kotlin}");
-    assert!(kc.contains("mode?.value?:0"), "{kotlin}");
+    assert!(kc.contains("mode?.value?:Int.MIN_VALUE"), "{kotlin}");
 
     // Rust native wrapper takes the two raw scalars and delegates each pair to
     // the registry-composed Optional converter. The public ABI is unchanged;
@@ -646,10 +761,10 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     assert!(rc.contains("ms_present:jni::sys::jboolean"), "{rust}");
     assert!(rc.contains("ms_value:jni::sys::jlong"), "{rust}");
     assert!(rc.contains("count_value:jni::sys::jint"), "{rust}");
-    assert!(rc.contains("mode_value:jni::sys::jint"), "{rust}");
+    assert!(rc.contains("mode:jni::sys::jint"), "{rust}");
     assert!(rc.contains("letms=matchtuple2_to_Option_i64_"), "{rust}");
     assert!(rc.contains("letcount=matchtuple2_to_Option_i32_"), "{rust}");
-    assert!(rc.contains("letmode=matchtuple2_to_Option_Mode_"), "{rust}");
+    assert!(rc.contains("letmode=matchjint_to_Option_Mode_"), "{rust}");
     assert!(rc.contains("if(v).0==0u8"), "{rust}");
     // The live path feeds the three rebuilt `Option`s straight to the source
     // call — no boxed `JObject` param anywhere in the wrapper.
@@ -838,16 +953,13 @@ fn option_scalar_struct_field_flattens() {
 /// `Option<enum>` fields. Output recursively uses `fromParts`; input now
 /// recursively flattens the same graph into primitive leaves, without passing
 /// either `Job` or `Inner` as a `JObject`.
-///  * output `fromParts` descriptor: an `Option`-boxed primitive slot is the
-///    BOX class (`Ljava/lang/Long;` / `Ljava/lang/Integer;`), not the bare
-///    primitive — and the Kotlin factory takes `Int?` for `Option<enum>`,
-///    rebuilding via `?.let { E.fromInt(it) }`;
+///  * output `fromParts` descriptor: an ordinary optional primitive is boxed,
+///    while `Option<enum>` uses one primitive `I` plus an unused discriminant;
 ///  * input `get_field` descriptors are the slots' EXACT static types (nested
 ///    class FQN, box class, enum class + `getValue()I` decode), not the erased
 ///    `Ljava/lang/Object;`;
-///  * a bare `Option<enum>` RETURN wires as `Int?` (the boxed discriminant),
-///    mapped back in the wrapper — previously the extern claimed the enum
-///    class while the native side returned a boxed `Integer`.
+///  * a bare `Option<enum>` RETURN wires as a non-null `Int` carrying that
+///    discriminant and is mapped back in the wrapper.
 #[test]
 fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     let loc = myflat_loc();
@@ -932,17 +1044,20 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     let kc: String = kotlin.split_whitespace().collect();
 
     // OUTPUT (`job_make` → `fromParts`): the nested `inner` inlines to its `J`
-    // leaf, the bare enum stays a raw `I`, and the two `Option` fields occupy
-    // their BOX-class slots.
+    // leaf, the bare enum stays a raw `I`, optional i64 keeps its box, and the
+    // optional enum uses its primitive niche.
     assert!(
-        rc.contains(r#""(JILjava/lang/Long;Ljava/lang/Integer;)Lio/test/jni/model/Job;""#),
+        rc.contains(r#""(JILjava/lang/Long;I)Lio/test/jni/model/Job;""#),
         "{rust}"
     );
-    // Kotlin factory: `Long?` / `Int?` params, enum rebuilt nullably; nested
-    // child reassembled via its own factory.
+    // Kotlin factory: nullable Long plus niche-backed Int, enum rebuilt
+    // nullably; nested child reassembled via its own factory.
     assert!(kc.contains("ttl:Long?"), "{kotlin}");
-    assert!(kc.contains("mode:Int?"), "{kotlin}");
-    assert!(kc.contains("mode?.let{Level.fromInt(it)}"), "{kotlin}");
+    assert!(kc.contains("mode:Int"), "{kotlin}");
+    assert!(
+        kc.contains("if(mode==Int.MIN_VALUE)nullelseLevel.fromInt(mode)"),
+        "{kotlin}"
+    );
     assert!(kc.contains("Inner.fromParts(inner_id)"), "{kotlin}");
 
     // INPUT (`job_mode`): the native method receives the recursively flattened
@@ -951,7 +1066,7 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     assert!(kc.contains("jInnerId:Long"), "{kotlin}");
     assert!(kc.contains("jLevel:Int"), "{kotlin}");
     assert!(kc.contains("jTtlPresent:Boolean"), "{kotlin}");
-    assert!(kc.contains("jModeValue:Int"), "{kotlin}");
+    assert!(kc.contains("jMode:Int"), "{kotlin}");
     assert!(kc.contains("j.inner.id"), "{kotlin}");
     assert!(rc.contains("myflat::Inner{id:__flat_j_inner_id"), "{rust}");
     assert!(
@@ -959,12 +1074,16 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
         "{rust}"
     );
 
-    // RETURN (`job_mode` → `Option<Level>`): the extern wires `Int?`; the
-    // wrapper maps the boxed discriminant back to the nullable enum.
-    assert!(kc.contains("jModeValue:Int"), "{kotlin}");
+    // RETURN (`job_mode` → `Option<Level>`): the extern keeps a primitive Int;
+    // the wrapper maps the allocated discriminant back to null.
+    assert!(kc.contains("jMode:Int"), "{kotlin}");
+    assert!(kc.contains("j.mode?.value?:Int.MIN_VALUE"), "{kotlin}");
     assert!(kc.contains("errorSink:Any"), "{kotlin}");
-    assert!(kc.contains("):Int?"), "{kotlin}");
-    assert!(kc.contains("?.let{Level.fromInt(it)}"), "{kotlin}");
+    assert!(kc.contains("):Int"), "{kotlin}");
+    assert!(
+        kc.contains("if(__ret==Int.MIN_VALUE)nullelseio.test.jni.model.Level.fromInt(__ret)"),
+        "{kotlin}"
+    );
 }
 
 #[test]
@@ -2296,9 +2415,9 @@ fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
 /// #290 closed that by **declining** the wrapped spelling. #292 item 3 replaced
 /// the refusal with the rebuild — `Box::new(..)` is exactly what the syntax
 /// asks for — so what this pins flipped: the wrapped parameter must now reach
-/// the decoupled `(present, value)` wire, *and* the Rust side must re-wrap.
+/// the same niche-backed primitive wire, *and* the Rust side must re-wrap.
 ///
-/// Asserted on the **pair** in both artifacts so it cannot pass vacuously: the
+/// Asserted on the **two functions** in both artifacts so it cannot pass vacuously: the
 /// bare twin must take the same Kotlin surface (or the wrapped one proves
 /// nothing) and must **not** get a `Box::new` (or the wrap assertion would hold
 /// for an emitter that wrapped everything).
@@ -2362,12 +2481,12 @@ fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() 
         .join("\n");
     let kc: String = kotlin.split_whitespace().collect();
 
-    // The control: the bare twin still takes the decoupled pair, so a refusal
+    // The control: the bare twin takes the niche-backed primitive, so a refusal
     // below is about the wrapper and not about the fixture failing to reach the
     // specialized path at all.
     assert!(
-        kc.contains("zBare(modePresent:Boolean,modeValue:Int"),
-        "the bare `Option<Mode>` must still cross as (present, value) — \
+        kc.contains("zBare(mode:Int"),
+        "the bare `Option<Mode>` must cross as one niche-backed Int — \
          otherwise this test proves nothing about the wrapped one:\n{kotlin}"
     );
 
@@ -2375,8 +2494,8 @@ fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() 
     // so an identical surface is the whole claim — a wrapper must not cost a
     // parameter its lowering.
     assert!(
-        kc.contains("zBoxed(modePresent:Boolean,modeValue:Int"),
-        "`Box<Option<Mode>>` must take the same present/value lowering as its \
+        kc.contains("zBoxed(mode:Int"),
+        "`Box<Option<Mode>>` must take the same niche lowering as its \
          bare twin — the model erases the `Box`, and the emitter puts it back \
          rather than declining the shape:\n{kotlin}"
     );
@@ -2389,14 +2508,15 @@ fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() 
         .expect("read rust");
     let rc: String = rust.split_whitespace().collect();
     assert!(
-        rc.contains("::std::boxed::Box::new({if(v).0==0u8"),
+        rc.contains("::std::boxed::Box::new({if*v==-2147483648i32"),
         "the Optional converter must re-wrap the source spelling:\n{rust}"
     );
     // The control on the Rust side too: exactly ONE of the two externs wraps,
     // so the assertion above is about the spelling and not an unconditional
     // `Box` the emitter adds to everything.
     assert_eq!(
-        rc.matches("::std::boxed::Box::new({if(v).0==0u8").count(),
+        rc.matches("::std::boxed::Box::new({if*v==-2147483648i32")
+            .count(),
         1,
         "only the wrapped spelling gets a `Box::new`; the bare twin builds the \
          `Option` and passes it as is:\n{rust}"

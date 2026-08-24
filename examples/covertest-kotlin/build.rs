@@ -318,14 +318,14 @@ fn main() {
                 // ordinary flattened leaves, so the tag-gated groups must
                 // interleave with them on one `fromParts` call.
                 .class(data_class!(Observation))
-                // `Marker`'s `Option<enum>` payload is not leaf-shaped, so the
-                // sum degrades to a whole-object crossing instead of failing —
-                // and that path is what reads an enum property back.
+                // `Marker`'s `Option<enum>` payload uses one primitive jint;
+                // an enum niche represents null while the sum tag independently
+                // identifies the active variant.
                 .class(sealed_class!(Marker))
                 .class(data_class!(Tagged))
                 // `Annotated` exercises a NESTED data-class field (`payload`,
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
-                // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
+                // Option<enum> FIELDS (one jint carrying an unused discriminant for null).
                 .class(data_class!(Annotated))
                 // #144: a NON-NULL enum field (`RepliesConfig.priority`) reached
                 // through an outer `Option<CacheConfig>` param. The outer
@@ -574,9 +574,8 @@ fn main() {
                 .fun(fun!(observation_which))
                 .fun(fun!(tagged_new))
                 .fun(fun!(tagged_rank))
-                // The same `Option<enum>` payload in RETURN position — the
-                // `synth_sum_leaves` path, which the struct field above does
-                // not reach (it degrades to the whole-object crossing).
+                // The same niche-backed `Option<enum>` payload in RETURN
+                // position exercises the hoisted sum builder.
                 .fun(fun!(marker_of))
                 // A sum as the function's OWN return (and callback argument):
                 // the tag + groups ride the hoisted builder / folder singleton

@@ -236,18 +236,29 @@ fn encode_field(
                     default: quote!(0i32),
                 });
             }
-            // `Option<enum>` leaf → the converter delivers the `box_jint`-boxed
-            // discriminant (JVM null = `None`); the slot is the box class.
-            PlanFieldKind::OptionEnum { conv, .. } => {
+            // `Option<enum>` uses the enum's primitive niche when available;
+            // the boxed Integer remains the fallback for an exhausted domain.
+            PlanFieldKind::OptionEnum { conv, niche, .. } => {
                 let value_expr = conv_value(conv);
-                preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
-                slots.push(EncSlot {
-                    ident: id,
-                    wire_ty: quote!(jni::objects::JObject),
-                    descriptor: "Ljava/lang/Integer;".to_string(),
-                    is_object: true,
-                    default: quote!(jni::objects::JObject::null()),
-                });
+                if niche.is_some() {
+                    preludes.extend(quote! { let #id: jni::sys::jint = #value_expr; });
+                    slots.push(EncSlot {
+                        ident: id,
+                        wire_ty: quote!(jni::sys::jint),
+                        descriptor: "I".to_string(),
+                        is_object: false,
+                        default: quote!(0i32),
+                    });
+                } else {
+                    preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
+                    slots.push(EncSlot {
+                        ident: id,
+                        wire_ty: quote!(jni::objects::JObject),
+                        descriptor: "Ljava/lang/Integer;".to_string(),
+                        is_object: true,
+                        default: quote!(jni::objects::JObject::null()),
+                    });
+                }
             }
             // Nested data-class: inline the child's leaves; under `Option` add
             // a `present` flag and default the child slots in the `None` arm.

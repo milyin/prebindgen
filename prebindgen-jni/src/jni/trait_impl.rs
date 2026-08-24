@@ -1068,6 +1068,7 @@ impl Declarations {
                 kotlin_name,
                 value_rust_type: None,
                 projection,
+                niche_sentinels: inner.metadata.niche_sentinels.clone(),
             },
         })
     }
@@ -1143,6 +1144,7 @@ impl Declarations {
                 kotlin_name,
                 value_rust_type: None,
                 projection,
+                niche_sentinels: Vec::new(),
             },
         })
     }
@@ -1212,6 +1214,7 @@ impl Declarations {
                 kotlin_name,
                 value_rust_type: None,
                 projection: None,
+                niche_sentinels: Vec::new(),
             },
         })
     }
@@ -1286,6 +1289,7 @@ impl Declarations {
                         kotlin_name,
                         value_rust_type: None,
                         projection,
+                        niche_sentinels: Vec::new(),
                     },
                 });
             }
@@ -2396,16 +2400,19 @@ impl Declarations {
                     // to run is the kind the model already decided.
                     if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
                         let (wire, body) = enum_input_body(self, registry, e);
-                        let niches = default_niches_for_wire(&wire);
+                        let (niches, niche_sentinels) =
+                            self.enum_niches(e, registry, Direction::Construct);
                         let kotlin_name =
                             cfg.name_spec.as_ref().map(|s| KtType::cls(self.fqn_of(s)));
+                        let mut metadata = self.framework_meta(kotlin_name);
+                        metadata.niche_sentinels = niche_sentinels;
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
                             function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                             destination: wire,
                             niches,
-                            metadata: self.framework_meta(kotlin_name),
+                            metadata,
                         });
                     }
                 }
@@ -2784,16 +2791,19 @@ impl Declarations {
                 if let Some(name) = reading.key().ident() {
                     if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
                         let (wire, body) = enum_output_body(self, e);
-                        let niches = default_niches_for_wire(&wire);
+                        let (niches, niche_sentinels) =
+                            self.enum_niches(e, registry, Direction::Deconstruct);
                         let kotlin_name =
                             cfg.name_spec.as_ref().map(|s| KtType::cls(self.fqn_of(s)));
+                        let mut metadata = self.framework_meta(kotlin_name);
+                        metadata.niche_sentinels = niche_sentinels;
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
                             function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                             destination: wire,
                             niches,
-                            metadata: self.framework_meta(kotlin_name),
+                            metadata,
                         });
                     }
                 }
@@ -3089,6 +3099,7 @@ impl Declarations {
                     kotlin_name,
                     value_rust_type: None,
                     projection,
+                    niche_sentinels: Vec::new(),
                 },
             });
         }
@@ -3161,6 +3172,7 @@ impl Declarations {
                 kotlin_name,
                 value_rust_type: None,
                 projection,
+                niche_sentinels: Vec::new(),
             },
         })
     }

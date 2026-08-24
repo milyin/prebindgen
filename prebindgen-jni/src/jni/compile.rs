@@ -112,6 +112,26 @@ pub(crate) fn optional_pair_plan_candidate(ext: &Declarations, arg: &TypeRef) ->
         && inner_entry.pre_stages.is_empty()
 }
 
+/// Kotlin spelling of the niche consumed by the outer Optional enum layer.
+/// The source is the inner fragment's next free slot: nested option fragments
+/// re-export their remaining slots, so each layer naturally takes a different
+/// discriminant without a second allocation policy in the renderer.
+pub(crate) fn option_enum_niche(
+    ext: &Declarations,
+    reading: &TypeRef,
+    direction: Direction,
+) -> Option<String> {
+    let inner = reading.optional_inner()?;
+    if !ext.is_kotlin_enum_reading(inner) {
+        return None;
+    }
+    let fragment = match direction {
+        Direction::Construct => ext.in_frag(inner),
+        Direction::Deconstruct => ext.out_frag(inner),
+    }?;
+    fragment.metadata.niche_sentinels.first().cloned()
+}
+
 /// Describe the two-leaf ABI of a bare `Option<primitive>` / `Option<enum>`
 /// input, or leave the crossing on its one-value representation.
 pub(crate) fn optional_pair_plan(
@@ -1311,6 +1331,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     kotlin_name,
                     value_rust_type: None,
                     projection,
+                    niche_sentinels: Vec::new(),
                 },
                 subs: vec![element.key()],
             },
@@ -1526,9 +1547,20 @@ impl<R: Conversions> JCompile<'_, R> {
             .projection
             .clone()
             .map(|projection| Projection {
-                strategy: FoldStrategy::Optional(nullable_kind, Box::new(projection.strategy)),
+                strategy: FoldStrategy::Optional(
+                    nullable_kind.clone(),
+                    Box::new(projection.strategy),
+                ),
                 ..projection
             });
+        let mut niche_sentinels = inner.conv.metadata.niche_sentinels.clone();
+        if nullable_kind == NullableKind::Niche {
+            if !niche_sentinels.is_empty() {
+                niche_sentinels.remove(0);
+            }
+        } else {
+            niche_sentinels.clear();
+        }
         let kotlin_name = if direction == Direction::Deconstruct && projection.is_none() {
             kotlin_name.map(|name| {
                 if name.is_nullable() {
@@ -1570,6 +1602,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 niches,
                 metadata: KotlinMeta {
                     projection,
+                    niche_sentinels,
                     ..self.decls.framework_meta(kotlin_name)
                 },
                 subs: vec![element.key()],
@@ -1970,6 +2003,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // own (`&`, `Option`), so there is nothing to re-spell and nothing to
         // look up.
         let as_enum_value = ext.is_kotlin_enum_reading(reading);
+        let enum_niche = option_enum_niche(ext, reading, Direction::Construct);
         let kt_name = crate::jni::kt_param_name(&ident.to_string());
 
         // The site's own conversion, which the registry built before calling
@@ -2055,6 +2089,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             kt_meta,
             optional,
             as_enum_value,
+            enum_niche,
             kind,
         })))
     }
@@ -2306,7 +2341,9 @@ impl<R: Conversions> JCompile<'_, R> {
                 gated: optional,
             });
             if optional {
-                tail = " ?: 0".to_string();
+                let sentinel = option_enum_niche(self.decls, &part.ty, Direction::Construct)
+                    .unwrap_or_else(|| "0".to_string());
+                tail = format!(" ?: {sentinel}");
             }
         }
         if optional && crate::jni::emit::is_jobject_shaped_wire(&frag.conv.destination) {
@@ -2388,6 +2425,7 @@ impl<R: Conversions> JCompile<'_, R> {
             surface,
             is_enum: enums.is_enum,
             is_option_enum: enums.is_option_enum,
+            enum_niche: option_enum_niche(self.decls, declared, Direction::Deconstruct),
         }
     }
 
@@ -2512,10 +2550,17 @@ impl<R: Conversions> JCompile<'_, R> {
         // An `enum_class` payload is a Kotlin enum object whose wire is the
         // `jint` discriminant, so the slot reads `.value` — without it the wire
         // would carry a `Priority?` where it wants an `Int`.
-        let read = if self.decls.is_kotlin_enum_reading(&part.ty) {
+        let enum_value = self.decls.is_kotlin_enum_reading(&part.ty);
+        let read = if enum_value {
             format!("{prop}?.value")
         } else {
             prop.clone()
+        };
+        let zero = if enum_value {
+            option_enum_niche(self.decls, &part.ty, Direction::Construct)
+                .or_else(|| prim.map(|p| p.kotlin_zero().to_string()))
+        } else {
+            prim.map(|p| p.kotlin_zero().to_string())
         };
         let mut kt_ty = crate::jni::emit::wire_kotlin_type(&frag.conv);
         if prim.is_none() && !kt_ty.ends_with('?') {
@@ -2531,7 +2576,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 // payload belongs to.
                 class: String::new(),
                 read,
-                zero: prim.map(|p| p.kotlin_zero().to_string()),
+                zero,
             },
             entry: Some(frag.conv.clone()),
             handle_target: None,

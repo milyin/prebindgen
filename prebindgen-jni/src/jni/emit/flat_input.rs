@@ -167,8 +167,8 @@ pub(crate) fn struct_input_body(
         // stores the TYPED enum object (`Priority` / `Priority?`), so read the
         // slot with the enum-class descriptor and decode the discriminant via
         // its `value` getter (`getValue()I`); a null object is the `None` arm.
-        // (The generic converters can't be used here: the bare-enum one is
-        // jint-keyed, the `Option<enum>` one unboxes `java.lang.Integer`.)
+        // (The generic converters can't be used here: both are jint-keyed,
+        // while this Kotlin property is an enum object or null.)
         if ext.is_kotlin_enum_reading(inner) {
             // The NAME off the classification, not off the last path segment:
             // `Box<T>` IS `T` here, and taking the spelling apart would answer
@@ -491,9 +491,8 @@ fn read_kotlin_property(
     }
     // An enum property — bare or under `Option` — is stored as the Kotlin
     // **enum object**, so it is read through `getValue`, NOT through the
-    // generic converters: the bare-enum one is `jint`-keyed and the
-    // `Option<enum>` one unboxes a `java.lang.Integer`, and neither matches
-    // what the JVM slot actually holds. `struct_input_body` makes the same
+    // generic converters: both are `jint`-keyed, and neither matches what the
+    // JVM slot actually holds. `struct_input_body` makes the same
     // distinction for data-class fields; this is that logic for a property.
     if ext.is_kotlin_enum_reading(inner) {
         // The NAME off the classification, not off the last path segment.
