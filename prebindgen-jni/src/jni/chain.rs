@@ -97,6 +97,18 @@ impl JFunction {
 }
 
 impl RustFunction for JFunction {
+    fn ident(&self) -> &syn::Ident {
+        match &self.0 {
+            JBody::Complete(function) => &function.sig.ident,
+            JBody::OwnedHandle(plan) => &plan.ident,
+            JBody::Product(plan) => &plan.ident,
+            JBody::Choice(plan) => &plan.ident,
+            JBody::Sequence(plan) => &plan.ident,
+            JBody::Optional(plan) => &plan.ident,
+            JBody::Invoke(plan) => plan.name(),
+        }
+    }
+
     fn should_emit(&self) -> bool {
         match &self.0 {
             JBody::Complete(_) => true,

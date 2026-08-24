@@ -1933,7 +1933,7 @@ fn optional_selector_dispatch_end_to_end() {
         ),
         (
             syn::Item::Fn(syn::parse_quote!(
-                pub fn z_enc_from_id(id: i32, schema: Option<String>) -> ZEnc {
+                pub fn z_enc_from_id(id: u16, schema: Option<Vec<u8>>) -> ZEnc {
                     unimplemented!()
                 }
             )),
@@ -1975,6 +1975,18 @@ fn optional_selector_dispatch_end_to_end() {
     assert!(rc.contains("<0"), "{rust}");
     assert!(rc.contains("Option::None"), "{rust}");
     assert!(rc.contains("z_enc_from_id"), "{rust}");
+    // The required `u16` constructor argument becomes nullable on the public
+    // selector surface because the identity arm does not use it. The native ABI
+    // must nevertheless stay allocation-free: Kotlin sends presence + raw
+    // primitive, and the registry Optional chain gates the scalar conversion.
+    assert_eq!(rc.matches("fntuple2_to_Option_u16_").count(), 1, "{rust}");
+    assert!(
+        rc.contains("encoding_0_0_present:jni::sys::jboolean"),
+        "{rust}"
+    );
+    assert!(rc.contains("encoding_0_0_value:jni::sys::jint"), "{rust}");
+    assert!(!rc.contains("JObject_to_Option_u16"), "{rust}");
+    assert!(!rc.contains("intValue"), "{rust}");
 
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let raw = paths
@@ -1986,9 +1998,11 @@ fn optional_selector_dispatch_end_to_end() {
     // Selector Int + nullable build-arm leaves + nullable identity handle.
     assert!(all.contains("encodingSel:Int"), "{raw}");
     assert!(all.contains("encoding1:ZEnc?"), "{raw}");
-    // The already-Option schema arg stays a single-level String?.
-    assert!(all.contains("encoding01:String?"), "{raw}");
-    assert!(!all.contains("String??"), "{raw}");
+    assert!(all.contains("encoding00:Int?"), "{raw}");
+    assert!(all.contains("encoding00!=null,encoding00?:0"), "{raw}");
+    // The already-Option schema arg stays a single-level ByteArray?.
+    assert!(all.contains("encoding01:ByteArray?"), "{raw}");
+    assert!(!all.contains("ByteArray??"), "{raw}");
 }
 
 /// #96: a `.constructor()` member's return is a factory — it must be

@@ -18,6 +18,8 @@ Base package: `io.prebindgen.covertest`
 - `archive_new` — `fun archiveNew(onError: JniErrorHandler<SummaryVault?>): SummaryVault?`
 - `archive_store` — `fun archiveStore(a: SummaryVault, sSel: Int, s00: Long?, s01: Double?, s1: Summary?, onError: JniErrorHandler<Unit>)`
   - shaped by: param `s` expanded from `Summary` — variants [summary_new, self]
+- `selector_code_score` — `fun selectorCodeScore(valueSel: Int, value00: Int?, value01: ByteArray?, value1: SelectorCode?, onError: JniErrorHandler<Long>): Long`
+  - shaped by: param `value` expanded from `SelectorCode` — variants [selector_code_new, self]
 - `storage_expect_summary` — `fun storageExpectSummary(s: Storage, expectedSel: Int, expected00: Long?, expected01: Double?, expected1: Summary?, onError: JniErrorHandler<Boolean>): Boolean`
   - shaped by: param `expected` expanded from `Summary` — variants [summary_new, self]
 - `storage_matches_summary` — `fun storageMatchesSummary(s: Storage, expectedSel: Int, expected00: Long?, expected01: Double?, expected1: Summary?, onError: JniErrorHandler<Boolean>): Boolean`
@@ -188,6 +190,10 @@ Base package: `io.prebindgen.covertest`
 
 - `payload_label_len` — `fun labelLen(onError: JniErrorHandler<Long?>): Long?`
 
+## class `io.prebindgen.covertest.analytics.SelectorCode` (ptr_class, Rust `SelectorCode`)
+
+- `selector_code_new` — `fun new(id: Int, schema: ByteArray?, onError: JniErrorHandler<SelectorCode?>): SelectorCode?`
+
 ## class `io.prebindgen.covertest.model.Stamp` (data_class, Rust `Stamp`)
 
 - `stamp_nanos` — `fun nanos(onError: JniErrorHandler<Long>): Long`
@@ -249,6 +255,7 @@ Base package: `io.prebindgen.covertest`
 - `Reading`: sealed_class → `io.prebindgen.covertest.model.Reading` (wire `?`)
 - `RepliesConfig`: data_class → `io.prebindgen.covertest.model.RepliesConfig` (wire `jni :: objects :: JObject`)
 - `Report`: ptr_class → `io.prebindgen.covertest.model.Report` (wire `jni :: sys :: jlong`)
+- `SelectorCode`: ptr_class → `io.prebindgen.covertest.analytics.SelectorCode` (wire `jni :: sys :: jlong`)
 - `Span`: ptr_class → `io.prebindgen.covertest.model.Span` (wire `jni :: sys :: jlong`)
 - `SpanHolder`: ptr_class → `io.prebindgen.covertest.model.SpanHolder` (wire `jni :: sys :: jlong`)
 - `Stamp`: data_class → `io.prebindgen.covertest.model.Stamp` (wire `jni :: objects :: JObject`)

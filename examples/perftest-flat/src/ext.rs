@@ -42,6 +42,12 @@ mod handles {
         pub(super) total: f64,
     }
 
+    #[derive(Clone)]
+    pub struct SelectorCode {
+        pub(super) id: u16,
+        pub(super) schema: Option<Vec<u8>>,
+    }
+
     pub struct Archive {
         pub(super) latest: Option<Summary>,
         /// A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
@@ -742,6 +748,31 @@ pub fn storage_try_from_stamp(s: Stamp, tag: [u8; 2]) -> Result<Storage, Storage
             label: None,
         }],
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SelectorCode — boxed scalar leaf in a multi-variant input expansion.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Opaque value used to exercise a selector expansion whose required `u16`
+/// constructor leaf becomes nullable when the identity arm is selected.
+#[prebindgen]
+pub type SelectorCode = handles::SelectorCode;
+
+/// Construct a [`SelectorCode`] from the same scalar-plus-optional-vector shape
+/// used by zenoh's expanded `Encoding` input.
+#[prebindgen]
+pub fn selector_code_new(id: u16, schema: Option<Vec<u8>>) -> SelectorCode {
+    SelectorCode { id, schema }
+}
+
+/// Observe all three selector states: absent, rebuilt from leaves, and supplied
+/// as an existing handle.
+#[prebindgen]
+pub fn selector_code_score(value: Option<&SelectorCode>) -> i64 {
+    value
+        .map(|value| i64::from(value.id) + value.schema.as_ref().map_or(0, |v| v.len() as i64))
+        .unwrap_or(-1)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

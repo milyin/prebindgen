@@ -1772,3 +1772,53 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
     }
     assert!(revisited, "fixture must actually be recursive");
 }
+
+#[test]
+fn expansion_leaf_readings_derive_before_validation() {
+    let consumer: syn::Ident = syn::parse_quote!(consume);
+    let constructor: syn::Ident = syn::parse_quote!(build);
+    let expansions = crate::expand::Expansions {
+        expands: vec![crate::expand::ExpandDecl {
+            func: consumer.clone(),
+            param: syn::parse_quote!(value),
+            declared_target: Some(TypeKey::parse("Value").expect("test type")),
+            sel: crate::expand::ExpandSel::Subset(vec![
+                crate::expand::Variant::Ctor(constructor.clone()),
+                crate::expand::Variant::Identity,
+            ]),
+        }],
+        ..Default::default()
+    };
+    let mut registry = crate::test_util::reg_with(&[
+        "fn build(id: u16) -> Value { todo!() }",
+        "fn consume(value: &Value) {}",
+    ])
+    .export(&consumer)
+    .export(&constructor)
+    .decompose(Decompositions {
+        expansions: Some(expansions),
+        ..Default::default()
+    });
+
+    // No validate/build call precedes this read. The accessor must trigger
+    // derivation itself instead of silently exposing the builder's empty store.
+    let readings: Vec<_> = registry
+        .expansion_leaf_readings()
+        .expect("derive expansion plans")
+        .cloned()
+        .collect();
+
+    assert_eq!(
+        readings.len(),
+        3,
+        "selector, constructor leaf, identity leaf"
+    );
+    assert_eq!(
+        readings
+            .iter()
+            .filter(|reading| reading.optional_inner().is_some())
+            .count(),
+        2,
+        "both non-selector arms are nullable synthetic readings"
+    );
+}

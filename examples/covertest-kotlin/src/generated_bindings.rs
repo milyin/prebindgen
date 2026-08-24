@@ -148,6 +148,22 @@ const _: () = {
 };
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
+pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_analytics_SelectorCode_freePtr(
+    _env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    ptr: jni::sys::jlong,
+) {
+    if ptr != 0 && (ptr & 1) == 0 {
+        drop(Box::from_raw(ptr as *mut perftest_flat::SelectorCode));
+    }
+}
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::SelectorCode>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_analytics_SummaryVault_freePtr(
     _env: jni::JNIEnv,
     _class: jni::objects::JClass,
@@ -1517,6 +1533,32 @@ pub(crate) unsafe fn JBooleanArray_to_bool_3_3f960c58<'env, 'v>(
                 )
             })?;
         __arr
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JByteArray_to_Option_Vec_u8_6f4428ab<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JByteArray<'v>,
+) -> ::core::result::Result<Option<Vec<u8>>, __JniErr> {
+    ::core::result::Result::Ok({
+        if v.is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = v;
+            ::core::option::Option::Some(JByteArray_to_Vec_u8_7936d5de(env, __present)?)
+        }
     })
 }
 #[allow(
@@ -10442,6 +10484,25 @@ pub(crate) unsafe fn Result_Summary_String_to_Summary_dfdf7f9e<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn SelectorCode_to_jlong_e4059701<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::SelectorCode,
+) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn SpanHolder_to_jlong_7ffe9314<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::SpanHolder,
@@ -11980,6 +12041,39 @@ pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn jlong_to_Option_SelectorCode_b3d1576b<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<Option<OwnedObject<perftest_flat::SelectorCode>>, __JniErr> {
+    if *v == 0 {
+        Ok(None)
+    } else if (*v & 1) == 1 {
+        Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        )
+    } else {
+        Ok(
+            Some(unsafe {
+                OwnedObject::from_raw(*v as *const perftest_flat::SelectorCode)
+            }),
+        )
+    }
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -12079,6 +12173,32 @@ pub(crate) unsafe fn jlong_to_PayloadVecHandler_b32d2812<'env, 'v>(
         );
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::PayloadVecHandler) })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn jlong_to_SelectorCode_e4059701<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<OwnedObject<perftest_flat::SelectorCode>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
+    Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::SelectorCode) })
 }
 #[allow(
     non_snake_case,
@@ -12608,6 +12728,32 @@ pub(crate) unsafe fn tuple2_to_Option_i64_b2611839<'env, 'v>(
         } else {
             let __present = (v).1;
             ::core::option::Option::Some(jlong_to_i64_fbf9a9bc(env, &__present)?)
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn tuple2_to_Option_u16_f61c9f72<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (jni::sys::jboolean, jni::sys::jint),
+) -> ::core::result::Result<Option<u16>, __JniErr> {
+    ::core::result::Result::Ok({
+        if (v).0 == 0u8 {
+            ::core::option::Option::None
+        } else {
+            let __present = (v).1;
+            ::core::option::Option::Some(jint_to_u16_28edf527(env, &__present)?)
         }
     })
 }
@@ -19081,6 +19227,219 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_reportEach<'a>(
                 &__e.to_string(),
             );
             ()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_selectorCodeNew<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    id: jni::sys::jint,
+    schema: jni::objects::JByteArray<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let id = match jint_to_u16_28edf527(&mut env, &id) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let schema = match JByteArray_to_Option_Vec_u8_6f4428ab(&mut env, &schema) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = perftest_flat::selector_code_new(id, schema);
+    match SelectorCode_to_jlong_e4059701(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_selectorCodeScore<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    value_sel: jni::sys::jint,
+    value_0_0_present: jni::sys::jboolean,
+    value_0_0_value: jni::sys::jint,
+    value_0_1: jni::objects::JByteArray<'a>,
+    value_1: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __exp_value_sel = match jint_to_i32_a3e3b6ef(&mut env, &value_sel) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_value_0_0: Option<u16> = match tuple2_to_Option_u16_f61c9f72(
+        &mut env,
+        (value_0_0_present, value_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_value_0_1 = match JByteArray_to_Option_Vec_u8_6f4428ab(
+        &mut env,
+        &value_0_1,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_value_1 = match jlong_to_Option_SelectorCode_b3d1576b(&mut env, &value_1) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __folded_value = match if __exp_value_sel < 0 {
+        ::core::result::Result::Ok(::core::option::Option::None)
+    } else {
+        ({
+            match __exp_value_sel {
+                0i32 => {
+                    match __exp_value_0_0 {
+                        ::core::option::Option::Some(__p0) => {
+                            ::core::result::Result::Ok(
+                                perftest_flat::selector_code_new(__p0, __exp_value_0_1),
+                            )
+                        }
+                        ::core::option::Option::None => {
+                            ::core::result::Result::Err(
+                                ::std::string::String::from(
+                                    "constructor variant input missing",
+                                ),
+                            )
+                        }
+                    }
+                }
+                1i32 => {
+                    match __exp_value_1 {
+                        ::core::option::Option::Some(__v) => {
+                            ::core::result::Result::Ok(
+                                ::core::clone::Clone::clone(&*__v),
+                            )
+                        }
+                        ::core::option::Option::None => {
+                            ::core::result::Result::Err(
+                                ::std::string::String::from(
+                                    "identity variant value missing",
+                                ),
+                            )
+                        }
+                    }
+                }
+                __sel => {
+                    ::core::result::Result::Err(
+                        ::std::format!("invalid constructor selector: {}", __sel),
+                    )
+                }
+            }
+        })
+            .map(::core::option::Option::Some)
+    } {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __je = <__JniErr as ::core::convert::From<
+                ::std::string::String,
+            >>::from(__e);
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__je.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = perftest_flat::selector_code_score(__folded_value.as_ref());
+    match i64_to_jlong_fbf9a9bc(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
         }
     }
 }

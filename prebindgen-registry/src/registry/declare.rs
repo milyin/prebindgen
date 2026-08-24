@@ -297,6 +297,23 @@ impl RegistryBuilder {
         self.registry.named_item_idents()
     }
 
+    /// Readings introduced as leaves of resolved parameter expansions.
+    ///
+    /// Derives the registry first when necessary, so callers cannot silently
+    /// observe an empty pre-validation plan store. The iterator exposes only
+    /// the readings recipe declaration needs, not the expansion map's storage
+    /// or key representation.
+    pub fn expansion_leaf_readings(
+        &mut self,
+    ) -> Result<impl Iterator<Item = &prebindgen_flat::flat::TypeRef>, WriteRustError> {
+        self.derive()?;
+        Ok(self
+            .registry
+            .expansion_plans
+            .values()
+            .flat_map(|plan| plan.leaves.iter().map(|leaf| &leaf.ty)))
+    }
+
     /// Whether the source declares a type under this name — see
     /// `Registry::declares_type`.
     #[cfg(test)]

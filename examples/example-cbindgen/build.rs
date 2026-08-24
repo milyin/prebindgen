@@ -245,7 +245,7 @@ fn generate_ffi_bindings() -> PathBuf {
         .build()
         .expect("build prebindgen items")
         .write_rust("example_flat.rs")
-        .expect("write generated bindings");
+        .unwrap_or_else(|error| panic!("write generated bindings: {error}"));
 
     // Publish the generated Rust into the crate tree under its per-variant name
     // (committed artifact). Write only on change so cargo doesn't rebuild-loop on
