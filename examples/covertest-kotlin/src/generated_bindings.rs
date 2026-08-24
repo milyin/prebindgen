@@ -23906,19 +23906,19 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalRaw<
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    if s == 0 || (s & 1) == 1 {
-        signal_binding_error(
-            &mut env,
-            &__error_sink,
-            &__SINK_MID,
-            __SINK_FQN,
-            __SINK_DESCR,
-            "Operation on a closed native handle.",
-        );
-        return 0.0 as jni::sys::jdouble;
-    }
-    let s: perftest_flat::Summary = unsafe {
-        *std::boxed::Box::from_raw(s as *mut perftest_flat::Summary)
+    let s = match jlong_to_Summary_3cb103b9_owned(&mut env, &s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0.0 as jni::sys::jdouble;
+        }
     };
     let __out = perftest_flat::summary_total_raw(s);
     match f64_to_jdouble_9e4a8f70(&mut env, __out) {
