@@ -118,6 +118,10 @@ pub(crate) struct PlanLeaf {
     /// Primitive sentinel carved by this Optional enum layer. When present,
     /// the JNI extern keeps `Int` non-null and Kotlin maps `null` to this value.
     pub enum_niche: Option<String>,
+    /// Frozen Rust converter operation and its JNI wire. Special layouts may
+    /// supply several site wires instead, but ordinary parameters and
+    /// constructor-expansion leaves call this pipeline directly.
+    pub pipeline: crate::jni::chain::JPipeline,
     pub kind: InputKind,
 }
 
@@ -218,16 +222,10 @@ pub(crate) struct ValueOutputPlan {
     /// `Return`-delivery convert (`convert_output`) — the wrapper returns the
     /// single deconstructed value through its ordinary output converter.
     pub is_convert: bool,
-    /// The type whose output converter runs: `convert_out_ty` for a convert,
-    /// the `Result` Ok type when an error plan peels, else the declared
-    /// return. A **reading** — all three candidates are one, and the emitter
-    /// asks it for the entry directly. Its entry is validated at plan build;
-    /// the Rust emitter re-looks it up (`expect`) to keep the plan
-    /// lifetime-free.
-    pub target_ty: prebindgen_registry::flat::TypeRef,
-    /// The resolved output entry's `destination` — the extern's wire return
-    /// and the sentinel source.
-    pub wire_ty: syn::Type,
+    /// Frozen Rust converter operation and its JNI wire. The ordinary wrapper
+    /// invokes this once instead of looking the crossing up and reconstructing
+    /// its semantic pre-stage order during emission.
+    pub pipeline: crate::jni::chain::JPipeline,
     /// Kotlin surface classification over the **declared** return
     /// (`convert_out_ty` for a convert, else `f.sig.output` — not
     /// `target_ty`: the Kotlin error peel rides `value_rust_type`).
@@ -486,7 +484,7 @@ impl FnOutputPlan {
     pub fn wire_ty(&self) -> syn::Type {
         match self {
             FnOutputPlan::Unfold(_) => syn::parse_quote!(jni::objects::JObject),
-            FnOutputPlan::Value(v) => v.wire_ty.clone(),
+            FnOutputPlan::Value(v) => v.pipeline.wire().clone(),
         }
     }
 }
@@ -684,6 +682,15 @@ fn classify_leaf(
                 reading,
                 prebindgen_registry::recipe::Direction::Construct,
             ),
+            pipeline: ext
+                .in_frag(reading)
+                .ok_or_else(|| PlanError::Unresolved {
+                    ty: Box::new(reading.clone()),
+                })?
+                .pipeline(
+                    prebindgen_registry::recipe::Direction::Construct,
+                    prebindgen_registry::recipe::Mode::Owned,
+                ),
             kind: InputKind::Callback { iface },
         });
     }
@@ -924,7 +931,7 @@ fn build_output(
         ty: Box::new(target.clone()),
     })?;
     let ValueOutputPlan {
-        wire_ty,
+        pipeline,
         surface,
         is_enum,
         is_option_enum,
@@ -933,8 +940,7 @@ fn build_output(
     } = plan;
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
         is_convert,
-        target_ty: target_ty.clone(),
-        wire_ty,
+        pipeline,
         surface,
         is_enum,
         is_option_enum,

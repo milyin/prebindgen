@@ -207,6 +207,18 @@ pub(crate) enum JValueUse {
     Cloned,
 }
 
+/// Borrow a rendered value without adding noise to the common identifier case.
+/// Parentheses remain mandatory for compound expressions so `&` applies to the
+/// whole planned value rather than only its first syntactic component.
+fn shared_ref(value: TokenStream) -> TokenStream {
+    let mut tokens = value.clone().into_iter();
+    if matches!(tokens.next(), Some(proc_macro2::TokenTree::Ident(_))) && tokens.next().is_none() {
+        quote!(&#value)
+    } else {
+        quote!(&(#value))
+    }
+}
+
 /// A JNI child's complete converter pipeline, including semantic pre-stages.
 #[derive(Clone)]
 pub(crate) struct JChild {
@@ -244,21 +256,52 @@ impl JChild {
     }
 }
 
-impl shared::Child for JChild {
-    fn call(&self) -> &shared::Call {
-        &self.call
+/// One frozen wire-to-Rust or Rust-to-wire converter pipeline.
+///
+/// The registry fragment has already selected the terminal converter and
+/// ordered every semantic stage. Ordinary site renderers consume this payload
+/// as one operation; they do not inspect `ConverterImpl::pre_stages` or look the
+/// crossing up again.
+#[derive(Clone)]
+pub(crate) struct JPipeline {
+    wire: syn::Type,
+    child: JChild,
+}
+
+impl JPipeline {
+    pub(crate) fn new(wire: syn::Type, child: JChild) -> Self {
+        Self { wire, child }
     }
 
-    fn invoke(&self, value: TokenStream) -> TokenStream {
+    pub(crate) fn wire(&self) -> &syn::Type {
+        &self.wire
+    }
+
+    /// Render the already-planned call graph around `value`.
+    pub(crate) fn invoke(&self, value: TokenStream) -> TokenStream {
+        let call = self.child.invoke_with_env(quote!(&mut env), value);
+        if self.child.stages.is_empty() {
+            call
+        } else {
+            quote!((|| -> ::core::result::Result<_, __JniErr> { #call })())
+        }
+    }
+}
+
+impl JChild {
+    /// Render this child in a context that supplies its own `JNIEnv` expression.
+    /// Registry-composed converter bodies receive an `&mut JNIEnv` named
+    /// `env`; exported wrappers own a mutable `JNIEnv` and pass `&mut env`.
+    fn invoke_with_env(&self, env: TokenStream, value: TokenStream) -> TokenStream {
         let converter = self.call.ident();
         match self.direction {
             Direction::Construct => {
                 let value = match self.value_use {
                     JValueUse::Direct => value,
-                    JValueUse::SharedRef => quote!(&(#value)),
+                    JValueUse::SharedRef => shared_ref(value),
                     JValueUse::Cloned => quote!((*#value).clone()),
                 };
-                let first = quote!(#converter(env, #value));
+                let first = quote!(#converter(#env, #value));
                 if self.stages.is_empty() {
                     return first;
                 }
@@ -267,7 +310,7 @@ impl shared::Child for JChild {
                 for (index, stage) in self.stages.iter().enumerate() {
                     let next = format_ident!("__chain_s{}", index + 1);
                     body.extend(quote!(
-                        let #next = #stage(env, #previous)
+                        let #next = #stage(#env, #previous)
                             .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
                                 __e.to_string()
                             ))?;
@@ -279,27 +322,37 @@ impl shared::Child for JChild {
             Direction::Deconstruct => {
                 let value = match self.value_use {
                     JValueUse::Direct => value,
-                    JValueUse::SharedRef => quote!(&(#value)),
+                    JValueUse::SharedRef => shared_ref(value),
                     JValueUse::Cloned => quote!((*#value).clone()),
                 };
                 if self.stages.is_empty() {
-                    return quote!(#converter(env, #value));
+                    return quote!(#converter(#env, #value));
                 }
                 let mut body = TokenStream::new();
                 let mut previous = value;
                 for (index, stage) in self.stages.iter().enumerate() {
                     let next = format_ident!("__chain_s{index}");
                     body.extend(quote!(
-                        let #next = #stage(env, #previous)
+                        let #next = #stage(#env, #previous)
                             .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
                                 __e.to_string()
                             ))?;
                     ));
                     previous = quote!(#next);
                 }
-                quote!({ #body #converter(env, #previous) })
+                quote!({ #body #converter(#env, #previous) })
             }
         }
+    }
+}
+
+impl shared::Child for JChild {
+    fn call(&self) -> &shared::Call {
+        &self.call
+    }
+
+    fn invoke(&self, value: TokenStream) -> TokenStream {
+        self.invoke_with_env(quote!(env), value)
     }
 }
 
@@ -802,5 +855,14 @@ mod tests {
         .to_string();
         assert!(name.starts_with("tuple64_to_i64_"), "{name}");
         assert!(name.len() < 64, "{name}");
+    }
+
+    #[test]
+    fn shared_refs_parenthesize_only_compound_values() {
+        let bare: syn::ExprReference = syn::parse2(shared_ref(quote!(value))).unwrap();
+        assert!(matches!(*bare.expr, syn::Expr::Path(_)));
+
+        let compound: syn::ExprReference = syn::parse2(shared_ref(quote!(value.0))).unwrap();
+        assert!(matches!(*compound.expr, syn::Expr::Paren(_)));
     }
 }

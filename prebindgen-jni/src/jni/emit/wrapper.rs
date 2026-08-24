@@ -226,26 +226,12 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // `Result<T, E>` rank-2 wrapper).
     let error_plan = plan.error.as_ref();
     let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
-    // The output converter entry (`None` for callback delivery). The lookup
-    // was validated at plan build; re-resolving here keeps the plan free of
-    // registry borrows for the future build-once stage.
-    let output_entry = match &plan.output {
-        FnOutputPlan::Value(v) => Some(
-            ext.out_frag(&v.target_ty)
-                .expect("output entry validated at plan build"),
-        ),
-        FnOutputPlan::Unfold(_) => None,
-    };
-    if let Some(entry) = &output_entry {
-        entry.activate();
-    }
     let wire_ty = plan.output.wire_ty();
     let wire_return = annotate_jobject_with_lifetime(&wire_ty, "a").to_token_stream();
     let on_err = sentinel_for_wire(&wire_ty);
 
     for param in &plan.params {
-        let (wp, pre, call_arg) =
-            emit_input_param(ext, registry, original_ident, param, &on_err, emit);
+        let (wp, pre, call_arg) = emit_input_param(ext, registry, param, &on_err, emit);
         wire_params.extend(wp);
         prelude.extend(pre);
         call_args.push(call_arg);
@@ -372,10 +358,10 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // Output phase. Three shapes:
     //   * `Callback` output expansion: decompose the return value and deliver the
     //     leaves to the foreign builder/fold (`__builder` / `__acc`+`__fold`).
-    //   * `Return` output expansion (convert) and normal returns: every output
-    //     converter returns `Result<wire, <err_type>>`; run pre_stages then the
-    //     wire-facing converter, routing each `Err` through `signal_error`. (For
-    //     convert, `call_expr` above already deconstructed the value.)
+    //   * `Return` output expansion (convert) and normal returns: invoke the
+    //     frozen registry-planned pipeline once and route its `Err` through
+    //     `signal_error`. (For convert, `call_expr` above already deconstructed
+    //     the value.)
     let mut builder_param: Option<TokenStream> = None;
     let output_phase: TokenStream = if let FnOutputPlan::Unfold(u) = &plan.output {
         // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
@@ -420,28 +406,14 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             emit,
         )
     } else {
-        let output_entry = output_entry.expect("normal path has an output entry");
+        let output = match &plan.output {
+            FnOutputPlan::Value(value) => value,
+            FnOutputPlan::Unfold(_) => unreachable!("normal output has a value plan"),
+        };
+        let convert = output.pipeline.invoke(quote!(__out));
         let mut phase: TokenStream = quote! { let __out = #call_expr; };
-        let mut prev_out: TokenStream = quote!(__out);
-        // Pre_stages run in forward order BEFORE the wire-facing function:
-        // rust → pre_stages[0] → … → pre_stages[N-1] → function → wire.
-        for (i, stage) in output_entry.output_stage_order() {
-            let stage_fn = &stage.function.sig.ident;
-            let next_ident = format_ident!("__out_s{}", i);
-            phase.extend(quote! {
-                let #next_ident = match #stage_fn(&mut env, #prev_out) {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                        return #on_err;
-                    }
-                };
-            });
-            prev_out = quote!(#next_ident);
-        }
-        let conv_out = output_entry.converter_ident().clone();
         phase.extend(quote! {
-            match #conv_out(&mut env, #prev_out) {
+            match #convert {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
                     signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
@@ -534,7 +506,6 @@ fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
 fn emit_input_param(
     ext: &Declarations,
     registry: &Registry,
-    original_ident: &syn::Ident,
     param: &PlanParam,
     on_err: &TokenStream,
     emit: &prebindgen_registry::Emit,
@@ -692,10 +663,7 @@ fn emit_input_param(
                 prebindgen_registry::flat::TypeKind::Ref { .. }
             ) =>
         {
-            let entry = ext
-                .in_frag(arg_ty)
-                .expect("plan classified Handle ⇒ entry present");
-            let wire_ident = if matches!(&entry.destination, syn::Type::Ptr(_)) {
+            let wire_ident = if matches!(leaf.pipeline.wire(), syn::Type::Ptr(_)) {
                 format_ident!("{}_ptr", arg_ident)
             } else {
                 arg_ident.clone()
@@ -720,32 +688,15 @@ fn emit_input_param(
         InputKind::Callback { .. }
         | InputKind::Handle { .. }
         | InputKind::Unsigned64 { .. }
-        | InputKind::Plain => {
-            // The leaf's reading — for `ParamForm::Single` it is the very
-            // reading `param.ty` was spelled from, so this is the same lookup
-            // without the round trip. The panic now CALLS the shared message
-            // instead of restating it, which is what `PlanError::message`'s doc
-            // has always claimed and hand-duplication did not deliver.
-            let entry = ext.in_frag(&leaf.reading).unwrap_or_else(|| {
-                panic!(
-                    "{}",
-                    PlanError::Unresolved {
-                        ty: Box::new(leaf.reading.clone())
-                    }
-                    .message(original_ident)
-                )
-            });
-            entry.activate();
-            emit_plain_decode(&entry, arg_ident, arg_ty, on_err)
-        }
+        | InputKind::Plain => emit_plain_decode(&leaf.pipeline, arg_ident, arg_ty, on_err),
     }
 }
 
-/// The ordinary converter-chain decode shared by every pass-through kind:
-/// wire param + staged decode prelude + the call argument (`&decoded` /
-/// `.as_deref()` per the source param's Rust shape).
+/// The ordinary converter decode shared by every pass-through kind emits a
+/// wire parameter, one frozen-pipeline invocation, and the call argument
+/// (`&decoded` / `.as_deref()` per the source parameter's Rust shape).
 fn emit_plain_decode(
-    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
+    pipeline: &crate::jni::chain::JPipeline,
     arg_ident: &syn::Ident,
     arg_ty: &prebindgen_registry::flat::TypeRef,
     on_err: &TokenStream,
@@ -770,8 +721,7 @@ fn emit_plain_decode(
     }
     let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
-    let wire = &entry.destination;
-    let conv = entry.converter_ident().clone();
+    let wire = pipeline.wire();
     let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
         format_ident!("{}_ptr", arg_ident)
     } else {
@@ -780,77 +730,25 @@ fn emit_plain_decode(
 
     let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
     wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
-    // Input wrapper takes wires by ref except for raw pointers. The
-    // converter returns `Result<T, __JniErr>`; on `Err` we signal the
-    // error sink and bail with the function sentinel (no JVM throw).
-    let decode_call = if matches!(wire, syn::Type::Ptr(_)) {
-        quote!(#conv(&mut env, #wire_ident))
-    } else {
-        quote!(#conv(&mut env, &#wire_ident))
-    };
+    let decode_call = pipeline.invoke(quote!(#wire_ident));
     // Binding for the final `arg_ident` needs `mut` when the source
     // fn takes `&mut T` — the call site below emits `&mut arg_ident`,
     // which requires a mutable binding. Also for `Option<&mut T>`
-    // where the call site needs `.as_deref_mut()`. Intermediate stage
-    // bindings (`__{ident}_sN`) don't need it.
+    // where the call site needs `.as_deref_mut()`.
     let arg_mut: TokenStream = if is_mut_ref(arg_ty) || matches!(opt_ref_mut(arg_ty), Some(true)) {
         quote!(mut)
     } else {
         quote!()
     };
-    // Stage 0: wire-facing function. Pre_stages then run in REVERSE
-    // (rust-side last). Even with no pre_stages this collapses to a
-    // single `let #arg_ident = match decode_call { ... }`, byte-
-    // identical to the pre-chain emission.
-    if entry.pre_stages.is_empty() {
-        prelude.push(quote!(
-            let #arg_mut #arg_ident = match #decode_call {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                    return #on_err;
-                }
-            };
-        ));
-    } else {
-        // Multi-stage: introduce a temporary for the function's
-        // result, then thread each pre_stage in reverse onto it.
-        let stage0_ident = format_ident!("__{}_s0", arg_ident);
-        prelude.push(quote!(
-            let #stage0_ident = match #decode_call {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                    return #on_err;
-                }
-            };
-        ));
-        let mut prev = stage0_ident;
-        // pre_stages[0] is closest to rust → iterated last; walk
-        // back from the function-adjacent end.
-        let n = entry.pre_stages.len();
-        for (idx, stage) in entry.input_stage_order() {
-            let stage_fn = &stage.function.sig.ident;
-            let is_last = idx == 0;
-            let out_ident = if is_last {
-                arg_ident.clone()
-            } else {
-                format_ident!("__{}_s{}", arg_ident, n - idx)
-            };
-            // Final binding gets `mut` if the source fn takes `&mut`.
-            let bind_mut: TokenStream = if is_last { arg_mut.clone() } else { quote!() };
-            prelude.push(quote!(
-                let #bind_mut #out_ident = match #stage_fn(&mut env, #prev) {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                        return #on_err;
-                    }
-                };
-            ));
-            prev = out_ident;
-        }
-    }
+    prelude.push(quote!(
+        let #arg_mut #arg_ident = match #decode_call {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                return #on_err;
+            }
+        };
+    ));
     let call_arg = match arg_ty.kind() {
         TypeKind::Ref { mutable: true, .. } => quote!(&mut #arg_ident),
         TypeKind::Ref { .. } => quote!(&#arg_ident),
@@ -895,21 +793,6 @@ pub(crate) fn emit_expanded_param(
         let leaf_ty = &leaf.ty;
         // The ascription generated Rust writes for this leaf's local.
         let leaf_ty_tokens = emit.spell(leaf_ty);
-        let lookup_entry = || {
-            // The leaf's own reading goes straight to the entry: spelling it and
-            // looking the same reading back up is the round trip #286 removed.
-            ext.in_frag(&leaf.ty).unwrap_or_else(|| {
-                // Shared wording, not restated — see the sibling backstop above.
-                panic!(
-                    "{}",
-                    PlanError::UnresolvedLeaf {
-                        ty: Box::new(leaf.ty.clone()),
-                        param: orig_param.clone(),
-                    }
-                    .message(orig_param)
-                )
-            })
-        };
         let local = format_ident!("__exp_{}", leaf.name);
 
         // An expansion leaf can itself be a data class. Reuse the recursive
@@ -988,9 +871,8 @@ pub(crate) fn emit_expanded_param(
             continue;
         }
 
-        let entry = lookup_entry();
-        let wire = &entry.destination;
-        let conv = entry.function.sig.ident.clone();
+        let pipeline = &classified.pipeline;
+        let wire = pipeline.wire();
         let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
             format_ident!("{}_ptr", leaf.name)
         } else {
@@ -998,54 +880,16 @@ pub(crate) fn emit_expanded_param(
         };
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
         wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
-        let decode_call = if matches!(wire, syn::Type::Ptr(_)) {
-            quote!(#conv(&mut env, #wire_ident))
-        } else {
-            quote!(#conv(&mut env, &#wire_ident))
-        };
-        // Compose any pre_stages (rust-side, reverse order) onto the decode.
-        if entry.pre_stages.is_empty() {
-            prelude.push(quote!(
-                let #local = match #decode_call {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                        return #on_err;
-                    }
-                };
-            ));
-        } else {
-            let stage0 = format_ident!("{}_s0", local);
-            prelude.push(quote!(
-                let #stage0 = match #decode_call {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                        return #on_err;
-                    }
-                };
-            ));
-            let n = entry.pre_stages.len();
-            let mut prev = stage0;
-            for (idx, stage) in entry.pre_stages.iter().enumerate().rev() {
-                let stage_fn = &stage.function.sig.ident;
-                let out_ident = if idx == 0 {
-                    local.clone()
-                } else {
-                    format_ident!("{}_s{}", local, n - idx)
-                };
-                prelude.push(quote!(
-                    let #out_ident = match #stage_fn(&mut env, #prev) {
-                        ::core::result::Result::Ok(__v) => __v,
-                        ::core::result::Result::Err(__e) => {
-                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                            return #on_err;
-                        }
-                    };
-                ));
-                prev = out_ident;
-            }
-        }
+        let decode_call = pipeline.invoke(quote!(#wire_ident));
+        prelude.push(quote!(
+            let #local = match #decode_call {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                    return #on_err;
+                }
+            };
+        ));
         leaf_locals.push(local);
     }
 
