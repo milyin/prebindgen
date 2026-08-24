@@ -22360,6 +22360,189 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryEnvelopeScore<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    value_summary_sel: jni::sys::jint,
+    value_summary_0_0_present: jni::sys::jboolean,
+    value_summary_0_0_value: jni::sys::jlong,
+    value_summary_0_1_present: jni::sys::jboolean,
+    value_summary_0_1_value: jni::sys::jdouble,
+    value_summary_1: jni::sys::jlong,
+    value_bonus: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __exp_value_summary_sel = match jint_to_i32_a3e3b6ef(
+        &mut env,
+        &value_summary_sel,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_value_summary_0_0: Option<i64> = match tuple2_to_Option_i64_b2611839(
+        &mut env,
+        (value_summary_0_0_present, value_summary_0_0_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_value_summary_0_1: Option<f64> = match tuple2_to_Option_f64_49db5632(
+        &mut env,
+        (value_summary_0_1_present, value_summary_0_1_value),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_value_summary_1 = match jlong_to_Option_Summary_252ef2ba(
+        &mut env,
+        &value_summary_1,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_value_bonus = match jlong_to_i64_fbf9a9bc(&mut env, &value_bonus) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __folded_value = match {
+        (|| -> ::core::result::Result<_, ::std::string::String> {
+            let __a0 = {
+                let __r: ::core::result::Result<_, ::std::string::String> = {
+                    match __exp_value_summary_sel {
+                        0i32 => {
+                            match (__exp_value_summary_0_0, __exp_value_summary_0_1) {
+                                (
+                                    ::core::option::Option::Some(__p0),
+                                    ::core::option::Option::Some(__p1),
+                                ) => {
+                                    ::core::result::Result::Ok(
+                                        perftest_flat::summary_new(__p0, __p1),
+                                    )
+                                }
+                                _ => {
+                                    ::core::result::Result::Err(
+                                        ::std::string::String::from(
+                                            "constructor variant input missing",
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                        1i32 => {
+                            match __exp_value_summary_1 {
+                                ::core::option::Option::Some(__v) => {
+                                    ::core::result::Result::Ok(__v)
+                                }
+                                ::core::option::Option::None => {
+                                    ::core::result::Result::Err(
+                                        ::std::string::String::from(
+                                            "identity variant value missing",
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                        __sel => {
+                            ::core::result::Result::Err(
+                                ::std::format!("invalid constructor selector: {}", __sel),
+                            )
+                        }
+                    }
+                };
+                __r?
+            };
+            let __a1 = __exp_value_bonus;
+            ::core::result::Result::Ok(perftest_flat::summary_envelope_new(__a0, __a1))
+        })()
+    } {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __je = <__JniErr as ::core::convert::From<
+                ::std::string::String,
+            >>::from(__e);
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__je.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = perftest_flat::summary_envelope_score(__folded_value);
+    match i64_to_jlong_fbf9a9bc(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,

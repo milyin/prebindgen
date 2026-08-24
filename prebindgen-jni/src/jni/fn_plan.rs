@@ -74,12 +74,80 @@ pub(crate) enum ParamForm {
     /// remains a source-parameter-only collection optimization), so all three
     /// sites agree on the leaf wire.
     Expanded {
-        /// The registry-built constructor plan. Keeping it beside its lowered
-        /// leaves lets Rust reconstruction and Kotlin/report descriptions use
-        /// the same decision after resolution.
-        plan: Box<prebindgen_registry::expand::FoldPlan>,
+        /// The frozen constructor fold and qualified call paths. Keeping it
+        /// beside its lowered leaves lets Rust reconstruction and Kotlin/report
+        /// descriptions use the same decision after resolution.
+        plan: Box<ExpandedParamPlan>,
         leaves: Vec<PlanLeaf>,
     },
+}
+
+/// Registry-built expansion fold plus every Rust constructor path it may call.
+///
+/// The core [`prebindgen_registry::expand::FoldPlan`] owns constructor
+/// selection and recursive argument assembly. JNI freezes origin qualification
+/// beside it while the registry is still available, so final wrapper emission
+/// only supplies decoded leaf locals and never resumes a registry lookup.
+pub(crate) struct ExpandedParamPlan {
+    fold: prebindgen_registry::expand::FoldPlan,
+    constructors: BTreeMap<String, syn::Path>,
+}
+
+impl ExpandedParamPlan {
+    fn new(
+        ext: &Declarations,
+        registry: &Registry,
+        fold: &prebindgen_registry::expand::FoldPlan,
+    ) -> Self {
+        let mut constructors = BTreeMap::new();
+        Self::freeze_variants(ext, registry, &fold.variants, &mut constructors);
+        Self {
+            fold: fold.clone(),
+            constructors,
+        }
+    }
+
+    fn freeze_variants(
+        ext: &Declarations,
+        registry: &Registry,
+        variants: &[prebindgen_registry::expand::FoldVariant],
+        constructors: &mut BTreeMap<String, syn::Path>,
+    ) {
+        for variant in variants {
+            if let Some(ctor) = &variant.ctor {
+                let module = ext.fn_module(registry, ctor);
+                let path = syn::parse_quote!(#module::#ctor);
+                constructors.entry(ctor.to_string()).or_insert(path);
+            }
+            for input in &variant.inputs {
+                if let prebindgen_registry::expand::FoldArg::Build(build) = input {
+                    Self::freeze_variants(ext, registry, &build.variants, constructors);
+                }
+            }
+        }
+    }
+
+    /// The core fold shared with Kotlin overload and report consumers.
+    pub(crate) fn fold(&self) -> &prebindgen_registry::expand::FoldPlan {
+        &self.fold
+    }
+
+    /// Assemble the fold expression from already-decoded leaf locals.
+    pub(crate) fn emit(&self, leaf_locals: &[syn::Ident]) -> syn::Expr {
+        prebindgen_registry::expand::emit_fold(&self.fold, leaf_locals, &|ident| {
+            self.constructors
+                .get(&ident.to_string())
+                .unwrap_or_else(|| {
+                    panic!("frozen JNI expansion plan has no constructor path for `{ident}`")
+                })
+                .clone()
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn constructor_path(&self, ident: &str) -> Option<&syn::Path> {
+        self.constructors.get(ident)
+    }
 }
 
 /// One classified effective parameter (a source param, or one expansion leaf).
@@ -559,7 +627,7 @@ impl JniFunctionPlan {
                     )?);
                 }
                 ParamForm::Expanded {
-                    plan: Box::new(plan.clone()),
+                    plan: Box::new(ExpandedParamPlan::new(ext, registry, plan)),
                     leaves,
                 }
             } else {

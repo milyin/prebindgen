@@ -1636,6 +1636,18 @@ internal object CovNative {
     ): String
 
     @JvmSynthetic
+    external fun summaryEnvelopeScore(
+        valueSummarySel: Int,
+        valueSummary00Present: Boolean,
+        valueSummary00Value: Long,
+        valueSummary01Present: Boolean,
+        valueSummary01Value: Double,
+        valueSummary1: Long,
+        valueBonus: Long,
+        errorSink: Any,
+    ): Long
+
+    @JvmSynthetic
     external fun summaryFromMean(count: Long, mean: Double, errorSink: Any): Long
 
     @JvmSynthetic

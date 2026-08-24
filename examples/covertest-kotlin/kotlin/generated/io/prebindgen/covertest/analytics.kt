@@ -264,6 +264,48 @@ public fun selectorCodeScore(
 }
 
 /**
+ * Observe a recursively reconstructed [`SummaryEnvelope`].
+ *
+ * Parameter `value` is the Rust `SummaryEnvelope` argument, expanded: its `summary_envelope_new` inputs (crosses as `valueSummarySel`, `valueSummary00`, `valueSummary01`, `valueSummary1`, `valueBonus`).
+ */
+public fun summaryEnvelopeScore(
+    valueSummarySel: Int,
+    valueSummary00: Long?,
+    valueSummary01: Double?,
+    valueSummary1: Summary?,
+    valueBonus: Long,
+    onError: JniErrorHandler<Long>,
+): Long {
+    if (valueSummary1?.isClosed() == true) return onError.run(
+        "Operation on a closed native handle.",
+    )
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = run {
+        val __locks = ArrayList<NativeHandle>()
+        valueSummary1?.let { __locks.add(it) }
+        withSortedHandleLocks(__locks) {
+            val valueSummary1_ptr = valueSummary1?.ptr ?: 0L
+            try {
+                CovNative.summaryEnvelopeScore(
+                    valueSummarySel,
+                    valueSummary00 != null,
+                    valueSummary00 ?: 0L,
+                    valueSummary01 != null,
+                    valueSummary01 ?: 0.0,
+                    valueSummary1_ptr,
+                    valueBonus,
+                    __bcap,
+                )
+            } finally {
+                valueSummary1?.markConsumed()
+            }
+        }
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * Summarize a storage (returns a `Summary`; the binding's **default
  * flatten-output** turns it into `(count, total)` leaves).
  *

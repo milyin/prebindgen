@@ -33,6 +33,8 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Summary` decomposed → [count, total, handle] (Callback delivery)
 - `summary_describe` — `fun describeSummary(sSel: Int, s00: Long?, s01: Double?, s1: Summary?, verbose: Boolean, onError: JniErrorHandler<String?>): String?`
   - shaped by: param `s` expanded from `Summary` — variants [summary_new, self]
+- `summary_envelope_score` — `fun summaryEnvelopeScore(valueSummarySel: Int, valueSummary00: Long?, valueSummary01: Double?, valueSummary1: Summary?, valueBonus: Long, onError: JniErrorHandler<Long>): Long`
+  - shaped by: param `value` expanded from `SummaryEnvelope` — variants [summary_envelope_new]
 - `summary_merge` — `fun <R> summaryMerge(primarySel: Int, primary00: Long?, primary01: Double?, primary1: Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: Summary?, onError: JniErrorHandler<R?>, build: SummaryBuilder<R>): R?`
   - shaped by: param `fallback` expanded from `Summary` — variants [summary_new, self]
   - shaped by: param `primary` expanded from `Summary` — variants [summary_new, self]
@@ -283,3 +285,4 @@ Base package: `io.prebindgen.covertest`
 ## rust-side-only types
 
 - `Ledger` (never materializes in Kotlin)
+- `SummaryEnvelope` (never materializes in Kotlin)

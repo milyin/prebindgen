@@ -1130,6 +1130,21 @@ fn binding_local_functions_all_positions() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let function_plan = gen
+        .generation_plan()
+        .function(&syn::parse_quote!(z_use))
+        .expect("frozen z_use plan");
+    let ParamForm::Expanded { plan, .. } = &function_plan.params[0].form else {
+        panic!("z_use primary parameter must be expanded");
+    };
+    assert_eq!(
+        plan.constructor_path("z_thing_from_len")
+            .expect("frozen local constructor path")
+            .to_token_stream()
+            .to_string(),
+        "crate :: z_thing_from_len"
+    );
+
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1932,8 +1947,32 @@ fn optional_selector_dispatch_end_to_end() {
             loc.clone(),
         ),
         (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZReq {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
             syn::Item::Fn(syn::parse_quote!(
                 pub fn z_enc_from_id(id: u16, schema: Option<Vec<u8>>) -> ZEnc {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_req_new(enc: ZEnc, bonus: i64) -> ZReq {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_score(req: ZReq) -> i64 {
                     unimplemented!()
                 }
             )),
@@ -1957,17 +1996,58 @@ fn optional_selector_dispatch_end_to_end() {
                 .class(
                     crate::ptr_class!(ZEnc).constructor(prebindgen_registry::fun!(z_enc_from_id)),
                 )
+                .fun(prebindgen_registry::fun!(z_score))
                 .fun(prebindgen_registry::fun!(z_put)),
         )
         .expand(
             prebindgen_registry::expand_param!(ZEnc)
                 .variant(prebindgen_registry::fun!(z_enc_from_id))
                 .variant_self(),
+        )
+        .expand(
+            prebindgen_registry::expand_param!(ZReq).variant(prebindgen_registry::fun!(z_req_new)),
         );
     let dir = unique_test_dir("jnigen_opt_selector");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let function_plan = gen
+        .generation_plan()
+        .function(&syn::parse_quote!(z_put))
+        .expect("frozen z_put plan");
+    let ParamForm::Expanded { plan, .. } = &function_plan.params[0].form else {
+        panic!("z_put encoding parameter must be expanded");
+    };
+    assert_eq!(
+        plan.constructor_path("z_enc_from_id")
+            .expect("frozen source constructor path")
+            .to_token_stream()
+            .to_string(),
+        "myflat :: z_enc_from_id"
+    );
+
+    let nested_plan = gen
+        .generation_plan()
+        .function(&syn::parse_quote!(z_score))
+        .expect("frozen z_score plan");
+    let ParamForm::Expanded { plan, .. } = &nested_plan.params[0].form else {
+        panic!("z_score request parameter must be expanded");
+    };
+    assert_eq!(
+        plan.constructor_path("z_req_new")
+            .expect("frozen outer constructor path")
+            .to_token_stream()
+            .to_string(),
+        "myflat :: z_req_new"
+    );
+    assert_eq!(
+        plan.constructor_path("z_enc_from_id")
+            .expect("frozen nested constructor path")
+            .to_token_stream()
+            .to_string(),
+        "myflat :: z_enc_from_id"
+    );
+
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
