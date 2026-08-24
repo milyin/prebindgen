@@ -753,8 +753,10 @@ fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
 /// [`build_flat_input_plan`] and consumed by all three codegen sites.
 pub(crate) struct FlatInputPlan {
     pub leaves: Vec<FlatLeaf>,
-    /// Registry-composed source converter over those leaves. A flattened plan
-    /// cannot exist without it; there is no adapter-side reconstruction path.
+    /// Registry-composed source converter over those leaves. Planning verifies
+    /// its presence and leaf arity; cross-artifact and runtime tests verify that
+    /// the ordered leaves have the same meaning on both sides of JNI. There is
+    /// no adapter-side reconstruction path.
     pub chain: crate::jni::compile::ComposedChain,
     /// Source identity retained only for the deliberately non-recursive Vec
     /// push helper, which constructs one simple element literal.
@@ -951,7 +953,7 @@ pub(crate) fn build_flat_input_plan(
             flat_error(
                 &key,
                 &param_name.to_string(),
-                "the registry-composed layout does not match the declared JNI wires",
+                "the registry-composed layout arity does not match the declared JNI wires",
             )
         })?;
     chain.activate();
