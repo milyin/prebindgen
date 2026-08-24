@@ -4423,8 +4423,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutSlice<'
             return ();
         }
     };
-    let payloads = unsafe { &*(payloads_handle as *const Vec<perftest_flat::Payload>) };
-    let __out = perftest_flat::storage_put_slice(&mut s, payloads);
+    let payloads = unsafe {
+        OwnedObject::from_raw(payloads_handle as *const Vec<perftest_flat::Payload>)
+    };
+    let __out = perftest_flat::storage_put_slice(&mut s, &payloads);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {

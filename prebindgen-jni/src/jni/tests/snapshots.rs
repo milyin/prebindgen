@@ -604,7 +604,8 @@ fn slice_input_builds_vec_handle() {
     assert!(kc.contains("}finally{"), "{kotlin}");
     assert!(kc.contains("JNINative.fooVecFree(__vec_v)"), "{kotlin}");
 
-    // Rust: the three helper symbols + both decode shapes (borrow / take).
+    // Rust: the three helper symbols + both frozen site-pipeline operations
+    // (a non-owning carrier for borrow, `mem::take` for consume).
     assert!(
         rc.contains("fnJava_io_test_jni_JNINative_fooVecNew"),
         "{rust}"
@@ -618,7 +619,7 @@ fn slice_input_builds_vec_handle() {
         "{rust}"
     );
     assert!(
-        rc.contains("&*(v_handleas*constVec<myflat::Foo>)"),
+        rc.contains("OwnedObject::from_raw(v_handleas*constVec<myflat::Foo>)"),
         "{rust}"
     );
     assert!(

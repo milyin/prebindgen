@@ -2886,8 +2886,8 @@ fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
     );
 }
 
-/// The two spellings of a **borrowed run** get the same local, and it is the
-/// borrow of the `Vec` rather than a slice of it (#384).
+/// The two spellings of a **borrowed run** get the same frozen site operation,
+/// carrying a borrow of the `Vec` rather than coercing it to a slice (#384).
 ///
 /// `sequence_elem` answers for `&[T]` and `&Vec<T>` alike — they are one type to
 /// the model — so both reach the Vec-build path. The emitter was not symmetric
@@ -2896,8 +2896,8 @@ fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
 /// of the two. A `&Vec<T>` parameter was then handed a `&[T]`, which does not
 /// coerce back — `E0308` in the generated crate.
 ///
-/// Unascribed, the coercion moves to the call site and serves both. What this
-/// test can pin is the **shape**; that it compiles is `covertest-kotlin`'s
+/// The non-owning `OwnedObject<Vec<T>>` carrier leaves coercion at the call site
+/// and serves both. What this test can pin is the **shape**; that it compiles is `covertest-kotlin`'s
 /// `ref_vec_id_sum`/`slice_id_sum` pair, since a lib test emits tokens and never
 /// builds them.
 #[test]
@@ -2973,19 +2973,22 @@ fn both_spellings_of_a_borrowed_run_get_the_vec_borrow() {
         );
     }
 
-    // The finding: ONE local, and it is the `Vec` borrow. Counted rather than
-    // merely found, so a per-spelling form cannot pass.
+    // The finding: both sites invoke the same Vec-handle pipeline operation,
+    // which returns the non-owning carrier the ordinary decode scaffold can
+    // borrow. Counted rather than merely found, so a per-spelling form cannot
+    // pass.
     assert_eq!(
-        rc.matches("letv=unsafe{&*(v_handleas*constVec<myflat::Foo>)};")
+        rc.matches("OwnedObject::from_raw(v_handleas*constVec<myflat::Foo>)")
             .count(),
         2,
-        "both borrowed runs must get the same unascribed `&Vec<Foo>` local:\n{rust}"
+        "both borrowed runs must use the same frozen Vec-handle operation:\n{rust}"
     );
-    // …and no slice ascription survives, which is the thing that broke.
+    // …and neither the old slice ascription nor the wrapper-local direct
+    // reconstruction survives.
     assert!(
-        !rc.contains("letv:&[myflat::Foo]="),
-        "ascribing `&[Foo]` coerces at the `let`, so a `&Vec<Foo>` parameter \
-         gets a `&[Foo]` and the generated crate does not build (E0308):\n{rust}"
+        !rc.contains("letv:&[myflat::Foo]=")
+            && !rc.contains("letv=unsafe{&*(v_handleas*constVec<myflat::Foo>)};"),
+        "borrowed Vec reconstruction must come only from the frozen pipeline:\n{rust}"
     );
 }
 

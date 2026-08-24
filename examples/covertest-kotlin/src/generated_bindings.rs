@@ -19593,8 +19593,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_refVecIdSum<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let ps = unsafe { &*(ps_handle as *const Vec<perftest_flat::Payload>) };
-    let __out = perftest_flat::ref_vec_id_sum(ps);
+    let ps = unsafe {
+        OwnedObject::from_raw(ps_handle as *const Vec<perftest_flat::Payload>)
+    };
+    let __out = perftest_flat::ref_vec_id_sum(&ps);
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
@@ -19682,8 +19684,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_sliceIdSum<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let ps = unsafe { &*(ps_handle as *const Vec<perftest_flat::Payload>) };
-    let __out = perftest_flat::slice_id_sum(ps);
+    let ps = unsafe {
+        OwnedObject::from_raw(ps_handle as *const Vec<perftest_flat::Payload>)
+    };
+    let __out = perftest_flat::slice_id_sum(&ps);
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
@@ -21408,8 +21412,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutSlice<
             return ();
         }
     };
-    let payloads = unsafe { &*(payloads_handle as *const Vec<perftest_flat::Payload>) };
-    let __out = perftest_flat::storage_put_slice(&mut s, payloads);
+    let payloads = unsafe {
+        OwnedObject::from_raw(payloads_handle as *const Vec<perftest_flat::Payload>)
+    };
+    let __out = perftest_flat::storage_put_slice(&mut s, &payloads);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {

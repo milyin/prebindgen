@@ -136,16 +136,9 @@ pub(crate) enum InputKind {
     Callback { iface: Option<Arc<IfaceSpec>> },
     /// `&[T]` / `Vec<T>` of a flattenable data_class: a single `jlong`
     /// Vec-handle on the wire, built by pushing element leaves.
-    /// The element as a **reading**, and the CANONICAL one: the vec-helper plan
-    /// and the element key are both taken from it, and generated Rust spells
-    /// `emit.spell(elem)`. `elem_wrappers` is what the storage therefore does not
-    /// carry, put back per element on consumption (#296) — empty for the
-    /// ordinary case, and a list rather than a second `TypeRef` because every
-    /// variant of this enum pays its size.
+    /// Rust reconstruction is frozen in [`PlanLeaf::pipeline`]; this kind keeps
+    /// only the helper ABI that Kotlin and the synthetic externs share.
     VecBuild {
-        elem: TypeRef,
-        by_ref: bool,
-        elem_wrappers: Vec<&'static str>,
         helpers: std::rc::Rc<VecBuildHelpers>,
     },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled

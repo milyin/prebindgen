@@ -4,9 +4,7 @@
 use prebindgen_registry::{types_util::result_ok_type, Conversions};
 
 use super::*;
-use crate::jni::trait_impl::{
-    build_through_erased_wrappers, build_through_wrappers, read_through_erased_wrappers,
-};
+use crate::jni::trait_impl::read_through_erased_wrappers;
 
 pub(crate) fn emit_jni_function_wrapper(
     ext: &Declarations,
@@ -410,7 +408,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             FnOutputPlan::Value(value) => value,
             FnOutputPlan::Unfold(_) => unreachable!("normal output has a value plan"),
         };
-        let convert = output.pipeline.invoke(quote!(__out));
+        let convert = output.pipeline.invoke(quote!(__out), emit);
         let mut phase: TokenStream = quote! { let __out = #call_expr; };
         phase.extend(quote! {
             match #convert {
@@ -573,78 +571,16 @@ fn emit_input_param(
             (wire_params, prelude, quote!(#arg_ident))
         }
 
-        // per-element `env.get_field(...)`. A borrowed run — `&[T]` or
-        // `&Vec<T>` — borrows the boxed Vec; by-value `Vec<T>` moves it out
-        // with `mem::take` (leaving an empty Vec the Kotlin `finally` frees).
-        // Decode is infallible, like the by-value-handle consume below.
-        InputKind::VecBuild {
-            elem,
-            by_ref,
-            elem_wrappers,
-            ..
-        } => {
-            // Generated Rust spells the reading's own tokens. This is the
-            // CANONICAL element, which is what the helper trio stores — so the
-            // cast below and `build_vec_build_helper_items` name one type.
-            let elem = emit.spell(elem);
-            let handle_ident = format_ident!("{}_handle", arg_ident);
-            wire_params.push(quote!(#handle_ident: jni::sys::jlong));
-            if *by_ref {
-                // `vec_build_elem` refuses a wrapped run on this path, so the
-                // borrow is the parameter's own spelling and there is nothing
-                // to put back.
-                //
-                // **No ascription**, for the reason the by-value branch below
-                // gives: the expression already produces the local's type, and
-                // naming it here writes the same fact twice — but here it also
-                // got it WRONG. `&*(.. as *const Vec<T>)` is a `&Vec<T>`, and
-                // ascribing `&[T]` coerced it at the `let`, where only one of
-                // the two spellings the model accepts can come out. A
-                // `&Vec<T>` parameter — which `sequence_elem` answers for
-                // exactly as it does for `&[T]` — was then handed a `&[T]`:
-                // `E0308` in the generated crate, since the deref coercion runs
-                // `&Vec<T>` → `&[T]` and not back (#384).
-                //
-                // Unascribed, the coercion moves to the call site and serves
-                // both: exact for `&Vec<T>`, deref for `&[T]`. `&mut Vec<T>`
-                // stays refused, and by `sequence_elem` returning `None` for a
-                // `Ref` kind rather than by the `mutable: false` guard — that
-                // guard is what refuses `&mut [T]`.
-                prelude.push(quote!(
-                    let #arg_ident = unsafe { &*(#handle_ident as *const Vec<#elem>) };
-                ));
-            } else {
-                // By value the local is owned, so the run's wrappers go back on
-                // for free — `Box<Vec<T>>` is `Box::new(mem::take(..))`. The
-                // ascription is dropped rather than restated: the wrapped
-                // spelling is what the expression now produces, and naming it
-                // here would be the same fact written twice.
-                let taken = quote!(unsafe {
-                    ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>))
-                });
-                // The ELEMENT's wrappers, which the storage does not carry
-                // (#296). One O(n) pass over a Vec already being moved, and it
-                // goes INSIDE the run wrap: `Box<Vec<Box<Payload>>>` boxes each
-                // element, collects, then boxes the run. Emitted only when there
-                // are wrappers, so every existing shape keeps its exact tokens.
-                let taken = if elem_wrappers.is_empty() {
-                    taken
-                } else {
-                    let wrapped = build_through_wrappers(elem_wrappers, quote!(__e))
-                        .expect("vec_build_elem accepted this element spelling");
-                    quote!(
-                        #taken
-                            .into_iter()
-                            .map(|__e| #wrapped)
-                            .collect::<Vec<_>>()
-                    )
-                };
-                let taken = build_through_erased_wrappers(&leaf.reading, taken)
-                    .expect("vec_build_elem accepted this run spelling");
-                prelude.push(quote!(let #arg_ident = #taken;));
-            }
-            (wire_params, prelude, quote!(#arg_ident))
-        }
+        // The helper ABI still distinguishes Vec-build inputs for Kotlin, but
+        // Rust reconstruction is the frozen site pipeline's operation.
+        InputKind::VecBuild { .. } => emit_plain_decode(
+            &leaf.pipeline,
+            arg_ident,
+            arg_ty,
+            on_err,
+            emit,
+            Some(format_ident!("{}_handle", arg_ident)),
+        ),
 
         // Handles, value projections, callbacks, and plain types all decode
         // through the frozen site pipeline. In particular, a direct owned
@@ -653,7 +589,9 @@ fn emit_input_param(
         InputKind::Callback { .. }
         | InputKind::Handle { .. }
         | InputKind::Unsigned64 { .. }
-        | InputKind::Plain => emit_plain_decode(&leaf.pipeline, arg_ident, arg_ty, on_err),
+        | InputKind::Plain => {
+            emit_plain_decode(&leaf.pipeline, arg_ident, arg_ty, on_err, emit, None)
+        }
     }
 }
 
@@ -665,6 +603,8 @@ fn emit_plain_decode(
     arg_ident: &syn::Ident,
     arg_ty: &prebindgen_registry::flat::TypeRef,
     on_err: &TokenStream,
+    emit: &prebindgen_registry::Emit,
+    wire_name: Option<syn::Ident>,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     use prebindgen_registry::flat::TypeKind;
     /// `&mut T`, read off the kind — and off `kind()` rather than through
@@ -687,15 +627,16 @@ fn emit_plain_decode(
     let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
     let wire = pipeline.wire();
-    let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
-        format_ident!("{}_ptr", arg_ident)
-    } else {
-        arg_ident.clone()
-    };
+    let wire_ident = wire_name.unwrap_or_else(|| {
+        if matches!(wire, syn::Type::Ptr(_)) {
+            format_ident!("{}_ptr", arg_ident)
+        } else {
+            arg_ident.clone()
+        }
+    });
 
     let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
     wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
-    let decode_call = pipeline.invoke(quote!(#wire_ident));
     // Binding for the final `arg_ident` needs `mut` when the source
     // fn takes `&mut T` — the call site below emits `&mut arg_ident`,
     // which requires a mutable binding. Also for `Option<&mut T>`
@@ -705,15 +646,20 @@ fn emit_plain_decode(
     } else {
         quote!()
     };
-    prelude.push(quote!(
-        let #arg_mut #arg_ident = match #decode_call {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                return #on_err;
-            }
-        };
-    ));
+    if let Some(value) = pipeline.invoke_infallible(quote!(#wire_ident), emit) {
+        prelude.push(quote!(let #arg_mut #arg_ident = #value;));
+    } else {
+        let decode_call = pipeline.invoke(quote!(#wire_ident), emit);
+        prelude.push(quote!(
+            let #arg_mut #arg_ident = match #decode_call {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                    return #on_err;
+                }
+            };
+        ));
+    }
     let call_arg = match arg_ty.kind() {
         TypeKind::Ref { mutable: true, .. } => quote!(&mut #arg_ident),
         TypeKind::Ref { .. } => quote!(&#arg_ident),
@@ -821,7 +767,7 @@ pub(crate) fn emit_expanded_param(
         };
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
         wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
-        let decode_call = pipeline.invoke(quote!(#wire_ident));
+        let decode_call = pipeline.invoke(quote!(#wire_ident), emit);
         prelude.push(quote!(
             let #local = match #decode_call {
                 ::core::result::Result::Ok(__v) => __v,
