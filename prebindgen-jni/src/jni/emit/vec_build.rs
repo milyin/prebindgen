@@ -211,7 +211,7 @@ impl Declarations {
         let plan = build_flat_input_plan(self, registry, &format_ident!("e"), elem)
             .ok()
             .flatten()?;
-        if plan.contains_nested
+        if plan.contains_composed_child
             || plan.leaves.iter().any(|l| {
                 l.is_present_flag()
                     || l.wire.handle_target.is_some()
@@ -335,8 +335,8 @@ pub(crate) fn build_vec_build_helper_items(
             ));
             inits.push(quote!(#fid: #tmp));
         }
-        let module = &h.plan.root.struct_module;
-        let sid = &h.plan.root.struct_ident;
+        let module = &h.plan.struct_module;
+        let sid = &h.plan.struct_ident;
 
         named.push((
             push_sym.clone(),

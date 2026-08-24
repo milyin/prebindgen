@@ -9,7 +9,7 @@ use prebindgen_registry::{
 };
 
 use super::*;
-use crate::jni::trait_impl::{build_through_erased_wrappers, build_through_wrappers};
+use crate::jni::trait_impl::build_through_erased_wrappers;
 
 /// Takes the **element**, not the `syn::ItemStruct` it was parsed from (#289):
 /// `flat::Field::ty` is already a `TypeRef`, so every peel below is the model's
@@ -611,11 +611,6 @@ pub(crate) struct FlatLeaf {
     pub native_ident: syn::Ident,
     /// Kotlin `external fun` parameter name (camelCase).
     pub kt_name: String,
-    /// The path through the value that reached this wire, as the fragment
-    /// states it — `tag`, `summary.count`, `reading.exact_v0`. What the rebuild
-    /// names a leaf by, so the tree it builds and the recipe it builds from cannot
-    /// disagree about which value is which.
-    pub path: String,
     /// The wire itself.
     pub wire: crate::jni::compile::Wire,
 }
@@ -627,7 +622,6 @@ impl FlatLeaf {
         Self {
             native_ident: format_ident!("{native}"),
             kt_name: snake_to_camel(&native),
-            path: wire.path.clone(),
             wire: wire.clone(),
         }
     }
@@ -693,149 +687,30 @@ impl FlatLeaf {
     }
 }
 
-pub(crate) struct FlatStructNode {
-    pub struct_module: syn::Path,
-    pub struct_ident: syn::Ident,
-    pub binding: syn::Ident,
-    pub optional: bool,
-    pub present_ident: Option<syn::Ident>,
-    pub fields: Vec<FlatFieldNode>,
-}
-
-pub(crate) enum FlatFieldNode {
-    Value {
-        field: syn::Ident,
-        value_leaf: usize,
-        present_leaf: Option<usize>,
-        /// `Some(target)` iff this field crosses as a raw handle jlong, where
-        /// `target` is the type the `Box` points at — the field's own type with
-        /// its optional layer peeled, **taken off the model at plan time**.
-        ///
-        /// Paired rather than a `bool` beside a spelling the renderer re-peels:
-        /// `option_inner_type` compared the last path segment, so a field
-        /// spelled `Box<Option<T>>` would have handed `Box::from_raw` the wrong
-        /// target. There is no reading here to ask — `FlatFieldNode` is an
-        /// emission IR and tokens are what it is for — so the answer travels
-        /// from where the reading was (#289).
-        /// The handle type a leaf reconstructs by `Box::from_raw` — the
-        /// reading, spelled at the emit site like every other generated type.
-        direct_handle: Option<Box<prebindgen_registry::flat::TypeRef>>,
-        optional_handle: bool,
-        rust_ty: Box<prebindgen_registry::flat::TypeRef>,
-        /// The transparent wrappers this field's spelling adds over its
-        /// classification, outermost first — put back wherever the decode
-        /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
-        /// running the field's own converter, which already yields the spelling.
-        wrappers: Vec<&'static str>,
-    },
-    Nested {
-        field: syn::Ident,
-        node: Box<FlatStructNode>,
-    },
-    /// A data-carrying enum crossing as an `Int` **tag** leaf plus one leaf
-    /// group per variant, inert groups filled with their wire defaults — the
-    /// N-way form of the `present` gating `Option` already uses.
-    Sum {
-        field: syn::Ident,
-        /// Index of the synthetic tag leaf.
-        tag_leaf: usize,
-        /// Index of the `present` gate when the field is `Option<sum>`.
-        /// Optionality and choice stay independent facts: the tag domain is
-        /// never overloaded with an "absent" value.
-        present_leaf: Option<usize>,
-        /// Qualified path to the source enum, for the reconstruct's arms.
-        source: syn::Path,
-        /// Variants in declaration order; index == tag.
-        variants: Vec<FlatSumVariant>,
-        rust_ty: Box<prebindgen_registry::flat::TypeRef>,
-        /// The transparent wrappers this field's spelling adds over its
-        /// classification, outermost first — put back wherever the decode
-        /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
-        /// running the field's own converter, which already yields the spelling.
-        wrappers: Vec<&'static str>,
-    },
-}
-
-/// One alternative of a [`FlatFieldNode::Sum`].
-pub(crate) struct FlatSumVariant {
-    pub rust_ident: syn::Ident,
-    /// This variant's payload: how each field is addressed when rebuilding
-    /// it, paired with the leaf carrying its value. Empty for a unit variant.
-    pub fields: Vec<(syn::Member, usize)>,
-}
-
-/// The three layers a specialized struct lowering descends through, each paired
-/// with the reading whose spelling it must satisfy.
+/// The outer layer a flattened call argument restores after its registry chain
+/// returns the value represented by the crossing.
 ///
-/// `kind` decides what the destination sees; the **conversion** follows the
-/// syntax, and this lowering does not decode its parameter — it emits a literal
-/// `S { .. }`, wraps it in `Option::Some`, and hands it to the source function.
-/// Rebuilding from the classification alone produces the *stripped* type, so a
-/// parameter spelled `Box<Option<S>>` would receive an `Option<S>`: `E0308` in
-/// the generated crate.
-///
-/// So each layer keeps its own reading, and the emitter puts that layer's
-/// wrappers back as it builds outward — see [`RebuildTarget::wrap_core`] and its
-/// siblings. Collected on the way **down** because an erasure sits *outside* the
-/// layer it wraps: `Box<&S>` classifies as `Ref`, and reading `kind` first would
-/// leave the `Box` unreachable.
+/// Product/Optional/Choice construction belongs to the registry chain. The
+/// renderer only adds the source call's borrow; wrappers outside that borrow
+/// still belong afterwards (`Box<&S>` -> `Box::new(&value)`).
 pub(crate) struct RebuildTarget {
     /// Wrappers over the borrow, if there is one — the `Box` of `Box<&S>`.
     arg: Vec<&'static str>,
-    /// Wrappers over the `Option` — the `Box` of `Box<Option<S>>`.
-    under_borrow: Vec<&'static str>,
-    /// Wrappers over the `S { .. }` literal — the `Box` of `Option<Box<S>>`.
-    core: Vec<&'static str>,
     /// `true` when the source fn takes `&Struct`.
     pub by_ref: bool,
-    /// `true` when the value is `Option`-wrapped.
-    pub optional: bool,
 }
 
 impl RebuildTarget {
-    /// Put back the wrappers standing over the `S { .. }` literal —
-    /// `Option<Box<S>>` wraps here, not at [`Self::wrap_optional`].
-    pub fn wrap_core(&self, e: TokenStream) -> TokenStream {
-        Self::wrap(&self.core, e)
-    }
-
-    /// Put back the wrappers over the `Option<..>` — the `Box` of
-    /// `Box<Option<S>>`.
-    ///
-    /// A no-op when the parameter is not optional, for the same reason
-    /// [`Self::wrap_arg`] is one when it is not a borrow: with no `Option` to
-    /// peel, `under_borrow` and `core` are the *same reading*, and wrapping at
-    /// both would apply one layer twice.
-    ///
-    /// Stated once as the rule the three share: **a layer's wrappers are
-    /// applied only where that layer exists**, and the innermost always applies.
-    pub fn wrap_optional(&self, e: TokenStream) -> TokenStream {
-        if !self.optional {
-            return e;
-        }
-        Self::wrap(&self.under_borrow, e)
-    }
-
     /// Put back the wrappers over the **borrow** — the `Box` of `Box<&S>`,
     /// which goes on after the call site has added its `&`.
     ///
-    /// A no-op when the parameter is not a borrow, and that is not an
-    /// optimisation: with no `&` to peel, `arg` and `under_borrow` are the *same
-    /// reading*, so wrapping at both would apply one layer twice —
-    /// `Box::new(Box::new(v))` for a `Box<Option<S>>` parameter.
+    /// A no-op when the parameter is not a borrow: wrappers at or below the
+    /// crossing are already restored by the registry chain.
     pub fn wrap_arg(&self, e: TokenStream) -> TokenStream {
         if !self.by_ref {
             return e;
         }
-        Self::wrap(&self.arg, e)
-    }
-
-    /// Every wrap goes through the one helper, and every layer was proved
-    /// buildable by [`rebuildable_target`] before a plan existed — so a `None`
-    /// here would mean the descent and the emission disagree about the same
-    /// reading, which is a bug in this file rather than an unsupported source.
-    fn wrap(names: &[&'static str], e: TokenStream) -> TokenStream {
-        build_through_wrappers(names, e)
+        crate::jni::trait_impl::build_through_wrappers(&self.arg, e)
             .expect("every layer was checked buildable when the plan was built")
     }
 }
@@ -860,20 +735,15 @@ fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
     let by_ref = arg.borrow_target().is_some();
     let t1 = arg.borrow_target().unwrap_or(arg);
     buildable(t1)?;
-    let optional = t1.optional_inner().is_some();
     let inner = t1.optional_inner().unwrap_or(t1);
-    // The struct is rebuilt BY NAME (`S { .. }`), and its own spelling may add a
-    // wrapper over that name — `Box<S>` gets its `Box::new` at `wrap_core`.
+    // The chain must also be able to rebuild the crossing's inner spelling.
     buildable(inner)?;
-    // Only the wrapper LISTS are kept: they are all a rebuild uses, and a
-    // `TypeRef` apiece would put ~800 bytes into every `InputKind`.
+    // Only wrappers outside the borrow are kept. Inner wrappers are already
+    // part of the registry chain's source policy.
     Some((
         RebuildTarget {
             arg: arg.erased_wrappers(),
-            under_borrow: t1.erased_wrappers(),
-            core: inner.erased_wrappers(),
             by_ref,
-            optional,
         },
         inner,
     ))
@@ -883,14 +753,20 @@ fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
 /// [`build_flat_input_plan`] and consumed by all three codegen sites.
 pub(crate) struct FlatInputPlan {
     pub leaves: Vec<FlatLeaf>,
-    /// Registry-composed source converter over those leaves, when available.
-    pub chain: Option<crate::jni::compile::ComposedChain>,
-    pub root: FlatStructNode,
+    /// Registry-composed source converter over those leaves. Planning verifies
+    /// its presence and leaf arity; cross-artifact and runtime tests verify that
+    /// the ordered leaves have the same meaning on both sides of JNI. There is
+    /// no adapter-side reconstruction path.
+    pub chain: crate::jni::compile::ComposedChain,
+    /// Source identity retained only for the deliberately non-recursive Vec
+    /// push helper, which constructs one simple element literal.
+    pub struct_module: syn::Path,
+    pub struct_ident: syn::Ident,
     /// `true` when the source fn takes `&Struct` — the call site passes `&arg`.
     pub by_ref: bool,
-    /// Vec/slice element lowering deliberately retains its previous
-    /// non-recursive ABI; callers use this bit to decline recursive plans.
-    pub contains_nested: bool,
+    /// Whether any Product child is itself composed. The specialized Vec
+    /// helper only understands a Product of terminal leaves.
+    pub contains_composed_child: bool,
     /// The layer readings the rebuild has to satisfy — carried rather than
     /// re-derived at the emission sites, so the descent is stated once.
     pub target: RebuildTarget,
@@ -995,109 +871,6 @@ pub(crate) fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<Kotlin
     }
 }
 
-/// The rebuild for a **data-carrying enum** field the recipe flattened into a tag
-/// plus one slot group per alternative.
-///
-/// Which of the two happened is the fragment's decision, not this walk's:
-/// `Compile::choice` composes the groups where every payload has a slot form
-/// and hands back a single-wire fragment where one does not — a handle, say,
-/// whose ownership the group-gated form does not model. So the caller asks
-/// whether the field is whole before reaching here, and every alternative's
-/// payloads are present when it does.
-#[allow(clippy::too_many_arguments)]
-fn build_flat_sum_field(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    sum_reading: &TypeRef,
-    field: syn::Ident,
-    optional: bool,
-    native_prefix: &str,
-    field_reading: &TypeRef,
-    root: &TypeKey,
-    leaves: &mut Leaves<'_>,
-) -> Result<FlatFieldNode, FlatInputError> {
-    let missing = || {
-        flat_error(
-            root,
-            native_prefix,
-            "the recipe states fewer wires than the model",
-        )
-    };
-    // The NAME off the classification, and then the ELEMENT — `enum_item`
-    // hands back only the `syn::ItemEnum`, deliberately, so a consumer that
-    // acts on the Variant/Enum distinction asks `declared_type` (#289).
-    let ident = match sum_reading.unwrapped().kind() {
-        flat::TypeKind::Named { id, .. } => id.ident(),
-        _ => None,
-    }
-    .ok_or_else(missing)?;
-    let Some(flat::Type::Variant(sum)) = registry.flat().declared_type(&ident) else {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "a sum recipe over a type that is not one",
-        ));
-    };
-
-    let present_leaf = match optional {
-        true => Some(leaves.take().ok_or_else(missing)?),
-        false => None,
-    };
-    let tag_leaf = leaves.take().ok_or_else(missing)?;
-    let mut variants = Vec::new();
-    for alt in &sum.alternatives {
-        let mut fields = Vec::new();
-        for f in &alt.fields {
-            fields.push((f.member(), leaves.take().ok_or_else(missing)?));
-        }
-        variants.push(FlatSumVariant {
-            rust_ident: alt.name.clone(),
-            fields,
-        });
-    }
-
-    let module = ext.fn_module(registry, &ident);
-    Ok(FlatFieldNode::Sum {
-        wrappers: field_reading.erased_wrappers(),
-        field,
-        tag_leaf,
-        present_leaf,
-        source: syn::parse_quote!(#module::#ident),
-        variants,
-        rust_ty: Box::new(field_reading.clone()),
-    })
-}
-
-/// The plan's leaves, read in the order the recipe states them.
-///
-/// A cursor rather than a lookup, because a path is not a key: a nested
-/// `data_class` with a field called `value` reaches the same path a decoupled
-/// pair's slot does, and one called `present` reaches the same path as the gate
-/// over its own struct. What is unambiguous is the **order** — the composition
-/// emits a gate before what it gates, fields in the model's order, and a sum's
-/// tag before its arms' slots — which is the order this walk visits them in.
-struct Leaves<'a> {
-    leaves: &'a [FlatLeaf],
-    next: usize,
-}
-
-impl Leaves<'_> {
-    /// The next leaf, consumed.
-    fn take(&mut self) -> Option<usize> {
-        let index = self.next;
-        (index < self.leaves.len()).then(|| {
-            self.next += 1;
-            index
-        })
-    }
-
-    /// Whether the next leaf is the whole of what `path` reaches, rather than
-    /// the first of several.
-    fn is_whole(&self, path: &str) -> bool {
-        self.leaves.get(self.next).is_some_and(|l| l.path == path)
-    }
-}
-
 pub(crate) fn build_flat_input_plan(
     ext: &Declarations,
     registry: &impl Conversions,
@@ -1109,7 +882,7 @@ pub(crate) fn build_flat_input_plan(
     let Some((target, inner)) = rebuildable_target(arg) else {
         return Ok(None);
     };
-    let (by_ref, optional) = (target.by_ref, target.optional);
+    let by_ref = target.by_ref;
     // `impl Into<S>` is NOT peeled here, and cannot be: the model refuses
     // `impl Trait` that is not the callback form (`DisallowedImplTrait`), so a
     // parameter spelled that way never becomes a reading and never reaches this
@@ -1175,543 +948,71 @@ pub(crate) fn build_flat_input_plan(
     let leaves: Vec<FlatLeaf> = wires.iter().map(|w| FlatLeaf::of(param_name, w)).collect();
     let chain = ext
         .composed_chain(arg, prebindgen_registry::recipe::Direction::Construct)
-        .filter(|chain| chain.layout.leaf_count() == leaves.len());
-    if let Some(chain) = &chain {
-        chain.activate();
-    }
-
-    // 3. The tree the Rust side rebuilds through, over those same wires in the
-    //    order the recipe states them.
-    let mut stack = Vec::new();
-    let mut cursor = Leaves {
-        leaves: &leaves,
-        next: 0,
+        .filter(|chain| chain.layout.leaf_count() == leaves.len())
+        .ok_or_else(|| {
+            flat_error(
+                &key,
+                &param_name.to_string(),
+                "the registry-composed layout arity does not match the declared JNI wires",
+            )
+        })?;
+    chain.activate();
+    let contains_composed_child = match &chain.layout {
+        crate::jni::compile::JLayout::Product(parts) => {
+            parts.iter().any(crate::jni::compile::JLayout::is_composed)
+        }
+        _ => true,
     };
-    let root = build_flat_struct_node(
-        ext,
-        registry,
-        st,
-        optional,
-        &param_name.to_string(),
-        "",
-        &key,
-        &mut stack,
-        &mut cursor,
-    )?;
-    let contains_nested = root
-        .fields
-        .iter()
-        .any(|f| matches!(f, FlatFieldNode::Nested { .. }));
     Ok(Some(FlatInputPlan {
         leaves,
         chain,
-        root,
+        struct_module: struct_module_path(ext, registry, &st.name),
+        struct_ident: st.name.clone(),
         by_ref,
-        contains_nested,
+        contains_composed_child,
         target,
     }))
 }
 
-/// The rebuild tree for one struct, over the wires the recipe states for it.
-///
-/// Takes the **element**, not the `syn::ItemStruct` it was parsed from (#289):
-/// `flat::Field::ty` is already a `TypeRef`, so every peel below is the model's
-/// answer rather than a last-path-segment test on tokens that had a reading one
-/// level up.
-///
-/// How many wires a field occupies is the recipe's answer, read off the cursor;
-/// which of the composite shapes it took is the model's, read off the field's
-/// type. The walk that used to decide both made the second decision twice — once
-/// to compose and once to rebuild — and two answers are two things to keep in
-/// step.
-#[allow(clippy::too_many_arguments)]
-fn build_flat_struct_node(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    st: &flat::Struct,
-    optional: bool,
-    native_prefix: &str,
-    path_prefix: &str,
-    root: &TypeKey,
-    stack: &mut Vec<TypeKey>,
-    leaves: &mut Leaves<'_>,
-) -> Result<FlatStructNode, FlatInputError> {
-    let node_key = TypeKey::from_ident(&st.name);
-    if stack.contains(&node_key) {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "recursive data-class cycle",
-        ));
-    }
-    if stack.len() >= 16 {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "recursive flattening exceeds depth 16",
-        ));
-    }
-    stack.push(node_key);
-    let missing = |at: &str| flat_error(root, at, "the recipe states fewer wires than the model");
-    let present_ident = if optional {
-        let gate = leaves.take().ok_or_else(|| missing(native_prefix))?;
-        Some(leaves.leaves[gate].native_ident.clone())
-    } else {
-        None
-    };
-    let mut fields = Vec::new();
-    for field in &st.fields {
-        // A positional field has no name to derive a Kotlin property from, which
-        // is what "only named-field structs can flatten" used to say one level
-        // up. Said per field now, because the element models a field list rather
-        // than a `syn::Fields` shape.
-        let Some(fident) = field.name.clone() else {
-            return Err(flat_error(
-                root,
-                native_prefix,
-                "only named-field structs can flatten",
-            ));
-        };
-        let path = format!("{path_prefix}{fident}");
-        let child_native = format!("{native_prefix}_{fident}");
-        // The optional layer off the MODEL, asked once and reused: every site
-        // below that wants "is this field optional" reads this, so they cannot
-        // disagree with each other the way seven independent path-segment tests
-        // could (#273).
-        let field_optional = field.ty.optional_inner().is_some();
-        let nested = field.ty.optional_inner().unwrap_or(&field.ty);
-        let wrappers = field.ty.erased_wrappers();
-
-        // One wire for the whole field: the ordinary case, and the one an
-        // opaque-handle field takes — the recipe says which by carrying a handle
-        // target on that wire. Also where a sum or a nested class the recipe left
-        // whole ends up.
-        if leaves.is_whole(&path) {
-            let index = leaves.take().ok_or_else(|| missing(&child_native))?;
-            let direct_handle = leaves.leaves[index]
-                .wire
-                .handle_target
-                .is_some()
-                .then(|| Box::new(nested.clone()));
-            if direct_handle.is_some()
-                && matches!(
-                    ext.in_frag(&field.ty).and_then(|e| e
-                        .metadata
-                        .projection
-                        .as_ref()
-                        .map(|p| p.strategy.clone())),
-                    Some(FoldStrategy::Iterable(_))
-                )
-            {
-                return Err(flat_error(
-                    root,
-                    &child_native,
-                    "collections of handles retain their collection boundary",
-                ));
-            }
-            fields.push(FlatFieldNode::Value {
-                field: fident,
-                value_leaf: index,
-                present_leaf: None,
-                optional_handle: direct_handle.is_some() && field_optional,
-                direct_handle,
-                rust_ty: Box::new(field.ty.clone()),
-                wrappers,
-            });
-            continue;
-        }
-
-        // Several wires, and the field's own type says which shape they take.
-        match ext.type_kind(registry, &nested.key()) {
-            TypeKind::Sum => {
-                fields.push(build_flat_sum_field(
-                    ext,
-                    registry,
-                    nested,
-                    fident,
-                    field_optional,
-                    &child_native,
-                    &field.ty,
-                    root,
-                    leaves,
-                )?);
-            }
-            TypeKind::DataStruct {
-                st: child,
-                cfg: Some(_),
-            } => {
-                let node = build_flat_struct_node(
-                    ext,
-                    registry,
-                    child,
-                    field_optional,
-                    &child_native,
-                    &format!("{path}."),
-                    root,
-                    stack,
-                    leaves,
-                )?;
-                fields.push(FlatFieldNode::Nested {
-                    field: fident,
-                    node: Box::new(node),
-                });
-            }
-            // A gate beside a raw slot: the allocation-free pair a nullable
-            // primitive, enum or unsigned representation crosses as.
-            _ => {
-                let present = leaves.take().ok_or_else(|| missing(&child_native))?;
-                let value = leaves.take().ok_or_else(|| missing(&child_native))?;
-                fields.push(FlatFieldNode::Value {
-                    field: fident,
-                    value_leaf: value,
-                    present_leaf: Some(present),
-                    direct_handle: None,
-                    optional_handle: false,
-                    rust_ty: Box::new(field.ty.clone()),
-                    wrappers,
-                });
-            }
-        }
-    }
-    stack.pop();
-    Ok(FlatStructNode {
-        struct_module: struct_module_path(ext, registry, &st.name),
-        struct_ident: st.name.clone(),
-        binding: format_ident!("__flat_{native_prefix}"),
-        optional,
-        present_ident,
-        fields,
-    })
-}
-
-/// Render native reconstruction for a [`FlatInputPlan`]. A registry Product
-/// descriptor decodes and constructs the whole value in one call when the
-/// declared layout matches exactly; irregular layouts retain the leaf fallback.
+/// Render native reconstruction for a [`FlatInputPlan`] through its registry
+/// chain. Building the Product/Optional/Choice tree is entirely a registry
+/// responsibility; this site only supplies the JNI wire leaves.
 /// Failures route through `signal_error` and return the function `on_err`
 /// sentinel. Returns the prelude and call argument (`arg` or `&arg`).
 pub(crate) fn render_flat_input_decode(
     plan: &FlatInputPlan,
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, TokenStream) {
-    if let Some(chain) = &plan.chain {
-        let leaves: Vec<syn::Ident> = plan
-            .leaves
-            .iter()
-            .map(|leaf| leaf.native_ident.clone())
-            .collect();
-        let intermediate = chain.layout.expression(&leaves);
-        let converter = &chain.ident;
-        let prelude = quote! {
-            let #arg_ident = match #converter(&mut env, #intermediate) {
-                ::core::result::Result::Ok(__value) => __value,
-                ::core::result::Result::Err(__error) => {
-                    signal_binding_error(
-                        &mut env,
-                        &__error_sink,
-                        &__SINK_MID,
-                        __SINK_FQN,
-                        __SINK_DESCR,
-                        &__error.to_string(),
-                    );
-                    return #on_err;
-                }
-            };
-        };
-        let borrowed = if plan.by_ref {
-            quote!(&#arg_ident)
-        } else {
-            quote!(#arg_ident)
-        };
-        return (prelude, plan.target.wrap_arg(borrowed));
-    }
-    let reconstruct = render_flat_struct_node(plan, &plan.root, Some(&plan.target), on_err, emit);
-    let root_binding = &plan.root.binding;
+    let leaves: Vec<syn::Ident> = plan
+        .leaves
+        .iter()
+        .map(|leaf| leaf.native_ident.clone())
+        .collect();
+    let intermediate = plan.chain.layout.expression(&leaves);
+    let converter = &plan.chain.ident;
     let prelude = quote! {
-        #reconstruct
-        let #arg_ident = #root_binding;
+        let #arg_ident = match #converter(&mut env, #intermediate) {
+            ::core::result::Result::Ok(__value) => __value,
+            ::core::result::Result::Err(__error) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__error.to_string(),
+                );
+                return #on_err;
+            }
+        };
     };
-    // The borrow, then the wrappers standing OVER it — `Box<&S>` is
-    // `Box::new(&arg)`, in that order, because the erasure sits outside the
-    // layer it wraps and the `&` is that layer.
     let borrowed = if plan.by_ref {
         quote!(&#arg_ident)
     } else {
         quote!(#arg_ident)
     };
     (prelude, plan.target.wrap_arg(borrowed))
-}
-
-fn render_entry_decode(
-    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
-    wire_ident: &syn::Ident,
-    out_ident: &syn::Ident,
-    on_err: &TokenStream,
-) -> TokenStream {
-    let conv = entry.converter_ident();
-    let decode_call = if matches!(entry.destination, syn::Type::Ptr(_)) {
-        quote!(#conv(&mut env, #wire_ident))
-    } else {
-        quote!(#conv(&mut env, &#wire_ident))
-    };
-    let route = |expr: TokenStream| {
-        quote! {
-            match #expr {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                    return #on_err;
-                }
-            }
-        }
-    };
-    if entry.pre_stages.is_empty() {
-        let decoded = route(decode_call);
-        return quote!(let #out_ident = #decoded;);
-    }
-    let stage0 = format_ident!("{}_s0", out_ident);
-    let decoded = route(decode_call);
-    let mut body = quote!(let #stage0 = #decoded;);
-    let mut previous = stage0;
-    let n = entry.pre_stages.len();
-    for (idx, stage) in entry.input_stage_order() {
-        let stage_fn = &stage.function.sig.ident;
-        let next = if idx == 0 {
-            out_ident.clone()
-        } else {
-            format_ident!("{}_s{}", out_ident, n - idx)
-        };
-        let converted = route(quote!(#stage_fn(&mut env, #previous)));
-        body.extend(quote!(let #next = #converted;));
-        previous = next;
-    }
-    body
-}
-
-/// `target` is `Some` for the parameter's ROOT node, whose spelling may add
-/// transparent wrappers the rebuild has to restore, and `None` for a nested one
-/// — a nested struct is reached through a field, and a field's own wrappers are
-/// applied where that field is decoded.
-fn render_flat_struct_node(
-    plan: &FlatInputPlan,
-    node: &FlatStructNode,
-    target: Option<&RebuildTarget>,
-    on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
-) -> TokenStream {
-    let mut decodes = TokenStream::new();
-    let mut inits = Vec::new();
-    for field in &node.fields {
-        match field {
-            FlatFieldNode::Nested { field, node: child } => {
-                decodes.extend(render_flat_struct_node(plan, child, None, on_err, emit));
-                let child_binding = &child.binding;
-                inits.push(quote!(#field: #child_binding));
-            }
-            // Tag-gated groups: one `match` over the tag rebuilds the live
-            // variant. ONLY that arm's leaves are converted — the inert
-            // groups carry wire defaults nobody reads.
-            FlatFieldNode::Sum {
-                wrappers,
-                field,
-                tag_leaf,
-                present_leaf,
-                source,
-                variants,
-                rust_ty,
-            } => {
-                let tmp = format_ident!("{}_{}", node.binding, field);
-                // The slot's ascription, spelled from the reading the node
-                // carries — see the comment below on why the type is written.
-                let rust_ty = emit.spell(rust_ty);
-                let tag = &plan.leaves[*tag_leaf].native_ident;
-                let arms = variants.iter().enumerate().map(|(t, v)| {
-                    let vident = &v.rust_ident;
-                    let tag_lit = proc_macro2::Literal::i32_unsuffixed(t as i32);
-                    let mut pre = TokenStream::new();
-                    let mut inits: Vec<TokenStream> = Vec::new();
-                    for (member, leaf_idx) in &v.fields {
-                        let leaf = &plan.leaves[*leaf_idx];
-                        let entry = leaf.entry().expect("sum payload leaf has an entry");
-                        let wire = &leaf.native_ident;
-                        let bind = format_ident!("{}_{}", tmp, wire);
-                        pre.extend(render_entry_decode(entry, wire, &bind, on_err));
-                        match member {
-                            syn::Member::Named(n) => inits.push(quote!(#n: #bind)),
-                            syn::Member::Unnamed(_) => inits.push(quote!(#bind)),
-                        }
-                    }
-                    let ctor = if v.fields.is_empty() {
-                        quote!(#source::#vident)
-                    } else if matches!(v.fields[0].0, syn::Member::Named(_)) {
-                        quote!(#source::#vident { #(#inits),* })
-                    } else {
-                        quote!(#source::#vident(#(#inits),*))
-                    };
-                    quote! { #tag_lit => { #pre #ctor } }
-                });
-                // A tag outside `0..N-1` is a binding error through the
-                // ordinary channel — never a panic across the boundary.
-                let bad_tag = format!(
-                    "{}: invalid tag",
-                    source
-                        .segments
-                        .last()
-                        .map(|s| s.ident.to_string())
-                        .unwrap_or_default()
-                );
-                let build = quote! {
-                    match #tag {
-                        #(#arms)*
-                        _ => {
-                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, #bad_tag);
-                            return #on_err;
-                        }
-                    }
-                };
-                // The rebuilt value, then the wrappers this FIELD's spelling
-                // adds — the slot is ascribed `#rust_ty`, so a `Box<Option<T>>`
-                // field needs its `Box` back. Only the rebuilding arms wrap: the
-                // fall-through below runs the field's own converter, which
-                // already yields the spelling.
-                let wrap = |e: TokenStream| {
-                    build_through_wrappers(wrappers, e)
-                        .expect("a field spelling the plan accepted is buildable")
-                };
-                if let Some(p) = present_leaf {
-                    let present = &plan.leaves[*p].native_ident;
-                    let gated = wrap(quote! {
-                        if #present != 0u8 {
-                            ::core::option::Option::Some(#build)
-                        } else {
-                            ::core::option::Option::None
-                        }
-                    });
-                    decodes.extend(quote! { let #tmp: #rust_ty = #gated; });
-                } else {
-                    let built = wrap(build);
-                    decodes.extend(quote! { let #tmp: #rust_ty = #built; });
-                }
-                inits.push(quote!(#field: #tmp));
-            }
-            FlatFieldNode::Value {
-                wrappers,
-                field,
-                value_leaf,
-                present_leaf,
-                direct_handle,
-                optional_handle,
-                rust_ty,
-            } => {
-                let leaf = &plan.leaves[*value_leaf];
-                let wire = &leaf.native_ident;
-                let tmp = format_ident!("{}_{}", node.binding, field);
-                let rust_ty = emit.spell(rust_ty);
-                let wrap = |e: TokenStream| {
-                    build_through_wrappers(wrappers, e)
-                        .expect("a field spelling the plan accepted is buildable")
-                };
-                if let Some(target) = direct_handle {
-                    let target_ty = emit.spell(target);
-                    if *optional_handle {
-                        let gated = wrap(quote! {
-                            if #wire == 0 {
-                                ::core::option::Option::None
-                            } else {
-                                if (#wire & 1) == 1 {
-                                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
-                                    return #on_err;
-                                }
-                                ::core::option::Option::Some(unsafe {
-                                    *::std::boxed::Box::from_raw(#wire as *mut #target_ty)
-                                })
-                            }
-                        });
-                        decodes.extend(quote! { let #tmp: #rust_ty = #gated; });
-                    } else {
-                        decodes.extend(quote! {
-                            if #wire == 0 || (#wire & 1) == 1 {
-                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
-                                return #on_err;
-                            }
-                            let #tmp: #rust_ty = unsafe {
-                                *::std::boxed::Box::from_raw(#wire as *mut #rust_ty)
-                            };
-                        });
-                    }
-                } else {
-                    let entry = leaf.entry().expect("ordinary leaf has converter entry");
-                    if let Some(present_index) = present_leaf {
-                        let present = &plan.leaves[*present_index].native_ident;
-                        let inner_tmp = format_ident!("{}_value", tmp);
-                        let decode = render_entry_decode(entry, wire, &inner_tmp, on_err);
-                        let gated = wrap(quote! {
-                            if #present != 0u8 {
-                                #decode
-                                ::core::option::Option::Some(#inner_tmp)
-                            } else {
-                                ::core::option::Option::None
-                            }
-                        });
-                        decodes.extend(quote! { let #tmp = #gated; });
-                    } else {
-                        decodes.extend(render_entry_decode(entry, wire, &tmp, on_err));
-                    }
-                }
-                inits.push(quote!(#field: #tmp));
-            }
-        }
-    }
-    let module = &node.struct_module;
-    let sid = &node.struct_ident;
-    let binding = &node.binding;
-    // The struct literal, then the wrappers the CORE spelling adds over it —
-    // `Option<Box<S>>` gets its `Box::new` here, inside the present gate, not
-    // around it. `None` for a nested node, whose own layers are its field's
-    // question rather than the parameter's.
-    let built = match target {
-        Some(t) => t.wrap_core(quote!(#module::#sid { #(#inits),* })),
-        None => quote!(#module::#sid { #(#inits),* }),
-    };
-    // …and the wrappers over the `Option` (or over the bare value) go around
-    // the whole gate — the `Box` of `Box<Option<S>>`.
-    let outer = |e: TokenStream| match target {
-        Some(t) => t.wrap_optional(e),
-        None => e,
-    };
-    if node.optional {
-        let present = node.present_ident.as_ref().expect("optional node has gate");
-        // `#decodes` belongs **inside** the true arm, and that is a correctness
-        // requirement rather than a tidiness one: when the Kotlin object is null
-        // its leaves carry inert placeholders, and decoding them is not
-        // side-effect-free. A required handle field arrives as pointer `0`, so
-        // an unconditional direct-handle decode calls `signal_binding_error` and
-        // returns instead of delivering `None`; an enum with no discriminant `0`
-        // and a fallible custom converter fail on their placeholders the same
-        // way.
-        //
-        // The wrapper goes around the whole conditional, which is what the
-        // `Option` layer wraps — so `outer` applies to the `if`, never between
-        // it and the decodes.
-        let gate = outer(quote! {
-            if #present != 0u8 {
-                #decodes
-                ::core::option::Option::Some(#built)
-            } else {
-                ::core::option::Option::None
-            }
-        });
-        quote! {
-            let #binding = #gate;
-        }
-    } else {
-        let value = outer(built);
-        quote! {
-            #decodes
-            let #binding = #value;
-        }
-    }
 }
 
 // ──────────────────────────────────────────────────────────────────────

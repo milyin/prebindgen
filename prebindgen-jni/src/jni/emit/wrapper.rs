@@ -535,7 +535,7 @@ fn emit_input_param(
                 let pty = &leaf.native_wire_ty();
                 wire_params.push(quote!(#pid: #pty));
             }
-            let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err, emit);
+            let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err);
             prelude.push(decode);
             (wire_params, prelude, call_arg)
         }
@@ -715,7 +715,7 @@ pub(crate) fn emit_expanded_param(
                 let wire = &flat_leaf.native_wire_ty();
                 wire_params.push(quote!(#ident: #wire));
             }
-            let (decode, _) = render_flat_input_decode(flat, &local, on_err, emit);
+            let (decode, _) = render_flat_input_decode(flat, &local, on_err);
             prelude.push(decode);
             leaf_locals.push(local);
             continue;

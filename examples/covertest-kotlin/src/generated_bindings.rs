@@ -12352,6 +12352,34 @@ pub(crate) unsafe fn tuple2_to_Box_Option_Payload_0aa97b23<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn tuple2_to_Box_Option_i64_cb6771ba<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (jni::sys::jboolean, jni::sys::jlong),
+) -> ::core::result::Result<Box<Option<i64>>, __JniErr> {
+    ::core::result::Result::Ok(
+        ::std::boxed::Box::new({
+            if (v).0 == 0u8 {
+                ::core::option::Option::None
+            } else {
+                let __present = (v).1;
+                ::core::option::Option::Some(jlong_to_i64_fbf9a9bc(env, &__present)?)
+            }
+        }),
+    )
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 #[inline(always)]
 pub(crate) unsafe fn tuple2_to_CacheConfig_fcb43e74<'env, 'a>(
     env: &mut jni::JNIEnv<'env>,
@@ -12596,6 +12624,32 @@ pub(crate) unsafe fn tuple2_to_Option_i64_b2611839<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn tuple2_to_Option_u64_560bcf14<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (jni::sys::jboolean, jni::sys::jlong),
+) -> ::core::result::Result<Option<u64>, __JniErr> {
+    ::core::result::Result::Ok({
+        if (v).0 == 0u8 {
+            ::core::option::Option::None
+        } else {
+            let __present = (v).1;
+            ::core::option::Option::Some(jlong_to_u64_4384a5d6(env, &__present)?)
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 #[inline(always)]
 pub(crate) unsafe fn tuple2_to_RepliesConfig_e72c0bc9<'env, 'a>(
     env: &mut jni::JNIEnv<'env>,
@@ -12713,6 +12767,51 @@ pub(crate) unsafe fn tuple3_to_Marker_8345c1e1<'env, 'a>(
                 });
             }
         }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn tuple4_to_Annotated_55eec48a<'env, 'a>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (
+        (
+            jni::sys::jlong,
+            jni::sys::jint,
+            jni::sys::jdouble,
+            jni::sys::jboolean,
+            jni::objects::JString<'a>,
+        ),
+        (
+            jni::sys::jboolean,
+            (
+                jni::sys::jlong,
+                jni::sys::jint,
+                jni::sys::jdouble,
+                jni::sys::jboolean,
+                jni::objects::JString<'a>,
+            ),
+        ),
+        (jni::sys::jboolean, jni::sys::jlong),
+        jni::sys::jint,
+    ),
+) -> ::core::result::Result<perftest_flat::Annotated, __JniErr> {
+    ::core::result::Result::Ok(perftest_flat::Annotated {
+        payload: tuple5_to_Payload_bbb055bc(env, (v).0)?,
+        alternate: tuple2_to_Option_Payload_af2bd54b(env, (v).1)?,
+        ttl: tuple2_to_Option_i64_b2611839(env, (v).2)?,
+        priority: jint_to_Option_Priority_3d9b4399(env, &((v).3))?,
     })
 }
 #[allow(
@@ -12858,6 +12957,70 @@ pub(crate) unsafe fn tuple5_to_Payload_bbb055bc<'env, 'a>(
         value: jdouble_to_f64_9e4a8f70(env, &((v).2))?,
         flag: jboolean_to_bool_31306d98(env, &((v).3))?,
         label: JString_to_Option_Box_String_071e4c8c(env, &((v).4))?,
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn tuple5_to_Unsigned_b5115b5a<'env, 'a>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (
+        jni::sys::jint,
+        jni::sys::jint,
+        jni::sys::jlong,
+        jni::sys::jlong,
+        (jni::sys::jboolean, jni::sys::jlong),
+    ),
+) -> ::core::result::Result<perftest_flat::Unsigned, __JniErr> {
+    ::core::result::Result::Ok(perftest_flat::Unsigned {
+        byte: jint_to_u8_553cf6ec(env, &((v).0))?,
+        short: jint_to_u16_28edf527(env, &((v).1))?,
+        int: jlong_to_u32_9594a230(env, &((v).2))?,
+        long: jlong_to_u64_4384a5d6(env, &((v).3))?,
+        maybe_long: tuple2_to_Option_u64_560bcf14(env, (v).4)?,
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn tuple5_to_WrappedFields_95f06a69<'env, 'a>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (
+        jni::sys::jlong,
+        (jni::sys::jboolean, jni::sys::jlong),
+        (jni::sys::jboolean, jni::sys::jlong),
+        jni::sys::jint,
+        jni::sys::jint,
+    ),
+) -> ::core::result::Result<perftest_flat::WrappedFields, __JniErr> {
+    ::core::result::Result::Ok(perftest_flat::WrappedFields {
+        id: jlong_to_i64_fbf9a9bc(env, &((v).0))?,
+        boxed: tuple2_to_Box_Option_i64_cb6771ba(env, (v).1)?,
+        plain: tuple2_to_Option_i64_b2611839(env, (v).2)?,
+        boxed_enum: jint_to_Box_Priority_a16653ae(env, &((v).3))?,
+        plain_enum: jint_to_Priority_447102d2(env, &((v).4))?,
     })
 }
 #[allow(
@@ -13183,231 +13346,43 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedAlterna
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __flat_a_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &a_payload_id) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &a_payload_seq) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a_payload_value = match jdouble_to_f64_9e4a8f70(
+    let a = match tuple4_to_Annotated_55eec48a(
         &mut env,
-        &a_payload_value,
+        (
+            (
+                a_payload_id,
+                a_payload_seq,
+                a_payload_value,
+                a_payload_flag,
+                a_payload_label,
+            ),
+            (
+                a_alternate_present,
+                (
+                    a_alternate_id,
+                    a_alternate_seq,
+                    a_alternate_value,
+                    a_alternate_flag,
+                    a_alternate_label,
+                ),
+            ),
+            (a_ttl_present, a_ttl_value),
+            a_priority,
+        ),
     ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__e.to_string(),
+                &__error.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
     };
-    let __flat_a_payload_flag = match jboolean_to_bool_31306d98(
-        &mut env,
-        &a_payload_flag,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a_payload_label = match JString_to_Option_Box_String_071e4c8c(
-        &mut env,
-        &a_payload_label,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a_payload = perftest_flat::Payload {
-        id: __flat_a_payload_id,
-        seq: __flat_a_payload_seq,
-        value: __flat_a_payload_value,
-        flag: __flat_a_payload_flag,
-        label: __flat_a_payload_label,
-    };
-    let __flat_a_alternate = if a_alternate_present != 0u8 {
-        let __flat_a_alternate_id = match jlong_to_i64_fbf9a9bc(
-            &mut env,
-            &a_alternate_id,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        let __flat_a_alternate_seq = match jint_to_i32_a3e3b6ef(
-            &mut env,
-            &a_alternate_seq,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        let __flat_a_alternate_value = match jdouble_to_f64_9e4a8f70(
-            &mut env,
-            &a_alternate_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        let __flat_a_alternate_flag = match jboolean_to_bool_31306d98(
-            &mut env,
-            &a_alternate_flag,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        let __flat_a_alternate_label = match JString_to_Option_Box_String_071e4c8c(
-            &mut env,
-            &a_alternate_label,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(perftest_flat::Payload {
-            id: __flat_a_alternate_id,
-            seq: __flat_a_alternate_seq,
-            value: __flat_a_alternate_value,
-            flag: __flat_a_alternate_flag,
-            label: __flat_a_alternate_label,
-        })
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_a_ttl = if a_ttl_present != 0u8 {
-        let __flat_a_ttl_value = match jlong_to_i64_fbf9a9bc(&mut env, &a_ttl_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__flat_a_ttl_value)
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_a_priority = match jint_to_Option_Priority_3d9b4399(
-        &mut env,
-        &a_priority,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a = perftest_flat::Annotated {
-        payload: __flat_a_payload,
-        alternate: __flat_a_alternate,
-        ttl: __flat_a_ttl,
-        priority: __flat_a_priority,
-    };
-    let a = __flat_a;
     let __out = perftest_flat::annotated_alternate_value(&a);
     match Option_f64_to_JObject_b3f3e9a9(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -13531,231 +13506,43 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPayload
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __flat_a_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &a_payload_id) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0.0 as jni::sys::jdouble;
-        }
-    };
-    let __flat_a_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &a_payload_seq) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0.0 as jni::sys::jdouble;
-        }
-    };
-    let __flat_a_payload_value = match jdouble_to_f64_9e4a8f70(
+    let a = match tuple4_to_Annotated_55eec48a(
         &mut env,
-        &a_payload_value,
+        (
+            (
+                a_payload_id,
+                a_payload_seq,
+                a_payload_value,
+                a_payload_flag,
+                a_payload_label,
+            ),
+            (
+                a_alternate_present,
+                (
+                    a_alternate_id,
+                    a_alternate_seq,
+                    a_alternate_value,
+                    a_alternate_flag,
+                    a_alternate_label,
+                ),
+            ),
+            (a_ttl_present, a_ttl_value),
+            a_priority,
+        ),
     ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__e.to_string(),
+                &__error.to_string(),
             );
             return 0.0 as jni::sys::jdouble;
         }
     };
-    let __flat_a_payload_flag = match jboolean_to_bool_31306d98(
-        &mut env,
-        &a_payload_flag,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0.0 as jni::sys::jdouble;
-        }
-    };
-    let __flat_a_payload_label = match JString_to_Option_Box_String_071e4c8c(
-        &mut env,
-        &a_payload_label,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0.0 as jni::sys::jdouble;
-        }
-    };
-    let __flat_a_payload = perftest_flat::Payload {
-        id: __flat_a_payload_id,
-        seq: __flat_a_payload_seq,
-        value: __flat_a_payload_value,
-        flag: __flat_a_payload_flag,
-        label: __flat_a_payload_label,
-    };
-    let __flat_a_alternate = if a_alternate_present != 0u8 {
-        let __flat_a_alternate_id = match jlong_to_i64_fbf9a9bc(
-            &mut env,
-            &a_alternate_id,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0.0 as jni::sys::jdouble;
-            }
-        };
-        let __flat_a_alternate_seq = match jint_to_i32_a3e3b6ef(
-            &mut env,
-            &a_alternate_seq,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0.0 as jni::sys::jdouble;
-            }
-        };
-        let __flat_a_alternate_value = match jdouble_to_f64_9e4a8f70(
-            &mut env,
-            &a_alternate_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0.0 as jni::sys::jdouble;
-            }
-        };
-        let __flat_a_alternate_flag = match jboolean_to_bool_31306d98(
-            &mut env,
-            &a_alternate_flag,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0.0 as jni::sys::jdouble;
-            }
-        };
-        let __flat_a_alternate_label = match JString_to_Option_Box_String_071e4c8c(
-            &mut env,
-            &a_alternate_label,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0.0 as jni::sys::jdouble;
-            }
-        };
-        ::core::option::Option::Some(perftest_flat::Payload {
-            id: __flat_a_alternate_id,
-            seq: __flat_a_alternate_seq,
-            value: __flat_a_alternate_value,
-            flag: __flat_a_alternate_flag,
-            label: __flat_a_alternate_label,
-        })
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_a_ttl = if a_ttl_present != 0u8 {
-        let __flat_a_ttl_value = match jlong_to_i64_fbf9a9bc(&mut env, &a_ttl_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0.0 as jni::sys::jdouble;
-            }
-        };
-        ::core::option::Option::Some(__flat_a_ttl_value)
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_a_priority = match jint_to_Option_Priority_3d9b4399(
-        &mut env,
-        &a_priority,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0.0 as jni::sys::jdouble;
-        }
-    };
-    let __flat_a = perftest_flat::Annotated {
-        payload: __flat_a_payload,
-        alternate: __flat_a_alternate,
-        ttl: __flat_a_ttl,
-        priority: __flat_a_priority,
-    };
-    let a = __flat_a;
     let __out = perftest_flat::annotated_payload_value(&a);
     match f64_to_jdouble_9e4a8f70(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -13797,231 +13584,43 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __flat_a_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &a_payload_id) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0 as jni::sys::jint;
-        }
-    };
-    let __flat_a_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &a_payload_seq) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0 as jni::sys::jint;
-        }
-    };
-    let __flat_a_payload_value = match jdouble_to_f64_9e4a8f70(
+    let a = match tuple4_to_Annotated_55eec48a(
         &mut env,
-        &a_payload_value,
+        (
+            (
+                a_payload_id,
+                a_payload_seq,
+                a_payload_value,
+                a_payload_flag,
+                a_payload_label,
+            ),
+            (
+                a_alternate_present,
+                (
+                    a_alternate_id,
+                    a_alternate_seq,
+                    a_alternate_value,
+                    a_alternate_flag,
+                    a_alternate_label,
+                ),
+            ),
+            (a_ttl_present, a_ttl_value),
+            a_priority,
+        ),
     ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__e.to_string(),
+                &__error.to_string(),
             );
             return 0 as jni::sys::jint;
         }
     };
-    let __flat_a_payload_flag = match jboolean_to_bool_31306d98(
-        &mut env,
-        &a_payload_flag,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0 as jni::sys::jint;
-        }
-    };
-    let __flat_a_payload_label = match JString_to_Option_Box_String_071e4c8c(
-        &mut env,
-        &a_payload_label,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0 as jni::sys::jint;
-        }
-    };
-    let __flat_a_payload = perftest_flat::Payload {
-        id: __flat_a_payload_id,
-        seq: __flat_a_payload_seq,
-        value: __flat_a_payload_value,
-        flag: __flat_a_payload_flag,
-        label: __flat_a_payload_label,
-    };
-    let __flat_a_alternate = if a_alternate_present != 0u8 {
-        let __flat_a_alternate_id = match jlong_to_i64_fbf9a9bc(
-            &mut env,
-            &a_alternate_id,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jint;
-            }
-        };
-        let __flat_a_alternate_seq = match jint_to_i32_a3e3b6ef(
-            &mut env,
-            &a_alternate_seq,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jint;
-            }
-        };
-        let __flat_a_alternate_value = match jdouble_to_f64_9e4a8f70(
-            &mut env,
-            &a_alternate_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jint;
-            }
-        };
-        let __flat_a_alternate_flag = match jboolean_to_bool_31306d98(
-            &mut env,
-            &a_alternate_flag,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jint;
-            }
-        };
-        let __flat_a_alternate_label = match JString_to_Option_Box_String_071e4c8c(
-            &mut env,
-            &a_alternate_label,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jint;
-            }
-        };
-        ::core::option::Option::Some(perftest_flat::Payload {
-            id: __flat_a_alternate_id,
-            seq: __flat_a_alternate_seq,
-            value: __flat_a_alternate_value,
-            flag: __flat_a_alternate_flag,
-            label: __flat_a_alternate_label,
-        })
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_a_ttl = if a_ttl_present != 0u8 {
-        let __flat_a_ttl_value = match jlong_to_i64_fbf9a9bc(&mut env, &a_ttl_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jint;
-            }
-        };
-        ::core::option::Option::Some(__flat_a_ttl_value)
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_a_priority = match jint_to_Option_Priority_3d9b4399(
-        &mut env,
-        &a_priority,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0 as jni::sys::jint;
-        }
-    };
-    let __flat_a = perftest_flat::Annotated {
-        payload: __flat_a_payload,
-        alternate: __flat_a_alternate,
-        ttl: __flat_a_ttl,
-        priority: __flat_a_priority,
-    };
-    let a = __flat_a;
     let __out = perftest_flat::annotated_priority(&a);
     match Option_Priority_to_jint_3d9b4399(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -14063,231 +13662,43 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedTtl<'a>
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __flat_a_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &a_payload_id) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &a_payload_seq) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a_payload_value = match jdouble_to_f64_9e4a8f70(
+    let a = match tuple4_to_Annotated_55eec48a(
         &mut env,
-        &a_payload_value,
+        (
+            (
+                a_payload_id,
+                a_payload_seq,
+                a_payload_value,
+                a_payload_flag,
+                a_payload_label,
+            ),
+            (
+                a_alternate_present,
+                (
+                    a_alternate_id,
+                    a_alternate_seq,
+                    a_alternate_value,
+                    a_alternate_flag,
+                    a_alternate_label,
+                ),
+            ),
+            (a_ttl_present, a_ttl_value),
+            a_priority,
+        ),
     ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__e.to_string(),
+                &__error.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
     };
-    let __flat_a_payload_flag = match jboolean_to_bool_31306d98(
-        &mut env,
-        &a_payload_flag,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a_payload_label = match JString_to_Option_Box_String_071e4c8c(
-        &mut env,
-        &a_payload_label,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a_payload = perftest_flat::Payload {
-        id: __flat_a_payload_id,
-        seq: __flat_a_payload_seq,
-        value: __flat_a_payload_value,
-        flag: __flat_a_payload_flag,
-        label: __flat_a_payload_label,
-    };
-    let __flat_a_alternate = if a_alternate_present != 0u8 {
-        let __flat_a_alternate_id = match jlong_to_i64_fbf9a9bc(
-            &mut env,
-            &a_alternate_id,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        let __flat_a_alternate_seq = match jint_to_i32_a3e3b6ef(
-            &mut env,
-            &a_alternate_seq,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        let __flat_a_alternate_value = match jdouble_to_f64_9e4a8f70(
-            &mut env,
-            &a_alternate_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        let __flat_a_alternate_flag = match jboolean_to_bool_31306d98(
-            &mut env,
-            &a_alternate_flag,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        let __flat_a_alternate_label = match JString_to_Option_Box_String_071e4c8c(
-            &mut env,
-            &a_alternate_label,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(perftest_flat::Payload {
-            id: __flat_a_alternate_id,
-            seq: __flat_a_alternate_seq,
-            value: __flat_a_alternate_value,
-            flag: __flat_a_alternate_flag,
-            label: __flat_a_alternate_label,
-        })
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_a_ttl = if a_ttl_present != 0u8 {
-        let __flat_a_ttl_value = match jlong_to_i64_fbf9a9bc(&mut env, &a_ttl_value) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__flat_a_ttl_value)
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_a_priority = match jint_to_Option_Priority_3d9b4399(
-        &mut env,
-        &a_priority,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_a = perftest_flat::Annotated {
-        payload: __flat_a_payload,
-        alternate: __flat_a_alternate,
-        ttl: __flat_a_ttl,
-        priority: __flat_a_priority,
-    };
-    let a = __flat_a;
     let __out = perftest_flat::annotated_ttl(&a);
     match Option_i64_to_JObject_2ba9a5ed(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -24067,92 +23478,29 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_unsignedDataMayb
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __flat_value_byte = match jint_to_u8_553cf6ec(&mut env, &value_byte) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
+    let value = match tuple5_to_Unsigned_b5115b5a(
+        &mut env,
+        (
+            value_byte,
+            value_short,
+            value_int,
+            value_long,
+            (value_maybe_long_present, value_maybe_long_value),
+        ),
+    ) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__e.to_string(),
+                &__error.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
     };
-    let __flat_value_short = match jint_to_u16_28edf527(&mut env, &value_short) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_value_int = match jlong_to_u32_9594a230(&mut env, &value_int) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_value_long = match jlong_to_u64_4384a5d6(&mut env, &value_long) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return jni::objects::JObject::null().into();
-        }
-    };
-    let __flat_value_maybe_long = if value_maybe_long_present != 0u8 {
-        let __flat_value_maybe_long_value = match jlong_to_u64_4384a5d6(
-            &mut env,
-            &value_maybe_long_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        ::core::option::Option::Some(__flat_value_maybe_long_value)
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_value = perftest_flat::Unsigned {
-        byte: __flat_value_byte,
-        short: __flat_value_short,
-        int: __flat_value_int,
-        long: __flat_value_long,
-        maybe_long: __flat_value_maybe_long,
-    };
-    let value = __flat_value;
     let __out = perftest_flat::unsigned_data_maybe(&value);
     match Option_u64_to_JObject_32be16a2(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -24760,105 +24108,29 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_wrappedFieldsSum
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __flat_w_id = match jlong_to_i64_fbf9a9bc(&mut env, &w_id) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0 as jni::sys::jlong;
-        }
-    };
-    let __flat_w_boxed = ::std::boxed::Box::new(
-        if w_boxed_present != 0u8 {
-            let __flat_w_boxed_value = match jlong_to_i64_fbf9a9bc(
-                &mut env,
-                &w_boxed_value,
-            ) {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(
-                        &mut env,
-                        &__error_sink,
-                        &__SINK_MID,
-                        __SINK_FQN,
-                        __SINK_DESCR,
-                        &__e.to_string(),
-                    );
-                    return 0 as jni::sys::jlong;
-                }
-            };
-            ::core::option::Option::Some(__flat_w_boxed_value)
-        } else {
-            ::core::option::Option::None
-        },
-    );
-    let __flat_w_plain = if w_plain_present != 0u8 {
-        let __flat_w_plain_value = match jlong_to_i64_fbf9a9bc(
-            &mut env,
-            &w_plain_value,
-        ) {
-            ::core::result::Result::Ok(__v) => __v,
-            ::core::result::Result::Err(__e) => {
-                signal_binding_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    &__e.to_string(),
-                );
-                return 0 as jni::sys::jlong;
-            }
-        };
-        ::core::option::Option::Some(__flat_w_plain_value)
-    } else {
-        ::core::option::Option::None
-    };
-    let __flat_w_boxed_enum = match jint_to_Box_Priority_a16653ae(
+    let w = match tuple5_to_WrappedFields_95f06a69(
         &mut env,
-        &w_boxed_enum,
+        (
+            w_id,
+            (w_boxed_present, w_boxed_value),
+            (w_plain_present, w_plain_value),
+            w_boxed_enum,
+            w_plain_enum,
+        ),
     ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__e.to_string(),
+                &__error.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
     };
-    let __flat_w_plain_enum = match jint_to_Priority_447102d2(&mut env, &w_plain_enum) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0 as jni::sys::jlong;
-        }
-    };
-    let __flat_w = perftest_flat::WrappedFields {
-        id: __flat_w_id,
-        boxed: __flat_w_boxed,
-        plain: __flat_w_plain,
-        boxed_enum: __flat_w_boxed_enum,
-        plain_enum: __flat_w_plain_enum,
-    };
-    let w = __flat_w;
     let __out = perftest_flat::wrapped_fields_sum(w);
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,

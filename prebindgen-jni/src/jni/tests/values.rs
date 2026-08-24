@@ -935,18 +935,18 @@ fn option_scalar_struct_field_flattens() {
     assert!(kc.contains("o.ttl?:0L"), "{kotlin}");
     assert!(kc.contains("o.flag?:false"), "{kotlin}");
 
-    // Rust rebuilds each field's `Option` from the raw scalars (gated on present)
-    // and reconstructs the struct inline from the flat leaves, passing it to the
-    // source fn. (The whole-struct `JObject_to_Opts` `get_field` converter is
-    // still emitted but is now dead `#[allow(dead_code)]`, like Phase 4's boxed
-    // converters — the live param path no longer references it.)
+    // Rust hands the nested pair intermediates to the registry-composed
+    // Optional chains, then hands their results to the Product chain. The
+    // wrapper does not reconstruct either shape itself. (The whole-struct
+    // `JObject_to_Opts` converter remains a dead compatibility conversion.)
     assert!(rc.contains("o_ttl_present:jni::sys::jboolean"), "{rust}");
     assert!(rc.contains("o_ttl_value:jni::sys::jlong"), "{rust}");
-    assert!(rc.contains("ifo_ttl_present!=0u8"), "{rust}");
     assert!(
-        rc.contains("myflat::Opts{id:__flat_o_id,ttl:__flat_o_ttl,flag:__flat_o_flag"),
+        rc.contains("tuple3_to_Opts_")
+            && rc.contains("(o_id,(o_ttl_present,o_ttl_value),(o_flag_present,o_flag_value))"),
         "{rust}"
     );
+    assert!(!rc.contains("__flat_o_"), "{rust}");
     assert!(rc.contains("myflat::opts_put(&o)"), "{rust}");
 }
 
@@ -1062,18 +1062,19 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     assert!(kc.contains("Inner.fromParts(inner_id)"), "{kotlin}");
 
     // INPUT (`job_mode`): the native method receives the recursively flattened
-    // leaves and Rust reconstructs `Inner` before `Job`. No live wrapper-side
-    // `get_field` decode is needed.
+    // leaves. The registry-composed Optional and Product chains reconstruct
+    // `Inner` and `Job`; the wrapper only assembles their tuple intermediate.
     assert!(kc.contains("jInnerId:Long"), "{kotlin}");
     assert!(kc.contains("jLevel:Int"), "{kotlin}");
     assert!(kc.contains("jTtlPresent:Boolean"), "{kotlin}");
     assert!(kc.contains("jMode:Int"), "{kotlin}");
     assert!(kc.contains("j.inner.id"), "{kotlin}");
-    assert!(rc.contains("myflat::Inner{id:__flat_j_inner_id"), "{rust}");
     assert!(
-        rc.contains("myflat::Job{inner:__flat_j_inner,level:__flat_j_level"),
+        rc.contains("tuple4_to_Job_")
+            && rc.contains("((j_inner_id,),j_level,(j_ttl_present,j_ttl_value),j_mode)"),
         "{rust}"
     );
+    assert!(!rc.contains("__flat_j_"), "{rust}");
 
     // RETURN (`job_mode` → `Option<Level>`): the extern keeps a primitive Int;
     // the wrapper maps the allocated discriminant back to null.

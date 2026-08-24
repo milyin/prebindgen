@@ -394,16 +394,14 @@ impl Declarations {
         //
         // Product-shaped payloads additionally offer `parts`; that row is
         // selected by the existing flattening bindings below.
-        let flattenable = self.flattenable_optionals(model);
-        for (key, (outer, _)) in self.implicit_optionals(model) {
+        let implicit = self.implicit_optionals(model);
+        for outer in implicit.values().map(|(outer, _)| *outer) {
             recipes
                 .declare_default(outer.clone(), whole(), Constructing::Optional)
-                .declare(outer.clone(), pair(), Constructing::Optional);
-            if flattenable.contains_key(&key) {
-                recipes.declare(outer.clone(), parts(), Constructing::Optional);
-            }
+                .declare(outer.clone(), pair(), Constructing::Optional)
+                .declare(outer.clone(), parts(), Constructing::Optional);
         }
-        for (outer, _) in flattenable.into_values() {
+        for (outer, _) in implicit.into_values() {
             recipes
                 .declare_default(outer.clone(), whole(), Deconstructing::Optional)
                 .declare(outer.clone(), parts(), Deconstructing::Optional);
@@ -502,16 +500,6 @@ impl Declarations {
         optionals
     }
 
-    fn flattenable_optionals<'a>(
-        &self,
-        model: &'a Flat,
-    ) -> BTreeMap<TypeKey, (&'a TypeRef, &'a TypeRef)> {
-        self.implicit_optionals(model)
-            .into_iter()
-            .filter(|(_, (_, inner))| self.field_crosses_as_its_fields(inner))
-            .collect()
-    }
-
     pub(crate) fn bindings(
         &self,
         model: &Flat,
@@ -531,18 +519,27 @@ impl Declarations {
             .collect();
         declared.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
-        // The named Optional row delegates its one child to the child's named
-        // Product row. The whole/default row has no parts and therefore remains
-        // untouched. Bind both directions: function inputs construct the Rust
-        // optional, while returns and callback arguments deconstruct it.
-        for (outer, inner) in self.flattenable_optionals(model).into_values() {
+        // The named Optional row is the representation suitable inside another
+        // composed shape. Where its child has a Product row it delegates to that
+        // row; a scalar child stays on its default row and lets the JNI compiler
+        // choose a niche or a `(present, value)` intermediate from the compiled
+        // child facts. The whole/default Optional row remains untouched.
+        //
+        // Bind both directions: function inputs construct the Rust optional,
+        // while returns and callback arguments deconstruct it.
+        for (outer, inner) in self.implicit_optionals(model).into_values() {
             for direction in [Direction::Construct, Direction::Deconstruct] {
                 let outer = Crossing::new(outer.clone(), direction);
                 let row = outer.row(parts());
+                let inner = Crossing::new(inner.clone(), direction);
                 bound.bind(
                     Site::part(&row, 0),
-                    Crossing::new(inner.clone(), direction),
-                    Ask::Recipe(parts()),
+                    inner.clone(),
+                    if recipes.key_of(&inner.key(), &parts()).is_some() {
+                        Ask::Recipe(parts())
+                    } else {
+                        Ask::Default
+                    },
                     Origin::Part,
                 );
             }
@@ -560,24 +557,29 @@ impl Declarations {
             let building = Crossing::new(ty.clone(), Direction::Construct);
             let handing_out = Crossing::new(ty, Direction::Deconstruct);
             for (index, field) in s.fields.iter().enumerate() {
-                // An `Option<D>` field reaches D through the optional's own
-                // recipe, so the part bound here is the optional and the inner is
-                // bound below.
-                let target = field.ty.optional_inner().unwrap_or(&field.ty);
-                if !self.field_crosses_as_its_fields(target) {
+                // A field selects `parts` exactly when its crossing declares
+                // that row AND the declaration says this occurrence decomposes.
+                // Direct classes retain the existing `.jobject_input()` and
+                // erased-wrapper boundaries; every implicit Optional selects its
+                // part representation, which decides whether the child is
+                // another composition or one scalar intermediate.
+                if field.ty.optional_inner().is_none()
+                    && !self.field_crosses_as_its_fields(&field.ty)
+                {
                     continue;
                 }
-                // A direct class field selects its Product row; an optional
-                // class field selects the Optional `parts` row, which in turn
-                // selects that same Product row for its child.
                 for (of, direction) in [
                     (&building, Direction::Construct),
                     (&handing_out, Direction::Deconstruct),
                 ] {
                     let row = of.row(parts());
+                    let field_crossing = Crossing::new(field.ty.clone(), direction);
+                    if recipes.key_of(&field_crossing.key(), &parts()).is_none() {
+                        continue;
+                    }
                     bound.bind(
                         Site::part(&row, index),
-                        Crossing::new(field.ty.clone(), direction),
+                        field_crossing,
                         Ask::Recipe(parts()),
                         Origin::Part,
                     );

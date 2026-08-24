@@ -143,7 +143,7 @@ pub(crate) enum InputKind {
     },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
-    OptionalPair(crate::jni::compile::OptionalPairPlan),
+    OptionalPair(Box<crate::jni::compile::OptionalPairPlan>),
     /// Flattenable data_class: the field leaves cross as separate wire params.
     FlattenStruct(FlatInputPlan),
     /// Lockable opaque-handle projection (`jlong` wire). Ownership and
