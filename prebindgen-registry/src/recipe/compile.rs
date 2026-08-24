@@ -499,7 +499,10 @@ impl<'a, C: Compile> Compiler<'a, C> {
     /// `Ask::Recipe`: useful where the choice follows from a compiled
     /// destination fragment rather than from the Flat model alone. The row
     /// must still be declared in the recipe table, so choosing it cannot
-    /// invent a representation outside the registry's model.
+    /// invent a representation outside the registry's model. An
+    /// adapter-selected recipe deliberately takes precedence over any binding
+    /// for the same site; callers use this entry point only after destination
+    /// compilation has supplied information the binding table cannot express.
     pub fn site_recipe(
         &mut self,
         adapter: &mut C,

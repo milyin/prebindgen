@@ -1,5 +1,6 @@
-use super::*;
 use prebindgen_registry::Conversions;
+
+use super::*;
 
 #[test]
 fn bounded_duration_option_uses_u64_niche_without_boxing() {
