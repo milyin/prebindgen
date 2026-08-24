@@ -21,6 +21,46 @@
 //! integer wire with `0` meaning `None`, matching the C-pointer-with-null
 //! ABI most native bindings already use.
 //!
+//! ## Aligned pointer tags
+//!
+//! Alignment can leave more invalid integer encodings than the null pointer.
+//! If generated Rust proves `align_of::<T>() >= 2`, every live
+//! `Box::into_raw` pointer to `T` has bit zero clear. An adapter can reserve
+//! that bit as an out-of-band tag while carrying the pointer in an integer
+//! wire.
+//!
+//! JniGen uses exactly this scheme for handle invalidation:
+//!
+//! | integer handle | meaning |
+//! |---|---|
+//! | `0` | an absent optional handle |
+//! | nonzero, even | a live `Box<T>` pointer |
+//! | nonzero, odd | a closed handle; the original address is `v & !1` |
+//!
+//! Closing a Kotlin handle sets bit zero instead of replacing the address, so
+//! the masked address remains an immutable lock-ordering key. Generated Rust
+//! asserts the alignment floor and rejects an odd value before any dereference.
+//!
+//! The odd encodings are **not** entries in JniGen's [`Niches`]. They already
+//! mean “closed handle”, an operational error that can reach the decoder; if
+//! an `Option` layer carved one, a close race would silently become `None`.
+//! “Not a valid live pointer” is therefore insufficient to make an encoding a
+//! representation niche. A slot belongs in [`Niches`] only when the wrapper is
+//! free to claim its meaning.
+//!
+//! An adapter reusing aligned-pointer tags must keep the complete protocol
+//! together:
+//!
+//! 1. assert the required alignment against the final concrete pointee type;
+//! 2. assign every reserved tag one meaning on both sides of the boundary;
+//! 3. recognize tags before dereferencing or freeing the integer as a pointer;
+//! 4. mask tags anywhere the stable address identity is compared or ordered;
+//! 5. publish only genuinely unclaimed encodings as [`NicheSlot`]s.
+//!
+//! Reserving several low-bit patterns requires a correspondingly stronger
+//! alignment guarantee and a non-overlapping allocation between lifecycle
+//! tags and wrapper discriminants.
+//!
 //! ## Cascading
 //!
 //! [`Niches::carve`] returns the next slot together with the remainder.
