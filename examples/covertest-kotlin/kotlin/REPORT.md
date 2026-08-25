@@ -80,6 +80,8 @@ Base package: `io.prebindgen.covertest`
 - `boxed_run_id_sum` — `fun boxedRunIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long`
 - `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
+- `const_array_echo` — `fun constArrayEcho(value: ConstArray, onError: JniErrorHandler<ConstArray?>): ConstArray?`
+  - shaped by: return `ConstArray` decomposed → [bytes] (Callback delivery)
 - `dossier_new` — `fun dossierNew(note: Long, tag: Long, count: Long, total: Double, onError: JniErrorHandler<Dossier?>): Dossier?`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary?>): DurationBoundary?`
   - shaped by: return `DurationBoundary` decomposed → [required, delay] (Callback delivery)
@@ -232,6 +234,7 @@ Base package: `io.prebindgen.covertest`
 - `BlobValue`: data_class → `io.prebindgen.covertest.model.BlobValue` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `CacheConfig`: data_class → `io.prebindgen.covertest.model.CacheConfig` (wire `jni :: objects :: JObject`)
 - `CallbackHolder`: data_class → `io.prebindgen.covertest.CallbackHolder` (wire `jni :: objects :: JObject`)
+- `ConstArray`: data_class → `io.prebindgen.covertest.model.ConstArray` (wire `jni :: objects :: JObject`)
 - `Dossier`: data_class → `io.prebindgen.covertest.Dossier` (wire `jni :: objects :: JObject`)
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)

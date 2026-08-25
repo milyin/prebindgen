@@ -461,6 +461,29 @@ public data class CacheConfig(val replies: RepliesConfig, val ttl: Long) {
 }
 
 /**
+ * A covertest-only fixed array whose length must render as
+ * `cov_helpers::CONST_ARRAY_LEN` in the binding crate.
+ */
+public data class ConstArray(val bytes: ByteArray) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ConstArray) return false
+        return bytes.contentEquals(other.bytes)
+    }
+
+    override fun hashCode(): Int {
+        return bytes.contentHashCode()
+    }
+
+    override fun toString(): String = "ConstArray(bytes=${bytes.contentToString()})"
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(bytes: ByteArray): ConstArray = ConstArray(bytes)
+    }
+}
+
+/**
  * Data-class composition probe for the bounded duration representation.
  * The coverage binding deliberately marks this class `.jobject_input()` so
  * its echo executes both the whole-object input decoder and the `fromParts`
@@ -1404,6 +1427,14 @@ public fun interface BlobValueBuilder<out R> {
 internal val __BlobValueBuilder: BlobValueBuilder<BlobValue> =
 BlobValueBuilder { stamp__secs, stamp__nanos, id, chunks -> BlobValue.fromParts(stamp__secs, stamp__nanos, id, chunks) }
 
+public fun interface ConstArrayBuilder<out R> {
+    public fun run(bytes: ByteArray): R
+}
+
+@get:JvmSynthetic
+internal val __ConstArrayBuilder: ConstArrayBuilder<ConstArray> =
+ConstArrayBuilder { bytes -> ConstArray.fromParts(bytes) }
+
 internal fun interface DurationBoundaryBuilderRaw<out R> {
     public fun run(required: Long, delay: Long): R
 }
@@ -1595,6 +1626,19 @@ internal object __StampFolderRawHolder {
     @JvmField
     val instance: StampFolderRaw<ArrayList<Stamp>> =
     StampFolderRaw { acc, secs, nanos -> acc.add(Stamp.fromParts(secs, nanos)); acc }
+}
+
+/**
+ * Round-trip the const-sized array in both converter directions.
+ *
+ * The Rust `ConstArray` result is delivered decomposed: the builder callback receives (`bytes`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun constArrayEcho(value: ConstArray, onError: JniErrorHandler<ConstArray?>): ConstArray? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.constArrayEcho(value.bytes, __ConstArrayBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as ConstArray
 }
 
 /**

@@ -28,6 +28,24 @@ pub const PREBINDGEN_OUT_DIR: &str = prebindgen_proc_macro::prebindgen_out_dir!(
 /// `konst` feature guard, like every prebindgen source crate).
 pub const FEATURES: &str = features!();
 
+/// Non-literal fixed-array length used to pin final-emission qualification.
+#[prebindgen]
+pub const CONST_ARRAY_LEN: usize = 3;
+
+/// A covertest-only fixed array whose length must render as
+/// `cov_helpers::CONST_ARRAY_LEN` in the binding crate.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConstArray {
+    pub bytes: [u8; CONST_ARRAY_LEN],
+}
+
+/// Round-trip the const-sized array in both converter directions.
+#[prebindgen]
+pub fn const_array_echo(value: ConstArray) -> ConstArray {
+    value
+}
+
 /// Canonical input conversion for [`Millis`]: build it from the raw
 /// millisecond count. Referenced by covertest's
 /// `convert!(Millis).input(fun!(millis_from_long))`.
