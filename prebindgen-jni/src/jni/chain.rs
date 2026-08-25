@@ -18,6 +18,7 @@ pub(crate) struct JFunction(JBody);
 enum JBody {
     Complete(Box<syn::ItemFn>),
     OwnedHandle(Box<JOwnedHandlePlan>),
+    BorrowedOptionalHandle(Box<JBorrowedOptionalHandlePlan>),
     Product(Box<JProductPlan>),
     Choice(Box<JChoicePlan>),
     Sequence(Box<JSequencePlan>),
@@ -32,6 +33,10 @@ impl JFunction {
 
     pub(crate) fn owned_handle(plan: JOwnedHandlePlan) -> Self {
         Self(JBody::OwnedHandle(Box::new(plan)))
+    }
+
+    pub(crate) fn borrowed_optional_handle(plan: JBorrowedOptionalHandlePlan) -> Self {
+        Self(JBody::BorrowedOptionalHandle(Box::new(plan)))
     }
 
     pub(crate) fn product(plan: JProductPlan) -> Self {
@@ -59,10 +64,16 @@ impl JFunction {
         matches!(self.0, JBody::Invoke(_))
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_borrowed_optional_handle(&self) -> bool {
+        matches!(self.0, JBody::BorrowedOptionalHandle(_))
+    }
+
     pub(crate) fn mark_reachable(&self) {
         match &self.0 {
             JBody::Complete(_) => {}
             JBody::OwnedHandle(plan) => plan.reachable.set(true),
+            JBody::BorrowedOptionalHandle(plan) => plan.reachable.set(true),
             JBody::Product(plan) => {
                 plan.reachable.set(true);
                 for dependency in &plan.dependencies {
@@ -101,6 +112,7 @@ impl RustFunction for JFunction {
         match &self.0 {
             JBody::Complete(function) => &function.sig.ident,
             JBody::OwnedHandle(plan) => &plan.ident,
+            JBody::BorrowedOptionalHandle(plan) => &plan.ident,
             JBody::Product(plan) => &plan.ident,
             JBody::Choice(plan) => &plan.ident,
             JBody::Sequence(plan) => &plan.ident,
@@ -113,6 +125,7 @@ impl RustFunction for JFunction {
         match &self.0 {
             JBody::Complete(_) => true,
             JBody::OwnedHandle(plan) => plan.reachable.get(),
+            JBody::BorrowedOptionalHandle(plan) => plan.reachable.get(),
             JBody::Product(plan) => plan.reachable.get(),
             JBody::Optional(plan) => plan.reachable.get(),
             JBody::Sequence(plan) => plan.reachable.get(),
@@ -127,6 +140,7 @@ impl RustFunction for JFunction {
         match &self.0 {
             JBody::Complete(function) => (**function).clone(),
             JBody::OwnedHandle(plan) => plan.render(emit),
+            JBody::BorrowedOptionalHandle(plan) => plan.render(emit),
             JBody::Product(plan) => plan.render(emit),
             JBody::Optional(plan) => plan.render(emit),
             JBody::Choice(plan) => plan.render(emit),
@@ -491,6 +505,52 @@ impl JOwnedHandlePlan {
                 ::core::result::Result::Ok(unsafe {
                     *::std::boxed::Box::from_raw(*v as *mut #source)
                 })
+            }
+        )
+    }
+}
+
+/// Optional borrowed opaque-handle input, kept syntax-free until final emission.
+///
+/// The converter deliberately returns a non-owning `OwnedObject<T>` carrier,
+/// not the crossing's `Option<&T>` spelling. The wrapper borrows through that
+/// carrier with `.as_deref()` / `.as_deref_mut()` while Kotlin's handle lock
+/// keeps the allocation alive for the native call.
+#[derive(Clone)]
+pub(crate) struct JBorrowedOptionalHandlePlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
+    pub(crate) target: TypeRef,
+    pub(crate) module: syn::Path,
+}
+
+impl JBorrowedOptionalHandlePlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let target = shared::Source::spell(
+            &JSource {
+                wrappers: Vec::new(),
+                module: Some(self.module.clone()),
+            },
+            &self.target,
+            emit,
+        );
+        let allow = crate::jni::trait_impl::generated_converter_attr();
+        syn::parse_quote!(
+            #allow
+            pub(crate) unsafe fn #name<'env, 'v>(
+                env: &mut jni::JNIEnv<'env>,
+                v: &jni::sys::jlong,
+            ) -> ::core::result::Result<Option<OwnedObject<#target>>, __JniErr> {
+                if *v == 0 {
+                    Ok(None)
+                } else if (*v & 1) == 1 {
+                    Err(<__JniErr as ::core::convert::From<String>>::from(
+                        "Operation on a closed native handle.".to_string(),
+                    ))
+                } else {
+                    Ok(Some(unsafe { OwnedObject::from_raw(*v as *const #target) }))
+                }
             }
         )
     }
