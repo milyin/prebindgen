@@ -457,6 +457,35 @@ impl CFrag {
             value,
         }
     }
+
+    /// A canonical scalar conversion retained as an operation until final
+    /// Rust emission rather than routed through `ConverterImpl::function`.
+    fn from_custom(at: At<'_>, plan: crate::chain::CustomPlan, niches: Niches) -> Self {
+        let destination = plan.wire.clone();
+        let subs = vec![TypeKey::from_type(&destination)];
+        let function = CFunction::custom(plan);
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            function,
+            niches,
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            shape: CShape::Atomic,
+            value,
+        }
+    }
 }
 
 /// How long what this conversion produces stays usable.
@@ -601,11 +630,16 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             };
             return self.wrap(at, "no field reading for this type", conv);
         }
+        if let Some((plan, niches)) =
+            self.gen
+                .custom_plan(ty, self.registry, at.crossing.direction())
+        {
+            return Ok(CFrag::from_custom(at, plan, niches));
+        }
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .gen
-                .in_custom(ty, self.registry, cx.emit())
-                .or_else(|| self.gen.in_opaque_handle(ty))
+                .in_opaque_handle(ty)
                 .or_else(|| self.gen.in_value_opaque(ty, self.registry))
                 .or_else(|| self.gen.in_enum(ty, self.registry))
                 .or_else(|| self.gen.in_string(ty))
@@ -615,8 +649,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 .or_else(|| self.gen.in_borrow(ty)),
             Direction::Deconstruct => self
                 .gen
-                .out_custom(ty, self.registry, cx.emit())
-                .or_else(|| self.gen.out_terminal(ty, self.registry, cx.emit()))
+                .out_terminal(ty, self.registry, cx.emit())
                 .or_else(|| self.gen.out_borrow_or_result(ty)),
         };
         self.wrap(at, "no C representation for this type", conv)

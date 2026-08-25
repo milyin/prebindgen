@@ -56,6 +56,7 @@ pub(crate) struct CFunction {
 #[derive(Clone)]
 enum CBody {
     Complete(syn::ItemFn),
+    Custom(CustomPlan),
     Product(ProductPlan),
     Optional(OptionalPlan),
     Sequence(SequencePlan),
@@ -83,6 +84,14 @@ impl CFunction {
         Self {
             call,
             body: CBody::Product(plan),
+        }
+    }
+
+    pub(crate) fn custom(plan: CustomPlan) -> Self {
+        let call = CCall(chain::Call::new(plan.ident.clone(), plan.fallible(), false));
+        Self {
+            call,
+            body: CBody::Custom(plan),
         }
     }
 
@@ -139,6 +148,11 @@ impl CFunction {
         matches!(self.body, CBody::DeferredInvoke)
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_custom(&self) -> bool {
+        matches!(self.body, CBody::Custom(_))
+    }
+
     pub(crate) fn call(&self) -> &CCall {
         &self.call
     }
@@ -152,6 +166,7 @@ impl RustFunction for CFunction {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         match &self.body {
             CBody::Complete(function) => function.clone(),
+            CBody::Custom(plan) => plan.render(emit),
             CBody::Product(plan) => plan.render(emit),
             CBody::Choice(plan) => plan.render(emit),
             CBody::Sequence(plan) => plan.render(emit),
@@ -159,6 +174,154 @@ impl RustFunction for CFunction {
             CBody::DeferredInvoke => {
                 unreachable!("a deferred C Invoke helper is rendered by its callback artifact")
             }
+        }
+    }
+}
+
+/// The operation behind one canonical scalar `convert!` declaration.
+///
+/// The callable path and wire type belong to the adapter and are safe to freeze
+/// during planning. The Rust value type remains a [`TypeRef`] in
+/// [`CustomPlan`] until final rendering.
+#[derive(Clone)]
+pub(crate) enum CustomOperation {
+    Function {
+        path: syn::Path,
+        by_ref: bool,
+        fallible: bool,
+    },
+    Trait {
+        fallible: bool,
+    },
+}
+
+impl CustomOperation {
+    fn fallible(&self) -> bool {
+        match self {
+            Self::Function { fallible, .. } | Self::Trait { fallible } => *fallible,
+        }
+    }
+
+    fn expression(&self, direction: Direction, source: &syn::Type, wire: &syn::Type) -> syn::Expr {
+        match self {
+            Self::Function { path, by_ref, .. } => {
+                if *by_ref {
+                    syn::parse_quote!(#path(&v))
+                } else {
+                    syn::parse_quote!(#path(v))
+                }
+            }
+            Self::Trait { fallible: true } => match direction {
+                Direction::Construct => syn::parse_quote!(
+                    <#wire as ::core::convert::TryInto<#source>>::try_into(v)
+                ),
+                Direction::Deconstruct => syn::parse_quote!(
+                    <#source as ::core::convert::TryInto<#wire>>::try_into(v)
+                ),
+            },
+            Self::Trait { fallible: false } => match direction {
+                Direction::Construct => syn::parse_quote!(
+                    <#wire as ::core::convert::Into<#source>>::into(v)
+                ),
+                Direction::Deconstruct => syn::parse_quote!(
+                    <#source as ::core::convert::Into<#wire>>::into(v)
+                ),
+            },
+        }
+    }
+}
+
+/// One canonical scalar conversion, frozen before source spelling is allowed.
+#[derive(Clone)]
+pub(crate) struct CustomPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) wire: syn::Type,
+    pub(crate) direction: Direction,
+    pub(crate) operation: CustomOperation,
+    pub(crate) valid: Option<syn::Expr>,
+    pub(crate) invalid_message: String,
+}
+
+impl CustomPlan {
+    pub(crate) fn fallible(&self) -> bool {
+        self.valid.is_some() || self.operation.fallible()
+    }
+
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let wire = &self.wire;
+        let conversion = self.operation.expression(self.direction, &source, wire);
+        let conversion_fallible = self.operation.fallible();
+
+        match self.direction {
+            Direction::Construct if self.fallible() => {
+                let valid = self
+                    .valid
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| syn::parse_quote!(true));
+                let message = &self.invalid_message;
+                let converted = if conversion_fallible {
+                    quote!((#conversion).map_err(|e| e.to_string()))
+                } else {
+                    quote!(::core::result::Result::Ok(#conversion))
+                };
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) fn #name(v: #wire)
+                        -> ::core::result::Result<#source, ::std::string::String>
+                    {
+                        if !(#valid) {
+                            return ::core::result::Result::Err(
+                                ::std::string::String::from(#message)
+                            );
+                        }
+                        #converted
+                    }
+                )
+            }
+            Direction::Construct => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #wire) -> #source {
+                    #conversion
+                }
+            ),
+            Direction::Deconstruct if self.fallible() => {
+                let valid = self
+                    .valid
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| syn::parse_quote!(true));
+                let message = &self.invalid_message;
+                let repr_expr = if conversion_fallible {
+                    quote!((#conversion).map_err(|error| error.to_string())?)
+                } else {
+                    quote!(#conversion)
+                };
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) fn #name(v: #source)
+                        -> ::core::result::Result<#wire, ::std::string::String>
+                    {
+                        let __repr: #wire = #repr_expr;
+                        if !(#valid) {
+                            return ::core::result::Result::Err(
+                                ::std::string::String::from(#message)
+                            );
+                        }
+                        ::core::result::Result::Ok(__repr)
+                    }
+                )
+            }
+            Direction::Deconstruct => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #source) -> #wire {
+                    #conversion
+                }
+            ),
         }
     }
 }
