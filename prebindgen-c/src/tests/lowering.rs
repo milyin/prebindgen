@@ -482,6 +482,47 @@ fn slice_input_terminals_stay_unrendered_until_final_write() {
     );
 }
 
+#[test]
+fn multi_wire_markers_stay_typed_until_final_write() {
+    use crate::chain::MarkerOperation;
+
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub fn maybe() -> Option<u64> { unimplemented!() }",
+        "pub fn values() -> &'static [u64] { &[] }",
+        "pub fn fallible() -> Result<u64, Error> { unimplemented!() }",
+        "pub struct Error { pub message: String }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .free_memory_function("free")
+        .data_struct(syn::parse_quote!(Error))
+        .error()
+        .function(syn::parse_quote!(maybe))
+        .function(syn::parse_quote!(values))
+        .function(syn::parse_quote!(fallible))
+        .build_with(registry)
+        .expect("resolve");
+
+    for operation in [
+        MarkerOperation::Optional,
+        MarkerOperation::Sequence,
+        MarkerOperation::Result,
+    ] {
+        assert!(
+            generated
+                .gen
+                .compiled_fns
+                .iter()
+                .any(|function| function.marker_operation() == Some(&operation)),
+            "{operation:?} must retain its own semantic marker before final writing"
+        );
+    }
+}
+
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {

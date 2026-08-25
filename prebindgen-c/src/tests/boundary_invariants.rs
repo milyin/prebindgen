@@ -441,7 +441,9 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         include_str!("../builder.rs"),
         include_str!("../chain.rs"),
         include_str!("../compile.rs"),
+        include_str!("../convert.rs"),
         include_str!("../emit.rs"),
+        include_str!("../recipes.rs"),
         include_str!("../trait_impl.rs"),
     ]
     .join("\n");
@@ -454,10 +456,18 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "shape_is_lowerable",
         "is_lowered_composite",
         "has_own_wire",
+        "fn from_converter",
+        "fn validity_of",
+        "fn produces_borrow",
     ] {
         assert!(
             !sources.contains(deleted),
             "deleted C compatibility planner returned through {deleted}"
         );
     }
+    let compact: String = sources.chars().filter(|c| !c.is_whitespace()).collect();
+    assert!(
+        !compact.contains("Option<ConverterImpl>"),
+        "a C production path accepts the deleted generic converter carrier"
+    );
 }
