@@ -3,6 +3,45 @@ use prebindgen_registry::Conversions;
 use super::*;
 
 #[test]
+fn bare_scalars_retain_late_registry_plans_in_both_directions() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::parse_quote!(
+            pub fn scalar_echo(value: u32) -> u32 {
+                value
+            }
+        ),
+        myflat_loc(),
+    )]))
+    .expect("index scalar fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(scalar_echo)))
+        .build_with(registry)
+        .expect("resolve scalar fixture");
+    let reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(u32)))
+        .expect("u32 reading");
+
+    assert!(
+        generation
+            .decls
+            .in_frag(&reading)
+            .expect("u32 input")
+            .is_scalar_plan(),
+        "the input scalar must retain an unrendered scalar plan"
+    );
+    assert!(
+        generation
+            .decls
+            .out_frag(&reading)
+            .expect("u32 output")
+            .is_scalar_plan(),
+        "the output scalar must retain an unrendered scalar plan"
+    );
+}
+
+#[test]
 fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = [
