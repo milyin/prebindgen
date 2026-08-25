@@ -445,12 +445,11 @@ pub struct CbindgenBuilder {
     /// argument sites, and callback artifacts.
     pub(crate) generation:
         Option<prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>>,
-    /// Every converter artifact this binding planned.
+    /// Every reached converter function plan this binding retained.
     ///
     /// Filled once by [`Self::build_with`] and handed to `write_rust` directly.
-    /// A legacy terminal may still contain a complete function; composed
-    /// Product and inbound Optional fragments contain syntax-free chains that
-    /// the shared writer renders only after resolution and validation.
+    /// Every entry is a typed terminal or composed shape plan that the shared
+    /// writer renders only after resolution and validation.
     /// The writer sorts and de-duplicates by function name, so the order here
     /// decides which of two same-named functions wins and not where any of them
     /// lands.

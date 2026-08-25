@@ -46,7 +46,7 @@ impl chain::Child for CCall {
     }
 }
 
-/// A complete legacy function or a chain waiting for final rendering.
+/// A typed converter plan waiting for final rendering.
 #[derive(Clone)]
 pub(crate) struct CFunction {
     call: CCall,
@@ -55,7 +55,6 @@ pub(crate) struct CFunction {
 
 #[derive(Clone)]
 enum CBody {
-    Complete(syn::ItemFn),
     Custom(CustomPlan),
     InputTerminal(InputTerminalPlan),
     OutputTerminal(OutputTerminalPlan),
@@ -73,14 +72,6 @@ enum CBody {
 }
 
 impl CFunction {
-    pub(crate) fn complete(function: syn::ItemFn) -> Self {
-        let call = CCall(chain::Call::complete(&function));
-        Self {
-            call,
-            body: CBody::Complete(function),
-        }
-    }
-
     pub(crate) fn product(plan: ProductPlan) -> Self {
         let call = CCall(chain::Call::new(
             plan.ident.clone(),
@@ -292,7 +283,6 @@ impl RustFunction for CFunction {
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         match &self.body {
-            CBody::Complete(function) => function.clone(),
             CBody::Custom(plan) => plan.render(emit),
             CBody::InputTerminal(plan) => plan.render(emit),
             CBody::OutputTerminal(plan) => plan.render(emit),
@@ -311,9 +301,10 @@ impl RustFunction for CFunction {
     }
 }
 
-/// A multi-wire crossing whose ABI lives in its frozen site value.
+/// A syntax-free marker whose real ABI or payload assembly lives elsewhere.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum MarkerOperation {
+    ChoiceArm,
     Optional,
     Sequence,
     Result,
@@ -330,6 +321,13 @@ pub(crate) struct MarkerPlan {
 impl MarkerPlan {
     fn render(&self) -> syn::ItemFn {
         match self.operation {
+            MarkerOperation::ChoiceArm => {
+                let name = &self.ident;
+                syn::parse_quote!(
+                    #[allow(dead_code)]
+                    fn #name() {}
+                )
+            }
             MarkerOperation::Optional | MarkerOperation::Sequence | MarkerOperation::Result => {
                 render_marker(&self.ident)
             }

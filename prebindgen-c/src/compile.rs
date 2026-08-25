@@ -1020,10 +1020,13 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 })
                 .map(|(p, _)| p.ty.key())
                 .collect();
-            let function = CFunction::complete(syn::parse_quote!(
-                #[allow(dead_code)]
-                fn __cbg_arm() {}
-            ));
+            let function = CFunction::marker(MarkerPlan {
+                ident: format_ident!("__cbg_arm"),
+                operation: MarkerOperation::ChoiceArm,
+                // Choice retains the exact part FragmentUse edges; this
+                // transient bridge has no independent dependency.
+                subs: Vec::new(),
+            });
             let destination: syn::Type = syn::parse_quote!(());
             let value = CValue::Direct {
                 wire: destination.clone(),

@@ -667,12 +667,18 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "fn payload_free_stmt",
         "fn tag_guard",
         "fn src_ty_of",
+        "Complete(syn::ItemFn)",
+        "CFunction::complete",
     ] {
         assert!(
             !sources.contains(deleted),
             "deleted C compatibility planner returned through {deleted}"
         );
     }
+    assert!(
+        sources.contains("operation: MarkerOperation::ChoiceArm"),
+        "Product-to-Choice composition must use its typed transient marker"
+    );
     let compact: String = sources.chars().filter(|c| !c.is_whitespace()).collect();
     assert!(
         !compact.contains("Option<ConverterImpl>"),
