@@ -1106,6 +1106,19 @@ pub type Vault = handles::Vault;
 #[prebindgen]
 pub type Ingot = handles::Ingot;
 
+/// Construct an [`Ingot`] for direct owned-handle input tests.
+#[prebindgen]
+pub fn ingot_new(grams: i64) -> Ingot {
+    Ingot { grams }
+}
+
+/// Consume an optional opaque handle. `Some` transfers the allocation and
+/// `None` rides the null-pointer niche without constructing a value.
+#[prebindgen]
+pub fn ingot_optional_grams(i: Option<Ingot>) -> i64 {
+    i.map_or(-1, |i| i.grams)
+}
+
 /// What an [`Ingot`] weighs — enough to prove the handle delivered to the JVM
 /// points at the right object.
 #[prebindgen]

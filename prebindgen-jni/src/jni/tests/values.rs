@@ -1327,6 +1327,11 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    assert_eq!(
+        generation.optional_chain_plan_for_test("Option<Token>"),
+        Some(true),
+        "the owned optional handle must retain the shared Optional plan"
+    );
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -1363,6 +1368,31 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     assert!(
         rc.contains("spare:jlong_to_Option_Token_") && rc.contains("env,&((v).1))?"),
         "the registry chain must own the optional field conversion:\n{rust}"
+    );
+    let file = syn::parse_file(&rust).expect("generated Rust parses");
+    let optional_helper = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Fn(function) => Some(function),
+            _ => None,
+        })
+        .find(|function| {
+            function
+                .sig
+                .ident
+                .to_string()
+                .starts_with("jlong_to_Option_Token_")
+        })
+        .expect("the reached Optional plan must be emitted");
+    let optional_body = quote::ToTokens::to_token_stream(&optional_helper.block).to_string();
+    assert!(
+        optional_body.contains("jlong_to_Token_") && optional_body.contains("_owned"),
+        "the Optional plan must delegate its present arm to the owned child plan:\n{rust}"
+    );
+    assert!(
+        !optional_body.contains("Box :: from_raw"),
+        "the Optional composer must not reconstruct the owned handle itself:\n{rust}"
     );
 }
 

@@ -69,6 +69,11 @@ impl JFunction {
         matches!(self.0, JBody::BorrowedOptionalHandle(_))
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_optional(&self) -> bool {
+        matches!(self.0, JBody::Optional(_))
+    }
+
     pub(crate) fn mark_reachable(&self) {
         match &self.0 {
             JBody::Complete(_) => {}

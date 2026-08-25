@@ -807,6 +807,18 @@ impl JniGen {
         Some(fragment.rust.is_borrowed_optional_handle())
     }
 
+    /// Whether an ordinary input crossing retained the shared Optional plan.
+    #[cfg(test)]
+    pub(crate) fn optional_chain_plan_for_test(&self, spelling: &str) -> Option<bool> {
+        use prebindgen_registry::recipe::Direction;
+
+        let ty: syn::Type = syn::parse_str(spelling).ok()?;
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let compiled = self.decls.compiled.borrow();
+        let fragment = compiled.fragment(&reading.key(), Direction::Construct)?;
+        Some(fragment.rust.is_optional())
+    }
+
     /// The whole-value callback compatibility row, when one was required.
     ///
     /// Recipe-built callbacks occupy their ordinary crossing row. Only the

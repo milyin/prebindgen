@@ -1068,6 +1068,14 @@ public class Ingot private constructor(initialPtr: Long) : NativeHandle(initialP
         /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
         @JvmSynthetic
         internal fun fromRawPtr(initialPtr: Long): Ingot = Ingot(initialPtr)
+
+        /** Construct an [`Ingot`] for direct owned-handle input tests. */
+        public fun new(grams: Long, onError: JniErrorHandler<Ingot?>): Ingot? {
+            val __bcap = JniErrorHandlerCapture.acquire()
+            val __ret = CovNative.ingotNew(grams, __bcap)
+            if (__bcap.failed) return onError.run(__bcap.ze0)
+            return Ingot.fromRawPtr(__ret)
+        }
     }
 }
 
@@ -1587,6 +1595,29 @@ internal object __StampFolderRawHolder {
     @JvmField
     val instance: StampFolderRaw<ArrayList<Stamp>> =
     StampFolderRaw { acc, secs, nanos -> acc.add(Stamp.fromParts(secs, nanos)); acc }
+}
+
+/**
+ * Consume an optional opaque handle. `Some` transfers the allocation and
+ * `None` rides the null-pointer niche without constructing a value.
+ */
+public fun ingotOptionalGrams(i: Ingot?, onError: JniErrorHandler<Long>): Long {
+    if (i?.isClosed() == true) return onError.run("Operation on a closed native handle.")
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = run {
+        val __locks = ArrayList<NativeHandle>()
+        i?.let { __locks.add(it) }
+        withSortedHandleLocks(__locks) {
+            val i_ptr = i?.ptr ?: 0L
+            try {
+                CovNative.ingotOptionalGrams(i_ptr, __bcap)
+            } finally {
+                i?.markConsumed()
+            }
+        }
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
 }
 
 /** Classify a payload by magnitude of its `value` (enum **return**). */

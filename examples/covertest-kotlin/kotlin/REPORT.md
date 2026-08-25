@@ -89,6 +89,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Hold` decomposed → [tag, for_v0] (Callback delivery)
 - `hold_policy_echo` — `fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy?`
 - `holder_tag_or` — `fun holderTagOr(h: Holder?, fallback: Long, onError: JniErrorHandler<Long>): Long`
+- `ingot_optional_grams` — `fun ingotOptionalGrams(i: Ingot?, onError: JniErrorHandler<Long>): Long`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String?>): String?`
 - `label_series_echo` — `fun labelSeriesEcho(labels: List<String>, onError: JniErrorHandler<List<String>?>): List<String>?`
 - `layered_of` — `fun layeredOf(which: Int, onError: JniErrorHandler<Layered?>): Layered?`
@@ -187,6 +188,7 @@ Base package: `io.prebindgen.covertest`
 ## class `io.prebindgen.covertest.model.Ingot` (ptr_class, Rust `Ingot`)
 
 - `ingot_grams` — `fun grams(onError: JniErrorHandler<Long>): Long`
+- `ingot_new` — `fun new(grams: Long, onError: JniErrorHandler<Ingot?>): Ingot?`
 
 ## class `io.prebindgen.covertest.Payload` (data_class, Rust `Payload`)
 
