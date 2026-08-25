@@ -28,16 +28,104 @@ fn bare_scalars_retain_late_registry_plans_in_both_directions() {
             .decls
             .in_frag(&reading)
             .expect("u32 input")
-            .is_scalar_plan(),
-        "the input scalar must retain an unrendered scalar plan"
+            .is_value_codec_plan(),
+        "the input scalar must retain an unrendered value codec plan"
     );
     assert!(
         generation
             .decls
             .out_frag(&reading)
             .expect("u32 output")
-            .is_scalar_plan(),
-        "the output scalar must retain an unrendered scalar plan"
+            .is_value_codec_plan(),
+        "the output scalar must retain an unrendered value codec plan"
+    );
+}
+
+#[test]
+fn owned_strings_and_unit_retain_late_value_codec_plans() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub fn string_echo(value: String) -> String {
+                    value
+                }
+            ),
+            myflat_loc(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn boxed_string_echo(value: Box<String>) -> Box<String> {
+                    value
+                }
+            ),
+            myflat_loc(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn cow_string_echo(value: Cow<'static, str>) -> Cow<'static, str> {
+                    value
+                }
+            ),
+            myflat_loc(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn unit_result() {}
+            ),
+            myflat_loc(),
+        ),
+    ]))
+    .expect("index value-codec fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .fun(prebindgen_registry::fun!(string_echo))
+                .fun(prebindgen_registry::fun!(boxed_string_echo))
+                .fun(prebindgen_registry::fun!(cow_string_echo))
+                .fun(prebindgen_registry::fun!(unit_result)),
+        )
+        .build_with(registry)
+        .expect("resolve value-codec fixture");
+
+    for ty in [
+        syn::parse_quote!(String),
+        syn::parse_quote!(Box<String>),
+        syn::parse_quote!(Cow<'static, str>),
+    ] {
+        let reading = generation
+            .registry
+            .reading(&TypeKey::from_type(&ty))
+            .expect("owned-string reading");
+        assert!(
+            generation
+                .decls
+                .in_frag(&reading)
+                .expect("owned-string input")
+                .is_value_codec_plan(),
+            "the owned-string input must retain an unrendered value codec: {ty:?}"
+        );
+        assert!(
+            generation
+                .decls
+                .out_frag(&reading)
+                .expect("owned-string output")
+                .is_value_codec_plan(),
+            "the owned-string output must retain an unrendered value codec: {ty:?}"
+        );
+    }
+
+    let unit = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(())))
+        .expect("unit reading");
+    assert!(
+        generation
+            .decls
+            .out_frag(&unit)
+            .expect("unit output")
+            .is_value_codec_plan(),
+        "the unit output must retain an unrendered value codec"
     );
 }
 
