@@ -653,21 +653,6 @@ impl CbindgenBuilder {
         qualify_source_type(ty, self.source_module.as_ref())
     }
 
-    /// [`Self::src_ty`] off the **identity** — the type peer of
-    /// [`Self::src_fn`], for the emitters that hold a declared type's key or a
-    /// declaration's own `Origin` rather than a node.
-    ///
-    /// A `TypeKey` is a normalized type, so re-parsing it is the reverse of
-    /// `from_type` and the qualification policy stays in one place: `String`
-    /// still resolves to `::std::string::String` (it can be declared
-    /// `opaque_ptr`), scalars are still left bare, and only a bare
-    /// single-segment path is prefixed.
-    pub(super) fn src_ty_of(&self, key: &TypeKey) -> syn::Type {
-        let spelled: syn::Type = syn::parse_str(key.as_str())
-            .expect("a `TypeKey` is a normalized `syn::Type`, so it re-parses");
-        self.src_ty(&spelled)
-    }
-
     /// Path to a source function (e.g. `zenoh_flat::z_keyexpr_try_from`).
     pub(super) fn src_fn(&self, ident: &syn::Ident) -> syn::Path {
         match &self.source_module {

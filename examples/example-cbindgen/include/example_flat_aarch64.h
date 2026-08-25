@@ -33,12 +33,6 @@ typedef struct calculator_t {
   uint8_t _private[0];
 } calculator_t;
 
-typedef struct caption_t {
-  uint64_t id;
-  char *text;
-  bool emphatic;
-} caption_t;
-
 typedef enum shape_t_Tag {
   Empty,
   Circle,
@@ -66,6 +60,12 @@ typedef struct shape_t {
     Labeled_Body labeled;
   };
 } shape_t;
+
+typedef struct caption_t {
+  uint64_t id;
+  char *text;
+  bool emphatic;
+} caption_t;
 
 typedef struct drawing_t {
   uint64_t id;
@@ -136,9 +136,9 @@ void example_free(void *p);
 
 void calculator_drop(struct calculator_t *this_);
 
-void note_drop(struct note_t *this_);
-
 void shape_drop(struct shape_t *this_);
+
+void note_drop(struct note_t *this_);
 
 bool calculator_absorb(struct calculator_t *a, const struct calculator_t *b, double *out, char **e);
 

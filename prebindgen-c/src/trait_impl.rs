@@ -629,6 +629,20 @@ impl CbindgenBuilder {
         items
     }
 
+    /// Converter fragments consumed by one type-level final artifact.
+    fn artifact_fragment_inputs(
+        &self,
+        reading: &TypeRef,
+    ) -> Vec<prebindgen_registry::generation::ArtifactInput> {
+        [self.in_frag(reading), self.out_frag(reading)]
+            .into_iter()
+            .flatten()
+            .map(|fragment| {
+                prebindgen_registry::generation::ArtifactInput::Fragment(fragment.id.clone())
+            })
+            .collect()
+    }
+
     /// Freeze source-dependent C declaration families as registry artifacts.
     ///
     /// Planning retains source TypeRefs and target-owned wire syntax. Only the
@@ -640,22 +654,15 @@ impl CbindgenBuilder {
         Vec<prebindgen_registry::generation::ArtifactPlan<crate::compile::CRepresentation>>,
         String,
     > {
-        use prebindgen_registry::generation::{ArtifactId, ArtifactInput, ArtifactPlan};
+        use prebindgen_registry::generation::{ArtifactId, ArtifactPlan};
 
-        let inputs = |reading: &TypeRef| {
-            [self.in_frag(reading), self.out_frag(reading)]
-                .into_iter()
-                .flatten()
-                .map(|fragment| ArtifactInput::Fragment(fragment.id.clone()))
-                .collect::<Vec<_>>()
-        };
         let mut artifacts = Vec::new();
 
         for (key, _cfg) in sorted_by_key(&self.opaque) {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            let dependencies = inputs(&reading);
+            let dependencies = self.artifact_fragment_inputs(&reading);
             if dependencies.is_empty() {
                 continue;
             }
@@ -679,7 +686,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            let dependencies = inputs(&reading);
+            let dependencies = self.artifact_fragment_inputs(&reading);
             if dependencies.is_empty() {
                 continue;
             }
@@ -752,6 +759,101 @@ impl CbindgenBuilder {
                     mirror,
                     drop_ident: self.destructor_symbol(key),
                     take,
+                }),
+            ));
+        }
+        Ok(artifacts)
+    }
+
+    /// Freeze one owning payload's recursive release policy without spelling
+    /// the Rust type used by a boxed-pointer cleanup.
+    fn payload_cleanup_plan(
+        &self,
+        fty: &TypeRef,
+        registry: &Registry,
+    ) -> Result<crate::chain::PayloadCleanup, String> {
+        use prebindgen_registry::generation::ArtifactId;
+
+        if r_is_string(fty) {
+            return Ok(crate::chain::PayloadCleanup::AllocatedString);
+        }
+        if self.tagged_union_has_drop(fty, registry) {
+            return Ok(crate::chain::PayloadCleanup::NestedUnion {
+                artifact: ArtifactId::new("c-tagged-union", fty.key().as_str())
+                    .map_err(|e| e.to_string())?,
+                drop_ident: self.destructor_symbol(&fty.key()),
+            });
+        }
+        let owning = self.owning_data_struct_fields(fty, registry);
+        if !owning.is_empty() {
+            let mut fields = Vec::with_capacity(owning.len());
+            for (name, ty) in owning {
+                fields.push((name, self.payload_cleanup_plan(ty, registry)?));
+            }
+            return Ok(crate::chain::PayloadCleanup::Fields(fields));
+        }
+        Ok(crate::chain::PayloadCleanup::BoxedPointer {
+            source: Box::new(r_boxed_inner(fty).unwrap_or(fty).clone()),
+        })
+    }
+
+    /// Freeze every reached tagged-union declaration and typed destructor.
+    fn tagged_union_artifact_plans(
+        &self,
+        registry: &Registry,
+    ) -> Result<
+        Vec<prebindgen_registry::generation::ArtifactPlan<crate::compile::CRepresentation>>,
+        String,
+    > {
+        use prebindgen_registry::generation::{ArtifactId, ArtifactPlan};
+
+        let mut artifacts = Vec::new();
+        for (key, _cfg) in sorted_by_key(&self.tagged_unions) {
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            let inputs = self.artifact_fragment_inputs(&reading);
+            if inputs.is_empty() {
+                continue;
+            }
+            let Some(sum) = payload_enum(registry, key) else {
+                continue;
+            };
+            let mut prerequisites = Vec::new();
+            let mut arms = Vec::with_capacity(sum.alternatives.len());
+            for alternative in &sum.alternatives {
+                let mut fields = Vec::with_capacity(alternative.fields.len());
+                for field in &alternative.fields {
+                    let wire = self.payload_wire_of(key, &alternative.name, field);
+                    let cleanup = if self.payload_wire_owns(&field.ty, &wire, registry) {
+                        let cleanup = self.payload_cleanup_plan(&field.ty, registry)?;
+                        cleanup.prerequisites(&mut prerequisites);
+                        Some(cleanup)
+                    } else {
+                        None
+                    };
+                    fields.push(crate::chain::TaggedUnionFieldArtifact { wire, cleanup });
+                }
+                arms.push(crate::chain::TaggedUnionArmArtifact {
+                    alternative: alternative.clone(),
+                    fields,
+                });
+            }
+            prerequisites.sort();
+            prerequisites.dedup();
+            let drop_ident = arms
+                .iter()
+                .any(|arm| arm.fields.iter().any(|field| field.cleanup.is_some()))
+                .then(|| self.destructor_symbol(key));
+            artifacts.push(ArtifactPlan::new(
+                ArtifactId::new("c-tagged-union", key.as_str()).map_err(|e| e.to_string())?,
+                prerequisites,
+                inputs,
+                crate::chain::CArtifact::TaggedUnion(crate::chain::TaggedUnionArtifact {
+                    source_module: self.source_module.clone(),
+                    c_name: self.c_type_ident(key),
+                    arms,
+                    drop_ident,
                 }),
             ));
         }
@@ -853,134 +955,6 @@ impl CbindgenBuilder {
         items
     }
 
-    /// Tagged unions: the `#[repr(C)]` mirror with payload variants, which
-    /// cbindgen renders as a tag enum plus a `union` of the variant bodies —
-    /// the idiomatic C tagged union, with no hand-written header fragment.
-    /// Variant shape is mirrored faithfully (named stays named, tuple stays
-    /// tuple, unit stays unit); each payload field takes the wire chosen by
-    /// [`CbindgenBuilder::payload_field_wire`].
-    ///
-    /// A union whose payload wires own memory also gets a typed
-    /// `<base>_drop(t_t *)` that frees the **active arm** and nulls the freed
-    /// slots, so a second drop is a no-op. A union of plain data owns nothing
-    /// and gets no drop.
-    fn prereq_tagged_unions(
-        &self,
-        registry: &Registry,
-        emit: &prebindgen_registry::Emit,
-    ) -> Vec<syn::Item> {
-        let mut items: Vec<syn::Item> = Vec::new();
-        for (key, _cfg) in sorted_by_key(&self.tagged_unions) {
-            let Some(reading) = registry.reading(key) else {
-                continue;
-            };
-            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
-                continue;
-            }
-            let Some(e) = payload_enum(registry, &reading.key()) else {
-                continue;
-            };
-            let cname = self.c_type_ident(&reading.key());
-
-            let mut variant_defs: Vec<TokenStream> = Vec::new();
-            // Per-variant drop arm, collected only for variants that own
-            // something; the rest fall to a single wildcard arm.
-            let mut drop_arms: Vec<TokenStream> = Vec::new();
-            for a in &e.alternatives {
-                let vident = &a.name;
-                let wires: Vec<syn::Type> = a
-                    .fields
-                    .iter()
-                    .map(|f| self.payload_wire_of(&reading.key(), vident, f))
-                    .collect();
-                // `Alternative::spell` writes the delimiters the source wrote,
-                // which is what the three-armed `syn::Fields` match was doing —
-                // and `Field::bind` decides `name: wire` or `wire` per field.
-                let defs: Vec<TokenStream> = a
-                    .fields
-                    .iter()
-                    .zip(&wires)
-                    .map(|(f, w)| f.bind(w))
-                    .collect();
-                variant_defs.push(emit.shape_alternative(a, quote!(#vident), &defs));
-
-                // Drop arm: bind every field, free the owning ones.
-                let owning: Vec<(usize, &Field, &syn::Type)> = a
-                    .fields
-                    .iter()
-                    .zip(&wires)
-                    .enumerate()
-                    .filter(|(_, (f, w))| self.payload_wire_owns(&f.ty, w, registry))
-                    .map(|(i, (f, w))| (i, f, w))
-                    .collect();
-                if owning.is_empty() {
-                    continue;
-                }
-                let binds: Vec<syn::Ident> = (0..a.fields.len())
-                    .map(|i| format_ident!("__f{}", i))
-                    .collect();
-                let parts: Vec<TokenStream> = a
-                    .fields
-                    .iter()
-                    .zip(&binds)
-                    .map(|(f, b)| f.bind(b))
-                    .collect();
-                let pattern = emit.shape_alternative(a, quote!(#cname::#vident), &parts);
-                let frees = owning.iter().map(|(i, f, _)| {
-                    let b = &binds[*i];
-                    self.payload_free_stmt(&f.ty, b, registry)
-                });
-                drop_arms.push(quote!(#pattern => { #(#frees)* }));
-            }
-
-            items.push(syn::parse_quote!(
-                #[repr(C)]
-                #[allow(non_camel_case_types)]
-                pub enum #cname {
-                    #(#variant_defs),*
-                }
-            ));
-
-            // The same predicate a CONTAINING struct uses to decide whether to
-            // call this drop, so a nested union can never be freed through a
-            // symbol that was not emitted.
-            if self.tagged_union_has_drop(&reading, registry) {
-                debug_assert!(!drop_arms.is_empty(), "has_drop implies an owning arm");
-                let drop_ident = self.destructor_symbol(&reading.key());
-                // The drop is a second C entry point into the same bytes, so it
-                // owes the same tag check as the input converter — `&mut *this_`
-                // on an out-of-range tag would be the very UB that check exists
-                // to prevent. It emits that check from the same place, and,
-                // having nowhere to report to, ignores the value (there is no
-                // live arm to release), which keeps `_drop` the always-safe
-                // no-op it is everywhere else.
-                let tag_guard = self.tag_guard(
-                    &cname,
-                    e.alternatives.len(),
-                    quote!((*this_)),
-                    quote!(return;),
-                );
-                items.push(syn::parse_quote!(
-                    #[no_mangle]
-                    #[allow(non_snake_case, unused_variables)]
-                    pub unsafe extern "C" fn #drop_ident(
-                        this_: *mut ::core::mem::MaybeUninit<#cname>,
-                    ) {
-                        if this_.is_null() {
-                            return;
-                        }
-                        #tag_guard
-                        match (*this_).assume_init_mut() {
-                            #(#drop_arms)*
-                            _ => {}
-                        }
-                    }
-                ));
-            }
-        }
-        items
-    }
-
     /// The wire of one payload field, or a generation error naming the
     /// offending variant field and the supported set.
     fn payload_wire_of(&self, key: &TypeKey, variant: &syn::Ident, field: &Field) -> syn::Type {
@@ -997,107 +971,6 @@ impl CbindgenBuilder {
                 reason,
             )
         })
-    }
-
-    /// Release one owning payload slot held behind `binding` (a `&mut` to the
-    /// wire, from a `match &mut *this_` arm) and null it, so a second drop of
-    /// the same union is a no-op. A `char *` block goes back to the C
-    /// allocator; an opaque pointer is re-boxed and dropped, running the Rust
-    /// destructor.
-    fn payload_free_stmt(
-        &self,
-        fty: &TypeRef,
-        binding: &syn::Ident,
-        registry: &Registry,
-    ) -> TokenStream {
-        if r_is_string(fty) {
-            return quote!(
-                free(*#binding as *mut ::core::ffi::c_void);
-                *#binding = ::core::ptr::null_mut();
-            );
-        }
-        // A nested `data_struct` payload crosses BY VALUE, so the arm binds the
-        // mirror itself and what has to be released is each of its OWNING
-        // fields — reached through the binding and nulled in place, exactly as
-        // a directly-owning payload is. This is the shape zenoh-flat#30 needs
-        // (`ReplyResult`'s alternatives are structs whose fields are handles),
-        // and without it those fields would leak silently.
-        let owning = self.owning_data_struct_fields(fty, registry);
-        if !owning.is_empty() {
-            let frees = owning.iter().map(|(fname, fty)| {
-                if r_is_string(fty) {
-                    quote!(
-                        free((*#binding).#fname as *mut ::core::ffi::c_void);
-                        (*#binding).#fname = ::core::ptr::null_mut();
-                    )
-                } else if self.tagged_union_has_drop(fty, registry) {
-                    // The field is ANOTHER union, crossing by value. Its own
-                    // typed drop releases whichever arm is live and nulls the
-                    // slot, so this stays idempotent like every other arm here
-                    // — and the owning pointer is reached even though it is two
-                    // levels down. Nothing else can reach it: a union arm is not
-                    // a top-level struct field the C caller releases by hand.
-                    let drop_ident = self.destructor_symbol(&fty.key());
-                    quote!(#drop_ident(&mut (*#binding).#fname);)
-                } else {
-                    // `owning_data_struct_fields` yields exactly the two shapes
-                    // above (`data_field_owns`), so this is unreachable — and a
-                    // silent fall-through here would be a leak, which is the
-                    // defect this whole path exists to prevent.
-                    panic!(
-                        "Cbindgen: data-struct field `{}` of type `{}` is owning but has no \
-                         release form (expected a `String` or a declared `tagged_union`)",
-                        fname, fty,
-                    )
-                }
-            });
-            return quote!(#(#frees)*);
-        }
-        let src_inner = self.src_ty_of(&r_boxed_inner(fty).unwrap_or(fty).key());
-        quote!(
-            if !(*#binding).is_null() {
-                drop(::std::boxed::Box::from_raw(*#binding as *mut #src_inner));
-                *#binding = ::core::ptr::null_mut();
-            }
-        )
-    }
-
-    /// The statements that make a C-supplied `MaybeUninit<mirror>` safe to
-    /// `assume_init`: read the leading discriminant as a plain `c_int` and
-    /// reject anything outside `0..variants`.
-    ///
-    /// `slot` is an expression for the `MaybeUninit` in scope and `on_bad` is
-    /// what to do with an out-of-range tag — the **only** thing the two C entry
-    /// points into these bytes differ in (the input converter returns `Err`,
-    /// the typed drop returns `()` and so just bails). Passing that difference
-    /// in, rather than letting the drop repeat the check inline, is what keeps
-    /// the two from drifting apart.
-    pub(crate) fn tag_guard(
-        &self,
-        cname: &syn::Ident,
-        variants: usize,
-        slot: TokenStream,
-        on_bad: TokenStream,
-    ) -> TokenStream {
-        let n = variants as i64;
-        let bounds_msg = format!(
-            "`{cname}`: a #[repr(C)] enum with payload variants must be at least as large as \
-             its C `int` discriminant"
-        );
-        quote!(
-            const _: () = {
-                assert!(
-                    ::core::mem::size_of::<#cname>()
-                        >= ::core::mem::size_of::<::core::ffi::c_int>(),
-                    #bounds_msg
-                );
-            };
-            let __tag: ::core::ffi::c_int =
-                ::core::ptr::read(#slot.as_ptr() as *const ::core::ffi::c_int);
-            if !((__tag as i64) >= 0 && (__tag as i64) < #n) {
-                #on_bad
-            }
-        )
     }
 }
 
@@ -1211,6 +1084,10 @@ impl CbindgenBuilder {
         };
         artifacts.extend(
             self.type_artifact_plans(&registry)
+                .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?,
+        );
+        artifacts.extend(
+            self.tagged_union_artifact_plans(&registry)
                 .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?,
         );
         let mut generation = prebindgen_registry::generation::GenerationPlanBuilder::new();
@@ -1365,7 +1242,13 @@ impl Prebindgen for CbindgenBuilder {
             emit,
         ));
         items.extend(self.prereq_enums(registry, emit));
-        items.extend(self.prereq_tagged_unions(registry, emit));
+        items.extend(crate::chain::render_artifacts(
+            self.generation
+                .as_ref()
+                .expect("C generation plan was not frozen"),
+            "c-tagged-union",
+            emit,
+        ));
         items.extend(crate::chain::render_artifacts(
             self.generation
                 .as_ref()

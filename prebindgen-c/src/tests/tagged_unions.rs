@@ -472,7 +472,7 @@ fn each_payload_rejection_names_its_own_reason() {
 
     // The other three reasons (no output converter, wire mismatch, fallible
     // output converter) are guards: an undeclared payload type fails at
-    // RESOLVE, before `prereq_tagged_unions` runs, so nothing reaches them
+    // RESOLVE, before tagged-union artifact planning runs, so nothing reaches them
     // from a fixture. Their messages are specific, but unexercised.
 }
 
