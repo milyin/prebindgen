@@ -719,6 +719,22 @@ impl JniGen {
         )
     }
 
+    /// Frozen ordinary-output operation coverage for one function:
+    /// `(wire count, every wire has an ABI, whole-element pipeline present)`.
+    #[cfg(test)]
+    pub(crate) fn output_freeze_for_test(&self, func: &str) -> Option<(usize, bool, bool)> {
+        let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
+        let plan = self.decls.generation.as_ref()?.function(&ident)?;
+        let crate::jni::fn_plan::FnOutputPlan::Unfold(output) = &plan.output else {
+            return None;
+        };
+        Some((
+            output.wires.len(),
+            output.wires.iter().all(|wire| wire.abi.is_some()),
+            output.element_pipeline.is_some(),
+        ))
+    }
+
     /// The leaves the registry's own expansion plans for one function, in the
     /// form [`Self::out_lines_for_test`] renders a recipe in.
     ///

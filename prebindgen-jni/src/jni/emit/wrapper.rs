@@ -394,15 +394,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                     delivered.erased_wrappers().join("<"),
                 )
             });
-        emit_unfold_delivery(
-            ext,
-            registry,
-            uplan,
-            u.iface.as_deref(),
-            &call_expr,
-            &on_err,
-            emit,
-        )
+        emit_unfold_delivery(ext, registry, uplan, u, &call_expr, &on_err, emit)
     } else {
         let output = match &plan.output {
             FnOutputPlan::Value(value) => value,

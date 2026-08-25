@@ -1377,16 +1377,11 @@ fn classify_output(
         // extern returns the real wire and `build_call` applies the
         // projection wrap (handle) below.
         render_return_surface(&v.surface)?
-    } else if let (
-        FnOutputPlan::Unfold(
-            u @ UnfoldOutputPlan {
-                fixed_builder: true,
-                ..
-            },
-        ),
-        Some(plan),
-    ) = (&fplan.output, unfold)
-    {
+    } else if matches!(&fplan.output, FnOutputPlan::Unfold(u) if u.fixed_builder) {
+        let FnOutputPlan::Unfold(u) = &fplan.output else {
+            unreachable!()
+        };
+        let plan = unfold?;
         // Synthesized by-value `data_class` delivery via a **fixed, hoisted
         // singleton** — the wrapper takes no caller `build`/`fold` param and is
         // not generic over `R`/`A`. The native side still receives the singleton

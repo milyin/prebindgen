@@ -31,10 +31,8 @@ pub(crate) enum JPlan {
     /// A return the binding takes apart: the values it hands out, in the order
     /// the builder receives them.
     ///
-    /// Read only by the equivalence fixture until the encode side takes it —
-    /// `reach_leaf_flat` and `encode_plan_leaves` still read the plan, because
-    /// where the Rust side reaches a value is the plan's and not the wire's.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// Consumed by ordinary decomposed-return delivery. Callback delivery
+    /// takes the same result in the following Invoke stage.
     Decomposed(Vec<OutWire>),
 }
 
@@ -56,7 +54,6 @@ impl JPlan {
     }
 
     /// The values a decomposed return hands out, or `None` if it is not one.
-    #[cfg(test)]
     pub(crate) fn decomposed(self) -> Option<Vec<OutWire>> {
         match self {
             JPlan::Decomposed(wires) => Some(wires),
@@ -496,6 +493,36 @@ pub(crate) struct OutWire {
     /// form reached through an `Option` puts every value under it in doubt —
     /// and the site that splices is what sets it.
     pub(crate) nullable: bool,
+    /// JNI-specific operation frozen when a return site selects this
+    /// registry-composed wire. Legacy callback/error deliveries synthesized
+    /// directly from `UnfoldLeaf` leave this absent until the Invoke stage.
+    pub(crate) abi: Option<OutAbi>,
+}
+
+/// Frozen JNI operation for one registry-composed outgoing wire.
+#[derive(Clone)]
+pub(crate) enum OutAbi {
+    /// Synthesized Choice selector: raw `jint`, with no converter.
+    Tag,
+    /// One value encoded through its registry-planned pipeline. Projection is
+    /// retained because handle/unsigned delivery owns special jvalue policy.
+    Value(Box<OutValueAbi>),
+}
+
+#[derive(Clone)]
+pub(crate) struct OutValueAbi {
+    pub(crate) pipeline: crate::jni::chain::JPipeline,
+    pub(crate) projection: Option<Projection>,
+    /// Converter dependency activated only when a site retains this wire.
+    dependency: crate::jni::chain::JFunction,
+}
+
+impl OutAbi {
+    fn activate(&self) {
+        if let Self::Value(value) = self {
+            value.dependency.mark_reachable();
+        }
+    }
 }
 
 impl OutWire {
@@ -522,12 +549,32 @@ impl OutWire {
             reach: leaf.path.clone(),
             identity: leaf.identity,
             nullable: leaf.nullable,
+            abi: None,
         }
     }
 
     /// A whole plan's leaves in the recipe's vocabulary.
     pub(crate) fn from_leaves(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) -> Vec<Self> {
         leaves.iter().map(Self::from_leaf).collect()
+    }
+
+    /// Whether two wires name the same delivered value. The ABI is excluded:
+    /// this compares a reusable recipe row with the function-unique unfold
+    /// plan before choosing which registry compilation supplies that ABI.
+    pub(crate) fn same_delivery(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.out_ty.key() == other.out_ty.key()
+            && self.group == other.group
+            && self.from == other.from
+            && self.reach == other.reach
+            && self.identity == other.identity
+            && self.nullable == other.nullable
+    }
+
+    fn activate(&self) {
+        if let Some(abi) = &self.abi {
+            abi.activate();
+        }
     }
 
     /// The steps from the crossed value down to this one, or empty for a value
@@ -818,6 +865,18 @@ fn refuse(at: At<'_>, why: &str) -> JErr {
 }
 
 impl<R: Conversions> JCompile<'_, R> {
+    /// Freeze the exact child operation while the registry is composing the
+    /// structural row. A later lookup by `TypeRef` cannot recover binding-local
+    /// field conversions and may select the structural row itself instead of
+    /// the child recipe that produced this leaf.
+    fn output_abi(&self, frag: &JFrag) -> OutAbi {
+        OutAbi::Value(Box::new(OutValueAbi {
+            pipeline: Self::planned_pipeline(Direction::Deconstruct, Mode::Owned, frag),
+            projection: frag.conv.metadata.projection.clone(),
+            dependency: frag.rust.clone(),
+        }))
+    }
+
     fn wrap(&self, at: At<'_>, why: &str, conv: Option<ConverterImpl<KotlinMeta>>) -> Frag<Self> {
         conv.map(|c| JFrag::new(at, c))
             .ok_or_else(|| refuse(at, why))
@@ -1784,6 +1843,87 @@ impl<R: Conversions> JCompile<'_, R> {
     }
 }
 
+/// Freeze each leaf of a function-unique unfold plan through the registry's
+/// selected default crossing. Per-function `expand_return(...)` declarations
+/// can describe a walk for which no reusable type recipe exists; the registry
+/// still owns that walk in `UnfoldPlan`, and this compiles rather than looks up
+/// each converter operation before rendering begins.
+pub(crate) fn freeze_out_wires(
+    ext: &Declarations,
+    registry: &Registry,
+    leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
+) -> Result<Vec<OutWire>, JErr> {
+    let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+        registry.flat(),
+        ext.recipe_table(),
+        ext.site_bindings(),
+        ext.compiled.borrow().clone(),
+    );
+    let mut adapter = JCompile {
+        decls: ext,
+        registry,
+        declared_return: None,
+        site: None,
+    };
+    let result = leaves
+        .iter()
+        .map(|leaf| {
+            let mut wire = OutWire::from_leaf(leaf);
+            wire.abi = Some(if wire.is_tag() {
+                OutAbi::Tag
+            } else {
+                let crossing = prebindgen_registry::recipe::Crossing::new(
+                    wire.out_ty.clone(),
+                    Direction::Deconstruct,
+                );
+                let fragment = compiler
+                    .crossing(&mut adapter, &crossing)
+                    .map_err(|error| JErr::Refused(error.to_string()))?;
+                adapter.output_abi(&fragment)
+            });
+            wire.activate();
+            Ok(wire)
+        })
+        .collect();
+    *ext.compiled.borrow_mut() = compiler.finish();
+    result
+}
+
+/// Freeze one whole-element output conversion through the registry before the
+/// iterable-fold renderer runs.
+pub(crate) fn freeze_output_pipeline(
+    ext: &Declarations,
+    registry: &Registry,
+    ty: &TypeRef,
+) -> Result<crate::jni::chain::JPipeline, JErr> {
+    let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+        registry.flat(),
+        ext.recipe_table(),
+        ext.site_bindings(),
+        ext.compiled.borrow().clone(),
+    );
+    let mut adapter = JCompile {
+        decls: ext,
+        registry,
+        declared_return: None,
+        site: None,
+    };
+    let crossing = prebindgen_registry::recipe::Crossing::new(ty.clone(), Direction::Deconstruct);
+    let result = compiler
+        .crossing(&mut adapter, &crossing)
+        .map(|fragment| {
+            let abi = adapter.output_abi(&fragment);
+            abi.activate();
+            let OutAbi::Value(value) = abi else {
+                unreachable!("a whole element is never a synthesized selector")
+            };
+            value.pipeline
+        })
+        .map_err(|error| JErr::Refused(error.to_string()));
+    *ext.compiled.borrow_mut() = compiler.finish();
+    result
+}
+
 impl<R: Conversions> Compile for JCompile<'_, R> {
     type Fragment = JFrag;
     /// One site of one exported function, classified.
@@ -2164,7 +2304,10 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 // recipe states. Nothing else distinguishes the two cases, and
                 // nothing needs to.
                 return Ok(match &root.out_wires {
-                    Some(wires) => JPlan::Decomposed(wires.clone()),
+                    Some(wires) => {
+                        wires.iter().for_each(OutWire::activate);
+                        JPlan::Decomposed(wires.clone())
+                    }
                     None => JPlan::Return(Box::new(self.return_plan(bound, root))),
                 });
             }
@@ -2677,7 +2820,7 @@ impl<R: Conversions> JCompile<'_, R> {
     fn out_arm(&self, at: At<'_>, parts: Parts<'_, Self>) -> JFrag {
         let wires = parts
             .iter()
-            .filter_map(|(part, _)| {
+            .filter_map(|(part, child)| {
                 Some(OutWire {
                     // Named by `choice`, which knows the alternative the name
                     // is built from.
@@ -2691,6 +2834,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     nullable: false,
                     identity: false,
                     reach: Vec::new(),
+                    abi: Some(self.output_abi(child)),
                 })
             })
             .collect();
@@ -2729,12 +2873,32 @@ impl<R: Conversions> JCompile<'_, R> {
     /// Describe a `data_class` as one tuple intermediate while retaining the
     /// independently flattened ABI leaves used by Kotlin signatures.
     fn out_product(&self, at: At<'_>, parts: Parts<'_, Self>) -> JFrag {
-        let Some(wires) = self
+        let Some(mut wires) = self
             .decls
             .struct_out_wires(self.registry, at.crossing.value())
         else {
             return JFrag::new(at, self.parts_marker(Vec::new()));
         };
+        let abis: Vec<OutAbi> = parts
+            .iter()
+            .flat_map(|(_, child)| match &child.out_wires {
+                Some(inner) => inner
+                    .iter()
+                    .map(|wire| {
+                        wire.abi
+                            .clone()
+                            .expect("a composed Product child freezes every outgoing leaf")
+                    })
+                    .collect::<Vec<_>>(),
+                None => vec![self.output_abi(child)],
+            })
+            .collect();
+        if wires.len() != abis.len() {
+            return JFrag::new(at, self.parts_marker(Vec::new()));
+        }
+        for (wire, abi) in wires.iter_mut().zip(abis) {
+            wire.abi = Some(abi);
+        }
         let mut frag = self.planned_product(at, parts).unwrap_or_else(|| {
             let mut marker = JFrag::new(
                 at,
@@ -2767,7 +2931,7 @@ impl<R: Conversions> JCompile<'_, R> {
             return declined;
         };
         let mut wires = Vec::new();
-        for (part, _) in parts {
+        for (part, child) in parts {
             let Some(field) = part_field(part) else {
                 return declined;
             };
@@ -2788,6 +2952,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 reach: vec![field_step(&ident)],
                 nullable: false,
                 identity: false,
+                abi: Some(self.output_abi(child)),
             });
         }
         let mut frag = JFrag::new(
@@ -2817,15 +2982,32 @@ impl<R: Conversions> JCompile<'_, R> {
         let ident = id
             .ident()
             .ok_or_else(|| refuse(at, "a choice recipe over a type that is not one identifier"))?;
-        // The composition is the declaration's and the model's, so the same
-        // answer serves the leaf synthesis that runs before `resolve`. The arm
-        // fragments the driver built are not read at all — a sum hands its
-        // payloads out through their own conversions, and which those are is
-        // the emitter's question rather than this recipe's.
-        let wires = self
+        // The layout is the declaration's and the model's, so the same answer
+        // serves leaf synthesis before `resolve`. The selected child operation
+        // is different: only the arm fragments handed here can state it, so
+        // splice their already-frozen payload ABIs into that shared layout.
+        let mut wires = self
             .decls
             .sum_out_wires(self.registry, &ident, at.crossing.value())
             .ok_or_else(|| refuse(at, "a choice recipe over an undeclared sum"))?;
+        let abis: Vec<OutAbi> = std::iter::once(OutAbi::Tag)
+            .chain(arms.iter().flat_map(|(_, arm)| {
+                arm.out_wires.as_ref().into_iter().flatten().map(|wire| {
+                    wire.abi
+                        .clone()
+                        .expect("a Choice arm freezes every payload operation")
+                })
+            }))
+            .collect();
+        if wires.len() != abis.len() {
+            return Err(refuse(
+                at,
+                "a choice recipe whose payload operations do not match its slots",
+            ));
+        }
+        for (wire, abi) in wires.iter_mut().zip(abis) {
+            wire.abi = Some(abi);
+        }
         let mut frag = JFrag::new(at, self.parts_marker(parts_subs(arms)));
         frag.out_wires = Some(wires);
         frag.composed_only = true;
@@ -3150,6 +3332,7 @@ impl Declarations {
                 reach: field_path.iter().map(field_step).collect(),
                 nullable: false,
                 identity: false,
+                abi: None,
             });
         }
         Some(wires)
@@ -3189,6 +3372,7 @@ impl Declarations {
             nullable: false,
             identity: false,
             reach: Vec::new(),
+            abi: None,
         }];
         for alt in &sum.alternatives {
             let kotlin = self.sum_variant_class_name(cfg, &alt.name);
@@ -3208,6 +3392,7 @@ impl Declarations {
                     nullable: false,
                     identity: false,
                     reach: Vec::new(),
+                    abi: None,
                 });
             }
         }

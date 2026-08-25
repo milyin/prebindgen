@@ -7,7 +7,8 @@
 //! wrapper, Kotlin wrapper, `JNINative` declaration, and JVM-slot validator
 //! consume those answers without reconstructing them from a source-shape tag.
 //! The pattern generalizes [`build_struct_plan`]'s field-level plan to function
-//! granularity; the output side follows in a later stage.
+//! granularity. Ordinary decomposed outputs likewise retain their ordered
+//! outgoing wires and converter pipelines before either writer runs.
 
 use kotlin_codegen::KtType;
 use prebindgen_registry::{flat::TypeRef, Conversions};
@@ -262,7 +263,7 @@ pub(crate) enum HandleMode {
 /// `Unfold` = callback delivery (builder/fold lambda, erased `Any?` wire);
 /// `Value` = everything else, including the `Return`-delivery convert.
 pub(crate) enum FnOutputPlan {
-    Unfold(UnfoldOutputPlan),
+    Unfold(Box<UnfoldOutputPlan>),
     Value(Box<ValueOutputPlan>),
 }
 
@@ -270,6 +271,13 @@ pub(crate) enum FnOutputPlan {
 /// Rust builder param, the erased extern params, and the typed Kotlin
 /// builder/fold surface all branch on the same booleans.
 pub(crate) struct UnfoldOutputPlan {
+    /// Registry-composed values the return site hands to its builder/folder,
+    /// with each target ABI and output pipeline frozen. Empty only for a
+    /// whole-element iterable fold.
+    pub wires: Vec<crate::jni::compile::OutWire>,
+    /// Whole-element iterable conversion, when `wires` is empty because the
+    /// fold receives each element through its ordinary one-value converter.
+    pub element_pipeline: Option<crate::jni::chain::JPipeline>,
     /// `is_iterable_fold(shape)` — a bare `Iterable` OR one wrapped in an
     /// `Optional` layer (`Option<Vec<T>>`). Selects the fold surface
     /// (`acc` + `fold`) over a scalar builder on every tier.
@@ -944,7 +952,35 @@ fn build_output(
                     .clone(),
             )
         });
-        return Ok(FnOutputPlan::Unfold(UnfoldOutputPlan {
+        let (wires, element_pipeline) = if let Some(element) = &plan.element {
+            let pipeline = crate::jni::compile::freeze_output_pipeline(ext, registry, element)
+                .map_err(|_| PlanError::UnresolvedOutput {
+                    ty: Box::new(element.clone()),
+                })?;
+            (Vec::new(), Some(pipeline))
+        } else {
+            let expected = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
+            let composed = return_site(ext, registry, ident, &plan.source, None)
+                .and_then(|site| site.decomposed())
+                .filter(|wires| {
+                    wires.len() == expected.len()
+                        && wires
+                            .iter()
+                            .zip(&expected)
+                            .all(|(left, right)| left.same_delivery(right))
+                });
+            let wires = match composed {
+                Some(wires) => wires,
+                None => crate::jni::compile::freeze_out_wires(ext, registry, &plan.leaves)
+                    .map_err(|_| PlanError::UnresolvedOutput {
+                        ty: Box::new(plan.source.clone()),
+                    })?,
+            };
+            (wires, None)
+        };
+        return Ok(FnOutputPlan::Unfold(Box::new(UnfoldOutputPlan {
+            wires,
+            element_pipeline,
             iterable_fold,
             optional,
             fixed_builder,
@@ -952,7 +988,7 @@ fn build_output(
             decon,
             generic,
             iface,
-        }));
+        })));
     }
 
     // Value return. The conversion target: the converted single value for a

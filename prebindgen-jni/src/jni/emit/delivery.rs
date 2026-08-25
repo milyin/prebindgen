@@ -35,7 +35,7 @@ pub(crate) fn emit_unfold_delivery(
     ext: &Declarations,
     registry: &Registry,
     plan: &prebindgen_registry::unfold::UnfoldPlan,
-    iface: Option<&IfaceSpec>,
+    output: &crate::jni::fn_plan::UnfoldOutputPlan,
     call_expr: &TokenStream,
     on_err: &TokenStream,
     emit: &prebindgen_registry::Emit,
@@ -63,7 +63,7 @@ pub(crate) fn emit_unfold_delivery(
     // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
     // yielding the per-leaf typed jvalue arg expressions.
     let encode_leaves = |value: &TokenStream, optional: bool| {
-        let mut delivered = Delivered::of(plan);
+        let mut delivered = Delivered::planned(plan, output.wires.clone());
         delivered.optional = optional;
         encode_plan_leaves(ext, registry, delivered, &obj_idents, value, &fail, emit)
     };
@@ -123,8 +123,12 @@ pub(crate) fn emit_unfold_delivery(
         _ => None,
     };
     if let Some(optional) = opt_iterable {
-        let statics =
-            iface_statics(iface.expect("folder interface spec derivable for a resolved plan"));
+        let statics = iface_statics(
+            output
+                .iface
+                .as_deref()
+                .expect("folder interface spec derivable for a resolved plan"),
+        );
         let fold_invoke = |arg_exprs: &[TokenStream]| -> TokenStream {
             quote! {
                 __acc = match __CB_MID.call_object(
@@ -142,50 +146,26 @@ pub(crate) fn emit_unfold_delivery(
             }
         };
 
-        let loop_body = if let Some(element) = plan.element.as_ref() {
+        let loop_body = if plan.element.is_some() {
             // Whole-element (M4): encode the element via its own converter —
             // a raw typed jvalue for a primitive-wire element, a JObject
             // otherwise (mirrors `leaf_is_prim`; the folder interface
             // declares the matching typed param).
-            let out_entry = registry
-                .reading(&element.key())
-                .and_then(|tr| ext.out_frag(&tr))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "emit_unfold_delivery: Vec element `{}` has no registered output converter",
-                        element.key()
-                    )
-                });
-            // The element's COMPLETE Rust -> wire chain. No `convert!` type is
-            // known to reach THIS path today (a fold element is single-leaf and
-            // whole, and the collection converters claim the shapes a converted
-            // element can take), but composing keeps the invariant uniform: a
-            // chain-less entry emits exactly the same call it did before. This
-            // is an extern body, so errors route to the sink rather than `?`.
-            let elem_conv = {
-                let step = |f: &syn::Ident, arg: TokenStream| {
-                    quote! {
-                        match #f(&mut env, #arg) {
-                            ::core::result::Result::Ok(__w) => __w,
-                            ::core::result::Result::Err(__e) => {
-                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                                return #on_err;
-                            }
-                        }
+            let pipeline = output
+                .element_pipeline
+                .as_ref()
+                .expect("whole-element fold carries its frozen output pipeline");
+            let elem_call = pipeline.invoke(quote!(__elem), emit);
+            let elem_conv = quote! {
+                match #elem_call {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                        return #on_err;
                     }
-                };
-                let mut body = TokenStream::new();
-                let mut previous = quote!(__elem);
-                for (order, (_, stage)) in out_entry.output_stage_order().enumerate() {
-                    let next = format_ident!("__es{}", order);
-                    let call = step(&stage.function.sig.ident, previous);
-                    body.extend(quote! { let #next = #call; });
-                    previous = quote!(#next);
                 }
-                let last = step(out_entry.converter_ident(), previous);
-                quote!({ #body #last })
             };
-            let elem_wire = out_entry.destination.clone();
+            let elem_wire = pipeline.wire().clone();
             // Primitive-wire elements (including an opaque **handle**, whose wire
             // is `jlong`) cross as a raw typed jvalue; object wires (String,
             // arrays) cross as a `JObject`. Keyed purely on the wire shape —
@@ -253,7 +233,10 @@ pub(crate) fn emit_unfold_delivery(
     match &plan.shape {
         UnfoldShape::Base => {
             let statics = iface_statics(
-                iface.expect("builder interface spec derivable for a registered declaration"),
+                output
+                    .iface
+                    .as_deref()
+                    .expect("builder interface spec derivable for a registered declaration"),
             );
             let body = emit_decompose(&quote!(__out));
             quote! {
@@ -271,7 +254,10 @@ pub(crate) fn emit_unfold_delivery(
                 ),
             }
             let statics = iface_statics(
-                iface.expect("builder interface spec derivable for a registered declaration"),
+                output
+                    .iface
+                    .as_deref()
+                    .expect("builder interface spec derivable for a registered declaration"),
             );
             let (leaves, arg_exprs, present) = encode_leaves(&quote!(__out), true);
             if let Some(present) = present {
@@ -568,6 +554,23 @@ impl<'a> Delivered<'a> {
     pub(crate) fn of(plan: &'a prebindgen_registry::unfold::UnfoldPlan) -> Self {
         Self {
             wires: crate::jni::compile::OutWire::from_leaves(&plan.leaves),
+            hoists: &plan.hoists,
+            by_ref: plan.by_ref,
+            source: &plan.source,
+            chain: None,
+            fixed_product: plan.fixed_builder,
+            optional: plan.is_optional_base(),
+        }
+    }
+
+    /// Ordinary return delivery from the registry-compiled return site. Unlike
+    /// `of`, this does not reconstruct wires from the legacy unfold leaves.
+    pub(crate) fn planned(
+        plan: &'a prebindgen_registry::unfold::UnfoldPlan,
+        wires: Vec<crate::jni::compile::OutWire>,
+    ) -> Self {
+        Self {
+            wires,
             hoists: &plan.hoists,
             by_ref: plan.by_ref,
             source: &plan.source,
@@ -1026,20 +1029,15 @@ pub(crate) fn encode_plan_leaves(
                     });
                     continue;
                 }
-                let out_entry = ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
-                    panic!(
-                        "jnigen composed leaf `{}` has no registered output converter",
-                        leaf.out_ty.key()
-                    )
-                });
+                let wire = leaf_wire(ext, leaf);
                 if leaf_is_prim(ext, leaf) {
-                    let (_, member, _) = jni_field_access(&out_entry.destination)
+                    let (_, member, _) = jni_field_access(&wire)
                         .expect("a primitive Product leaf has a JNI jvalue member");
                     stmts.extend(quote! {
                         let #object = jni::sys::jvalue { #member: #encoded };
                     });
                 } else {
-                    let cast = cast_wire_to_jobject(encoded, &out_entry.destination, fail);
+                    let cast = cast_wire_to_jobject(encoded, &wire, fail);
                     stmts.extend(quote! {
                         let #object: jni::objects::JObject = #cast;
                     });
@@ -1253,26 +1251,67 @@ pub(crate) fn encode_plan_leaves(
         };
         let (value, by_ref, path, consuming) = rebase(leaf);
         let value = &value;
-        let out_entry = ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
-            panic!(
-                "jnigen unfold: leaf `{}` has no registered output converter",
-                leaf.out_ty.key()
-            )
+        let (frozen_pipeline, frozen_projection) = match &leaf.abi {
+            Some(crate::jni::compile::OutAbi::Value(value)) => {
+                (Some(&value.pipeline), value.projection.as_ref())
+            }
+            Some(crate::jni::compile::OutAbi::Tag) => {
+                unreachable!("sum selector segments are encoded above")
+            }
+            None => (None, None),
+        };
+        // Callback/error delivery still arrives through legacy synthesized
+        // leaves until the Invoke stage. Ordinary return delivery always has a
+        // frozen ABI and never enters this compatibility branch.
+        let legacy_entry = frozen_pipeline.is_none().then(|| {
+            ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
+                panic!(
+                    "jnigen unfold: leaf `{}` has no registered output converter",
+                    leaf.out_ty.key()
+                )
+            })
         });
-        out_entry.activate();
+        if let Some(entry) = &legacy_entry {
+            entry.activate();
+        }
+        let projection = frozen_projection.or_else(|| {
+            legacy_entry
+                .as_ref()
+                .and_then(|entry| entry.metadata.projection.as_ref())
+        });
+        let wire = frozen_pipeline.map_or_else(
+            || {
+                legacy_entry
+                    .as_ref()
+                    .expect("legacy output leaf has an entry")
+                    .destination
+                    .clone()
+            },
+            |pipeline| pipeline.wire().clone(),
+        );
         let conv_fail = fail(quote!(__e.to_string()));
-        // The leaf's COMPLETE Rust -> wire chain: the rust-side stages a custom
-        // `convert!` declaration inserts (`Duration -> u64`), then the
-        // wire-facing converter (`u64 -> jlong`). Calling only the latter would
-        // hand it the semantic value where it expects the representation.
-        // Stage locals are keyed on the leaf index, so sibling leaves of the
-        // same type cannot collide.
-        let conv_stages: Vec<syn::Ident> = out_entry
-            .output_stage_order()
-            .map(|(_, stage)| stage.function.sig.ident.clone())
-            .collect();
-        let conv_fn = out_entry.converter_ident().clone();
         let conv = |input: TokenStream| -> TokenStream {
+            if let Some(pipeline) = frozen_pipeline {
+                let call = pipeline.invoke(input, emit);
+                return quote! {
+                    match #call {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            #conv_fail
+                        }
+                    }
+                };
+            }
+            let out_entry = legacy_entry
+                .as_ref()
+                .expect("compatibility output leaf has an entry");
+            // Legacy callback/error leaf: reconstruct its semantic stages until
+            // those paths retain the same registry site result.
+            let conv_stages: Vec<syn::Ident> = out_entry
+                .output_stage_order()
+                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .collect();
+            let conv_fn = out_entry.converter_ident().clone();
             let step = |f: &syn::Ident, arg: TokenStream| {
                 quote! {
                     match #f(&mut env, #arg) {
@@ -1316,7 +1355,7 @@ pub(crate) fn encode_plan_leaves(
             // path) boxes to `java.lang.Long` / null. The whole path is `Option`-unwrapped
             // (`unwrap_last`): an optional nesting step makes the leaf null
             // when the value is absent.
-            let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
+            let proj = projection.unwrap_or_else(|| {
                 panic!(
                     "jnigen unfold: identity leaf `{}` has no projection — \
                      `.accessor_record_id()` requires a ptr_class type",
@@ -1556,7 +1595,6 @@ pub(crate) fn encode_plan_leaves(
         // declares the primitive). Everything else (object wires, and nullable
         // leaves whose `None` arm must yield a JVM null) encodes the reached
         // value with the leaf's output converter and casts to JObject.
-        let wire = out_entry.destination.clone();
         let enc_ident = format_ident!("__enc{}", idx);
         if leaf_is_prim(ext, leaf) {
             let letter = jni_field_access(&wire)
@@ -1636,7 +1674,34 @@ pub(crate) fn leaf_is_prim(ext: &Declarations, leaf: &crate::jni::compile::OutWi
     if leaf.nullable {
         return false;
     }
+    if let Some(crate::jni::compile::OutAbi::Value(value)) = &leaf.abi {
+        let proj_ok = match &value.projection {
+            None => true,
+            Some(p) => matches!(p.kind, ProjectionKind::Handle | ProjectionKind::Unsigned64),
+        };
+        return proj_ok && matches!(jni_field_access(value.pipeline.wire()), Some((_, _, false)));
+    }
     leaf_ty_is_prim(ext, &leaf.out_ty)
+}
+
+/// Final JNI wire for one outgoing leaf. Ordinary return sites retain it in
+/// their frozen ABI; callback/error compatibility leaves still resolve it from
+/// the adapter until the Invoke stage.
+pub(crate) fn leaf_wire(ext: &Declarations, leaf: &crate::jni::compile::OutWire) -> syn::Type {
+    match &leaf.abi {
+        Some(crate::jni::compile::OutAbi::Tag) => syn::parse_quote!(jni::sys::jint),
+        Some(crate::jni::compile::OutAbi::Value(value)) => value.pipeline.wire().clone(),
+        None => ext
+            .out_frag(&leaf.out_ty)
+            .unwrap_or_else(|| {
+                panic!(
+                    "jnigen output leaf `{}` has no registered output converter",
+                    leaf.out_ty.key()
+                )
+            })
+            .destination
+            .clone(),
+    }
 }
 
 /// The wire half of [`leaf_is_prim`]: does a leaf of this type occupy a **raw
