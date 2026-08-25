@@ -667,6 +667,8 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "fn payload_free_stmt",
         "fn tag_guard",
         "fn src_ty_of",
+        "Complete(syn::ItemFn)",
+        "CFunction::complete",
     ] {
         assert!(
             !sources.contains(deleted),
@@ -674,6 +676,10 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         );
     }
     let compact: String = sources.chars().filter(|c| !c.is_whitespace()).collect();
+    assert!(
+        compact.contains("operation:MarkerOperation::ChoiceArm"),
+        "Product-to-Choice composition must use its typed transient marker"
+    );
     assert!(
         !compact.contains("Option<ConverterImpl>"),
         "a C production path accepts the deleted generic converter carrier"

@@ -1581,6 +1581,7 @@ impl CbindgenBuilder {
         subject: &TypeRef,
     ) -> Option<crate::chain::MarkerPlan> {
         let (ident, subs) = match operation {
+            crate::chain::MarkerOperation::ChoiceArm => return None,
             crate::chain::MarkerOperation::Optional => (
                 format_ident!("__cbg_outmark_option_{}", sanitize(&subject.key())),
                 vec![subject.clone()],
