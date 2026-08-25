@@ -275,6 +275,8 @@ pub(crate) struct UnfoldOutputPlan {
     /// with each target ABI and output pipeline frozen. Empty only for a
     /// whole-element iterable fold.
     pub wires: Vec<crate::jni::compile::OutWire>,
+    /// Exact composed converter for a fixed Product/Optional/Choice return.
+    pub chain: Option<crate::jni::compile::ComposedChain>,
     /// Whole-element iterable conversion, when `wires` is empty because the
     /// fold receives each element through its ordinary one-value converter.
     pub element_pipeline: Option<crate::jni::chain::JPipeline>,
@@ -952,14 +954,28 @@ fn build_output(
                     .clone(),
             )
         });
-        let (wires, element_pipeline) = if let Some(element) = &plan.element {
+        let (wires, chain, element_pipeline) = if let Some(element) = &plan.element {
             let pipeline = crate::jni::compile::freeze_output_pipeline(ext, registry, element)
                 .map_err(|_| PlanError::UnresolvedOutput {
                     ty: Box::new(element.clone()),
                 })?;
-            (Vec::new(), Some(pipeline))
+            (Vec::new(), None, Some(pipeline))
         } else {
             let expected = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
+            let delivered = if plan.by_ref {
+                plan.source.borrowed()
+            } else {
+                plan.source.clone()
+            };
+            // Only an Optional directly around the decomposed base belongs in
+            // the converter chain. `optional` also covers
+            // `Option<Vec<T>>`, whose presence gates the fold outside the
+            // per-element `T` chain.
+            let delivered = if plan.is_optional_base() {
+                delivered.optional()
+            } else {
+                delivered
+            };
             let composed = return_site(ext, registry, ident, &plan.source, None)
                 .and_then(|site| site.decomposed())
                 .filter(|wires| {
@@ -976,10 +992,23 @@ fn build_output(
                         ty: Box::new(plan.source.clone()),
                     })?,
             };
-            (wires, None)
+            // Chain availability depends on the exact value the delivery owns,
+            // including borrow and outer Optional mode. Freeze that answer now;
+            // the site binding itself intentionally names the core Product.
+            let chain = if fixed_builder && plan.hoists.is_empty() {
+                crate::jni::compile::freeze_output_chain(ext, registry, &delivered).map_err(
+                    |_| PlanError::UnresolvedOutput {
+                        ty: Box::new(delivered),
+                    },
+                )?
+            } else {
+                None
+            };
+            (wires, chain, None)
         };
         return Ok(FnOutputPlan::Unfold(Box::new(UnfoldOutputPlan {
             wires,
+            chain,
             element_pipeline,
             iterable_fold,
             optional,

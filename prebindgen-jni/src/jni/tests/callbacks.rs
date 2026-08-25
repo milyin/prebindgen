@@ -241,12 +241,11 @@ fn declared_optional_conversion_callback_falls_back_to_whole_value() {
 
 /// `Ledger` has an output expansion but is deliberately not a declared Kotlin
 /// class. Its fields reach a consuming `Report` value form through two
-/// conditional (`Option`) accessors. The recipe compiler cannot turn that
-/// irregular callback argument into a reusable parts converter, so callback
-/// delivery takes the whole-value compatibility seam. That seam must keep the
-/// `Invoke` plan late and pair it with the conversion the resolver returns.
+/// conditional (`Option`) accessors. The registry's deconstruction plan is its
+/// only JNI representation, and Invoke must retain that plan without a
+/// callback-specific compatibility row.
 #[test]
-fn undeclared_expanded_callback_retains_its_late_compatibility_plan() {
+fn undeclared_expanded_callback_retains_its_registry_invoke_plan() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = [
         "pub struct ReportStruct { pub label: String }",
@@ -283,11 +282,11 @@ fn undeclared_expanded_callback_retains_its_late_compatibility_plan() {
     let generation = jni.build_with(registry).expect("resolve");
     let callback = "impl Fn(Ledger) + Send + Sync + 'static";
     let (converter, is_late_invoke) = generation
-        .compatibility_callback_for_test(callback)
-        .expect("Ledger callback uses the whole-value compatibility row");
+        .callback_invoke_for_test(callback)
+        .expect("Ledger callback is compiled through its ordinary crossing");
     assert!(
         is_late_invoke,
-        "the compatibility row must retain an unrendered Invoke plan"
+        "the ordinary callback fragment must retain an unrendered Invoke plan"
     );
 
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();

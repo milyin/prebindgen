@@ -41,6 +41,59 @@ fn callback_argument_name(index: usize) -> syn::Ident {
     format_ident!("__cb_arg{}", index)
 }
 
+/// Freeze one callback argument's deconstructed delivery before the retained
+/// Invoke plan is rendered. A composable recipe contributes its exact child
+/// wires and chain; an irregular registry-owned unfold walk freezes each
+/// already-resolved leaf crossing once at this resolution seam.
+fn freeze_callback_delivery(
+    ext: &Declarations,
+    plan: &prebindgen_registry::unfold::UnfoldPlan,
+    fragment: &crate::jni::compile::JFrag,
+) -> Option<(
+    Vec<crate::jni::compile::OutWire>,
+    Option<crate::jni::compile::ComposedChain>,
+)> {
+    let expected = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
+    let composed = fragment.out_wires.clone().filter(|wires| {
+        wires.len() == expected.len()
+            && wires
+                .iter()
+                .zip(&expected)
+                .all(|(left, right)| left.same_delivery(right))
+    });
+    let wires = match composed {
+        Some(wires) => wires,
+        None => expected
+            .into_iter()
+            .map(|mut wire| {
+                wire.abi = Some(if wire.is_tag() {
+                    crate::jni::compile::OutAbi::Tag
+                } else {
+                    ext.out_frag(&wire.out_ty)?.output_abi()
+                });
+                if wire.identity
+                    && matches!(
+                        wire.abi,
+                        Some(crate::jni::compile::OutAbi::Value(ref value))
+                            if value.projection.is_none()
+                    )
+                {
+                    return None;
+                }
+                Some(wire)
+            })
+            .collect::<Option<Vec<_>>>()?,
+    };
+    wires
+        .iter()
+        .for_each(crate::jni::compile::OutWire::activate);
+    let chain = fragment.composed_chain();
+    if let Some(chain) = &chain {
+        chain.activate();
+    }
+    Some((wires, chain))
+}
+
 /// A registry-composed callback retained until the final Rust writer runs.
 #[derive(Clone)]
 pub(crate) struct JInvokePlan {
@@ -193,7 +246,7 @@ pub(crate) fn callback_input(
     source: &prebindgen_registry::flat::TypeRef,
     args: &[prebindgen_registry::flat::TypeRef],
     registry: &impl Conversions,
-    arg_fragments: Option<&[&crate::jni::compile::JFrag]>,
+    arg_fragments: &[&crate::jni::compile::JFrag],
     emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, JInvokePlan)> {
     // Human-readable tag for attach/log messages.
@@ -245,11 +298,8 @@ pub(crate) fn callback_input(
             .callback_arg_plan(&arg_ty.key())
             .filter(|p| super::render::is_iterable_fold(&p.shape))
         {
-            // Every leaf converter must already be resolved (deferral safety).
-            // A synthesized leaf (a sum's tag) has no converter to wait for.
-            for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                ext.out_frag(&leaf.out_ty)?;
-            }
+            let fragment = *arg_fragments.get(i)?;
+            let (wires, chain) = freeze_callback_delivery(ext, plan, fragment)?;
             let spec = folder_iface_for_plan(ext, registry, plan)?;
             let holder_slash =
                 syn::LitStr::new(&spec.singleton_holder_slash_fqn(), Span::call_site());
@@ -292,12 +342,7 @@ pub(crate) fn callback_input(
             let (leaf_stmts, leaf_args, _) = encode_plan_leaves(
                 ext,
                 registry,
-                crate::jni::emit::Delivered::with_chain(
-                    plan,
-                    arg_fragments
-                        .and_then(|fragments| fragments.get(i))
-                        .and_then(|fragment| fragment.composed_chain()),
-                ),
+                crate::jni::emit::Delivered::planned(plan, wires, chain),
                 &obj_idents,
                 &quote!(__cb_elem),
                 &fail,
@@ -349,30 +394,15 @@ pub(crate) fn callback_input(
         // Decomposed arg: deliver the leaves of its type-level canonical
         // output, exactly like a return delivery.
         if let Some(plan) = effective_callback_plan(ext, registry, arg_ty) {
-            // Deferral safety: every leaf converter (and identity-leaf
-            // projection) must already be resolved — return None so the rank
-            // resolver retries this converter later otherwise. A synthesized
-            // leaf (a sum's tag) has no converter to wait for: requiring one
-            // would make the trampoline wait forever on an `i32` crossing the
-            // binding may not have.
-            for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                let e = ext.out_frag(&leaf.out_ty)?;
-                if leaf.identity && e.metadata.projection.is_none() {
-                    return None;
-                }
-            }
+            let fragment = *arg_fragments.get(i)?;
+            let (wires, chain) = freeze_callback_delivery(ext, plan, fragment)?;
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cb{}_obj{}", i, k))
                 .collect();
             let (stmts, mut arg_exprs, present) = encode_plan_leaves(
                 ext,
                 registry,
-                crate::jni::emit::Delivered::with_chain(
-                    plan,
-                    arg_fragments
-                        .and_then(|fragments| fragments.get(i))
-                        .and_then(|fragment| fragment.composed_chain()),
-                ),
+                crate::jni::emit::Delivered::planned(plan, wires, chain),
                 &obj_idents,
                 &quote!(#cb_arg),
                 &fail,
@@ -397,72 +427,24 @@ pub(crate) fn callback_input(
             continue;
         }
 
-        // Whole-value delivery. A by-value arg (`impl Fn(T)`) has a `T` output
-        // converter and is passed by move. A borrowed whole-value arg
-        // (`impl Fn(&T)` for a type with no accessor plan — e.g. a field-based
-        // `data_class` like `Payload`) has no `&T` converter, so fall back to `T`'s
-        // converter and clone the borrow (the callback only borrows the value). The
-        // `data_class` converter composes the whole object via `fromParts`, so the
-        // Kotlin `run(t: T)` receives a ready-made `T`.
-        let (cb_val, arg_entry) = match ext.out_frag(arg_ty) {
-            Some(e) => (quote!(#cb_arg), e),
-            // A borrow: the callback hands out a reference, and the value is
-            // cloned for the JVM.
-            //
-            // That this is a borrow is the model's answer (`borrow_target`) —
-            // no spelling is inspected here, which is the point of #229.
-            //
-            // `(#cb_arg).clone()` is nonetheless only well-typed for a
-            // DIRECTLY-spelled `&T`: `#cb_arg` carries the source's spelling,
-            // so a transparent wrapper — `Box<&T>`, `Ref` all the same —
-            // would clone to `Box<&T>`, which the `T` converter rejects. That
-            // case is refused before it reaches here: a callback arg's
-            // whole-value output converter is a *required* type, and
-            // `output_wrapper_shape`'s borrowed-opaque arm matches
-            // `syn::Type::Reference` on `produced` structurally, so `Box<&T>`
-            // (a `Type::Path`) never gets one.
-            //
-            // MEASURED, not assumed — `a_wrapped_borrow_callback_arg_declines`
-            // fails, on exactly this clone, if that arm is made
-            // spelling-blind. A local re-check here was tried (#279 review)
-            // and dropped: it changed no output on `Box<&String>` or
-            // `Box<&ZThing>`, and added a classification that never fires.
-            None => {
-                let core = arg_ty.borrow_target()?;
-                (quote!((#cb_arg).clone()), ext.out_frag(core)?)
-            }
+        // Whole-value delivery consumes the exact deconstruct fragment the
+        // registry's Invoke recipe compiled for this argument. Its retained
+        // pipeline already decides move versus borrow cloning, stage order,
+        // projection, and the final JNI wire; rendering does not look the type
+        // up again or reconstruct any of those decisions.
+        let fragment = *arg_fragments.get(i)?;
+        let cb_val = quote!(#cb_arg);
+        let arg_abi = fragment.output_abi();
+        arg_abi.activate();
+        let crate::jni::compile::OutAbi::Value(arg_value) = arg_abi else {
+            unreachable!("a whole callback argument is not a synthesized selector")
         };
-        arg_entry.activate();
-        let arg_wire = arg_entry.destination.clone();
+        let arg_wire = arg_value.pipeline.wire().clone();
         let enc_ident = format_ident!("__cb{}_enc", i);
         let obj_ident = format_ident!("__cb{}_obj", i);
 
-        // The arg's COMPLETE Rust -> wire chain: the rust-side stages a custom
-        // `convert!` declaration inserts (`Duration -> u64`), then the
-        // wire-facing converter (`u64 -> jlong`). A whole-value callback arg
-        // has no leaf plan, so this is its own encoder path — calling only the
-        // wire-facing converter would hand it the semantic value where it
-        // expects the representation. Stage locals are keyed on the arg index.
-        let conv = {
-            let converter = arg_entry.converter_ident();
-            if arg_entry.pre_stages.is_empty() {
-                quote!(#converter(&mut env, #cb_val)?)
-            } else {
-                let mut body = TokenStream::new();
-                let mut previous = cb_val.clone();
-                for (order, (_, stage)) in arg_entry.output_stage_order().enumerate() {
-                    let stage_fn = &stage.function.sig.ident;
-                    let next = format_ident!("__cb{}_s{}", i, order);
-                    body.extend(quote! {
-                        let #next = #stage_fn(&mut env, #previous)
-                            .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
-                                __e.to_string()))?;
-                    });
-                    previous = quote!(#next);
-                }
-                quote!({ #body #converter(&mut env, #previous)? })
-            }
-        };
+        let conversion = arg_value.pipeline.invoke(cb_val, emit);
+        let conv = quote!(#conversion?);
 
         // Plan-less opaque-handle arg: encode to a raw `jlong` (`Box::into_raw`)
         // and deliver it as-is. The typed handle class is constructed Kotlin-side
@@ -472,7 +454,7 @@ pub(crate) fn callback_input(
         // consumer reply through the handle inside the callback (a consuming
         // reply zeroes the slot, making the proxy's `close` a no-op). See
         // `owned_handle_iface_param`.
-        if let Some(h) = &arg_entry.metadata.projection {
+        if let Some(h) = &arg_value.projection {
             if matches!(h.kind, ProjectionKind::Handle) {
                 preludes.push(quote! {
                     let #enc_ident = #conv;
@@ -494,8 +476,7 @@ pub(crate) fn callback_input(
         // passes its raw primitive; everything else casts to JObject. Output
         // converters take the value by move; `cb_arg` is the closure
         // parameter, so pass it directly.
-        let arg_is_prim = arg_entry
-            .metadata
+        let arg_is_prim = arg_value
             .projection
             .as_ref()
             .is_none_or(|p| p.kind == ProjectionKind::Unsigned64)
