@@ -1596,7 +1596,12 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Construct => "conversion_into",
             Direction::Deconstruct => "conversion_from",
         };
-        let ident = crate::jni::chain::model_operation_name(operation, &source.key());
+        let ident = match source.unwrapped().kind() {
+            TypeKind::Named { id, .. } => {
+                crate::jni::chain::named_model_operation_name(operation, id, &source.key())
+            }
+            _ => crate::jni::chain::model_operation_name(operation, &source.key()),
+        };
         let plan = crate::jni::chain::JFunction::custom_conversion(
             crate::jni::chain::JCustomConversionPlan {
                 ident: ident.clone(),
