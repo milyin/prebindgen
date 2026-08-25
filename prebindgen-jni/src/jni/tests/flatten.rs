@@ -59,6 +59,16 @@ fn inline_output_gets_own_builder() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    assert_eq!(
+        gen.output_freeze_for_test("z_make_a"),
+        Some((2, true, false)),
+        "the type-level return must freeze every delivered leaf",
+    );
+    assert_eq!(
+        gen.output_freeze_for_test("z_make_b"),
+        Some((3, true, false)),
+        "the function-unique return must freeze its own leaf operations",
+    );
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();

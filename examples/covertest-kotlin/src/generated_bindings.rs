@@ -19573,37 +19573,29 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_spanHolderNew<'a
     let (__obj0, __obj1): (jni::objects::JObject, jni::objects::JObject) = match __vf0 {
         ::core::option::Option::Some(__u0) => {
             let __obj0: jni::objects::JObject = {
-                let __enc0 = {
-                    let __cs0_0 = match Duration_to_u64_e3980876(
-                        &mut env,
-                        __u0.required.clone(),
-                    ) {
-                        ::core::result::Result::Ok(__w) => __w,
-                        ::core::result::Result::Err(__e) => {
-                            signal_binding_error(
+                let __enc0 = match (|| -> ::core::result::Result<_, __JniErr> {
+                    {
+                        let __chain_s0 = Duration_to_u64_e3980876(
                                 &mut env,
-                                &__error_sink,
-                                &__SINK_MID,
-                                __SINK_FQN,
-                                __SINK_DESCR,
-                                &__e.to_string(),
-                            );
-                            return jni::objects::JObject::null().into();
-                        }
-                    };
-                    match u64_to_jlong_4384a5d6(&mut env, __cs0_0) {
-                        ::core::result::Result::Ok(__w) => __w,
-                        ::core::result::Result::Err(__e) => {
-                            signal_binding_error(
-                                &mut env,
-                                &__error_sink,
-                                &__SINK_MID,
-                                __SINK_FQN,
-                                __SINK_DESCR,
-                                &__e.to_string(),
-                            );
-                            return jni::objects::JObject::null().into();
-                        }
+                                __u0.required.clone(),
+                            )
+                            .map_err(|__e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(__e.to_string()))?;
+                        u64_to_jlong_4384a5d6(&mut env, __chain_s0)
+                    }
+                })() {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
                     }
                 };
                 match ::prebindgen_jni_runtime::box_jlong(&mut env, __enc0) {
@@ -20703,20 +20695,18 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageLabels<'a
     let __vec = perftest_flat::storage_labels(&s);
     let mut __acc = __acc;
     for __elem in __vec.into_iter() {
-        let __enc = {
-            match String_to_JString_c7f3ca43(&mut env, __elem) {
-                ::core::result::Result::Ok(__w) => __w,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(
-                        &mut env,
-                        &__error_sink,
-                        &__SINK_MID,
-                        __SINK_FQN,
-                        __SINK_DESCR,
-                        &__e.to_string(),
-                    );
-                    return jni::objects::JObject::null().into();
-                }
+        let __enc = match String_to_JString_c7f3ca43(&mut env, __elem) {
+            ::core::result::Result::Ok(__w) => __w,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
             }
         };
         let __obj: jni::objects::JObject = __enc.into();
@@ -21284,20 +21274,18 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShards<'a
     let __vec = perftest_flat::storage_shards(count, each);
     let mut __acc = __acc;
     for __elem in __vec.into_iter() {
-        let __enc = {
-            match Storage_to_jlong_1b233abd(&mut env, __elem) {
-                ::core::result::Result::Ok(__w) => __w,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(
-                        &mut env,
-                        &__error_sink,
-                        &__SINK_MID,
-                        __SINK_FQN,
-                        __SINK_DESCR,
-                        &__e.to_string(),
-                    );
-                    return jni::objects::JObject::null().into();
-                }
+        let __enc = match Storage_to_jlong_1b233abd(&mut env, __elem) {
+            ::core::result::Result::Ok(__w) => __w,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
             }
         };
         __acc = match __CB_MID
@@ -21387,20 +21375,18 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShardsOpt
         ::core::option::Option::Some(__vec) => {
             let mut __acc = __acc;
             for __elem in __vec.into_iter() {
-                let __enc = {
-                    match Storage_to_jlong_1b233abd(&mut env, __elem) {
-                        ::core::result::Result::Ok(__w) => __w,
-                        ::core::result::Result::Err(__e) => {
-                            signal_binding_error(
-                                &mut env,
-                                &__error_sink,
-                                &__SINK_MID,
-                                __SINK_FQN,
-                                __SINK_DESCR,
-                                &__e.to_string(),
-                            );
-                            return jni::objects::JObject::null().into();
-                        }
+                let __enc = match Storage_to_jlong_1b233abd(&mut env, __elem) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
                     }
                 };
                 __acc = match __CB_MID
@@ -24368,20 +24354,18 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_unsignedSeries<'
     let __vec = perftest_flat::unsigned_series();
     let mut __acc = __acc;
     for __elem in __vec.into_iter() {
-        let __enc = {
-            match u64_to_jlong_4384a5d6(&mut env, __elem) {
-                ::core::result::Result::Ok(__w) => __w,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(
-                        &mut env,
-                        &__error_sink,
-                        &__SINK_MID,
-                        __SINK_FQN,
-                        __SINK_DESCR,
-                        &__e.to_string(),
-                    );
-                    return jni::objects::JObject::null().into();
-                }
+        let __enc = match u64_to_jlong_4384a5d6(&mut env, __elem) {
+            ::core::result::Result::Ok(__w) => __w,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
             }
         };
         __acc = match __CB_MID
