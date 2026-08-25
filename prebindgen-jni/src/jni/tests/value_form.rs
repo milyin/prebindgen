@@ -3226,7 +3226,7 @@ fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
             Ok(g) => {
                 let planned = g
                     .borrowed_optional_handle_plan_for_test(&spelling)
-                    .unwrap_or(false);
+                    .expect("compiled input crossing");
                 Ok((
                     std::fs::read_to_string(g.write_rust(dir.join("g.rs")).expect("write_rust"))
                         .expect("read rust"),

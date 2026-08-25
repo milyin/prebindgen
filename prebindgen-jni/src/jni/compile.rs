@@ -1503,7 +1503,9 @@ impl<R: Conversions> JCompile<'_, R> {
             }
             _ => {}
         }
-        if direction == Direction::Construct && inner.conv.metadata.is_direct_handle() {
+        if direction == Direction::Construct
+            && (element.borrow_target().is_some() || inner.conv.metadata.is_direct_handle())
+        {
             return None;
         }
 
