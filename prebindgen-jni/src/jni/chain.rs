@@ -1523,6 +1523,21 @@ pub(crate) fn model_operation_name(operation: &str, key: &TypeKey) -> syn::Ident
     format_ident!("{operation}_{:08x}", hash.finish() & 0xffff_ffff)
 }
 
+/// Stable private name that keeps a nominal model identity readable while the
+/// table key itself remains opaque.
+///
+/// TypeId is a Flat-model fact, not recovered Rust syntax. The key still
+/// supplies uniqueness for wrappers and generic instantiations that share the
+/// same nominal identity.
+pub(crate) fn named_model_operation_name(
+    operation: &str,
+    id: &prebindgen_registry::flat::TypeId,
+    key: &TypeKey,
+) -> syn::Ident {
+    let nominal = crate::jni::emit::sanitize_for_ident(&id.name);
+    model_operation_name(&format!("{operation}_{nominal}"), key)
+}
+
 /// Stable private name for a plan identified by an adapter semantic rather
 /// than by a source crossing. This accepts a semantic label, not Rust syntax.
 fn planned_name_for_key(
