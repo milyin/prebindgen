@@ -1971,6 +1971,13 @@ fn a_composed_type_keys_as_its_spelling() {
     );
     assert_eq!(optional.optional_inner().expect("optional").key(), t.key());
 
+    let vector = t.vector();
+    assert_eq!(
+        vector.key(),
+        TypeKey::from_type(&syn::parse_quote!(Vec<u64>))
+    );
+    assert_eq!(vector.sequence_elem().expect("vector").key(), t.key());
+
     // A scalar the binding invented: spelled from its own kind, so the two
     // cannot drift.
     assert_eq!(

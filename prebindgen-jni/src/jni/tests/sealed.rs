@@ -2894,20 +2894,33 @@ fn borrowed_sequences_keep_their_registry_plan_or_specialized_shape() {
         "the flattened callback fold needs only its Sequence shape: {ident}\n{rendered}"
     );
 
-    let (specialized, ident, rendered) = gen
+    let (specialized, borrowed_ident, borrowed_rendered) = gen
         .crossing_plan_for_test(
             syn::parse_quote!(&[String]),
             prebindgen_registry::recipe::Direction::Construct,
         )
         .expect("labels plan");
-    let compact: String = rendered.split_whitespace().collect();
+    let compact: String = borrowed_rendered.split_whitespace().collect();
     assert!(
         !specialized
-            && ident.starts_with("JObject_to_String_")
-            && compact.contains("Result<::std::vec::Vec<String>,__JniErr>")
+            && borrowed_ident.starts_with("JObject_to_Vec_String_")
+            && compact.contains("Result<Vec<String>,__JniErr>")
             && compact.contains("letmut__sequence_values")
             && compact.contains("JString_to_String"),
-        "the borrowed input must retain the executable registry Sequence plan: {ident}\n{rendered}"
+        "the borrowed input must retain the executable registry Sequence plan: {borrowed_ident}\n{borrowed_rendered}"
+    );
+
+    let (specialized, owned_ident, owned_rendered) = gen
+        .crossing_plan_for_test(
+            syn::parse_quote!(Vec<String>),
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .expect("owned labels plan");
+    assert!(
+        !specialized
+            && owned_ident == borrowed_ident
+            && owned_rendered == borrowed_rendered,
+        "owned Vec and borrowed slice inputs must share their produced-carrier converter:\nborrowed {borrowed_ident}: {borrowed_rendered}\nowned {owned_ident}: {owned_rendered}"
     );
 }
 

@@ -2497,64 +2497,6 @@ pub(crate) unsafe fn JObject_to_Holder_c36a9705<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn JObject_to_Label_0284d056<'env, 'a>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'a>,
-) -> ::core::result::Result<::std::vec::Vec<perftest_flat::Label>, __JniErr> {
-    ::core::result::Result::Ok({
-        let __sequence_list = jni::objects::JList::from_env(env, v)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        let mut __sequence_iter = __sequence_list
-            .iter(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __sequence_values: ::std::vec::Vec<perftest_flat::Label> = ::std::vec::Vec::new();
-        while let ::core::option::Option::Some(__sequence_part) = match __sequence_iter
-            .next(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-next: {}", e)))?
-        {
-            ::core::option::Option::Some(__sequence_object) => {
-                let __sequence_part: jni::objects::JString = __sequence_object.into();
-                ::core::option::Option::Some(__sequence_part)
-            }
-            ::core::option::Option::None => ::core::option::Option::None,
-        } {
-            __sequence_values
-                .push(
-                    {
-                        let __chain_s0 = JString_to_String_c7f3ca43(
-                            env,
-                            &__sequence_part,
-                        )?;
-                        let __chain_s1 = String_to_Label_c1a79668(env, __chain_s0)
-                            .map_err(|__e| <__JniErr as ::core::convert::From<
-                                String,
-                            >>::from(__e.to_string()))?;
-                        ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
-                    }?,
-                );
-        }
-        __sequence_values
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn JObject_to_Lookup_94ada15e<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -16163,7 +16105,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelBorrowedCon
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let labels = match JObject_to_Label_0284d056(&mut env, &labels) {
+    let labels = match JObject_to_Vec_Label_3fdf860d(&mut env, &labels) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(

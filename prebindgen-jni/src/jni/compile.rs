@@ -1336,7 +1336,19 @@ impl<R: Conversions> JCompile<'_, R> {
         }
         let child = Self::planned_child_mode(direction, elements, inner);
         let destination: syn::Type = syn::parse_quote!(jni::objects::JObject);
-        let ident = crate::jni::chain::planned_name(direction, at.crossing.spelled(), &destination);
+        // A shared slice input and an owned vector input both materialize the
+        // same `Vec<T>` carrier. Give that produced model type to the plan,
+        // so converter identity, name and emitted body are shared. The wrapper
+        // still owns the crossing mode and adds the final borrow.
+        let produced = if direction == Direction::Construct
+            && matches!(source.kind(), TypeKind::Slice(_))
+            && at.crossing.mode() == Mode::Shared
+        {
+            element.vector()
+        } else {
+            source.clone()
+        };
+        let ident = crate::jni::chain::planned_name(direction, &produced, &destination);
         let marker = crate::jni::chain::planned_marker(&ident);
         let bridge = match direction {
             Direction::Construct => crate::jni::chain::JSequenceBridge::Input {
@@ -1349,10 +1361,8 @@ impl<R: Conversions> JCompile<'_, R> {
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             dependencies: vec![inner.rust.clone()],
             mode: at.crossing.mode(),
-            construct_vec_carrier: direction == Direction::Construct
-                && matches!(source.unwrapped().kind(), TypeKind::Slice(_)),
             chain: prebindgen_registry::chain::Sequence {
-                source: source.clone(),
+                source: produced,
                 element: element.clone(),
                 direction,
                 source_policy: crate::jni::chain::JSource {
