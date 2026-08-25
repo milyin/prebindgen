@@ -1298,16 +1298,15 @@ impl<R: Conversions> JCompile<'_, R> {
         let rust =
             crate::jni::chain::JFunction::handle_codec(crate::jni::chain::JHandleCodecPlan {
                 ident,
-                // Legacy parents can retain only the child's converter name,
-                // so they cannot activate its `JFunction` dependency yet.
-                // Output and borrowed-input terminals were unconditional
-                // functions before this late plan; keep that exact emission
-                // rule until those parents become plans too. Owned input was
-                // already a reachable plan and remains demand-driven.
-                reachable: std::rc::Rc::new(std::cell::Cell::new(
-                    direction == Direction::Deconstruct
-                        || matches!(operation, crate::jni::chain::JHandleOperation::BorrowInput),
-                )),
+                // Borrowed-input terminals were unconditional functions before
+                // this late plan and remain so until every compatibility parent
+                // retains dependencies. Owned input and both output operations
+                // are demand-driven; the retained Result plan now propagates
+                // reachability to its success converter.
+                reachable: std::rc::Rc::new(std::cell::Cell::new(matches!(
+                    operation,
+                    crate::jni::chain::JHandleOperation::BorrowInput
+                ))),
                 source: render_source,
                 module,
                 target,
@@ -1335,6 +1334,50 @@ impl<R: Conversions> JCompile<'_, R> {
                 validity: Validity::SelfSufficient,
             },
         })
+    }
+
+    /// Retain the `Result<T, E> -> T` error peel and its success dependency.
+    /// The model supplies all three readings; no Rust type is spelled until
+    /// the plan renders the final helper.
+    fn planned_result(&self, at: At<'_>) -> Option<JFrag> {
+        if at.crossing.direction() != Direction::Deconstruct {
+            return None;
+        }
+        let source = at.crossing.spelled();
+        let (ok, err) = source.fallible_parts()?;
+        let success = self.decls.out_frag(ok)?;
+        let ident = crate::jni::chain::model_operation_name("result_peel", &source.key());
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let mut pre_stages = vec![Stage {
+            function: marker,
+            metadata: KotlinMeta::default(),
+        }];
+        pre_stages.extend(success.pre_stages.iter().cloned());
+        let rust = crate::jni::chain::JFunction::result(crate::jni::chain::JResultPlan {
+            ident,
+            reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
+            success: success.0.rust.clone(),
+            source: source.clone(),
+            ok: ok.clone(),
+            err: err.clone(),
+        });
+        Some(JFrag::planned(
+            at,
+            ConverterImpl {
+                destination: success.destination.clone(),
+                function: success.function.clone(),
+                pre_stages,
+                niches: default_niches_for_wire(&success.destination),
+                metadata: KotlinMeta {
+                    kotlin_name: success.metadata.kotlin_name.clone(),
+                    value_reading: Some(ok.clone()),
+                    projection: success.metadata.projection.clone(),
+                    niche_sentinels: Vec::new(),
+                },
+                subs: Vec::new(),
+            },
+            rust,
+        ))
     }
     fn planned_child(
         direction: Direction,
@@ -1724,7 +1767,7 @@ impl<R: Conversions> JCompile<'_, R> {
             marker.conv.destination = syn::parse_quote!(jni::objects::JObject);
             marker.conv.metadata = KotlinMeta {
                 kotlin_name,
-                value_rust_type: None,
+                value_reading: None,
                 projection,
                 niche_sentinels: Vec::new(),
             };
@@ -1790,7 +1833,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 niches,
                 metadata: KotlinMeta {
                     kotlin_name,
-                    value_rust_type: None,
+                    value_reading: None,
                     projection,
                     niche_sentinels: Vec::new(),
                 },
@@ -1874,7 +1917,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 niches: Niches::empty(),
                 metadata: KotlinMeta {
                     kotlin_name,
-                    value_rust_type: None,
+                    value_reading: None,
                     projection,
                     niche_sentinels: Vec::new(),
                 },
@@ -2327,6 +2370,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(frag) = self.planned_handle_codec(at) {
             return Ok(frag);
         }
+        if let Some(frag) = self.planned_result(at) {
+            return Ok(frag);
+        }
         let emit = cx.emit();
         let conv = match at.crossing.direction() {
             Direction::Construct => self
@@ -2337,7 +2383,6 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
-                .or_else(|| self.decls.result_shape(ty, self.registry, emit))
                 .or_else(|| self.borrow(ty, false))
                 .or_else(|| {
                     self.decls
@@ -3063,6 +3108,11 @@ impl Conv {
     pub(crate) fn is_handle_codec_plan(&self) -> bool {
         self.0.rust.is_handle_codec()
     }
+
+    #[cfg(test)]
+    pub(crate) fn is_result_plan(&self) -> bool {
+        self.0.rust.is_result()
+    }
 }
 
 impl std::ops::Deref for Conv {
@@ -3280,7 +3330,7 @@ impl<R: Conversions> JCompile<'_, R> {
     /// calling this, which is the whole point of the hook. What the plan adds
     /// is the Kotlin surface, which is classified over the **declared** return
     /// rather than over the crossing: an error peel rides the conversion's
-    /// `value_rust_type`, so the full `Result<T, E>` is what the surface reads.
+    /// `value_reading`, so the full `Result<T, E>` is what the surface reads.
     fn return_plan(&self, bound: &Bound, root: &JFrag) -> crate::jni::fn_plan::ValueOutputPlan {
         let declared = self
             .declared_return

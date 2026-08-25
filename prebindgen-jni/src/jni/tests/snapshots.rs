@@ -85,9 +85,12 @@ fn snapshot_rust_side() {
     // Source-module-qualified calls into the flat crate.
     assert!(rc.contains("myflat::z_thing_new"), "{rust}");
     assert!(rc.contains("myflat::z_thing_name"), "{rust}");
-    // Opaque handle round-trips as a boxed pointer of the source type.
+    // Opaque handle round-trips as a boxed pointer of the source type. The
+    // output half is demand-driven: `Result<ZThing, Error>` must reach its
+    // retained success plan for `Box::into_raw` to be present at all.
     assert!(rc.contains("myflat::ZThing"), "{rust}");
     assert!(rc.contains("Box::from_raw"), "{rust}");
+    assert!(rc.contains("Box::into_raw"), "{rust}");
     // Handle-input converters reject null AND tag-bit-set (closed) pointers
     // before any dereference — the #34 guard; bit 0 is the Kotlin closed tag.
     assert!(rc.contains("if*v==0||(*v&1)==1"), "{rust}");

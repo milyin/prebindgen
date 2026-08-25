@@ -2,7 +2,7 @@
 
 use prebindgen_registry::{
     chain::{self as shared, Chain as _},
-    flat::TypeRef,
+    flat::{TypeKey, TypeRef},
     recipe::Mode,
     write::RustFunction,
     Emit,
@@ -20,6 +20,7 @@ enum JBody {
     Marker(syn::Ident),
     ValueCodec(Box<JValueCodecPlan>),
     HandleCodec(Box<JHandleCodecPlan>),
+    Result(Box<JResultPlan>),
     BorrowedOptionalHandle(Box<JBorrowedOptionalHandlePlan>),
     Product(Box<JProductPlan>),
     Choice(Box<JChoicePlan>),
@@ -43,6 +44,10 @@ impl JFunction {
 
     pub(crate) fn handle_codec(plan: JHandleCodecPlan) -> Self {
         Self(JBody::HandleCodec(Box::new(plan)))
+    }
+
+    pub(crate) fn result(plan: JResultPlan) -> Self {
+        Self(JBody::Result(Box::new(plan)))
     }
 
     pub(crate) fn value_codec(plan: JValueCodecPlan) -> Self {
@@ -89,6 +94,11 @@ impl JFunction {
     }
 
     #[cfg(test)]
+    pub(crate) fn is_result(&self) -> bool {
+        matches!(self.0, JBody::Result(_))
+    }
+
+    #[cfg(test)]
     pub(crate) fn is_borrowed_optional_handle(&self) -> bool {
         matches!(self.0, JBody::BorrowedOptionalHandle(_))
     }
@@ -110,6 +120,10 @@ impl JFunction {
             JBody::Complete(_) => {}
             JBody::Marker(_) | JBody::ValueCodec(_) => {}
             JBody::HandleCodec(plan) => plan.reachable.set(true),
+            JBody::Result(plan) => {
+                plan.reachable.set(true);
+                plan.success.mark_reachable();
+            }
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.set(true),
             JBody::Product(plan) => {
                 plan.reachable.set(true);
@@ -151,6 +165,7 @@ impl RustFunction for JFunction {
             JBody::Marker(ident) => ident,
             JBody::ValueCodec(plan) => &plan.ident,
             JBody::HandleCodec(plan) => &plan.ident,
+            JBody::Result(plan) => &plan.ident,
             JBody::BorrowedOptionalHandle(plan) => &plan.ident,
             JBody::Product(plan) => &plan.ident,
             JBody::Choice(plan) => &plan.ident,
@@ -169,6 +184,7 @@ impl RustFunction for JFunction {
             // planned too, every compiled value codec remains an emitted leaf.
             JBody::ValueCodec(_) => true,
             JBody::HandleCodec(plan) => plan.reachable.get(),
+            JBody::Result(plan) => plan.reachable.get(),
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.get(),
             JBody::Product(plan) => plan.reachable.get(),
             JBody::Optional(plan) => plan.reachable.get(),
@@ -186,6 +202,7 @@ impl RustFunction for JFunction {
             JBody::Marker(ident) => planned_marker(ident),
             JBody::ValueCodec(plan) => plan.render(emit),
             JBody::HandleCodec(plan) => plan.render(emit),
+            JBody::Result(plan) => plan.render(emit),
             JBody::BorrowedOptionalHandle(plan) => plan.render(emit),
             JBody::Product(plan) => plan.render(emit),
             JBody::Optional(plan) => plan.render(emit),
@@ -193,6 +210,41 @@ impl RustFunction for JFunction {
             JBody::Sequence(plan) => plan.render(emit),
             JBody::Invoke(plan) => plan.render(emit),
         }
+    }
+}
+
+/// One fallible-output peel retained as model readings until final emission.
+///
+/// The error never crosses as a value: returning it from this stage makes the
+/// already-frozen site pipeline route it through the function's domain-error
+/// channel. The success value then continues through `success`'s converter.
+#[derive(Clone)]
+pub(crate) struct JResultPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
+    pub(crate) success: JFunction,
+    pub(crate) source: TypeRef,
+    pub(crate) ok: TypeRef,
+    pub(crate) err: TypeRef,
+}
+
+impl JResultPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = emit.spell_ty(&self.source);
+        let ok = emit.spell_ty(&self.ok);
+        let err = emit.spell_ty(&self.err);
+        let ok = annotate_jobject_with_lifetime(&ok, "a");
+        let allow = crate::jni::trait_impl::generated_converter_attr();
+        syn::parse_quote!(
+            #allow
+            pub(crate) unsafe fn #name<'a>(
+                env: &mut jni::JNIEnv<'a>,
+                v: #source,
+            ) -> ::core::result::Result<#ok, #err> {
+                v
+            }
+        )
     }
 }
 
@@ -1366,6 +1418,22 @@ pub(crate) fn planned_name(
 ) -> syn::Ident {
     let key = source.key();
     planned_name_for_key(direction, key.as_str(), intermediate)
+}
+
+/// Stable private name for an adapter operation identified by a model key.
+///
+/// Hashing treats `TypeKey` as opaque table identity. In particular, this does
+/// not obtain its normalized-source label, parse it, or branch on its text;
+/// #558 tracks removing that textual capability from `TypeKey` itself.
+pub(crate) fn model_operation_name(operation: &str, key: &TypeKey) -> syn::Ident {
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
+    let mut hash = DefaultHasher::new();
+    operation.hash(&mut hash);
+    key.hash(&mut hash);
+    format_ident!("{operation}_{:08x}", hash.finish() & 0xffff_ffff)
 }
 
 /// Stable private name for a plan identified by an adapter semantic rather

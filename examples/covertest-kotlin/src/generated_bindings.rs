@@ -10541,63 +10541,6 @@ pub(crate) unsafe fn RepliesConfig_to_JObject_eb8e9079<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn Report_to_jlong_eaed4ba1<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Report,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Result_Storage_StorageError_to_Storage_7ccce404<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Result<perftest_flat::Storage, perftest_flat::StorageError>,
-) -> ::core::result::Result<perftest_flat::Storage, perftest_flat::StorageError> {
-    v
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Result_Summary_String_to_Summary_dfdf7f9e<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Result<perftest_flat::Summary, String>,
-) -> ::core::result::Result<perftest_flat::Summary, String> {
-    v
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn SelectorCode_to_jlong_e4059701<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::SelectorCode,
@@ -10620,25 +10563,6 @@ pub(crate) unsafe fn SelectorCode_to_jlong_e4059701<'a>(
 pub(crate) unsafe fn SpanHolder_to_jlong_7ffe9314<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::SpanHolder,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Span_to_jlong_6d59d587<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Span,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
@@ -10985,25 +10909,6 @@ pub(crate) unsafe fn Unsigned_to_tuple5_371b0950<'a>(
 pub(crate) unsafe fn VaultHolder_to_jlong_1de3f656<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::VaultHolder,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Vault_to_jlong_4a33ea23<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Vault,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
@@ -12557,6 +12462,25 @@ pub(crate) unsafe fn owned_text_to_JString_220e25c6<'a>(
                 >>::from(format!("encode_str: {}", e))
             })?
     })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn result_peel_b82a36e0<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Result<perftest_flat::Summary, String>,
+) -> ::core::result::Result<perftest_flat::Summary, String> {
+    v
 }
 #[allow(
     non_snake_case,
@@ -22825,7 +22749,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<
     let __out = crate::summary_from_mean(count, mean);
     match (|| -> ::core::result::Result<_, __JniErr> {
         {
-            let __chain_s0 = Result_Summary_String_to_Summary_dfdf7f9e(&mut env, __out)
+            let __chain_s0 = result_peel_b82a36e0(&mut env, __out)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;

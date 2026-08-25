@@ -343,10 +343,10 @@ pub(crate) struct ValueOutputPlan {
     pub pipeline: crate::jni::chain::JPipeline,
     /// Kotlin surface classification over the **declared** return
     /// (`convert_out_ty` for a convert, else `f.sig.output` — not
-    /// `target_ty`: the Kotlin error peel rides `value_rust_type`).
+    /// `target_ty`: the Kotlin error peel rides `value_reading`).
     pub surface: ReturnSurface,
     /// `enum_class` / `Option<enum>` probes over the canonical
-    /// (`value_rust_type`-peeled) declared return. The extern decl uses them
+    /// (`value_reading`-peeled) declared return. The extern decl uses them
     /// raw; the wrapper surface masks them with `!is_convert` (the historical
     /// `unfold.is_none()` gate).
     pub is_enum: bool,
@@ -1125,7 +1125,7 @@ fn build_output(
     //
     // The Kotlin surface classifies the DECLARED return: `convert_out_ty` for a
     // convert, else the signature's own output. Not `target_ty` — the Kotlin
-    // error peel rides the conversion's `value_rust_type`, so the full
+    // error peel rides the conversion's `value_reading`, so the full
     // `Result<T, E>` is what the surface reads, and that is the one fact the
     // crossing cannot carry.
     let plan = return_site(
@@ -1168,7 +1168,7 @@ pub(crate) struct EnumSurface {
 
 impl ReturnSurface {
     /// Classify a declared return type. Returns the surface plus the
-    /// canonical (`value_rust_type`-peeled) type the enum probes run over —
+    /// canonical (`value_reading`-peeled) type the enum probes run over —
     /// the single peel that subsumed both `classify_return`'s inline peel
     /// and the former `canonical_return_ty`.
     pub fn classify(
@@ -1179,19 +1179,13 @@ impl ReturnSurface {
         // reading into a `-> #ty` fragment for this to take apart again, and
         // the `ReturnType::Default` arm was a unit the element already states.
         let outer_meta = ext.out_frag(ret).map(|e| e.metadata.clone());
-        // Unit returns (incl. `ZResult<()>`, whose inner identity rides
-        // `value_rust_type`) declare no Kotlin return type. The peeled type is
-        // the one the converter's metadata stored — a canonical `syn::Type`,
-        // so nothing is rebuilt here. Falling back to the declared return is
-        // not a miss: `value_rust_type` is `None` exactly for plain values and
-        // arity-0 converters, which have no inner identity to peel to.
-        //
-        // `value_rust_type` is a canonical `syn::Type` the ADAPTER composed,
-        // which is why `is_unit` still asks it of a node; with no metadata the
-        // question is the reading's own kind.
-        let stored = outer_meta.as_ref().and_then(|m| m.value_rust_type.as_ref());
+        // Unit returns (incl. `Result<()>`, whose inner identity rides
+        // `value_reading`) declare no Kotlin return type. Falling back to the
+        // declared return is not a miss: `None` means the crossing itself is
+        // the surfaced value.
+        let stored = outer_meta.as_ref().and_then(|m| m.value_reading.as_ref());
         let is_unit = match stored {
-            Some(t) => crate::util::is_unit(t),
+            Some(t) => matches!(t.kind(), prebindgen_registry::flat::TypeKind::Unit),
             None => matches!(ret.kind(), prebindgen_registry::flat::TypeKind::Unit),
         };
         // The two enum questions, answered where BOTH branches are in view.
@@ -1199,18 +1193,20 @@ impl ReturnSurface {
         // the reading — and then `option_inner_type` peeled that spelling to
         // ask about its inner, which is the layer-off-a-spelling mistake #273
         // is named for: the model erases wrappers the spelling still shows.
-        // A stored `value_rust_type` is an adapter-composed node and keeps its
-        // node-shaped answer; with no metadata the reading answers directly.
-        let enum_probe = |t: &syn::Type| ext.is_kotlin_enum(t);
+        // A stored `value_reading` is a classified reading. No Rust node is
+        // reconstructed or peeled here.
         let (is_enum, is_option_enum) = match stored {
             Some(t) => {
-                let mut inner = t.clone();
+                let mut inner = t;
                 let mut optional = false;
-                while let Some(next) = prebindgen_registry::types_util::option_inner_type(&inner) {
+                while let Some(next) = inner.optional_inner() {
                     optional = true;
                     inner = next;
                 }
-                (enum_probe(t), optional && enum_probe(&inner))
+                (
+                    ext.is_kotlin_enum_key(&t.key()),
+                    optional && ext.is_kotlin_enum_key(&inner.key()),
+                )
             }
             // `is_kotlin_enum_reading` is NOT the peer here: it probes THROUGH
             // the layers, so `Option<Level>` answers true for the first
