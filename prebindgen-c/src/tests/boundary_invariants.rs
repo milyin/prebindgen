@@ -511,6 +511,131 @@ fn type_artifacts_retain_source_types_and_fragment_dependencies() {
 }
 
 #[test]
+fn tagged_union_artifacts_retain_cleanup_types_and_dependencies() {
+    use prebindgen_registry::generation::{ArtifactId, ArtifactInput};
+
+    let loc = SourceLocation::default();
+    let items = declare_referenced([
+        (
+            syn::parse_quote!(
+                pub struct Handle;
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub enum Shape {
+                    Empty,
+                    Filled(Box<Handle>),
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub struct Drawing {
+                    pub shape: Shape,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub enum Note {
+                    Silent,
+                    Sketched(Drawing),
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn make_shape() -> Shape {
+                    unimplemented!()
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn make_note() -> Note {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]);
+    let registry = crate::test_util::reg_from_items(items).expect("index items");
+    let binding = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(source))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .tagged_union(syn::parse_quote!(Shape))
+        .data_struct(syn::parse_quote!(Drawing))
+        .tagged_union(syn::parse_quote!(Note))
+        .function(syn::parse_quote!(make_shape))
+        .function(syn::parse_quote!(make_note))
+        .build_with(registry)
+        .expect("resolve");
+    let generation = binding.gen.generation.as_ref().expect("frozen plan");
+    let tagged: Vec<_> = generation
+        .artifacts()
+        .filter(|artifact| artifact.id().kind() == "c-tagged-union")
+        .collect();
+    assert_eq!(tagged.len(), 2);
+    assert_eq!(
+        tagged
+            .iter()
+            .map(|artifact| artifact.id().name())
+            .collect::<Vec<_>>(),
+        ["Shape", "Note"],
+        "the registry orders the inner union before its dependent"
+    );
+    for artifact in &tagged {
+        assert!(
+            !artifact.inputs().is_empty(),
+            "{} must consume reached converter fragments",
+            artifact.id()
+        );
+        assert!(artifact
+            .inputs()
+            .iter()
+            .all(|input| matches!(input, ArtifactInput::Fragment(_))));
+    }
+
+    let shape = tagged
+        .iter()
+        .find(|artifact| artifact.id().name() == "Shape")
+        .expect("Shape artifact");
+    let crate::chain::CArtifact::TaggedUnion(shape_plan) = shape.payload() else {
+        panic!("Shape must be a tagged-union artifact");
+    };
+    assert!(matches!(
+        shape_plan.arms[1].fields[0].cleanup.as_ref(),
+        Some(crate::chain::PayloadCleanup::BoxedPointer { source })
+            if source.key().as_str() == "Handle"
+    ));
+
+    let note = tagged
+        .iter()
+        .find(|artifact| artifact.id().name() == "Note")
+        .expect("Note artifact");
+    let shape_id = ArtifactId::new("c-tagged-union", "Shape").expect("valid artifact id");
+    assert_eq!(note.prerequisites(), std::slice::from_ref(&shape_id));
+    let crate::chain::CArtifact::TaggedUnion(note_plan) = note.payload() else {
+        panic!("Note must be a tagged-union artifact");
+    };
+    assert!(matches!(
+        note_plan.arms[1].fields[0].cleanup.as_ref(),
+        Some(crate::chain::PayloadCleanup::Fields(fields))
+            if matches!(
+                fields.as_slice(),
+                [(field, crate::chain::PayloadCleanup::NestedUnion { artifact, .. })]
+                    if field == "shape" && artifact == &shape_id
+            )
+    ));
+}
+
+#[test]
 fn legacy_c_shape_and_callback_planners_are_deleted() {
     let sources = [
         include_str!("../lib.rs"),
@@ -538,6 +663,10 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "fn prereq_opaque_handles",
         "fn prereq_value_opaque",
         "fn value_opaque_writeback(",
+        "fn prereq_tagged_unions",
+        "fn payload_free_stmt",
+        "fn tag_guard",
+        "fn src_ty_of",
     ] {
         assert!(
             !sources.contains(deleted),

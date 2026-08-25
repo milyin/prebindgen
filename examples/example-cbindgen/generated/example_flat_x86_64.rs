@@ -92,6 +92,41 @@ pub enum operation_t {
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
+pub enum shape_t {
+    Empty,
+    Circle(f64),
+    Rect { width: f64, height: f64 },
+    Labeled(*mut ::core::ffi::c_char, ::core::mem::MaybeUninit<operation_t>),
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
+pub unsafe extern "C" fn shape_drop(this_: *mut ::core::mem::MaybeUninit<shape_t>) {
+    if this_.is_null() {
+        return;
+    }
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < shape_t > () >= ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`shape_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+        );
+    };
+    let __tag: ::core::ffi::c_int = ::core::ptr::read(
+        (*this_).as_ptr() as *const ::core::ffi::c_int,
+    );
+    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
+        return;
+    }
+    match (*this_).assume_init_mut() {
+        shape_t::Labeled(__f0, __f1) => {
+            free(*__f0 as *mut ::core::ffi::c_void);
+            *__f0 = ::core::ptr::null_mut();
+        }
+        _ => {}
+    }
+}
+#[repr(C)]
+#[allow(non_camel_case_types)]
 pub enum note_t {
     Silent,
     Titled(caption_t),
@@ -125,41 +160,6 @@ pub unsafe extern "C" fn note_drop(this_: *mut ::core::mem::MaybeUninit<note_t>)
         }
         note_t::Sketched(__f0) => {
             shape_drop(&mut (*__f0).shape);
-        }
-        _ => {}
-    }
-}
-#[repr(C)]
-#[allow(non_camel_case_types)]
-pub enum shape_t {
-    Empty,
-    Circle(f64),
-    Rect { width: f64, height: f64 },
-    Labeled(*mut ::core::ffi::c_char, ::core::mem::MaybeUninit<operation_t>),
-}
-#[no_mangle]
-#[allow(non_snake_case, unused_variables)]
-pub unsafe extern "C" fn shape_drop(this_: *mut ::core::mem::MaybeUninit<shape_t>) {
-    if this_.is_null() {
-        return;
-    }
-    const _: () = {
-        assert!(
-            ::core::mem::size_of:: < shape_t > () >= ::core::mem::size_of:: <
-            ::core::ffi::c_int > (),
-            "`shape_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
-        );
-    };
-    let __tag: ::core::ffi::c_int = ::core::ptr::read(
-        (*this_).as_ptr() as *const ::core::ffi::c_int,
-    );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
-        return;
-    }
-    match (*this_).assume_init_mut() {
-        shape_t::Labeled(__f0, __f1) => {
-            free(*__f0 as *mut ::core::ffi::c_void);
-            *__f0 = ::core::ptr::null_mut();
         }
         _ => {}
     }

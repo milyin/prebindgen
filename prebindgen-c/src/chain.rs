@@ -9,7 +9,7 @@
 use prebindgen_registry::{
     chain::{self, Chain as _},
     flat::{Alternative, TypeRef},
-    generation::{GenerationPlan, SiteId},
+    generation::{ArtifactId, GenerationPlan, SiteId},
     recipe::Mode,
     write::RustFunction,
     Emit,
@@ -1205,6 +1205,7 @@ impl CallbackArtifact {
 pub(crate) enum CArtifact {
     Callback(CallbackArtifact),
     OpaqueHandle(OpaqueHandleArtifact),
+    TaggedUnion(TaggedUnionArtifact),
     ValueOpaque(ValueOpaqueArtifact),
 }
 
@@ -1213,6 +1214,7 @@ impl CArtifact {
         match self {
             Self::Callback(callback) => callback.render(emit),
             Self::OpaqueHandle(handle) => handle.render(emit),
+            Self::TaggedUnion(tagged_union) => tagged_union.render(emit),
             Self::ValueOpaque(value) => value.render(emit),
         }
     }
@@ -1392,6 +1394,178 @@ impl ValueOpaqueArtifact {
             ));
         }
         items
+    }
+}
+
+/// One recursively composed cleanup operation for an owning union payload.
+pub(crate) enum PayloadCleanup {
+    AllocatedString,
+    BoxedPointer {
+        source: Box<TypeRef>,
+    },
+    NestedUnion {
+        artifact: ArtifactId,
+        drop_ident: syn::Ident,
+    },
+    Fields(Vec<(syn::Ident, PayloadCleanup)>),
+}
+
+impl PayloadCleanup {
+    pub(crate) fn prerequisites(&self, out: &mut Vec<ArtifactId>) {
+        match self {
+            Self::NestedUnion { artifact, .. } => out.push(artifact.clone()),
+            Self::Fields(fields) => {
+                for (_, cleanup) in fields {
+                    cleanup.prerequisites(out);
+                }
+            }
+            Self::AllocatedString | Self::BoxedPointer { .. } => {}
+        }
+    }
+
+    fn render(
+        &self,
+        emit: &Emit,
+        source_module: Option<&syn::Path>,
+        slot: TokenStream,
+    ) -> TokenStream {
+        match self {
+            Self::AllocatedString => quote!(
+                free(#slot as *mut ::core::ffi::c_void);
+                #slot = ::core::ptr::null_mut();
+            ),
+            Self::BoxedPointer { source } => {
+                let source = qualify_source_type(&emit.spell_ty(source), source_module);
+                quote!(
+                    if !(#slot).is_null() {
+                        drop(::std::boxed::Box::from_raw(#slot as *mut #source));
+                        #slot = ::core::ptr::null_mut();
+                    }
+                )
+            }
+            Self::NestedUnion { drop_ident, .. } => quote!(#drop_ident(&mut #slot);),
+            Self::Fields(fields) => {
+                let cleanups = fields.iter().map(|(field, cleanup)| {
+                    cleanup.render(emit, source_module, quote!((#slot).#field))
+                });
+                quote!(#(#cleanups)*)
+            }
+        }
+    }
+}
+
+/// One payload field's target wire and optional ownership cleanup.
+pub(crate) struct TaggedUnionFieldArtifact {
+    pub(crate) wire: syn::Type,
+    pub(crate) cleanup: Option<PayloadCleanup>,
+}
+
+/// One alternative of a frozen C tagged-union declaration.
+pub(crate) struct TaggedUnionArmArtifact {
+    pub(crate) alternative: Alternative,
+    pub(crate) fields: Vec<TaggedUnionFieldArtifact>,
+}
+
+/// A tagged-union mirror and its optional typed destructor.
+pub(crate) struct TaggedUnionArtifact {
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) c_name: syn::Ident,
+    pub(crate) arms: Vec<TaggedUnionArmArtifact>,
+    pub(crate) drop_ident: Option<syn::Ident>,
+}
+
+impl TaggedUnionArtifact {
+    fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+        let c_name = &self.c_name;
+        let variants = self.arms.iter().map(|arm| {
+            let alternative = &arm.alternative;
+            let variant = &alternative.name;
+            let fields: Vec<_> = alternative
+                .fields
+                .iter()
+                .zip(&arm.fields)
+                .map(|(field, planned)| field.bind(&planned.wire))
+                .collect();
+            emit.shape_alternative(alternative, quote!(#variant), &fields)
+        });
+        let declaration = syn::parse_quote!(
+            #[repr(C)]
+            #[allow(non_camel_case_types)]
+            pub enum #c_name {
+                #(#variants),*
+            }
+        );
+        let Some(drop_ident) = &self.drop_ident else {
+            return vec![declaration];
+        };
+
+        let drop_arms: Vec<_> = self
+            .arms
+            .iter()
+            .filter(|arm| arm.fields.iter().any(|field| field.cleanup.is_some()))
+            .map(|arm| {
+                let alternative = &arm.alternative;
+                let variant = &alternative.name;
+                let bindings: Vec<_> = (0..arm.fields.len())
+                    .map(|index| format_ident!("__f{}", index))
+                    .collect();
+                let parts: Vec<_> = alternative
+                    .fields
+                    .iter()
+                    .zip(&bindings)
+                    .map(|(field, binding)| field.bind(binding))
+                    .collect();
+                let pattern =
+                    emit.shape_alternative(alternative, quote!(#c_name::#variant), &parts);
+                let cleanups = arm
+                    .fields
+                    .iter()
+                    .zip(&bindings)
+                    .filter_map(|(field, binding)| {
+                        field.cleanup.as_ref().map(|cleanup| {
+                            cleanup.render(emit, self.source_module.as_ref(), quote!(*#binding))
+                        })
+                    });
+                quote!(#pattern => { #(#cleanups)* })
+            })
+            .collect();
+        debug_assert!(
+            !drop_arms.is_empty(),
+            "a planned union drop has an owning arm"
+        );
+        let alternatives = self.arms.len() as i64;
+        let bounds_msg = format!(
+            "`{c_name}`: a #[repr(C)] enum with payload variants must be at least as large as \
+             its C `int` discriminant"
+        );
+        let drop = syn::parse_quote!(
+            #[no_mangle]
+            #[allow(non_snake_case, unused_variables)]
+            pub unsafe extern "C" fn #drop_ident(
+                this_: *mut ::core::mem::MaybeUninit<#c_name>,
+            ) {
+                if this_.is_null() {
+                    return;
+                }
+                const _: () = {
+                    assert!(
+                        ::core::mem::size_of::<#c_name>()
+                            >= ::core::mem::size_of::<::core::ffi::c_int>(),
+                        #bounds_msg
+                    );
+                };
+                let __tag: ::core::ffi::c_int =
+                    ::core::ptr::read((*this_).as_ptr() as *const ::core::ffi::c_int);
+                if !((__tag as i64) >= 0 && (__tag as i64) < #alternatives) {
+                    return;
+                }
+                match (*this_).assume_init_mut() {
+                    #(#drop_arms)*
+                    _ => {}
+                }
+            }
+        );
+        vec![declaration, drop]
     }
 }
 

@@ -276,8 +276,8 @@ impl CbindgenBuilder {
     ///
     /// A nested `data_struct` payload crosses BY VALUE, so the wire itself is
     /// not a pointer, but its mirror's own fields may be: the union's drop
-    /// then has to reach through and release each of them (see
-    /// [`CbindgenBuilder::payload_free_stmt`]). Without this a `String` or handle
+    /// then has to reach through and release each of them through the recursive
+    /// payload-cleanup artifact plan. Without this a `String` or handle
     /// inside a struct payload would leak, silently, for exactly the shape
     /// zenoh-flat#30 needs.
     pub(super) fn payload_wire_owns(
@@ -323,8 +323,8 @@ impl CbindgenBuilder {
     /// Whether a declared `tagged_union` gets a typed `<base>_drop` — i.e. it is
     /// produced at all, and some arm's payload owns memory.
     ///
-    /// This is the emission condition of that drop
-    /// ([`CbindgenBuilder::prereq_tagged_unions`]) *and* the test for whether a
+    /// This is the emission condition of the tagged-union artifact's drop *and*
+    /// the test for whether a
     /// containing struct has to call it, so a union nested inside a payload
     /// cannot be freed through a symbol that was never emitted. `false` for
     /// anything that is not a declared tagged union.
