@@ -989,10 +989,9 @@ pub struct Declarations {
     pub(crate) packages: BTreeMap<String, PackageConfig>,
 
     /// Canonical single-value conversions ([`ConvertDecl`], accepted by
-    /// [`JniGenBuilder::convert`]), stored raw — the rank-0 converter bodies derive
-    /// from the conversion fns' registry signatures at lookup time
-    /// ([`JniGenBuilder::convert_input_body`] / [`JniGenBuilder::convert_output_body`]),
-    /// keeping declarations order-independent and origin-qualified.
+    /// [`JniGenBuilder::convert`]), stored raw. Recipe compilation freezes
+    /// function/trait call policy and Flat representation/error readings;
+    /// final rendering spells those readings and qualifies their origins.
     pub(crate) convert_decls: Vec<ConvertDecl>,
     /// Every conversion this binding compiled.
     ///
