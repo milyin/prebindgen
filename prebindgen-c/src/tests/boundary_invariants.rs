@@ -429,9 +429,85 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
 fn callback_renderer_accepts_only_the_frozen_plan() {
     let renderer: fn(
         &prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>,
+        &str,
         &prebindgen_registry::Emit,
-    ) -> Vec<syn::Item> = crate::chain::render_callback_artifacts;
+    ) -> Vec<syn::Item> = crate::chain::render_artifacts;
     let _ = renderer;
+}
+
+#[test]
+fn type_artifacts_retain_source_types_and_fragment_dependencies() {
+    use prebindgen_registry::generation::ArtifactInput;
+
+    let loc = SourceLocation::default();
+    let items = declare_referenced([
+        (
+            syn::parse_quote!(
+                pub struct Handle;
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub struct Payload {
+                    pub bytes: Vec<u8>,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn make_handle() -> Handle {
+                    unimplemented!()
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn make_payload() -> Payload {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]);
+    let registry = crate::test_util::reg_from_items(items).expect("index items");
+    let binding = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(source))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_owned_struct(syn::parse_quote!(Payload), syn::parse_quote!(PayloadOpaque))
+        .function(syn::parse_quote!(make_handle))
+        .function(syn::parse_quote!(make_payload))
+        .build_with(registry)
+        .expect("resolve");
+    let generation = binding.gen.generation.as_ref().expect("frozen plan");
+
+    let handle = generation
+        .artifacts()
+        .find(|artifact| artifact.id().kind() == "c-opaque-handle")
+        .expect("opaque handle artifact");
+    assert!(handle
+        .inputs()
+        .iter()
+        .all(|input| matches!(input, ArtifactInput::Fragment(_))));
+    assert!(matches!(
+        handle.payload(),
+        crate::chain::CArtifact::OpaqueHandle(plan) if plan.source.key().as_str() == "Handle"
+    ));
+
+    let value = generation
+        .artifacts()
+        .find(|artifact| artifact.id().kind() == "c-value-opaque")
+        .expect("value opaque artifact");
+    assert!(value
+        .inputs()
+        .iter()
+        .all(|input| matches!(input, ArtifactInput::Fragment(_))));
+    assert!(matches!(
+        value.payload(),
+        crate::chain::CArtifact::ValueOpaque(plan) if plan.source.key().as_str() == "Payload"
+    ));
 }
 
 #[test]
@@ -459,6 +535,9 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "fn from_converter",
         "fn validity_of",
         "fn produces_borrow",
+        "fn prereq_opaque_handles",
+        "fn prereq_value_opaque",
+        "fn value_opaque_writeback(",
     ] {
         assert!(
             !sources.contains(deleted),
