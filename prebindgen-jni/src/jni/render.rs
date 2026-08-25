@@ -523,59 +523,11 @@ pub(crate) fn render_extern_decl(
     let jni_call = &fplan.jni_method;
     let mut params: Vec<KtParam> = Vec::new();
     for leaf in fplan.leaves() {
-        let name = leaf.kt_name.clone();
-        match &leaf.kind {
-            // Flattenable data_class param → its leaf wire params.
-            InputKind::FlattenStruct(plan) => {
-                for l in &plan.leaves {
-                    params.push(KtParam::new(
-                        l.kt_name.clone(),
-                        KtType::cls(l.kt_wire_ty().to_string()),
-                    ));
-                }
-            }
-            // Bare `Option<primitive>` / `Option<enum>` param → a `(present:
-            // Boolean, value: <Prim>)` pair (no boxed `java.lang.*` wire).
-            InputKind::OptionalPair(sp) => {
-                params.push(KtParam::new(sp.present_kt.clone(), KtType::boolean()));
-                params.push(KtParam::new(
-                    sp.value_kt.clone(),
-                    KtType::cls(sp.value_kt_type.clone()),
-                ));
-            }
-            // Slice/Vec of a flattenable data_class → a single `jlong`
-            // Vec-handle param (the Rust extern decodes the boxed `Vec<T>`).
-            // Elements cross through the synthetic `…VecPush` extern.
-            InputKind::VecBuild { .. } => {
-                params.push(KtParam::new(name, KtType::long()));
-            }
-            // An opaque-**handle** projection (direct `&T`/`T`, `Option<&T>`,
-            // or by-value `Option<T>`) crosses the JNI wire as a primitive
-            // `jlong` with `0` encoding `None` — a non-null `Long`; the `?`
-            // lives only on the typed-wrapper surface.
-            InputKind::Handle { .. } => {
-                params.push(KtParam::new(name, KtType::long()));
-            }
-            InputKind::Callback { .. } | InputKind::Unsigned64 { .. } | InputKind::Plain => {
-                let ty = if leaf.as_enum_value {
-                    // Enum (incl. `Option<enum>`) crosses as jint → Kotlin
-                    // `Int`; the wrapper passes `.value` / `?.value`. The Rust
-                    // converter consumes that discriminant directly when a
-                    // niche exists, and boxes only as a fallback. The extern
-                    // never declares the enum object.
-                    KtType::int()
-                } else {
-                    leaf.kt_meta.clone()?
-                };
-                let niche_primitive = leaf.enum_niche.is_some()
-                    || matches!(&leaf.kind, InputKind::Unsigned64 { niche: Some(_) });
-                let ty = if leaf.optional && !niche_primitive {
-                    ty.nullable()
-                } else {
-                    ty
-                };
-                params.push(KtParam::new(name, ty));
-            }
+        for native in &leaf.native {
+            params.push(KtParam::new(
+                native.kt_name.clone(),
+                native.kt_wire.clone()?,
+            ));
         }
     }
     // Output (data) expansion: a **callback** delivery appends the lambda(s)
@@ -1216,9 +1168,9 @@ struct DomainSink {
 
 /// Type every effective input of the lowered [`JniFunctionPlan`] into a
 /// [`Param`] (Kotlin name/type + call-site [`ParamMode`]). The crossing-form
-/// classification comes from the plan — the same decision the Rust extern and
-/// `external fun` renderers consume — this site only maps each [`InputKind`]
-/// to its Kotlin surface. Returns the params plus the index of the
+/// operation comes from the plan; this site only renders each
+/// [`KotlinParamOp`] into its Kotlin surface and call form. Returns the params
+/// plus the index of the
 /// instance-method receiver (the first param whose peeled type matches
 /// `receiver_key`), which is bound to `this` and dropped from the signature.
 fn classify_params(
@@ -1250,7 +1202,7 @@ fn classify_params(
         // The extern receives it erased (`Any`) and the native trampoline
         // calls the typed `run`, so no call-site adapter exists.
         // Lambda-literal call sites SAM-convert unchanged.
-        if let InputKind::Callback { iface, .. } = &leaf.kind {
+        if let KotlinParamOp::Callback { iface, .. } = &leaf.kotlin {
             let spec = iface.as_deref()?;
             let kt_type = spec.kt_ref(vec![]);
             // The extern receives the RAW twin: the generated `asRaw()`
@@ -1280,8 +1232,8 @@ fn classify_params(
         let kt_type_raw = leaf.kt_public.clone()?;
 
         // Map the plan's crossing form to the Kotlin call-site mode.
-        let mode = match &leaf.kind {
-            InputKind::VecBuild { helpers, .. } => {
+        let mode = match &leaf.kotlin {
+            KotlinParamOp::VecBuild { helpers, .. } => {
                 // Slice/Vec of a flattenable data_class: build the Rust-side
                 // Vec by pushing each element's leaves, pass the handle (see
                 // the body direction + `build_vec_build_helper_items`). The
@@ -1298,7 +1250,7 @@ fn classify_params(
                     elem_accesses,
                 }
             }
-            InputKind::OptionalPair(sp) => {
+            KotlinParamOp::OptionalPair(sp) => {
                 // Bare `Option<primitive>` / `Option<enum>`: cross as a
                 // `(present, value)` pair (no boxed object). The high-level
                 // signature keeps `T?`; only the call-site args split in two.
@@ -1313,7 +1265,7 @@ fn classify_params(
                     value_expr,
                 }
             }
-            InputKind::FlattenStruct(plan) => {
+            KotlinParamOp::FlattenStruct(plan) => {
                 let handles = plan
                     .leaves
                     .iter()
@@ -1352,17 +1304,17 @@ fn classify_params(
                     handles,
                 }
             }
-            InputKind::Handle { mode, .. } => match mode {
+            KotlinParamOp::Handle { mode, .. } => match mode {
                 HandleMode::Borrow => ParamMode::Borrow,
                 HandleMode::Consume => ParamMode::Consume,
                 HandleMode::BorrowNullable => ParamMode::BorrowNullable,
                 HandleMode::ConsumeNullable => ParamMode::ConsumeNullable,
             },
-            InputKind::Unsigned64 { niche } => ParamMode::Unsigned64 {
+            KotlinParamOp::Unsigned64 { niche } => ParamMode::Unsigned64 {
                 niche: niche.clone(),
             },
-            InputKind::Plain => ParamMode::PassThrough,
-            InputKind::Callback { .. } => unreachable!("callback params handled above"),
+            KotlinParamOp::Plain => ParamMode::PassThrough,
+            KotlinParamOp::Callback { .. } => unreachable!("callback params handled above"),
         };
 
         // Full-FQN surface type — the render-time `ImportSet` shortens it and

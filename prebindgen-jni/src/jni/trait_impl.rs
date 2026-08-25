@@ -841,7 +841,7 @@ pub(crate) fn build_through_erased_wrappers(
 ///
 /// The list is the only part of the reading a rebuild uses, and it is two
 /// pointers instead of a `TypeRef`'s ~264 bytes. That matters because these
-/// plans live in `InputKind`, whose size every variant pays.
+/// plans live in `KotlinParamOp`, whose size every variant pays.
 pub(crate) fn build_through_wrappers(
     names: &[&'static str],
     value: TokenStream,

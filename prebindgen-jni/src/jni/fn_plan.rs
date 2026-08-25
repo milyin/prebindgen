@@ -1,14 +1,13 @@
 //! Input side of the per-function lowered binding plan (issue #90).
 //!
-//! [`JniFunctionPlan`] classifies every input parameter of a bound function
-//! ONCE, deterministically over `(ext, registry, f)`. The three coordinated
-//! emission sites — the Rust `extern "C"` wrapper (`emit_input_param`), the
-//! Kotlin wrapper classifier (`classify_params`), and the `JNINative`
-//! `external fun` declaration (`render_extern_decl`) — all consume the same
-//! [`InputKind`] decision instead of re-running their own copies of the
-//! probe cascade, so the wire arity, types, and call forms agree by
-//! construction. The pattern generalizes [`build_struct_plan`]'s field-level
-//! plan to function granularity; the output side follows in a later stage.
+//! [`JniFunctionPlan`] lowers every input parameter of a bound function ONCE,
+//! deterministically over `(ext, registry, f)`. Each leaf freezes three
+//! independent answers: its exact ordered native ABI leaves, its Rust decode
+//! operation, and its Kotlin call/locking operation. The Rust `extern "C"`
+//! wrapper, Kotlin wrapper, `JNINative` declaration, and JVM-slot validator
+//! consume those answers without reconstructing them from a source-shape tag.
+//! The pattern generalizes [`build_struct_plan`]'s field-level plan to function
+//! granularity; the output side follows in a later stage.
 
 use kotlin_codegen::KtType;
 use prebindgen_registry::{flat::TypeRef, Conversions};
@@ -163,13 +162,9 @@ pub(crate) struct PlanLeaf {
     /// Typed-wrapper surface type: the projection's Kotlin FQN for
     /// handle/value projections, else the resolved entry's Kotlin name.
     /// `None` when the metadata lacks a name (the Kotlin wrapper renderer
-    /// skips the function — the escape-hatch path) and for [`InputKind::
-    /// Callback`] (typed from the interface spec at render time).
+    /// skips the function — the escape-hatch path) and for callback operations
+    /// (typed from the interface spec at render time).
     pub kt_public: Option<KtType>,
-    /// The resolved entry's raw `metadata.kotlin_name` — the type the
-    /// `JNINative` extern declares for pass-through leaves (for projections
-    /// this is the erased wire name, not the typed surface).
-    pub kt_meta: Option<KtType>,
     /// Whether the leaf crosses as optional, **per the model** — so a wrapped
     /// spelling (`Box<Option<T>>`) answers exactly as the bare one does. Each
     /// site applies its own nullability rule on top (handles stay non-null
@@ -190,13 +185,42 @@ pub(crate) struct PlanLeaf {
     /// supply several site wires instead, but ordinary parameters and
     /// constructor-expansion leaves call this pipeline directly.
     pub pipeline: crate::jni::chain::JPipeline,
-    pub kind: InputKind,
+    /// Exact ordered parameters shared by the Rust extern, `JNINative`
+    /// declaration, and JVM descriptor-slot validation.
+    pub native: Vec<NativeParam>,
+    /// How the Rust wrapper obtains this leaf's source value from `native`.
+    pub rust: RustParamOp,
+    /// How the typed Kotlin wrapper supplies `native`, including handle
+    /// locking/consumption policy.
+    pub kotlin: KotlinParamOp,
 }
 
-/// The classified crossing form. Branches are mutually exclusive by
-/// construction (each probe rejects the shapes the others accept), so the
-/// probe order is canonical, not load-bearing.
-pub(crate) enum InputKind {
+/// One exact JNI parameter in a leaf's ordered native ABI.
+pub(crate) struct NativeParam {
+    pub rust_ident: syn::Ident,
+    /// Final Rust spelling, including the JNI object lifetime when required.
+    pub rust_wire: TokenStream,
+    pub kt_name: String,
+    /// `None` preserves the unresolved-name escape hatch: Kotlin emission
+    /// skips the containing function.
+    pub kt_wire: Option<KtType>,
+    pub jvm_slots: usize,
+}
+
+/// Frozen Rust-side operation for one effective parameter.
+pub(crate) enum RustParamOp {
+    /// Invoke the registry-planned pipeline with this single native leaf.
+    Pipeline { wire_ident: syn::Ident },
+    /// Rebuild an allocation-free optional from its two native leaves.
+    OptionalPair(std::rc::Rc<crate::jni::compile::OptionalPairPlan>),
+    /// Rebuild a data class from its recursively flattened native leaves.
+    FlattenStruct(std::rc::Rc<FlatInputPlan>),
+}
+
+/// Frozen typed-Kotlin call and ownership operation for one effective
+/// parameter. These variants are target operations, not a source-type
+/// classification; native ABI and Rust decoding are stored independently.
+pub(crate) enum KotlinParamOp {
     /// `impl Fn(args)` callback: erased `Any` on the wire. `iface` is the
     /// typed `fun interface` spec (memoized under [`SpecKey::Callback`] —
     /// the same allocation the trampoline and the declaration emitter read);
@@ -211,9 +235,9 @@ pub(crate) enum InputKind {
     },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
-    OptionalPair(Box<crate::jni::compile::OptionalPairPlan>),
+    OptionalPair(std::rc::Rc<crate::jni::compile::OptionalPairPlan>),
     /// Flattenable data_class: the field leaves cross as separate wire params.
-    FlattenStruct(FlatInputPlan),
+    FlattenStruct(std::rc::Rc<FlatInputPlan>),
     /// Lockable opaque-handle projection (`jlong` wire). Ownership and
     /// nullability are Kotlin locking policy; Rust conversion is already
     /// frozen in the leaf pipeline.
@@ -662,28 +686,16 @@ impl JniFunctionPlan {
         })
     }
 
-    fn jvm_parameter_slots(&self, ext: &Declarations) -> usize {
+    fn jvm_parameter_slots(&self, _ext: &Declarations) -> usize {
         // `JNINative` is a Kotlin object, so its external methods are instance
         // methods and the JVM counts the implicit receiver as one unit.
         let mut slots = 1usize;
         for leaf in self.leaves() {
-            slots += match &leaf.kind {
-                InputKind::FlattenStruct(plan) => plan
-                    .leaves
-                    .iter()
-                    .map(|l| kotlin_jvm_slots(l.kt_wire_ty()))
-                    .sum(),
-                InputKind::OptionalPair(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
-                InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
-                InputKind::Callback { .. } => 1,
-                InputKind::Unsigned64 { .. } | InputKind::Plain => ext
-                    .in_frag(&leaf.reading)
-                    .and_then(|entry| JniPrim::from_wire(&entry.destination))
-                    .map_or(1, |prim| match prim {
-                        JniPrim::Long | JniPrim::Double => 2,
-                        _ => 1,
-                    }),
-            };
+            slots += leaf
+                .native
+                .iter()
+                .map(|param| param.jvm_slots)
+                .sum::<usize>();
         }
         slots += match &self.output {
             FnOutputPlan::Unfold(plan) if plan.iterable_fold => 2,
@@ -698,7 +710,7 @@ impl JniFunctionPlan {
     }
 }
 
-fn kotlin_jvm_slots(ty: &str) -> usize {
+pub(crate) fn kotlin_jvm_slots(ty: &str) -> usize {
     if !ty.ends_with('?') && matches!(ty, "Long" | "Double") {
         2
     } else {
@@ -729,13 +741,18 @@ fn classify_leaf(
         // `SpecKey` is a memo key and holds `TypeKey`s, so the args reach it as
         // each arg reading's own identity.
         let iface = ext.iface_spec(registry, &SpecKey::callback(args));
+        let entry = ext.in_frag(reading).ok_or_else(|| PlanError::Unresolved {
+            ty: Box::new(reading.clone()),
+        })?;
+        let pipeline = entry.pipeline(
+            prebindgen_registry::recipe::Direction::Construct,
+            prebindgen_registry::recipe::Mode::Owned,
+        );
+        let wire_ident = ident.clone();
         return Ok(PlanLeaf {
             reading: reading.clone(),
             kt_name: kt_param_name(&ident.to_string()),
             kt_public: None,
-            kt_meta: ext
-                .in_frag(reading)
-                .and_then(|e| e.metadata.kotlin_name.clone()),
             optional: reading.optional_inner().is_some(),
             as_enum_value: ext.is_kotlin_enum_reading(reading),
             enum_niche: crate::jni::compile::option_enum_niche(
@@ -743,16 +760,16 @@ fn classify_leaf(
                 reading,
                 prebindgen_registry::recipe::Direction::Construct,
             ),
-            pipeline: ext
-                .in_frag(reading)
-                .ok_or_else(|| PlanError::Unresolved {
-                    ty: Box::new(reading.clone()),
-                })?
-                .pipeline(
-                    prebindgen_registry::recipe::Direction::Construct,
-                    prebindgen_registry::recipe::Mode::Owned,
-                ),
-            kind: InputKind::Callback { iface },
+            native: vec![NativeParam {
+                rust_ident: wire_ident.clone(),
+                rust_wire: annotate_jobject_with_lifetime(pipeline.wire(), "a").to_token_stream(),
+                kt_name: kt_param_name(&ident.to_string()),
+                kt_wire: entry.metadata.kotlin_name.clone(),
+                jvm_slots: 1,
+            }],
+            pipeline,
+            rust: RustParamOp::Pipeline { wire_ident },
+            kotlin: KotlinParamOp::Callback { iface },
         });
     }
     // The compiler, resumed over what the build already compiled. Every

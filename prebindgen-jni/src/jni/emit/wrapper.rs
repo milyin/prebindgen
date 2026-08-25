@@ -499,7 +499,8 @@ fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
 /// Render the Rust-side decode for one source-fn parameter from its lowered
 /// [`PlanParam`]: the wire params, prelude decode statements, and the call
 /// argument. The classification (which crossing form) lives in the plan; this
-/// site only renders each [`InputKind`]'s decode.
+/// site renders the frozen Rust decode operation over the leaf's exact native
+/// ABI.
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
     param: &PlanParam,
@@ -518,24 +519,25 @@ fn emit_input_param(
     let arg_ident = &param.ident;
     let arg_ty = &param.ty;
 
-    let mut wire_params: Vec<TokenStream> = Vec::new();
-    let mut prelude: Vec<TokenStream> = Vec::new();
+    let wire_params: Vec<TokenStream> = leaf
+        .native
+        .iter()
+        .map(|native| {
+            let ident = &native.rust_ident;
+            let wire = &native.rust_wire;
+            quote!(#ident: #wire)
+        })
+        .collect();
 
-    match &leaf.kind {
+    match &leaf.rust {
         // Flattenable data_class param: cross its fields as separate wire
         // params and reconstruct the struct inline — no per-call
         // `env.get_field(...)` reflection. The `JNINative` extern and the
         // Kotlin call-site destructure read the same plan so the three
         // sites can't drift.
-        InputKind::FlattenStruct(plan) => {
-            for leaf in &plan.leaves {
-                let pid = &leaf.native_ident;
-                let pty = &leaf.native_wire_ty();
-                wire_params.push(quote!(#pid: #pty));
-            }
+        RustParamOp::FlattenStruct(plan) => {
             let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err);
-            prelude.push(decode);
-            (wire_params, prelude, call_arg)
+            (wire_params, vec![decode], call_arg)
         }
 
         // Bare `Option<primitive>` / `Option<enum>` param: cross as a
@@ -543,14 +545,11 @@ fn emit_input_param(
         // `java.lang.*` `JObject`. The registry's selected Optional fragment
         // rebuilds the value from two raw scalars — no
         // `env.call_method("intValue", …)` unbox.
-        InputKind::OptionalPair(sp) => {
+        RustParamOp::OptionalPair(sp) => {
             let pid = &sp.present_ident;
             let vid = &sp.value_ident;
-            let vwire = &sp.value_wire;
-            wire_params.push(quote!(#pid: jni::sys::jboolean));
-            wire_params.push(quote!(#vid: #vwire));
             let converter = &sp.chain.ident;
-            prelude.push(quote! {
+            let decode = quote! {
                 let #arg_ident = match #converter(&mut env, (#pid, #vid)) {
                     ::core::result::Result::Ok(__value) => __value,
                     ::core::result::Result::Err(__error) => {
@@ -565,30 +564,17 @@ fn emit_input_param(
                         return #on_err;
                     }
                 };
-            });
-            (wire_params, prelude, quote!(#arg_ident))
+            };
+            (wire_params, vec![decode], quote!(#arg_ident))
         }
 
-        // The helper ABI still distinguishes Vec-build inputs for Kotlin, but
-        // Rust reconstruction is the frozen site pipeline's operation.
-        InputKind::VecBuild { .. } => emit_plain_decode(
-            &leaf.pipeline,
-            arg_ident,
-            arg_ty,
-            on_err,
-            emit,
-            Some(format_ident!("{}_handle", arg_ident)),
-        ),
-
-        // Handles, value projections, callbacks, and plain types all decode
-        // through the frozen site pipeline. In particular, a direct owned
-        // handle now reaches the registry-planned `JOwnedHandlePlan`; wrapper
-        // emission no longer repeats its null/tag guard and `Box::from_raw`.
-        InputKind::Callback { .. }
-        | InputKind::Handle { .. }
-        | InputKind::Unsigned64 { .. }
-        | InputKind::Plain => {
-            emit_plain_decode(&leaf.pipeline, arg_ident, arg_ty, on_err, emit, None)
+        // Handles, value projections, callbacks, Vec-build inputs, and plain
+        // values all execute the registry-planned pipeline. The plan already
+        // fixed the sole native leaf's name and type.
+        RustParamOp::Pipeline { wire_ident } => {
+            let (prelude, call_arg) =
+                emit_plain_decode(&leaf.pipeline, arg_ident, arg_ty, on_err, emit, wire_ident);
+            (wire_params, prelude, call_arg)
         }
     }
 }
@@ -602,8 +588,8 @@ fn emit_plain_decode(
     arg_ty: &prebindgen_registry::flat::TypeRef,
     on_err: &TokenStream,
     emit: &prebindgen_registry::Emit,
-    wire_name: Option<syn::Ident>,
-) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
+    wire_ident: &syn::Ident,
+) -> (Vec<TokenStream>, TokenStream) {
     use prebindgen_registry::flat::TypeKind;
     /// `&mut T`, read off the kind — and off `kind()` rather than through
     /// `is_exclusive_borrow`, which also sees through a `Box` and refuses an
@@ -622,19 +608,7 @@ fn emit_plain_decode(
             _ => None,
         }
     }
-    let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
-    let wire = pipeline.wire();
-    let wire_ident = wire_name.unwrap_or_else(|| {
-        if matches!(wire, syn::Type::Ptr(_)) {
-            format_ident!("{}_ptr", arg_ident)
-        } else {
-            arg_ident.clone()
-        }
-    });
-
-    let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
-    wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
     // Binding for the final `arg_ident` needs `mut` when the source
     // fn takes `&mut T` — the call site below emits `&mut arg_ident`,
     // which requires a mutable binding. Also for `Option<&mut T>`
@@ -681,7 +655,7 @@ fn emit_plain_decode(
         }
         _ => quote!(#arg_ident),
     };
-    (wire_params, prelude, call_arg)
+    (prelude, call_arg)
 }
 
 /// Emit the wire params, decode prelude, and call argument for one
@@ -709,78 +683,59 @@ pub(crate) fn emit_expanded_param(
         // The ascription generated Rust writes for this leaf's local.
         let leaf_ty_tokens = emit.spell(leaf_ty);
         let local = format_ident!("__exp_{}", leaf.name);
+        wire_params.extend(classified.native.iter().map(|native| {
+            let ident = &native.rust_ident;
+            let wire = &native.rust_wire;
+            quote!(#ident: #wire)
+        }));
 
-        // An expansion leaf can itself be a data class. Reuse the recursive
-        // plan instead of allowing that leaf to fall back to a JObject, so
-        // expansion and ordinary parameters have the same boundary rule.
-        if let InputKind::FlattenStruct(flat) = &classified.kind {
-            for flat_leaf in &flat.leaves {
-                let ident = &flat_leaf.native_ident;
-                let wire = &flat_leaf.native_wire_ty();
-                wire_params.push(quote!(#ident: #wire));
+        match &classified.rust {
+            // An expansion leaf can itself be a data class. Reuse the
+            // recursive rebuild operation used by an ordinary parameter.
+            RustParamOp::FlattenStruct(flat) => {
+                let (decode, _) = render_flat_input_decode(flat, &local, on_err);
+                prelude.push(decode);
             }
-            let (decode, _) = render_flat_input_decode(flat, &local, on_err);
-            prelude.push(decode);
-            leaf_locals.push(local);
-            continue;
+            // Selector-dispatched Optional leaf: rebuild from its already
+            // frozen `(present, value)` native pair.
+            RustParamOp::OptionalPair(sp) => {
+                let present_ident = &sp.present_ident;
+                let value_ident = &sp.value_ident;
+                let converter = &sp.chain.ident;
+                prelude.push(quote!(
+                    let #local: #leaf_ty_tokens = match #converter(
+                        &mut env,
+                        (#present_ident, #value_ident),
+                    ) {
+                        ::core::result::Result::Ok(__value) => __value,
+                        ::core::result::Result::Err(__error) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__error.to_string(),
+                            );
+                            return #on_err;
+                        }
+                    };
+                ));
+            }
+            RustParamOp::Pipeline { wire_ident } => {
+                let pipeline = &classified.pipeline;
+                let decode_call = pipeline.invoke(quote!(#wire_ident), emit);
+                prelude.push(quote!(
+                    let #local = match #decode_call {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                            return #on_err;
+                        }
+                    };
+                ));
+            }
         }
-
-        // `Option<scalar>` / `Option<enum>` leaf (only produced by a
-        // selector-dispatched constructor variant, where each arm's args are
-        // `Option`-wrapped by presence): cross as a decoupled
-        // `(present: jboolean, value: <wire>)` pair instead of a boxed
-        // `java.lang.*` `JObject`. The Kotlin extern and call site consume
-        // the same classified plan, so the JNI arity/types agree on both
-        // sides of the wire.
-        if let InputKind::OptionalPair(sp) = &classified.kind {
-            let present_ident = &sp.present_ident;
-            let value_ident = &sp.value_ident;
-            let value_wire = &sp.value_wire;
-            let converter = &sp.chain.ident;
-            wire_params.push(quote!(#present_ident: jni::sys::jboolean));
-            wire_params.push(quote!(#value_ident: #value_wire));
-            prelude.push(quote!(
-                let #local: #leaf_ty_tokens = match #converter(
-                    &mut env,
-                    (#present_ident, #value_ident),
-                ) {
-                    ::core::result::Result::Ok(__value) => __value,
-                    ::core::result::Result::Err(__error) => {
-                        signal_binding_error(
-                            &mut env,
-                            &__error_sink,
-                            &__SINK_MID,
-                            __SINK_FQN,
-                            __SINK_DESCR,
-                            &__error.to_string(),
-                        );
-                        return #on_err;
-                    }
-                };
-            ));
-            leaf_locals.push(local);
-            continue;
-        }
-
-        let pipeline = &classified.pipeline;
-        let wire = pipeline.wire();
-        let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
-            format_ident!("{}_ptr", leaf.name)
-        } else {
-            leaf.name.clone()
-        };
-        let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
-        wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
-        let decode_call = pipeline.invoke(quote!(#wire_ident), emit);
-        prelude.push(quote!(
-            let #local = match #decode_call {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                    return #on_err;
-                }
-            };
-        ));
         leaf_locals.push(local);
     }
 

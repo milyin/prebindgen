@@ -757,6 +757,23 @@ fn generation_plan_freezes_and_drains_derivations() {
     let b = ext.fn_plan(registry, f).expect("plan");
     assert!(std::rc::Rc::ptr_eq(&a, &b), "one plan per function ident");
     assert_eq!(a.native_symbol, b.native_symbol);
+    let records = a.leaves().next().expect("records parameter leaf");
+    assert!(
+        matches!(&records.kotlin, KotlinParamOp::VecBuild { .. }),
+        "the Kotlin operation remains independently frozen"
+    );
+    let RustParamOp::Pipeline { wire_ident } = &records.rust else {
+        panic!("Vec-build Rust operation must execute its registry pipeline");
+    };
+    assert_eq!(wire_ident, "records_handle");
+    assert_eq!(records.native.len(), 1);
+    assert_eq!(records.native[0].rust_ident, "records_handle");
+    assert_eq!(
+        records.native[0].rust_wire.to_string(),
+        "jni :: sys :: jlong"
+    );
+    assert_eq!(records.native[0].kt_name, "records");
+    assert_eq!(records.native[0].jvm_slots, 2);
 
     // Exercise both artifact writers. None of the recursively used struct,
     // sum, interface, function, or Vec-helper lookups may resume planning.
