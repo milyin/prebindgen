@@ -169,95 +169,10 @@ impl Declarations {
         )
     }
 
-    /// Universal "opaque Box-handle as `jlong`" pair — input side.
-    ///
-    /// Use for any Rust type whose lifecycle is owned by the Java side:
-    /// Java holds the raw `Box<T>` pointer as a `Long` and calls Rust
-    /// passing the pointer. The converter handles both parameter
-    /// shapes, the decision is taken in `on_function` from the
-    /// parameter's syntax:
-    ///
-    /// **`&T` sites (borrow)**: `OwnedObject::from_raw` stores the
-    /// pointer without taking ownership of the `Box`; `Deref<Target
-    /// = T>` exposes `&*ptr` so the generated call site can borrow it
-    /// as `&T`. The wrapper has no `Drop` — nothing is freed, the
-    /// heap allocation stays with Java. The Java side must take the
-    /// pointer out of its `NativeHandle.withPtr` (read lock) so the
-    /// borrow is sequenced against any concurrent consume / close.
-    ///
-    /// **`T` sites (consume, by-value)**: the call-site emitter
-    /// bypasses `OwnedObject` and inlines `*Box::from_raw(ptr)` —
-    /// infallible. The Java side must take the pointer out of its
-    /// `NativeHandle.consume` (write lock + atomic null) before
-    /// invoking this entry point; that write lock drains concurrent
-    /// borrows and the atomic-null ensures the same Long cannot be
-    /// passed twice. No `T: Clone` bound (Box requires nothing of T),
-    /// so non-Clone handles (`Publisher<'a>`, `Subscriber<()>`) can
-    /// consume.
-    ///
-    /// **Convention** (single rule for both input and output):
-    /// * Wire: `jni::sys::jlong` — the same width JNI hands across
-    ///   the boundary on every platform (`*mut T` would mismatch
-    ///   on 32-bit, where ptr size is 4 but jlong is 8).
-    /// * Output: `Box::into_raw(Box::new(v)) as i64` — leak the heap
-    ///   allocation to Java; sole owner is whoever later calls
-    ///   `Box::from_raw` on the same pointer.
-    /// * Input: `OwnedObject::from_raw(*v as *const T)` (borrow only),
-    ///   after rejecting null and tag-bit-set values — bit 0 is the
-    ///   Kotlin-side closed tag (see `NativeHandle`), so an odd `jlong`
-    ///   is a handle that was closed after the wrapper's pre-lock guard;
-    ///   it must never be dereferenced.
-    /// * Niche: `0i64` / `*v == 0` — `Box::into_raw` never returns 0,
-    ///   so `Option<T>` automatically synthesises `0` = `None`,
-    ///   matching the legacy "null pointer" ABI for nullable handles.
-    ///   A *tagged* (closed-but-present) value is an error, not `None`.
-    pub fn opaque_handle_input(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> ConverterImpl<KotlinMeta> {
-        let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let ty = emit.spell(reading);
-        let name = input_name(&ty, &wire);
-        let gen_allow = generated_converter_attr();
-        let function: syn::ItemFn = syn::parse_quote!(
-            #gen_allow
-            pub(crate) unsafe fn #name<'env, 'v>(
-                env: &mut jni::JNIEnv<'env>,
-                v: &jni::sys::jlong,
-            ) -> ::core::result::Result<OwnedObject<#ty>, __JniErr> {
-                // Null or tag-bit-set (closed handle raced past the Kotlin
-                // pre-lock guard) — reject before any dereference.
-                if *v == 0 || (*v & 1) == 1 {
-                    return ::core::result::Result::Err(
-                        <__JniErr as ::core::convert::From<String>>::from(
-                            "Operation on a closed native handle.".to_string(),
-                        ),
-                    );
-                }
-                Ok(unsafe { OwnedObject::from_raw(*v as *const #ty) })
-            }
-        );
-        ConverterImpl {
-            subs: vec![],
-            function,
-            destination: wire,
-            pre_stages: vec![],
-            niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
-            // Opaque handles' value-context Kotlin name stays `"Long"`
-            // (the jlong wire mention); the *typed* Kotlin rendering is
-            // derived from `handle` below. The wrapper's `?` path surfaces
-            // an `OwnedObject::from_raw` failure as the framework
-            // `JniBindingError`, so the throws fields point at the
-            // framework exception.
-            metadata: self.opaque_leaf_meta(reading.key()),
-        }
-    }
-
-    /// Leaf metadata for an opaque handle: value-context name `"Long"`
-    /// plus the [`Projection`] that folds outward through wrappers (owned,
-    /// [`FoldStrategy::Base`]). The single seam where a Rust type is
-    /// first marked a closeable native handle.
+    /// Leaf metadata for an opaque handle: value-context name `Long` plus the
+    /// projection that folds outward through wrappers. The corresponding
+    /// ownership, null-niche, and odd-pointer-tag operations live in the late
+    /// `JHandleCodecPlan`; this method describes the Kotlin-facing leaf only.
     pub(crate) fn opaque_leaf_meta(&self, key: TypeKey) -> KotlinMeta {
         KotlinMeta {
             projection: Some(Projection {
@@ -408,31 +323,6 @@ impl Declarations {
             length_names: &length_names,
         };
         syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
-    }
-
-    /// Output side of [`Self::opaque_handle_input`] — see that method's
-    /// docs for the full convention.
-    pub fn opaque_handle_output(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> ConverterImpl<KotlinMeta> {
-        let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let body: syn::Expr =
-            syn::parse_quote!(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64);
-        ConverterImpl {
-            subs: vec![],
-            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-            destination: wire,
-            pre_stages: vec![],
-            niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
-            // Opaque handles' value-context name `"Long"` + folded
-            // `Projection` — see [`Self::opaque_handle_input`] /
-            // [`Self::opaque_leaf_meta`]. Framework throws because the
-            // wrapper's emitted match-arm still has a `JniBindingError`
-            // branch reachable via the chain.
-            metadata: self.opaque_leaf_meta(reading.key()),
-        }
     }
 }
 
@@ -1599,18 +1489,11 @@ impl Prebindgen for Declarations {
         validate_bindings(self, registry)
     }
 
-    /// The other-side type of every `convert!` conversion, in the
-    /// conversion's direction: an input fn's parameter type (peeled of `&`)
-    /// must have its own **input** converter for the composed rank-0 body to
-    /// chain through; an output fn's return type needs the **output** twin.
-    /// Signatures are read from the registry (missing fns are reported by
-    /// the scan's helper-function warning; the body derivation later
-    /// hard-errors with the precise decl).
-    /// Emit the `OwnedObject<T>` borrow wrapper used by
-    /// [`Self::opaque_handle_input`] into the destination file.
-    /// The struct is referenced by an unqualified `OwnedObject` from
-    /// the same generated file, so no `use` paths leak into the host
-    /// crate's source tree.
+    /// Emit shared Rust items needed by JNI wrappers and late converters.
+    ///
+    /// This includes the `OwnedObject<T>` carrier used by borrowed opaque
+    /// handle plans. It is referenced unqualified from the same generated
+    /// file, so no `use` path leaks into the host crate's source tree.
     fn prerequisites(
         &self,
         registry: &Registry,
@@ -1777,14 +1660,9 @@ impl Declarations {
         // generated Rust uses this.
         // Everything below reads the reading: the identity for a lookup, the
         // spelling for what generated Rust says. Neither needs a node.
-        // Structured-config overrides first (opaque handles, then user-
-        // registered rank-0 wrappers, then built-ins).
+        // Structured-config overrides first (user-registered rank-0 wrappers,
+        // then built-ins). Opaque handles are retained before this fallback.
         let key = reading.key();
-        if let Some(cfg) = self.types.get(&key) {
-            if cfg.is_opaque() {
-                return Some(self.opaque_handle_input(reading, emit));
-            }
-        }
         if let Some(conv) = self.lookup_input(reading, registry, emit) {
             return Some(conv);
         }
@@ -2049,13 +1927,9 @@ impl Declarations {
         // Classify off `kind`, spell with `spell()` — see `input_terminal`.
         // Everything below reads the reading: the identity for a lookup, the
         // spelling for what generated Rust says. Neither needs a node.
-        // Structured-config overrides first (opaque handles, then built-ins).
+        // Structured-config overrides first (built-ins). Opaque handles are
+        // retained before this fallback.
         let key = reading.key();
-        if let Some(cfg) = self.types.get(&key) {
-            if cfg.is_opaque() {
-                return Some(self.opaque_handle_output(reading, emit));
-            }
-        }
         if let Some(conv) = self.lookup_output(reading, registry, emit) {
             return Some(conv);
         }
@@ -2103,43 +1977,6 @@ impl Declarations {
                     metadata: self.framework_meta(kotlin_name),
                 });
             }
-        }
-        None
-    }
-
-    /// Borrowed-handle output terminals.
-    pub(crate) fn output_borrow(
-        &self,
-        produced: &prebindgen_registry::flat::TypeRef,
-        t1: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
-        // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
-        // return *borrowed* handles for the C tier's zero-copy borrows, but
-        // the JVM keeps its handle past the call — so the only sound lowering
-        // is to clone the referent into a fresh owned `Box`-handle (every such
-        // zenoh handle type is `Clone`). This mirrors `opaque_handle_output`
-        // with a `.clone()`; `Option<&T>` then composes through the `Option`
-        // arm below (it looks up this `&T` entry as its inner). Matched
-        // structurally so the lifetime variant `&'static _` is covered too.
-        if matches!(
-            produced.kind(),
-            prebindgen_registry::flat::TypeKind::Ref { mutable: false, .. }
-        ) && self.types.get(&t1.key()).is_some_and(|c| c.is_opaque())
-        {
-            let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-            let body: syn::Expr = syn::parse_quote!(
-                std::boxed::Box::into_raw(std::boxed::Box::new(v.clone())) as i64
-            );
-            return Some(ConverterImpl {
-                subs: vec![],
-                function: self.build_output_fn_of(produced, &wire, &body, None, emit),
-                destination: wire,
-                pre_stages: vec![],
-                niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
-                metadata: self.opaque_leaf_meta(t1.key()),
-            });
         }
         None
     }

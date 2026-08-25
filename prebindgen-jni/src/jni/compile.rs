@@ -1155,12 +1155,7 @@ impl<R: Conversions> JCompile<'_, R> {
     }
 
     /// The borrow arms, which are neither a terminal nor an arity layer.
-    fn borrow(
-        &self,
-        ty: &TypeRef,
-        emit: &prebindgen_registry::Emit,
-        into_rust: bool,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
+    fn borrow(&self, ty: &TypeRef, into_rust: bool) -> Option<ConverterImpl<KotlinMeta>> {
         let TypeKind::Ref {
             mutable,
             inner: borrowed,
@@ -1187,58 +1182,136 @@ impl<R: Conversions> JCompile<'_, R> {
             if !writes_reach_the_caller {
                 return None;
             }
-            if ty.erased_wrappers().is_empty()
-                && self
-                    .decls
-                    .types
-                    .get(&inner.key())
-                    .is_some_and(|cfg| cfg.is_opaque())
-            {
-                let mut c = self.decls.opaque_handle_input(inner, emit);
-                c.metadata.projection = c.metadata.projection.map(|projection| Projection {
-                    owned: false,
-                    ..projection
-                });
-                c.subs = vec![inner.key()];
-                return Some(c);
-            }
             let mut c = self.decls.input_borrow(ty, inner)?;
             c.subs = vec![inner.key()];
             Some(c)
         } else {
-            let mut c = self.decls.output_borrow(ty, inner, emit)?;
-            c.subs = vec![inner.key()];
-            Some(c)
+            None
         }
     }
 
-    /// Plan an owned opaque input without spelling its Rust type. Product
-    /// fields use this ordinary atomic fragment; final emission performs the
-    /// only `TypeRef` -> Rust syntax conversion.
-    fn planned_owned_handle(&self, at: At<'_>) -> Option<JFrag> {
-        if at.crossing.direction() != Direction::Construct || at.crossing.mode() != Mode::Owned {
-            return None;
-        }
+    /// Plan every opaque-handle terminal without spelling its Rust type.
+    /// Ownership policy is adapter data; final emission performs the only
+    /// `TypeRef` -> Rust syntax conversion.
+    fn planned_handle_codec(&self, at: At<'_>) -> Option<JFrag> {
         let source = at.crossing.spelled();
-        let cfg = self.decls.types.get(&source.key())?;
-        if !cfg.is_opaque() || !source.erased_wrappers().is_empty() {
+        if !source.erased_wrappers().is_empty() {
             return None;
         }
-        let TypeKind::Named { id, .. } = source.unwrapped().kind() else {
-            return None;
-        };
-        let source_ident = id.ident()?;
-        let module = self.decls.fn_module(self.registry, &source_ident);
+        let direction = at.crossing.direction();
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let base = crate::jni::chain::planned_name(Direction::Construct, source, &wire);
-        let ident = format_ident!("{base}_owned");
+        let (render_source, target, operation, ident, metadata, subs) = match source.kind() {
+            TypeKind::Named { id, .. }
+                if self
+                    .decls
+                    .types
+                    .get(&source.key())
+                    .is_some_and(|cfg| cfg.is_opaque()) =>
+            {
+                let target = id.ident()?;
+                let operation = match direction {
+                    Direction::Construct if at.crossing.mode() == Mode::Owned => {
+                        crate::jni::chain::JHandleOperation::ConsumeInput
+                    }
+                    Direction::Deconstruct if at.crossing.mode() == Mode::Owned => {
+                        crate::jni::chain::JHandleOperation::OwnOutput
+                    }
+                    _ => return None,
+                };
+                let base = crate::jni::chain::planned_name(direction, source, &wire);
+                let ident = match operation {
+                    crate::jni::chain::JHandleOperation::ConsumeInput => {
+                        format_ident!("{base}_owned")
+                    }
+                    _ => base,
+                };
+                (
+                    source.clone(),
+                    target,
+                    operation,
+                    ident,
+                    self.decls.opaque_leaf_meta(source.key()),
+                    Vec::new(),
+                )
+            }
+            TypeKind::Ref {
+                mutable,
+                inner: borrowed,
+                ..
+            } => {
+                let target_ref = source.borrow_target()?;
+                if !self
+                    .decls
+                    .types
+                    .get(&target_ref.key())
+                    .is_some_and(|cfg| cfg.is_opaque())
+                {
+                    return None;
+                }
+                let TypeKind::Named { id, .. } = target_ref.unwrapped().kind() else {
+                    return None;
+                };
+                let target = id.ident()?;
+                let operation = match direction {
+                    Direction::Construct
+                        if !*mutable
+                            || self
+                                .decls
+                                .types
+                                .get(&borrowed.key())
+                                .is_some_and(|cfg| cfg.is_opaque()) =>
+                    {
+                        crate::jni::chain::JHandleOperation::BorrowInput
+                    }
+                    Direction::Deconstruct if !*mutable => {
+                        crate::jni::chain::JHandleOperation::CloneOutput
+                    }
+                    _ => return None,
+                };
+                let (render_source, name_source) = match operation {
+                    crate::jni::chain::JHandleOperation::BorrowInput => {
+                        (target_ref.clone(), target_ref)
+                    }
+                    _ => (source.clone(), source),
+                };
+                let ident = crate::jni::chain::planned_name(direction, name_source, &wire);
+                let mut metadata = self.decls.opaque_leaf_meta(target_ref.key());
+                if matches!(operation, crate::jni::chain::JHandleOperation::BorrowInput) {
+                    metadata.projection = metadata.projection.map(|projection| Projection {
+                        owned: false,
+                        ..projection
+                    });
+                }
+                (
+                    render_source,
+                    target,
+                    operation,
+                    ident,
+                    metadata,
+                    vec![target_ref.key()],
+                )
+            }
+            _ => return None,
+        };
+        let module = self.decls.fn_module(self.registry, &target);
         let marker = crate::jni::chain::planned_marker(&ident);
         let rust =
-            crate::jni::chain::JFunction::owned_handle(crate::jni::chain::JOwnedHandlePlan {
+            crate::jni::chain::JFunction::handle_codec(crate::jni::chain::JHandleCodecPlan {
                 ident,
-                reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
-                source: source.clone(),
+                // Legacy parents can retain only the child's converter name,
+                // so they cannot activate its `JFunction` dependency yet.
+                // Output and borrowed-input terminals were unconditional
+                // functions before this late plan; keep that exact emission
+                // rule until those parents become plans too. Owned input was
+                // already a reachable plan and remains demand-driven.
+                reachable: std::rc::Rc::new(std::cell::Cell::new(
+                    direction == Direction::Deconstruct
+                        || matches!(operation, crate::jni::chain::JHandleOperation::BorrowInput),
+                )),
+                source: render_source,
                 module,
+                target,
+                operation,
             });
         Some(JFrag {
             conv: ConverterImpl {
@@ -1246,8 +1319,8 @@ impl<R: Conversions> JCompile<'_, R> {
                 function: marker,
                 pre_stages: Vec::new(),
                 niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
-                metadata: self.decls.opaque_leaf_meta(source.key()),
-                subs: Vec::new(),
+                metadata,
+                subs,
             },
             choice_arm: None,
             rust,
@@ -2251,7 +2324,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(frag) = self.planned_primitive_array(at) {
             return Ok(frag);
         }
-        if let Some(frag) = self.planned_owned_handle(at) {
+        if let Some(frag) = self.planned_handle_codec(at) {
             return Ok(frag);
         }
         let emit = cx.emit();
@@ -2259,13 +2332,13 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Direction::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
-                .or_else(|| self.borrow(ty, emit, true))
+                .or_else(|| self.borrow(ty, true))
                 .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit)),
             Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
                 .or_else(|| self.decls.result_shape(ty, self.registry, emit))
-                .or_else(|| self.borrow(ty, emit, false))
+                .or_else(|| self.borrow(ty, false))
                 .or_else(|| {
                     self.decls
                         .output_transparent_bridge(ty, self.registry, emit)
@@ -2423,12 +2496,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Direction::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
-                .or_else(|| self.borrow(ty, emit, true))
+                .or_else(|| self.borrow(ty, true))
                 .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit)),
             Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
-                .or_else(|| self.borrow(ty, emit, false))
+                .or_else(|| self.borrow(ty, false))
                 .or_else(|| {
                     self.decls
                         .output_transparent_bridge(ty, self.registry, emit)
@@ -2984,6 +3057,11 @@ impl Conv {
     #[cfg(test)]
     pub(crate) fn is_value_codec_plan(&self) -> bool {
         self.0.rust.is_value_codec()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_handle_codec_plan(&self) -> bool {
+        self.0.rust.is_handle_codec()
     }
 }
 

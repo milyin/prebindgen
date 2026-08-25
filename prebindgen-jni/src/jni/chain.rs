@@ -19,7 +19,7 @@ enum JBody {
     Complete(Box<syn::ItemFn>),
     Marker(syn::Ident),
     ValueCodec(Box<JValueCodecPlan>),
-    OwnedHandle(Box<JOwnedHandlePlan>),
+    HandleCodec(Box<JHandleCodecPlan>),
     BorrowedOptionalHandle(Box<JBorrowedOptionalHandlePlan>),
     Product(Box<JProductPlan>),
     Choice(Box<JChoicePlan>),
@@ -41,8 +41,8 @@ impl JFunction {
         }
     }
 
-    pub(crate) fn owned_handle(plan: JOwnedHandlePlan) -> Self {
-        Self(JBody::OwnedHandle(Box::new(plan)))
+    pub(crate) fn handle_codec(plan: JHandleCodecPlan) -> Self {
+        Self(JBody::HandleCodec(Box::new(plan)))
     }
 
     pub(crate) fn value_codec(plan: JValueCodecPlan) -> Self {
@@ -84,6 +84,11 @@ impl JFunction {
     }
 
     #[cfg(test)]
+    pub(crate) fn is_handle_codec(&self) -> bool {
+        matches!(self.0, JBody::HandleCodec(_))
+    }
+
+    #[cfg(test)]
     pub(crate) fn is_borrowed_optional_handle(&self) -> bool {
         matches!(self.0, JBody::BorrowedOptionalHandle(_))
     }
@@ -104,7 +109,7 @@ impl JFunction {
         match &self.0 {
             JBody::Complete(_) => {}
             JBody::Marker(_) | JBody::ValueCodec(_) => {}
-            JBody::OwnedHandle(plan) => plan.reachable.set(true),
+            JBody::HandleCodec(plan) => plan.reachable.set(true),
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.set(true),
             JBody::Product(plan) => {
                 plan.reachable.set(true);
@@ -145,7 +150,7 @@ impl RustFunction for JFunction {
             JBody::Complete(function) => &function.sig.ident,
             JBody::Marker(ident) => ident,
             JBody::ValueCodec(plan) => &plan.ident,
-            JBody::OwnedHandle(plan) => &plan.ident,
+            JBody::HandleCodec(plan) => &plan.ident,
             JBody::BorrowedOptionalHandle(plan) => &plan.ident,
             JBody::Product(plan) => &plan.ident,
             JBody::Choice(plan) => &plan.ident,
@@ -163,7 +168,7 @@ impl RustFunction for JFunction {
             // reachability to the children they call. Until those parents are
             // planned too, every compiled value codec remains an emitted leaf.
             JBody::ValueCodec(_) => true,
-            JBody::OwnedHandle(plan) => plan.reachable.get(),
+            JBody::HandleCodec(plan) => plan.reachable.get(),
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.get(),
             JBody::Product(plan) => plan.reachable.get(),
             JBody::Optional(plan) => plan.reachable.get(),
@@ -180,7 +185,7 @@ impl RustFunction for JFunction {
             JBody::Complete(function) => (**function).clone(),
             JBody::Marker(ident) => planned_marker(ident),
             JBody::ValueCodec(plan) => plan.render(emit),
-            JBody::OwnedHandle(plan) => plan.render(emit),
+            JBody::HandleCodec(plan) => plan.render(emit),
             JBody::BorrowedOptionalHandle(plan) => plan.render(emit),
             JBody::Product(plan) => plan.render(emit),
             JBody::Optional(plan) => plan.render(emit),
@@ -775,45 +780,104 @@ impl shared::Child for JChild {
     }
 }
 
-/// Owned opaque-handle input, kept syntax-free until final emission.
+/// Which ownership operation an opaque-handle terminal performs.
+#[derive(Clone, Copy)]
+pub(crate) enum JHandleOperation {
+    ConsumeInput,
+    BorrowInput,
+    OwnOutput,
+    CloneOutput,
+}
+
+/// One opaque `Box`-handle terminal, kept source-syntax-free until final
+/// emission.
+///
+/// All operations use `jni::sys::jlong`, not `*mut T`, because JNI's wire is
+/// 64 bits even on a 32-bit target. Owned output leaks `Box<T>` to the JVM;
+/// owned input reclaims it with `Box::from_raw`. Borrowed input instead keeps
+/// the allocation JVM-owned through `OwnedObject<T>`, and borrowed output
+/// clones the referent into a fresh owned handle.
+///
+/// Both input operations reject zero and odd values. Zero is the optional
+/// niche (`Box::into_raw` cannot produce it). Bit zero is reserved by Kotlin's
+/// `NativeHandle` as the closed tag: an odd pointer means close won a race
+/// after the wrapper's pre-lock check and must never be dereferenced. This
+/// convention depends on the separately emitted `align_of::<T>() >= 2` guard
+/// for every opaque handle type.
 #[derive(Clone)]
-pub(crate) struct JOwnedHandlePlan {
+pub(crate) struct JHandleCodecPlan {
     pub(crate) ident: syn::Ident,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) source: TypeRef,
     pub(crate) module: syn::Path,
+    pub(crate) target: syn::Ident,
+    pub(crate) operation: JHandleOperation,
 }
 
-impl JOwnedHandlePlan {
+impl JHandleCodecPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = &self.ident;
-        let source = shared::Source::spell(
-            &JSource {
-                wrappers: Vec::new(),
-                module: Some(self.module.clone()),
-            },
-            &self.source,
-            emit,
-        );
+        let mut source = emit.spell_ty(&self.source);
+        let mut qualifier = QualifySource {
+            module: &self.module,
+            target: self.target.clone(),
+        };
+        syn::visit_mut::VisitMut::visit_type_mut(&mut qualifier, &mut source);
         let allow = crate::jni::trait_impl::generated_converter_attr();
-        syn::parse_quote!(
-            #allow
-            pub(crate) unsafe fn #name<'env, 'v>(
-                env: &mut jni::JNIEnv<'env>,
-                v: &jni::sys::jlong,
-            ) -> ::core::result::Result<#source, __JniErr> {
-                if *v == 0 || (*v & 1) == 1 {
-                    return ::core::result::Result::Err(
-                        <__JniErr as ::core::convert::From<String>>::from(
-                            "Operation on a closed native handle.".to_string(),
-                        ),
-                    );
+        match self.operation {
+            JHandleOperation::ConsumeInput => syn::parse_quote!(
+                #allow
+                pub(crate) unsafe fn #name<'env, 'v>(
+                    env: &mut jni::JNIEnv<'env>,
+                    v: &jni::sys::jlong,
+                ) -> ::core::result::Result<#source, __JniErr> {
+                    if *v == 0 || (*v & 1) == 1 {
+                        return ::core::result::Result::Err(
+                            <__JniErr as ::core::convert::From<String>>::from(
+                                "Operation on a closed native handle.".to_string(),
+                            ),
+                        );
+                    }
+                    ::core::result::Result::Ok(unsafe {
+                        *::std::boxed::Box::from_raw(*v as *mut #source)
+                    })
                 }
-                ::core::result::Result::Ok(unsafe {
-                    *::std::boxed::Box::from_raw(*v as *mut #source)
-                })
-            }
-        )
+            ),
+            JHandleOperation::BorrowInput => syn::parse_quote!(
+                #allow
+                pub(crate) unsafe fn #name<'env, 'v>(
+                    env: &mut jni::JNIEnv<'env>,
+                    v: &jni::sys::jlong,
+                ) -> ::core::result::Result<OwnedObject<#source>, __JniErr> {
+                    if *v == 0 || (*v & 1) == 1 {
+                        return ::core::result::Result::Err(
+                            <__JniErr as ::core::convert::From<String>>::from(
+                                "Operation on a closed native handle.".to_string(),
+                            ),
+                        );
+                    }
+                    Ok(unsafe { OwnedObject::from_raw(*v as *const #source) })
+                }
+            ),
+            JHandleOperation::OwnOutput => syn::parse_quote!(
+                #allow
+                pub(crate) unsafe fn #name<'a>(
+                    env: &mut jni::JNIEnv<'a>,
+                    v: #source,
+                ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+                    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
+                }
+            ),
+            JHandleOperation::CloneOutput => syn::parse_quote!(
+                #allow
+                pub(crate) unsafe fn #name<'a>(
+                    env: &mut jni::JNIEnv<'a>,
+                    v: #source,
+                ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+                    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v.clone())) as i64)
+                }
+            ),
+        }
     }
 }
 
