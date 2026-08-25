@@ -525,30 +525,19 @@ impl CbindgenBuilder {
     /// Lossy on invalid UTF-8 for the same reason. This is the reading the
     /// hand-written field walk had; stating it as a recipe is what makes it
     /// visible rather than buried.
-    pub(crate) fn in_string_field(&self, ty: &TypeRef) -> Option<ConverterImpl> {
+    pub(crate) fn in_string_field_plan(
+        &self,
+        ty: &TypeRef,
+    ) -> Option<crate::chain::InputTerminalPlan> {
         if !r_is_string(ty) {
             return None;
         }
-        let name = format_ident!("{}_field", Self::in_name_of(&ty.key()));
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name(
-                v: *const ::core::ffi::c_char,
-            ) -> ::std::string::String {
-                if v.is_null() {
-                    ::std::string::String::new()
-                } else {
-                    ::std::ffi::CStr::from_ptr(v).to_string_lossy().into_owned()
-                }
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: syn::parse_quote!(*const ::core::ffi::c_char),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
+        Some(crate::chain::InputTerminalPlan {
+            ident: format_ident!("{}_field", Self::in_name_of(&ty.key())),
+            source: ty.clone(),
+            source_module: self.source_module.clone(),
+            wire: syn::parse_quote!(*const ::core::ffi::c_char),
+            operation: crate::chain::InputTerminalOperation::StringField,
         })
     }
 
@@ -560,26 +549,19 @@ impl CbindgenBuilder {
     /// `bool` **return** is always already one of two values and crosses as
     /// itself, while a field shares one mirror with the decode that has to
     /// normalise it.
-    pub(crate) fn out_bool_field(&self, ty: &TypeRef) -> Option<ConverterImpl> {
+    pub(crate) fn out_bool_field_plan(
+        &self,
+        ty: &TypeRef,
+    ) -> Option<crate::chain::OutputTerminalPlan> {
         if !r_is_bool(ty) {
             return None;
         }
-        let name = format_ident!("{}_field", Self::out_name_of(&ty.key()));
-        let wire = bool_wire();
-        let wrap = bool_out_expr(quote!(v));
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) fn #name(v: bool) -> #wire {
-                #wrap
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: wire,
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
+        Some(crate::chain::OutputTerminalPlan {
+            ident: format_ident!("{}_field", Self::out_name_of(&ty.key())),
+            source: ty.clone(),
+            source_module: self.source_module.clone(),
+            wire: bool_wire(),
+            operation: crate::chain::OutputTerminalOperation::BoolField,
         })
     }
 }

@@ -199,6 +199,28 @@ impl CFunction {
     }
 
     #[cfg(test)]
+    pub(crate) fn is_string_field_terminal(&self) -> bool {
+        matches!(
+            &self.body,
+            CBody::InputTerminal(InputTerminalPlan {
+                operation: InputTerminalOperation::StringField,
+                ..
+            })
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_bool_field_terminal(&self) -> bool {
+        matches!(
+            &self.body,
+            CBody::OutputTerminal(OutputTerminalPlan {
+                operation: OutputTerminalOperation::BoolField,
+                ..
+            })
+        )
+    }
+
+    #[cfg(test)]
     pub(crate) fn is_payload(&self) -> bool {
         matches!(self.body, CBody::Payload(_))
     }
@@ -320,7 +342,7 @@ impl PayloadPlan {
     }
 }
 
-/// One whole-value C input operation selected without spelling its source.
+/// One C input terminal operation selected without spelling its source.
 #[derive(Clone)]
 pub(crate) enum InputTerminalOperation {
     OwnedHandle {
@@ -339,6 +361,7 @@ pub(crate) enum InputTerminalOperation {
         align_message: String,
     },
     String,
+    StringField,
     StrMarker,
     Bool,
     Scalar,
@@ -382,7 +405,7 @@ impl InputTerminalOperation {
     }
 }
 
-/// A whole-value C input retained until the final writer owns [`Emit`].
+/// A C input terminal retained until the final writer owns [`Emit`].
 #[derive(Clone)]
 pub(crate) struct InputTerminalPlan {
     pub(crate) ident: syn::Ident,
@@ -497,6 +520,16 @@ impl InputTerminalPlan {
                     }
                 }
             ),
+            InputTerminalOperation::StringField => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name(v: #wire) -> #source {
+                    if v.is_null() {
+                        ::std::string::String::new()
+                    } else {
+                        ::std::ffi::CStr::from_ptr(v).to_string_lossy().into_owned()
+                    }
+                }
+            ),
             InputTerminalOperation::StrMarker => syn::parse_quote!(
                 #[allow(non_snake_case, dead_code, unused_variables)]
                 pub(crate) fn #name() {}
@@ -520,11 +553,12 @@ impl InputTerminalPlan {
     }
 }
 
-/// One whole-value C output operation selected without spelling its source.
+/// One C output terminal operation selected without spelling its source.
 #[derive(Clone)]
 pub(crate) enum OutputTerminalOperation {
     Unit,
     String,
+    BoolField,
     Scalar,
     OwnedHandle {
         c_struct: syn::Ident,
@@ -539,7 +573,7 @@ pub(crate) enum OutputTerminalOperation {
     },
 }
 
-/// A whole-value C output retained until the final writer owns `Emit`.
+/// A C output terminal retained until the final writer owns `Emit`.
 #[derive(Clone)]
 pub(crate) struct OutputTerminalPlan {
     pub(crate) ident: syn::Ident,
@@ -565,6 +599,15 @@ impl OutputTerminalPlan {
                     __cbg_alloc_cstr(v)
                 }
             ),
+            OutputTerminalOperation::BoolField => {
+                let wrap = bool_out_expr(quote!(v));
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) fn #name(v: #source) -> #wire {
+                        #wrap
+                    }
+                )
+            }
             OutputTerminalOperation::Scalar => syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
                 pub(crate) fn #name(v: #source) -> #wire {
