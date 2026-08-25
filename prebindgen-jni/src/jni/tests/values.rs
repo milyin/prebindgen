@@ -2619,6 +2619,18 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    let result = generation
+        .registry
+        .reading_of(&syn::parse_quote!(Result<u64, String>))
+        .expect("fallible output reading");
+    assert!(
+        generation
+            .decls
+            .out_frag(&result)
+            .expect("fallible output")
+            .is_result_plan(),
+        "Result output must retain an unrendered peel with its success dependency"
+    );
     let rust_path = generation
         .write_rust(dir.join("gen.rs"))
         .expect("write_rust");

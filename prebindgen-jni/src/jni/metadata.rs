@@ -98,20 +98,15 @@ pub struct KotlinMeta {
     /// error.
     pub kotlin_name: Option<KtType>,
     /// For wrapper converters whose Kotlin projection is the *inner*
-    /// type's projection (e.g. `ZResult<Publisher>` → `Publisher`),
-    /// this carries the inner Rust type — canonicalized — so downstream
-    /// emitters (typed-handle constructor lookup in `classify_return`) can find
-    /// the wrapped value's identity without baking in any specific shape.
-    /// Populated with `args[0]`'s canonical type for arity-1 wrappers, and
-    /// inherited by the built-in `Option<_>` / `Vec<_>` / `&_` wrappers from
-    /// their inner type's metadata. `None` for plain values and arity-0
-    /// converters.
+    /// type's projection (e.g. `Result<Publisher, E>` → `Publisher`),
+    /// this carries the inner Flat reading so downstream emitters can find the
+    /// surfaced value's identity without spelling or reconstructing Rust.
     ///
-    /// **A type, because that is the only thing anyone reads it as.** It held a
-    /// `TypeKey` and had exactly one reader, which immediately spent it on
-    /// `to_type()` — so the key was never an identity here, only a detour
-    /// through one. The producers have the `syn::Type` in hand (#291).
-    pub value_rust_type: Option<syn::Type>,
+    /// This is a classified Flat reading, not Rust syntax. Result planning
+    /// stores its success reading here; return-surface classification asks its
+    /// `TypeKind` and keys directly. `None` means the crossing itself is the
+    /// surfaced value.
+    pub value_reading: Option<prebindgen_registry::flat::TypeRef>,
     /// Present iff this (possibly wrapped) value is an opaque native handle. Set
     /// at the opaque-handle leaf and folded outward by the `&_` / `Option<_>`
     /// wrappers and the `lookup_*` composed branches. The single source of truth

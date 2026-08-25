@@ -691,7 +691,7 @@ impl Declarations {
             niches: inner.niches.clone(),
             metadata: KotlinMeta {
                 kotlin_name,
-                value_rust_type: None,
+                value_reading: None,
                 projection,
                 niche_sentinels: inner.metadata.niche_sentinels.clone(),
             },
@@ -942,7 +942,7 @@ impl JniGenBuilder {
                     f.conv
                         .pre_stages
                         .iter()
-                        .map(|s| crate::jni::chain::JFunction::complete(s.function.clone())),
+                        .map(|s| crate::jni::chain::JFunction::retained(s.function.clone())),
                 )
             })
             .collect();

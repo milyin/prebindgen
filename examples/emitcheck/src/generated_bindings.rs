@@ -465,44 +465,6 @@ pub(crate) unsafe fn Vec_u8_to_JByteArray_7936d5de<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn ZKeyExpr_to_jlong_37f9dc18<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: myflat::ZKeyExpr,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn ZSample_to_jlong_757bca9c<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: myflat::ZSample,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn borrowed_text_to_JString_b6a9f7b3<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: &str,

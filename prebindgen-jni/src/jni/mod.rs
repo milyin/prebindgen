@@ -1187,7 +1187,6 @@ mod iface;
 mod prim;
 mod prim_array;
 mod recipes;
-mod selector;
 #[cfg(test)]
 mod tests;
 pub(crate) mod trait_impl;

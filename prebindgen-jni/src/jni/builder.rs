@@ -99,23 +99,9 @@ impl Declarations {
             .unwrap_or_else(|| syn::parse_quote!(crate))
     }
 
-    /// Whether `ty` was registered via an `EnumClassDecl` — used by the
-    /// Kotlin wrapper generator to decide if a parameter needs a `.value`
-    /// projection between the typed enum (Kotlin signature) and the `Int`
-    /// wire (JNI `external fun`).
-    ///
-    /// Keyed on the canonical **spelling**, so it answers about the wrapper for
-    /// a transparently-wrapped type: `Box<Priority>` is `false` here.
-    /// [`is_kotlin_enum_reading`](Self::is_kotlin_enum_reading) is the same
-    /// question asked of the model, and is what a caller holding a reading
-    /// should use.
-    pub(crate) fn is_kotlin_enum(&self, ty: &syn::Type) -> bool {
-        self.is_kotlin_enum_key(&TypeKey::from_type(ty))
-    }
-
-    /// [`Self::is_kotlin_enum`] off the **identity** — the whole type's, not a
-    /// probe through its layers. See [`Self::is_kotlin_enum_reading`] for the
-    /// question that does peel, and why the two are not interchangeable.
+    /// Whether this exact type identity was registered as an `EnumClassDecl`.
+    /// See [`Self::is_kotlin_enum_reading`] for the question that peels model
+    /// layers before probing the identity.
     pub(crate) fn is_kotlin_enum_key(&self, key: &TypeKey) -> bool {
         self.types.get(key).is_some_and(|c| c.is_enum_class())
     }
@@ -124,10 +110,8 @@ impl Declarations {
     /// asked of the **reading**: [`enum_probe`] peels the borrow/optional
     /// layers off the model, and the name comes off the classification.
     ///
-    /// The name off `TypeKind::Named` rather than the spelling is the whole
-    /// difference from [`is_kotlin_enum`](Self::is_kotlin_enum). A declaration
-    /// names a type (`enum_class!(Priority)` keys `Priority`), and the model
-    /// erases the wrappers no destination language can see — so
+    /// A declaration names a type (`enum_class!(Priority)` keys `Priority`),
+    /// and the model erases the wrappers no destination language can see — so
     /// `Box<Option<&Priority>>` reaches the same declaration `Priority` does,
     /// where taking the spelling apart finds `Box` and answers about it.
     pub(crate) fn is_kotlin_enum_reading(&self, reading: &TypeRef) -> bool {
@@ -1785,7 +1769,7 @@ impl Declarations {
     pub(crate) fn framework_meta(&self, kotlin_name: Option<KtType>) -> KotlinMeta {
         KotlinMeta {
             kotlin_name,
-            value_rust_type: None,
+            value_reading: None,
             projection: None,
             niche_sentinels: Vec::new(),
         }
@@ -2038,7 +2022,7 @@ impl Declarations {
                     niches,
                     metadata: KotlinMeta {
                         kotlin_name,
-                        value_rust_type: None,
+                        value_reading: None,
                         // Terminal: body produces the wire directly, no inner
                         // converter composed, so no handle to carry.
                         projection: None,
@@ -2065,7 +2049,7 @@ impl Declarations {
                 let mut pre_stages = vec![stage];
                 pre_stages.extend(inner.pre_stages.iter().cloned());
                 let kotlin_name = inner.metadata.kotlin_name.clone();
-                let value_rust_type = None;
+                let value_reading = None;
                 let (niches, sentinels) = self.conversion_domain_niches(
                     &key,
                     registry,
@@ -2074,7 +2058,7 @@ impl Declarations {
                 );
                 let mut metadata = KotlinMeta {
                     kotlin_name,
-                    value_rust_type,
+                    value_reading,
                     projection: inner.metadata.projection.clone(),
                     niche_sentinels: Vec::new(),
                 };
@@ -2110,45 +2094,14 @@ impl Declarations {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = outer.key();
         let (ty, exc_ty, body) = self.convert_output_body(&key, registry, emit)?;
-        self.build_output_converter(outer, None, ty, exc_ty, body, registry, emit)
-    }
-
-    /// The `Result<T, E>` output peel: the value succeeds as `T`, and `E` routes
-    /// to the error sink on `Err`.
-    ///
-    /// This was the sole entry in a four-rank wildcard-pattern table, reached
-    /// through a general unification engine. The model already calls this shape
-    /// [`TypeKind::Fallible`](prebindgen_registry::flat::TypeKind::Fallible), so the
-    /// engine expressed one fact the frontend states outright.
-    pub(crate) fn result_peel(
-        &self,
-        outer: &prebindgen_registry::flat::TypeRef,
-        ok: &syn::Type,
-        err: &syn::Type,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.build_output_converter(
-            outer,
-            Some(ok),
-            ok.clone(),
-            Some(err.clone()),
-            syn::parse_quote!(v),
-            registry,
-            emit,
-        )
+        self.build_output_converter(outer, ty, exc_ty, body, registry, emit)
     }
 
     /// Assemble the output `ConverterImpl` from a body triple.
     ///
-    /// `arg0` is the peeled inner type for a shape peel, `None` for a
-    /// `convert!`-declared conversion — which is what the old `rank == 0`
-    /// tested.
-    #[allow(clippy::too_many_arguments)]
     fn build_output_converter(
         &self,
         outer: &prebindgen_registry::flat::TypeRef,
-        arg0: Option<&syn::Type>,
         ty: syn::Type,
         exc_ty: Option<syn::Type>,
         body: syn::Expr,
@@ -2169,39 +2122,21 @@ impl Declarations {
         match inner {
             None if is_self || is_wire_type(&ty) => {
                 // Terminal: `ty` is the wire; the body produces it from `outer`.
-                let (kotlin_name, value_rust_type) = if let Some(a0) = arg0 {
-                    registry
-                        .reading_of(a0)
-                        .and_then(|tr| self.out_frag(&tr))
-                        .map(|e| {
-                            (
-                                e.metadata.kotlin_name.clone(),
-                                Some(prebindgen_registry::flat::canonical_type(a0)),
-                            )
-                        })
-                        .unwrap_or((None, None))
-                } else {
-                    let kn = self
-                        .types
-                        .get(&key)
-                        .and_then(|c| c.name_spec.as_ref())
-                        .map(|s| KtType::cls(self.fqn_of(s)))
-                        .or_else(|| kotlin_for_wire(&ty));
-                    (kn, None)
-                };
-                let niches = match arg0 {
-                    None => Niches::empty(),
-                    Some(_) => default_niches_for_wire(&ty),
-                };
+                let kotlin_name = self
+                    .types
+                    .get(&key)
+                    .and_then(|c| c.name_spec.as_ref())
+                    .map(|s| KtType::cls(self.fqn_of(s)))
+                    .or_else(|| kotlin_for_wire(&ty));
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
                     function: self.build_output_fn_of(outer, &ty, &body, exc, emit),
                     destination: ty,
-                    niches,
+                    niches: Niches::empty(),
                     metadata: KotlinMeta {
                         kotlin_name,
-                        value_rust_type,
+                        value_reading: None,
                         // Terminal: body produces the wire directly, no inner
                         // converter composed, so no handle to carry.
                         projection: None,
@@ -2220,19 +2155,15 @@ impl Declarations {
                 let mut pre_stages = vec![stage];
                 pre_stages.extend(inner.pre_stages.iter().cloned());
                 let kotlin_name = inner.metadata.kotlin_name.clone();
-                let value_rust_type = arg0.map(prebindgen_registry::flat::canonical_type);
-                let (niches, sentinels) = match arg0 {
-                    None => self.conversion_domain_niches(
-                        &key,
-                        registry,
-                        Direction::Deconstruct,
-                        &inner.destination,
-                    ),
-                    Some(_) => (default_niches_for_wire(&inner.destination), Vec::new()),
-                };
+                let (niches, sentinels) = self.conversion_domain_niches(
+                    &key,
+                    registry,
+                    Direction::Deconstruct,
+                    &inner.destination,
+                );
                 let mut metadata = KotlinMeta {
                     kotlin_name,
-                    value_rust_type,
+                    value_reading: None,
                     projection: inner.metadata.projection.clone(),
                     niche_sentinels: Vec::new(),
                 };
