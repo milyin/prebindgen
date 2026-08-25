@@ -8,7 +8,7 @@
 
 use kotlin_codegen::KtType;
 use prebindgen_registry::{
-    flat::{Alternative, Function, TypeKind, TypeRef},
+    flat::{Alternative, Function, ScalarKind, TypeKind, TypeRef},
     recipe::{
         At, Bound, Carrier, Compile, Cx, Direction, Frag, Mode, Part, Parts, Validity, Yield,
     },
@@ -957,9 +957,10 @@ impl<R: Conversions> JCompile<'_, R> {
                 let metadata = self.decls.framework_meta(kotlin_name);
                 (wire, body, niches, metadata, Some(adapter_source))
             } else if direction == Direction::Deconstruct
+                && matches!(source.kind(), TypeKind::Cow { .. })
                 && matches!(
-                    source.kind(),
-                    TypeKind::Cow { inner, .. } if inner.key().as_str() == "[u8]"
+                    source.sequence_elem().map(TypeRef::kind),
+                    Some(TypeKind::Scalar(ScalarKind::U8))
                 )
             {
                 let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
