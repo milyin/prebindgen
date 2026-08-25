@@ -354,6 +354,43 @@ fn tagged_union_payloads_stay_unrendered_until_final_write() {
     );
 }
 
+#[test]
+fn specialized_field_terminals_stay_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Record { pub text: String, pub flag: bool }",
+        "pub fn record_roundtrip(v: Record) -> Record { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .free_memory_function("binding_free")
+        .data_struct(syn::parse_quote!(Record))
+        .function(syn::parse_quote!(record_roundtrip))
+        .build_with(registry)
+        .expect("resolve");
+
+    let functions = &generated.gen.compiled_fns;
+    assert_eq!(
+        functions
+            .iter()
+            .filter(|function| function.is_string_field_terminal())
+            .count(),
+        1,
+        "lenient String input must retain its field plan"
+    );
+    assert_eq!(
+        functions
+            .iter()
+            .filter(|function| function.is_bool_field_terminal())
+            .count(),
+        1,
+        "normalized bool output must retain its distinct field plan"
+    );
+}
+
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {

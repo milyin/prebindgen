@@ -710,13 +710,20 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     .expect("bool has an ordinary input-terminal plan");
                 return Ok(CFrag::from_input_terminal(at, plan));
             }
-            let conv = match at.crossing.direction() {
-                Direction::Construct => self.gen.in_string_field(ty),
+            return match at.crossing.direction() {
+                Direction::Construct => self
+                    .gen
+                    .in_string_field_plan(ty)
+                    .map(|plan| CFrag::from_input_terminal(at, plan))
+                    .ok_or_else(|| refuse(at, "no field reading for this type")),
                 // Only `bool` reads differently on the way out; a `String`
                 // field is allocated exactly as a `String` return is.
-                Direction::Deconstruct => self.gen.out_bool_field(ty),
+                Direction::Deconstruct => self
+                    .gen
+                    .out_bool_field_plan(ty)
+                    .map(|plan| CFrag::from_output_terminal(at, plan))
+                    .ok_or_else(|| refuse(at, "no field reading for this type")),
             };
-            return self.wrap(at, "no field reading for this type", conv);
         }
         if let Some((plan, niches)) =
             self.gen
