@@ -493,9 +493,10 @@ pub(crate) struct OutWire {
     /// form reached through an `Option` puts every value under it in doubt —
     /// and the site that splices is what sets it.
     pub(crate) nullable: bool,
-    /// JNI-specific operation frozen when a return site selects this
-    /// registry-composed wire. Legacy callback/error deliveries synthesized
-    /// directly from `UnfoldLeaf` leave this absent until the Invoke stage.
+    /// JNI-specific operation frozen when a return, callback, or error site
+    /// selects this registry-composed wire. `None` is valid only while a
+    /// structural recipe/interface is being described; Rust delivery rejects
+    /// a reached wire whose operation was not frozen during planning.
     pub(crate) abi: Option<OutAbi>,
 }
 

@@ -548,20 +548,7 @@ pub(crate) struct Delivered<'a> {
 }
 
 impl<'a> Delivered<'a> {
-    /// The site one expansion plan describes.
-    pub(crate) fn of(plan: &'a prebindgen_registry::unfold::UnfoldPlan) -> Self {
-        Self {
-            wires: crate::jni::compile::OutWire::from_leaves(&plan.leaves),
-            hoists: &plan.hoists,
-            by_ref: plan.by_ref,
-            chain: None,
-            fixed_product: plan.fixed_builder,
-            optional: plan.is_optional_base(),
-        }
-    }
-
-    /// Ordinary return delivery from the registry-compiled return site. Unlike
-    /// `of`, this does not reconstruct wires from the legacy unfold leaves.
+    /// Delivery from a registry-compiled return, callback, or error site.
     pub(crate) fn planned(
         plan: &'a prebindgen_registry::unfold::UnfoldPlan,
         wires: Vec<crate::jni::compile::OutWire>,
@@ -918,8 +905,8 @@ fn reach_leaf(
 /// null leaf) — see [`reach_leaf`]. Error arms are produced by `fail` (see
 /// [`cast_wire_to_jobject`]). Shared by the return-delivery site
 /// ([`emit_unfold_delivery`]), the callback trampoline, and the domain-error
-/// arm of fallible externs (whose `fail` falls back to a binding-error
-/// `signal_error` with default ze values).
+/// arm of fallible externs (whose `fail` routes an encoding failure to the
+/// binding-error channel).
 pub(crate) fn encode_plan_leaves(
     ext: &Declarations,
     registry: &impl Conversions,
@@ -1221,88 +1208,29 @@ pub(crate) fn encode_plan_leaves(
         let value = &value;
         let (frozen_pipeline, frozen_projection) = match &leaf.abi {
             Some(crate::jni::compile::OutAbi::Value(value)) => {
-                (Some(&value.pipeline), value.projection.as_ref())
+                (&value.pipeline, value.projection.as_ref())
             }
             Some(crate::jni::compile::OutAbi::Tag) => {
                 unreachable!("sum selector segments are encoded above")
             }
-            None => (None, None),
+            None => panic!(
+                "jnigen delivery: leaf `{}` reached Rust rendering without a frozen output ABI",
+                leaf.name
+            ),
         };
-        // Callback/error delivery still arrives through legacy synthesized
-        // leaves until the Invoke stage. Ordinary return delivery always has a
-        // frozen ABI and never enters this compatibility branch.
-        let legacy_entry = frozen_pipeline.is_none().then(|| {
-            ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
-                panic!(
-                    "jnigen unfold: leaf `{}` has no registered output converter",
-                    leaf.out_ty.key()
-                )
-            })
-        });
-        if let Some(entry) = &legacy_entry {
-            entry.activate();
-        }
-        let projection = frozen_projection.or_else(|| {
-            legacy_entry
-                .as_ref()
-                .and_then(|entry| entry.metadata.projection.as_ref())
-        });
-        let wire = frozen_pipeline.map_or_else(
-            || {
-                legacy_entry
-                    .as_ref()
-                    .expect("legacy output leaf has an entry")
-                    .destination
-                    .clone()
-            },
-            |pipeline| pipeline.wire().clone(),
-        );
+        let projection = frozen_projection;
+        let wire = frozen_pipeline.wire().clone();
         let conv_fail = fail(quote!(__e.to_string()));
         let conv = |input: TokenStream| -> TokenStream {
-            if let Some(pipeline) = frozen_pipeline {
-                let call = pipeline.invoke(input, emit);
-                return quote! {
-                    match #call {
-                        ::core::result::Result::Ok(__w) => __w,
-                        ::core::result::Result::Err(__e) => {
-                            #conv_fail
-                        }
-                    }
-                };
-            }
-            let out_entry = legacy_entry
-                .as_ref()
-                .expect("compatibility output leaf has an entry");
-            // Legacy callback/error leaf: reconstruct its semantic stages until
-            // those paths retain the same registry site result.
-            let conv_stages: Vec<syn::Ident> = out_entry
-                .output_stage_order()
-                .map(|(_, stage)| stage.function.sig.ident.clone())
-                .collect();
-            let conv_fn = out_entry.converter_ident().clone();
-            let step = |f: &syn::Ident, arg: TokenStream| {
-                quote! {
-                    match #f(&mut env, #arg) {
-                        ::core::result::Result::Ok(__w) => __w,
-                        ::core::result::Result::Err(__e) => {
-                            #conv_fail
-                        }
+            let call = frozen_pipeline.invoke(input, emit);
+            quote! {
+                match #call {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        #conv_fail
                     }
                 }
-            };
-            if conv_stages.is_empty() {
-                return step(&conv_fn, input);
             }
-            let mut body = TokenStream::new();
-            let mut previous = input;
-            for (order, stage_fn) in conv_stages.iter().enumerate() {
-                let next = format_ident!("__cs{}_{}", idx, order);
-                let call = step(stage_fn, previous);
-                body.extend(quote! { let #next = #call; });
-                previous = quote!(#next);
-            }
-            let last = step(&conv_fn, previous);
-            quote!({ #body #last })
         };
 
         // Bind `obj_ident` to a JObject-yielding `expr`.
@@ -1652,9 +1580,10 @@ pub(crate) fn leaf_is_prim(ext: &Declarations, leaf: &crate::jni::compile::OutWi
     leaf_ty_is_prim(ext, &leaf.out_ty)
 }
 
-/// Final JNI wire for one outgoing leaf. Ordinary return sites retain it in
-/// their frozen ABI; callback/error compatibility leaves still resolve it from
-/// the adapter until the Invoke stage.
+/// Final JNI wire for one outgoing leaf. Every Rust delivery site retains this
+/// in its frozen ABI. The `None` branch serves only structural interface
+/// derivation, which describes raw recipe leaves before a concrete site is
+/// frozen and never emits their conversion.
 pub(crate) fn leaf_wire(ext: &Declarations, leaf: &crate::jni::compile::OutWire) -> syn::Type {
     match &leaf.abi {
         Some(crate::jni::compile::OutAbi::Tag) => syn::parse_quote!(jni::sys::jint),

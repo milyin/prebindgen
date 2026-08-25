@@ -43,11 +43,31 @@ pub(crate) struct JniFunctionPlan {
     /// Rust delivery, Kotlin surface/KDoc, and the report all consume this
     /// owned plan after the registry phase is closed.
     pub unfold: Option<prebindgen_registry::unfold::UnfoldPlan>,
-    /// Registry-resolved domain-error decomposition selected for this
-    /// function. Rust encoding and every Kotlin artifact share this value.
-    pub error: Option<prebindgen_registry::unfold::UnfoldPlan>,
+    /// Registry-resolved domain-error delivery selected for this function.
+    /// The structural decomposition, exact outgoing JNI operations, and any
+    /// composed converter are frozen together before either writer runs.
+    pub error: Option<ErrorOutputPlan>,
     pub params: Vec<PlanParam>,
     pub output: FnOutputPlan,
+}
+
+/// Frozen delivery of a fallible function's `Err(E)` arm.
+///
+/// Kotlin and report generation read [`Self::unfold`]. Rust delivery consumes
+/// [`Self::wires`] and [`Self::chain`], so it cannot reconstruct converters
+/// from `TypeRef` while rendering the wrapper.
+pub(crate) struct ErrorOutputPlan {
+    pub unfold: prebindgen_registry::unfold::UnfoldPlan,
+    pub wires: Vec<crate::jni::compile::OutWire>,
+    pub chain: Option<crate::jni::compile::ComposedChain>,
+}
+
+impl std::ops::Deref for ErrorOutputPlan {
+    type Target = prebindgen_registry::unfold::UnfoldPlan;
+
+    fn deref(&self) -> &Self::Target {
+        &self.unfold
+    }
 }
 
 /// One source parameter: the ident/type as written plus its lowered form.
@@ -639,6 +659,9 @@ impl JniFunctionPlan {
         // before the inputs, so an unresolved-output failure takes precedence
         // over an unresolved-input one.
         let output = build_output(ext, registry, f, unfold.as_ref(), error.as_ref())?;
+        let error = error
+            .map(|plan| build_error_output(ext, registry, plan))
+            .transpose()?;
         let mut params = Vec::new();
         // The element's parameters: each already a name and a `TypeRef`, so
         // there is no `FnArg`/`Pat` destructuring and no position that could
@@ -902,6 +925,49 @@ pub(crate) fn decomposed_return_for_test(
     let ret = ret.sequence_elem().unwrap_or(ret);
     let ret = ret.borrow_target().unwrap_or(ret);
     return_site(ext, registry, func, ret, None).and_then(|p| p.decomposed())
+}
+
+/// Freeze the exact Rust-to-JNI delivery selected for one domain-error plan.
+///
+/// Error decompositions may be function-unique value-form walks, so their
+/// leaves are always compiled directly through the registry. A model-derived
+/// Product/Optional/Choice additionally retains its composed converter; the
+/// renderer may use it only when its layout matches the declared error leaves.
+fn build_error_output(
+    ext: &Declarations,
+    registry: &Registry,
+    unfold: prebindgen_registry::unfold::UnfoldPlan,
+) -> Result<ErrorOutputPlan, PlanError> {
+    let wires =
+        crate::jni::compile::freeze_out_wires(ext, registry, &unfold.leaves).map_err(|_| {
+            PlanError::UnresolvedOutput {
+                ty: Box::new(unfold.source.clone()),
+            }
+        })?;
+    let delivered = if unfold.by_ref {
+        unfold.source.borrowed()
+    } else {
+        unfold.source.clone()
+    };
+    let delivered = if unfold.is_optional_base() {
+        delivered.optional()
+    } else {
+        delivered
+    };
+    let chain = if unfold.fixed_builder && unfold.hoists.is_empty() {
+        crate::jni::compile::freeze_output_chain(ext, registry, &delivered).map_err(|_| {
+            PlanError::UnresolvedOutput {
+                ty: Box::new(delivered),
+            }
+        })?
+    } else {
+        None
+    };
+    Ok(ErrorOutputPlan {
+        unfold,
+        wires,
+        chain,
+    })
 }
 
 /// Lower the output side. Mirrors the historical derivations exactly:

@@ -319,70 +319,28 @@ fn encode_group_leaf(
     emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
     let frozen_pipeline = match &leaf.abi {
-        Some(crate::jni::compile::OutAbi::Value(value)) => Some(&value.pipeline),
+        Some(crate::jni::compile::OutAbi::Value(value)) => &value.pipeline,
         Some(crate::jni::compile::OutAbi::Tag) => {
             unreachable!("a Choice payload is not its selector")
         }
-        None => None,
+        None => panic!(
+            "jnigen sum delivery: payload leaf `{}` reached Rust rendering without a frozen output ABI",
+            leaf.name
+        ),
     };
-    // Callback/error delivery still synthesizes compatibility leaves. An
-    // ordinary return's Choice payload always carries the frozen pipeline.
-    let legacy_entry = frozen_pipeline.is_none().then(|| {
-        ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
-            panic!(
-                "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
-                leaf.name,
-                leaf.out_ty.key()
-            )
-        })
-    });
-    if let Some(entry) = &legacy_entry {
-        entry.activate();
-    }
     let wire = leaf_wire(ext, leaf);
     let conv_fail = fail(quote!(__e.to_string()));
     let enc = format_ident!("__enc_{}", obj_ident);
     let mut encode = TokenStream::new();
-    if let Some(pipeline) = frozen_pipeline {
-        let call = pipeline.invoke(quote!(#bind.clone()), emit);
-        encode.extend(quote! {
-            let #enc = match #call {
-                ::core::result::Result::Ok(__w) => __w,
-                ::core::result::Result::Err(__e) => {
-                    #conv_fail
-                }
-            };
-        });
-    } else {
-        let out_entry = legacy_entry
-            .as_ref()
-            .expect("compatibility Choice payload has an output entry");
-        // Legacy callback/error payload: reconstruct its semantic stages until
-        // those paths retain the same registry site result.
-        let mut previous = quote!(#bind.clone());
-        for (order, (_, stage)) in out_entry.output_stage_order().enumerate() {
-            let stage_fn = &stage.function.sig.ident;
-            let next = format_ident!("__enc_{}_s{}", obj_ident, order);
-            encode.extend(quote! {
-                let #next = match #stage_fn(&mut env, #previous) {
-                    ::core::result::Result::Ok(__w) => __w,
-                    ::core::result::Result::Err(__e) => {
-                        #conv_fail
-                    }
-                };
-            });
-            previous = quote!(#next);
-        }
-        let conv = out_entry.converter_ident();
-        encode.extend(quote! {
-            let #enc = match #conv(&mut env, #previous) {
-                ::core::result::Result::Ok(__w) => __w,
-                ::core::result::Result::Err(__e) => {
-                    #conv_fail
-                }
-            };
-        });
-    }
+    let call = frozen_pipeline.invoke(quote!(#bind.clone()), emit);
+    encode.extend(quote! {
+        let #enc = match #call {
+            ::core::result::Result::Ok(__w) => __w,
+            ::core::result::Result::Err(__e) => {
+                #conv_fail
+            }
+        };
+    });
     if prim {
         let letter = jni_field_access(&wire)
             .expect("leaf_is_prim guarantees a primitive wire")
