@@ -1344,7 +1344,7 @@ fn peel_one_borrow(t: &prebindgen_registry::flat::TypeRef) -> &prebindgen_regist
 /// `syn::ItemEnum` to work out which of the two shapes it had — the
 /// classification the model makes once, at parse time, and expresses as two
 /// different elements.
-fn flat_unit_enum<'r>(
+pub(crate) fn flat_unit_enum<'r>(
     registry: &'r impl Conversions,
     name: &syn::Ident,
     declarator: &str,
@@ -1785,38 +1785,6 @@ impl Declarations {
                 return Some(self.opaque_handle_input(reading, emit));
             }
         }
-        // `enum_class`-declared enums: jint wire, `TryFrom<i32>` decode.
-        // Registered before the user-wrapper lookup so a stray
-        // `input_wrapper` registration on the same key would have to be
-        // intentional. The rank-0 enum arm produces a terminal converter
-        // (jint → Rust enum) with the configured Kotlin FQN in metadata.
-        if let Some(cfg) = self.types.get(&key) {
-            if cfg.is_enum_class() {
-                if let Some(name) = reading.key().ident() {
-                    // The ELEMENT, and the match is the check: a declared
-                    // `enum_class!` over a data-carrying enum is a `Variant`,
-                    // not an `Enum`, so the shape assertion the two bodies used
-                    // to run is the kind the model already decided.
-                    if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
-                        let (wire, body) = enum_input_body(self, registry, e);
-                        let (niches, niche_sentinels) =
-                            self.enum_niches(e, registry, Direction::Construct);
-                        let kotlin_name =
-                            cfg.name_spec.as_ref().map(|s| KtType::cls(self.fqn_of(s)));
-                        let mut metadata = self.framework_meta(kotlin_name);
-                        metadata.niche_sentinels = niche_sentinels;
-                        return Some(ConverterImpl {
-                            subs: vec![],
-                            pre_stages: vec![],
-                            function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                            destination: wire,
-                            niches,
-                            metadata,
-                        });
-                    }
-                }
-            }
-        }
         if let Some(conv) = self.lookup_input(reading, registry, emit) {
             return Some(conv);
         }
@@ -2086,33 +2054,6 @@ impl Declarations {
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_opaque() {
                 return Some(self.opaque_handle_output(reading, emit));
-            }
-        }
-        // `enum_class`-declared enums: jint wire, `as jni::sys::jint`
-        // encode. Symmetric to the input arm above; relies on
-        // `#[repr(i32)]` (or any repr that supports the cast) on the
-        // declared enum so the discriminant value round-trips identically.
-        if let Some(cfg) = self.types.get(&key) {
-            if cfg.is_enum_class() {
-                if let Some(name) = reading.key().ident() {
-                    if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
-                        let (wire, body) = enum_output_body(self, e);
-                        let (niches, niche_sentinels) =
-                            self.enum_niches(e, registry, Direction::Deconstruct);
-                        let kotlin_name =
-                            cfg.name_spec.as_ref().map(|s| KtType::cls(self.fqn_of(s)));
-                        let mut metadata = self.framework_meta(kotlin_name);
-                        metadata.niche_sentinels = niche_sentinels;
-                        return Some(ConverterImpl {
-                            subs: vec![],
-                            pre_stages: vec![],
-                            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                            destination: wire,
-                            niches,
-                            metadata,
-                        });
-                    }
-                }
             }
         }
         if let Some(conv) = self.lookup_output(reading, registry, emit) {
