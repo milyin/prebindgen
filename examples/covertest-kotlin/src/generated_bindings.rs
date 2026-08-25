@@ -6711,6 +6711,34 @@ pub(crate) unsafe fn JString_to_String_c7f3ca43<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn JString_to_owned_text_220e25c6<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JString<'v>,
+) -> ::core::result::Result<String, __JniErr> {
+    Ok({
+        let s = env
+            .get_string(v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("decode_string: {}", e))
+            })?;
+        s.into()
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Label_to_String_63dec766<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Label,
@@ -11469,6 +11497,32 @@ pub(crate) unsafe fn bool_to_jboolean_31306d98<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn borrowed_text_to_JString_b6a9f7b3<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: &str,
+) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
+    Ok({
+        env.new_string(v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("encode_str: {}", e))
+            })?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn f64_2_to_JDoubleArray_dc30d1f9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: [f64; 2],
@@ -12529,32 +12583,6 @@ pub(crate) unsafe fn jlong_to_u64_4384a5d6<'env, 'v>(
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<u64, __JniErr> {
     Ok(*v as ::core::primitive::u64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn str_to_JString_7b77dc67<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: &str,
-) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    Ok({
-        env.new_string(v)
-            .map_err(|e| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("encode_str: {}", e))
-            })?
-    })
 }
 #[allow(
     non_snake_case,
@@ -22222,7 +22250,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTryWithLa
     static __DSINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __DSINK_FQN: &str = "io/prebindgen/covertest/errors/StorageErrorHandlerRaw";
     const __DSINK_DESCR: &str = "(Ljava/lang/String;J)Ljava/lang/Object;";
-    let label = match JString_to_String_c7f3ca43(&mut env, &label) {
+    let label = match JString_to_owned_text_220e25c6(&mut env, &label) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -22355,7 +22383,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stringNew<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match JString_to_String_c7f3ca43(&mut env, &s) {
+    let s = match JString_to_owned_text_220e25c6(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -24965,7 +24993,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverTag
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::COVER_TAG;
-    match str_to_JString_7b77dc67(&mut env, __out) {
+    match borrowed_text_to_JString_b6a9f7b3(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(

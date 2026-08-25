@@ -9,6 +9,16 @@ use prebindgen_registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 use super::*;
 
+/// Whether Flat classifies this exact crossing as the unsigned 64-bit scalar.
+/// Destination policy asks the model once through this helper; no caller reads
+/// or compares Rust spelling.
+pub(crate) fn is_unsigned64(ty: &prebindgen_registry::flat::TypeRef) -> bool {
+    matches!(
+        ty.kind(),
+        prebindgen_registry::flat::TypeKind::Scalar(prebindgen_registry::flat::ScalarKind::U64)
+    )
+}
+
 /// The `#[allow(...)]` carried by every generated converter `fn`.
 ///
 /// Generated converters are uniform templates, not hand-written idiomatic Rust,
@@ -822,7 +832,7 @@ impl Declarations {
             // unsupported status (`Vec<u8>` is the rank-0 ByteArray special).
             None => {
                 matches!(elem.kind(), prebindgen_registry::flat::TypeKind::String)
-                    || elem.key().as_str() == "u64"
+                    || is_unsigned64(elem)
             }
         }
     }
@@ -1822,7 +1832,7 @@ impl Declarations {
         {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if reading.key().as_str() == "u64" {
+            let metadata = if is_unsigned64(reading) {
                 self.unsigned64_leaf_meta()
             } else {
                 self.framework_meta(kotlin_name)
@@ -2120,7 +2130,7 @@ impl Declarations {
         {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if reading.key().as_str() == "u64" {
+            let metadata = if is_unsigned64(reading) {
                 self.unsigned64_leaf_meta()
             } else {
                 self.framework_meta(kotlin_name)

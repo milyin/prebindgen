@@ -130,7 +130,7 @@ fn owned_strings_and_unit_retain_late_value_codec_plans() {
 }
 
 #[test]
-fn unsized_str_retains_adapter_typed_value_codec_plans() {
+fn unsized_str_retains_semantic_text_codec_plans() {
     let loc = myflat_loc();
     let registry = crate::test_util::reg_from_items(declare_referenced(vec![
         (
@@ -197,11 +197,11 @@ fn unsized_str_retains_adapter_typed_value_codec_plans() {
         .expect("&str output");
     assert!(
         input.is_value_codec_plan(),
-        "the unsized input must retain a plan whose adapter type is String"
+        "the unsized input must retain a semantic owned-text plan"
     );
     assert!(
         bare_output.is_value_codec_plan() && ref_output.is_value_codec_plan(),
-        "both output crossings must retain the adapter-typed &str plan"
+        "both output crossings must retain the semantic borrowed-text plan"
     );
     assert_eq!(
         bare_output.converter_ident(),

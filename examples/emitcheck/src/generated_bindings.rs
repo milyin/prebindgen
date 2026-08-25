@@ -256,7 +256,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
                         let __o0: &::core::option::Option<_> = &(&__vf0).opt_plain;
                         match __o0 {
                             ::core::option::Option::Some(__n0) => {
-                                let __enc0 = match str_to_JString_7b77dc67(
+                                let __enc0 = match borrowed_text_to_JString_b6a9f7b3(
                                     &mut env,
                                     myflat::z_keyexpr_as_str(__n0),
                                 ) {
@@ -278,7 +278,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
                         let __o0: &::core::option::Option<_> = &(&__vf0).opt_boxed;
                         match __o0 {
                             ::core::option::Option::Some(__n0) => {
-                                let __enc1 = match str_to_JString_7b77dc67(
+                                let __enc1 = match borrowed_text_to_JString_b6a9f7b3(
                                     &mut env,
                                     myflat::z_keyexpr_as_str(__n0),
                                 ) {
@@ -529,7 +529,7 @@ pub(crate) unsafe fn ZSample_to_jlong_757bca9c<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn str_to_JString_7b77dc67<'a>(
+pub(crate) unsafe fn borrowed_text_to_JString_b6a9f7b3<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: &str,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
