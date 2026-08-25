@@ -124,15 +124,6 @@ pub struct KotlinMeta {
 }
 
 impl KotlinMeta {
-    pub fn from_name(name: impl Into<String>) -> Self {
-        Self {
-            kotlin_name: Some(KtType::cls(name)),
-            value_rust_type: None,
-            projection: None,
-            niche_sentinels: Vec::new(),
-        }
-    }
-
     /// True iff this (input-direction) converter decodes a directly-consumable
     /// owned opaque handle — i.e. its projection is a bare `Handle` leaf with no
     /// `Option`/`Vec` fold. Replaces the former `converter_returns_owned_object`

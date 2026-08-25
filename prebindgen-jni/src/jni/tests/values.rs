@@ -3,6 +3,68 @@ use prebindgen_registry::Conversions;
 use super::*;
 
 #[test]
+fn opaque_handles_retain_late_plans_for_all_ownership_operations() {
+    let loc = myflat_loc();
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub struct Token {
+                    _private: u8,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn owned_handle(value: Token) -> Token {
+                    value
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn borrowed_handle(value: &Token) -> &Token {
+                    value
+                }
+            ),
+            loc,
+        ),
+    ]))
+    .expect("index handle fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Token))
+                .fun(prebindgen_registry::fun!(owned_handle))
+                .fun(prebindgen_registry::fun!(borrowed_handle)),
+        )
+        .build_with(registry)
+        .expect("resolve handle fixture");
+
+    for ty in [syn::parse_quote!(Token), syn::parse_quote!(&Token)] {
+        let reading = generation.registry.reading_of(&ty).expect("handle reading");
+        assert!(
+            generation
+                .decls
+                .in_frag(&reading)
+                .expect("handle input")
+                .is_handle_codec_plan(),
+            "the handle input must retain an unrendered handle codec: {ty:?}"
+        );
+        assert!(
+            generation
+                .decls
+                .out_frag(&reading)
+                .expect("handle output")
+                .is_handle_codec_plan(),
+            "the handle output must retain an unrendered handle codec: {ty:?}"
+        );
+    }
+}
+
+#[test]
 fn bare_scalars_retain_late_registry_plans_in_both_directions() {
     let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
         syn::parse_quote!(
