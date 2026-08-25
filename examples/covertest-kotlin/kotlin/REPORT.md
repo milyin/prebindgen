@@ -5,6 +5,7 @@ Base package: `io.prebindgen.covertest`
 ## package `io.prebindgen.covertest`
 
 - `callback_holder_optional_emit` — `fun callbackHolderOptionalEmit(present: Boolean, f: CallbackHolderOptionalCallback, onError: JniErrorHandler<Unit>)`
+- `payload_optional_borrow_id` — `fun payloadOptionalBorrowId(p: Payload?, onError: JniErrorHandler<Long>): Long`
 - `string_new` — `fun stringNew(s: String, onError: JniErrorHandler<String?>): String?`
 - `val COVER_BANNER: String` — binding expression
 - `val COVER_MAGIC` — `#[prebindgen]` const `COVER_MAGIC`

@@ -1011,6 +1011,7 @@ impl<R: Conversions> JCompile<'_, R> {
         crate::jni::chain::JPipeline::new(
             frag.conv.destination.clone(),
             Self::planned_child_mode(direction, mode, frag),
+            direction == Direction::Construct && frag.rust.is_borrowed_optional_value(),
         )
     }
 
@@ -1497,7 +1498,27 @@ impl<R: Conversions> JCompile<'_, R> {
             }
             _ => {}
         }
-        if direction == Direction::Construct && element.borrow_target().is_some() {
+        let borrowed_input = if direction == Direction::Construct {
+            element.borrow_target().and_then(|target| {
+                // An outer transparent wrapper would have to contain borrowed
+                // values, which no converter-local carrier can construct.
+                if !source.erased_wrappers().is_empty() {
+                    return None;
+                }
+                matches!(
+                    self.decls.type_kind(self.registry, &target.stripped_key()),
+                    crate::jni::classify::TypeKind::DataStruct { cfg: Some(cfg), .. }
+                        if cfg.name_spec.is_some()
+                )
+                .then(|| target.clone())
+            })
+        } else {
+            None
+        };
+        if direction == Direction::Construct
+            && element.borrow_target().is_some()
+            && borrowed_input.is_none()
+        {
             return None;
         }
 
@@ -1702,9 +1723,12 @@ impl<R: Conversions> JCompile<'_, R> {
             chain: prebindgen_registry::chain::Optional {
                 source: source.clone(),
                 direction,
-                source_policy: crate::jni::chain::JSource {
-                    wrappers,
-                    module: None,
+                source_policy: crate::jni::chain::JOptionalSource {
+                    ordinary: crate::jni::chain::JSource {
+                        wrappers,
+                        module: None,
+                    },
+                    borrowed_input,
                 },
                 bridge,
                 child,
@@ -2199,12 +2223,15 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         };
 
         // VecBuild constructs a Rust collection through its handle helpers and
-        // never calls the root JObject converter. Activating that converter
-        // would emit an orphan list decoder; for a bare Vec it also duplicates
-        // the legacy decoder. Other leaf parameter plans still consume their
-        // root conversion.
+        // FlattenStruct reconstructs one through the registry's `parts` chain;
+        // neither calls the crossing's default whole-value converter.
+        // Activating that converter would emit an orphan list/object decoder.
+        // Other leaf parameter plans still consume their root conversion.
         if matches!(root.layout, Some(JLayout::Leaf))
-            && !matches!(&kind, InputKind::VecBuild { .. })
+            && !matches!(
+                &kind,
+                InputKind::VecBuild { .. } | InputKind::FlattenStruct(_)
+            )
         {
             root.rust.mark_reachable();
         }

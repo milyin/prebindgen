@@ -60,6 +60,7 @@
 //! | fixed-width unsigned scalars (#108) | `Unsigned` + direct/optional/callback/collection max-value round trips |
 //! | owned `Option<opaque>` input         | `ingot_optional_grams`: null niche or consuming handle through the shared registry Optional chain |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
+//! | borrowed `Option<&data_class>`       | `payload_optional_borrow_id`: Kotlin-side flattening → registry-owned `Option<Payload>` carrier → final borrow |
 //! | non-null enum field under nullable-context (#144) | `Option<CacheConfig>` → nested `RepliesConfig.priority` (single Elvis default) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
 //! | owned-handle callback (`Fn(Storage)`)| `storage_handler_new` / `storage_emit` |
@@ -216,12 +217,14 @@ fn main() {
         // `PayloadApi` exposes its fields + `labelLen()`, and the
         // hand-written `Timestamped` interface extends it (#54).
         .package(
-            package!().class(
-                data_class!(Payload)
-                    .interface()
-                    .implements("io.prebindgen.covertest.Timestamped")
-                    .method(fun!(payload_label_len)),
-            ),
+            package!()
+                .class(
+                    data_class!(Payload)
+                        .interface()
+                        .implements("io.prebindgen.covertest.Timestamped")
+                        .method(fun!(payload_label_len)),
+                )
+                .fun(fun!(payload_optional_borrow_id)),
         )
         // `Option<Holder>` where `Holder` has a REQUIRED handle field: the
         // absent case passes pointer 0 for it, so the field decodes must stay
