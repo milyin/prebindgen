@@ -866,34 +866,6 @@ pub(crate) unsafe fn Box_Box_Option_String_to_JString_299999e0<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn Box_Duration_to_jlong_0776c1ca<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Box<perftest_flat::Duration>,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok({
-        let __inner = *v;
-        {
-            let __inner_s0 = Duration_to_u64_e3980876(env, __inner)
-                .map_err(|__e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(__e.to_string()))?;
-            u64_to_jlong_4384a5d6(env, __inner_s0)?
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn Box_Option_i64_to_JObject_cf5a3724<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Box<Option<i64>>,
@@ -909,28 +881,6 @@ pub(crate) unsafe fn Box_Option_i64_to_JObject_cf5a3724<'a>(
             }
             ::core::option::Option::None => jni::objects::JObject::null(),
         }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Box_Priority_to_jint_a16653ae<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Box<perftest_flat::Priority>,
-) -> ::core::result::Result<jni::sys::jint, __JniErr> {
-    Ok({
-        let __inner = *v;
-        Priority_to_jint_447102d2(env, __inner)?
     })
 }
 #[allow(
@@ -2191,28 +2141,6 @@ pub(crate) unsafe fn JObject_to_Box_Option_i64_cf5a3724<'env, 'v>(
             }
         }),
     )
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn JObject_to_Box_Payload_0d2d19da<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Box<perftest_flat::Payload>, __JniErr> {
-    Ok({
-        let __inner = JObject_to_Payload_98f64326(env, v)?;
-        ::std::boxed::Box::new(__inner)
-    })
 }
 #[allow(
     non_snake_case,
@@ -4059,7 +3987,7 @@ pub(crate) unsafe fn JObject_to_WrappedFields_f14f08c1<'env, 'v>(
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("WrappedFields.boxedEnum: {}", e)))?;
-        let boxed_enum = jint_to_Box_Priority_a16653ae(env, &__boxed_enum_raw)?;
+        let boxed_enum = transparent_input_34c54232(env, &__boxed_enum_raw)?;
         let __plain_enum_jobj: jni::objects::JObject = env
             .get_field(v, "plainEnum", "Lio/prebindgen/covertest/model/Priority;")
             .and_then(|val| val.l())
@@ -11250,7 +11178,7 @@ pub(crate) unsafe fn WrappedFields_to_JObject_f14f08c1<'a>(
             env,
             v.plain.clone(),
         )?;
-        let ___boxed_enum: jni::sys::jint = Box_Priority_to_jint_a16653ae(
+        let ___boxed_enum: jni::sys::jint = transparent_output_338ccda2(
             env,
             v.boxed_enum.clone(),
         )?;
@@ -11711,28 +11639,6 @@ pub(crate) unsafe fn jint_to_Box_Option_Priority_2f024ff7<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn jint_to_Box_Priority_a16653ae<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::sys::jint,
-) -> ::core::result::Result<Box<perftest_flat::Priority>, __JniErr> {
-    Ok({
-        let __inner = jint_to_Priority_447102d2(env, v)?;
-        ::std::boxed::Box::new(__inner)
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn jint_to_Option_Option_Priority_156f825d<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
@@ -11902,35 +11808,6 @@ pub(crate) unsafe fn jlong_to_Archive_cd73502c<'env, 'v>(
         );
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Archive) })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn jlong_to_Box_Duration_0776c1ca<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::sys::jlong,
-) -> ::core::result::Result<Box<perftest_flat::Duration>, __JniErr> {
-    Ok({
-        let __inner = {
-            let __inner_s0 = jlong_to_u64_4384a5d6(env, v)?;
-            let __inner_s1 = u64_to_Duration_7c0845f9(env, __inner_s0)
-                .map_err(|__e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(__e.to_string()))?;
-            __inner_s1
-        };
-        ::std::boxed::Box::new(__inner)
-    })
 }
 #[allow(
     non_snake_case,
@@ -12481,6 +12358,107 @@ pub(crate) unsafe fn result_peel_b82a36e0<'a>(
     v: Result<perftest_flat::Summary, String>,
 ) -> ::core::result::Result<perftest_flat::Summary, String> {
     v
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn transparent_input_34c54232<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jint,
+) -> ::core::result::Result<Box<perftest_flat::Priority>, __JniErr> {
+    ::core::result::Result::Ok({
+        let __inner = jint_to_Priority_447102d2(env, v)?;
+        ::std::boxed::Box::new(__inner)
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn transparent_input_376b06ab<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<Box<perftest_flat::Duration>, __JniErr> {
+    ::core::result::Result::Ok({
+        let __inner = {
+            let __chain_s0 = jlong_to_u64_4384a5d6(env, v)?;
+            let __chain_s1 = u64_to_Duration_7c0845f9(env, __chain_s0)
+                .map_err(|__e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(__e.to_string()))?;
+            ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
+        }?;
+        ::std::boxed::Box::new(__inner)
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn transparent_output_338ccda2<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Box<perftest_flat::Priority>,
+) -> ::core::result::Result<jni::sys::jint, __JniErr> {
+    ::core::result::Result::Ok({
+        let __inner = *v;
+        Priority_to_jint_447102d2(env, __inner)?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn transparent_output_e691bcd4<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Box<perftest_flat::Duration>,
+) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+    ::core::result::Result::Ok({
+        let __inner = *v;
+        {
+            let __chain_s0 = Duration_to_u64_e3980876(env, __inner)
+                .map_err(|__e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(__e.to_string()))?;
+            u64_to_jlong_4384a5d6(env, __chain_s0)
+        }?
+    })
 }
 #[allow(
     non_snake_case,
@@ -13282,7 +13260,7 @@ pub(crate) unsafe fn tuple5_to_WrappedFields_95f06a69<'env, 'a>(
         id: jlong_to_i64_fbf9a9bc(env, &((v).0))?,
         boxed: tuple2_to_Box_Option_i64_cb6771ba(env, (v).1)?,
         plain: tuple2_to_Option_i64_b2611839(env, (v).2)?,
-        boxed_enum: jint_to_Box_Priority_a16653ae(env, &((v).3))?,
+        boxed_enum: transparent_input_34c54232(env, &((v).3))?,
         plain_enum: jint_to_Priority_447102d2(env, &((v).4))?,
     })
 }
@@ -14871,7 +14849,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedDurationEch
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let value = match jlong_to_Box_Duration_0776c1ca(&mut env, &value) {
+    let value = match transparent_input_376b06ab(&mut env, &value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -14886,7 +14864,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedDurationEch
         }
     };
     let __out = perftest_flat::boxed_duration_echo(value);
-    match Box_Duration_to_jlong_0776c1ca(&mut env, __out) {
+    match transparent_output_e691bcd4(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
