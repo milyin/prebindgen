@@ -36,7 +36,7 @@ pub(crate) struct VecBuildElem {
     /// The wrappers taken off the element, outermost first — empty for the
     /// ordinary case. Applied per element where the Vec is consumed, since the
     /// storage holds the canonical type. A list and not a `TypeRef`: it is the
-    /// only part a rebuild uses, and it rides in [`InputKind::VecBuild`], whose
+    /// only part a rebuild uses, and it rides in [`KotlinParamOp::VecBuild`], whose
     /// size every variant pays.
     pub elem_wrappers: Vec<&'static str>,
     /// The canonical helper ABI shared by every function using this element

@@ -2147,7 +2147,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     /// leaf, and the diagnostic for an unresolved leaf names the parameter that
     /// expanded.
     fn plan(&mut self, _cx: &mut Cx<'_>, bound: &Bound, root: &JFrag) -> Result<JPlan, JErr> {
-        use crate::jni::fn_plan::{plan_error, InputKind, PlanLeaf};
+        use crate::jni::fn_plan::{
+            kotlin_jvm_slots, plan_error, KotlinParamOp, NativeParam, PlanLeaf, RustParamOp,
+        };
         let site = self
             .site
             .as_ref()
@@ -2190,7 +2192,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let flat_plan = crate::jni::emit::build_flat_input_plan(ext, registry, ident, reading)
             .map_err(|e| plan_error(crate::jni::fn_plan::PlanError::UnflattenableDataClass(e)))?;
         let mut site_pipeline = None;
-        let kind = if let Some(v) = (!expanded)
+        let kotlin = if let Some(v) = (!expanded)
             .then(|| crate::jni::emit::vec_build_elem(ext, registry, reading))
             .flatten()
         {
@@ -2200,7 +2202,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 v.by_ref,
                 v.elem_wrappers,
             ));
-            InputKind::VecBuild { helpers: v.helpers }
+            KotlinParamOp::VecBuild { helpers: v.helpers }
         } else if bound.recipe.name() == &crate::jni::recipes::pair() {
             let plan = optional_pair_plan(ext, ident, reading, root).ok_or_else(|| {
                 JErr::Refused(format!(
@@ -2208,12 +2210,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     bound.site
                 ))
             })?;
-            InputKind::OptionalPair(Box::new(plan))
+            KotlinParamOp::OptionalPair(std::rc::Rc::new(plan))
         } else if let Some(plan) = flat_plan {
-            InputKind::FlattenStruct(plan)
+            KotlinParamOp::FlattenStruct(std::rc::Rc::new(plan))
         } else {
             match entry.metadata.projection.as_ref().map(|p| p.kind.clone()) {
-                Some(ProjectionKind::Handle) => InputKind::Handle {
+                Some(ProjectionKind::Handle) => KotlinParamOp::Handle {
                     mode: if reading
                         .optional_inner()
                         .is_some_and(|inner| inner.borrow_target().is_some())
@@ -2227,7 +2229,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         crate::jni::HandleMode::Consume
                     },
                 },
-                Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64 {
+                Some(ProjectionKind::Unsigned64) => KotlinParamOp::Unsigned64 {
                     niche: entry.metadata.projection.as_ref().and_then(|p| {
                         reading
                             .optional_inner()
@@ -2236,7 +2238,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                             .flatten()
                     }),
                 },
-                None => InputKind::Plain,
+                None => KotlinParamOp::Plain,
             }
         };
 
@@ -2247,8 +2249,8 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // Other leaf parameter plans still consume their root conversion.
         if matches!(root.layout, Some(JLayout::Leaf))
             && !matches!(
-                &kind,
-                InputKind::VecBuild { .. } | InputKind::FlattenStruct(_)
+                &kotlin,
+                KotlinParamOp::VecBuild { .. } | KotlinParamOp::FlattenStruct(_)
             )
         {
             root.rust.mark_reachable();
@@ -2262,19 +2264,122 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Some(p) => crate::jni::projection_leaf_kt(ext, p),
             None => kt_meta.clone(),
         };
+        let pipeline = site_pipeline.unwrap_or_else(|| {
+            Self::planned_pipeline(Direction::Construct, bound.crossing.mode(), root)
+        });
+
+        // Freeze the exact native ABI independently from both target-side
+        // operations. The declaration and slot validator consume only this
+        // ordered list; the Rust emitter consumes only its Rust spelling.
+        let (native, rust) = match &kotlin {
+            KotlinParamOp::VecBuild { .. } => {
+                let wire_ident = format_ident!("{}_handle", ident);
+                let wire = annotate_jobject_with_lifetime(pipeline.wire(), "a").to_token_stream();
+                (
+                    vec![NativeParam {
+                        rust_ident: wire_ident.clone(),
+                        rust_wire: wire,
+                        kt_name: kt_name.clone(),
+                        kt_wire: Some(KtType::long()),
+                        jvm_slots: 2,
+                    }],
+                    RustParamOp::Pipeline { wire_ident },
+                )
+            }
+            KotlinParamOp::OptionalPair(plan) => (
+                vec![
+                    NativeParam {
+                        rust_ident: plan.present_ident.clone(),
+                        rust_wire: quote!(jni::sys::jboolean),
+                        kt_name: plan.present_kt.clone(),
+                        kt_wire: Some(KtType::boolean()),
+                        jvm_slots: 1,
+                    },
+                    NativeParam {
+                        rust_ident: plan.value_ident.clone(),
+                        rust_wire: plan.value_wire.to_token_stream(),
+                        kt_name: plan.value_kt.clone(),
+                        kt_wire: Some(KtType::cls(plan.value_kt_type.clone())),
+                        jvm_slots: kotlin_jvm_slots(&plan.value_kt_type),
+                    },
+                ],
+                RustParamOp::OptionalPair(plan.clone()),
+            ),
+            KotlinParamOp::FlattenStruct(plan) => (
+                plan.leaves
+                    .iter()
+                    .map(|leaf| NativeParam {
+                        rust_ident: leaf.native_ident.clone(),
+                        rust_wire: leaf.native_wire_ty(),
+                        kt_name: leaf.kt_name.clone(),
+                        kt_wire: Some(KtType::cls(leaf.kt_wire_ty().to_string())),
+                        jvm_slots: kotlin_jvm_slots(leaf.kt_wire_ty()),
+                    })
+                    .collect(),
+                RustParamOp::FlattenStruct(plan.clone()),
+            ),
+            KotlinParamOp::Handle { .. }
+            | KotlinParamOp::Unsigned64 { .. }
+            | KotlinParamOp::Plain => {
+                let wire_ident = if matches!(pipeline.wire(), syn::Type::Ptr(_)) {
+                    format_ident!("{}_ptr", ident)
+                } else {
+                    ident.clone()
+                };
+                let kt_wire = if matches!(&kotlin, KotlinParamOp::Handle { .. }) {
+                    Some(KtType::long())
+                } else {
+                    let ty = if as_enum_value {
+                        Some(KtType::int())
+                    } else {
+                        kt_meta.clone()
+                    };
+                    let niche_primitive = enum_niche.is_some()
+                        || matches!(&kotlin, KotlinParamOp::Unsigned64 { niche: Some(_) });
+                    ty.map(|ty| {
+                        if optional && !niche_primitive {
+                            ty.nullable()
+                        } else {
+                            ty
+                        }
+                    })
+                };
+                let jvm_slots = if matches!(&kotlin, KotlinParamOp::Handle { .. }) {
+                    2
+                } else {
+                    JniPrim::from_wire(&entry.destination).map_or(1, |prim| match prim {
+                        JniPrim::Long | JniPrim::Double => 2,
+                        _ => 1,
+                    })
+                };
+                (
+                    vec![NativeParam {
+                        rust_ident: wire_ident.clone(),
+                        rust_wire: annotate_jobject_with_lifetime(pipeline.wire(), "a")
+                            .to_token_stream(),
+                        kt_name: kt_name.clone(),
+                        kt_wire,
+                        jvm_slots,
+                    }],
+                    RustParamOp::Pipeline { wire_ident },
+                )
+            }
+            KotlinParamOp::Callback { .. } => {
+                unreachable!("callback parameters bypass registry site planning")
+            }
+        };
 
         Ok(JPlan::Param(Box::new(PlanLeaf {
             reading: reading.clone(),
             kt_name,
             kt_public,
-            kt_meta,
             optional,
             as_enum_value,
             enum_niche,
-            pipeline: site_pipeline.unwrap_or_else(|| {
-                Self::planned_pipeline(Direction::Construct, bound.crossing.mode(), root)
-            }),
-            kind,
+            pipeline,
+            native,
+            rust,
+            kotlin,
         })))
     }
 }

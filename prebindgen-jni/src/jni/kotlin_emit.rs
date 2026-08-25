@@ -1211,7 +1211,7 @@ impl Declarations {
             .expect("callback-interface emission requires a frozen JNI plan");
         for fplan in generation.functions() {
             for leaf in fplan.leaves() {
-                if let InputKind::Callback { iface: Some(spec) } = &leaf.kind {
+                if let KotlinParamOp::Callback { iface: Some(spec) } = &leaf.kotlin {
                     let args = leaf
                         .reading
                         .callback_args()
