@@ -1792,43 +1792,36 @@ impl CbindgenBuilder {
         ))
     }
 
-    /// The `Option<X>` / `Vec<X>` / `Cow<'_, [X]>` **output** marker.
+    /// A typed Optional, Sequence, or Result output marker.
     ///
-    /// Carries a `()` destination: the frozen [`crate::compile::CValue`] owns the
-    /// real multi-leaf ABI, and this legacy converter carrier remains only until
-    /// terminal operations move into final emission.
-    pub(crate) fn out_arity_marker(&self, kind: &str, inner: &TypeRef) -> ConverterImpl {
-        let name = format_ident!("__cbg_outmark_{}_{}", kind, sanitize(&inner.key()));
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, dead_code, unused)]
-            pub(crate) fn #name() {}
-        );
-        ConverterImpl {
-            subs: vec![inner.key()],
-            destination: syn::parse_quote!(()),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        }
-    }
-
-    /// The `Result<T, E>` output marker. Real lowering (bool + out-param +
-    /// error-param) is in `on_function`.
-    pub(crate) fn out_result_marker(&self, ty: &TypeRef) -> Option<ConverterImpl> {
-        let (ok, err) = ty.fallible_parts()?;
-        let name = format_ident!("__cbg_result_{}", sanitize(&ty.key()));
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, dead_code, unused)]
-            pub(crate) fn #name() {}
-        );
-        Some(ConverterImpl {
-            subs: vec![ok.key(), err.key()],
-            destination: syn::parse_quote!(()),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
+    /// Its frozen C value or function site owns the real multi-leaf ABI; the
+    /// marker retains semantic identity and dependency edges for emission.
+    pub(crate) fn out_marker_plan(
+        &self,
+        operation: crate::chain::MarkerOperation,
+        subject: &TypeRef,
+    ) -> Option<crate::chain::MarkerPlan> {
+        let (ident, subs) = match operation {
+            crate::chain::MarkerOperation::Optional => (
+                format_ident!("__cbg_outmark_option_{}", sanitize(&subject.key())),
+                vec![subject.clone()],
+            ),
+            crate::chain::MarkerOperation::Sequence => (
+                format_ident!("__cbg_outmark_vec_{}", sanitize(&subject.key())),
+                vec![subject.clone()],
+            ),
+            crate::chain::MarkerOperation::Result => {
+                let (ok, err) = subject.fallible_parts()?;
+                (
+                    format_ident!("__cbg_result_{}", sanitize(&subject.key())),
+                    vec![ok.clone(), err.clone()],
+                )
+            }
+        };
+        Some(crate::chain::MarkerPlan {
+            ident,
+            operation,
+            subs,
         })
     }
 }

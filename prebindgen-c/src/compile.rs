@@ -22,8 +22,8 @@ use prebindgen_registry::{
 
 use super::*;
 use crate::chain::{
-    CCall, CFunction, ChoicePlan, OptionalPlan, OptionalRepr, ProductField, ProductPlan,
-    SequencePlan, SliceInputPlan,
+    CCall, CFunction, ChoicePlan, MarkerOperation, MarkerPlan, OptionalPlan, OptionalRepr,
+    ProductField, ProductPlan, SequencePlan, SliceInputPlan,
 };
 
 /// The shape selected by the recipe compiler, retaining semantic child edges.
@@ -429,12 +429,12 @@ impl CFrag {
         )
     }
 
-    /// One of the adapter's existing converter builders, as a fragment.
-    fn from_converter(at: At<'_>, conv: ConverterImpl) -> Self {
-        let validity = validity_of(&conv, at.crossing.direction());
-        let destination = conv.destination;
-        let niches = conv.niches;
-        let function = CFunction::complete(conv.function);
+    /// A multi-wire crossing whose exact ABI is carried by its frozen value.
+    fn from_marker(at: At<'_>, plan: MarkerPlan) -> Self {
+        let destination: syn::Type = syn::parse_quote!(());
+        let subs = plan.subs.iter().map(TypeRef::key).collect();
+        let function = CFunction::marker(plan);
+        let niches = Niches::empty();
         let value = CValue::Direct {
             wire: destination.clone(),
             converter: function.call().clone(),
@@ -446,12 +446,12 @@ impl CFrag {
             destination,
             function,
             niches,
-            subs: conv.subs,
+            subs,
             arm: None,
             yields: Yield {
                 ty: at.crossing.value().stripped_key(),
                 mode: at.crossing.mode(),
-                validity,
+                validity: Validity::SelfSufficient,
             },
             shape: CShape::Atomic,
             value,
@@ -634,42 +634,6 @@ impl CFrag {
     }
 }
 
-/// How long what this conversion produces stays usable.
-///
-/// A property of the **conversion**, not of how the crossing was spelled.
-/// Reading the spelling is wrong in both directions: a conversion may clone or
-/// allocate out of a borrow, and — the case C actually has — a conversion may
-/// hand C a pointer *into* a Rust value from a crossing that looks owned.
-fn validity_of(conv: &ConverterImpl, direction: Direction) -> Validity {
-    match direction {
-        // Rust to C. A `*const T` is the zero-copy borrow: the late borrow plan
-        // casts the Rust value's own address, and `repr_c_struct`'s reinterpret
-        // does the same, so the pointer dies with the value it points into. A
-        // `*mut` is a handle C now owns (`Box::into_raw`) or a block C must free
-        // (`__cbg_alloc_cstr`), and every by-value wire is a copy.
-        Direction::Deconstruct => match &conv.destination {
-            syn::Type::Ptr(p) if p.mutability.is_none() => Validity::Borrowed,
-            _ => Validity::SelfSufficient,
-        },
-        // C to Rust: what the converter's own function hands back. A decode
-        // yielding `&'a T` borrows the caller's memory, which is right at a
-        // parameter and refused at a return.
-        Direction::Construct => match &conv.function.sig.output {
-            syn::ReturnType::Type(_, ty) if produces_borrow(ty) => Validity::Borrowed,
-            _ => Validity::SelfSufficient,
-        },
-    }
-}
-
-/// Whether a converter's return type hands back a borrow — `&T`, or a
-/// `Result<&T, E>` whose success arm is one.
-fn produces_borrow(ty: &syn::Type) -> bool {
-    match ty {
-        syn::Type::Reference(_) => true,
-        _ => result_parts(ty).is_some_and(|(ok, _)| matches!(ok, syn::Type::Reference(_))),
-    }
-}
-
 /// The adapter, for the length of one crossing's compilation.
 ///
 /// Holds the binding's declarations and the registry view the emission helpers
@@ -726,13 +690,6 @@ fn held_uninit(declared: &syn::Type, produced: &syn::Type) -> bool {
 /// A refusal naming the crossing that could not be answered.
 fn refuse(at: At<'_>, why: &str) -> String {
     format!("Cbindgen: {} ({why})", at.crossing.key())
-}
-
-impl<R: Conversions> CCompile<'_, R> {
-    fn wrap(&self, at: At<'_>, why: &str, conv: Option<ConverterImpl>) -> Frag<Self> {
-        conv.map(|c| CFrag::from_converter(at, c))
-            .ok_or_else(|| refuse(at, why))
-    }
 }
 
 impl<R: Conversions> Compile for CCompile<'_, R> {
@@ -806,11 +763,12 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         if let Some(plan) = self.gen.borrow_plan(ty, at.crossing.direction()) {
             return Ok(CFrag::from_borrow(at, plan));
         }
-        let conv = match at.crossing.direction() {
-            Direction::Construct => None,
-            Direction::Deconstruct => self.gen.out_result_marker(ty),
-        };
-        self.wrap(at, "no C representation for this type", conv)
+        if at.crossing.direction() == Direction::Deconstruct {
+            if let Some(plan) = self.gen.out_marker_plan(MarkerOperation::Result, ty) {
+                return Ok(CFrag::from_marker(at, plan));
+            }
+        }
+        Err(refuse(at, "no C representation for this type"))
     }
 
     fn optional(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &CFrag) -> Frag<Self> {
@@ -821,8 +779,11 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             ));
         };
         if at.crossing.direction() == Direction::Deconstruct {
-            let marker = self.gen.out_arity_marker("option", elem);
-            let mut fragment = CFrag::from_converter(at, marker);
+            let marker = self
+                .gen
+                .out_marker_plan(MarkerOperation::Optional, elem)
+                .expect("Optional output markers accept every resolved inner");
+            let mut fragment = CFrag::from_marker(at, marker);
             let absent = inner.value.effective_niches().carve().map(|(slot, _)| slot);
             fragment.shape = CShape::Optional(fragment_use(inner));
             fragment.value = CValue::Optional {
@@ -941,11 +902,12 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             }
             // A deconstructed run has no single wire of its own. The frozen
             // CValue below carries its pointer-plus-length ABI and encoder.
-            Direction::Deconstruct => self.wrap(
+            Direction::Deconstruct => CFrag::from_marker(
                 at,
-                "no C representation for this run",
-                Some(self.gen.out_arity_marker("vec", &inner.source)),
-            )?,
+                self.gen
+                    .out_marker_plan(MarkerOperation::Sequence, &inner.source)
+                    .expect("Sequence output markers accept every resolved element"),
+            ),
         };
         fragment.shape = CShape::Sequence(fragment_use(inner));
         if at.crossing.direction() == Direction::Deconstruct {

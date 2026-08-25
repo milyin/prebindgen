@@ -454,6 +454,10 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "shape_is_lowerable",
         "is_lowered_composite",
         "has_own_wire",
+        "fn from_converter",
+        "fn validity_of",
+        "fn produces_borrow",
+        "fn wrap(",
     ] {
         assert!(
             !sources.contains(deleted),

@@ -62,6 +62,7 @@ enum CBody {
     Payload(PayloadPlan),
     Borrow(BorrowPlan),
     SliceInput(SliceInputPlan),
+    Marker(MarkerPlan),
     Product(ProductPlan),
     Optional(OptionalPlan),
     Sequence(SequencePlan),
@@ -149,6 +150,14 @@ impl CFunction {
         Self {
             call,
             body: CBody::SliceInput(plan),
+        }
+    }
+
+    pub(crate) fn marker(plan: MarkerPlan) -> Self {
+        let call = CCall(chain::Call::new(plan.ident.clone(), false, false));
+        Self {
+            call,
+            body: CBody::Marker(plan),
         }
     }
 
@@ -263,6 +272,14 @@ impl CFunction {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn marker_operation(&self) -> Option<&MarkerOperation> {
+        match &self.body {
+            CBody::Marker(plan) => Some(&plan.operation),
+            _ => None,
+        }
+    }
+
     pub(crate) fn call(&self) -> &CCall {
         &self.call
     }
@@ -282,12 +299,39 @@ impl RustFunction for CFunction {
             CBody::Payload(plan) => plan.render(emit),
             CBody::Borrow(plan) => plan.render(emit),
             CBody::SliceInput(plan) => plan.render(),
+            CBody::Marker(plan) => plan.render(),
             CBody::Product(plan) => plan.render(emit),
             CBody::Choice(plan) => plan.render(emit),
             CBody::Sequence(plan) => plan.render(emit),
             CBody::Optional(plan) => plan.render(emit),
             CBody::DeferredInvoke => {
                 unreachable!("a deferred C Invoke helper is rendered by its callback artifact")
+            }
+        }
+    }
+}
+
+/// A multi-wire crossing whose ABI lives in its frozen site value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum MarkerOperation {
+    Optional,
+    Sequence,
+    Result,
+}
+
+/// A typed replacement for one legacy zero-argument marker converter.
+#[derive(Clone)]
+pub(crate) struct MarkerPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) operation: MarkerOperation,
+    pub(crate) subs: Vec<TypeRef>,
+}
+
+impl MarkerPlan {
+    fn render(&self) -> syn::ItemFn {
+        match self.operation {
+            MarkerOperation::Optional | MarkerOperation::Sequence | MarkerOperation::Result => {
+                render_marker(&self.ident)
             }
         }
     }
@@ -304,12 +348,15 @@ pub(crate) struct SliceInputPlan {
 
 impl SliceInputPlan {
     fn render(&self) -> syn::ItemFn {
-        let name = &self.ident;
-        syn::parse_quote!(
-            #[allow(non_snake_case, dead_code, unused)]
-            pub(crate) fn #name() {}
-        )
+        render_marker(&self.ident)
     }
+}
+
+fn render_marker(name: &syn::Ident) -> syn::ItemFn {
+    syn::parse_quote!(
+        #[allow(non_snake_case, dead_code, unused)]
+        pub(crate) fn #name() {}
+    )
 }
 
 /// One source borrow crossing retained without spelling its referent.
