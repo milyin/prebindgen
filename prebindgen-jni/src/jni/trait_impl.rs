@@ -1853,9 +1853,12 @@ impl Prebindgen for Declarations {
 impl Declarations {
     // ── Input converters ─────────────────────────────────────────────
 
-    /// Whole-type **input** terminal categories (opaque handle, enum,
-    /// `convert!`, `str`, primitive, struct) — depends on nothing, `subs`
-    /// empty.
+    /// Remaining whole-type **input** compatibility categories (opaque
+    /// handle, enum, `convert!`, unsized `str`, byte run, struct) — depends on
+    /// nothing, `subs` empty.
+    ///
+    /// Bare scalars and owned strings are compiled as `JValueCodecPlan`s
+    /// before this fallback is entered.
     pub(crate) fn input_terminal(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
@@ -1956,45 +1959,12 @@ impl Declarations {
                 metadata: self.framework_meta(kotlin_name),
             });
         }
-        // Any OWNED string, however Rust spells it — `String`, `Box<String>`,
-        // `Cow<'_, str>`. The model classifies each of them `Str`; the spelling is
-        // the source's business, and `.into()` constructs it from the decoded
-        // `String`. This used to be one hardcoded `TypeKey == "Box < String >"`
-        // arm, which is what a spelling-keyed converter table costs: one
-        // hand-written case per representation anyone happened to write (#270).
-        //
-        // `str` is handled above, separately and deliberately: it is unsized,
-        // so its converter yields an owned `String` the call site borrows —
-        // a different contract, not a different spelling.
-        if matches!(
-            reading.unwrapped().kind(),
-            prebindgen_registry::flat::TypeKind::Str | prebindgen_registry::flat::TypeKind::String
-        ) {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-            let body: syn::Expr = syn::parse_quote!({
-                let s = env.get_string(v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "decode_string: {}",
-                        e
-                    ))
-                })?;
-                // The canonical value, then the spelling.
-                ::std::string::String::from(s).into()
-            });
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
-            let niches = default_niches_for_wire(&wire);
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
-        }
         if let Some((wire, body)) = (!matches!(
             reading.unwrapped().kind(),
             prebindgen_registry::flat::TypeKind::Scalar(_)
+                | prebindgen_registry::flat::TypeKind::Str
+                | prebindgen_registry::flat::TypeKind::String
+                | prebindgen_registry::flat::TypeKind::Unit
         ))
         .then(|| primitive_input(&reading.key()))
         .flatten()
@@ -2235,9 +2205,12 @@ impl Declarations {
 
     // ── Output converters ────────────────────────────────────────────
 
-    /// Whole-type **output** terminal categories (the dual of
-    /// [`Self::input_terminal`]: opaque handle, enum, user table,
-    /// `str`, `Cow<[u8]>`, unit, primitive, struct) — `subs` empty.
+    /// Remaining whole-type **output** compatibility categories (the dual of
+    /// [`Self::input_terminal`]: opaque handle, enum, user table, unsized
+    /// `str`, byte runs, struct) — `subs` empty.
+    ///
+    /// Bare scalars, owned strings, and unit are compiled as
+    /// `JValueCodecPlan`s before this fallback is entered.
     pub(crate) fn output_terminal(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
@@ -2308,49 +2281,6 @@ impl Declarations {
         if reading.key().as_str() == "str" {
             return Some(self.str_ref_output());
         }
-        // An owned string in any representation the model erases — `Box<String>`,
-        // `Cow<'_, str>`. It classifies each of them `Str`, and the body is
-        // representation-agnostic: `&*v` reaches through any of them by `Deref`
-        // to something `new_string` accepts (`&String` through a `Box`, `&str`
-        // through a `Cow`). Only the *dispatch* was spelling-keyed, as one
-        // hardcoded `TypeKey == "Box < String >"` arm (#270).
-        //
-        // Plain `String` keeps its own earlier arm in `primitive_output`, whose
-        // body this matches exactly; this one is reached for the wrapped
-        // spellings that arm's key cannot name.
-        if matches!(
-            reading.unwrapped().kind(),
-            prebindgen_registry::flat::TypeKind::Str | prebindgen_registry::flat::TypeKind::String
-        ) {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-            let body: syn::Expr = syn::parse_quote!({
-                env.new_string(&*v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
-                })?
-            });
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
-            let niches = default_niches_for_wire(&wire);
-            // A `Cow` accessor may spell its own path any way it likes, but the
-            // generated fn's param type has to resolve with no imports in the
-            // consumer crate — normalize it, exactly as the `Cow<'_, [u8]>` arm
-            // below does. Every other spelling here (`String`, `Box<String>`)
-            // is already prelude-resolvable, so it keeps its own.
-            let function = match reading.kind() {
-                prebindgen_registry::flat::TypeKind::Cow { .. } => {
-                    let norm: syn::Type = syn::parse_quote!(::std::borrow::Cow<'_, str>);
-                    self.build_output_fn(&norm, &wire, &body, None)
-                }
-                _ => self.build_output_fn_of(reading, &wire, &body, None, emit),
-            };
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function,
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
-        }
         // `Cow<'_, [u8]>` (any lifetime): a borrow-or-owned byte container —
         // one copy into the JVM array straight off the `Deref<[u8]>`, no
         // intermediate owned `Vec` (the zero-copy dual of the `Vec<u8>`
@@ -2359,29 +2289,12 @@ impl Declarations {
         if let Some(conv) = self.cow_bytes_output(reading) {
             return Some(conv);
         }
-        // `()` — identity converter so `fn foo()` and `fn foo() -> ()`
-        // funnel through the same uniform output path as everything else.
-        // Wire is `()`. Body just returns `v`. No Kotlin name — Unit
-        // returns are dropped from emitted signatures, so metadata stays
-        // empty.
-        if matches!(
-            reading.unwrapped().kind(),
-            prebindgen_registry::flat::TypeKind::Unit
-        ) {
-            let wire: syn::Type = syn::parse_quote!(());
-            let body: syn::Expr = syn::parse_quote!(v);
-            return Some(ConverterImpl {
-                subs: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: KotlinMeta::default(),
-            });
-        }
         if let Some((wire, body)) = (!matches!(
             reading.unwrapped().kind(),
             prebindgen_registry::flat::TypeKind::Scalar(_)
+                | prebindgen_registry::flat::TypeKind::Str
+                | prebindgen_registry::flat::TypeKind::String
+                | prebindgen_registry::flat::TypeKind::Unit
         ))
         .then(|| primitive_output(&reading.key()))
         .flatten()

@@ -873,30 +873,69 @@ impl<R: Conversions> JCompile<'_, R> {
             .ok_or_else(|| refuse(at, why))
     }
 
-    /// Freeze a bare scalar codec without asking `Emit` to spell its source.
-    fn planned_scalar(&self, at: At<'_>) -> Option<JFrag> {
+    /// Freeze a terminal value codec without asking `Emit` to spell its source.
+    fn planned_value_codec(&self, at: At<'_>) -> Option<JFrag> {
         let source = at.crossing.spelled();
-        if !matches!(source.unwrapped().kind(), TypeKind::Scalar(_)) {
+        let direction = at.crossing.direction();
+        let (wire, body, niches, metadata) = if matches!(source.kind(), TypeKind::Scalar(_)) {
+            let (wire, body) = match direction {
+                Direction::Construct => crate::jni::emit::primitive_input(&source.key()),
+                Direction::Deconstruct => crate::jni::emit::primitive_output(&source.key()),
+            }?;
+            let niches = default_niches_for_wire(&wire);
+            let kotlin_name = kotlin_for_wire(&wire);
+            let metadata = if source.key().as_str() == "u64" {
+                self.decls.unsigned64_leaf_meta()
+            } else {
+                self.decls.framework_meta(kotlin_name)
+            };
+            (wire, body, niches, metadata)
+        } else if !matches!(source.kind(), TypeKind::Str)
+            && matches!(source.unwrapped().kind(), TypeKind::Str | TypeKind::String)
+        {
+            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
+            let body = match direction {
+                Direction::Construct => syn::parse_quote!({
+                    let s = env.get_string(v).map_err(|e| {
+                        <__JniErr as ::core::convert::From<String>>::from(format!(
+                            "decode_string: {}",
+                            e
+                        ))
+                    })?;
+                    ::std::string::String::from(s).into()
+                }),
+                Direction::Deconstruct => syn::parse_quote!({
+                    env.new_string(&*v).map_err(|e| {
+                        <__JniErr as ::core::convert::From<String>>::from(format!(
+                            "encode_str: {}",
+                            e
+                        ))
+                    })?
+                }),
+            };
+            let niches = default_niches_for_wire(&wire);
+            let kotlin_name = self
+                .decls
+                .override_kotlin_name(&source.key(), Some(KtType::string()));
+            let metadata = self.decls.framework_meta(kotlin_name);
+            (wire, body, niches, metadata)
+        } else if direction == Direction::Deconstruct && matches!(source.kind(), TypeKind::Unit) {
+            (
+                syn::parse_quote!(()),
+                syn::parse_quote!(v),
+                Niches::empty(),
+                KotlinMeta::default(),
+            )
+        } else {
             return None;
-        }
-        let (wire, body) = match at.crossing.direction() {
-            Direction::Construct => crate::jni::emit::primitive_input(&source.key()),
-            Direction::Deconstruct => crate::jni::emit::primitive_output(&source.key()),
-        }?;
-        let plan = crate::jni::chain::JScalarPlan::new(
+        };
+        let plan = crate::jni::chain::JValueCodecPlan::new(
             at.crossing.direction(),
             source.clone(),
             wire.clone(),
             body,
         );
         let ident = plan.name().clone();
-        let niches = default_niches_for_wire(&wire);
-        let kotlin_name = kotlin_for_wire(&wire);
-        let metadata = if source.key().as_str() == "u64" {
-            self.decls.unsigned64_leaf_meta()
-        } else {
-            self.decls.framework_meta(kotlin_name)
-        };
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
@@ -908,7 +947,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag::planned(
             at,
             conv,
-            crate::jni::chain::JFunction::scalar(plan),
+            crate::jni::chain::JFunction::value_codec(plan),
         ))
     }
 
@@ -2003,7 +2042,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
 
     fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
-        if let Some(frag) = self.planned_scalar(at) {
+        if let Some(frag) = self.planned_value_codec(at) {
             return Ok(frag);
         }
         if let Some(frag) = self.planned_owned_handle(at) {
@@ -2731,8 +2770,8 @@ impl Conv {
     }
 
     #[cfg(test)]
-    pub(crate) fn is_scalar_plan(&self) -> bool {
-        self.0.rust.is_scalar()
+    pub(crate) fn is_value_codec_plan(&self) -> bool {
+        self.0.rust.is_value_codec()
     }
 }
 

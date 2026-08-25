@@ -153,6 +153,32 @@ pub(crate) unsafe fn Box_String_to_JString_027f6250<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Cow_static_str_to_JString_47272020<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: ::std::borrow::Cow<'static, str>,
+) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
+    Ok({
+        env.new_string(&*v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("encode_str: {}", e))
+            })?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -309,7 +335,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
                         __enc5.into()
                     };
                     let __cb0_obj6: jni::objects::JObject = {
-                        let __enc6 = match std_borrow_Cow_str_to_JString_df3f677f(
+                        let __enc6 = match Cow_static_str_to_JString_47272020(
                             &mut env,
                             __vf0.text_cow.clone(),
                         ) {
@@ -463,32 +489,6 @@ pub(crate) unsafe fn ZSample_to_jlong_757bca9c<'a>(
     v: myflat::ZSample,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn std_borrow_Cow_str_to_JString_df3f677f<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: ::std::borrow::Cow<'_, str>,
-) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    Ok({
-        env.new_string(&*v)
-            .map_err(|e| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("encode_str: {}", e))
-            })?
-    })
 }
 #[allow(
     non_snake_case,

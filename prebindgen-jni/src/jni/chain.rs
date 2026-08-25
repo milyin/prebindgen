@@ -18,7 +18,7 @@ pub(crate) struct JFunction(JBody);
 enum JBody {
     Complete(Box<syn::ItemFn>),
     Marker(syn::Ident),
-    Scalar(Box<JScalarPlan>),
+    ValueCodec(Box<JValueCodecPlan>),
     OwnedHandle(Box<JOwnedHandlePlan>),
     BorrowedOptionalHandle(Box<JBorrowedOptionalHandlePlan>),
     Product(Box<JProductPlan>),
@@ -45,8 +45,8 @@ impl JFunction {
         Self(JBody::OwnedHandle(Box::new(plan)))
     }
 
-    pub(crate) fn scalar(plan: JScalarPlan) -> Self {
-        Self(JBody::Scalar(Box::new(plan)))
+    pub(crate) fn value_codec(plan: JValueCodecPlan) -> Self {
+        Self(JBody::ValueCodec(Box::new(plan)))
     }
 
     pub(crate) fn borrowed_optional_handle(plan: JBorrowedOptionalHandlePlan) -> Self {
@@ -79,8 +79,8 @@ impl JFunction {
     }
 
     #[cfg(test)]
-    pub(crate) fn is_scalar(&self) -> bool {
-        matches!(self.0, JBody::Scalar(_))
+    pub(crate) fn is_value_codec(&self) -> bool {
+        matches!(self.0, JBody::ValueCodec(_))
     }
 
     #[cfg(test)]
@@ -103,7 +103,7 @@ impl JFunction {
     pub(crate) fn mark_reachable(&self) {
         match &self.0 {
             JBody::Complete(_) => {}
-            JBody::Marker(_) | JBody::Scalar(_) => {}
+            JBody::Marker(_) | JBody::ValueCodec(_) => {}
             JBody::OwnedHandle(plan) => plan.reachable.set(true),
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.set(true),
             JBody::Product(plan) => {
@@ -144,7 +144,7 @@ impl RustFunction for JFunction {
         match &self.0 {
             JBody::Complete(function) => &function.sig.ident,
             JBody::Marker(ident) => ident,
-            JBody::Scalar(plan) => &plan.ident,
+            JBody::ValueCodec(plan) => &plan.ident,
             JBody::OwnedHandle(plan) => &plan.ident,
             JBody::BorrowedOptionalHandle(plan) => &plan.ident,
             JBody::Product(plan) => &plan.ident,
@@ -161,8 +161,8 @@ impl RustFunction for JFunction {
             JBody::Marker(_) => false,
             // Complete compatibility parents do not yet propagate
             // reachability to the children they call. Until those parents are
-            // planned too, every compiled scalar remains an emitted leaf.
-            JBody::Scalar(_) => true,
+            // planned too, every compiled value codec remains an emitted leaf.
+            JBody::ValueCodec(_) => true,
             JBody::OwnedHandle(plan) => plan.reachable.get(),
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.get(),
             JBody::Product(plan) => plan.reachable.get(),
@@ -179,7 +179,7 @@ impl RustFunction for JFunction {
         match &self.0 {
             JBody::Complete(function) => (**function).clone(),
             JBody::Marker(ident) => planned_marker(ident),
-            JBody::Scalar(plan) => plan.render(emit),
+            JBody::ValueCodec(plan) => plan.render(emit),
             JBody::OwnedHandle(plan) => plan.render(emit),
             JBody::BorrowedOptionalHandle(plan) => plan.render(emit),
             JBody::Product(plan) => plan.render(emit),
@@ -191,14 +191,16 @@ impl RustFunction for JFunction {
     }
 }
 
-/// One bare Flat scalar crossing, retained without source Rust syntax.
+/// One terminal value crossing, retained without source Rust syntax.
 ///
-/// The scalar's JNI representation and conversion expression are adapter
-/// policy and are safe to freeze during recipe compilation. Its Rust spelling
-/// is not: the plan keeps the Flat reading opaque until the writer supplies
-/// [`Emit`].
+/// The JNI representation and conversion expression are adapter policy and
+/// are safe to freeze during recipe compilation. The source Rust spelling is
+/// not: the plan keeps the Flat reading opaque until the writer supplies
+/// [`Emit`]. This covers values whose converter signature names the crossing
+/// itself; deliberately composed signatures such as bare `str -> String`
+/// remain separate.
 #[derive(Clone)]
-pub(crate) struct JScalarPlan {
+pub(crate) struct JValueCodecPlan {
     ident: syn::Ident,
     direction: Direction,
     source: TypeRef,
@@ -206,7 +208,7 @@ pub(crate) struct JScalarPlan {
     body: syn::Expr,
 }
 
-impl JScalarPlan {
+impl JValueCodecPlan {
     pub(crate) fn new(
         direction: Direction,
         source: TypeRef,
@@ -1154,7 +1156,9 @@ pub(crate) fn planned_name(
     let source_key = key.as_str();
     let source_id = crate::jni::emit::sanitize_for_ident(source_key);
     let wire_id = match intermediate {
-        syn::Type::Tuple(tuple) => format!("tuple{}", tuple.elems.len()),
+        syn::Type::Tuple(tuple) if !tuple.elems.is_empty() => {
+            format!("tuple{}", tuple.elems.len())
+        }
         _ => crate::jni::emit::wire_short(intermediate),
     };
     let suffix = crate::jni::emit::hash_name_pair(source_key, intermediate) & 0xffff_ffff;
