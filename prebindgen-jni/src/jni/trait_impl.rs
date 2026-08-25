@@ -367,7 +367,7 @@ impl Declarations {
     /// Leaf metadata for Rust `u64`: the JNI value-context stays `Long`, while
     /// projection-aware Kotlin emitters surface `ULong` and insert the
     /// bit-preserving `toLong()` / `toULong()` bridge.
-    fn unsigned64_leaf_meta(&self) -> KotlinMeta {
+    pub(crate) fn unsigned64_leaf_meta(&self) -> KotlinMeta {
         KotlinMeta {
             projection: Some(Projection {
                 leaf_key: TypeKey::parse("u64").expect("builtin type key"),
@@ -1992,7 +1992,13 @@ impl Declarations {
                 metadata: self.framework_meta(kotlin_name),
             });
         }
-        if let Some((wire, body)) = primitive_input(&reading.key()) {
+        if let Some((wire, body)) = (!matches!(
+            reading.unwrapped().kind(),
+            prebindgen_registry::flat::TypeKind::Scalar(_)
+        ))
+        .then(|| primitive_input(&reading.key()))
+        .flatten()
+        {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
             let metadata = if reading.key().as_str() == "u64" {
@@ -2373,7 +2379,13 @@ impl Declarations {
                 metadata: KotlinMeta::default(),
             });
         }
-        if let Some((wire, body)) = primitive_output(&reading.key()) {
+        if let Some((wire, body)) = (!matches!(
+            reading.unwrapped().kind(),
+            prebindgen_registry::flat::TypeKind::Scalar(_)
+        ))
+        .then(|| primitive_output(&reading.key()))
+        .flatten()
+        {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
             let metadata = if reading.key().as_str() == "u64" {

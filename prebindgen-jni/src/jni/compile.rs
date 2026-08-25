@@ -697,8 +697,16 @@ impl Carrier for JFrag {
 
 impl JFrag {
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
+        let rust = crate::jni::chain::JFunction::retained(conv.function.clone());
+        Self::planned(at, conv, rust)
+    }
+
+    fn planned(
+        at: At<'_>,
+        conv: ConverterImpl<KotlinMeta>,
+        rust: crate::jni::chain::JFunction,
+    ) -> Self {
         let validity = validity_of(&conv, at.crossing.direction());
-        let rust = crate::jni::chain::JFunction::complete(conv.function.clone());
         Self {
             conv,
             rust,
@@ -863,6 +871,45 @@ impl<R: Conversions> JCompile<'_, R> {
     fn wrap(&self, at: At<'_>, why: &str, conv: Option<ConverterImpl<KotlinMeta>>) -> Frag<Self> {
         conv.map(|c| JFrag::new(at, c))
             .ok_or_else(|| refuse(at, why))
+    }
+
+    /// Freeze a bare scalar codec without asking `Emit` to spell its source.
+    fn planned_scalar(&self, at: At<'_>) -> Option<JFrag> {
+        let source = at.crossing.spelled();
+        if !matches!(source.unwrapped().kind(), TypeKind::Scalar(_)) {
+            return None;
+        }
+        let (wire, body) = match at.crossing.direction() {
+            Direction::Construct => crate::jni::emit::primitive_input(&source.key()),
+            Direction::Deconstruct => crate::jni::emit::primitive_output(&source.key()),
+        }?;
+        let plan = crate::jni::chain::JScalarPlan::new(
+            at.crossing.direction(),
+            source.clone(),
+            wire.clone(),
+            body,
+        );
+        let ident = plan.name().clone();
+        let niches = default_niches_for_wire(&wire);
+        let kotlin_name = kotlin_for_wire(&wire);
+        let metadata = if source.key().as_str() == "u64" {
+            self.decls.unsigned64_leaf_meta()
+        } else {
+            self.decls.framework_meta(kotlin_name)
+        };
+        let conv = ConverterImpl {
+            subs: vec![],
+            pre_stages: vec![],
+            function: crate::jni::chain::planned_marker(&ident),
+            destination: wire,
+            niches,
+            metadata,
+        };
+        Some(JFrag::planned(
+            at,
+            conv,
+            crate::jni::chain::JFunction::scalar(plan),
+        ))
     }
 
     /// The borrow arms, which are neither a terminal nor an arity layer.
@@ -1956,10 +2003,13 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
 
     fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
-        let emit = cx.emit();
+        if let Some(frag) = self.planned_scalar(at) {
+            return Ok(frag);
+        }
         if let Some(frag) = self.planned_owned_handle(at) {
             return Ok(frag);
         }
+        let emit = cx.emit();
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .decls
@@ -2678,6 +2728,11 @@ impl Conv {
     /// Freeze this exact compiled fragment as one outgoing ABI operation.
     pub(crate) fn output_abi(&self) -> OutAbi {
         self.0.output_abi()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_scalar_plan(&self) -> bool {
+        self.0.rust.is_scalar()
     }
 }
 

@@ -17,6 +17,8 @@ pub(crate) struct JFunction(JBody);
 #[derive(Clone)]
 enum JBody {
     Complete(Box<syn::ItemFn>),
+    Marker(syn::Ident),
+    Scalar(Box<JScalarPlan>),
     OwnedHandle(Box<JOwnedHandlePlan>),
     BorrowedOptionalHandle(Box<JBorrowedOptionalHandlePlan>),
     Product(Box<JProductPlan>),
@@ -31,8 +33,20 @@ impl JFunction {
         Self(JBody::Complete(Box::new(function)))
     }
 
+    pub(crate) fn retained(function: syn::ItemFn) -> Self {
+        if is_planned_marker(&function) {
+            Self(JBody::Marker(function.sig.ident))
+        } else {
+            Self::complete(function)
+        }
+    }
+
     pub(crate) fn owned_handle(plan: JOwnedHandlePlan) -> Self {
         Self(JBody::OwnedHandle(Box::new(plan)))
+    }
+
+    pub(crate) fn scalar(plan: JScalarPlan) -> Self {
+        Self(JBody::Scalar(Box::new(plan)))
     }
 
     pub(crate) fn borrowed_optional_handle(plan: JBorrowedOptionalHandlePlan) -> Self {
@@ -65,6 +79,11 @@ impl JFunction {
     }
 
     #[cfg(test)]
+    pub(crate) fn is_scalar(&self) -> bool {
+        matches!(self.0, JBody::Scalar(_))
+    }
+
+    #[cfg(test)]
     pub(crate) fn is_borrowed_optional_handle(&self) -> bool {
         matches!(self.0, JBody::BorrowedOptionalHandle(_))
     }
@@ -84,6 +103,7 @@ impl JFunction {
     pub(crate) fn mark_reachable(&self) {
         match &self.0 {
             JBody::Complete(_) => {}
+            JBody::Marker(_) | JBody::Scalar(_) => {}
             JBody::OwnedHandle(plan) => plan.reachable.set(true),
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.set(true),
             JBody::Product(plan) => {
@@ -123,6 +143,8 @@ impl RustFunction for JFunction {
     fn ident(&self) -> &syn::Ident {
         match &self.0 {
             JBody::Complete(function) => &function.sig.ident,
+            JBody::Marker(ident) => ident,
+            JBody::Scalar(plan) => &plan.ident,
             JBody::OwnedHandle(plan) => &plan.ident,
             JBody::BorrowedOptionalHandle(plan) => &plan.ident,
             JBody::Product(plan) => &plan.ident,
@@ -136,6 +158,11 @@ impl RustFunction for JFunction {
     fn should_emit(&self) -> bool {
         match &self.0 {
             JBody::Complete(_) => true,
+            JBody::Marker(_) => false,
+            // Complete compatibility parents do not yet propagate
+            // reachability to the children they call. Until those parents are
+            // planned too, every compiled scalar remains an emitted leaf.
+            JBody::Scalar(_) => true,
             JBody::OwnedHandle(plan) => plan.reachable.get(),
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.get(),
             JBody::Product(plan) => plan.reachable.get(),
@@ -151,6 +178,8 @@ impl RustFunction for JFunction {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         match &self.0 {
             JBody::Complete(function) => (**function).clone(),
+            JBody::Marker(ident) => planned_marker(ident),
+            JBody::Scalar(plan) => plan.render(emit),
             JBody::OwnedHandle(plan) => plan.render(emit),
             JBody::BorrowedOptionalHandle(plan) => plan.render(emit),
             JBody::Product(plan) => plan.render(emit),
@@ -158,6 +187,77 @@ impl RustFunction for JFunction {
             JBody::Choice(plan) => plan.render(emit),
             JBody::Sequence(plan) => plan.render(emit),
             JBody::Invoke(plan) => plan.render(emit),
+        }
+    }
+}
+
+/// One bare Flat scalar crossing, retained without source Rust syntax.
+///
+/// The scalar's JNI representation and conversion expression are adapter
+/// policy and are safe to freeze during recipe compilation. Its Rust spelling
+/// is not: the plan keeps the Flat reading opaque until the writer supplies
+/// [`Emit`].
+#[derive(Clone)]
+pub(crate) struct JScalarPlan {
+    ident: syn::Ident,
+    direction: Direction,
+    source: TypeRef,
+    wire: syn::Type,
+    body: syn::Expr,
+}
+
+impl JScalarPlan {
+    pub(crate) fn new(
+        direction: Direction,
+        source: TypeRef,
+        wire: syn::Type,
+        body: syn::Expr,
+    ) -> Self {
+        let ident = planned_name(direction, &source, &wire);
+        Self {
+            ident,
+            direction,
+            source,
+            wire,
+            body,
+        }
+    }
+
+    pub(crate) fn name(&self) -> &syn::Ident {
+        &self.ident
+    }
+
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = emit.spell(&self.source);
+        let wire = &self.wire;
+        let body = super::builder::body_for_exc(&self.body, None);
+        let allow = super::trait_impl::generated_converter_attr();
+        match self.direction {
+            Direction::Construct => {
+                let wire = annotate_jobject_with_lifetime(wire, "v");
+                syn::parse_quote!(
+                    #allow
+                    pub(crate) unsafe fn #name<'env, 'v>(
+                        env: &mut jni::JNIEnv<'env>,
+                        v: &#wire,
+                    ) -> ::core::result::Result<#source, __JniErr> {
+                        #body
+                    }
+                )
+            }
+            Direction::Deconstruct => {
+                let wire = annotate_jobject_with_lifetime(wire, "a");
+                syn::parse_quote!(
+                    #allow
+                    pub(crate) unsafe fn #name<'a>(
+                        env: &mut jni::JNIEnv<'a>,
+                        v: #source,
+                    ) -> ::core::result::Result<#wire, __JniErr> {
+                        #body
+                    }
+                )
+            }
         }
     }
 }
@@ -1028,6 +1128,19 @@ impl JOptionalPlan {
 /// prevents callers from mistaking the marker for executable generated code.
 pub(crate) fn planned_marker(ident: &syn::Ident) -> syn::ItemFn {
     syn::parse_quote!(fn #ident() {})
+}
+
+fn is_planned_marker(function: &syn::ItemFn) -> bool {
+    function.attrs.is_empty()
+        && function.vis == syn::Visibility::Inherited
+        && function.sig.constness.is_none()
+        && function.sig.asyncness.is_none()
+        && function.sig.unsafety.is_none()
+        && function.sig.abi.is_none()
+        && function.sig.generics.params.is_empty()
+        && function.sig.inputs.is_empty()
+        && matches!(function.sig.output, syn::ReturnType::Default)
+        && function.block.stmts.is_empty()
 }
 
 /// Stable private name for a converter whose source spelling is deliberately
