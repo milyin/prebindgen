@@ -37,45 +37,110 @@ impl CbindgenBuilder {
     }
 }
 
-/// Per-category **input** terminal converter builders. Each returns
-/// `Some(ConverterImpl)` only for the type category it claims (and `None`
-/// otherwise); [`Prebindgen::on_input_type`] chains them in priority order
-/// before the wrapper shapes. The categories are mutually exclusive, so the
-/// chain's fall-through is equivalent to a sequential `if … return` block.
+/// Ordinary whole-value input-terminal selection. This records semantic and
+/// wire-side facts only; the source [`TypeRef`] remains opaque until final
+/// rendering.
 impl CbindgenBuilder {
-    /// Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible (null
-    /// handle → message). The wire is the bare handle pointer `*mut #c_struct`.
-    pub(crate) fn in_opaque_handle(&self, ty: &TypeRef) -> Option<ConverterImpl> {
+    /// Select one ordinary whole-value input operation without spelling the
+    /// source type. The retained [`TypeRef`] is materialized only by the final
+    /// Rust renderer.
+    pub(crate) fn in_terminal(
+        &self,
+        ty: &TypeRef,
+        registry: &impl Conversions,
+    ) -> Option<crate::chain::InputTerminalPlan> {
+        use crate::chain::InputTerminalOperation;
+
+        let plan = |ident, wire, operation| crate::chain::InputTerminalPlan {
+            ident,
+            source: ty.clone(),
+            source_module: self.source_module.clone(),
+            wire,
+            operation,
+        };
         let key = ty.key();
-        if !self.opaque.contains_key(&key) {
-            return None;
+
+        // Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible
+        // (null handle → message).
+        if self.opaque.contains_key(&key) {
+            let c_struct = self.c_type_ident(&key);
+            return Some(plan(
+                Self::in_name_of(&key),
+                syn::parse_quote!(*mut #c_struct),
+                InputTerminalOperation::OwnedHandle {
+                    null_message: format!("null {} handle passed by value", type_short(&key)),
+                },
+            ));
         }
-        let name = Self::in_name_of(&ty.key());
-        let c_struct = self.c_type_ident(&ty.key());
-        let src = self.src_ty_of(&ty.key());
-        let short = type_short(&ty.key());
-        let null_msg = format!("null {short} handle passed by value");
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name(
-                v: *mut #c_struct,
-            ) -> ::core::result::Result<#src, ::std::string::String> {
-                if v.is_null() {
-                    return ::core::result::Result::Err(
-                        ::std::string::String::from(#null_msg),
-                    );
-                }
-                ::core::result::Result::Ok(*::std::boxed::Box::from_raw(v as *mut #src))
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: syn::parse_quote!(*mut #c_struct),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
+
+        // Inline-opaque, by-`*mut` consume. Ownership-specific write-back is a
+        // Flat/adapter semantic decision and is safe to freeze as wire-side
+        // statements before the source type is spelled.
+        if let Some(opaque) = self.value_opaque_ty_of(&key).cloned() {
+            let writeback = self.value_opaque_writeback_plan(registry, &key)?;
+            return Some(plan(
+                Self::in_name_of(&key),
+                syn::parse_quote!(*mut #opaque),
+                InputTerminalOperation::ValueOpaque {
+                    opaque,
+                    writeback,
+                    null_message: format!("null {} value passed by value", type_short(&key)),
+                },
+            ));
+        }
+
+        // A C enum arrives through `MaybeUninit` so its discriminant can be
+        // validated before any restricted Rust enum value is materialized.
+        if self.enums.contains_key(&key) {
+            let e = unit_enum(registry, &key)?;
+            let c_name = self.c_type_ident(&key);
+            let c_name_string = c_name.to_string();
+            return Some(plan(
+                Self::in_name_of(&key),
+                syn::parse_quote!(::core::mem::MaybeUninit<#c_name>),
+                InputTerminalOperation::Enum {
+                    c_name,
+                    variants: e.values.iter().map(|value| value.name.clone()).collect(),
+                    invalid_message: format!("invalid discriminant {{}} for `{c_name_string}`"),
+                    size_message: format!(
+                        "`{c_name_string}`: a #[repr(C)] enum must have the size of a C `int`"
+                    ),
+                    align_message: format!(
+                        "`{c_name_string}`: a #[repr(C)] enum must have the alignment of a C `int`"
+                    ),
+                },
+            ));
+        }
+
+        if r_is_string(ty) {
+            return Some(plan(
+                Self::in_name_of(&key),
+                syn::parse_quote!(*const ::core::ffi::c_char),
+                InputTerminalOperation::String,
+            ));
+        }
+        if r_is_str(ty) {
+            return Some(plan(
+                Self::in_name_of(&key),
+                syn::parse_quote!(*const ::core::ffi::c_char),
+                InputTerminalOperation::StrMarker,
+            ));
+        }
+        if r_is_bool(ty) {
+            return Some(plan(
+                Self::in_name_of(&key),
+                bool_wire(),
+                InputTerminalOperation::Bool,
+            ));
+        }
+        if r_is_scalar(ty) {
+            return Some(plan(
+                Self::in_name_of(&key),
+                scalar_ty(ty)?,
+                InputTerminalOperation::Scalar,
+            ));
+        }
+        None
     }
 
     /// The mirror field idents to null in a by-value consume's gravestone write-back,
@@ -120,26 +185,38 @@ impl CbindgenBuilder {
         key: &TypeKey,
         slot: &syn::Ident,
     ) -> Option<TokenStream> {
+        let opaque = &self.value_opaque.get(key)?.opaque;
+        let plan = self.value_opaque_writeback_plan(registry, key)?;
+        match plan {
+            crate::chain::ValueOpaqueWriteback::None => None,
+            _ => Some(plan.render(slot, opaque)),
+        }
+    }
+
+    /// The semantic write-back policy shared by late input rendering and the
+    /// emitted public `_take` helper.
+    fn value_opaque_writeback_plan(
+        &self,
+        registry: &impl Conversions,
+        key: &TypeKey,
+    ) -> Option<crate::chain::ValueOpaqueWriteback> {
+        use crate::chain::ValueOpaqueWriteback;
+
         let cfg = self.value_opaque.get(key)?;
-        let opaque = &cfg.opaque;
         if cfg.generate_mirror {
             match self.nullable_owned_ptr_fields(registry, key) {
                 // No owned-pointer fields ⇒ plain data, nothing to clean up.
-                Some(fields) if fields.is_empty() => None,
+                Some(fields) if fields.is_empty() => Some(ValueOpaqueWriteback::None),
                 // All owned-pointer fields nullable ⇒ null them in place (drop-safe).
-                Some(fields) => Some(quote!(#( (*#slot).#fields = ::core::ptr::null_mut(); )*)),
+                Some(fields) => Some(ValueOpaqueWriteback::NullFields(fields)),
                 // Bare `Box<T>` field ⇒ a NULL would be an invalid `Box`; full gravestone.
-                None => Some(
-                    quote!(::core::ptr::write(#slot, <#opaque as ::prebindgen_c_runtime::Gravestone>::gravestone());),
-                ),
+                None => Some(ValueOpaqueWriteback::Gravestone),
             }
         } else {
             // Non-mirror opaque: the consumer chose the kind explicitly.
             match cfg.kind {
-                OpaqueKind::Owned => Some(
-                    quote!(::core::ptr::write(#slot, <#opaque as ::prebindgen_c_runtime::Gravestone>::gravestone());),
-                ),
-                OpaqueKind::Data => None,
+                OpaqueKind::Owned => Some(ValueOpaqueWriteback::Gravestone),
+                OpaqueKind::Data => Some(ValueOpaqueWriteback::None),
             }
         }
     }
@@ -156,225 +233,6 @@ impl CbindgenBuilder {
             }
             _ => false,
         }
-    }
-
-    /// Inline-opaque, by-`*mut` consume: read the live Rust value out by
-    /// transmute (move). For an `opaque_owned_struct` type, write a gravestone back so a
-    /// later `_drop` is a no-op (safe drop-after-move); an `opaque_data_struct` type
-    /// owns no external resource, so the moved-from bitwise duplicate is
-    /// harmlessly droppable and no write-back is needed. Only the C pointer is
-    /// null-checked — NULL ⇒ Err, and the `Option<_>` wrapper maps a NULL pointer
-    /// wire → None. (We do NOT reject gravestone values: for types whose
-    /// gravestone coincides with a legitimate value — e.g. an *empty* `ZBytes` —
-    /// that would wrongly reject valid inputs; the move + write-back is safe.)
-    ///
-    /// **Write-back optimization for a `repr_c_struct` mirror:** the generator knows
-    /// the mirror's fields, so when all its owned-pointer fields are nullable
-    /// (`Option<Box<T>>`) it nulls just those fields (`(*v).label = null`) instead of
-    /// rebuilding+writing the whole `Default` gravestone — drop-safe (scalars are
-    /// `Copy`; nulling the owned pointers prevents the double-free) and far cheaper.
-    /// Non-mirror types (`opaque_owned_struct` blobs) and mirrors with a bare `Box<T>`
-    /// field (NULL would be an invalid `Box`) keep the full `gravestone()` write.
-    pub(crate) fn in_value_opaque(
-        &self,
-        ty: &TypeRef,
-        registry: &impl Conversions,
-    ) -> Option<ConverterImpl> {
-        let opaque = self.value_opaque_ty_of(&ty.key())?.clone();
-        let name = Self::in_name_of(&ty.key());
-        let src = self.src_ty_of(&ty.key());
-        let short = type_short(&ty.key());
-        let null_msg = format!("null {short} value passed by value");
-        // Owned-ness (whether to clean up the moved-from slot) is inferred from the
-        // mirror's fields for a `repr_c_struct`, or the explicit kind for a non-mirror.
-        let writeback = self.value_opaque_writeback(registry, &ty.key(), &format_ident!("v"));
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name(
-                v: *mut #opaque,
-            ) -> ::core::result::Result<#src, ::std::string::String> {
-                if v.is_null() {
-                    return ::core::result::Result::Err(
-                        ::std::string::String::from(#null_msg),
-                    );
-                }
-                let __live = <#opaque as ::prebindgen_c_runtime::Transmute>::into_rust(
-                    ::core::ptr::read(v),
-                );
-                #writeback
-                ::core::result::Result::Ok(__live)
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: syn::parse_quote!(*mut #opaque),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
-    }
-
-    /// Enum input: read the C-supplied discriminant as a plain integer,
-    /// **validate** it, then build the source enum — fallible.
-    ///
-    /// A C `enum` is an `int` at the ABI, so nothing stops a caller passing a
-    /// value no variant has. Taking the mirror `#[repr(C)]` enum by value would
-    /// **materialise** that invalid discriminant at the boundary — undefined
-    /// behaviour *before* any `match` in this converter could inspect it, which
-    /// is why validating an already-materialised enum is not a fix (#158).
-    ///
-    /// So the wire is `::core::mem::MaybeUninit<mirror>`, which is
-    /// `#[repr(transparent)]` over the mirror (identical ABI, identical C
-    /// spelling — cbindgen renders `MaybeUninit<T>` as `T`) and, unlike the
-    /// mirror itself, may legally hold **any** bit pattern. The discriminant is
-    /// then read out as `c_int` — the representation a `#[repr(C)]` fieldless
-    /// enum has by definition, asserted below — and compared against the
-    /// mirror's own variants, so a `const`- or `cfg`-driven discriminant needs
-    /// no generator-side evaluation. An unmatched value is a binding error
-    /// through the wrapper's error channel; no Rust enum is ever constructed
-    /// from it.
-    pub(crate) fn in_enum(&self, ty: &TypeRef, r: &impl Conversions) -> Option<ConverterImpl> {
-        let key = ty.key();
-        if !self.enums.contains_key(&key) {
-            return None;
-        }
-        let e = unit_enum(r, &ty.key())?;
-        let name = Self::in_name_of(&ty.key());
-        let cname = self.c_type_ident(&ty.key());
-        let src = self.src_ty_of(&ty.key());
-        let cname_str = cname.to_string();
-        let arms = e.values.iter().map(|v| {
-            let id = &v.name;
-            quote!(
-                if __raw == #cname::#id as ::core::ffi::c_int {
-                    return ::core::result::Result::Ok(#src::#id);
-                }
-            )
-        });
-        let bad_msg = format!("invalid discriminant {{}} for `{cname_str}`");
-        let size_msg = format!("`{cname_str}`: a #[repr(C)] enum must have the size of a C `int`");
-        let align_msg =
-            format!("`{cname_str}`: a #[repr(C)] enum must have the alignment of a C `int`");
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name(
-                v: ::core::mem::MaybeUninit<#cname>,
-            ) -> ::core::result::Result<#src, ::std::string::String> {
-                const _: () = {
-                    assert!(
-                        ::core::mem::size_of::<#cname>()
-                            == ::core::mem::size_of::<::core::ffi::c_int>(),
-                        #size_msg
-                    );
-                    assert!(
-                        ::core::mem::align_of::<#cname>()
-                            == ::core::mem::align_of::<::core::ffi::c_int>(),
-                        #align_msg
-                    );
-                };
-                let __raw: ::core::ffi::c_int =
-                    ::core::ptr::read(v.as_ptr() as *const ::core::ffi::c_int);
-                #(#arms)*
-                ::core::result::Result::Err(::std::format!(#bad_msg, __raw))
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: syn::parse_quote!(::core::mem::MaybeUninit<#cname>),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
-    }
-
-    /// `String` input: `*const c_char` → owned `String` — fallible.
-    pub(crate) fn in_string(&self, ty: &TypeRef) -> Option<ConverterImpl> {
-        if !r_is_string(ty) {
-            return None;
-        }
-        let name = Self::in_name_of(&ty.key());
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name(
-                v: *const ::core::ffi::c_char,
-            ) -> ::core::result::Result<::std::string::String, ::std::string::String> {
-                if v.is_null() {
-                    return ::core::result::Result::Err(
-                        ::std::string::String::from("null pointer passed for String argument"),
-                    );
-                }
-                match ::std::ffi::CStr::from_ptr(v).to_str() {
-                    ::core::result::Result::Ok(s) => {
-                        ::core::result::Result::Ok(s.to_owned())
-                    }
-                    ::core::result::Result::Err(_) => {
-                        ::core::result::Result::Err(
-                            ::std::string::String::from("invalid UTF-8 in String argument"),
-                        )
-                    }
-                }
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: syn::parse_quote!(*const ::core::ffi::c_char),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
-    }
-
-    /// Bare `str` never crosses the C ABI directly, but resolving `&str`
-    /// inputs requires its inner node to have a filled rank-0 cell.
-    pub(crate) fn in_str(&self, ty: &TypeRef) -> Option<ConverterImpl> {
-        if !r_is_str(ty) {
-            return None;
-        }
-        let name = Self::in_name_of(&ty.key());
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, dead_code, unused_variables)]
-            pub(crate) fn #name() {}
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: syn::parse_quote!(*const ::core::ffi::c_char),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
-    }
-
-    /// `bool` input: the one scalar that is **not** a pass-through (#170).
-    ///
-    /// A `bool` parameter is the broadest place C hands over a byte that no
-    /// Rust `bool` may hold, so it crosses as [`bool_wire`] and is normalised
-    /// by [`bool_in_expr`] before a `bool` exists. The C prototype is
-    /// unchanged — cbindgen simplifies `MaybeUninit<T>` to `T`.
-    pub(crate) fn in_bool(&self, ty: &TypeRef) -> Option<ConverterImpl> {
-        if !r_is_bool(ty) {
-            return None;
-        }
-        let name = Self::in_name_of(&ty.key());
-        let wire = bool_wire();
-        let read = bool_in_expr(quote!(v));
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name(v: #wire) -> bool {
-                #read
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: wire,
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
     }
 
     /// Compile every site of every exported function.
@@ -790,31 +648,6 @@ impl CbindgenBuilder {
         Some(ConverterImpl {
             subs: vec![],
             destination: wire,
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
-    }
-
-    /// FFI-safe scalar (integers, floats): identity pass-through. `bool` is
-    /// claimed earlier by [`Self::in_bool`] and never reaches here.
-    pub(crate) fn in_scalar(&self, ty: &TypeRef) -> Option<ConverterImpl> {
-        if !r_is_scalar(ty) || r_is_bool(ty) {
-            return None;
-        }
-        let name = Self::in_name_of(&ty.key());
-        // A scalar's spelling is its name, so this needs no captured syntax.
-        let spelled = scalar_ty(ty)?;
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) fn #name(v: #spelled) -> #spelled {
-                v
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: spelled.clone(),
             function,
             pre_stages: vec![],
             niches: Niches::empty(),
@@ -1809,7 +1642,7 @@ impl CbindgenBuilder {
         // `String` output: a `malloc`'d `char*` raw block freed via the
         // `free_memory_function`. A `String` explicitly declared `opaque_ptr`
         // (held by C as `string_t *`) opts out — the opaque-handle branch below
-        // owns it then (mirroring the input side, where `in_opaque_handle` wins).
+        // owns it then (mirroring the input side, where owned-handle selection wins).
         if r_is_string(ty) && !self.opaque.contains_key(&ty.key()) {
             let name = Self::out_name_of(&ty.key());
             return Some(plan(
