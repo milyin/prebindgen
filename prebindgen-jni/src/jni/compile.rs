@@ -8,7 +8,7 @@
 
 use kotlin_codegen::KtType;
 use prebindgen_registry::{
-    flat::{Alternative, Function, TypeKind, TypeRef},
+    flat::{Alternative, Function, ScalarKind, TypeKind, TypeRef},
     recipe::{
         At, Bound, Carrier, Compile, Cx, Direction, Frag, Mode, Part, Parts, Validity, Yield,
     },
@@ -877,7 +877,7 @@ impl<R: Conversions> JCompile<'_, R> {
     fn planned_value_codec(&self, at: At<'_>) -> Option<JFrag> {
         let source = at.crossing.spelled();
         let direction = at.crossing.direction();
-        let (wire, body, niches, metadata, adapter_source) =
+        let (wire, body, niches, metadata, text_carrier) =
             if matches!(source.kind(), TypeKind::Scalar(_)) {
                 let (wire, body) = match direction {
                     Direction::Construct => crate::jni::emit::primitive_input(&source.key()),
@@ -885,7 +885,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 }?;
                 let niches = default_niches_for_wire(&wire);
                 let kotlin_name = kotlin_for_wire(&wire);
-                let metadata = if source.key().as_str() == "u64" {
+                let metadata = if crate::jni::trait_impl::is_unsigned64(source) {
                     self.decls.unsigned64_leaf_meta()
                 } else {
                     self.decls.framework_meta(kotlin_name)
@@ -893,42 +893,35 @@ impl<R: Conversions> JCompile<'_, R> {
                 (wire, body, niches, metadata, None)
             } else if matches!(source.kind(), TypeKind::Str) {
                 let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-                let (adapter_source, body, kotlin_key) = match direction {
-                    Direction::Construct => (
-                        syn::parse_quote!(String),
-                        syn::parse_quote!({
-                            let s = env.get_string(v).map_err(|e| {
-                                <__JniErr as ::core::convert::From<String>>::from(format!(
-                                    "decode_string: {}",
-                                    e
-                                ))
-                            })?;
-                            s.into()
-                        }),
-                        source.key(),
-                    ),
-                    Direction::Deconstruct => {
-                        let rust: syn::Type = syn::parse_quote!(&str);
-                        (
-                            rust.clone(),
-                            syn::parse_quote!({
-                                env.new_string(v).map_err(|e| {
-                                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                                        "encode_str: {}",
-                                        e
-                                    ))
-                                })?
-                            }),
-                            TypeKey::from_type(&rust),
-                        )
-                    }
+                let body = match direction {
+                    Direction::Construct => syn::parse_quote!({
+                        let s = env.get_string(v).map_err(|e| {
+                            <__JniErr as ::core::convert::From<String>>::from(format!(
+                                "decode_string: {}",
+                                e
+                            ))
+                        })?;
+                        s.into()
+                    }),
+                    Direction::Deconstruct => syn::parse_quote!({
+                        env.new_string(v).map_err(|e| {
+                            <__JniErr as ::core::convert::From<String>>::from(format!(
+                                "encode_str: {}",
+                                e
+                            ))
+                        })?
+                    }),
                 };
                 let niches = default_niches_for_wire(&wire);
                 let kotlin_name = self
                     .decls
-                    .override_kotlin_name(&kotlin_key, Some(KtType::string()));
+                    .override_kotlin_name(&source.key(), Some(KtType::string()));
                 let metadata = self.decls.framework_meta(kotlin_name);
-                (wire, body, niches, metadata, Some(adapter_source))
+                let carrier = match direction {
+                    Direction::Construct => crate::jni::chain::JTextCarrier::Owned,
+                    Direction::Deconstruct => crate::jni::chain::JTextCarrier::Borrowed,
+                };
+                (wire, body, niches, metadata, Some(carrier))
             } else if direction == Direction::Deconstruct
                 && matches!(
                     source.kind(),
@@ -939,7 +932,6 @@ impl<R: Conversions> JCompile<'_, R> {
                     } if matches!(inner.kind(), TypeKind::Str)
                 )
             {
-                let adapter_source: syn::Type = syn::parse_quote!(&str);
                 let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
                 let body = syn::parse_quote!({
                     env.new_string(v).map_err(|e| {
@@ -950,12 +942,39 @@ impl<R: Conversions> JCompile<'_, R> {
                     })?
                 });
                 let niches = default_niches_for_wire(&wire);
-                let kotlin_name = self.decls.override_kotlin_name(
-                    &TypeKey::from_type(&adapter_source),
-                    Some(KtType::string()),
-                );
+                let kotlin_name = self
+                    .decls
+                    .override_kotlin_name(&source.key(), Some(KtType::string()));
                 let metadata = self.decls.framework_meta(kotlin_name);
-                (wire, body, niches, metadata, Some(adapter_source))
+                (
+                    wire,
+                    body,
+                    niches,
+                    metadata,
+                    Some(crate::jni::chain::JTextCarrier::Borrowed),
+                )
+            } else if direction == Direction::Deconstruct
+                && matches!(source.kind(), TypeKind::Cow { .. })
+                && matches!(
+                    source.sequence_elem().map(TypeRef::kind),
+                    Some(TypeKind::Scalar(ScalarKind::U8))
+                )
+            {
+                let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
+                let body: syn::Expr = syn::parse_quote!({
+                    env.byte_array_from_slice(&v).map_err(|e| {
+                        <__JniErr as ::core::convert::From<String>>::from(format!(
+                            "encode_byte_array: {}",
+                            e
+                        ))
+                    })?
+                });
+                let niches = default_niches_for_wire(&wire);
+                let kotlin_name = self
+                    .decls
+                    .override_kotlin_name(&source.key(), Some(KtType::byte_array()));
+                let metadata = self.decls.framework_meta(kotlin_name);
+                (wire, body, niches, metadata, None)
             } else if !matches!(source.kind(), TypeKind::Str)
                 && matches!(source.unwrapped().kind(), TypeKind::Str | TypeKind::String)
             {
@@ -995,7 +1014,9 @@ impl<R: Conversions> JCompile<'_, R> {
                     .decls
                     .override_kotlin_name(&source.key(), Some(KtType::string()));
                 let metadata = self.decls.framework_meta(kotlin_name);
-                (wire, body, niches, metadata, None)
+                let carrier = matches!(source.kind(), TypeKind::String)
+                    .then_some(crate::jni::chain::JTextCarrier::Owned);
+                (wire, body, niches, metadata, carrier)
             } else if direction == Direction::Deconstruct && matches!(source.kind(), TypeKind::Unit)
             {
                 (
@@ -1008,20 +1029,16 @@ impl<R: Conversions> JCompile<'_, R> {
             } else {
                 return None;
             };
-        let plan = match adapter_source {
-            Some(adapter_source) => crate::jni::chain::JValueCodecPlan::with_adapter_source(
+        let plan = if let Some(carrier) = text_carrier {
+            crate::jni::chain::JValueCodecPlan::text(
                 direction,
                 source.clone(),
-                adapter_source,
+                carrier,
                 wire.clone(),
                 body,
-            ),
-            None => crate::jni::chain::JValueCodecPlan::new(
-                direction,
-                source.clone(),
-                wire.clone(),
-                body,
-            ),
+            )
+        } else {
+            crate::jni::chain::JValueCodecPlan::new(direction, source.clone(), wire.clone(), body)
         };
         let ident = plan.name().clone();
         let conv = ConverterImpl {
@@ -2324,6 +2341,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         inner: &JFrag,
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
+        // `Cow<'_, [u8]>` is classified as a Sequence by the flat model, but
+        // its declared JNI representation is one terminal byte array. Freeze
+        // that terminal before attempting structural List composition.
+        if let Some(planned) = self.planned_value_codec(at) {
+            return Ok(planned);
+        }
         let emit = cx.emit();
         if let Some(planned) = self.planned_sequence(at, elements, inner) {
             return Ok(planned);

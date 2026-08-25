@@ -179,6 +179,32 @@ pub(crate) unsafe fn Cow_static_str_to_JString_47272020<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Cow_static_u8_to_JByteArray_5ff7543f<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: ::std::borrow::Cow<'static, [u8]>,
+) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
+    Ok({
+        env.byte_array_from_slice(&v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("encode_byte_array: {}", e))
+            })?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -230,7 +256,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
                         let __o0: &::core::option::Option<_> = &(&__vf0).opt_plain;
                         match __o0 {
                             ::core::option::Option::Some(__n0) => {
-                                let __enc0 = match str_to_JString_7b77dc67(
+                                let __enc0 = match borrowed_text_to_JString_b6a9f7b3(
                                     &mut env,
                                     myflat::z_keyexpr_as_str(__n0),
                                 ) {
@@ -252,7 +278,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
                         let __o0: &::core::option::Option<_> = &(&__vf0).opt_boxed;
                         match __o0 {
                             ::core::option::Option::Some(__n0) => {
-                                let __enc1 = match str_to_JString_7b77dc67(
+                                let __enc1 = match borrowed_text_to_JString_b6a9f7b3(
                                     &mut env,
                                     myflat::z_keyexpr_as_str(__n0),
                                 ) {
@@ -287,7 +313,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
                         __enc2.into()
                     };
                     let __cb0_obj3: jni::objects::JObject = {
-                        let __enc3 = match std_borrow_Cow_u8_to_JByteArray_c6a6bddf(
+                        let __enc3 = match Cow_static_u8_to_JByteArray_5ff7543f(
                             &mut env,
                             __vf0.seq_cow.clone(),
                         ) {
@@ -303,7 +329,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
                         __enc3.into()
                     };
                     let __cb0_obj4: jni::objects::JObject = {
-                        let __enc4 = match String_to_JString_c7f3ca43(
+                        let __enc4 = match owned_text_to_JString_220e25c6(
                             &mut env,
                             __vf0.text_plain.clone(),
                         ) {
@@ -413,32 +439,6 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: String,
-) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    Ok({
-        env.new_string(&*v)
-            .map_err(|e| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("encode_str: {}", e))
-            })?
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn Vec_u8_to_JByteArray_7936d5de<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<u8>,
@@ -503,16 +503,16 @@ pub(crate) unsafe fn ZSample_to_jlong_757bca9c<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn std_borrow_Cow_u8_to_JByteArray_c6a6bddf<'a>(
+pub(crate) unsafe fn borrowed_text_to_JString_b6a9f7b3<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: ::std::borrow::Cow<'_, [u8]>,
-) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
+    v: &str,
+) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
-        env.byte_array_from_slice(&v)
+        env.new_string(v)
             .map_err(|e| {
                 <__JniErr as ::core::convert::From<
                     String,
-                >>::from(format!("encode_byte_array: {}", e))
+                >>::from(format!("encode_str: {}", e))
             })?
     })
 }
@@ -529,12 +529,12 @@ pub(crate) unsafe fn std_borrow_Cow_u8_to_JByteArray_c6a6bddf<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn str_to_JString_7b77dc67<'a>(
+pub(crate) unsafe fn owned_text_to_JString_220e25c6<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: &str,
+    v: String,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
-        env.new_string(v)
+        env.new_string(&*v)
             .map_err(|e| {
                 <__JniErr as ::core::convert::From<
                     String,

@@ -444,7 +444,7 @@ fn rust_side_only_input_type() {
     // The wrapper folds the ctor Rust-side.
     assert!(rc.contains("myflat::z_opts_new("), "{rust}");
     assert!(
-        rc.contains("let__chain_s0=JString_to_String_")
+        rc.contains("let__chain_s0=JString_to_owned_text_")
             && rc.contains("let__chain_s1=String_to_Label_"),
         "the expansion leaf must invoke its frozen terminal-then-stage pipeline:\n{rust}"
     );

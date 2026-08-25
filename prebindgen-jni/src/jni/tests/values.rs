@@ -130,7 +130,7 @@ fn owned_strings_and_unit_retain_late_value_codec_plans() {
 }
 
 #[test]
-fn unsized_str_retains_adapter_typed_value_codec_plans() {
+fn unsized_str_retains_semantic_text_codec_plans() {
     let loc = myflat_loc();
     let registry = crate::test_util::reg_from_items(declare_referenced(vec![
         (
@@ -159,6 +159,14 @@ fn unsized_str_retains_adapter_typed_value_codec_plans() {
         ),
         (
             syn::parse_quote!(
+                pub fn owned_text_len(value: String) -> i64 {
+                    value.len() as i64
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
                 pub fn text_emit(cb: impl Fn(Text) + Send + Sync + 'static) {
                     unimplemented!()
                 }
@@ -173,6 +181,7 @@ fn unsized_str_retains_adapter_typed_value_codec_plans() {
             crate::package!()
                 .class(crate::ptr_class!(Text))
                 .fun(prebindgen_registry::fun!(text_len))
+                .fun(prebindgen_registry::fun!(owned_text_len))
                 .fun(prebindgen_registry::fun!(text_emit)),
         )
         .expand(
@@ -188,6 +197,10 @@ fn unsized_str_retains_adapter_typed_value_codec_plans() {
         .registry
         .reading(&TypeKey::from_type(&syn::parse_quote!(&str)))
         .expect("&str reading");
+    let string_reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(String)))
+        .expect("String reading");
 
     let input = generation.decls.in_frag(&str_reading).expect("str input");
     let bare_output = generation.decls.out_frag(&str_reading).expect("str output");
@@ -195,13 +208,22 @@ fn unsized_str_retains_adapter_typed_value_codec_plans() {
         .decls
         .out_frag(&ref_reading)
         .expect("&str output");
+    let string_input = generation
+        .decls
+        .in_frag(&string_reading)
+        .expect("String input");
     assert!(
         input.is_value_codec_plan(),
-        "the unsized input must retain a plan whose adapter type is String"
+        "the unsized input must retain a semantic owned-text plan"
     );
     assert!(
         bare_output.is_value_codec_plan() && ref_output.is_value_codec_plan(),
-        "both output crossings must retain the adapter-typed &str plan"
+        "both output crossings must retain the semantic borrowed-text plan"
+    );
+    assert_eq!(
+        input.converter_ident(),
+        string_input.converter_ident(),
+        "bare str input and String must share the owned-text decoder"
     );
     assert_eq!(
         bare_output.converter_ident(),
@@ -246,6 +268,44 @@ fn fixed_primitive_arrays_retain_late_registry_plans() {
             .expect("primitive-array output")
             .is_value_codec_plan(),
         "the output array must retain an unrendered primitive-array plan"
+    );
+}
+
+#[test]
+fn cow_byte_slices_retain_a_late_value_codec() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::parse_quote!(
+            pub fn cow_bytes() -> Cow<'static, [u8]> {
+                unimplemented!()
+            }
+        ),
+        myflat_loc(),
+    )]))
+    .expect("index Cow-byte fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(cow_bytes)))
+        .build_with(registry)
+        .expect("resolve Cow-byte fixture");
+    let reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(Cow<'static, [u8]>)))
+        .expect("Cow-byte reading");
+
+    let output = generation
+        .decls
+        .out_frag(&reading)
+        .expect("Cow-byte output");
+    assert!(
+        output.is_value_codec_plan(),
+        "Cow<[u8]> output must retain an unrendered value codec"
+    );
+    assert!(
+        output
+            .converter_ident()
+            .to_string()
+            .contains("Cow_static_u8"),
+        "the late codec identity must preserve the crossing's lifetime"
     );
 }
 
@@ -2187,14 +2247,14 @@ fn convert_via_local_fns() {
     assert!(rc.contains("crate::conv::label_in("), "{rust}");
     assert!(rc.contains("crate::conv::label_out("), "{rust}");
     assert!(
-        rc.contains("let__chain_s0=JString_to_String_")
+        rc.contains("let__chain_s0=JString_to_owned_text_")
             && rc.contains("let__chain_s1=String_to_Label_")
             && rc.contains("Result::<_,__JniErr>::Ok(__chain_s1)"),
         "the ordinary input must invoke its frozen terminal-then-stage pipeline:\n{rust}"
     );
     assert!(
         rc.contains("let__chain_s0=Label_to_String_")
-            && rc.contains("String_to_JString_")
+            && rc.contains("owned_text_to_JString_")
             && rc.contains("env,__chain_s0)"),
         "the ordinary output must invoke its frozen stage-then-terminal pipeline:\n{rust}"
     );
@@ -2246,7 +2306,7 @@ fn multi_stage_pipeline_preserves_registry_order() {
     let rc: String = rust.split_whitespace().collect();
 
     assert!(
-        rc.contains("let__chain_s0=JString_to_String_")
+        rc.contains("let__chain_s0=JString_to_owned_text_")
             && rc.contains("let__chain_s1=String_to_Label_")
             && rc.contains("let__chain_s2=Label_to_Tag_")
             && rc.contains("Result::<_,__JniErr>::Ok(__chain_s2)"),
@@ -2255,7 +2315,7 @@ fn multi_stage_pipeline_preserves_registry_order() {
     assert!(
         rc.contains("let__chain_s0=Tag_to_Label_")
             && rc.contains("let__chain_s1=Label_to_String_")
-            && rc.contains("String_to_JString_")
+            && rc.contains("owned_text_to_JString_")
             && rc.contains("env,__chain_s1)"),
         "deconstruct must run outer stage, inner stage, then terminal:\n{rust}"
     );

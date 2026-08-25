@@ -9,6 +9,16 @@ use prebindgen_registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 use super::*;
 
+/// Whether Flat classifies this exact crossing as the unsigned 64-bit scalar.
+/// Destination policy asks the model once through this helper; no caller reads
+/// or compares Rust spelling.
+pub(crate) fn is_unsigned64(ty: &prebindgen_registry::flat::TypeRef) -> bool {
+    matches!(
+        ty.kind(),
+        prebindgen_registry::flat::TypeKind::Scalar(prebindgen_registry::flat::ScalarKind::U64)
+    )
+}
+
 /// The `#[allow(...)]` carried by every generated converter `fn`.
 ///
 /// Generated converters are uniform templates, not hand-written idiomatic Rust,
@@ -157,46 +167,6 @@ impl Declarations {
                 #ret_body
             }
         )
-    }
-
-    /// `Cow<[u8]>` output converter (any lifetime form) — see the call site
-    /// in [`Self::output_terminal`]. `None` when `ty` isn't a
-    /// `Cow<…, [u8]>` path.
-    fn cow_bytes_output(
-        &self,
-        ty: &prebindgen_registry::flat::TypeRef,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `TypeKind::Cow` is the form, and its `inner` is the argument — where
-        // this walked a path's last segment, compared the ident to the NAME
-        // `"Cow"`, and scanned the angle-bracketed arguments for a `[u8]`.
-        let prebindgen_registry::flat::TypeKind::Cow { inner, .. } = ty.kind() else {
-            return None;
-        };
-        if inner.key().as_str() != "[u8]" {
-            return None;
-        }
-        // The generated fn's param type must be resolvable without imports —
-        // normalize whatever path form the accessor wrote to the full one.
-        let norm_ty: syn::Type = syn::parse_quote!(::std::borrow::Cow<'_, [u8]>);
-        let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
-        let body: syn::Expr = syn::parse_quote!({
-            env.byte_array_from_slice(&v).map_err(|e| {
-                <__JniErr as ::core::convert::From<String>>::from(format!(
-                    "encode_byte_array: {}",
-                    e
-                ))
-            })?
-        });
-        let kotlin_name = self.override_kotlin_name(&ty.key(), Some(KtType::byte_array()));
-        let niches = default_niches_for_wire(&wire);
-        Some(ConverterImpl {
-            subs: vec![],
-            pre_stages: vec![],
-            function: self.build_output_fn(&norm_ty, &wire, &body, None),
-            destination: wire,
-            niches,
-            metadata: self.framework_meta(kotlin_name),
-        })
     }
 
     /// Universal "opaque Box-handle as `jlong`" pair — input side.
@@ -862,7 +832,7 @@ impl Declarations {
             // unsupported status (`Vec<u8>` is the rank-0 ByteArray special).
             None => {
                 matches!(elem.kind(), prebindgen_registry::flat::TypeKind::String)
-                    || elem.key().as_str() == "u64"
+                    || is_unsigned64(elem)
             }
         }
     }
@@ -1862,7 +1832,7 @@ impl Declarations {
         {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if reading.key().as_str() == "u64" {
+            let metadata = if is_unsigned64(reading) {
                 self.unsigned64_leaf_meta()
             } else {
                 self.framework_meta(kotlin_name)
@@ -2148,14 +2118,6 @@ impl Declarations {
         if let Some(conv) = self.lookup_output(reading, registry, emit) {
             return Some(conv);
         }
-        // `Cow<'_, [u8]>` (any lifetime): a borrow-or-owned byte container —
-        // one copy into the JVM array straight off the `Deref<[u8]>`, no
-        // intermediate owned `Vec` (the zero-copy dual of the `Vec<u8>`
-        // output, for accessors like `zenoh::ZBytes::to_bytes()` that borrow
-        // when the payload is contiguous). Surfaces as Kotlin `ByteArray`.
-        if let Some(conv) = self.cow_bytes_output(reading) {
-            return Some(conv);
-        }
         if let Some((wire, body)) = (!matches!(
             reading.unwrapped().kind(),
             prebindgen_registry::flat::TypeKind::Scalar(_)
@@ -2168,7 +2130,7 @@ impl Declarations {
         {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if reading.key().as_str() == "u64" {
+            let metadata = if is_unsigned64(reading) {
                 self.unsigned64_leaf_meta()
             } else {
                 self.framework_meta(kotlin_name)

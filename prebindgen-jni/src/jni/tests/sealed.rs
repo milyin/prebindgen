@@ -2900,7 +2900,7 @@ fn borrowed_sequences_keep_their_registry_plan_or_specialized_shape() {
             && borrowed_ident.starts_with("JObject_to_Vec_String_")
             && compact.contains("Result<Vec<String>,__JniErr>")
             && compact.contains("letmut__sequence_values")
-            && compact.contains("JString_to_String"),
+            && compact.contains("JString_to_owned_text"),
         "the borrowed input must retain the executable registry Sequence plan: {borrowed_ident}\n{borrowed_rendered}"
     );
 

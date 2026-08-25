@@ -200,21 +200,48 @@ enum JValueBody {
     PrimitiveArray(Box<crate::jni::prim_array::PrimArray>),
 }
 
+/// How a terminal codec obtains the Rust type in its generated signature.
+///
+/// A crossing is spelled by [`Emit`] at the final write. Text terminals can
+/// instead select a semantic owned or borrowed carrier. The concrete Rust
+/// spellings for those carriers are deliberately confined to `render` too.
+#[derive(Clone, Copy)]
+enum JValueSource {
+    Crossing,
+    Text(JTextCarrier),
+}
+
+/// Adapter-semantic text ownership, before its Rust carrier is spelled.
+#[derive(Clone, Copy)]
+pub(crate) enum JTextCarrier {
+    Owned,
+    Borrowed,
+}
+
+impl JTextCarrier {
+    fn identity(self) -> &'static str {
+        match self {
+            Self::Owned => "owned_text",
+            Self::Borrowed => "borrowed_text",
+        }
+    }
+}
+
 /// One terminal value crossing, retained without source Rust syntax.
 ///
 /// The JNI representation and source-independent conversion policy are safe
 /// to freeze during recipe compilation. Source Rust spelling is not: the plan
 /// keeps the Flat reading opaque until the writer supplies [`Emit`]. Most
 /// codecs retain a ready expression; fixed-size arrays retain their JNI policy
-/// and build the source-typed expression only while rendering. Bare `str`
-/// records its adapter-authored `String`/`&str` signature explicitly without
-/// deriving either spelling from the crossing.
+/// and build the source-typed expression only while rendering. Text codecs
+/// retain only their ownership semantics; the concrete owned/borrowed Rust
+/// carrier is chosen inside final rendering.
 #[derive(Clone)]
 pub(crate) struct JValueCodecPlan {
     ident: syn::Ident,
     direction: Direction,
     source: TypeRef,
-    adapter_source: Option<syn::Type>,
+    source_kind: JValueSource,
     wire: syn::Type,
     body: JValueBody,
 }
@@ -231,37 +258,27 @@ impl JValueCodecPlan {
             ident,
             direction,
             source,
-            adapter_source: None,
+            source_kind: JValueSource::Crossing,
             wire,
             body: JValueBody::Ready(body),
         }
     }
 
-    /// A codec whose Rust signature deliberately differs from its crossing.
-    ///
-    /// The supplied type is adapter-authored syntax, not syntax extracted from
-    /// `source`: bare `str` is unsized, so JNI decodes it into `String` and
-    /// encodes it through `&str`. Keeping that exception explicit lets the
-    /// crossing remain opaque while preserving the actual converter contract.
-    pub(crate) fn with_adapter_source(
+    /// A text codec whose concrete owned/borrowed carrier is selected only
+    /// during final rendering.
+    pub(crate) fn text(
         direction: Direction,
         source: TypeRef,
-        adapter_source: syn::Type,
+        carrier: JTextCarrier,
         wire: syn::Type,
         body: syn::Expr,
     ) -> Self {
-        use quote::ToTokens as _;
-
-        let source_tokens = adapter_source.to_token_stream();
-        let ident = match direction {
-            Direction::Construct => crate::jni::emit::input_name(&source_tokens, &wire),
-            Direction::Deconstruct => crate::jni::emit::output_name(&source_tokens, &wire),
-        };
+        let ident = planned_name_for_key(direction, carrier.identity(), &wire);
         Self {
             ident,
             direction,
             source,
-            adapter_source: Some(adapter_source),
+            source_kind: JValueSource::Text(carrier),
             wire,
             body: JValueBody::Ready(body),
         }
@@ -277,7 +294,7 @@ impl JValueCodecPlan {
             ident,
             direction,
             source,
-            adapter_source: None,
+            source_kind: JValueSource::Crossing,
             wire: spec.wire.clone(),
             body: JValueBody::PrimitiveArray(Box::new(spec)),
         }
@@ -289,11 +306,11 @@ impl JValueCodecPlan {
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = &self.ident;
-        let source = self
-            .adapter_source
-            .as_ref()
-            .map(|source| quote::quote!(#source))
-            .unwrap_or_else(|| emit.spell(&self.source));
+        let source = match self.source_kind {
+            JValueSource::Crossing => emit.spell(&self.source),
+            JValueSource::Text(JTextCarrier::Owned) => quote::quote!(String),
+            JValueSource::Text(JTextCarrier::Borrowed) => quote::quote!(&str),
+        };
         let wire = &self.wire;
         let body = match &self.body {
             JValueBody::Ready(body) => body.clone(),
@@ -1224,7 +1241,16 @@ pub(crate) fn planned_name(
     intermediate: &syn::Type,
 ) -> syn::Ident {
     let key = source.key();
-    let source_key = key.as_str();
+    planned_name_for_key(direction, key.as_str(), intermediate)
+}
+
+/// Stable private name for a plan identified by an adapter semantic rather
+/// than by a source crossing. This accepts a semantic label, not Rust syntax.
+fn planned_name_for_key(
+    direction: Direction,
+    source_key: &str,
+    intermediate: &syn::Type,
+) -> syn::Ident {
     let source_id = crate::jni::emit::sanitize_for_ident(source_key);
     let wire_id = match intermediate {
         syn::Type::Tuple(tuple) if !tuple.elems.is_empty() => {

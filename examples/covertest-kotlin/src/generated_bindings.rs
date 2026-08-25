@@ -440,7 +440,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverVer
         use cov_helpers::*;
         crate::cover_version()
     };
-    match String_to_JString_c7f3ca43(&mut env, __out) {
+    match owned_text_to_JString_220e25c6(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -473,7 +473,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBan
         use cov_helpers::*;
         format!("{COVER_TAG}:{COVER_MAGIC:#x}")
     };
-    match String_to_JString_c7f3ca43(&mut env, __out) {
+    match owned_text_to_JString_220e25c6(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -847,7 +847,7 @@ pub(crate) unsafe fn Box_Box_Option_String_to_JString_299999e0<'a>(
     ::core::result::Result::Ok({
         match **v {
             ::core::option::Option::Some(__value) => {
-                String_to_JString_c7f3ca43(env, __value)?
+                owned_text_to_JString_220e25c6(env, __value)?
             }
             ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
@@ -2704,7 +2704,7 @@ pub(crate) unsafe fn JObject_to_Lookup_94ada15e<'env, 'v>(
                         String,
                     >>::from(format!("Lookup.Failed.v0: {}", e)))?;
                 let __p_v0_raw: jni::objects::JString = __p_v0_obj.into();
-                let __p_v0 = JString_to_String_c7f3ca43(env, &__p_v0_raw)?;
+                let __p_v0 = JString_to_owned_text_220e25c6(env, &__p_v0_raw)?;
                 return ::core::result::Result::Ok(perftest_flat::Lookup::Failed(__p_v0));
             }
             ::core::result::Result::Err(
@@ -3256,7 +3256,7 @@ pub(crate) unsafe fn JObject_to_Observation_435b0724<'env, 'v>(
                 String,
             >>::from(format!("Observation.note: {}", e)))?;
         let __note_raw: jni::objects::JString = __note_jobj.into();
-        let note = JString_to_String_c7f3ca43(env, &__note_raw)?;
+        let note = JString_to_owned_text_220e25c6(env, &__note_raw)?;
         perftest_flat::Observation {
             id,
             reading,
@@ -3624,7 +3624,7 @@ pub(crate) unsafe fn JObject_to_Reading_2261050f<'env, 'v>(
                         String,
                     >>::from(format!("Reading.Tagged.v0: {}", e)))?;
                 let __p_v0_raw: jni::objects::JString = __p_v0_obj.into();
-                let __p_v0 = JString_to_String_c7f3ca43(env, &__p_v0_raw)?;
+                let __p_v0 = JString_to_owned_text_220e25c6(env, &__p_v0_raw)?;
                 let __p_v1_obj: jni::objects::JObject = env
                     .get_field(__obj, "v1", "Lio/prebindgen/covertest/model/Priority;")
                     .and_then(|val| val.l())
@@ -3909,7 +3909,7 @@ pub(crate) unsafe fn JObject_to_Vec_Label_3fdf860d<'env, 'a>(
             __sequence_values
                 .push(
                     {
-                        let __chain_s0 = JString_to_String_c7f3ca43(
+                        let __chain_s0 = JString_to_owned_text_220e25c6(
                             env,
                             &__sequence_part,
                         )?;
@@ -4328,7 +4328,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                     __cb0_obj7 = jni::objects::JObject::null();
                                 }
                                 perftest_flat::Lookup::Failed(__sv0) => {
-                                    let __enc___cb0_obj7 = match String_to_JString_c7f3ca43(
+                                    let __enc___cb0_obj7 = match owned_text_to_JString_220e25c6(
                                         &mut env,
                                         __sv0.clone(),
                                     ) {
@@ -4477,7 +4477,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                 }
                             };
                             let __cb0_obj8: jni::objects::JObject = {
-                                let __enc8 = match String_to_JString_c7f3ca43(
+                                let __enc8 = match owned_text_to_JString_220e25c6(
                                     &mut env,
                                     __u0.label,
                                 ) {
@@ -4598,7 +4598,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                     __cb0_obj16 = jni::objects::JObject::null();
                                 }
                                 perftest_flat::Lookup::Failed(__sv0) => {
-                                    let __enc___cb0_obj16 = match String_to_JString_c7f3ca43(
+                                    let __enc___cb0_obj16 = match owned_text_to_JString_220e25c6(
                                         &mut env,
                                         __sv0.clone(),
                                     ) {
@@ -4747,7 +4747,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                 }
                             };
                             let __cb0_obj17: jni::objects::JObject = {
-                                let __enc17 = match String_to_JString_c7f3ca43(
+                                let __enc17 = match owned_text_to_JString_220e25c6(
                                     &mut env,
                                     __u1.label,
                                 ) {
@@ -5749,7 +5749,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Probe_Send_Sync_static_b0418db6<'env, 'v
                                         __cb0_obj3 = jni::objects::JObject::null();
                                     }
                                     perftest_flat::Lookup::Failed(__sv0) => {
-                                        let __enc___cb0_obj3 = match String_to_JString_c7f3ca43(
+                                        let __enc___cb0_obj3 = match owned_text_to_JString_220e25c6(
                                             &mut env,
                                             __sv0.clone(),
                                         ) {
@@ -6068,7 +6068,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
                             __cb0_obj7 = jni::objects::JObject::null();
                         }
                         perftest_flat::Lookup::Failed(__sv0) => {
-                            let __enc___cb0_obj7 = match String_to_JString_c7f3ca43(
+                            let __enc___cb0_obj7 = match owned_text_to_JString_220e25c6(
                                 &mut env,
                                 __sv0.clone(),
                             ) {
@@ -6167,7 +6167,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
                         jni::sys::jvalue { j: __enc4 }
                     };
                     let __cb0_obj8: jni::objects::JObject = {
-                        let __enc8 = match String_to_JString_c7f3ca43(
+                        let __enc8 = match owned_text_to_JString_220e25c6(
                             &mut env,
                             __vf0.label,
                         ) {
@@ -6585,7 +6585,9 @@ pub(crate) unsafe fn JString_to_Box_Option_String_caeff346<'env, 'v>(
                 ::core::option::Option::None
             } else {
                 let __present = v;
-                ::core::option::Option::Some(JString_to_String_c7f3ca43(env, __present)?)
+                ::core::option::Option::Some(
+                    JString_to_owned_text_220e25c6(env, __present)?,
+                )
             }
         }),
     )
@@ -6666,7 +6668,7 @@ pub(crate) unsafe fn JString_to_Option_String_56d5e304<'env, 'v>(
             ::core::option::Option::None
         } else {
             let __present = v;
-            ::core::option::Option::Some(JString_to_String_c7f3ca43(env, __present)?)
+            ::core::option::Option::Some(JString_to_owned_text_220e25c6(env, __present)?)
         }
     })
 }
@@ -6683,7 +6685,7 @@ pub(crate) unsafe fn JString_to_Option_String_56d5e304<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn JString_to_String_c7f3ca43<'env, 'v>(
+pub(crate) unsafe fn JString_to_owned_text_220e25c6<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
 ) -> ::core::result::Result<String, __JniErr> {
@@ -6880,7 +6882,7 @@ pub(crate) unsafe fn Lookup_to_tuple4_68d54df3<'a>(
                     2i32,
                     (),
                     (0 as jni::sys::jlong,),
-                    (String_to_JString_c7f3ca43(env, __part0)?,),
+                    (owned_text_to_JString_220e25c6(env, __part0)?,),
                 )
             }
         }
@@ -9290,7 +9292,7 @@ pub(crate) unsafe fn Observation_to_JObject_435b0724<'a>(
                 ___reading_g5 = 0i64;
             }
             perftest_flat::Reading::Labeled(__s0_0, __s0_1) => {
-                let ___reading_tagged_v0: jni::objects::JObject = String_to_JString_c7f3ca43(
+                let ___reading_tagged_v0: jni::objects::JObject = owned_text_to_JString_220e25c6(
                         env,
                         __s0_0.clone(),
                     )?
@@ -9374,7 +9376,7 @@ pub(crate) unsafe fn Observation_to_JObject_435b0724<'a>(
                         ___fallback_g5 = 0i64;
                     }
                     perftest_flat::Reading::Labeled(__s0_0, __s0_1) => {
-                        let ___fallback_tagged_v0: jni::objects::JObject = String_to_JString_c7f3ca43(
+                        let ___fallback_tagged_v0: jni::objects::JObject = owned_text_to_JString_220e25c6(
                                 env,
                                 __s0_0.clone(),
                             )?
@@ -9417,7 +9419,7 @@ pub(crate) unsafe fn Observation_to_JObject_435b0724<'a>(
                 ___fallback_g5 = 0i64;
             }
         }
-        let ___note: jni::objects::JObject = String_to_JString_c7f3ca43(
+        let ___note: jni::objects::JObject = owned_text_to_JString_220e25c6(
                 env,
                 v.note.clone(),
             )?
@@ -9880,7 +9882,7 @@ pub(crate) unsafe fn Option_String_to_JString_56d5e304<'a>(
     ::core::result::Result::Ok({
         match v {
             ::core::option::Option::Some(__value) => {
-                String_to_JString_c7f3ca43(env, __value)?
+                owned_text_to_JString_220e25c6(env, __value)?
             }
             ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
@@ -10375,7 +10377,7 @@ pub(crate) unsafe fn Reading_to_tuple6_4cad5c2d<'a>(
                     (0 as jni::sys::jlong,),
                     (0 as jni::sys::jlong, 0 as jni::sys::jlong),
                     (
-                        String_to_JString_c7f3ca43(env, (*&*__part0).clone())?,
+                        owned_text_to_JString_220e25c6(env, (*&*__part0).clone())?,
                         Priority_to_jint_447102d2(env, (*&*__part1).clone())?,
                     ),
                     (0 as jni::sys::jlong,),
@@ -10464,7 +10466,7 @@ pub(crate) unsafe fn Reading_to_tuple6_69702d1f<'a>(
                     (0 as jni::sys::jlong,),
                     (0 as jni::sys::jlong, 0 as jni::sys::jlong),
                     (
-                        String_to_JString_c7f3ca43(env, __part0)?,
+                        owned_text_to_JString_220e25c6(env, __part0)?,
                         Priority_to_jint_447102d2(env, __part1)?,
                     ),
                     (0 as jni::sys::jlong,),
@@ -10770,32 +10772,6 @@ pub(crate) unsafe fn Storage_to_jlong_1b233abd<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: String,
-) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    Ok({
-        env.new_string(&*v)
-            .map_err(|e| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("encode_str: {}", e))
-            })?
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn String_to_Label_c1a79668<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: String,
@@ -11065,7 +11041,7 @@ pub(crate) unsafe fn Vec_Label_to_JObject_3fdf860d<'a>(
                     .map_err(|__e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(__e.to_string()))?;
-                String_to_JString_c7f3ca43(env, __chain_s0)
+                owned_text_to_JString_220e25c6(env, __chain_s0)
             }?;
             let __sequence_object: jni::objects::JObject = __sequence_part.into();
             __sequence_list
@@ -11313,7 +11289,7 @@ pub(crate) unsafe fn Verdict_to_JObject_a94c1ffd<'a>(
                 ___outcome_g1 = jni::objects::JObject::null();
             }
             perftest_flat::Lookup::Failed(__s0_0) => {
-                let ___outcome_failed_v0: jni::objects::JObject = String_to_JString_c7f3ca43(
+                let ___outcome_failed_v0: jni::objects::JObject = owned_text_to_JString_220e25c6(
                         env,
                         __s0_0.clone(),
                     )?
@@ -11455,6 +11431,32 @@ pub(crate) unsafe fn bool_to_jboolean_31306d98<'a>(
     v: bool,
 ) -> ::core::result::Result<jni::sys::jboolean, __JniErr> {
     Ok(v as jni::sys::jboolean)
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn borrowed_text_to_JString_b6a9f7b3<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: &str,
+) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
+    Ok({
+        env.new_string(v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("encode_str: {}", e))
+            })?
+    })
 }
 #[allow(
     non_snake_case,
@@ -12543,12 +12545,12 @@ pub(crate) unsafe fn jlong_to_u64_4384a5d6<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn str_to_JString_7b77dc67<'a>(
+pub(crate) unsafe fn owned_text_to_JString_220e25c6<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: &str,
+    v: String,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
-        env.new_string(v)
+        env.new_string(&*v)
             .map_err(|e| {
                 <__JniErr as ::core::convert::From<
                     String,
@@ -13195,7 +13197,7 @@ pub(crate) unsafe fn tuple4_to_Observation_438d4015<'env, 'a>(
         id: jlong_to_i64_fbf9a9bc(env, &((v).0))?,
         reading: tuple6_to_Reading_69702d1f(env, (v).1)?,
         fallback: tuple2_to_Option_Reading_550e9a70(env, (v).2)?,
-        note: JString_to_String_c7f3ca43(env, &((v).3))?,
+        note: JString_to_owned_text_220e25c6(env, &((v).3))?,
     })
 }
 #[allow(
@@ -13406,7 +13408,7 @@ pub(crate) unsafe fn tuple6_to_Reading_69702d1f<'env, 'a>(
                 let __choice = v;
                 let __arm = (__choice).4;
                 perftest_flat::Reading::Labeled(
-                    JString_to_String_c7f3ca43(env, &((__arm).0))?,
+                    JString_to_owned_text_220e25c6(env, &((__arm).0))?,
                     jint_to_Priority_447102d2(env, &((__arm).1))?,
                 )
             }
@@ -15590,7 +15592,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_coverTagRuntime<
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::cover_tag_runtime();
-    match String_to_JString_c7f3ca43(&mut env, __out) {
+    match owned_text_to_JString_220e25c6(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -16341,7 +16343,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelBorrowedCon
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
-            String_to_JString_c7f3ca43(&mut env, __chain_s0)
+            owned_text_to_JString_220e25c6(&mut env, __chain_s0)
         }
     })() {
         ::core::result::Result::Ok(__w) => __w,
@@ -16372,7 +16374,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let l = match (|| -> ::core::result::Result<_, __JniErr> {
         {
-            let __chain_s0 = JString_to_String_c7f3ca43(&mut env, &l)?;
+            let __chain_s0 = JString_to_owned_text_220e25c6(&mut env, &l)?;
             let __chain_s1 = String_to_Label_c1a79668(&mut env, __chain_s0)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
@@ -16400,7 +16402,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
-            String_to_JString_c7f3ca43(&mut env, __chain_s0)
+            owned_text_to_JString_220e25c6(&mut env, __chain_s0)
         }
     })() {
         ::core::result::Result::Ok(__w) => __w,
@@ -16767,7 +16769,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                     __obj7 = jni::objects::JObject::null();
                 }
                 perftest_flat::Lookup::Failed(__sv0) => {
-                    let __enc___obj7 = match String_to_JString_c7f3ca43(
+                    let __enc___obj7 = match owned_text_to_JString_220e25c6(
                         &mut env,
                         __sv0.clone(),
                     ) {
@@ -16949,7 +16951,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                 }
             };
             let __obj8: jni::objects::JObject = {
-                let __enc8 = match String_to_JString_c7f3ca43(&mut env, __u0.label) {
+                let __enc8 = match owned_text_to_JString_220e25c6(&mut env, __u0.label) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
                         signal_binding_error(
@@ -17077,7 +17079,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                     __obj16 = jni::objects::JObject::null();
                 }
                 perftest_flat::Lookup::Failed(__sv0) => {
-                    let __enc___obj16 = match String_to_JString_c7f3ca43(
+                    let __enc___obj16 = match owned_text_to_JString_220e25c6(
                         &mut env,
                         __sv0.clone(),
                     ) {
@@ -17259,7 +17261,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                 }
             };
             let __obj17: jni::objects::JObject = {
-                let __enc17 = match String_to_JString_c7f3ca43(&mut env, __u1.label) {
+                let __enc17 = match owned_text_to_JString_220e25c6(
+                    &mut env,
+                    __u1.label,
+                ) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
                         signal_binding_error(
@@ -18881,7 +18886,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_probeNew<'a>(
                         __obj3 = jni::objects::JObject::null();
                     }
                     perftest_flat::Lookup::Failed(__sv0) => {
-                        let __enc___obj3 = match String_to_JString_c7f3ca43(
+                        let __enc___obj3 = match owned_text_to_JString_220e25c6(
                             &mut env,
                             __sv0.clone(),
                         ) {
@@ -20437,7 +20442,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageErrorMess
         }
     };
     let __out = perftest_flat::storage_error_message(&e);
-    match String_to_JString_c7f3ca43(&mut env, __out) {
+    match owned_text_to_JString_220e25c6(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -20912,7 +20917,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageLabels<'a
     let __vec = perftest_flat::storage_labels(&s);
     let mut __acc = __acc;
     for __elem in __vec.into_iter() {
-        let __enc = match String_to_JString_c7f3ca43(&mut env, __elem) {
+        let __enc = match owned_text_to_JString_220e25c6(&mut env, __elem) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
                 signal_binding_error(
@@ -22151,7 +22156,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTryFromSt
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__de) => {
             let __eze0: jni::objects::JObject = {
-                let __enc0 = match String_to_JString_c7f3ca43(
+                let __enc0 = match owned_text_to_JString_220e25c6(
                     &mut env,
                     perftest_flat::storage_error_message(&__de),
                 ) {
@@ -22222,7 +22227,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTryWithLa
     static __DSINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __DSINK_FQN: &str = "io/prebindgen/covertest/errors/StorageErrorHandlerRaw";
     const __DSINK_DESCR: &str = "(Ljava/lang/String;J)Ljava/lang/Object;";
-    let label = match JString_to_String_c7f3ca43(&mut env, &label) {
+    let label = match JString_to_owned_text_220e25c6(&mut env, &label) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -22240,7 +22245,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTryWithLa
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__de) => {
             let __eze0: jni::objects::JObject = {
-                let __enc0 = match String_to_JString_c7f3ca43(
+                let __enc0 = match owned_text_to_JString_220e25c6(
                     &mut env,
                     perftest_flat::storage_error_message(&__de),
                 ) {
@@ -22355,7 +22360,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stringNew<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match JString_to_String_c7f3ca43(&mut env, &s) {
+    let s = match JString_to_owned_text_220e25c6(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -22370,7 +22375,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stringNew<'a>(
         }
     };
     let __out = perftest_flat::string_new(&s);
-    match String_to_JString_c7f3ca43(&mut env, __out) {
+    match owned_text_to_JString_220e25c6(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -22578,7 +22583,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
         }
     };
     let __out = crate::summary_describe(&__folded_s, verbose);
-    match String_to_JString_c7f3ca43(&mut env, __out) {
+    match owned_text_to_JString_220e25c6(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -24965,7 +24970,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverTag
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::COVER_TAG;
-    match str_to_JString_7b77dc67(&mut env, __out) {
+    match borrowed_text_to_JString_b6a9f7b3(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
