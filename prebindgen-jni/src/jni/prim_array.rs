@@ -28,6 +28,7 @@ use kotlin_codegen::KtType;
 use super::*;
 
 /// The JNI/Kotlin array pair for one primitive element type.
+#[derive(Clone)]
 pub(crate) struct PrimArray {
     /// Wire type: `jni::objects::JLongArray`.
     pub wire: syn::Type,

@@ -1039,6 +1039,36 @@ impl<R: Conversions> JCompile<'_, R> {
         ))
     }
 
+    /// Freeze a fixed-size primitive-array codec without spelling its element
+    /// or full array type until final rendering.
+    fn planned_primitive_array(&self, at: At<'_>) -> Option<JFrag> {
+        let source = at.crossing.spelled();
+        let direction = at.crossing.direction();
+        let spec = crate::jni::prim_array::prim_array_of(source)?;
+        let wire = spec.wire.clone();
+        let niches = default_niches_for_wire(&wire);
+        let kotlin_name = self
+            .decls
+            .override_kotlin_name(&source.key(), Some(spec.kotlin.clone()));
+        let metadata = self.decls.framework_meta(kotlin_name);
+        let plan =
+            crate::jni::chain::JValueCodecPlan::primitive_array(direction, source.clone(), spec);
+        let ident = plan.name().clone();
+        let conv = ConverterImpl {
+            subs: vec![],
+            pre_stages: vec![],
+            function: crate::jni::chain::planned_marker(&ident),
+            destination: wire,
+            niches,
+            metadata,
+        };
+        Some(JFrag::planned(
+            at,
+            conv,
+            crate::jni::chain::JFunction::value_codec(plan),
+        ))
+    }
+
     /// The borrow arms, which are neither a terminal nor an arity layer.
     fn borrow(
         &self,
@@ -2131,6 +2161,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
         if let Some(frag) = self.planned_value_codec(at) {
+            return Ok(frag);
+        }
+        if let Some(frag) = self.planned_primitive_array(at) {
             return Ok(frag);
         }
         if let Some(frag) = self.planned_owned_handle(at) {

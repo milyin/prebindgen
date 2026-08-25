@@ -1815,23 +1815,6 @@ impl Declarations {
                 return Some(self.opaque_handle_input(reading, emit));
             }
         }
-        // Fixed-size array of JNI primitives — dual of the output branch.
-        // The `try_into` IS the length check: a JVM array of the wrong size
-        // becomes a binding error naming the type, never a panic.
-        if let Some(spec) = crate::jni::prim_array::prim_array_of(reading) {
-            let body = crate::jni::prim_array::input_body(reading, &spec, emit);
-            let wire = spec.wire.clone();
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(spec.kotlin.clone()));
-            let niches = default_niches_for_wire(&wire);
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
-        }
         // `enum_class`-declared enums: jint wire, `TryFrom<i32>` decode.
         // Registered before the user-wrapper lookup so a stray
         // `input_wrapper` registration on the same key would have to be
@@ -2134,23 +2117,6 @@ impl Declarations {
             if cfg.is_opaque() {
                 return Some(self.opaque_handle_output(reading, emit));
             }
-        }
-        // Fixed-size array of JNI primitives: `[u8; N]` -> `ByteArray`,
-        // `[i64; N]` -> `LongArray`, ... Bulk-copied, nothing boxed. See
-        // [`prim_array`]; this replaced the raw-memory value blob.
-        if let Some(spec) = crate::jni::prim_array::prim_array_of(reading) {
-            let body = crate::jni::prim_array::output_body(&spec);
-            let wire = spec.wire.clone();
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(spec.kotlin.clone()));
-            let niches = default_niches_for_wire(&wire);
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
         }
         // `enum_class`-declared enums: jint wire, `as jni::sys::jint`
         // encode. Symmetric to the input arm above; relies on
