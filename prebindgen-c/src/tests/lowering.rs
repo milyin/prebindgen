@@ -148,6 +148,71 @@ fn custom_conversion_without_domain_stays_infallible() {
     );
 }
 
+#[test]
+fn custom_conversion_stays_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub fn ratio_from_f64(v: f64) -> Ratio { unimplemented!() }",
+        "pub fn ratio_to_f64(v: Ratio) -> f64 { unimplemented!() }",
+        "pub fn ratio_echo(v: Ratio) -> Ratio { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let generated = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            prebindgen_registry::convert!(Ratio)
+                .input(prebindgen_registry::fun!(ratio_from_f64))
+                .output(prebindgen_registry::fun!(ratio_to_f64)),
+        )
+        .function(syn::parse_quote!(ratio_echo))
+        .build_with(registry)
+        .expect("resolve");
+
+    assert_eq!(
+        generated
+            .gen
+            .compiled_fns
+            .iter()
+            .filter(|function| function.is_custom())
+            .count(),
+        2,
+        "both custom directions must retain semantic plans before final writing"
+    );
+}
+
+#[test]
+fn trait_backed_custom_conversion_renders_from_the_late_plan() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> =
+        ["pub fn ratio_echo(v: Ratio) -> Ratio { unimplemented!() }"]
+            .into_iter()
+            .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+            .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            prebindgen_registry::convert!(Ratio)
+                .input(prebindgen_registry::from!(f64))
+                .output(prebindgen_registry::into!(f64)),
+        )
+        .function(syn::parse_quote!(ratio_echo));
+
+    let src = write(cbindgen, registry, "trait_custom_conversion");
+    let compact: String = src.split_whitespace().collect();
+    assert!(
+        compact.contains("<f64as::core::convert::Into<myflat::Ratio>>::into(v)"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("<myflat::Ratioas::core::convert::Into<f64>>::into(v)"),
+        "{src}"
+    );
+}
+
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {
