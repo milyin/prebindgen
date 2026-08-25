@@ -57,3 +57,10 @@ itertools = "0.14.0"
 if_rust_version = "1.0"
 konst = "0.3.0" # consumer crates need konst too: the generated file emits a konst::assertc_eq! guard
 toml = "0.9.5"
+
+# Build scripts (and proc-macros/their deps) don't need debug info: cargo
+# runs them once and reads what they print. Without this, build-hash
+# directories accumulate ~100 MB debug binaries per script. See #543.
+[profile.dev.build-override]
+debug = false
+strip = true
