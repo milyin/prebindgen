@@ -675,11 +675,11 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
             "deleted C compatibility planner returned through {deleted}"
         );
     }
+    let compact: String = sources.chars().filter(|c| !c.is_whitespace()).collect();
     assert!(
-        sources.contains("operation: MarkerOperation::ChoiceArm"),
+        compact.contains("operation:MarkerOperation::ChoiceArm"),
         "Product-to-Choice composition must use its typed transient marker"
     );
-    let compact: String = sources.chars().filter(|c| !c.is_whitespace()).collect();
     assert!(
         !compact.contains("Option<ConverterImpl>"),
         "a C production path accepts the deleted generic converter carrier"
