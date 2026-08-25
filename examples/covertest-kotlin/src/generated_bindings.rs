@@ -1127,6 +1127,65 @@ pub(crate) unsafe fn Celsius_to_i32_88c8e884<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn ConstArray_to_JObject_d4812b36<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: cov_helpers::ConstArray,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___bytes: jni::objects::JObject = u8_CONST_ARRAY_LEN_to_JByteArray_417a13ac(
+                env,
+                v.bytes.clone(),
+            )?
+            .into();
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ConstArray",
+                "fromParts",
+                "([B)Lio/prebindgen/covertest/model/ConstArray;",
+                &[jni::objects::JValue::Object(&___bytes)],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn ConstArray_to_tuple1_7d60a1f4<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: cov_helpers::ConstArray,
+) -> ::core::result::Result<(jni::objects::JByteArray<'a>,), __JniErr> {
+    ::core::result::Result::Ok((
+        u8_CONST_ARRAY_LEN_to_JByteArray_417a13ac(env, v.bytes)?,
+    ))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Dossier_to_JObject_eabbdbfa<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Dossier,
@@ -1659,6 +1718,45 @@ pub(crate) unsafe fn JByteArray_to_u8_4_39abedfa<'env, 'v>(
                     String,
                 >>::from(
                     "fixed-size array decode: `[u8 ; 4]` expects a different length"
+                        .to_string(),
+                )
+            })?;
+        __arr
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JByteArray_to_u8_CONST_ARRAY_LEN_417a13ac<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JByteArray<'v>,
+) -> ::core::result::Result<[u8; cov_helpers::CONST_ARRAY_LEN], __JniErr> {
+    Ok({
+        let __buf = env
+            .convert_byte_array(v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("fixed-size array decode: {}", e))
+            })?;
+        let __arr: [u8; cov_helpers::CONST_ARRAY_LEN] = __buf
+            .as_slice()
+            .try_into()
+            .map_err(|_| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    "fixed-size array decode: `[u8 ; CONST_ARRAY_LEN]` expects a different length"
                         .to_string(),
                 )
             })?;
@@ -2229,6 +2327,35 @@ pub(crate) unsafe fn JObject_to_CallbackToken_432e8cc0<'env, 'v>(
         perftest_flat::CallbackToken {
             ingot,
         }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_ConstArray_d4812b36<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<cov_helpers::ConstArray, __JniErr> {
+    Ok({
+        let __bytes_jobj: jni::objects::JObject = env
+            .get_field(v, "bytes", "[B")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ConstArray.bytes: {}", e)))?;
+        let __bytes_raw: jni::objects::JByteArray = __bytes_jobj.into();
+        let bytes = JByteArray_to_u8_CONST_ARRAY_LEN_417a13ac(env, &__bytes_raw)?;
+        cov_helpers::ConstArray { bytes }
     })
 }
 #[allow(
@@ -12442,6 +12569,28 @@ pub(crate) unsafe fn str_to_JString_7b77dc67<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+#[inline(always)]
+pub(crate) unsafe fn tuple1_to_ConstArray_7d60a1f4<'env, 'a>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (jni::objects::JByteArray<'a>,),
+) -> ::core::result::Result<cov_helpers::ConstArray, __JniErr> {
+    ::core::result::Result::Ok(cov_helpers::ConstArray {
+        bytes: JByteArray_to_u8_CONST_ARRAY_LEN_417a13ac(env, &((v).0))?,
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn tuple2_to_Box_Option_Payload_0aa97b23<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: (
@@ -13459,6 +13608,32 @@ pub(crate) unsafe fn u64_to_jlong_4384a5d6<'a>(
 pub(crate) unsafe fn u8_4_to_JByteArray_39abedfa<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: [u8; 4],
+) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
+    Ok({
+        env.byte_array_from_slice(&v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("fixed-size array encode: {}", e))
+            })?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn u8_CONST_ARRAY_LEN_to_JByteArray_417a13ac<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: [u8; cov_helpers::CONST_ARRAY_LEN],
 ) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
     Ok({
         env.byte_array_from_slice(&v)
@@ -15321,6 +15496,85 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_celsiusDouble<'a
                 &__e.to_string(),
             );
             0 as jni::sys::jint
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constArrayEcho<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    value_bytes: jni::objects::JByteArray<'a>,
+    __builder: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let value = match tuple1_to_ConstArray_7d60a1f4(&mut env, (value_bytes,)) {
+        ::core::result::Result::Ok(__value) => __value,
+        ::core::result::Result::Err(__error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/ConstArrayBuilder";
+    const __CB_DESCR: &str = "([B)Ljava/lang/Object;";
+    let __out = cov_helpers::const_array_echo(value);
+    let (__chain_wire0,) = match ConstArray_to_tuple1_7d60a1f4(&mut env, __out) {
+        ::core::result::Result::Ok(__intermediate) => __intermediate,
+        ::core::result::Result::Err(__chain_error) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__chain_error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __obj0: jni::objects::JObject = __chain_wire0.into();
+    match __CB_MID
+        .call_object(
+            &mut env,
+            __CB_FQN,
+            "run",
+            __CB_DESCR,
+            &__builder,
+            &[
+                jni::sys::jvalue {
+                    l: __obj0.as_raw(),
+                },
+            ],
+        )
+    {
+        ::core::result::Result::Ok(__o) => __o,
+        ::core::result::Result::Err(__e) => {
+            let _ = env.exception_describe();
+            let __e2 = <__JniErr as ::core::convert::From<
+                String,
+            >>::from(__e.to_string());
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e2.to_string(),
+            );
+            jni::objects::JObject::null().into()
         }
     }
 }

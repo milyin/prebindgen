@@ -26,6 +26,7 @@ import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.Arrays
 import io.prebindgen.covertest.model.CacheConfig
+import io.prebindgen.covertest.model.ConstArray
 import io.prebindgen.covertest.model.RepliesConfig
 import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.ObjectBoundary
@@ -49,6 +50,7 @@ import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.arraysEcho
+import io.prebindgen.covertest.model.constArrayEcho
 import io.prebindgen.covertest.model.blobValueEcho
 import io.prebindgen.covertest.Holder
 import io.prebindgen.covertest.WrappedFields
@@ -1181,6 +1183,14 @@ fun main() {
             "flags must matter"
         }
         check(a1.toString().contains("flags=[true, false, true]")) { "got $a1" }
+
+        // This separate source-stream fixture uses `[u8; CONST_ARRAY_LEN]`.
+        // The generated Rust must qualify that const as
+        // `cov_helpers::CONST_ARRAY_LEN`; the binding crate has no bare import.
+        val constArray = ConstArray(byteArrayOf(8, 9, 10))
+        val constEcho = constArrayEcho(constArray, boom)
+        check(constEcho == constArray)
+        check(constEcho.bytes.contentEquals(byteArrayOf(8, 9, 10)))
 
         // Wrong length is a BINDING ERROR, not a panic — the decode's `try_into`
         // is the fixed-size-array length check.

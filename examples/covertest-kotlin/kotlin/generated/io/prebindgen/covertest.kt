@@ -1266,6 +1266,9 @@ internal object CovNative {
     external fun celsiusDouble(c: Int, errorSink: Any): Int
 
     @JvmSynthetic
+    external fun constArrayEcho(valueBytes: ByteArray, build: Any, errorSink: Any): Any?
+
+    @JvmSynthetic
     external fun coverTagRuntime(errorSink: Any): String
 
     @JvmSynthetic

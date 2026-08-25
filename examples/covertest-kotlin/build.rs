@@ -71,6 +71,7 @@
 //! | N-ary sorted handle locking          | `storage_total_len` (3 handles) + a 4-thread smoke |
 //! | `Vec<String>` return                 | `storage_labels` (single-leaf string fold) |
 //! | `String` return                      | `string_new` |
+//! | fixed-size primitive arrays          | every JNI scalar element + `[u8; CONST_ARRAY_LEN]` from the renamed helper source |
 //! | binding-error channel (`JniErrorHandler`) | wrong-length `[u8; 2]` (fixed-size array length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
@@ -209,6 +210,14 @@ fn main() {
         // verify callback cleanup through an Optional(Product) chain.
         .convert(convert!(CallbackToken).output(fun!(callback_token_into_ingot)))
         .ignore(ty!(CallbackToken))
+        // The helper source is private to this JVM covertest. Its array length
+        // is a marked const, so final Rust emission must qualify the path with
+        // the helper crate's configured `cov_helpers` name.
+        .package(
+            package!("model")
+                .class(data_class!(ConstArray))
+                .fun(fun!(const_array_echo)),
+        )
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
         // reassembled via a generated `fromParts`). A data class can carry

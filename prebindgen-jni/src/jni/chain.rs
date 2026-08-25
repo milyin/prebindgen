@@ -191,14 +191,24 @@ impl RustFunction for JFunction {
     }
 }
 
+#[derive(Clone)]
+enum JValueBody {
+    Ready(syn::Expr),
+    /// Array classification and JNI method selection are adapter policy. The
+    /// decoder's element and full-array type ascriptions are source spelling,
+    /// so its body is built only during final rendering.
+    PrimitiveArray(Box<crate::jni::prim_array::PrimArray>),
+}
+
 /// One terminal value crossing, retained without source Rust syntax.
 ///
-/// The JNI representation and conversion expression are adapter policy and
-/// are safe to freeze during recipe compilation. The source Rust spelling is
-/// not: the plan keeps the Flat reading opaque until the writer supplies
-/// [`Emit`]. This covers values whose converter signature names the crossing
-/// itself; deliberately composed signatures such as bare `str -> String`
-/// remain separate.
+/// The JNI representation and source-independent conversion policy are safe
+/// to freeze during recipe compilation. Source Rust spelling is not: the plan
+/// keeps the Flat reading opaque until the writer supplies [`Emit`]. Most
+/// codecs retain a ready expression; fixed-size arrays retain their JNI policy
+/// and build the source-typed expression only while rendering. Bare `str`
+/// records its adapter-authored `String`/`&str` signature explicitly without
+/// deriving either spelling from the crossing.
 #[derive(Clone)]
 pub(crate) struct JValueCodecPlan {
     ident: syn::Ident,
@@ -206,7 +216,7 @@ pub(crate) struct JValueCodecPlan {
     source: TypeRef,
     adapter_source: Option<syn::Type>,
     wire: syn::Type,
-    body: syn::Expr,
+    body: JValueBody,
 }
 
 impl JValueCodecPlan {
@@ -223,7 +233,7 @@ impl JValueCodecPlan {
             source,
             adapter_source: None,
             wire,
-            body,
+            body: JValueBody::Ready(body),
         }
     }
 
@@ -253,7 +263,23 @@ impl JValueCodecPlan {
             source,
             adapter_source: Some(adapter_source),
             wire,
-            body,
+            body: JValueBody::Ready(body),
+        }
+    }
+
+    pub(crate) fn primitive_array(
+        direction: Direction,
+        source: TypeRef,
+        spec: crate::jni::prim_array::PrimArray,
+    ) -> Self {
+        let ident = planned_name(direction, &source, &spec.wire);
+        Self {
+            ident,
+            direction,
+            source,
+            adapter_source: None,
+            wire: spec.wire.clone(),
+            body: JValueBody::PrimitiveArray(Box::new(spec)),
         }
     }
 
@@ -269,7 +295,16 @@ impl JValueCodecPlan {
             .map(|source| quote::quote!(#source))
             .unwrap_or_else(|| emit.spell(&self.source));
         let wire = &self.wire;
-        let body = super::builder::body_for_exc(&self.body, None);
+        let body = match &self.body {
+            JValueBody::Ready(body) => body.clone(),
+            JValueBody::PrimitiveArray(spec) => match self.direction {
+                Direction::Construct => {
+                    crate::jni::prim_array::input_body(&self.source, spec, emit)
+                }
+                Direction::Deconstruct => crate::jni::prim_array::output_body(spec),
+            },
+        };
+        let body = super::builder::body_for_exc(&body, None);
         let allow = super::trait_impl::generated_converter_attr();
         match self.direction {
             Direction::Construct => {

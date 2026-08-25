@@ -101,7 +101,8 @@ for the full table; in brief:
   borrowed slice input), `Vec<String>`, `Vec<Stamp>` → `List<Stamp>`,
   `Vec<handle>` / `Option<Vec<handle>>` (Kotlin-side handle fold),
   borrowed-opaque returns (`Option<&T>` → cloned owned handle),
-  `Result<_, E>` → `onError`, enums, data/sealed classes, fixed-size primitive arrays, `impl Fn` callbacks
+  `Result<_, E>` → `onError`, enums, data/sealed classes, fixed-size primitive arrays
+  (including a marked const-path length qualified from a renamed source), `impl Fn` callbacks
   (single + slice + **owned-handle**), N-ary sorted handle locking (3 handles,
   hammered from 4 threads), the `je != null` binding-error channel (malformed
   wrong-length fixed-size arrays), the callback no-throw contract (exceptions described +

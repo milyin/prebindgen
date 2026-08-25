@@ -211,6 +211,45 @@ fn unsized_str_retains_adapter_typed_value_codec_plans() {
 }
 
 #[test]
+fn fixed_primitive_arrays_retain_late_registry_plans() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::parse_quote!(
+            pub fn array_echo(value: [bool; 4]) -> [bool; 4] {
+                value
+            }
+        ),
+        myflat_loc(),
+    )]))
+    .expect("index primitive-array fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(array_echo)))
+        .build_with(registry)
+        .expect("resolve primitive-array fixture");
+    let reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!([bool; 4])))
+        .expect("primitive-array reading");
+
+    assert!(
+        generation
+            .decls
+            .in_frag(&reading)
+            .expect("primitive-array input")
+            .is_value_codec_plan(),
+        "the input array must retain an unrendered primitive-array plan"
+    );
+    assert!(
+        generation
+            .decls
+            .out_frag(&reading)
+            .expect("primitive-array output")
+            .is_value_codec_plan(),
+        "the output array must retain an unrendered primitive-array plan"
+    );
+}
+
+#[test]
 fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = [
