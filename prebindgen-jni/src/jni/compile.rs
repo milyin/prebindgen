@@ -877,64 +877,152 @@ impl<R: Conversions> JCompile<'_, R> {
     fn planned_value_codec(&self, at: At<'_>) -> Option<JFrag> {
         let source = at.crossing.spelled();
         let direction = at.crossing.direction();
-        let (wire, body, niches, metadata) = if matches!(source.kind(), TypeKind::Scalar(_)) {
-            let (wire, body) = match direction {
-                Direction::Construct => crate::jni::emit::primitive_input(&source.key()),
-                Direction::Deconstruct => crate::jni::emit::primitive_output(&source.key()),
-            }?;
-            let niches = default_niches_for_wire(&wire);
-            let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if source.key().as_str() == "u64" {
-                self.decls.unsigned64_leaf_meta()
-            } else {
-                self.decls.framework_meta(kotlin_name)
-            };
-            (wire, body, niches, metadata)
-        } else if !matches!(source.kind(), TypeKind::Str)
-            && matches!(source.unwrapped().kind(), TypeKind::Str | TypeKind::String)
-        {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-            let body = match direction {
-                Direction::Construct => syn::parse_quote!({
-                    let s = env.get_string(v).map_err(|e| {
-                        <__JniErr as ::core::convert::From<String>>::from(format!(
-                            "decode_string: {}",
-                            e
-                        ))
-                    })?;
-                    ::std::string::String::from(s).into()
-                }),
-                Direction::Deconstruct => syn::parse_quote!({
-                    env.new_string(&*v).map_err(|e| {
+        let (wire, body, niches, metadata, adapter_source) =
+            if matches!(source.kind(), TypeKind::Scalar(_)) {
+                let (wire, body) = match direction {
+                    Direction::Construct => crate::jni::emit::primitive_input(&source.key()),
+                    Direction::Deconstruct => crate::jni::emit::primitive_output(&source.key()),
+                }?;
+                let niches = default_niches_for_wire(&wire);
+                let kotlin_name = kotlin_for_wire(&wire);
+                let metadata = if source.key().as_str() == "u64" {
+                    self.decls.unsigned64_leaf_meta()
+                } else {
+                    self.decls.framework_meta(kotlin_name)
+                };
+                (wire, body, niches, metadata, None)
+            } else if matches!(source.kind(), TypeKind::Str) {
+                let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
+                let (adapter_source, body, kotlin_key) = match direction {
+                    Direction::Construct => (
+                        syn::parse_quote!(String),
+                        syn::parse_quote!({
+                            let s = env.get_string(v).map_err(|e| {
+                                <__JniErr as ::core::convert::From<String>>::from(format!(
+                                    "decode_string: {}",
+                                    e
+                                ))
+                            })?;
+                            s.into()
+                        }),
+                        source.key(),
+                    ),
+                    Direction::Deconstruct => {
+                        let rust: syn::Type = syn::parse_quote!(&str);
+                        (
+                            rust.clone(),
+                            syn::parse_quote!({
+                                env.new_string(v).map_err(|e| {
+                                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                                        "encode_str: {}",
+                                        e
+                                    ))
+                                })?
+                            }),
+                            TypeKey::from_type(&rust),
+                        )
+                    }
+                };
+                let niches = default_niches_for_wire(&wire);
+                let kotlin_name = self
+                    .decls
+                    .override_kotlin_name(&kotlin_key, Some(KtType::string()));
+                let metadata = self.decls.framework_meta(kotlin_name);
+                (wire, body, niches, metadata, Some(adapter_source))
+            } else if direction == Direction::Deconstruct
+                && matches!(
+                    source.kind(),
+                    TypeKind::Ref {
+                        mutable: false,
+                        inner,
+                        ..
+                    } if matches!(inner.kind(), TypeKind::Str)
+                )
+            {
+                let adapter_source: syn::Type = syn::parse_quote!(&str);
+                let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
+                let body = syn::parse_quote!({
+                    env.new_string(v).map_err(|e| {
                         <__JniErr as ::core::convert::From<String>>::from(format!(
                             "encode_str: {}",
                             e
                         ))
                     })?
-                }),
+                });
+                let niches = default_niches_for_wire(&wire);
+                let kotlin_name = self.decls.override_kotlin_name(
+                    &TypeKey::from_type(&adapter_source),
+                    Some(KtType::string()),
+                );
+                let metadata = self.decls.framework_meta(kotlin_name);
+                (wire, body, niches, metadata, Some(adapter_source))
+            } else if !matches!(source.kind(), TypeKind::Str)
+                && matches!(source.unwrapped().kind(), TypeKind::Str | TypeKind::String)
+            {
+                let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
+                let body = match direction {
+                    Direction::Construct if matches!(source.kind(), TypeKind::String) => {
+                        syn::parse_quote!({
+                            let s = env.get_string(v).map_err(|e| {
+                                <__JniErr as ::core::convert::From<String>>::from(format!(
+                                    "decode_string: {}",
+                                    e
+                                ))
+                            })?;
+                            s.into()
+                        })
+                    }
+                    Direction::Construct => syn::parse_quote!({
+                        let s = env.get_string(v).map_err(|e| {
+                            <__JniErr as ::core::convert::From<String>>::from(format!(
+                                "decode_string: {}",
+                                e
+                            ))
+                        })?;
+                        ::std::string::String::from(s).into()
+                    }),
+                    Direction::Deconstruct => syn::parse_quote!({
+                        env.new_string(&*v).map_err(|e| {
+                            <__JniErr as ::core::convert::From<String>>::from(format!(
+                                "encode_str: {}",
+                                e
+                            ))
+                        })?
+                    }),
+                };
+                let niches = default_niches_for_wire(&wire);
+                let kotlin_name = self
+                    .decls
+                    .override_kotlin_name(&source.key(), Some(KtType::string()));
+                let metadata = self.decls.framework_meta(kotlin_name);
+                (wire, body, niches, metadata, None)
+            } else if direction == Direction::Deconstruct && matches!(source.kind(), TypeKind::Unit)
+            {
+                (
+                    syn::parse_quote!(()),
+                    syn::parse_quote!(v),
+                    Niches::empty(),
+                    KotlinMeta::default(),
+                    None,
+                )
+            } else {
+                return None;
             };
-            let niches = default_niches_for_wire(&wire);
-            let kotlin_name = self
-                .decls
-                .override_kotlin_name(&source.key(), Some(KtType::string()));
-            let metadata = self.decls.framework_meta(kotlin_name);
-            (wire, body, niches, metadata)
-        } else if direction == Direction::Deconstruct && matches!(source.kind(), TypeKind::Unit) {
-            (
-                syn::parse_quote!(()),
-                syn::parse_quote!(v),
-                Niches::empty(),
-                KotlinMeta::default(),
-            )
-        } else {
-            return None;
+        let plan = match adapter_source {
+            Some(adapter_source) => crate::jni::chain::JValueCodecPlan::with_adapter_source(
+                direction,
+                source.clone(),
+                adapter_source,
+                wire.clone(),
+                body,
+            ),
+            None => crate::jni::chain::JValueCodecPlan::new(
+                direction,
+                source.clone(),
+                wire.clone(),
+                body,
+            ),
         };
-        let plan = crate::jni::chain::JValueCodecPlan::new(
-            at.crossing.direction(),
-            source.clone(),
-            wire.clone(),
-            body,
-        );
         let ident = plan.name().clone();
         let conv = ConverterImpl {
             subs: vec![],

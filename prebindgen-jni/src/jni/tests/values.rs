@@ -130,6 +130,87 @@ fn owned_strings_and_unit_retain_late_value_codec_plans() {
 }
 
 #[test]
+fn unsized_str_retains_adapter_typed_value_codec_plans() {
+    let loc = myflat_loc();
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub struct Text {
+                    pub value: String,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn text_as_str(value: &Text) -> &str {
+                    unimplemented!()
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn text_len(value: &str) -> i64 {
+                    value.len() as i64
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn text_emit(cb: impl Fn(Text) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]))
+    .expect("index unsized-str fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Text))
+                .fun(prebindgen_registry::fun!(text_len))
+                .fun(prebindgen_registry::fun!(text_emit)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(Text).field(prebindgen_registry::fun!(text_as_str)),
+        )
+        .build_with(registry)
+        .expect("resolve unsized-str fixture");
+    let str_reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(str)))
+        .expect("str reading");
+    let ref_reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(&str)))
+        .expect("&str reading");
+
+    let input = generation.decls.in_frag(&str_reading).expect("str input");
+    let bare_output = generation.decls.out_frag(&str_reading).expect("str output");
+    let ref_output = generation
+        .decls
+        .out_frag(&ref_reading)
+        .expect("&str output");
+    assert!(
+        input.is_value_codec_plan(),
+        "the unsized input must retain a plan whose adapter type is String"
+    );
+    assert!(
+        bare_output.is_value_codec_plan() && ref_output.is_value_codec_plan(),
+        "both output crossings must retain the adapter-typed &str plan"
+    );
+    assert_eq!(
+        bare_output.converter_ident(),
+        ref_output.converter_ident(),
+        "rank-0 str and rank-1 &str must share one normalized converter"
+    );
+}
+
+#[test]
 fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = [
