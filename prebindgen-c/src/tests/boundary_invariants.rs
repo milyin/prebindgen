@@ -441,7 +441,9 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         include_str!("../builder.rs"),
         include_str!("../chain.rs"),
         include_str!("../compile.rs"),
+        include_str!("../convert.rs"),
         include_str!("../emit.rs"),
+        include_str!("../recipes.rs"),
         include_str!("../trait_impl.rs"),
     ]
     .join("\n");
@@ -457,11 +459,15 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "fn from_converter",
         "fn validity_of",
         "fn produces_borrow",
-        "fn wrap(",
     ] {
         assert!(
             !sources.contains(deleted),
             "deleted C compatibility planner returned through {deleted}"
         );
     }
+    let compact: String = sources.chars().filter(|c| !c.is_whitespace()).collect();
+    assert!(
+        !compact.contains("fnwrap(&self,at:At<'_>,why:&str,conv:Option<ConverterImpl>)"),
+        "the deleted generic ConverterImpl fragment wrapper returned"
+    );
 }
