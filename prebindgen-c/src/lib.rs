@@ -185,7 +185,7 @@ struct ValueOpaqueCfg {
     kind: OpaqueKind,
     /// When `true`, the `opaque` counterpart is **not** supplied externally but is
     /// an auto-generated **visible-field** `#[repr(C)]` mirror of the source struct,
-    /// emitted by [`CbindgenBuilder::prereq_value_opaque`]. Set by
+    /// retained in the registry generation plan. Set by
     /// [`CbindgenBuilder::repr_c_struct`]; `false` for `opaque_data_struct` /
     /// `opaque_owned_struct` (counterpart defined elsewhere).
     generate_mirror: bool,

@@ -171,28 +171,6 @@ impl CbindgenBuilder {
         Some(idents)
     }
 
-    /// The gravestone write-back statements for a by-value **consume** / `_take` of a
-    /// value-opaque type, writing into the slot pointed to by `slot` (a `*mut #opaque`).
-    /// `None` ⇒ no write-back needed (plain data — the moved-from bitwise copy drops
-    /// harmlessly). Owned-ness is **inferred** for a `repr_c_struct` mirror (the
-    /// generator knows the fields): nullable owned-pointer fields are nulled in place
-    /// (cheap, no `Default`); a bare `Box<T>` field falls back to the full `gravestone()`
-    /// write. A non-mirror (`opaque_data_struct`/`opaque_owned_struct`) uses its explicit
-    /// declared `kind` (its fields are an opaque blob the generator can't introspect).
-    fn value_opaque_writeback(
-        &self,
-        registry: &impl Conversions,
-        key: &TypeKey,
-        slot: &syn::Ident,
-    ) -> Option<TokenStream> {
-        let opaque = &self.value_opaque.get(key)?.opaque;
-        let plan = self.value_opaque_writeback_plan(registry, key)?;
-        match plan {
-            crate::chain::ValueOpaqueWriteback::None => None,
-            _ => Some(plan.render(slot, opaque)),
-        }
-    }
-
     /// The semantic write-back policy shared by late input rendering and the
     /// emitted public `_take` helper.
     fn value_opaque_writeback_plan(
@@ -651,42 +629,133 @@ impl CbindgenBuilder {
         items
     }
 
-    /// Opaque handles: bare-pointer C type (`z_*_t*` = `Box::into_raw`) + typed
-    /// `_drop`. The C type is an opaque/incomplete struct.
-    fn prereq_opaque_handles(&self, registry: &Registry) -> Vec<syn::Item> {
-        let mut items: Vec<syn::Item> = Vec::new();
+    /// Freeze source-dependent C declaration families as registry artifacts.
+    ///
+    /// Planning retains source TypeRefs and target-owned wire syntax. Only the
+    /// final artifact renderer may ask Emit to spell a source type.
+    fn type_artifact_plans(
+        &self,
+        registry: &Registry,
+    ) -> Result<
+        Vec<prebindgen_registry::generation::ArtifactPlan<crate::compile::CRepresentation>>,
+        String,
+    > {
+        use prebindgen_registry::generation::{ArtifactId, ArtifactInput, ArtifactPlan};
+
+        let inputs = |reading: &TypeRef| {
+            [self.in_frag(reading), self.out_frag(reading)]
+                .into_iter()
+                .flatten()
+                .map(|fragment| ArtifactInput::Fragment(fragment.id.clone()))
+                .collect::<Vec<_>>()
+        };
+        let mut artifacts = Vec::new();
+
         for (key, _cfg) in sorted_by_key(&self.opaque) {
-            // Keyed directly: this used to spell the key into tokens purely so
-            // `reading_of` could re-key them, twice (#291).
             let Some(reading) = registry.reading(key) else {
                 continue;
             };
-            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
+            let dependencies = inputs(&reading);
+            if dependencies.is_empty() {
                 continue;
             }
-            let c_struct = self.c_type_ident(&reading.key());
-            // Opaque/incomplete C type: the handle is `#c_struct *`, which IS the
-            // `Box::into_raw` pointer to the source value.
-            items.push(syn::parse_quote!(
-                #[repr(C)]
-                #[allow(non_camel_case_types)]
-                pub struct #c_struct {
-                    _private: [u8; 0],
-                }
-            ));
-            let src = self.src_ty_of(&reading.key());
-            let drop_ident = self.destructor_symbol(&reading.key());
-            items.push(syn::parse_quote!(
-                #[no_mangle]
-                #[allow(non_snake_case, unused_variables)]
-                pub unsafe extern "C" fn #drop_ident(this_: *mut #c_struct) {
-                    if !this_.is_null() {
-                        drop(::std::boxed::Box::from_raw(this_ as *mut #src));
-                    }
-                }
+            artifacts.push(ArtifactPlan::new(
+                ArtifactId::new("c-opaque-handle", key.as_str()).map_err(|e| e.to_string())?,
+                Vec::new(),
+                dependencies,
+                crate::chain::CArtifact::OpaqueHandle(crate::chain::OpaqueHandleArtifact {
+                    source: reading,
+                    source_module: self.source_module.clone(),
+                    c_struct: self.c_type_ident(key),
+                    drop_ident: self.destructor_symbol(key),
+                }),
             ));
         }
-        items
+
+        let takeable_keys = self.takeable_type_keys();
+        let mut values: Vec<(&TypeKey, &ValueOpaqueCfg)> = self.value_opaque.iter().collect();
+        values.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
+        for (key, cfg) in values {
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            let dependencies = inputs(&reading);
+            if dependencies.is_empty() {
+                continue;
+            }
+            let mirror = if cfg.generate_mirror {
+                let fields = self.struct_fields(registry, key).unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen::repr_c_struct: `{}` is not a named struct",
+                        type_short(key)
+                    )
+                });
+                let restricted = self.restricted_validity_fields(registry, key);
+                if !restricted.is_empty() && !cfg.assume_c_field_validity {
+                    let listed: Vec<String> = restricted
+                        .iter()
+                        .map(|(fname, reason)| format!("  `{fname}`: {reason}"))
+                        .collect();
+                    panic!(
+                        "Cbindgen::repr_c_struct: `{}` crosses C's memory by whole-struct \
+                         reinterpret, but these fields have restricted-validity Rust types:\n\
+                         {}\n\
+                         A C caller can write a byte outside those domains, and the reinterpret \
+                         materialises it with no hook to normalise or validate it first (#170, \
+                         #158). Move the field to a `data_struct` (per-field wires), pass it as \
+                         a separate parameter, or widen it to an integer. If this binding's C \
+                         side is trusted to write only in-domain bytes — or never hands the \
+                         mirror back at all — acknowledge it with `.assume_c_field_validity()`.",
+                        type_short(key),
+                        listed.join("\n"),
+                    );
+                }
+                Some(crate::chain::ValueOpaqueMirror {
+                    ident: self.c_type_ident(key),
+                    fields: fields
+                        .iter()
+                        .map(|(name, ty)| {
+                            let wire = self.mirror_field_wire(ty).unwrap_or_else(|| {
+                                panic!(
+                                    "Cbindgen::repr_c_struct: field `{}` of `{}` has unsupported \
+                                     type `{}` (expected a scalar, a declared `enum_type`, or an \
+                                     opaque pointer `Option<Box<T>>`/`Box<T>` with `T` an `opaque_ptr`)",
+                                    name,
+                                    type_short(key),
+                                    ty
+                                )
+                            });
+                            (name.clone(), wire)
+                        })
+                        .collect(),
+                    gravestone: self.mirror_needs_gravestone_impl(registry, key),
+                })
+            } else {
+                None
+            };
+            let take = takeable_keys
+                .contains(key)
+                .then(|| crate::chain::ValueOpaqueTake {
+                    ident: self.take_symbol(key),
+                    writeback: self
+                        .value_opaque_writeback_plan(registry, key)
+                        .expect("value-opaque declaration has a write-back policy"),
+                });
+            artifacts.push(ArtifactPlan::new(
+                ArtifactId::new("c-value-opaque", key.as_str()).map_err(|e| e.to_string())?,
+                Vec::new(),
+                dependencies,
+                crate::chain::CArtifact::ValueOpaque(crate::chain::ValueOpaqueArtifact {
+                    source: reading,
+                    source_module: self.source_module.clone(),
+                    opaque: cfg.opaque.clone(),
+                    mirror,
+                    drop_ident: self.destructor_symbol(key),
+                    take,
+                }),
+            ));
+        }
+        Ok(artifacts)
     }
 
     /// Data structs: `#[repr(C)]` mirror only. Heap (`String`) fields are
@@ -724,199 +793,6 @@ impl CbindgenBuilder {
                     #(#field_defs,)*
                 }
             ));
-        }
-        items
-    }
-
-    /// Value-opaque types: the opaque `#[repr(C, align(_))]` counterpart is
-    /// defined elsewhere (e.g. a size/align probe generator). Here we emit only
-    /// the fail-closed size+align equality asserts and the typed `_drop` (drops
-    /// the live Rust value in place; NULL/gravestone ⇒ no-op), plus a `_take`
-    /// for types delivered as takeable callback params.
-    fn prereq_value_opaque(&self, registry: &Registry) -> Vec<syn::Item> {
-        let mut items: Vec<syn::Item> = Vec::new();
-        let takeable_keys = self.takeable_type_keys();
-        let mut vo: Vec<(&TypeKey, &ValueOpaqueCfg)> = self.value_opaque.iter().collect();
-        vo.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
-        for (key, cfg) in vo {
-            let Some(reading) = registry.reading(key) else {
-                continue;
-            };
-            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
-                continue;
-            }
-            let src = self.src_ty_of(&reading.key());
-            let opaque = &cfg.opaque;
-            // `repr_c_struct`: the opaque counterpart is an auto-generated
-            // **visible-field** `#[repr(C)]` mirror (so C reads the fields directly),
-            // not an externally-provided blob. Each field is lowered by
-            // `mirror_field_wire` (scalar / enum / opaque pointer). The size/align
-            // assert below then proves the whole-struct reinterpret sound.
-            if cfg.generate_mirror {
-                let mirror_ident = self.c_type_ident(&reading.key());
-                let fields = self
-                    .struct_fields(registry, &reading.key())
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Cbindgen::repr_c_struct: `{}` is not a named struct",
-                            type_short(&reading.key())
-                        )
-                    });
-                // Restricted-validity audit (#170 instance 3, #158 instance 3):
-                // a mirror is reinterpreted whole, so a field whose Rust type
-                // rejects some bit patterns is UB the moment C writes one and
-                // hands the struct back.
-                //
-                // Not narrowed to inbound mirrors, though only those are
-                // reachable: converter reachability is not derived from use
-                // today (a declared type resolves BOTH directions whether or
-                // not either is called — the accounting #194/#196 replace), so
-                // "does it cross in" has no truthful answer here. Over-
-                // reporting is the safe direction, and the acknowledgement
-                // below is the escape for a genuinely write-only mirror.
-                let restricted = self.restricted_validity_fields(registry, &reading.key());
-                if !restricted.is_empty() && !cfg.assume_c_field_validity {
-                    let listed: Vec<String> = restricted
-                        .iter()
-                        .map(|(fname, reason)| format!("  `{fname}`: {reason}"))
-                        .collect();
-                    panic!(
-                        "Cbindgen::repr_c_struct: `{}` crosses C's memory by whole-struct \
-                         reinterpret, but these fields have restricted-validity Rust types:\n\
-                         {}\n\
-                         A C caller can write a byte outside those domains, and the reinterpret \
-                         materialises it with no hook to normalise or validate it first (#170, \
-                         #158). Move the field to a `data_struct` (per-field wires), pass it as \
-                         a separate parameter, or widen it to an integer. If this binding's C \
-                         side is trusted to write only in-domain bytes — or never hands the \
-                         mirror back at all — acknowledge it with `.assume_c_field_validity()`.",
-                        type_short(&reading.key()),
-                        listed.join("\n"),
-                    );
-                }
-                let field_defs: Vec<TokenStream> = fields
-                    .iter()
-                    .map(|(fname, fty)| {
-                        let wire = self.mirror_field_wire(fty).unwrap_or_else(|| {
-                            panic!(
-                                "Cbindgen::repr_c_struct: field `{}` of `{}` has unsupported \
-                                 type `{}` (expected a scalar, a declared `enum_type`, or an \
-                                 opaque pointer `Option<Box<T>>`/`Box<T>` with `T` an `opaque_ptr`)",
-                                fname,
-                                type_short(&reading.key()),
-                                fty
-                            )
-                        });
-                        quote!(pub #fname: #wire)
-                    })
-                    .collect();
-                items.push(syn::parse_quote!(
-                    #[repr(C)]
-                    #[allow(non_camel_case_types)]
-                    pub struct #mirror_ident {
-                        #(#field_defs,)*
-                    }
-                ));
-                // A mirror that needs `gravestone()` (only the bare-`Box<T>` fallback —
-                // nullable owned-pointer fields are nulled in place) gets an
-                // auto-generated `Gravestone` from the source type's `Default`. Nullable
-                // mirrors emit nothing here, so they impose no `Default` requirement.
-                if self.mirror_needs_gravestone_impl(registry, &reading.key()) {
-                    items.push(syn::parse_quote!(
-                        impl ::prebindgen_c_runtime::Gravestone for #mirror_ident {
-                            #[inline]
-                            fn rust_gravestone() -> #src {
-                                <#src as ::core::default::Default>::default()
-                            }
-                        }
-                    ));
-                }
-            }
-            // Fail-closed size/align equality guard (proves the transmute sound).
-            items.push(syn::parse_quote!(
-                const _: () = {
-                    assert!(
-                        ::core::mem::size_of::<#src>() == ::core::mem::size_of::<#opaque>(),
-                        "value_opaque: Rust type and opaque counterpart differ in size"
-                    );
-                    assert!(
-                        ::core::mem::align_of::<#src>() == ::core::mem::align_of::<#opaque>(),
-                        "value_opaque: Rust type and opaque counterpart differ in alignment"
-                    );
-                };
-            ));
-            // Autogenerated transmute glue: the single place that owns the
-            // unsafe rust<->opaque reinterpretation. `Gravestone` (user logic)
-            // and the converters below are all expressed via these methods.
-            items.push(syn::parse_quote!(
-                impl ::prebindgen_c_runtime::Transmute for #opaque {
-                    type Rust = #src;
-                    #[inline]
-                    fn from_rust(value: Self::Rust) -> Self {
-                        let __v = ::core::mem::ManuallyDrop::new(value);
-                        unsafe {
-                            ::core::ptr::read(&*__v as *const Self::Rust as *const Self)
-                        }
-                    }
-                    #[inline]
-                    fn into_rust(self) -> Self::Rust {
-                        let __v = ::core::mem::ManuallyDrop::new(self);
-                        unsafe {
-                            ::core::ptr::read(&*__v as *const Self as *const Self::Rust)
-                        }
-                    }
-                    #[inline]
-                    fn as_rust(&self) -> &Self::Rust {
-                        unsafe { &*(self as *const Self as *const Self::Rust) }
-                    }
-                    #[inline]
-                    fn as_rust_mut(&mut self) -> &mut Self::Rust {
-                        unsafe { &mut *(self as *mut Self as *mut Self::Rust) }
-                    }
-                }
-            ));
-            let drop_ident = self.destructor_symbol(&reading.key());
-            // Unconditional drop: safe because a moved-from slot holds a
-            // gravestone (a valid, safely-droppable empty value), so dropping
-            // it is a harmless no-op; a live slot drops normally.
-            items.push(syn::parse_quote!(
-                #[no_mangle]
-                #[allow(non_snake_case, unused_variables)]
-                pub unsafe extern "C" fn #drop_ident(this_: *mut #opaque) {
-                    if !this_.is_null() {
-                        ::core::ptr::drop_in_place(
-                            <#opaque as ::prebindgen_c_runtime::Transmute>::as_rust_mut(&mut *this_),
-                        );
-                    }
-                }
-            ));
-            // For a type delivered as a takeable callback param, also emit a
-            // public `<base>_take(dst, src)`: move `src`'s value into `dst`. For
-            // an `opaque_owned_struct` type, leave `src` a gravestone (so the
-            // trampoline's post-call drop is a no-op); an `opaque_data_struct` type owns
-            // nothing, so the leftover bitwise copy in `src` drops harmlessly and
-            // no write-back is needed. This is the C user's "take" operation.
-            if takeable_keys.contains(key) {
-                let take_ident = self.take_symbol(&reading.key());
-                // Same inferred write-back as a consume (field-null for a nullable
-                // mirror, `gravestone()` for a bare-`Box` mirror / non-mirror owned).
-                let writeback =
-                    self.value_opaque_writeback(registry, &reading.key(), &format_ident!("src"));
-                items.push(syn::parse_quote!(
-                    #[no_mangle]
-                    #[allow(non_snake_case, unused_variables)]
-                    pub unsafe extern "C" fn #take_ident(
-                        dst: *mut #opaque,
-                        src: *mut #opaque,
-                    ) {
-                        if dst.is_null() || src.is_null() {
-                            return;
-                        }
-                        ::core::ptr::write(dst, ::core::ptr::read(src));
-                        #writeback
-                    }
-                ));
-            }
         }
         items
     }
@@ -1317,7 +1193,10 @@ impl CbindgenBuilder {
             .build()?;
         // Freeze every ordinary and callback position plus the callback artifacts
         // that consume those sites.
-        let CPlanParts { sites, artifacts } = {
+        let CPlanParts {
+            sites,
+            mut artifacts,
+        } = {
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                 &model,
                 &recipes,
@@ -1330,6 +1209,10 @@ impl CbindgenBuilder {
             *self.compiled.borrow_mut() = compiler.finish();
             parts
         };
+        artifacts.extend(
+            self.type_artifact_plans(&registry)
+                .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?,
+        );
         let mut generation = prebindgen_registry::generation::GenerationPlanBuilder::new();
         for fragment in self.compiled.borrow().fragments() {
             generation.fragment(fragment.freeze());
@@ -1466,15 +1349,28 @@ impl Prebindgen for CbindgenBuilder {
         let mut items: Vec<syn::Item> = Vec::new();
         items.extend(self.prereq_alloc_free(registry, produces_array));
         items.extend(self.prereq_array_builder(produces_array));
-        items.extend(self.prereq_opaque_handles(registry));
-        items.extend(self.prereq_data_structs(registry));
-        items.extend(self.prereq_value_opaque(registry));
-        items.extend(self.prereq_enums(registry, emit));
-        items.extend(self.prereq_tagged_unions(registry, emit));
-        items.extend(crate::chain::render_callback_artifacts(
+        items.extend(crate::chain::render_artifacts(
             self.generation
                 .as_ref()
                 .expect("C generation plan was not frozen"),
+            "c-opaque-handle",
+            emit,
+        ));
+        items.extend(self.prereq_data_structs(registry));
+        items.extend(crate::chain::render_artifacts(
+            self.generation
+                .as_ref()
+                .expect("C generation plan was not frozen"),
+            "c-value-opaque",
+            emit,
+        ));
+        items.extend(self.prereq_enums(registry, emit));
+        items.extend(self.prereq_tagged_unions(registry, emit));
+        items.extend(crate::chain::render_artifacts(
+            self.generation
+                .as_ref()
+                .expect("C generation plan was not frozen"),
+            "c-callback",
             emit,
         ));
         items.extend(self.prereq_domain_constants(registry));

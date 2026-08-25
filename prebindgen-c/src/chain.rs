@@ -1204,30 +1204,195 @@ impl CallbackArtifact {
 /// Adapter-owned final artifacts stored and ordered by the registry plan.
 pub(crate) enum CArtifact {
     Callback(CallbackArtifact),
+    OpaqueHandle(OpaqueHandleArtifact),
+    ValueOpaque(ValueOpaqueArtifact),
 }
 
 impl CArtifact {
     pub(crate) fn render(&self, emit: &Emit) -> Vec<syn::Item> {
         match self {
             Self::Callback(callback) => callback.render(emit),
+            Self::OpaqueHandle(handle) => handle.render(emit),
+            Self::ValueOpaque(value) => value.render(emit),
         }
     }
 }
 
-/// Render the C callback artifacts from the frozen registry plan.
+/// Render one class of C artifacts from the frozen registry plan.
 ///
-/// The deliberately narrow signature is the callback-rendering boundary: final
-/// emission can spell retained source types through [`Emit`], but it cannot
+/// The deliberately narrow signature is the artifact-rendering boundary: final
+/// emission can spell retained source types through Emit, but it cannot
 /// reopen the registry or the adapter's mutable compilation cache.
-pub(crate) fn render_callback_artifacts(
+pub(crate) fn render_artifacts(
     generation: &GenerationPlan<crate::compile::CRepresentation>,
+    kind: &str,
     emit: &Emit,
 ) -> Vec<syn::Item> {
     generation
         .artifacts()
-        .filter(|artifact| artifact.id().kind() == "c-callback")
+        .filter(|artifact| artifact.id().kind() == kind)
         .flat_map(|artifact| artifact.payload().render(emit))
         .collect()
+}
+
+/// One opaque C handle declaration and its typed destructor.
+pub(crate) struct OpaqueHandleArtifact {
+    pub(crate) source: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) c_struct: syn::Ident,
+    pub(crate) drop_ident: syn::Ident,
+}
+
+impl OpaqueHandleArtifact {
+    fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let c_struct = &self.c_struct;
+        let drop_ident = &self.drop_ident;
+        vec![
+            syn::parse_quote!(
+                #[repr(C)]
+                #[allow(non_camel_case_types)]
+                pub struct #c_struct {
+                    _private: [u8; 0],
+                }
+            ),
+            syn::parse_quote!(
+                #[no_mangle]
+                #[allow(non_snake_case, unused_variables)]
+                pub unsafe extern "C" fn #drop_ident(this_: *mut #c_struct) {
+                    if !this_.is_null() {
+                        drop(::std::boxed::Box::from_raw(this_ as *mut #source));
+                    }
+                }
+            ),
+        ]
+    }
+}
+
+/// A generated visible mirror and whether it needs a full gravestone.
+pub(crate) struct ValueOpaqueMirror {
+    pub(crate) ident: syn::Ident,
+    pub(crate) fields: Vec<(syn::Ident, syn::Type)>,
+    pub(crate) gravestone: bool,
+}
+
+/// The optional public move helper for a takeable value-opaque type.
+pub(crate) struct ValueOpaqueTake {
+    pub(crate) ident: syn::Ident,
+    pub(crate) writeback: ValueOpaqueWriteback,
+}
+
+/// One value-opaque declaration family retained until final source spelling.
+pub(crate) struct ValueOpaqueArtifact {
+    pub(crate) source: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) opaque: syn::Type,
+    pub(crate) mirror: Option<ValueOpaqueMirror>,
+    pub(crate) drop_ident: syn::Ident,
+    pub(crate) take: Option<ValueOpaqueTake>,
+}
+
+impl ValueOpaqueArtifact {
+    fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let opaque = &self.opaque;
+        let mut items = Vec::new();
+        if let Some(mirror) = &self.mirror {
+            let ident = &mirror.ident;
+            let fields = mirror
+                .fields
+                .iter()
+                .map(|(name, wire)| quote!(pub #name: #wire));
+            items.push(syn::parse_quote!(
+                #[repr(C)]
+                #[allow(non_camel_case_types)]
+                pub struct #ident {
+                    #(#fields,)*
+                }
+            ));
+            if mirror.gravestone {
+                items.push(syn::parse_quote!(
+                    impl ::prebindgen_c_runtime::Gravestone for #ident {
+                        #[inline]
+                        fn rust_gravestone() -> #source {
+                            <#source as ::core::default::Default>::default()
+                        }
+                    }
+                ));
+            }
+        }
+        items.push(syn::parse_quote!(
+            const _: () = {
+                assert!(
+                    ::core::mem::size_of::<#source>() == ::core::mem::size_of::<#opaque>(),
+                    "value_opaque: Rust type and opaque counterpart differ in size"
+                );
+                assert!(
+                    ::core::mem::align_of::<#source>() == ::core::mem::align_of::<#opaque>(),
+                    "value_opaque: Rust type and opaque counterpart differ in alignment"
+                );
+            };
+        ));
+        items.push(syn::parse_quote!(
+            impl ::prebindgen_c_runtime::Transmute for #opaque {
+                type Rust = #source;
+                #[inline]
+                fn from_rust(value: Self::Rust) -> Self {
+                    let __v = ::core::mem::ManuallyDrop::new(value);
+                    unsafe {
+                        ::core::ptr::read(&*__v as *const Self::Rust as *const Self)
+                    }
+                }
+                #[inline]
+                fn into_rust(self) -> Self::Rust {
+                    let __v = ::core::mem::ManuallyDrop::new(self);
+                    unsafe {
+                        ::core::ptr::read(&*__v as *const Self as *const Self::Rust)
+                    }
+                }
+                #[inline]
+                fn as_rust(&self) -> &Self::Rust {
+                    unsafe { &*(self as *const Self as *const Self::Rust) }
+                }
+                #[inline]
+                fn as_rust_mut(&mut self) -> &mut Self::Rust {
+                    unsafe { &mut *(self as *mut Self as *mut Self::Rust) }
+                }
+            }
+        ));
+        let drop_ident = &self.drop_ident;
+        items.push(syn::parse_quote!(
+            #[no_mangle]
+            #[allow(non_snake_case, unused_variables)]
+            pub unsafe extern "C" fn #drop_ident(this_: *mut #opaque) {
+                if !this_.is_null() {
+                    ::core::ptr::drop_in_place(
+                        <#opaque as ::prebindgen_c_runtime::Transmute>::as_rust_mut(&mut *this_),
+                    );
+                }
+            }
+        ));
+        if let Some(take) = &self.take {
+            let take_ident = &take.ident;
+            let src = format_ident!("src");
+            let writeback = take.writeback.render(&src, opaque);
+            items.push(syn::parse_quote!(
+                #[no_mangle]
+                #[allow(non_snake_case, unused_variables)]
+                pub unsafe extern "C" fn #take_ident(
+                    dst: *mut #opaque,
+                    src: *mut #opaque,
+                ) {
+                    if dst.is_null() || src.is_null() {
+                        return;
+                    }
+                    ::core::ptr::write(dst, ::core::ptr::read(src));
+                    #writeback
+                }
+            ));
+        }
+        items
+    }
 }
 
 /// One C callback argument's already-resolved wire delivery.
