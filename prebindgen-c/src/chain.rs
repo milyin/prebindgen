@@ -60,6 +60,7 @@ enum CBody {
     InputTerminal(InputTerminalPlan),
     OutputTerminal(OutputTerminalPlan),
     Payload(PayloadPlan),
+    Borrow(BorrowPlan),
     Product(ProductPlan),
     Optional(OptionalPlan),
     Sequence(SequencePlan),
@@ -127,6 +128,18 @@ impl CFunction {
         Self {
             call,
             body: CBody::Payload(plan),
+        }
+    }
+
+    pub(crate) fn borrow(plan: BorrowPlan) -> Self {
+        let call = CCall(chain::Call::new(
+            plan.ident.clone(),
+            plan.operation.fallible(),
+            true,
+        ));
+        Self {
+            call,
+            body: CBody::Borrow(plan),
         }
     }
 
@@ -225,6 +238,14 @@ impl CFunction {
         matches!(self.body, CBody::Payload(_))
     }
 
+    #[cfg(test)]
+    pub(crate) fn borrow_operation(&self) -> Option<&BorrowOperation> {
+        match &self.body {
+            CBody::Borrow(plan) => Some(&plan.operation),
+            _ => None,
+        }
+    }
+
     pub(crate) fn call(&self) -> &CCall {
         &self.call
     }
@@ -242,6 +263,7 @@ impl RustFunction for CFunction {
             CBody::InputTerminal(plan) => plan.render(emit),
             CBody::OutputTerminal(plan) => plan.render(emit),
             CBody::Payload(plan) => plan.render(emit),
+            CBody::Borrow(plan) => plan.render(emit),
             CBody::Product(plan) => plan.render(emit),
             CBody::Choice(plan) => plan.render(emit),
             CBody::Sequence(plan) => plan.render(emit),
@@ -249,6 +271,116 @@ impl RustFunction for CFunction {
             CBody::DeferredInvoke => {
                 unreachable!("a deferred C Invoke helper is rendered by its callback artifact")
             }
+        }
+    }
+}
+
+/// One source borrow crossing retained without spelling its referent.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum BorrowOperation {
+    StrInput,
+    SharedInput,
+    MutableInput,
+    MutableUninitInput,
+    SharedOutput,
+}
+
+impl BorrowOperation {
+    fn fallible(&self) -> bool {
+        !matches!(self, Self::SharedOutput)
+    }
+}
+
+/// A borrow terminal whose referent is materialized only during final emission.
+#[derive(Clone)]
+pub(crate) struct BorrowPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source_inner: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) wire: syn::Type,
+    pub(crate) operation: BorrowOperation,
+    pub(crate) null_message: String,
+}
+
+impl BorrowPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source_inner = qualify_source_type(
+            &emit.spell_ty(&self.source_inner),
+            self.source_module.as_ref(),
+        );
+        let wire = &self.wire;
+        let null_message = &self.null_message;
+
+        match self.operation {
+            BorrowOperation::StrInput => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name<'a>(
+                    v: #wire,
+                ) -> ::core::result::Result<&'a str, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_message),
+                        );
+                    }
+                    match ::std::ffi::CStr::from_ptr(v).to_str() {
+                        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s),
+                        ::core::result::Result::Err(_) => ::core::result::Result::Err(
+                            ::std::string::String::from("invalid UTF-8 in str argument"),
+                        ),
+                    }
+                }
+            ),
+            BorrowOperation::SharedInput => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name<'a>(
+                    v: #wire,
+                ) -> ::core::result::Result<&'a #source_inner, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_message),
+                        );
+                    }
+                    ::core::result::Result::Ok(&*(v as *const #source_inner))
+                }
+            ),
+            BorrowOperation::MutableInput => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name<'a>(
+                    v: #wire,
+                ) -> ::core::result::Result<&'a mut #source_inner, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_message),
+                        );
+                    }
+                    ::core::result::Result::Ok(&mut *(v as *mut #source_inner))
+                }
+            ),
+            BorrowOperation::MutableUninitInput => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name<'a>(
+                    v: #wire,
+                ) -> ::core::result::Result<
+                    &'a mut ::core::mem::MaybeUninit<#source_inner>,
+                    ::std::string::String,
+                > {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_message),
+                        );
+                    }
+                    ::core::result::Result::Ok(
+                        &mut *(v as *mut ::core::mem::MaybeUninit<#source_inner>)
+                    )
+                }
+            ),
+            BorrowOperation::SharedOutput => syn::parse_quote!(
+                #[allow(non_snake_case, dead_code, unused)]
+                pub(crate) unsafe fn #name(v: &#source_inner) -> #wire {
+                    v as *const #source_inner as #wire
+                }
+            ),
         }
     }
 }

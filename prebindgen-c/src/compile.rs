@@ -570,6 +570,35 @@ impl CFrag {
             value,
         }
     }
+
+    /// A source borrow retained until final Rust emission.
+    fn from_borrow(at: At<'_>, plan: crate::chain::BorrowPlan) -> Self {
+        let destination = plan.wire.clone();
+        let subs = vec![plan.source_inner.key()];
+        let function = CFunction::borrow(plan);
+        let niches = Niches::empty();
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            function,
+            niches,
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::Borrowed,
+            },
+            shape: CShape::Atomic,
+            value,
+        }
+    }
 }
 
 /// How long what this conversion produces stays usable.
@@ -580,7 +609,7 @@ impl CFrag {
 /// hand C a pointer *into* a Rust value from a crossing that looks owned.
 fn validity_of(conv: &ConverterImpl, direction: Direction) -> Validity {
     match direction {
-        // Rust to C. A `*const T` is the zero-copy borrow: `out_borrow_or_result`
+        // Rust to C. A `*const T` is the zero-copy borrow: the late borrow plan
         // casts the Rust value's own address, and `repr_c_struct`'s reinterpret
         // does the same, so the pointer dies with the value it points into. A
         // `*mut` is a handle C now owns (`Box::into_raw`) or a block C must free
@@ -741,9 +770,12 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 return Ok(CFrag::from_input_terminal(at, plan));
             }
         }
+        if let Some(plan) = self.gen.borrow_plan(ty, at.crossing.direction()) {
+            return Ok(CFrag::from_borrow(at, plan));
+        }
         let conv = match at.crossing.direction() {
-            Direction::Construct => self.gen.in_borrow(ty),
-            Direction::Deconstruct => self.gen.out_borrow_or_result(ty),
+            Direction::Construct => None,
+            Direction::Deconstruct => self.gen.out_result_marker(ty),
         };
         self.wrap(at, "no C representation for this type", conv)
     }

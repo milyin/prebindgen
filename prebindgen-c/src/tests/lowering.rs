@@ -391,6 +391,57 @@ fn specialized_field_terminals_stay_unrendered_until_final_write() {
     );
 }
 
+#[test]
+fn borrow_terminals_stay_unrendered_until_final_write() {
+    use crate::chain::BorrowOperation;
+
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Handle;",
+        "pub struct Record { pub value: u64 }",
+        "pub fn read_str(v: &str) -> usize { unimplemented!() }",
+        "pub fn share(v: &Handle) -> &Handle { unimplemented!() }",
+        "pub fn mutate(v: &mut Handle) { unimplemented!() }",
+        "pub fn fill(v: &mut std::mem::MaybeUninit<Record>) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .repr_c_struct(syn::parse_quote!(Record))
+        .function(syn::parse_quote!(read_str))
+        .panic()
+        .function(syn::parse_quote!(share))
+        .panic()
+        .function(syn::parse_quote!(mutate))
+        .panic()
+        .function(syn::parse_quote!(fill))
+        .panic()
+        .build_with(registry)
+        .expect("resolve");
+
+    for operation in [
+        BorrowOperation::StrInput,
+        BorrowOperation::SharedInput,
+        BorrowOperation::MutableInput,
+        BorrowOperation::MutableUninitInput,
+        BorrowOperation::SharedOutput,
+    ] {
+        assert_eq!(
+            generated
+                .gen
+                .compiled_fns
+                .iter()
+                .filter(|function| function.borrow_operation() == Some(&operation))
+                .count(),
+            1,
+            "{operation:?} must retain its own semantic plan before final writing"
+        );
+    }
+}
+
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {
