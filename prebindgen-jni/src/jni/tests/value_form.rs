@@ -3320,6 +3320,35 @@ fn an_unbuildable_optional_borrow_is_explicitly_refused() {
         error.contains("could not be resolved") && error.contains("Box < Option < & ZData > >"),
         "the unsupported outer wrapper must be refused and name its crossing: {error}"
     );
+
+    // The finished-registry diagnosis intentionally reports completeness,
+    // because scanned but unreachable crossings may refuse without making the
+    // binding invalid. Compile the same crossing directly to pin the adapter's
+    // exact capability boundary as well.
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZData {
+                pub value: i64,
+            }
+        )),
+        myflat_loc(),
+    )]))
+    .expect("index the seam type");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::data_class!(ZData)))
+        .build_with(registry)
+        .expect("build the supported neighbouring crossings");
+    let refusal = gen
+        .crossing_plan_for_test(
+            syn::parse_quote!(Box<Option<&ZData>>),
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .expect_err("the Optional composer must reject a wrapped borrowed carrier");
+    assert!(
+        refusal.contains("no registry-composed JNI representation for this optional"),
+        "the seam must name the exact Optional composition boundary: {refusal}"
+    );
 }
 
 /// A wrapper cannot be bridged where the converter does not produce the spelled
