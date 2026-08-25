@@ -213,6 +213,54 @@ fn trait_backed_custom_conversion_renders_from_the_late_plan() {
     );
 }
 
+#[test]
+fn output_terminals_stay_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Handle;",
+        "pub struct Error;",
+        "pub struct Payload;",
+        "pub enum Mode { First, Second }",
+        "pub fn output_unit() {}",
+        "pub fn output_string() -> String { unimplemented!() }",
+        "pub fn output_scalar() -> u64 { unimplemented!() }",
+        "pub fn output_handle() -> Handle { unimplemented!() }",
+        "pub fn output_error() -> Error { unimplemented!() }",
+        "pub fn output_value_opaque() -> Payload { unimplemented!() }",
+        "pub fn output_enum() -> Mode { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .free_memory_function("binding_free")
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_error(syn::parse_quote!(Error), syn::parse_quote!(error_message))
+        .opaque_owned_struct(syn::parse_quote!(Payload), syn::parse_quote!(OpaquePayload))
+        .enum_type(syn::parse_quote!(Mode))
+        .function(syn::parse_quote!(output_unit))
+        .function(syn::parse_quote!(output_string))
+        .function(syn::parse_quote!(output_scalar))
+        .function(syn::parse_quote!(output_handle))
+        .function(syn::parse_quote!(output_error))
+        .function(syn::parse_quote!(output_value_opaque))
+        .function(syn::parse_quote!(output_enum))
+        .build_with(registry)
+        .expect("resolve");
+
+    assert_eq!(
+        generated
+            .gen
+            .compiled_fns
+            .iter()
+            .filter(|function| function.is_output_terminal())
+            .count(),
+        7,
+        "every whole-value output operation must retain a semantic plan before final writing"
+    );
+}
+
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {
