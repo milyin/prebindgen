@@ -123,7 +123,7 @@ pub(crate) fn vec_build_elem(
     // What that buys: a `Box` the model erases no longer downgrades the crossing
     // from raw scalar leaves to a per-element `JObject` plus a field read per
     // field. Correctness was never the issue — the general converter serves the
-    // shape (see `input_transparent_bridge`) — the cost was, and it was silent.
+    // shape (see the transparent-wrapper plan) — the cost was, and it was silent.
     let elem_wrappers = elem.erased_wrappers();
     if !elem_wrappers.is_empty() {
         // **Definitive on the BORROWED path.** By value the local is owned, so

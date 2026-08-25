@@ -3077,6 +3077,8 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
 /// showing rather than arguing.
 #[test]
 fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
+    use prebindgen_registry::Conversions as _;
+
     let loc = myflat_loc();
     // The enum is carried wrapped AND bare, so the Kotlin assertion below can
     // say "these present alike" rather than merely "the wrapped one compiles".
@@ -3153,22 +3155,41 @@ fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
     let gen = jni
         .build_with(registry)
         .expect("an erased wrapper over a terminal resolves in both directions");
+    for ty in [
+        syn::parse_quote!(Box<Priority>),
+        syn::parse_quote!(Box<ZSample>),
+        syn::parse_quote!(Box<Leaf>),
+    ] {
+        let reading = gen.registry.reading_of(&ty).expect("wrapped reading");
+        assert!(
+            gen.decls
+                .in_frag(&reading)
+                .expect("wrapped input")
+                .is_transparent_plan(),
+            "the input bridge must retain a frozen transparent-wrapper plan"
+        );
+        assert!(
+            gen.decls
+                .out_frag(&reading)
+                .expect("wrapped output")
+                .is_transparent_plan(),
+            "the output bridge must retain a frozen transparent-wrapper plan"
+        );
+    }
     let rust =
         std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust")).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
     // Outbound: the wrapper comes off, then the inner converter runs. Inbound
     // is the mirror — the inner converter runs, then the wrapper goes back on.
-    for kind in ["Priority", "ZSample", "Leaf"] {
-        assert!(
-            rc.contains(&format!("Box_{kind}_to_")),
-            "`Box<{kind}>` needs an OUTBOUND converter:\n{rust}"
-        );
-        assert!(
-            rc.contains(&format!("_to_Box_{kind}_")),
-            "`Box<{kind}>` needs an inbound converter:\n{rust}"
-        );
-    }
+    assert!(rc.matches("transparent_input_").count() >= 3, "{rust}");
+    assert!(rc.matches("transparent_output_").count() >= 3, "{rust}");
+    assert!(rc.contains("Box::new(__inner)"), "{rust}");
+    assert!(rc.contains("let__inner=*v"), "{rust}");
+    assert!(
+        rc.contains("Box::into_raw"),
+        "the reached Box<ZSample> output bridge must reach its opaque child:\n{rust}"
+    );
     // The wrapper is invisible to Kotlin, so the bare and wrapped enum fields
     // present as the same type — the point of the model erasing it.
     let kotlin = gen

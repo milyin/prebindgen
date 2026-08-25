@@ -165,64 +165,6 @@ pub(crate) fn primitive_output(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> 
 // Option<_> wrappers
 // ──────────────────────────────────────────────────────────────────────
 
-/// Invoke an inner input converter's complete `wire -> Rust` chain.
-///
-/// Structural wrappers cannot call only [`ConverterImpl::function`]: custom
-/// conversions may carry semantic steps in `pre_stages` (for example
-/// `jlong -> u64 -> Duration`). Keep those steps inside the `Some` arm so a
-/// niche discriminator is tested before any conversion runs.
-pub(crate) fn composed_inner_input(
-    inner: &ConverterImpl<KotlinMeta>,
-    wire: TokenStream,
-) -> syn::Expr {
-    let converter = inner.converter_ident();
-    if inner.pre_stages.is_empty() {
-        return syn::parse2(quote!(#converter(env, #wire)?))
-            .expect("single-stage input call is a valid expression");
-    }
-    let mut body = quote! {
-        let __inner_s0 = #converter(env, #wire)?;
-    };
-    let mut previous = format_ident!("__inner_s0");
-    for (order, (_, stage)) in inner.input_stage_order().enumerate() {
-        let stage_fn = &stage.function.sig.ident;
-        let next = format_ident!("__inner_s{}", order + 1);
-        body.extend(quote! {
-            let #next = #stage_fn(env, #previous)
-                .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(__e.to_string()))?;
-        });
-        previous = next;
-    }
-    body.extend(quote!(#previous));
-    syn::parse2(quote!({ #body })).expect("composed input chain is a valid expression")
-}
-
-/// Invoke an inner output converter's complete `Rust -> wire` chain.
-/// Mirror of [`composed_inner_input`].
-pub(crate) fn composed_inner_output(
-    inner: &ConverterImpl<KotlinMeta>,
-    value: TokenStream,
-) -> syn::Expr {
-    let converter = inner.converter_ident();
-    if inner.pre_stages.is_empty() {
-        return syn::parse2(quote!(#converter(env, #value)?))
-            .expect("single-stage output call is a valid expression");
-    }
-    let mut body = TokenStream::new();
-    let mut previous = value;
-    for (order, (_, stage)) in inner.output_stage_order().enumerate() {
-        let stage_fn = &stage.function.sig.ident;
-        let next = format_ident!("__inner_s{}", order);
-        body.extend(quote! {
-            let #next = #stage_fn(env, #previous)
-                .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(__e.to_string()))?;
-        });
-        previous = quote!(#next);
-    }
-    body.extend(quote!(#converter(env, #previous)?));
-    syn::parse2(quote!({ #body })).expect("composed output chain is a valid expression")
-}
-
 // ──────────────────────────────────────────────────────────────────────
 // Callback wrappers — impl Fn(args) -> JObject (erased Kotlin lambda)
 // ──────────────────────────────────────────────────────────────────────

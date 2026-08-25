@@ -1301,8 +1301,8 @@ impl<R: Conversions> JCompile<'_, R> {
                 // Borrowed-input terminals were unconditional functions before
                 // this late plan and remain so until every compatibility parent
                 // retains dependencies. Owned input and both output operations
-                // are demand-driven; the retained Result plan now propagates
-                // reachability to its success converter.
+                // are demand-driven; retained Result and transparent-wrapper
+                // parents propagate reachability to their child converters.
                 reachable: std::rc::Rc::new(std::cell::Cell::new(matches!(
                     operation,
                     crate::jni::chain::JHandleOperation::BorrowInput
@@ -1379,6 +1379,94 @@ impl<R: Conversions> JCompile<'_, R> {
             rust,
         ))
     }
+
+    /// Retain an erased wrapper over a terminal as one late bridge around the
+    /// terminal's already-compiled child conversion.
+    ///
+    /// The wrapper walk is a Flat-model fact. Planning records that policy,
+    /// the child pipeline, and the wrapper reading; only final rendering spells
+    /// the Rust type in the converter signature.
+    fn planned_transparent_bridge(&self, at: At<'_>) -> Option<JFrag> {
+        let source = at.crossing.spelled();
+        if source.erased_wrappers().is_empty() || source.borrow_target().is_some() {
+            return None;
+        }
+        let direction = at.crossing.direction();
+        let stripped = source.stripped_key();
+        let inner = self.registry.reading(&stripped)?;
+        let entry = match direction {
+            Direction::Construct => self.decls.in_frag(&inner)?,
+            Direction::Deconstruct => self.decls.out_frag(&inner)?,
+        };
+        // Cow is deliberately not reconstructible through this generic bridge.
+        // Ask the model-backed wrapper policy before accepting the plan.
+        match direction {
+            Direction::Construct => {
+                crate::jni::trait_impl::build_through_erased_wrappers(source, quote!(__probe))?;
+            }
+            Direction::Deconstruct => {
+                crate::jni::trait_impl::read_through_erased_wrappers(source, quote!(__probe))?;
+            }
+        }
+        let stages = match direction {
+            Direction::Construct => entry
+                .input_stage_order()
+                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .collect(),
+            Direction::Deconstruct => entry
+                .output_stage_order()
+                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .collect(),
+        };
+        // The outer bridge already receives the exact parameter form expected
+        // by the child converter: a pointer by value, otherwise a borrowed JNI
+        // object/scalar wire. Do not add the ordinary site-level borrow again.
+        let child = match direction {
+            Direction::Construct => crate::jni::chain::JChild::input(
+                entry.converter_ident().clone(),
+                stages,
+                crate::jni::chain::JValueUse::Direct,
+            ),
+            Direction::Deconstruct => crate::jni::chain::JChild::output(
+                entry.converter_ident().clone(),
+                stages,
+                crate::jni::chain::JValueUse::Direct,
+            ),
+        };
+        let operation = match direction {
+            Direction::Construct => "transparent_input",
+            Direction::Deconstruct => "transparent_output",
+        };
+        let ident = match inner.unwrapped().kind() {
+            TypeKind::Named { id, .. } => {
+                crate::jni::chain::named_model_operation_name(operation, id, &source.key())
+            }
+            _ => crate::jni::chain::model_operation_name(operation, &source.key()),
+        };
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let rust = crate::jni::chain::JFunction::transparent(crate::jni::chain::JTransparentPlan {
+            ident,
+            reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
+            inner: entry.0.rust.clone(),
+            source: source.clone(),
+            wire: entry.destination.clone(),
+            direction,
+            child,
+        });
+        Some(JFrag::planned(
+            at,
+            ConverterImpl {
+                destination: entry.destination.clone(),
+                function: marker,
+                pre_stages: Vec::new(),
+                niches: entry.niches.clone(),
+                metadata: entry.metadata.clone(),
+                subs: vec![stripped],
+            },
+            rust,
+        ))
+    }
+
     fn planned_child(
         direction: Direction,
         part: &Part<'_>,
@@ -2373,21 +2461,19 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(frag) = self.planned_result(at) {
             return Ok(frag);
         }
+        if let Some(frag) = self.planned_transparent_bridge(at) {
+            return Ok(frag);
+        }
         let emit = cx.emit();
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
-                .or_else(|| self.borrow(ty, true))
-                .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit)),
+                .or_else(|| self.borrow(ty, true)),
             Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
-                .or_else(|| self.borrow(ty, false))
-                .or_else(|| {
-                    self.decls
-                        .output_transparent_bridge(ty, self.registry, emit)
-                }),
+                .or_else(|| self.borrow(ty, false)),
         };
         if conv.is_none()
             && at.crossing.direction() == Direction::Deconstruct
@@ -2533,24 +2619,22 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(planned) = self.planned_value_codec(at) {
             return Ok(planned);
         }
-        let emit = cx.emit();
         if let Some(planned) = self.planned_sequence(at, elements, inner) {
             return Ok(planned);
         }
+        if let Some(planned) = self.planned_transparent_bridge(at) {
+            return Ok(planned);
+        }
+        let emit = cx.emit();
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
-                .or_else(|| self.borrow(ty, true))
-                .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit)),
+                .or_else(|| self.borrow(ty, true)),
             Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
-                .or_else(|| self.borrow(ty, false))
-                .or_else(|| {
-                    self.decls
-                        .output_transparent_bridge(ty, self.registry, emit)
-                }),
+                .or_else(|| self.borrow(ty, false)),
         };
         let mut frag = self.wrap(at, "no JNI representation for this run", conv)?;
         frag.nested_chain = inner.composed_chain();
@@ -3112,6 +3196,11 @@ impl Conv {
     #[cfg(test)]
     pub(crate) fn is_result_plan(&self) -> bool {
         self.0.rust.is_result()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_transparent_plan(&self) -> bool {
+        self.0.rust.is_transparent()
     }
 }
 

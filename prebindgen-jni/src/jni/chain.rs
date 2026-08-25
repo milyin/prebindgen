@@ -21,6 +21,7 @@ enum JBody {
     ValueCodec(Box<JValueCodecPlan>),
     HandleCodec(Box<JHandleCodecPlan>),
     Result(Box<JResultPlan>),
+    Transparent(Box<JTransparentPlan>),
     BorrowedOptionalHandle(Box<JBorrowedOptionalHandlePlan>),
     Product(Box<JProductPlan>),
     Choice(Box<JChoicePlan>),
@@ -48,6 +49,10 @@ impl JFunction {
 
     pub(crate) fn result(plan: JResultPlan) -> Self {
         Self(JBody::Result(Box::new(plan)))
+    }
+
+    pub(crate) fn transparent(plan: JTransparentPlan) -> Self {
+        Self(JBody::Transparent(Box::new(plan)))
     }
 
     pub(crate) fn value_codec(plan: JValueCodecPlan) -> Self {
@@ -99,6 +104,11 @@ impl JFunction {
     }
 
     #[cfg(test)]
+    pub(crate) fn is_transparent(&self) -> bool {
+        matches!(self.0, JBody::Transparent(_))
+    }
+
+    #[cfg(test)]
     pub(crate) fn is_borrowed_optional_handle(&self) -> bool {
         matches!(self.0, JBody::BorrowedOptionalHandle(_))
     }
@@ -123,6 +133,10 @@ impl JFunction {
             JBody::Result(plan) => {
                 plan.reachable.set(true);
                 plan.success.mark_reachable();
+            }
+            JBody::Transparent(plan) => {
+                plan.reachable.set(true);
+                plan.inner.mark_reachable();
             }
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.set(true),
             JBody::Product(plan) => {
@@ -166,6 +180,7 @@ impl RustFunction for JFunction {
             JBody::ValueCodec(plan) => &plan.ident,
             JBody::HandleCodec(plan) => &plan.ident,
             JBody::Result(plan) => &plan.ident,
+            JBody::Transparent(plan) => &plan.ident,
             JBody::BorrowedOptionalHandle(plan) => &plan.ident,
             JBody::Product(plan) => &plan.ident,
             JBody::Choice(plan) => &plan.ident,
@@ -185,6 +200,7 @@ impl RustFunction for JFunction {
             JBody::ValueCodec(_) => true,
             JBody::HandleCodec(plan) => plan.reachable.get(),
             JBody::Result(plan) => plan.reachable.get(),
+            JBody::Transparent(plan) => plan.reachable.get(),
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.get(),
             JBody::Product(plan) => plan.reachable.get(),
             JBody::Optional(plan) => plan.reachable.get(),
@@ -203,6 +219,7 @@ impl RustFunction for JFunction {
             JBody::ValueCodec(plan) => plan.render(emit),
             JBody::HandleCodec(plan) => plan.render(emit),
             JBody::Result(plan) => plan.render(emit),
+            JBody::Transparent(plan) => plan.render(emit),
             JBody::BorrowedOptionalHandle(plan) => plan.render(emit),
             JBody::Product(plan) => plan.render(emit),
             JBody::Optional(plan) => plan.render(emit),
@@ -245,6 +262,76 @@ impl JResultPlan {
                 v
             }
         )
+    }
+}
+
+/// One transparent-wrapper bridge retained as Flat wrapper policy plus its
+/// already-compiled inner conversion.
+///
+/// Planning knows that the wrapper is erased and how to traverse it, but never
+/// spells the wrapped Rust type. The final renderer performs that spelling and
+/// assembles the standard converter signature around the frozen child call.
+#[derive(Clone)]
+pub(crate) struct JTransparentPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
+    pub(crate) inner: JFunction,
+    pub(crate) source: TypeRef,
+    pub(crate) wire: syn::Type,
+    pub(crate) direction: Direction,
+    pub(crate) child: JChild,
+}
+
+impl JTransparentPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = emit.spell_ty(&self.source);
+        let wire = &self.wire;
+        let allow = crate::jni::trait_impl::generated_converter_attr();
+        match self.direction {
+            Direction::Construct => {
+                let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "v");
+                let input = if matches!(wire, syn::Type::Ptr(_)) {
+                    quote!(v: #wire)
+                } else {
+                    quote!(v: &#wire_with_lifetime)
+                };
+                let child = self.child.invoke_with_env(quote!(env), quote!(v));
+                let built =
+                    super::trait_impl::build_through_erased_wrappers(&self.source, quote!(__inner))
+                        .expect("transparent-wrapper planning accepted this input spelling");
+                syn::parse_quote!(
+                    #allow
+                    pub(crate) unsafe fn #name<'env, 'v>(
+                        env: &mut jni::JNIEnv<'env>,
+                        #input,
+                    ) -> ::core::result::Result<#source, __JniErr> {
+                        ::core::result::Result::Ok({
+                            let __inner = #child?;
+                            #built
+                        })
+                    }
+                )
+            }
+            Direction::Deconstruct => {
+                let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
+                let read = super::trait_impl::read_through_erased_wrappers(&self.source, quote!(v))
+                    .expect("transparent-wrapper planning accepted this output spelling");
+                let child = self.child.invoke_with_env(quote!(env), quote!(__inner));
+                syn::parse_quote!(
+                    #allow
+                    pub(crate) unsafe fn #name<'a>(
+                        env: &mut jni::JNIEnv<'a>,
+                        v: #source,
+                    ) -> ::core::result::Result<#wire_with_lifetime, __JniErr> {
+                        ::core::result::Result::Ok({
+                            let __inner = #read;
+                            #child?
+                        })
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -1434,6 +1521,21 @@ pub(crate) fn model_operation_name(operation: &str, key: &TypeKey) -> syn::Ident
     operation.hash(&mut hash);
     key.hash(&mut hash);
     format_ident!("{operation}_{:08x}", hash.finish() & 0xffff_ffff)
+}
+
+/// Stable private name that keeps a nominal model identity readable while the
+/// table key itself remains opaque.
+///
+/// TypeId is a Flat-model fact, not recovered Rust syntax. The key still
+/// supplies uniqueness for wrappers and generic instantiations that share the
+/// same nominal identity.
+pub(crate) fn named_model_operation_name(
+    operation: &str,
+    id: &prebindgen_registry::flat::TypeId,
+    key: &TypeKey,
+) -> syn::Ident {
+    let nominal = crate::jni::emit::sanitize_for_ident(&id.name);
+    model_operation_name(&format!("{operation}_{nominal}"), key)
 }
 
 /// Stable private name for a plan identified by an adapter semantic rather
