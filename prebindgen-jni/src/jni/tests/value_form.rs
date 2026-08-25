@@ -2689,6 +2689,16 @@ fn a_borrowed_plan_clones_before_consuming() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let (composed_only, ident, _) = gen
+        .parts_plan_for_test(
+            syn::parse_quote!(Option<&ZCarrier>),
+            prebindgen_registry::recipe::Direction::Deconstruct,
+        )
+        .expect("Option<&ZCarrier> parts row");
+    assert!(
+        composed_only && ident == "__jni_parts",
+        "the value-form decomposition must retain a non-rendering parts row"
+    );
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     assert!(
