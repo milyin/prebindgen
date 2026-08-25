@@ -285,7 +285,6 @@ pub(crate) struct JCustomConversionPlan {
     pub(crate) direction: Direction,
     pub(crate) call: JCustomCall,
     pub(crate) domain: Option<prebindgen_registry::RepresentationDomain>,
-    pub(crate) diagnostic_name: String,
 }
 
 impl JCustomConversionPlan {
@@ -348,7 +347,7 @@ impl JCustomConversionPlan {
             } else {
                 quote!(::core::result::Result::Ok(#raw))
             };
-            let diagnostic = &self.diagnostic_name;
+            let diagnostic = self.source.to_string();
             let body: syn::Expr = match self.direction {
                 Direction::Construct => syn::parse_quote!({
                     if #valid {

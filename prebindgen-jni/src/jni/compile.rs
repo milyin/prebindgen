@@ -864,48 +864,6 @@ fn refuse(at: At<'_>, why: &str) -> JErr {
     JErr::Refused(format!("JniGen: {} ({why})", at.crossing.key()))
 }
 
-/// A readable label assembled only from Flat semantic variants and nominal
-/// identity. It is for diagnostics and private names, never type recovery.
-fn model_type_name(ty: &TypeRef) -> String {
-    let name = match ty.kind() {
-        TypeKind::Scalar(kind) => match kind {
-            ScalarKind::Bool => "bool".to_string(),
-            ScalarKind::I8 => "i8".to_string(),
-            ScalarKind::I16 => "i16".to_string(),
-            ScalarKind::I32 => "i32".to_string(),
-            ScalarKind::I64 => "i64".to_string(),
-            ScalarKind::Isize => "isize".to_string(),
-            ScalarKind::U8 => "u8".to_string(),
-            ScalarKind::U16 => "u16".to_string(),
-            ScalarKind::U32 => "u32".to_string(),
-            ScalarKind::U64 => "u64".to_string(),
-            ScalarKind::Usize => "usize".to_string(),
-            ScalarKind::F32 => "f32".to_string(),
-            ScalarKind::F64 => "f64".to_string(),
-        },
-        TypeKind::Str => "str".to_string(),
-        TypeKind::String => "String".to_string(),
-        TypeKind::Optional(inner) => format!("Option_{}", model_type_name(inner)),
-        TypeKind::Vec(inner) => format!("Vec_{}", model_type_name(inner)),
-        TypeKind::Slice(inner) => format!("slice_{}", model_type_name(inner)),
-        TypeKind::Fallible { ok, err } => {
-            format!("Result_{}_{}", model_type_name(ok), model_type_name(err))
-        }
-        TypeKind::Named { id, .. } => id.name.clone(),
-        TypeKind::Array { elem, .. } => format!("array_{}", model_type_name(elem)),
-        TypeKind::Ref { inner, mutable, .. } => {
-            let prefix = if *mutable { "mut_" } else { "ref_" };
-            format!("{prefix}{}", model_type_name(inner))
-        }
-        TypeKind::Boxed(inner) => format!("Box_{}", model_type_name(inner)),
-        TypeKind::Cow { inner, .. } => format!("Cow_{}", model_type_name(inner)),
-        TypeKind::Uninit(inner) => format!("MaybeUninit_{}", model_type_name(inner)),
-        TypeKind::Callback { .. } => "callback".to_string(),
-        TypeKind::Unit => "unit".to_string(),
-    };
-    crate::jni::emit::sanitize_for_ident(&name)
-}
-
 /// Readable label for syntax explicitly supplied by the adapter declaration.
 /// This is not captured source syntax and never accepts a TypeRef.
 fn declared_type_name(ty: &syn::Type) -> String {
@@ -1535,13 +1493,10 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Construct => decl.input_spec().as_ref()?,
             Direction::Deconstruct => decl.output_spec().as_ref()?,
         };
-        let diagnostic_name = model_type_name(source);
         let (representation, representation_key, inner, call) = match spec {
             ConvertSpec::PrebindgenFn(function) => {
                 let item = self.registry.flat().function(function).unwrap_or_else(|| {
-                    panic!(
-                        "convert!({diagnostic_name}): function {function} is absent from the Flat model"
-                    )
+                    panic!("convert!({source}): function {function} is absent from the Flat model")
                 });
                 assert!(
                     item.params.len() == 1,
@@ -1561,24 +1516,24 @@ impl<R: Conversions> JCompile<'_, R> {
                     Direction::Construct => {
                         assert!(
                             result.key() == source.key(),
-                            "convert!({diagnostic_name}).input({function}): the function produces `{}`, not `{diagnostic_name}`",
-                            model_type_name(result),
+                            "convert!({source}).input({function}): the function produces `{}`, not `{source}`",
+                            result,
                         );
                         assert!(
                             parameter.key() != source.key(),
-                            "convert!({diagnostic_name}).input({function}) must take the converted form",
+                            "convert!({source}).input({function}) must take the converted form",
                         );
                         parameter.clone()
                     }
                     Direction::Deconstruct => {
                         assert!(
                             parameter.key() == source.key(),
-                            "convert!({diagnostic_name}).output({function}): the function takes `{}`, not `{diagnostic_name}`",
-                            model_type_name(parameter),
+                            "convert!({source}).output({function}): the function takes `{}`, not `{source}`",
+                            parameter,
                         );
                         assert!(
                             result.key() != source.key(),
-                            "convert!({diagnostic_name}).output({function}) must return the converted form",
+                            "convert!({source}).output({function}) must return the converted form",
                         );
                         result.clone()
                     }
@@ -1618,29 +1573,30 @@ impl<R: Conversions> JCompile<'_, R> {
         };
         if let Some(domain) = decl.domain() {
             let domain_key = TypeKey::from_type(domain.ty());
-            assert!(
-                domain_key == representation_key,
-                "convert!({diagnostic_name}): domain type {} does not match {} representation {}",
-                declared_type_name(domain.ty()),
-                match direction {
+            if domain_key != representation_key {
+                let direction = match direction {
                     Direction::Construct => "input",
                     Direction::Deconstruct => "output",
-                },
+                };
+                let domain = declared_type_name(domain.ty());
                 match &representation {
-                    crate::jni::chain::JCustomType::Model(reading) => model_type_name(reading),
-                    crate::jni::chain::JCustomType::Declared(ty) => declared_type_name(ty),
-                },
-            );
+                    crate::jni::chain::JCustomType::Model(reading) => panic!(
+                        "convert!({source}): domain type {domain} does not match {direction} representation {reading}"
+                    ),
+                    crate::jni::chain::JCustomType::Declared(ty) => {
+                        let representation = declared_type_name(ty);
+                        panic!(
+                            "convert!({source}): domain type {domain} does not match {direction} representation {representation}"
+                        )
+                    }
+                }
+            }
         }
-        let representation_name = match &representation {
-            crate::jni::chain::JCustomType::Model(reading) => model_type_name(reading),
-            crate::jni::chain::JCustomType::Declared(ty) => declared_type_name(ty),
-        };
         let operation = match direction {
-            Direction::Construct => format!("{representation_name}_to_{diagnostic_name}"),
-            Direction::Deconstruct => format!("{diagnostic_name}_to_{representation_name}"),
+            Direction::Construct => "conversion_into",
+            Direction::Deconstruct => "conversion_from",
         };
-        let ident = crate::jni::chain::model_operation_name(&operation, &source.key());
+        let ident = crate::jni::chain::model_operation_name(operation, &source.key());
         let plan = crate::jni::chain::JFunction::custom_conversion(
             crate::jni::chain::JCustomConversionPlan {
                 ident: ident.clone(),
@@ -1649,7 +1605,6 @@ impl<R: Conversions> JCompile<'_, R> {
                 direction,
                 call,
                 domain: decl.domain().clone(),
-                diagnostic_name,
             },
         );
         let mut pre_stages = vec![Stage {
