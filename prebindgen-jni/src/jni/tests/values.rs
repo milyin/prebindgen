@@ -250,6 +250,37 @@ fn fixed_primitive_arrays_retain_late_registry_plans() {
 }
 
 #[test]
+fn cow_byte_slices_retain_a_late_adapter_typed_value_codec() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::parse_quote!(
+            pub fn cow_bytes() -> Cow<'static, [u8]> {
+                unimplemented!()
+            }
+        ),
+        myflat_loc(),
+    )]))
+    .expect("index Cow-byte fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(cow_bytes)))
+        .build_with(registry)
+        .expect("resolve Cow-byte fixture");
+    let reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(Cow<'static, [u8]>)))
+        .expect("Cow-byte reading");
+
+    assert!(
+        generation
+            .decls
+            .out_frag(&reading)
+            .expect("Cow-byte output")
+            .is_value_codec_plan(),
+        "Cow<[u8]> output must retain an unrendered adapter-typed value codec"
+    );
+}
+
+#[test]
 fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = [

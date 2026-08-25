@@ -956,6 +956,28 @@ impl<R: Conversions> JCompile<'_, R> {
                 );
                 let metadata = self.decls.framework_meta(kotlin_name);
                 (wire, body, niches, metadata, Some(adapter_source))
+            } else if direction == Direction::Deconstruct
+                && matches!(
+                    source.kind(),
+                    TypeKind::Cow { inner, .. } if inner.key().as_str() == "[u8]"
+                )
+            {
+                let adapter_source: syn::Type = syn::parse_quote!(::std::borrow::Cow<'_, [u8]>);
+                let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
+                let body: syn::Expr = syn::parse_quote!({
+                    env.byte_array_from_slice(&v).map_err(|e| {
+                        <__JniErr as ::core::convert::From<String>>::from(format!(
+                            "encode_byte_array: {}",
+                            e
+                        ))
+                    })?
+                });
+                let niches = default_niches_for_wire(&wire);
+                let kotlin_name = self
+                    .decls
+                    .override_kotlin_name(&source.key(), Some(KtType::byte_array()));
+                let metadata = self.decls.framework_meta(kotlin_name);
+                (wire, body, niches, metadata, Some(adapter_source))
             } else if !matches!(source.kind(), TypeKind::Str)
                 && matches!(source.unwrapped().kind(), TypeKind::Str | TypeKind::String)
             {
@@ -2324,6 +2346,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         inner: &JFrag,
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
+        // `Cow<'_, [u8]>` is classified as a Sequence by the flat model, but
+        // its declared JNI representation is one terminal byte array. Freeze
+        // that terminal before attempting structural List composition.
+        if let Some(planned) = self.planned_value_codec(at) {
+            return Ok(planned);
+        }
         let emit = cx.emit();
         if let Some(planned) = self.planned_sequence(at, elements, inner) {
             return Ok(planned);
