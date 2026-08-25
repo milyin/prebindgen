@@ -836,14 +836,6 @@ impl Produced<'_> {
         self.bridge_layers().is_some_and(|l| l.is_empty())
     }
 
-    /// The tokens generated Rust spells for this type.
-    fn spell(&self, emit: &prebindgen_registry::Emit) -> TokenStream {
-        match self {
-            Produced::Reading(r) => emit.spell(r),
-            Produced::Composed(t) => t.to_token_stream(),
-        }
-    }
-
     /// This type's identity.
     fn key(&self) -> TypeKey {
         match self {
@@ -1140,11 +1132,8 @@ impl Declarations {
         })
     }
 
-    /// `Option<T>`: first the direct-opaque-handle by-value consume (wire
-    /// `jlong`, `0` = `None`, `Box` reconstructed and `T` moved out), then —
-    /// when the inner isn't a direct handle — the general nullable fold. The
-    /// two share the `Option<_>` pattern, so they stay in one method to keep
-    /// the original sequential fall-through.
+    /// Legacy `Option<T>` nullable fold for intermediates the registry Optional
+    /// composer cannot represent yet.
     fn input_option(
         &self,
         shape: WrapperShape,
@@ -1157,65 +1146,6 @@ impl Declarations {
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
         let t1_ty = emit.spell(t1);
-        if shape == WrapperShape::Optional {
-            let inner = self.in_frag(t1)?;
-            if inner.metadata.is_direct_handle() {
-                let inner_wire = inner.destination.clone();
-                let outer_ty = produced.key();
-                let outer_spelled = produced.spell(emit);
-                let build = build_from_canonical(produced, quote::quote!(__v))?;
-                let name = input_name(&outer_spelled, &inner_wire);
-                let gen_allow = generated_converter_attr();
-                let function: syn::ItemFn = syn::parse_quote!(
-                    #gen_allow
-                    pub(crate) unsafe fn #name<'env, 'v>(
-                        env: &mut jni::JNIEnv<'env>,
-                        v: &#inner_wire,
-                    ) -> ::core::result::Result<#outer_spelled, __JniErr> {
-                        Ok({
-                            let __v: ::core::option::Option<#t1_ty> = if *v == 0 {
-                                None
-                            } else if (*v & 1) == 1 {
-                                // Tagged (closed) handle raced past the Kotlin
-                                // pre-lock guard — present-but-closed is an
-                                // error, absent is None.
-                                return ::core::result::Result::Err(
-                                    <__JniErr as ::core::convert::From<String>>::from(
-                                        "Operation on a closed native handle.".to_string(),
-                                    ),
-                                );
-                            } else {
-                                Some(*std::boxed::Box::from_raw(*v as *mut #t1_ty))
-                            };
-                            #build
-                        })
-                    }
-                );
-                let kotlin_name =
-                    self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
-                let projection = inner.metadata.projection.clone().map(|h| Projection {
-                    owned: true,
-                    // Rides the inner's `*v == 0` niche, so the wire stays
-                    // `jlong` and `None` is the `0` sentinel (never JVM boxed).
-                    strategy: FoldStrategy::Optional(NullableKind::Niche, Box::new(h.strategy)),
-                    ..h
-                });
-                return Some(ConverterImpl {
-                    subs: vec![],
-                    pre_stages: vec![],
-                    function,
-                    destination: inner_wire,
-                    niches: Niches::empty(),
-                    metadata: KotlinMeta {
-                        kotlin_name,
-                        value_rust_type: None,
-                        projection,
-                        niche_sentinels: Vec::new(),
-                    },
-                });
-            }
-            // Non-opaque inner: fall through to the general Option handler.
-        }
         if shape == WrapperShape::Optional {
             let outer_ty = produced.key();
             let build = build_from_canonical(produced, quote::quote!(__v))?;

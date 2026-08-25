@@ -36,6 +36,7 @@ import io.prebindgen.covertest.model.ObjectBoundary16
 import io.prebindgen.covertest.model.ObjectBoundary32
 import io.prebindgen.covertest.model.ObjectBoundary63
 import io.prebindgen.covertest.model.Ingot
+import io.prebindgen.covertest.model.ingotOptionalGrams
 import io.prebindgen.covertest.model.ObjectBoundary64
 import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
@@ -1436,6 +1437,15 @@ fun main() {
         val code = SelectorCode.new(50, byteArrayOf(1, 2, 3), boom).orThrow()
         check(selectorCodeScore(1, null, null, code, boom) == 53L)
         code.close()
+    }
+
+    // ── owned Option<handle>: shared registry Optional chain ──────────────
+    section("owned optional handle input consumes only the present arm") {
+        check(ingotOptionalGrams(null, boom) == -1L)
+
+        val ingot = Ingot.new(37L, boom).orThrow()
+        check(ingotOptionalGrams(ingot, boom) == 37L)
+        check(ingot.isClosed())
     }
 
     // ── recursive constructor expansion: nested build and identity arms ─────

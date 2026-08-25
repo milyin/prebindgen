@@ -93,8 +93,9 @@ for the full table; in brief:
   proves the synthetic `Option<u16>` selects the registry pair recipe and
   crosses as `Boolean + Int`, without `JObject` allocation or `intValue()`.
 - **type mappings:** primitives, `String`/`&str` (incl. a bare `String`
-  return), `Option<T>` (param / return / **field**, incl. `Option<enum>` in
-  all three positions and `Option<Payload>` in both directions),
+  return), `Option<T>` (param / return / **field**, incl.
+  consuming `Option<opaque>`, `Option<enum>` in all three positions, and
+  `Option<Payload>` in both directions),
   `Vec<T>`/`&[T]`, `Vec<String>`, `Vec<Stamp>` → `List<Stamp>`,
   `Vec<handle>` / `Option<Vec<handle>>` (Kotlin-side handle fold),
   borrowed-opaque returns (`Option<&T>` → cloned owned handle),

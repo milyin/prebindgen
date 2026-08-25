@@ -58,6 +58,7 @@
 //! | `Result<_, E>` → typed domain `onError` | `storage_try_with_label` |
 //! | two-caller split (#45): `onBindingError` + `onError` on one fallible wrapper | `storage_try_from_stamp` (wrong-length `tag` → binding; bad `secs` → domain) |
 //! | fixed-width unsigned scalars (#108) | `Unsigned` + direct/optional/callback/collection max-value round trips |
+//! | owned `Option<opaque>` input         | `ingot_optional_grams`: null niche or consuming handle through the shared registry Optional chain |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | non-null enum field under nullable-context (#144) | `Option<CacheConfig>` → nested `RepliesConfig.priority` (single Elvis default) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -308,7 +309,12 @@ fn main() {
                 // while both halves still compile.
                 .class(ptr_class!(Vault))
                 .class(ptr_class!(VaultHolder))
-                .class(ptr_class!(Ingot).method(fun!(ingot_grams)))
+                .class(
+                    ptr_class!(Ingot)
+                        .constructor(fun!(ingot_new))
+                        .method(fun!(ingot_grams)),
+                )
+                .fun(fun!(ingot_optional_grams))
                 // `Hold`'s payload is a CONVERTED type, so its leaf crosses
                 // through the `convert!(Duration)` chain; `HoldPolicy` puts
                 // that same payload in the data-class-field position.

@@ -12041,6 +12041,32 @@ pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn jlong_to_Option_Ingot_a76a8f2f<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<Option<perftest_flat::Ingot>, __JniErr> {
+    ::core::result::Result::Ok({
+        if *v == 0 {
+            ::core::option::Option::None
+        } else {
+            let __present = v;
+            ::core::option::Option::Some(jlong_to_Ingot_020c3a86_owned(env, __present)?)
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_Option_SelectorCode_b3d1576b<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -12078,19 +12104,15 @@ pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<Option<perftest_flat::Summary>, __JniErr> {
-    Ok({
-        let __v: ::core::option::Option<perftest_flat::Summary> = if *v == 0 {
-            None
-        } else if (*v & 1) == 1 {
-            return ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from("Operation on a closed native handle.".to_string()),
-            );
+    ::core::result::Result::Ok({
+        if *v == 0 {
+            ::core::option::Option::None
         } else {
-            Some(*std::boxed::Box::from_raw(*v as *mut perftest_flat::Summary))
-        };
-        __v
+            let __present = v;
+            ::core::option::Option::Some(
+                jlong_to_Summary_3cb103b9_owned(env, __present)?,
+            )
+        }
     })
 }
 #[allow(
@@ -16148,6 +16170,90 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ingotGrams<'a>(
         }
     };
     let __out = perftest_flat::ingot_grams(&i);
+    match i64_to_jlong_fbf9a9bc(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ingotNew<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    grams: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let grams = match jlong_to_i64_fbf9a9bc(&mut env, &grams) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = perftest_flat::ingot_new(grams);
+    match Ingot_to_jlong_020c3a86(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ingotOptionalGrams<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    i: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let i = match jlong_to_Option_Ingot_a76a8f2f(&mut env, &i) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = perftest_flat::ingot_optional_grams(i);
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
