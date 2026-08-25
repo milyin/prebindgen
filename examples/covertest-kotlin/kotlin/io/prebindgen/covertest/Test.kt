@@ -77,6 +77,7 @@ import io.prebindgen.covertest.model.durationEmit
 import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.holdEcho
 import io.prebindgen.covertest.model.holdPolicyEcho
+import io.prebindgen.covertest.model.labelBorrowedConcat
 import io.prebindgen.covertest.model.labelReverse
 import io.prebindgen.covertest.model.labelSeriesEcho
 import io.prebindgen.covertest.model.percentInvalidOutput
@@ -1697,6 +1698,11 @@ fun main() {
         // is a primitive `Long`, so it is refused at resolve time.)
         check(labelSeriesEcho(listOf("alpha", "beta"), boom) == listOf("alpha", "beta"))
         check(labelSeriesEcho(emptyList(), boom) == emptyList<String>())
+        // A borrowed slice uses the registry Sequence loop too. Its converter
+        // returns an owned Vec<Label> carrier; only the final source call adds
+        // the borrow.
+        check(labelBorrowedConcat(listOf("alpha", "beta"), boom) == "alphabeta")
+        check(labelBorrowedConcat(emptyList(), boom) == "")
     }
 
     // ── Vec<opaque-handle> return: the Kotlin-side handle fold ───────────────

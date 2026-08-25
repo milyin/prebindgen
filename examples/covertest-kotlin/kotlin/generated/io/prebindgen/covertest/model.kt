@@ -1782,6 +1782,17 @@ public fun labelSeriesEcho(
 }
 
 /**
+ * Join a borrowed run of converted elements. JNI decodes the Java list into
+ * an owned `Vec<Label>` carrier and lends it here only for this call.
+ */
+public fun labelBorrowedConcat(labels: List<String>, onError: JniErrorHandler<String?>): String? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.labelBorrowedConcat(labels, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * Assemble an [`Annotated`] (nested data-class **output** + bare
  * `Option<scalar>` / `Option<enum>` inputs).
  */

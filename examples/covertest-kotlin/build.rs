@@ -61,6 +61,7 @@
 //! | owned `Option<opaque>` input         | `ingot_optional_grams`: null niche or consuming handle through the shared registry Optional chain |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | borrowed `Option<&data_class>`       | `payload_optional_borrow_id`: Kotlin-side flattening → registry-owned `Option<Payload>` carrier → final borrow |
+//! | borrowed `&[T]` Sequence input      | `label_borrowed_concat`: registry Sequence chain builds an owned `Vec<Label>` carrier → final borrow |
 //! | non-null enum field under nullable-context (#144) | `Option<CacheConfig>` → nested `RepliesConfig.priority` (single Elvis default) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
 //! | owned-handle callback (`Fn(Storage)`)| `storage_handler_new` / `storage_emit` |
@@ -591,6 +592,7 @@ fn main() {
                 .fun(fun!(percent_invalid_output))
                 .fun(fun!(label_reverse))
                 .fun(fun!(label_series_echo))
+                .fun(fun!(label_borrowed_concat))
                 .fun(fun!(annotated_new))
                 .fun(fun!(annotated_alternate_value))
                 .fun(fun!(annotated_ttl))

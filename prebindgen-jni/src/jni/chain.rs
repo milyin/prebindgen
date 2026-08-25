@@ -821,6 +821,10 @@ pub(crate) struct JSequencePlan {
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) dependencies: Vec<JFunction>,
     pub(crate) mode: Mode,
+    /// A borrowed slice input is decoded into an owned `Vec<T>` local; the
+    /// exported wrapper lends that local to the source call. The element stays
+    /// a `TypeRef` until this plan is rendered.
+    pub(crate) construct_vec_carrier: bool,
     pub(crate) chain: shared::Sequence<JSource, JSequenceBridge, JChild>,
 }
 
@@ -833,15 +837,23 @@ impl JSequencePlan {
         let body = &rendered.body;
         let allow = crate::jni::trait_impl::generated_converter_attr();
         match self.chain.direction {
-            Direction::Construct => syn::parse_quote!(
-                #allow
-                pub(crate) unsafe fn #name<'env, 'a>(
-                    env: &mut jni::JNIEnv<'env>,
-                    v: &#intermediate,
-                ) -> ::core::result::Result<#source, __JniErr> {
-                    ::core::result::Result::Ok(#body)
-                }
-            ),
+            Direction::Construct => {
+                let output = if self.construct_vec_carrier {
+                    let element = emit.spell_ty(&self.chain.element);
+                    syn::parse_quote!(::std::vec::Vec<#element>)
+                } else {
+                    source.clone()
+                };
+                syn::parse_quote!(
+                    #allow
+                    pub(crate) unsafe fn #name<'env, 'a>(
+                        env: &mut jni::JNIEnv<'env>,
+                        v: &#intermediate,
+                    ) -> ::core::result::Result<#output, __JniErr> {
+                        ::core::result::Result::Ok(#body)
+                    }
+                )
+            }
             Direction::Deconstruct => {
                 let input = match self.mode {
                     Mode::Owned => quote!(v: #source),

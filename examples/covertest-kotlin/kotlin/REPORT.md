@@ -91,6 +91,7 @@ Base package: `io.prebindgen.covertest`
 - `hold_policy_echo` — `fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy?`
 - `holder_tag_or` — `fun holderTagOr(h: Holder?, fallback: Long, onError: JniErrorHandler<Long>): Long`
 - `ingot_optional_grams` — `fun ingotOptionalGrams(i: Ingot?, onError: JniErrorHandler<Long>): Long`
+- `label_borrowed_concat` — `fun labelBorrowedConcat(labels: List<String>, onError: JniErrorHandler<String?>): String?`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String?>): String?`
 - `label_series_echo` — `fun labelSeriesEcho(labels: List<String>, onError: JniErrorHandler<List<String>?>): List<String>?`
 - `layered_of` — `fun layeredOf(which: Int, onError: JniErrorHandler<Layered?>): Layered?`

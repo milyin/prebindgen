@@ -2838,6 +2838,79 @@ fn sequence_wrapper_plan(
     gen.crossing_plan_for_test(ty, direction)
 }
 
+/// Sequence composition has two registry-owned outcomes: an executable list
+/// converter for a one-slot element, and a non-rendering shape fragment when a
+/// site already folds a multi-slot element on the Kotlin side.
+#[test]
+fn borrowed_sequences_keep_their_registry_plan_or_specialized_shape() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                pub struct Payload {
+                    pub id: i64,
+                    pub label: String,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn seed(cb: impl Fn(&[Payload]) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn take_labels(labels: &[String]) {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Payload))
+                .fun(prebindgen_registry::fun!(seed))
+                .fun(prebindgen_registry::fun!(take_labels)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+    let (specialized, ident, rendered) = gen
+        .crossing_plan_for_test(
+            syn::parse_quote!(&[Payload]),
+            prebindgen_registry::recipe::Direction::Deconstruct,
+        )
+        .expect("plan");
+    assert!(
+        specialized && ident == "__jni_parts",
+        "the flattened callback fold needs only its Sequence shape: {ident}\n{rendered}"
+    );
+
+    let (specialized, ident, rendered) = gen
+        .crossing_plan_for_test(
+            syn::parse_quote!(&[String]),
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .expect("labels plan");
+    let compact: String = rendered.split_whitespace().collect();
+    assert!(
+        !specialized
+            && ident.starts_with("JObject_to_String_")
+            && compact.contains("Result<::std::vec::Vec<String>,__JniErr>")
+            && compact.contains("letmut__sequence_values")
+            && compact.contains("JString_to_String"),
+        "the borrowed input must retain the executable registry Sequence plan: {ident}\n{rendered}"
+    );
+}
+
 /// Every composed planner refuses a wrapper it cannot peel and put back, and
 /// refuses to read one it does not own.
 ///
