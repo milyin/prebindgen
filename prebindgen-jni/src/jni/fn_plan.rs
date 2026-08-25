@@ -670,7 +670,7 @@ impl JniFunctionPlan {
             params,
             output,
         };
-        let slots = result.jvm_parameter_slots(ext);
+        let slots = result.jvm_parameter_slots();
         if slots > 255 {
             return Err(PlanError::JvmParameterLimit { slots });
         }
@@ -686,7 +686,7 @@ impl JniFunctionPlan {
         })
     }
 
-    fn jvm_parameter_slots(&self, _ext: &Declarations) -> usize {
+    fn jvm_parameter_slots(&self) -> usize {
         // `JNINative` is a Kotlin object, so its external methods are instance
         // methods and the JVM counts the implicit receiver as one unit.
         let mut slots = 1usize;

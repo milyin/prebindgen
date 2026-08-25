@@ -1580,7 +1580,10 @@ fn whole_object_handle_field_calls_its_reached_owned_plan() {
 }
 
 #[test]
-fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
+fn recursive_flattening_counts_long_as_two_and_rejects_jvm_parameter_slot_overflow() {
+    // 127 non-null Long leaves occupy 254 descriptor slots. Together with the
+    // JNINative object receiver and binding-error sink, this is exactly 256:
+    // both the two-slot Long rule and the 255-slot rejection are load-bearing.
     let fields = (0..127)
         .map(|index| format!("pub f{index}: i64"))
         .collect::<Vec<_>>()
