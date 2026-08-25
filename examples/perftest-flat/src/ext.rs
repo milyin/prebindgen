@@ -1321,6 +1321,13 @@ pub fn label_series_echo(labels: Vec<Label>) -> Vec<Label> {
     labels
 }
 
+/// Join a borrowed run of converted elements. JNI decodes the Java list into
+/// an owned `Vec<Label>` carrier and lends it here only for this call.
+#[prebindgen]
+pub fn label_borrowed_concat(labels: &[Label]) -> Label {
+    Label(labels.iter().map(|label| label.0.as_str()).collect())
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Option<scalar> — a nullable primitive return.
 // ─────────────────────────────────────────────────────────────────────────────

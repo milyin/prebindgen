@@ -97,7 +97,8 @@ for the full table; in brief:
   consuming `Option<opaque>`, `Option<enum>` in all three positions, and
   `Option<Payload>` in both directions), borrowed `Option<&data_class>`
   (Kotlin-side leaf deconstruction and registry-owned recomposition),
-  `Vec<T>`/`&[T]`, `Vec<String>`, `Vec<Stamp>` → `List<Stamp>`,
+  `Vec<T>`/`&[T]` (including the registry-planned owned `Vec<T>` carrier for a
+  borrowed slice input), `Vec<String>`, `Vec<Stamp>` → `List<Stamp>`,
   `Vec<handle>` / `Option<Vec<handle>>` (Kotlin-side handle fold),
   borrowed-opaque returns (`Option<&T>` → cloned owned handle),
   `Result<_, E>` → `onError`, enums, data/sealed classes, fixed-size primitive arrays, `impl Fn` callbacks

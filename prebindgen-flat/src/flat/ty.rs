@@ -50,9 +50,9 @@ use super::{
 ///
 /// **Enforced at the representation boundary.** The `kind` and `origin`
 /// fields remain private, so no consumer can assemble a disagreeing pair.
-/// `Flat::classify` and the `borrowed` / `optional` / `scalar`
-/// composers are intentionally public: they are the independent flat layer's
-/// constructors, and each builds the model and its matching origin together.
+/// `Flat::classify` and the `borrowed` / `optional` / `vector` /
+/// `scalar` composers are intentionally public: they are the independent flat
+/// layer's constructors, and each builds the model and its matching origin together.
 /// A collector does not need to depend on `prebindgen-registry` to create or
 /// compose a valid reading.
 ///
@@ -125,10 +125,11 @@ impl TypeRef {
     /// let forged = TypeRef { kind: TypeKind::Unit, origin: todo!() };
     /// ```
     ///
-    /// The public composition constructors (`borrowed`, `optional`, `scalar`) are
-    /// intentional flat-model API: collectors can derive readings without reparsing
-    /// Rust. They construct a matching kind and origin together, but the resulting
-    /// captured spelling still leaves this crate only through `RustEmitter`.
+    /// The public composition constructors (`borrowed`, `optional`, `vector`,
+    /// `scalar`) are intentional flat-model API: collectors can derive readings
+    /// without reparsing Rust. They construct a matching kind and origin together,
+    /// but the resulting captured spelling still leaves this crate only through
+    /// `RustEmitter`.
     pub fn kind(&self) -> &TypeKind {
         &self.kind
     }
@@ -346,6 +347,18 @@ impl TypeRef {
         TypeRef {
             kind: TypeKind::Optional(Box::new(self.clone())),
             origin: self.origin.with(syn::parse_quote!(Option<#inner>)),
+        }
+    }
+
+    /// An owned vector of this type — `Vec<T>` from `T`. Location as
+    /// [`Self::borrowed`]. A converter that materializes an owned carrier for a
+    /// borrowed slice uses this model value as its identity; it never has to
+    /// reconstruct or inspect the corresponding Rust syntax.
+    pub fn vector(&self) -> TypeRef {
+        let inner = self.origin.spell();
+        TypeRef {
+            kind: TypeKind::Vec(Box::new(self.clone())),
+            origin: self.origin.with(syn::parse_quote!(Vec<#inner>)),
         }
     }
 

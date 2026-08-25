@@ -1324,6 +1324,9 @@ internal object CovNative {
     external fun ingotOptionalGrams(i: Long, errorSink: Any): Long
 
     @JvmSynthetic
+    external fun labelBorrowedConcat(labels: List<String>, errorSink: Any): String
+
+    @JvmSynthetic
     external fun labelReverse(l: String, errorSink: Any): String
 
     @JvmSynthetic

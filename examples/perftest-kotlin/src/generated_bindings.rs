@@ -642,50 +642,6 @@ pub(crate) unsafe fn JObject_to_Payload_98f64326<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Vec<perftest_flat::Payload>, __JniErr> {
-    Ok({
-        let __list = jni::objects::JList::from_env(env, v)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-        let mut __it = __list
-            .iter(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __out: Vec<perftest_flat::Payload> = Vec::new();
-        while let Some(__obj) = __it
-            .next(env)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("Vec<_>: list-next: {}", e)))?
-        {
-            let __elem_wire: jni::objects::JObject = __obj.into();
-            let __elem: perftest_flat::Payload = JObject_to_Payload_98f64326(
-                env,
-                &__elem_wire,
-            )?;
-            __out.push(__elem);
-        }
-        __out
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_95073668<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -2573,48 +2529,6 @@ pub(crate) unsafe fn PayloadVecHandler_to_jlong_b32d2812<'a>(
     v: perftest_flat::PayloadVecHandler,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Payload_to_JObject_25cd94ea<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: &[perftest_flat::Payload],
-) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    Ok({
-        let __list_obj = env
-            .new_object("java/util/ArrayList", "()V", &[])
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("&[_]: new ArrayList: {}", e)))?;
-        let __list = jni::objects::JList::from_env(env, &__list_obj)
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("&[_]: list-from-env: {}", e)))?;
-        for __elem in v.iter() {
-            let __elem_wire = Payload_to_JObject_98f64326(
-                env,
-                ::core::clone::Clone::clone(__elem),
-            )?;
-            let __elem_obj: jni::objects::JObject = __elem_wire.into();
-            __list
-                .add(env, &__elem_obj)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("&[_]: list-add: {}", e)))?;
-        }
-        __list_obj
-    })
 }
 #[allow(
     non_snake_case,

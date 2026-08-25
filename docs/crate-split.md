@@ -127,7 +127,7 @@ registry-key construction, and the hidden registry-to-flat protocol path.
 
 The other widened methods are intentional flat-model API rather than emission
 doors. `Flat::classify`, `Flat::add_local_function`,
-`TypeRef::{borrowed, optional, scalar}`, and `types_util::ident` let an
+`TypeRef::{borrowed, optional, vector, scalar}`, and `types_util::ident` let an
 independent parser or collector build and compose the representation without
 depending on the registry.
 

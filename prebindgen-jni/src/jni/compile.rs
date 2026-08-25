@@ -15,10 +15,7 @@ use prebindgen_registry::{
     Conversions,
 };
 
-use super::{
-    trait_impl::{Produced, WrapperShape},
-    *,
-};
+use super::*;
 
 /// The JNI adapter's answer for one site.
 ///
@@ -845,7 +842,6 @@ impl<R: Conversions> JCompile<'_, R> {
         // The target through the accessor: an out-parameter's `MaybeUninit` is
         // the slot a `T` goes in, and it is the `T` that converts.
         let inner = ty.borrow_target().expect("a borrow");
-        let produced = Produced::Reading(ty);
         if into_rust {
             // An exclusive borrow crosses only when the borrowed value lives on
             // the Rust side — see `input_borrow`'s own note. `mutable` is read
@@ -875,23 +871,11 @@ impl<R: Conversions> JCompile<'_, R> {
                 c.subs = vec![inner.key()];
                 return Some(c);
             }
-            let mutable = ty.is_exclusive_borrow();
-            let mut c = self.decls.input_wrapper_shape(
-                WrapperShape::Borrow { mutable },
-                &produced,
-                inner,
-                emit,
-            )?;
+            let mut c = self.decls.input_borrow(ty, inner)?;
             c.subs = vec![inner.key()];
             Some(c)
         } else {
-            let mutable = ty.is_exclusive_borrow();
-            let mut c = self.decls.output_wrapper_shape(
-                WrapperShape::Borrow { mutable },
-                &produced,
-                inner,
-                emit,
-            )?;
+            let mut c = self.decls.output_borrow(ty, inner, emit)?;
             c.subs = vec![inner.key()];
             Some(c)
         }
@@ -1283,15 +1267,13 @@ impl<R: Conversions> JCompile<'_, R> {
     /// operations. Primitive arrays, handle-vector builders and multi-slot
     /// element folds retain their specialized representations.
     fn planned_sequence(&self, at: At<'_>, elements: Mode, inner: &JFrag) -> Option<JFrag> {
-        if inner.composed_only || inner.wires.is_some() || inner.out_wires.is_some() {
-            return None;
-        }
         let source = at.crossing.value();
         let element = source.sequence_elem()?.clone();
         let direction = at.crossing.direction();
         match (direction, source.unwrapped().kind()) {
-            (Direction::Construct, TypeKind::Vec(_))
-            | (Direction::Deconstruct, TypeKind::Vec(_) | TypeKind::Slice(_)) => {}
+            (Direction::Construct, TypeKind::Vec(_)) => {}
+            (Direction::Construct, TypeKind::Slice(_)) if at.crossing.mode() == Mode::Shared => {}
+            (Direction::Deconstruct, TypeKind::Vec(_) | TypeKind::Slice(_)) => {}
             _ => return None,
         }
         // The same gate the product and choice planners apply. This one used to
@@ -1301,42 +1283,12 @@ impl<R: Conversions> JCompile<'_, R> {
         // the `Box`.
         let wrappers = composable_wrappers(at.crossing)?;
 
-        let child_wire = inner.conv.destination.clone();
-        if !is_jobject_shaped_wire(&child_wire) {
-            return None;
-        }
-        if direction == Direction::Construct {
-            reject_vec_of_handle(&inner.conv.metadata.projection, &element);
-        }
-        let child = Self::planned_child_mode(direction, elements, inner);
-        let destination: syn::Type = syn::parse_quote!(jni::objects::JObject);
-        let ident = crate::jni::chain::planned_name(direction, at.crossing.spelled(), &destination);
-        let marker = crate::jni::chain::planned_marker(&ident);
-        let bridge = match direction {
-            Direction::Construct => crate::jni::chain::JSequenceBridge::Input {
-                child: Box::new(child_wire),
-            },
-            Direction::Deconstruct => crate::jni::chain::JSequenceBridge::Output,
-        };
-        let rust = crate::jni::chain::JFunction::sequence(crate::jni::chain::JSequencePlan {
-            ident,
-            reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
-            dependencies: vec![inner.rust.clone()],
-            mode: at.crossing.mode(),
-            chain: prebindgen_registry::chain::Sequence {
-                source: source.clone(),
-                element: element.clone(),
-                direction,
-                source_policy: crate::jni::chain::JSource {
-                    wrappers,
-                    module: None,
-                },
-                bridge,
-                child,
-            },
-        });
-
-        let inner_kotlin = inner.conv.metadata.kotlin_name.clone()?;
+        let inner_kotlin = inner
+            .conv
+            .metadata
+            .kotlin_name
+            .clone()
+            .or_else(|| self.decls.override_kotlin_name(&element.key(), None))?;
         let kotlin_name = self.decls.override_kotlin_name(
             &at.crossing.spelled().key(),
             Some(KtType::generic("List", [inner_kotlin])),
@@ -1354,6 +1306,74 @@ impl<R: Conversions> JCompile<'_, R> {
         } else {
             None
         };
+
+        let child_wire = inner.conv.destination.clone();
+        let specialized_site = inner.wires.is_some()
+            || inner.out_wires.is_some()
+            || (!is_jobject_shaped_wire(&child_wire) && inner.conv.metadata.projection.is_some());
+        if specialized_site {
+            // Multi-slot elements cross at a site as a Kotlin-side fold or a
+            // transient Vec handle. The Sequence row still owns the shape and
+            // its surface metadata, but deliberately has no whole-list Rust
+            // converter for those site-specific representations.
+            let mut marker = JFrag::new(at, self.parts_marker(vec![element.key()]));
+            marker.conv.destination = syn::parse_quote!(jni::objects::JObject);
+            marker.conv.metadata = KotlinMeta {
+                kotlin_name,
+                value_rust_type: None,
+                projection,
+                niche_sentinels: Vec::new(),
+            };
+            marker.nested_chain = inner.composed_chain();
+            marker.composed_only = true;
+            return Some(marker);
+        }
+        if inner.composed_only || !is_jobject_shaped_wire(&child_wire) {
+            return None;
+        }
+        if direction == Direction::Construct {
+            reject_vec_of_handle(&inner.conv.metadata.projection, &element);
+        }
+        let child = Self::planned_child_mode(direction, elements, inner);
+        let destination: syn::Type = syn::parse_quote!(jni::objects::JObject);
+        // A shared slice input and an owned vector input both materialize the
+        // same `Vec<T>` carrier. Give that produced model type to the plan,
+        // so converter identity, name and emitted body are shared. The wrapper
+        // still owns the crossing mode and adds the final borrow.
+        let produced = if direction == Direction::Construct
+            && matches!(source.kind(), TypeKind::Slice(_))
+            && at.crossing.mode() == Mode::Shared
+        {
+            element.vector()
+        } else {
+            source.clone()
+        };
+        let ident = crate::jni::chain::planned_name(direction, &produced, &destination);
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let bridge = match direction {
+            Direction::Construct => crate::jni::chain::JSequenceBridge::Input {
+                child: Box::new(child_wire),
+            },
+            Direction::Deconstruct => crate::jni::chain::JSequenceBridge::Output,
+        };
+        let rust = crate::jni::chain::JFunction::sequence(crate::jni::chain::JSequencePlan {
+            ident,
+            reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
+            dependencies: vec![inner.rust.clone()],
+            mode: at.crossing.mode(),
+            chain: prebindgen_registry::chain::Sequence {
+                source: produced,
+                element: element.clone(),
+                direction,
+                source_policy: crate::jni::chain::JSource {
+                    wrappers,
+                    module: None,
+                },
+                bridge,
+                child,
+            },
+        });
+
         let niches = match direction {
             Direction::Construct => Niches::empty(),
             Direction::Deconstruct => default_niches_for_wire(&destination),
@@ -1924,13 +1944,11 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Direction::Construct => self
                 .decls
                 .input_terminal(ty, self.registry, emit)
-                .or_else(|| self.decls.input_run(ty, emit))
                 .or_else(|| self.borrow(ty, emit, true))
                 .or_else(|| self.decls.input_transparent_bridge(ty, self.registry, emit)),
             Direction::Deconstruct => self
                 .decls
                 .output_terminal(ty, self.registry, emit)
-                .or_else(|| self.decls.output_run(ty, emit))
                 .or_else(|| self.borrow(ty, emit, false))
                 .or_else(|| {
                     self.decls
