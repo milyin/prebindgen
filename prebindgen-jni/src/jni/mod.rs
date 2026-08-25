@@ -735,6 +735,20 @@ impl JniGen {
         ))
     }
 
+    /// Frozen domain-error operation coverage for one fallible function:
+    /// `(wire count, every wire has an ABI, composed chain present)`.
+    #[cfg(test)]
+    pub(crate) fn error_freeze_for_test(&self, func: &str) -> Option<(usize, bool, bool)> {
+        let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
+        let plan = self.decls.generation.as_ref()?.function(&ident)?;
+        let error = plan.error.as_ref()?;
+        Some((
+            error.wires.len(),
+            error.wires.iter().all(|wire| wire.abi.is_some()),
+            error.chain.is_some(),
+        ))
+    }
+
     /// The leaves the registry's own expansion plans for one function, in the
     /// form [`Self::out_lines_for_test`] renders a recipe in.
     ///
