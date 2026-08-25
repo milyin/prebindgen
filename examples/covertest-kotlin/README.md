@@ -31,7 +31,7 @@ re-runs `build.rs` to regenerate both sides of the binding
 the Kotlin asserts. Expected output ends with:
 
 ```
-PASS - 58 sections, every JniGen feature exercised
+PASS - 61 sections, every JniGen feature exercised
 ```
 
 (One section deliberately provokes callback exceptions; the stack traces it
@@ -95,7 +95,8 @@ for the full table; in brief:
 - **type mappings:** primitives, `String`/`&str` (incl. a bare `String`
   return), `Option<T>` (param / return / **field**, incl.
   consuming `Option<opaque>`, `Option<enum>` in all three positions, and
-  `Option<Payload>` in both directions),
+  `Option<Payload>` in both directions), borrowed `Option<&data_class>`
+  (Kotlin-side leaf deconstruction and registry-owned recomposition),
   `Vec<T>`/`&[T]`, `Vec<String>`, `Vec<Stamp>` → `List<Stamp>`,
   `Vec<handle>` / `Option<Vec<handle>>` (Kotlin-side handle fold),
   borrowed-opaque returns (`Option<&T>` → cloned owned handle),

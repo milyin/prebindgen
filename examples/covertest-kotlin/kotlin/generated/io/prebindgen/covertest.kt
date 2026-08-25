@@ -947,6 +947,27 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
 }
 
 /**
+ * Read a borrowed optional data class without making the JNI side decode the
+ * Kotlin object reflectively. The generated boundary flattens `Payload` into
+ * primitive leaves, lets the registry construct an owned `Option<Payload>`,
+ * and borrows it only for this final source call.
+ */
+public fun payloadOptionalBorrowId(p: Payload?, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.payloadOptionalBorrowId(
+        p != null,
+        p?.id ?: 0L,
+        p?.seq ?: 0,
+        p?.value ?: 0.0,
+        p?.flag ?: false,
+        p?.label,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * Deliver a present or absent handle-owning data class to a callback.
  *
  * The generated Kotlin bridge must close `token` after the callback unless
@@ -1378,6 +1399,17 @@ internal object CovNative {
         pLabel: String?,
         errorSink: Any,
     ): Long?
+
+    @JvmSynthetic
+    external fun payloadOptionalBorrowId(
+        pPresent: Boolean,
+        pId: Long,
+        pSeq: Int,
+        pValue: Double,
+        pFlag: Boolean,
+        pLabel: String?,
+        errorSink: Any,
+    ): Long
 
     @JvmSynthetic
     external fun payloadOptionalEmit(present: Boolean, f: Any, errorSink: Any)

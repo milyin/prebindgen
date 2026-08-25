@@ -1333,6 +1333,15 @@ pub fn payload_label_len(p: &Payload) -> Option<i64> {
     p.label.as_ref().map(|s| s.len() as i64)
 }
 
+/// Read a borrowed optional data class without making the JNI side decode the
+/// Kotlin object reflectively. The generated boundary flattens `Payload` into
+/// primitive leaves, lets the registry construct an owned `Option<Payload>`,
+/// and borrows it only for this final source call.
+#[prebindgen]
+pub fn payload_optional_borrow_id(p: Option<&Payload>) -> i64 {
+    p.map_or(-1, |p| p.id)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Annotated — a data class with a NESTED data-class field and Option<scalar> /
 // Option<enum> fields.

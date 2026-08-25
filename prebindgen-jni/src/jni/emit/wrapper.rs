@@ -661,16 +661,23 @@ fn emit_plain_decode(
     let call_arg = match arg_ty.kind() {
         TypeKind::Ref { mutable: true, .. } => quote!(&mut #arg_ident),
         TypeKind::Ref { .. } => quote!(&#arg_ident),
-        // `Option<&T>` / `Option<&mut T>` for opaque inner: the input
-        // converter produced `Option<OwnedObject<T>>` (see rank-1
-        // handler above). `.as_deref()` / `.as_deref_mut()` coerces
-        // back to `Option<&T>` / `Option<&mut T>` via OwnedObject's
-        // Deref / DerefMut impls.
+        // An Optional borrow carries either an owned value assembled by a
+        // registry chain (`Option<T>`) or an `OwnedObject<T>` pointing into a
+        // locked Kotlin handle. The frozen pipeline says which one it yields;
+        // the call site performs only the final borrow.
         _ if matches!(opt_ref_mut(arg_ty), Some(false)) => {
-            quote!(#arg_ident.as_deref())
+            if pipeline.borrowed_optional_value() {
+                quote!(#arg_ident.as_ref())
+            } else {
+                quote!(#arg_ident.as_deref())
+            }
         }
         _ if matches!(opt_ref_mut(arg_ty), Some(true)) => {
-            quote!(#arg_ident.as_deref_mut())
+            if pipeline.borrowed_optional_value() {
+                quote!(#arg_ident.as_mut())
+            } else {
+                quote!(#arg_ident.as_deref_mut())
+            }
         }
         _ => quote!(#arg_ident),
     };

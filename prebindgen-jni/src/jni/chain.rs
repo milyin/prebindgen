@@ -69,6 +69,13 @@ impl JFunction {
         matches!(self.0, JBody::BorrowedOptionalHandle(_))
     }
 
+    pub(crate) fn is_borrowed_optional_value(&self) -> bool {
+        matches!(
+            &self.0,
+            JBody::Optional(plan) if plan.chain.source_policy.borrowed_input.is_some()
+        )
+    }
+
     #[cfg(test)]
     pub(crate) fn is_optional(&self) -> bool {
         matches!(self.0, JBody::Optional(_))
@@ -229,6 +236,42 @@ impl shared::Source for JSource {
     }
 }
 
+/// Optional source policy with an owned carrier for `Option<&T>` input.
+///
+/// The registry still owns construction of the Optional shape. A Rust
+/// reference cannot escape the converter that creates its referent, so a
+/// borrowed data-class parameter is represented transiently as `Option<T>`;
+/// the exported wrapper borrows that local immediately before the source call.
+/// The target remains a Flat identity until this policy is rendered.
+#[derive(Clone)]
+pub(crate) struct JOptionalSource {
+    pub(crate) ordinary: JSource,
+    pub(crate) borrowed_input: Option<TypeRef>,
+}
+
+impl shared::Source for JOptionalSource {
+    fn spell(&self, source: &TypeRef, emit: &Emit) -> syn::Type {
+        if let Some(target) = &self.borrowed_input {
+            let target = emit.spell_ty(target);
+            syn::parse_quote!(::core::option::Option<#target>)
+        } else {
+            shared::Source::spell(&self.ordinary, source, emit)
+        }
+    }
+
+    fn build(&self, canonical: TokenStream) -> TokenStream {
+        shared::Source::build(&self.ordinary, canonical)
+    }
+
+    fn read(&self, source: TokenStream) -> TokenStream {
+        shared::Source::read(&self.ordinary, source)
+    }
+
+    fn field(&self, source: TokenStream, name: &syn::Ident) -> TokenStream {
+        shared::Source::field(&self.ordinary, source, name)
+    }
+}
+
 /// Whether the first JNI child converter consumes an existing reference or a
 /// freshly produced intermediate value.
 #[derive(Clone, Copy)]
@@ -297,6 +340,7 @@ impl JChild {
 pub(crate) struct JPipeline {
     wire: syn::Type,
     body: JPipelineBody,
+    borrowed_optional_value: bool,
 }
 
 #[derive(Clone)]
@@ -317,10 +361,11 @@ struct JVecHandleInput {
 }
 
 impl JPipeline {
-    pub(crate) fn new(wire: syn::Type, child: JChild) -> Self {
+    pub(crate) fn new(wire: syn::Type, child: JChild, borrowed_optional_value: bool) -> Self {
         Self {
             wire,
             body: JPipelineBody::Converter(child),
+            borrowed_optional_value,
         }
     }
 
@@ -338,11 +383,18 @@ impl JPipeline {
                 by_ref,
                 elem_wrappers,
             })),
+            borrowed_optional_value: false,
         }
     }
 
     pub(crate) fn wire(&self) -> &syn::Type {
         &self.wire
+    }
+
+    /// Whether an `Option<&T>` input converter yields an owned `Option<T>`
+    /// carrier that the wrapper must borrow with `as_ref` / `as_mut`.
+    pub(crate) fn borrowed_optional_value(&self) -> bool {
+        self.borrowed_optional_value
     }
 
     /// Render a site operation that cannot fail. Terminal converters keep
@@ -922,7 +974,7 @@ pub(crate) struct JOptionalPlan {
     pub(crate) ident: syn::Ident,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) dependencies: Vec<JFunction>,
-    pub(crate) chain: shared::Optional<JSource, JOptionalBridge, JChild>,
+    pub(crate) chain: shared::Optional<JOptionalSource, JOptionalBridge, JChild>,
     pub(crate) input_by_ref: bool,
 }
 

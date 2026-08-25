@@ -212,6 +212,14 @@ fun main() {
         check(Payload.fromParts(9L, 9, 9.0, false, null).label == null)
     }
 
+    // ── borrowed Option<data_class>: null/present are deconstructed on the
+    // Kotlin side, cross as primitive leaves, and are recomposed before the
+    // source call borrows the registry-owned carrier ─────────────────────────
+    section("borrowed Option<&data_class> uses the shared chain") {
+        check(payloadOptionalBorrowId(Payload(17L, 2, 3.5, true, "hello"), boom) == 17L)
+        check(payloadOptionalBorrowId(null, boom) == -1L)
+    }
+
     // ── #108: fixed-width unsigned scalars. Small widths widen losslessly;
     // u64 keeps all bits through the public ULong ↔ raw Long projection. ─────
     section("fixed-width unsigned scalars") {

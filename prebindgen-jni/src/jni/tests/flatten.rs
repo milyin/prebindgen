@@ -2352,6 +2352,16 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
             "mInnerId: Long = m.inner?.id ?: 0L",
         ],
     );
+    let (composed_only, ident, _) = gen
+        .parts_plan_for_test(
+            syn::parse_quote!(Option<Mid>),
+            prebindgen_registry::recipe::Direction::Deconstruct,
+        )
+        .expect("Option<Mid> parts row");
+    assert!(
+        composed_only && ident == "__jni_parts",
+        "the unsupported whole-value shape must remain a non-rendering parts row"
+    );
 }
 
 /// A nullable primitive keeps the allocation-free `(present, value)` pair

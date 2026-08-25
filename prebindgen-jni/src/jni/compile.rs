@@ -656,12 +656,6 @@ impl JFrag {
     /// Registry recipes handle composable callback products. Irregular layouts
     /// still enter through this compatibility path and are indexed as fragments
     /// so downstream emitters use the same lookup in either case.
-    #[cfg(test)]
-    pub(crate) fn by_hand(ty: TypeKey, conv: ConverterImpl<KotlinMeta>) -> Self {
-        let rust = crate::jni::chain::JFunction::complete(conv.function.clone());
-        Self::by_hand_with_rust(ty, conv, rust)
-    }
-
     pub(crate) fn by_hand_with_rust(
         ty: TypeKey,
         conv: ConverterImpl<KotlinMeta>,
@@ -1017,6 +1011,7 @@ impl<R: Conversions> JCompile<'_, R> {
         crate::jni::chain::JPipeline::new(
             frag.conv.destination.clone(),
             Self::planned_child_mode(direction, mode, frag),
+            direction == Direction::Construct && frag.rust.is_borrowed_optional_value(),
         )
     }
 
@@ -1480,7 +1475,7 @@ impl<R: Conversions> JCompile<'_, R> {
     /// spelling its source type or generating its Rust body.
     ///
     /// Borrowed opaque handles use a dedicated frozen soundness-carrier plan;
-    /// Choice layouts remain with the legacy parts compiler.
+    /// parts-only rows remain non-rendering markers.
     fn planned_optional(&self, at: At<'_>, inner: &JFrag, decoupled: bool) -> Option<JFrag> {
         let source = at.crossing.spelled();
         let element = source.optional_inner()?;
@@ -1503,7 +1498,27 @@ impl<R: Conversions> JCompile<'_, R> {
             }
             _ => {}
         }
-        if direction == Direction::Construct && element.borrow_target().is_some() {
+        let borrowed_input = if direction == Direction::Construct {
+            element.borrow_target().and_then(|target| {
+                // An outer transparent wrapper would have to contain borrowed
+                // values, which no converter-local carrier can construct.
+                if !source.erased_wrappers().is_empty() {
+                    return None;
+                }
+                matches!(
+                    self.decls.type_kind(self.registry, &target.stripped_key()),
+                    crate::jni::classify::TypeKind::DataStruct { cfg: Some(cfg), .. }
+                        if cfg.name_spec.is_some()
+                )
+                .then(|| target.clone())
+            })
+        } else {
+            None
+        };
+        if direction == Direction::Construct
+            && element.borrow_target().is_some()
+            && borrowed_input.is_none()
+        {
             return None;
         }
 
@@ -1708,9 +1723,12 @@ impl<R: Conversions> JCompile<'_, R> {
             chain: prebindgen_registry::chain::Optional {
                 source: source.clone(),
                 direction,
-                source_policy: crate::jni::chain::JSource {
-                    wrappers,
-                    module: None,
+                source_policy: crate::jni::chain::JOptionalSource {
+                    ordinary: crate::jni::chain::JSource {
+                        wrappers,
+                        module: None,
+                    },
+                    borrowed_input,
                 },
                 bridge,
                 child,
@@ -1789,13 +1807,11 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         self.wrap(at, "no JNI representation for this type", conv)
     }
 
-    fn optional(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &JFrag) -> Frag<Self> {
-        let ty = at.crossing.spelled();
-        let emit = cx.emit();
+    fn optional(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &JFrag) -> Frag<Self> {
         // Declared whole-Optional converters are selected as terminal recipes
         // before structural compilation. If this hook runs, the recipe table
-        // has already chosen Optional composition or its legacy structural
-        // fallback, so repeating the terminal lookup here was dead code.
+        // has already chosen Optional composition or a parts-only row. The latter
+        // carries reachability metadata but deliberately emits no converter.
         // Decide the allocation-free primitive ABI once. The same answer
         // selects the Optional bridge below and supplies the site's two wire
         // leaves afterwards; recomputing it at either layer would restore the
@@ -1813,12 +1829,20 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         }
         let mut frag = if let Some(planned) = self.planned_optional(at, inner, pair_recipe) {
             planned
+        } else if parts_recipe {
+            let element = at
+                .crossing
+                .spelled()
+                .optional_inner()
+                .expect("the Optional recipe has an element");
+            let mut marker = JFrag::new(at, self.parts_marker(vec![element.key()]));
+            marker.composed_only = true;
+            marker
         } else {
-            let legacy = match at.crossing.direction() {
-                Direction::Construct => self.decls.input_optional(ty, emit),
-                Direction::Deconstruct => self.decls.output_optional(ty, emit),
-            };
-            self.wrap(at, "no JNI representation for this optional", legacy)?
+            return Err(refuse(
+                at,
+                "no registry-composed JNI representation for this optional",
+            ));
         };
         // An optional over something that crosses as several values cannot ride
         // a niche in any one of them — which of `(tag, summary)` would carry
@@ -2199,12 +2223,15 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         };
 
         // VecBuild constructs a Rust collection through its handle helpers and
-        // never calls the root JObject converter. Activating that converter
-        // would emit an orphan list decoder; for a bare Vec it also duplicates
-        // the legacy decoder. Other leaf parameter plans still consume their
-        // root conversion.
+        // FlattenStruct reconstructs one through the registry's `parts` chain;
+        // neither calls the crossing's default whole-value converter.
+        // Activating that converter would emit an orphan list/object decoder.
+        // Other leaf parameter plans still consume their root conversion.
         if matches!(root.layout, Some(JLayout::Leaf))
-            && !matches!(&kind, InputKind::VecBuild { .. })
+            && !matches!(
+                &kind,
+                InputKind::VecBuild { .. } | InputKind::FlattenStruct(_)
+            )
         {
             root.rust.mark_reachable();
         }

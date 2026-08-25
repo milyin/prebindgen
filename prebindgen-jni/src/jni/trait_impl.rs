@@ -720,8 +720,6 @@ pub(crate) enum WrapperShape {
     Borrow { mutable: bool },
     /// `Sequence` — a run of its element.
     Sequence,
-    /// `Optional` — its inner, or absent.
-    Optional,
 }
 
 /// What generated Rust can do with one wrapper the model
@@ -997,19 +995,13 @@ pub(crate) fn build_through_wrappers(
     Some(out)
 }
 
-/// Per-shape **input** wrapper converter builders (`&`/`Vec`/
-/// `Option`). Each returns `Some(ConverterImpl)` only for the [`WrapperShape`]
-/// it claims; [`Declarations::input_wrapper_shape`] chains them in priority
-/// order. The shapes are disjoint — except the two `Optional` sub-cases
-/// (direct-handle-by-value vs general), which share one and so live together in
-/// [`Declarations::input_option`] to keep their original fall-through.
+/// Per-shape **input** wrapper converter builders (`&` and `Vec`). Each returns
+/// `Some(ConverterImpl)` only for the [`WrapperShape`] it claims;
+/// [`Declarations::input_wrapper_shape`] chains the disjoint builders.
 ///
-/// Each takes `produced`: the Rust type the converter's function **yields**.
-/// Normally that is the crossing's own spelling, so a `Box<Option<T>>` crossing
-/// produces a `Box<Option<T>>` rather than silently declaring `Option<T>` and
-/// mismatching its call site. The one deliberate exception is a `&[T]`
-/// parameter, which decodes to an owned `Vec<T>` the call site borrows — see
-/// [`Declarations::select_input_type`].
+/// Each takes `produced`, the Rust type the converter function yields. This is
+/// normally the crossing spelling; a borrowed slice deliberately decodes to an
+/// owned `Vec<T>` that the call site borrows.
 impl Declarations {
     /// `& _` / `& mut _` borrow: share T's resolved converter — `&T`'s entry
     /// points at the same `ItemFn` (the fn returns owned `T`; the call site in
@@ -1130,64 +1122,6 @@ impl Declarations {
                 niche_sentinels: Vec::new(),
             },
         })
-    }
-
-    /// Legacy `Option<T>` nullable fold for intermediates the registry Optional
-    /// composer cannot represent yet.
-    fn input_option(
-        &self,
-        shape: WrapperShape,
-        produced: &Produced<'_>,
-        t1: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions — the
-        // canonical form a produced spelling is compared against, and the
-        // type ascriptions the generated body writes. Everything else takes
-        // the READING itself (#284).
-        let t1_ty = emit.spell(t1);
-        if shape == WrapperShape::Optional {
-            let outer_ty = produced.key();
-            let build = build_from_canonical(produced, quote::quote!(__v))?;
-            let (wire, inner_body, niches) = option_input(t1, self, emit)?;
-            // `option_input` yields the canonical `Option<T>`; the converter
-            // yields the spelling.
-            let body: syn::Expr = syn::parse_quote!({
-                let __v: ::core::option::Option<#t1_ty> = #inner_body;
-                #build
-            });
-            // Inherit the inner's name; user pins on `Option<T>` win.
-            // The nullability marker (`?`) is added by the use site.
-            let inherited = self
-                .in_frag(t1)
-                .and_then(|e| e.metadata.kotlin_name.clone());
-            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
-            // Fold a Nullable layer over the inner projection (if any). The
-            // kind mirrors which path `option_input` took: when it consumed
-            // an inner niche, the wire stays identical to the inner's
-            // destination and `None` is the niche slot sentinel; the boxed
-            // fallback widens the wire to `JObject`.
-            let nullable_kind = nullable_kind_for(&wire, t1, self);
-            let projection = self
-                .in_frag(t1)
-                .and_then(|e| e.metadata.projection.clone())
-                .map(|h| Projection {
-                    strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
-                    ..h
-                });
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_produced(produced, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: KotlinMeta {
-                    projection,
-                    ..self.framework_meta(kotlin_name)
-                },
-            });
-        }
-        None
     }
 
     /// True when `elem` crosses the boundary as a **single leaf** the foreign
@@ -2573,13 +2507,8 @@ impl Declarations {
         })
     }
 
-    /// **Input** wrapper shape (`pat` = the reconstructed canonical pattern,
-    /// `t1` = its captured inner): the built-in `&`/`Option<&>`/`Vec`/`Option`
-    /// handlers. The dual of [`Self::output_wrapper_shape`], whose own doc has
-    /// said so all along — this had been stranded above a different function
-    /// since the transparent bridge was inserted between them (#294), and
-    /// adding the outbound bridge moved it onto an OUTPUT converter, where it
-    /// read as an outright contradiction.
+    /// **Input** wrapper shape: the built-in borrow and sequence handlers.
+    /// The dual of [`Self::output_wrapper_shape`].
     pub(crate) fn input_wrapper_shape(
         &self,
         shape: WrapperShape,
@@ -2587,12 +2516,9 @@ impl Declarations {
         t1: &prebindgen_registry::flat::TypeRef,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
-        // borrow/vec shapes are mutually exclusive; the two
-        // `Optional` sub-cases share a method.
+        // Disjoint borrow and sequence shapes, tried in priority order.
         self.input_borrow(shape, produced, t1)
             .or_else(|| self.input_vec(shape, produced, t1, emit))
-            .or_else(|| self.input_option(shape, produced, t1, emit))
     }
 
     // ── Output converters ────────────────────────────────────────────
@@ -2781,8 +2707,7 @@ impl Declarations {
     }
 
     /// **Output** wrapper shape (the dual of [`Self::input_wrapper_shape`]):
-    /// the built-in `&Handle`/`&str`/`Option`/`Vec` handlers. An
-    /// `Option<&Handle>` resolves via the shallow `Option<_>`.
+    /// the built-in borrowed-handle, borrowed-string, and sequence handlers.
     pub(crate) fn output_wrapper_shape(
         &self,
         shape: WrapperShape,
@@ -2829,59 +2754,6 @@ impl Declarations {
             if t1.key().as_str() == "str" {
                 return Some(self.str_ref_output());
             }
-        }
-        // `Result<T, E>` is peeled by the selector, off the model's
-        // `TypeKind::Fallible`. Bindings declare the `Err` type via
-        // `.throwable()`.
-        if shape == WrapperShape::Optional {
-            let outer_ty = produced.key();
-            let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
-            // Bridgeable first: an unsupported representation must not resolve
-            // and then emit code the consumer cannot compile.
-            let read = read_as_canonical(produced)?;
-            let (wire, inner_body, niches) = option_output(t1, self)?;
-            let body: syn::Expr = syn::parse_quote!({
-                let v: #canonical = #read;
-                #inner_body
-            });
-            let inherited = self
-                .out_frag(t1)
-                .and_then(|e| e.metadata.kotlin_name.clone());
-            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
-            // Fold a Nullable layer over the inner projection (if any). The
-            // kind reflects which path `option_output` took (see
-            // [`nullable_kind_for`]): niche-fulfilled keeps the inner wire
-            // and treats the slot value as `None`; boxed widens to `JObject`
-            // and uses JVM null.
-            let nullable_kind = nullable_kind_for_output(&wire, t1, self);
-            let projection = self
-                .out_frag(t1)
-                .and_then(|e| e.metadata.projection.clone())
-                .map(|h| Projection {
-                    strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
-                    ..h
-                });
-            // A **non-projection** `Option<T>` return (`Option<String>`,
-            // `Option<i64>`, …) surfaces directly as a nullable Kotlin type, so
-            // its value-context name carries the `?`. Projection options get the
-            // `?` from `handle_kt_type(Nullable …)` at the use site instead,
-            // so leave those untouched here.
-            let kotlin_name = if projection.is_none() {
-                kotlin_name.map(|n| if n.is_nullable() { n } else { n.nullable() })
-            } else {
-                kotlin_name
-            };
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: KotlinMeta {
-                    projection,
-                    ..self.framework_meta(kotlin_name)
-                },
-            });
         }
         // `Vec<T>` (output side): encode as a `java.util.ArrayList<InnerWire>`.
         // Symmetric to the input handler. `Vec<u8>` is special-cased at

@@ -39,31 +39,6 @@ fn is_unsized_spelling(ty: &prebindgen_registry::flat::TypeRef) -> bool {
 }
 
 impl Declarations {
-    /// The `Option<X>` **input** shape.
-    ///
-    /// Borrowed opaque handles are intercepted by the registry compiler and kept as
-    /// a frozen non-owning-carrier plan; this legacy selector now handles only the
-    /// structural Optional fallback.
-    pub(crate) fn input_optional(
-        &self,
-        ty: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // What the converter YIELDS: this crossing's own reading, so a
-        // `Box<Option<T>>` crossing produces a `Box<Option<T>>`.
-        let produced = crate::jni::trait_impl::Produced::Reading(ty);
-        let inner = ty.optional_inner()?;
-        // A wrapped optional borrow has no value the fallback can rebuild. Letting
-        // the shallow handler decode it would treat the jlong as a `*mut &T`, so
-        // it still stops here rather than resolving wrong.
-        if inner.borrow_target().is_some() && !ty.erased_wrappers().is_empty() {
-            return None;
-        }
-        let mut c = self.input_wrapper_shape(WrapperShape::Optional, &produced, inner, emit)?;
-        c.subs = vec![inner.key()];
-        Some(c)
-    }
-
     /// The `Vec<X>` / `&[X]` / `&Vec<X>` **input** shapes.
     ///
     /// A shared slice borrow has no owned `[T]` to decode into, so it reuses the
@@ -116,22 +91,6 @@ impl Declarations {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (ok, err) = fallible_parts(ty, emit)?;
         self.result_peel(ty, &ok, &err, registry, emit)
-    }
-
-    /// The `Option<X>` **output** shape.
-    ///
-    /// An `Option<&Handle>` resolves via the shallow `Optional` whose inner
-    /// conversion is the `&Handle` borrow's; there is no deep output handler.
-    pub(crate) fn output_optional(
-        &self,
-        ty: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let produced = crate::jni::trait_impl::Produced::Reading(ty);
-        let inner = ty.optional_inner()?;
-        let mut c = self.output_wrapper_shape(WrapperShape::Optional, &produced, inner, emit)?;
-        c.subs = vec![inner.key()];
-        Some(c)
     }
 
     /// The `Vec<X>` / `&[X]` **output** shapes.

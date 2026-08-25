@@ -696,8 +696,14 @@ impl FlatLeaf {
 pub(crate) struct RebuildTarget {
     /// Wrappers over the borrow, if there is one — the `Box` of `Box<&S>`.
     arg: Vec<&'static str>,
-    /// `true` when the source fn takes `&Struct`.
-    pub by_ref: bool,
+    borrow: RebuildBorrow,
+}
+
+#[derive(Clone, Copy)]
+enum RebuildBorrow {
+    None,
+    Outer { mutable: bool },
+    OptionalInner { mutable: bool },
 }
 
 impl RebuildTarget {
@@ -706,18 +712,32 @@ impl RebuildTarget {
     ///
     /// A no-op when the parameter is not a borrow: wrappers at or below the
     /// crossing are already restored by the registry chain.
-    pub fn wrap_arg(&self, e: TokenStream) -> TokenStream {
-        if !self.by_ref {
-            return e;
+    pub fn call_arg(&self, ident: &syn::Ident) -> TokenStream {
+        let value = match self.borrow {
+            RebuildBorrow::None => quote!(#ident),
+            RebuildBorrow::Outer { mutable: false } => quote!(&#ident),
+            RebuildBorrow::Outer { mutable: true } => quote!(&mut #ident),
+            RebuildBorrow::OptionalInner { mutable: false } => quote!(#ident.as_ref()),
+            RebuildBorrow::OptionalInner { mutable: true } => quote!(#ident.as_mut()),
+        };
+        if !matches!(self.borrow, RebuildBorrow::Outer { .. }) {
+            return value;
         }
-        crate::jni::trait_impl::build_through_wrappers(&self.arg, e)
+        crate::jni::trait_impl::build_through_wrappers(&self.arg, value)
             .expect("every layer was checked buildable when the plan was built")
+    }
+
+    fn mutable_binding(&self) -> bool {
+        matches!(
+            self.borrow,
+            RebuildBorrow::Outer { mutable: true } | RebuildBorrow::OptionalInner { mutable: true }
+        )
     }
 }
 
-/// Descend `&` then `Option<…>` off the model to the struct a specialized
-/// lowering will **rebuild**, keeping each layer's reading so its spelling can
-/// be restored.
+/// Descend an outer borrow, an `Option`, or the borrow inside an `Option` to the
+/// struct a specialized lowering will **rebuild**, keeping each layer's reading
+/// so its spelling can be restored.
 ///
 /// One function because it is one rule, and the layers are checked **on the way
 /// down**: an erasure sits outside the layer it wraps, so `Box<&S>` classifies
@@ -732,18 +752,38 @@ fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
     // peel that would hide it. The token is irrelevant — only the `Option` is.
     let buildable = |t: &TypeRef| build_through_erased_wrappers(t, quote!(__probe)).map(|_| ());
     buildable(arg)?;
-    let by_ref = arg.borrow_target().is_some();
-    let t1 = arg.borrow_target().unwrap_or(arg);
+    let (borrow, t1) = match arg.unwrapped().kind() {
+        flat::TypeKind::Ref { mutable, inner, .. } => {
+            (RebuildBorrow::Outer { mutable: *mutable }, inner.as_ref())
+        }
+        _ => (RebuildBorrow::None, arg),
+    };
     buildable(t1)?;
-    let inner = t1.optional_inner().unwrap_or(t1);
+    let mut inner = t1.optional_inner().unwrap_or(t1);
     // The chain must also be able to rebuild the crossing's inner spelling.
     buildable(inner)?;
+    let borrow = if matches!(borrow, RebuildBorrow::None) {
+        match inner.kind() {
+            flat::TypeKind::Ref {
+                mutable,
+                inner: target,
+                ..
+            } if arg.erased_wrappers().is_empty() => {
+                inner = target.as_ref();
+                buildable(inner)?;
+                RebuildBorrow::OptionalInner { mutable: *mutable }
+            }
+            _ => borrow,
+        }
+    } else {
+        borrow
+    };
     // Only wrappers outside the borrow are kept. Inner wrappers are already
     // part of the registry chain's source policy.
     Some((
         RebuildTarget {
             arg: arg.erased_wrappers(),
-            by_ref,
+            borrow,
         },
         inner,
     ))
@@ -762,8 +802,6 @@ pub(crate) struct FlatInputPlan {
     /// push helper, which constructs one simple element literal.
     pub struct_module: syn::Path,
     pub struct_ident: syn::Ident,
-    /// `true` when the source fn takes `&Struct` — the call site passes `&arg`.
-    pub by_ref: bool,
     /// Whether any Product child is itself composed. The specialized Vec
     /// helper only understands a Product of terminal leaves.
     pub contains_composed_child: bool,
@@ -882,7 +920,6 @@ pub(crate) fn build_flat_input_plan(
     let Some((target, inner)) = rebuildable_target(arg) else {
         return Ok(None);
     };
-    let by_ref = target.by_ref;
     // `impl Into<S>` is NOT peeled here, and cannot be: the model refuses
     // `impl Trait` that is not the callback form (`DisallowedImplTrait`), so a
     // parameter spelled that way never becomes a reading and never reaches this
@@ -968,7 +1005,6 @@ pub(crate) fn build_flat_input_plan(
         chain,
         struct_module: struct_module_path(ext, registry, &st.name),
         struct_ident: st.name.clone(),
-        by_ref,
         contains_composed_child,
         target,
     }))
@@ -991,8 +1027,9 @@ pub(crate) fn render_flat_input_decode(
         .collect();
     let intermediate = plan.chain.layout.expression(&leaves);
     let converter = &plan.chain.ident;
+    let binding = plan.target.mutable_binding().then(|| quote!(mut));
     let prelude = quote! {
-        let #arg_ident = match #converter(&mut env, #intermediate) {
+        let #binding #arg_ident = match #converter(&mut env, #intermediate) {
             ::core::result::Result::Ok(__value) => __value,
             ::core::result::Result::Err(__error) => {
                 signal_binding_error(
@@ -1007,12 +1044,7 @@ pub(crate) fn render_flat_input_decode(
             }
         };
     };
-    let borrowed = if plan.by_ref {
-        quote!(&#arg_ident)
-    } else {
-        quote!(#arg_ident)
-    };
-    (prelude, plan.target.wrap_arg(borrowed))
+    (prelude, plan.target.call_arg(arg_ident))
 }
 
 // ──────────────────────────────────────────────────────────────────────
