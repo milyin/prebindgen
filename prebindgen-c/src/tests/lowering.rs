@@ -311,6 +311,49 @@ fn input_terminals_stay_unrendered_until_final_write() {
     );
 }
 
+#[test]
+fn tagged_union_payloads_stay_unrendered_until_final_write() {
+    let count: usize = [
+        "Handle",
+        "Option<Handle>",
+        "Box<Handle>",
+        "Option<Box<Handle>>",
+    ]
+    .into_iter()
+    .map(|payload| {
+        let loc = SourceLocation::default();
+        let variant = format!("pub enum Payloads {{ Value({payload}) }}");
+        let items: Vec<(syn::Item, SourceLocation)> = [
+            "pub struct Handle;".to_owned(),
+            variant,
+            "pub fn payload_roundtrip(v: Payloads) -> Payloads { unimplemented!() }".to_owned(),
+        ]
+        .into_iter()
+        .map(|source| (syn::parse_str(&source).unwrap(), loc.clone()))
+        .collect();
+        let registry = crate::test_util::reg_from_items(items).unwrap();
+        let generated = CbindgenBuilder::new()
+            .opaque_ptr(syn::parse_quote!(Handle))
+            .tagged_union(syn::parse_quote!(Payloads))
+            .function(syn::parse_quote!(payload_roundtrip))
+            .panic()
+            .build_with(registry)
+            .expect("resolve");
+        generated
+            .gen
+            .compiled_fns
+            .iter()
+            .filter(|function| function.is_payload())
+            .count()
+    })
+    .sum();
+
+    assert_eq!(
+        count, 8,
+        "bare, optional, boxed, and optional-boxed payloads must retain plans in both directions"
+    );
+}
+
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {

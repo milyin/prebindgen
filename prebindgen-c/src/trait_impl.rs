@@ -459,127 +459,55 @@ impl CbindgenBuilder {
             .map(|a| a.name.to_string())
     }
 
-    /// A `Box`-over-handle **payload of a tagged union**, C to Rust.
+    /// Retain a tagged-union pointer payload without spelling its Rust type.
     ///
-    /// The payload rides as a bare `*mut t_t` the C caller gave up ownership
-    /// of, so the pointer is reclaimed. A NULL one is reachable rather than
-    /// hypothetical — the typed drop nulls the arm it frees, so a union passed
-    /// back after being dropped arrives here NULL — and is reported, never
-    /// materialised. An `Option<Box<T>>` reads NULL as `None` instead, which is
-    /// the representation it has room for.
-    pub(crate) fn in_boxed_payload(&self, fty: &TypeRef) -> Option<ConverterImpl> {
-        let name = format_ident!("{}_payload", Self::in_name_of(&fty.key()));
+    /// The C wire owns one heap allocation. A source payload that already says
+    /// `Box<T>` transfers that box directly; a bare declared handle `T` is
+    /// boxed or unboxed at the boundary. Optionality is represented by NULL,
+    /// while a NULL non-optional input is a binding error because it can be
+    /// observed after a union arm has already been dropped.
+    pub(crate) fn payload_plan(
+        &self,
+        fty: &TypeRef,
+        direction: Direction,
+    ) -> Option<crate::chain::PayloadPlan> {
         let optional = fty.optional_inner().is_some();
-        let (wire, src_inner, owned, short) =
+        let (wire, source_inner, boxed, short) =
             if let Some(inner) = self.declared_opaque_payload_inner(fty) {
                 let c = self.c_type_ident(&inner);
-                let src_inner = self.src_ty_of(&inner);
-                let short = type_short(&inner);
-                // The value is moved out of the box the C side owned.
                 (
-                    quote!(*mut #c),
-                    src_inner.clone(),
-                    quote!(*::std::boxed::Box::from_raw(v as *mut #src_inner)),
-                    short,
+                    syn::parse_quote!(*mut #c),
+                    fty.optional_inner().unwrap_or(fty).clone(),
+                    false,
+                    type_short(&inner),
                 )
             } else {
                 let inner = r_boxed_inner(fty)?;
                 let c = self.c_type_ident(&inner.key());
-                let src_inner = self.src_ty_of(&inner.key());
-                let short = type_short(&inner.key());
                 (
-                    quote!(*mut #c),
-                    src_inner.clone(),
-                    quote!(::std::boxed::Box::from_raw(v as *mut #src_inner)),
-                    short,
+                    syn::parse_quote!(*mut #c),
+                    inner.clone(),
+                    true,
+                    type_short(&inner.key()),
                 )
             };
-        let _ = src_inner;
-        let produced = self.src_ty_of(&fty.key());
-        let function: syn::ItemFn = if optional {
-            syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(v: #wire) -> #produced {
-                    if v.is_null() {
-                        ::core::option::Option::None
-                    } else {
-                        ::core::option::Option::Some(#owned)
-                    }
-                }
-            )
-        } else {
-            let null_msg = format!(
+        let prefix = match direction {
+            Direction::Construct => Self::in_name_of(&fty.key()),
+            Direction::Deconstruct => Self::out_name_of(&fty.key()),
+        };
+        Some(crate::chain::PayloadPlan {
+            ident: format_ident!("{prefix}_payload"),
+            source: fty.clone(),
+            source_inner,
+            source_module: self.source_module.clone(),
+            wire,
+            direction,
+            optional,
+            boxed,
+            null_message: format!(
                 "null payload for `{short}` (a non-optional payload cannot be NULL — the \
                  union may already have been dropped)"
-            );
-            syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(
-                    v: #wire,
-                ) -> ::core::result::Result<#produced, ::std::string::String> {
-                    if v.is_null() {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from(#null_msg),
-                        );
-                    }
-                    ::core::result::Result::Ok(#owned)
-                }
-            )
-        };
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: syn::parse_quote!(#wire),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
-    }
-
-    /// The peer of [`Self::in_boxed_payload`]: an owned value the C side must
-    /// later release, boxed here rather than having arrived boxed.
-    pub(crate) fn out_boxed_payload(&self, fty: &TypeRef) -> Option<ConverterImpl> {
-        let name = format_ident!("{}_payload", Self::out_name_of(&fty.key()));
-        let optional = fty.optional_inner().is_some();
-        let src = self.src_ty_of(&fty.key());
-        let (wire, some_expr, bare_expr) =
-            if let Some(inner) = self.declared_opaque_payload_inner(fty) {
-                let c = self.c_type_ident(&inner);
-                (
-                    quote!(*mut #c),
-                    quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(__v)) as *mut #c),
-                    quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut #c),
-                )
-            } else {
-                let inner = r_boxed_inner(fty)?;
-                let c = self.c_type_ident(&inner.key());
-                (
-                    quote!(*mut #c),
-                    quote!(::std::boxed::Box::into_raw(__v) as *mut #c),
-                    quote!(::std::boxed::Box::into_raw(v) as *mut #c),
-                )
-            };
-        let body: TokenStream = if optional {
-            quote!(match v {
-                ::core::option::Option::Some(__v) => #some_expr,
-                ::core::option::Option::None => ::core::ptr::null_mut(),
-            })
-        } else {
-            bare_expr
-        };
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) fn #name(v: #src) -> #wire {
-                #body
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            destination: syn::parse_quote!(#wire),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
+            ),
         })
     }
 
@@ -588,7 +516,7 @@ impl CbindgenBuilder {
     ///
     /// The second reading a `String` has, and the reason it needs a recipe of its
     /// own. A `String` **parameter** is a pointer the caller chose to pass, so
-    /// a null one is a caller error and [`Self::in_string`] says so. A `String`
+    /// a null one is a caller error and the ordinary input-terminal plan says so. A `String`
     /// **field** shares a struct with every other field, and refusing it would
     /// make the whole struct's decode fallible — so a function taking such a
     /// struct by value would need a `Result` return or `.panic()`, for a field

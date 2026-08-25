@@ -542,6 +542,34 @@ impl CFrag {
             value,
         }
     }
+
+    /// A tagged-union pointer payload retained until final Rust emission.
+    fn from_payload(at: At<'_>, plan: crate::chain::PayloadPlan) -> Self {
+        let destination = plan.wire.clone();
+        let function = CFunction::payload(plan);
+        let niches = Niches::empty();
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            function,
+            niches,
+            subs: vec![],
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            shape: CShape::Atomic,
+            value,
+        }
+    }
 }
 
 /// How long what this conversion produces stays usable.
@@ -668,11 +696,11 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         // `Blob` share one recipe and could not be told apart there. A fragment is
         // keyed by the spelling, which is exactly the distinction needed.
         if at.recipe.name() == &crate::recipes::payload() {
-            let conv = match at.crossing.direction() {
-                Direction::Construct => self.gen.in_boxed_payload(ty),
-                Direction::Deconstruct => self.gen.out_boxed_payload(ty),
-            };
-            return self.wrap(at, "no payload reading for this handle", conv);
+            let plan = self
+                .gen
+                .payload_plan(ty, at.crossing.direction())
+                .ok_or_else(|| refuse(at, "no payload reading for this handle"))?;
+            return Ok(CFrag::from_payload(at, plan));
         }
         if at.recipe.name() == &crate::recipes::in_field() {
             if at.crossing.direction() == Direction::Construct && r_is_bool(ty) {

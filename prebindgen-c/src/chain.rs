@@ -59,6 +59,7 @@ enum CBody {
     Custom(CustomPlan),
     InputTerminal(InputTerminalPlan),
     OutputTerminal(OutputTerminalPlan),
+    Payload(PayloadPlan),
     Product(ProductPlan),
     Optional(OptionalPlan),
     Sequence(SequencePlan),
@@ -114,6 +115,18 @@ impl CFunction {
         Self {
             call,
             body: CBody::InputTerminal(plan),
+        }
+    }
+
+    pub(crate) fn payload(plan: PayloadPlan) -> Self {
+        let call = CCall(chain::Call::new(
+            plan.ident.clone(),
+            plan.direction == Direction::Construct && !plan.optional,
+            plan.direction == Direction::Construct,
+        ));
+        Self {
+            call,
+            body: CBody::Payload(plan),
         }
     }
 
@@ -185,6 +198,11 @@ impl CFunction {
         matches!(self.body, CBody::InputTerminal(_))
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_payload(&self) -> bool {
+        matches!(self.body, CBody::Payload(_))
+    }
+
     pub(crate) fn call(&self) -> &CCall {
         &self.call
     }
@@ -201,12 +219,102 @@ impl RustFunction for CFunction {
             CBody::Custom(plan) => plan.render(emit),
             CBody::InputTerminal(plan) => plan.render(emit),
             CBody::OutputTerminal(plan) => plan.render(emit),
+            CBody::Payload(plan) => plan.render(emit),
             CBody::Product(plan) => plan.render(emit),
             CBody::Choice(plan) => plan.render(emit),
             CBody::Sequence(plan) => plan.render(emit),
             CBody::Optional(plan) => plan.render(emit),
             CBody::DeferredInvoke => {
                 unreachable!("a deferred C Invoke helper is rendered by its callback artifact")
+            }
+        }
+    }
+}
+
+/// A tagged-union pointer payload retained without spelling its source types.
+#[derive(Clone)]
+pub(crate) struct PayloadPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) source_inner: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) wire: syn::Type,
+    pub(crate) direction: Direction,
+    pub(crate) optional: bool,
+    pub(crate) boxed: bool,
+    pub(crate) null_message: String,
+}
+
+impl PayloadPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let source_inner = qualify_source_type(
+            &emit.spell_ty(&self.source_inner),
+            self.source_module.as_ref(),
+        );
+        let wire = &self.wire;
+
+        match self.direction {
+            Direction::Construct => {
+                let owned = if self.boxed {
+                    quote!(::std::boxed::Box::from_raw(v as *mut #source_inner))
+                } else {
+                    quote!(*::std::boxed::Box::from_raw(v as *mut #source_inner))
+                };
+                if self.optional {
+                    syn::parse_quote!(
+                        #[allow(non_snake_case, unused_variables, dead_code)]
+                        pub(crate) unsafe fn #name(v: #wire) -> #source {
+                            if v.is_null() {
+                                ::core::option::Option::None
+                            } else {
+                                ::core::option::Option::Some(#owned)
+                            }
+                        }
+                    )
+                } else {
+                    let null_message = &self.null_message;
+                    syn::parse_quote!(
+                        #[allow(non_snake_case, unused_variables, dead_code)]
+                        pub(crate) unsafe fn #name(
+                            v: #wire,
+                        ) -> ::core::result::Result<#source, ::std::string::String> {
+                            if v.is_null() {
+                                return ::core::result::Result::Err(
+                                    ::std::string::String::from(#null_message),
+                                );
+                            }
+                            ::core::result::Result::Ok(#owned)
+                        }
+                    )
+                }
+            }
+            Direction::Deconstruct => {
+                let encode = |value: TokenStream| {
+                    if self.boxed {
+                        quote!(::std::boxed::Box::into_raw(#value) as #wire)
+                    } else {
+                        quote!(
+                            ::std::boxed::Box::into_raw(::std::boxed::Box::new(#value)) as #wire
+                        )
+                    }
+                };
+                let body = if self.optional {
+                    let some = encode(quote!(__v));
+                    quote!(match v {
+                        ::core::option::Option::Some(__v) => #some,
+                        ::core::option::Option::None => ::core::ptr::null_mut(),
+                    })
+                } else {
+                    encode(quote!(v))
+                };
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) fn #name(v: #source) -> #wire {
+                        #body
+                    }
+                )
             }
         }
     }
