@@ -57,6 +57,7 @@ pub(crate) struct CFunction {
 enum CBody {
     Complete(syn::ItemFn),
     Custom(CustomPlan),
+    OutputTerminal(OutputTerminalPlan),
     Product(ProductPlan),
     Optional(OptionalPlan),
     Sequence(SequencePlan),
@@ -92,6 +93,14 @@ impl CFunction {
         Self {
             call,
             body: CBody::Custom(plan),
+        }
+    }
+
+    pub(crate) fn output_terminal(plan: OutputTerminalPlan) -> Self {
+        let call = CCall(chain::Call::new(plan.ident.clone(), false, false));
+        Self {
+            call,
+            body: CBody::OutputTerminal(plan),
         }
     }
 
@@ -153,6 +162,11 @@ impl CFunction {
         matches!(self.body, CBody::Custom(_))
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_output_terminal(&self) -> bool {
+        matches!(self.body, CBody::OutputTerminal(_))
+    }
+
     pub(crate) fn call(&self) -> &CCall {
         &self.call
     }
@@ -167,12 +181,97 @@ impl RustFunction for CFunction {
         match &self.body {
             CBody::Complete(function) => function.clone(),
             CBody::Custom(plan) => plan.render(emit),
+            CBody::OutputTerminal(plan) => plan.render(emit),
             CBody::Product(plan) => plan.render(emit),
             CBody::Choice(plan) => plan.render(emit),
             CBody::Sequence(plan) => plan.render(emit),
             CBody::Optional(plan) => plan.render(emit),
             CBody::DeferredInvoke => {
                 unreachable!("a deferred C Invoke helper is rendered by its callback artifact")
+            }
+        }
+    }
+}
+
+/// One whole-value C output operation selected without spelling its source.
+#[derive(Clone)]
+pub(crate) enum OutputTerminalOperation {
+    Unit,
+    String,
+    Scalar,
+    OwnedHandle {
+        c_struct: syn::Ident,
+    },
+    OpaqueError {
+        message_path: syn::Path,
+    },
+    ValueOpaque,
+    Enum {
+        c_name: syn::Ident,
+        variants: Vec<syn::Ident>,
+    },
+}
+
+/// A whole-value C output retained until the final writer owns `Emit`.
+#[derive(Clone)]
+pub(crate) struct OutputTerminalPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) wire: syn::Type,
+    pub(crate) operation: OutputTerminalOperation,
+}
+
+impl OutputTerminalPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let wire = &self.wire;
+        match &self.operation {
+            OutputTerminalOperation::Unit => syn::parse_quote!(
+                #[allow(non_snake_case, dead_code, unused_variables)]
+                pub(crate) fn #name(v: #source) {}
+            ),
+            OutputTerminalOperation::String => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #source) -> #wire {
+                    __cbg_alloc_cstr(v)
+                }
+            ),
+            OutputTerminalOperation::Scalar => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #source) -> #wire {
+                    v
+                }
+            ),
+            OutputTerminalOperation::OwnedHandle { c_struct } => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #source) -> #wire {
+                    ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut #c_struct
+                }
+            ),
+            OutputTerminalOperation::OpaqueError { message_path } => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #source) -> #wire {
+                    __cbg_alloc_cstr(#message_path(&v))
+                }
+            ),
+            OutputTerminalOperation::ValueOpaque => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #source) -> #wire {
+                    <#wire as ::prebindgen_c_runtime::Transmute>::from_rust(v)
+                }
+            ),
+            OutputTerminalOperation::Enum { c_name, variants } => {
+                let arms = variants
+                    .iter()
+                    .map(|variant| quote!(#source::#variant => #c_name::#variant,));
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) fn #name(v: #source) -> #wire {
+                        match v { #(#arms)* }
+                    }
+                )
             }
         }
     }

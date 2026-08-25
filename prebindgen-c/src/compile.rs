@@ -486,6 +486,34 @@ impl CFrag {
             value,
         }
     }
+
+    /// A whole-value output retained as an operation until final Rust emission.
+    fn from_output_terminal(at: At<'_>, plan: crate::chain::OutputTerminalPlan) -> Self {
+        let destination = plan.wire.clone();
+        let function = CFunction::output_terminal(plan);
+        let niches = Niches::empty();
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            function,
+            niches,
+            subs: vec![],
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            shape: CShape::Atomic,
+            value,
+        }
+    }
 }
 
 /// How long what this conversion produces stays usable.
@@ -596,7 +624,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
     type Plan = SitePlan<CRepresentation>;
     type Error = String;
 
-    fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+    fn atomic(&mut self, _cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
         // The field recipe, where a value crosses differently **inside a
         // `data_struct`'s mirror** than it does on its own. Two types have one:
@@ -636,6 +664,11 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         {
             return Ok(CFrag::from_custom(at, plan, niches));
         }
+        if at.crossing.direction() == Direction::Deconstruct {
+            if let Some(plan) = self.gen.out_terminal(ty, self.registry) {
+                return Ok(CFrag::from_output_terminal(at, plan));
+            }
+        }
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .gen
@@ -647,10 +680,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 .or_else(|| self.gen.in_bool(ty))
                 .or_else(|| self.gen.in_scalar(ty))
                 .or_else(|| self.gen.in_borrow(ty)),
-            Direction::Deconstruct => self
-                .gen
-                .out_terminal(ty, self.registry, cx.emit())
-                .or_else(|| self.gen.out_borrow_or_result(ty)),
+            Direction::Deconstruct => self.gen.out_borrow_or_result(ty),
         };
         self.wrap(at, "no C representation for this type", conv)
     }

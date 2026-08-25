@@ -1785,26 +1785,25 @@ impl CbindgenBuilder {
     pub(crate) fn out_terminal(
         &self,
         ty: &TypeRef,
-        _r: &impl Conversions,
-        _emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl> {
+        registry: &impl Conversions,
+    ) -> Option<crate::chain::OutputTerminalPlan> {
+        let plan = |ident, wire, operation| crate::chain::OutputTerminalPlan {
+            ident,
+            source: ty.clone(),
+            source_module: self.source_module.clone(),
+            wire,
+            operation,
+        };
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
         // Never actually called — void-returning wrappers ignore it, and
         // `emit_fallible_wrapper` special-cases `Result<(), E>` to drop the
         // out-param entirely (it exists only to satisfy the resolver).
         if matches!(ty.kind(), TypeKind::Unit) {
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, dead_code, unused_variables)]
-                pub(crate) fn __cbg_out_unit(v: ()) {}
-            );
-            return Some(ConverterImpl {
-                subs: vec![],
-                destination: syn::parse_quote!(()),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+            return Some(plan(
+                format_ident!("__cbg_out_unit"),
+                syn::parse_quote!(()),
+                crate::chain::OutputTerminalOperation::Unit,
+            ));
         }
 
         // `String` output: a `malloc`'d `char*` raw block freed via the
@@ -1813,40 +1812,22 @@ impl CbindgenBuilder {
         // owns it then (mirroring the input side, where `in_opaque_handle` wins).
         if r_is_string(ty) && !self.opaque.contains_key(&ty.key()) {
             let name = Self::out_name_of(&ty.key());
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: ::std::string::String) -> *mut ::core::ffi::c_char {
-                    __cbg_alloc_cstr(v)
-                }
-            );
-            return Some(ConverterImpl {
-                subs: vec![],
-                destination: syn::parse_quote!(*mut ::core::ffi::c_char),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+            return Some(plan(
+                name,
+                syn::parse_quote!(*mut ::core::ffi::c_char),
+                crate::chain::OutputTerminalOperation::String,
+            ));
         }
 
         // FFI-safe scalar (`bool`, integers, floats): identity pass-through.
         if r_is_scalar(ty) {
             let name = Self::out_name_of(&ty.key());
             let spelled = scalar_ty(ty)?;
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #spelled) -> #spelled {
-                    v
-                }
-            );
-            return Some(ConverterImpl {
-                subs: vec![],
-                destination: spelled.clone(),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+            return Some(plan(
+                name,
+                spelled,
+                crate::chain::OutputTerminalOperation::Scalar,
+            ));
         }
 
         let key = ty.key();
@@ -1855,21 +1836,11 @@ impl CbindgenBuilder {
         if self.opaque.contains_key(&key) {
             let name = Self::out_name_of(&ty.key());
             let c_struct = self.c_type_ident(&ty.key());
-            let src = self.src_ty_of(&ty.key());
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src) -> *mut #c_struct {
-                    ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut #c_struct
-                }
-            );
-            return Some(ConverterImpl {
-                subs: vec![],
-                destination: syn::parse_quote!(*mut #c_struct),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+            return Some(plan(
+                name,
+                syn::parse_quote!(*mut #c_struct),
+                crate::chain::OutputTerminalOperation::OwnedHandle { c_struct },
+            ));
         }
 
         // Opaque error output (e.g. `ZError`): not a by-value struct — marshal it
@@ -1878,22 +1849,13 @@ impl CbindgenBuilder {
         // `char **e`. Freed by the universal `free_memory_function`.
         if let Some(msg_fn) = self.opaque_errors.get(&key) {
             let name = Self::out_name_of(&ty.key());
-            let src = self.src_ty_of(&ty.key());
-            let msg_path = self.src_fn(msg_fn);
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src) -> *mut ::core::ffi::c_char {
-                    __cbg_alloc_cstr(#msg_path(&v))
-                }
-            );
-            return Some(ConverterImpl {
-                subs: vec![],
-                destination: syn::parse_quote!(*mut ::core::ffi::c_char),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+            return Some(plan(
+                name,
+                syn::parse_quote!(*mut ::core::ffi::c_char),
+                crate::chain::OutputTerminalOperation::OpaqueError {
+                    message_path: self.src_fn(msg_fn),
+                },
+            ));
         }
 
         // Value-opaque output: move the Rust value's bytes into the opaque
@@ -1902,47 +1864,26 @@ impl CbindgenBuilder {
         if let Some(opaque) = self.value_opaque_ty_of(&ty.key()) {
             let opaque = opaque.clone();
             let name = Self::out_name_of(&ty.key());
-            let src = self.src_ty_of(&ty.key());
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src) -> #opaque {
-                    <#opaque as ::prebindgen_c_runtime::Transmute>::from_rust(v)
-                }
-            );
-            return Some(ConverterImpl {
-                subs: vec![],
-                destination: opaque,
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+            return Some(plan(
+                name,
+                opaque,
+                crate::chain::OutputTerminalOperation::ValueOpaque,
+            ));
         }
 
         // Enum output: `match` the source enum to the C enum.
         if self.enums.contains_key(&key) {
-            let e = unit_enum(_r, &ty.key())?;
+            let e = unit_enum(registry, &ty.key())?;
             let name = Self::out_name_of(&ty.key());
             let cname = self.c_type_ident(&ty.key());
-            let src = self.src_ty_of(&ty.key());
-            let arms = e.values.iter().map(|v| {
-                let id = &v.name;
-                quote!(#src::#id => #cname::#id,)
-            });
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src) -> #cname {
-                    match v { #(#arms)* }
-                }
-            );
-            return Some(ConverterImpl {
-                subs: vec![],
-                destination: syn::parse_quote!(#cname),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+            return Some(plan(
+                name,
+                syn::parse_quote!(#cname),
+                crate::chain::OutputTerminalOperation::Enum {
+                    c_name: cname,
+                    variants: e.values.iter().map(|value| value.name.clone()).collect(),
+                },
+            ));
         }
 
         None
