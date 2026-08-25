@@ -1679,9 +1679,14 @@ impl CbindgenBuilder {
         })
     }
 
-    /// `&str`, `&mut T` and `&T` **input** shapes: a borrow reached through the
-    /// pointer the C caller supplied.
-    pub(crate) fn in_borrow(&self, ty: &TypeRef) -> Option<ConverterImpl> {
+    /// Retain an input or output borrow without spelling its Rust referent.
+    pub(crate) fn borrow_plan(
+        &self,
+        ty: &TypeRef,
+        direction: Direction,
+    ) -> Option<crate::chain::BorrowPlan> {
+        use crate::chain::{BorrowOperation, BorrowPlan};
+
         // `mutable` off the `Ref` itself, NOT `is_exclusive_borrow`: that
         // reading deliberately answers `false` for `&mut MaybeUninit<_>` — an
         // out-param slot is not an exclusive borrow OF A VALUE — and these arms
@@ -1698,35 +1703,44 @@ impl CbindgenBuilder {
         // or its source path, both of which the model answers.
         let elem = rf_inner;
 
+        let plan = |ident, source_inner, wire, operation, null_message| BorrowPlan {
+            ident,
+            source_inner,
+            source_module: self.source_module.clone(),
+            wire,
+            operation,
+            null_message,
+        };
+
+        if direction == Direction::Deconstruct {
+            if *rf_mut {
+                return None;
+            }
+            let key = elem.key();
+            let wire_ty: syn::Type = if self.opaque.contains_key(&key) {
+                let c_struct = self.c_type_ident(&key);
+                syn::parse_quote!(#c_struct)
+            } else {
+                self.value_opaque_ty_of(&key)?.clone()
+            };
+            return Some(plan(
+                format_ident!("__cbg_out_ref_{}", sanitize(&key)),
+                elem.as_ref().clone(),
+                syn::parse_quote!(*const #wire_ty),
+                BorrowOperation::SharedOutput,
+                String::new(),
+            ));
+        }
+
         // `&str`: borrow a UTF-8 C string directly from the caller.
         if !*rf_mut && r_is_str(rf_inner) {
-            let name = Self::in_name_of(&ty.key());
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name<'a>(
-                    v: *const ::core::ffi::c_char,
-                ) -> ::core::result::Result<&'a str, ::std::string::String> {
-                    if v.is_null() {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from("null pointer passed for str argument"),
-                        );
-                    }
-                    match ::std::ffi::CStr::from_ptr(v).to_str() {
-                        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s),
-                        ::core::result::Result::Err(_) => ::core::result::Result::Err(
-                            ::std::string::String::from("invalid UTF-8 in str argument"),
-                        ),
-                    }
-                }
-            );
-            return Some(ConverterImpl {
-                subs: vec![elem.key()],
-                destination: syn::parse_quote!(*const ::core::ffi::c_char),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+            return Some(plan(
+                Self::in_name_of(&ty.key()),
+                elem.as_ref().clone(),
+                syn::parse_quote!(*const ::core::ffi::c_char),
+                BorrowOperation::StrInput,
+                "null pointer passed for str argument".to_owned(),
+            ));
         }
         // `&mut T` (mutable borrow). Three sub-cases, all wiring to a `*mut` of the
         // wire (the C memory IS the Rust value for a value-opaque mirror — asserted
@@ -1738,31 +1752,14 @@ impl CbindgenBuilder {
             // reading a path's tail ident.
             if let prebindgen_registry::flat::TypeKind::Uninit(inner) = elem.kind() {
                 let op = self.value_opaque_ty_of(&inner.key())?.clone();
-                let name = Self::in_name_of(&ty.key());
-                let src = self.src_ty_of(&inner.key());
                 let short = type_short(&inner.key());
-                let null_ptr_msg = format!("null {short} pointer");
-                let function: syn::ItemFn = syn::parse_quote!(
-                    #[allow(non_snake_case, unused_variables, dead_code)]
-                    pub(crate) unsafe fn #name<'a>(
-                        v: *mut #op,
-                    ) -> ::core::result::Result<&'a mut ::core::mem::MaybeUninit<#src>, ::std::string::String> {
-                        if v.is_null() {
-                            return ::core::result::Result::Err(
-                                ::std::string::String::from(#null_ptr_msg),
-                            );
-                        }
-                        ::core::result::Result::Ok(&mut *(v as *mut ::core::mem::MaybeUninit<#src>))
-                    }
-                );
-                return Some(ConverterImpl {
-                    subs: vec![inner.key()],
-                    destination: syn::parse_quote!(*mut #op),
-                    function,
-                    pre_stages: vec![],
-                    niches: Niches::empty(),
-                    metadata: (),
-                });
+                return Some(plan(
+                    Self::in_name_of(&ty.key()),
+                    inner.as_ref().clone(),
+                    syn::parse_quote!(*mut #op),
+                    BorrowOperation::MutableUninitInput,
+                    format!("null {short} pointer"),
+                ));
             }
             // `&mut` opaque handle, or `&mut` value-opaque: both reinterpret the C
             // pointer as a mutable Rust reference. The wire is the handle's C struct
@@ -1773,31 +1770,14 @@ impl CbindgenBuilder {
             } else {
                 self.value_opaque_ty_of(&elem.key())?.clone()
             };
-            let name = Self::in_name_of(&ty.key());
-            let src = self.src_ty_of(&elem.key());
             let short = type_short(&elem.key());
-            let null_ptr_msg = format!("null {short} pointer");
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name<'a>(
-                    v: *mut #wire_ty,
-                ) -> ::core::result::Result<&'a mut #src, ::std::string::String> {
-                    if v.is_null() {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from(#null_ptr_msg),
-                        );
-                    }
-                    ::core::result::Result::Ok(&mut *(v as *mut #src))
-                }
-            );
-            return Some(ConverterImpl {
-                subs: vec![elem.key()],
-                destination: syn::parse_quote!(*mut #wire_ty),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
+            return Some(plan(
+                Self::in_name_of(&ty.key()),
+                elem.as_ref().clone(),
+                syn::parse_quote!(*mut #wire_ty),
+                BorrowOperation::MutableInput,
+                format!("null {short} pointer"),
+            ));
         }
         // `&T` (shared borrow) of an opaque handle or value-opaque type.
         let key1 = elem.key();
@@ -1807,29 +1787,14 @@ impl CbindgenBuilder {
         } else {
             self.value_opaque_ty_of(&elem.key())?.clone()
         };
-        let name = Self::in_name_of(&ty.key());
-        let src = self.src_ty_of(&elem.key());
         let short = type_short(&elem.key());
-        let null_ptr_msg = format!("null {short} pointer");
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name<'a>(
-                v: *const #wire_ty,
-            ) -> ::core::result::Result<&'a #src, ::std::string::String> {
-                if v.is_null() {
-                    return ::core::result::Result::Err(::std::string::String::from(#null_ptr_msg));
-                }
-                ::core::result::Result::Ok(&*(v as *const #src))
-            }
-        );
-        Some(ConverterImpl {
-            subs: vec![elem.key()],
-            destination: syn::parse_quote!(*const #wire_ty),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
+        Some(plan(
+            Self::in_name_of(&ty.key()),
+            elem.as_ref().clone(),
+            syn::parse_quote!(*const #wire_ty),
+            BorrowOperation::SharedInput,
+            format!("null {short} pointer"),
+        ))
     }
 
     /// The `Option<X>` / `Vec<X>` / `Cow<'_, [X]>` **output** marker.
@@ -1853,40 +1818,9 @@ impl CbindgenBuilder {
         }
     }
 
-    /// The `&T` shared borrow and the `Result<T, E>` marker — the two **output**
-    /// shapes that are neither terminal nor a run.
-    pub(crate) fn out_borrow_or_result(&self, ty: &TypeRef) -> Option<ConverterImpl> {
-        // `&T` shared borrow of an opaque/value-opaque type → non-owning `*const`.
-        if let TypeKind::Ref { mutable, inner, .. } = ty.kind() {
-            if !*mutable {
-                let key = inner.key();
-                let wire_ty: syn::Type = if self.opaque.contains_key(&key) {
-                    let c_struct = self.c_type_ident(&key);
-                    syn::parse_quote!(#c_struct)
-                } else {
-                    self.value_opaque_ty_of(&key)?.clone()
-                };
-                let src = self.src_ty_of(&key);
-                let name = format_ident!("__cbg_out_ref_{}", sanitize(&key));
-                let function: syn::ItemFn = syn::parse_quote!(
-                    #[allow(non_snake_case, dead_code, unused)]
-                    pub(crate) unsafe fn #name(v: &#src) -> *const #wire_ty {
-                        v as *const #src as *const #wire_ty
-                    }
-                );
-                return Some(ConverterImpl {
-                    subs: vec![key],
-                    destination: syn::parse_quote!(*const #wire_ty),
-                    function,
-                    pre_stages: vec![],
-                    niches: Niches::empty(),
-                    metadata: (),
-                });
-            }
-            return None;
-        }
-        // `Result<T, E>` marker — real lowering (bool + out-param + error-param)
-        // is in `on_function`.
+    /// The `Result<T, E>` output marker. Real lowering (bool + out-param +
+    /// error-param) is in `on_function`.
+    pub(crate) fn out_result_marker(&self, ty: &TypeRef) -> Option<ConverterImpl> {
         let (ok, err) = ty.fallible_parts()?;
         let name = format_ident!("__cbg_result_{}", sanitize(&ty.key()));
         let function: syn::ItemFn = syn::parse_quote!(
