@@ -467,7 +467,7 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
     }
     let compact: String = sources.chars().filter(|c| !c.is_whitespace()).collect();
     assert!(
-        !compact.contains("fnwrap(&self,at:At<'_>,why:&str,conv:Option<ConverterImpl>)"),
-        "the deleted generic ConverterImpl fragment wrapper returned"
+        !compact.contains("Option<ConverterImpl>"),
+        "a C production path accepts the deleted generic converter carrier"
     );
 }
