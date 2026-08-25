@@ -442,6 +442,46 @@ fn borrow_terminals_stay_unrendered_until_final_write() {
     }
 }
 
+#[test]
+fn slice_input_terminals_stay_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Record { pub value: u64 }",
+        "pub fn scalar_slice(v: &[u8]) { unimplemented!() }",
+        "pub fn record_slice(v: &[Record]) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .repr_c_struct(syn::parse_quote!(Record))
+        .function(syn::parse_quote!(scalar_slice))
+        .panic()
+        .function(syn::parse_quote!(record_slice))
+        .panic()
+        .build_with(registry)
+        .expect("resolve");
+
+    let mut operations: Vec<(TypeKey, bool)> = generated
+        .gen
+        .compiled_fns
+        .iter()
+        .filter_map(|function| function.slice_input_operation())
+        .map(|(element, reinterpret)| (element.key(), reinterpret))
+        .collect();
+    operations.sort_by(|a, b| a.0.cmp(&b.0));
+
+    assert_eq!(
+        operations,
+        [
+            (TypeKey::from_type(&syn::parse_quote!(Record)), true),
+            (TypeKey::from_type(&syn::parse_quote!(u8)), false),
+        ],
+        "scalar and value-opaque slices must retain their exact final-decode operation"
+    );
+}
+
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {

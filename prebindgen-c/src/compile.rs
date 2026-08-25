@@ -23,7 +23,7 @@ use prebindgen_registry::{
 use super::*;
 use crate::chain::{
     CCall, CFunction, ChoicePlan, OptionalPlan, OptionalRepr, ProductField, ProductPlan,
-    SequencePlan,
+    SequencePlan, SliceInputPlan,
 };
 
 /// The shape selected by the recipe compiler, retaining semantic child edges.
@@ -599,6 +599,39 @@ impl CFrag {
             value,
         }
     }
+
+    /// A shared-slice marker retained as semantic data until final emission.
+    fn from_slice_input(at: At<'_>, plan: SliceInputPlan) -> Self {
+        let destination = plan.wire.clone();
+        let element = plan.element.clone();
+        let reinterpret = plan.reinterpret;
+        let subs = vec![element.key()];
+        let function = CFunction::slice_input(plan);
+        let niches = Niches::empty();
+        let value = CValue::BorrowedInput {
+            element,
+            wire: destination.clone(),
+            reinterpret,
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            function,
+            niches,
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                // Preserve the legacy marker's classification. The actual
+                // borrowed wire is explicit in CValue::BorrowedInput.
+                validity: Validity::SelfSufficient,
+            },
+            shape: CShape::Atomic,
+            value,
+        }
+    }
 }
 
 /// How long what this conversion produces stays usable.
@@ -896,27 +929,31 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 }
             }
         }
-        let conv = match at.crossing.direction() {
+        let mut fragment = match at.crossing.direction() {
             // A `&[E]` is the only run C builds a Rust value out of, and it does
             // it zero-copy from the caller's own block.
-            Direction::Construct => self.gen.in_slice(ty),
+            Direction::Construct => {
+                let plan = self
+                    .gen
+                    .in_slice_plan(ty)
+                    .ok_or_else(|| refuse(at, "no C representation for this run"))?;
+                CFrag::from_slice_input(at, plan)
+            }
             // A deconstructed run has no single wire of its own. The frozen
             // CValue below carries its pointer-plus-length ABI and encoder.
-            Direction::Deconstruct => Some(self.gen.out_arity_marker("vec", &inner.source)),
+            Direction::Deconstruct => self.wrap(
+                at,
+                "no C representation for this run",
+                Some(self.gen.out_arity_marker("vec", &inner.source)),
+            )?,
         };
-        let mut fragment = self.wrap(at, "no C representation for this run", conv)?;
         fragment.shape = CShape::Sequence(fragment_use(inner));
-        fragment.value = match at.crossing.direction() {
-            Direction::Construct => CValue::BorrowedInput {
-                element: inner.source.clone(),
-                wire: fragment.destination.clone(),
-                reinterpret: scalar_ty(&inner.source).is_none(),
-            },
-            Direction::Deconstruct => CValue::BorrowedSequence {
+        if at.crossing.direction() == Direction::Deconstruct {
+            fragment.value = CValue::BorrowedSequence {
                 element_wire: inner.destination.clone(),
                 converter: inner.function.call().clone(),
-            },
-        };
+            };
+        }
         Ok(fragment)
     }
 

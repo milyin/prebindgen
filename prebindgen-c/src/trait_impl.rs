@@ -1637,10 +1637,10 @@ impl CbindgenBuilder {
 /// peels `ty`'s outermost layer and composes the inner's converter; `subs`
 /// lists the immediate inner(s) it looked up.
 impl CbindgenBuilder {
-    /// `&[E]` slice **input**: marker only for converter-artifact compatibility.
+    /// `&[E]` slice **input** retained without a rendered converter body.
     /// The frozen site plan owns the two-parameter (`*const E_wire`, `usize`)
     /// ABI and zero-copy decode.
-    pub(crate) fn in_slice(&self, ty: &TypeRef) -> Option<ConverterImpl> {
+    pub(crate) fn in_slice_plan(&self, ty: &TypeRef) -> Option<crate::chain::SliceInputPlan> {
         let e = r_shared_slice_elem(ty)?;
         // #170, the slice instance. The two-param lowering builds the
         // `&[E]` zero-copy from C's own block, so there is nowhere to
@@ -1658,24 +1658,19 @@ impl CbindgenBuilder {
                  `opaque_ptr` handle."
             );
         }
-        let wire: syn::Type = if let Some(e_ty) = scalar_ty(e) {
-            syn::parse_quote!(*const #e_ty)
-        } else {
-            let counterpart = self.value_opaque_ty_of(&e.key())?.clone();
-            syn::parse_quote!(*const #counterpart)
+        let scalar = scalar_ty(e);
+        let wire: syn::Type = match &scalar {
+            Some(e_ty) => syn::parse_quote!(*const #e_ty),
+            None => {
+                let counterpart = self.value_opaque_ty_of(&e.key())?.clone();
+                syn::parse_quote!(*const #counterpart)
+            }
         };
-        let name = format_ident!("__cbg_inmark_slice_{}", sanitize(&e.key()));
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, dead_code, unused)]
-            pub(crate) fn #name() {}
-        );
-        Some(ConverterImpl {
-            subs: vec![e.key()],
-            destination: wire,
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
+        Some(crate::chain::SliceInputPlan {
+            ident: format_ident!("__cbg_inmark_slice_{}", sanitize(&e.key())),
+            element: e.clone(),
+            wire,
+            reinterpret: scalar.is_none(),
         })
     }
 

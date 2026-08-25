@@ -61,6 +61,7 @@ enum CBody {
     OutputTerminal(OutputTerminalPlan),
     Payload(PayloadPlan),
     Borrow(BorrowPlan),
+    SliceInput(SliceInputPlan),
     Product(ProductPlan),
     Optional(OptionalPlan),
     Sequence(SequencePlan),
@@ -140,6 +141,14 @@ impl CFunction {
         Self {
             call,
             body: CBody::Borrow(plan),
+        }
+    }
+
+    pub(crate) fn slice_input(plan: SliceInputPlan) -> Self {
+        let call = CCall(chain::Call::new(plan.ident.clone(), false, false));
+        Self {
+            call,
+            body: CBody::SliceInput(plan),
         }
     }
 
@@ -246,6 +255,14 @@ impl CFunction {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn slice_input_operation(&self) -> Option<(&TypeRef, bool)> {
+        match &self.body {
+            CBody::SliceInput(plan) => Some((&plan.element, plan.reinterpret)),
+            _ => None,
+        }
+    }
+
     pub(crate) fn call(&self) -> &CCall {
         &self.call
     }
@@ -264,6 +281,7 @@ impl RustFunction for CFunction {
             CBody::OutputTerminal(plan) => plan.render(emit),
             CBody::Payload(plan) => plan.render(emit),
             CBody::Borrow(plan) => plan.render(emit),
+            CBody::SliceInput(plan) => plan.render(),
             CBody::Product(plan) => plan.render(emit),
             CBody::Choice(plan) => plan.render(emit),
             CBody::Sequence(plan) => plan.render(emit),
@@ -272,6 +290,25 @@ impl RustFunction for CFunction {
                 unreachable!("a deferred C Invoke helper is rendered by its callback artifact")
             }
         }
+    }
+}
+
+/// A zero-copy shared-slice input retained without a legacy converter body.
+#[derive(Clone)]
+pub(crate) struct SliceInputPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) element: TypeRef,
+    pub(crate) wire: syn::Type,
+    pub(crate) reinterpret: bool,
+}
+
+impl SliceInputPlan {
+    fn render(&self) -> syn::ItemFn {
+        let name = &self.ident;
+        syn::parse_quote!(
+            #[allow(non_snake_case, dead_code, unused)]
+            pub(crate) fn #name() {}
+        )
     }
 }
 
