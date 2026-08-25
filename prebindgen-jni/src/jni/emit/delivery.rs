@@ -63,7 +63,7 @@ pub(crate) fn emit_unfold_delivery(
     // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
     // yielding the per-leaf typed jvalue arg expressions.
     let encode_leaves = |value: &TokenStream, optional: bool| {
-        let mut delivered = Delivered::planned(plan, output.wires.clone());
+        let mut delivered = Delivered::planned(plan, output.wires.clone(), output.chain.clone());
         delivered.optional = optional;
         encode_plan_leaves(ext, registry, delivered, &obj_idents, value, &fail, emit)
     };
@@ -538,8 +538,6 @@ pub(crate) struct Delivered<'a> {
     pub(crate) hoists: &'a [prebindgen_registry::unfold::Hoist],
     /// Whether the delivered value is reached through a borrow.
     pub(crate) by_ref: bool,
-    /// Core source whose exact deconstructing crossing can be selected.
-    pub(crate) source: &'a prebindgen_registry::flat::TypeRef,
     /// True when these leaves are the model-derived data-class Product itself.
     pub(crate) fixed_product: bool,
     /// Whether the fixed Product is wrapped in one outer Optional shape.
@@ -556,7 +554,6 @@ impl<'a> Delivered<'a> {
             wires: crate::jni::compile::OutWire::from_leaves(&plan.leaves),
             hoists: &plan.hoists,
             by_ref: plan.by_ref,
-            source: &plan.source,
             chain: None,
             fixed_product: plan.fixed_builder,
             optional: plan.is_optional_base(),
@@ -568,28 +565,15 @@ impl<'a> Delivered<'a> {
     pub(crate) fn planned(
         plan: &'a prebindgen_registry::unfold::UnfoldPlan,
         wires: Vec<crate::jni::compile::OutWire>,
+        chain: Option<crate::jni::compile::ComposedChain>,
     ) -> Self {
         Self {
             wires,
             hoists: &plan.hoists,
             by_ref: plan.by_ref,
-            source: &plan.source,
-            chain: None,
+            chain,
             fixed_product: plan.fixed_builder,
             optional: plan.is_optional_base(),
-        }
-    }
-
-    /// The same delivery with the composed fragment the registry handed to a
-    /// callback's `Invoke` recipe. This is available before the compilation
-    /// store is committed, so callbacks do not need an adapter-side re-query.
-    pub(crate) fn with_chain(
-        plan: &'a prebindgen_registry::unfold::UnfoldPlan,
-        chain: Option<crate::jni::compile::ComposedChain>,
-    ) -> Self {
-        Self {
-            chain,
-            ..Self::of(plan)
         }
     }
 }
@@ -949,7 +933,6 @@ pub(crate) fn encode_plan_leaves(
         wires,
         hoists,
         by_ref,
-        source,
         chain,
         fixed_product,
         optional,
@@ -979,22 +962,7 @@ pub(crate) fn encode_plan_leaves(
     // call ABI. Callback and ordinary output delivery therefore share the
     // same Rust-value walk; only the final delivery remains JNI-specific.
     if fixed_product && hoists.is_empty() {
-        let crossing = if by_ref {
-            source.borrowed()
-        } else {
-            source.clone()
-        };
-        let crossing = if optional {
-            crossing.optional()
-        } else {
-            crossing
-        };
-        let chain = chain.or_else(|| {
-            ext.composed_chain(
-                &crossing,
-                prebindgen_registry::recipe::Direction::Deconstruct,
-            )
-        });
+        let chain = chain;
         if let Some(chain) = chain.filter(|chain| match &chain.layout {
             crate::jni::compile::JLayout::Optional(inner) => optional && inner.leaf_count() == n,
             layout => !optional && layout.leaf_count() == n,

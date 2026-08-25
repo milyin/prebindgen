@@ -1016,15 +1016,11 @@ impl JniGenBuilder {
         // built out of the conversions for its inners, which are compiled
         // first. That is the same order the converter table was filled in, so
         // a fragment is there exactly when a table entry would have been.
-        // Callback layouts whose arguments have no composable deconstructor
-        // still use the shared Invoke composer, but enter it without child
-        // fragments. Their late plan is recorded beside the compatibility
-        // fragment below, so neither path renders during resolution.
         // Compositions that refused. See `compile_crossing`: these are adapter
         // invariants, reported together once the walk is done.
         let mut refusals: Vec<String> = Vec::new();
         let registry = declared
-            .convert_with(|crossing, built, emit| {
+            .convert_with(|crossing, built, _emit| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     decls.recipe_table(),
@@ -1032,30 +1028,9 @@ impl JniGenBuilder {
                     decls.compiled.borrow().clone(),
                 );
                 let compiled =
-                    decls.compile_crossing(&mut compiler, crossing, built, emit, &mut refusals);
+                    decls.compile_crossing(&mut compiler, crossing, built, &mut refusals);
                 *decls.compiled.borrow_mut() = compiler.finish();
-                let (conv, compatibility) = compiled?;
-                let (dir, key) = crossing;
-                let compiled_by_recipe = decls.compiled.borrow().fragment(key, *dir).is_some();
-                if decls.is_callback_crossing(crossing, built) && !compiled_by_recipe {
-                    let rust = compatibility.expect(
-                        "a callback outside the recipe compiler retains its late Invoke plan",
-                    );
-                    // Index the whole-value compatibility plan with the same
-                    // lookup and late renderer used for recipe-built callbacks.
-                    decls.compiled.borrow_mut().record(
-                        prebindgen_registry::recipe::CrossingKey {
-                            ty: key.clone(),
-                            direction: *dir,
-                        }
-                        .row(crate::jni::recipes::callback()),
-                        crate::jni::compile::JFrag::by_hand_with_rust(
-                            key.clone(),
-                            conv.clone(),
-                            rust,
-                        ),
-                    );
-                }
+                let conv = compiled?;
                 // The conversion stays here; what the registry gets back is
                 // which other crossings this one delegates to, which is what
                 // its reachability walk needs.
@@ -1186,19 +1161,6 @@ impl Declarations {
     ///
     /// `None` is *cannot*, never *not yet*: the crossings arrive inner-first,
     /// so everything this could compose from is already in `built`.
-    /// Whether this crossing is the callback shape `compile_crossing` answers
-    /// without the compiler.
-    fn is_callback_crossing<R: Conversions>(&self, crossing: &Crossing, built: &R) -> bool {
-        let (dir, key) = crossing;
-        matches!(dir, Direction::Construct)
-            && built.reading(key).is_some_and(|r| {
-                matches!(
-                    r.unwrapped().kind(),
-                    prebindgen_registry::flat::TypeKind::Callback { .. }
-                )
-            })
-    }
-
     fn compile_crossing<'v, R: Conversions>(
         &'v self,
         compiler: &mut prebindgen_registry::recipe::Compiler<
@@ -1207,12 +1169,8 @@ impl Declarations {
         >,
         crossing: &Crossing,
         built: &'v R,
-        emit: &prebindgen_registry::Emit,
         refusals: &mut Vec<String>,
-    ) -> Option<(
-        ConverterImpl<KotlinMeta>,
-        Option<crate::jni::chain::JFunction>,
-    )> {
+    ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
         // key the crossing IS.
@@ -1225,22 +1183,7 @@ impl Declarations {
             site: None,
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(reading, direction);
-        let fragment = match compiler.crossing(&mut adapter, &crossing) {
-            Ok(fragment) => fragment,
-            Err(prebindgen_registry::recipe::CompileError::Adapter(
-                crate::jni::compile::JErr::Refused(_),
-            )) => {
-                let prebindgen_registry::flat::TypeKind::Callback { args } =
-                    crossing.spelled().unwrapped().kind()
-                else {
-                    return None;
-                };
-                return self
-                    .dispatch_fn_input(crossing.spelled(), args, built, None, emit)
-                    .map(|(conv, rust)| (conv, Some(rust)));
-            }
-            Err(_) => return None,
-        };
+        let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
         // A `data_class` also states a recipe that says what it is made of.
         // Compiling that named recipe equips whole-value input, output and
         // callback paths with the same registry-owned Product descriptor.
@@ -1281,7 +1224,7 @@ impl Declarations {
                 ));
             }
         }
-        Some(((*fragment).clone().conv, None))
+        Some((*fragment).clone().conv)
     }
 
     pub fn declare_into(
@@ -1525,7 +1468,7 @@ impl Declarations {
         source: &prebindgen_registry::flat::TypeRef,
         args: &[prebindgen_registry::flat::TypeRef],
         registry: &impl Conversions,
-        arg_fragments: Option<&[&crate::jni::compile::JFrag]>,
+        arg_fragments: &[&crate::jni::compile::JFrag],
         emit: &prebindgen_registry::Emit,
     ) -> Option<(ConverterImpl<KotlinMeta>, crate::jni::chain::JFunction)> {
         let (wire, plan) = callback_input(self, source, args, registry, arg_fragments, emit)?;

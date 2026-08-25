@@ -835,23 +835,16 @@ impl JniGen {
         Some(fragment.rust.is_optional())
     }
 
-    /// The whole-value callback compatibility row, when one was required.
-    ///
-    /// Recipe-built callbacks occupy their ordinary crossing row. Only the
-    /// adapter-refusal fallback records this deliberately named row, so asking
-    /// for it pins the compatibility seam rather than callback generation in
-    /// general. The boolean distinguishes the retained late plan from a
-    /// complete function rendered during resolution.
+    /// Whether a callback crossing retained the registry's late Invoke plan.
     #[cfg(test)]
-    pub(crate) fn compatibility_callback_for_test(&self, spelling: &str) -> Option<(String, bool)> {
-        use prebindgen_registry::recipe::{Crossing, Direction};
+    pub(crate) fn callback_invoke_for_test(&self, spelling: &str) -> Option<(String, bool)> {
+        use prebindgen_registry::recipe::Direction;
 
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let key = reading.key();
-        let row = Crossing::new(reading, Direction::Construct).row(crate::jni::recipes::callback());
         let compiled = self.decls.compiled.borrow();
-        let fragment = compiled.recipe_fragment(&key, &row)?;
+        let fragment = compiled.fragment(&key, Direction::Construct)?;
         Some((
             fragment.conv.converter_ident().to_string(),
             fragment.rust.is_invoke(),

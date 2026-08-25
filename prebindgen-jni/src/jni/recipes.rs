@@ -260,11 +260,6 @@ pub(crate) fn pair() -> RecipeName {
     RecipeName::new("pair")
 }
 
-/// The compatibility row for a callback whose arguments cannot be composed.
-pub(crate) fn callback() -> RecipeName {
-    RecipeName::new("callback")
-}
-
 impl Declarations {
     /// Every recipe this binding's declarations state.
     ///

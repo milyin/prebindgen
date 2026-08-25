@@ -1156,9 +1156,10 @@ fn sum_return_emits_one_match_with_wire_defaults() {
 
 /// A sum returned **borrowed** (`&E`, `Option<&E>`). `unfold::returns_type`
 /// peels the leading `&` and `wire_fixed_returns` records `by_ref`, so the
-/// encoder matches THROUGH the reference rather than moving the value out of
-/// the owner. Each live group then clones what it needs, and Kotlin receives an
-/// ordinary value with no borrow to track — the borrow never crosses (#161).
+/// registry Choice chain matches THROUGH the reference rather than moving the
+/// value out of the owner. Each live group then clones what it needs, and
+/// Kotlin receives an ordinary value with no borrow to track — the borrow never
+/// crosses (#161).
 #[test]
 fn borrowed_sum_return_matches_through_the_reference() {
     let (rust, kotlin) = sum_returns("jnigen_sum_borrowed");
@@ -1168,30 +1169,23 @@ fn borrowed_sum_return_matches_through_the_reference() {
             .find(&format!("fn Java_io_test_jni_JNINative_{extern_fn}"))
             .unwrap_or_else(|| panic!("{extern_fn} extern missing:\n{rust}"));
         let body = &rust[at..at + 4000];
-        // The value is borrowed from its owner, so the encoder matches the
-        // binding DIRECTLY — `by_ref` is already reflected in `__out`'s type.
-        // Asserted exactly: a bare `contains("match __out")` would also accept
-        // `match __out2`, and accepting `match &__out` as an alternative would
-        // let a regression to double-referencing the borrow pass silently.
+        // The exact borrowed Choice crossing is frozen during planning, so the
+        // wrapper delegates rather than rebuilding the match locally.
         assert!(
-            body.contains("match __out {"),
-            "{extern_fn}: one match over the borrowed value:\n{body}"
+            body.contains("Reading_to_tuple"),
+            "{extern_fn}: delegates to the borrowed Choice chain:\n{body}"
         );
         assert!(
             !body.contains("match &__out"),
             "{extern_fn}: a borrowed return must not take a second reference:\n{body}"
         );
-        assert!(
-            body.contains("myflat::Reading::Missing =>"),
-            "{extern_fn}: arms bind each variant through the reference:\n{body}"
-        );
-        // A payload reached through a borrow cannot be moved out, so the live
-        // group clones it.
-        assert!(
-            body.contains(".clone()"),
-            "{extern_fn}: a borrowed group's payload is cloned, not moved:\n{body}"
-        );
     }
+
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("v:&myflat::Reading") && rc.contains("matchv{") && rc.contains(".clone()"),
+        "the retained Choice chain matches through the borrow and clones payloads:\n{rust}"
+    );
 
     // Kotlin sees a plain value / nullable value — a borrowed sum is not a
     // handle, so there is nothing to close and no lifetime to track.

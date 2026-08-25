@@ -518,7 +518,7 @@ pub(crate) struct OutValueAbi {
 }
 
 impl OutAbi {
-    fn activate(&self) {
+    pub(crate) fn activate(&self) {
         if let Self::Value(value) = self {
             value.dependency.mark_reachable();
         }
@@ -571,7 +571,7 @@ impl OutWire {
             && self.nullable == other.nullable
     }
 
-    fn activate(&self) {
+    pub(crate) fn activate(&self) {
         if let Some(abi) = &self.abi {
             abi.activate();
         }
@@ -695,33 +695,6 @@ impl Carrier for JFrag {
 }
 
 impl JFrag {
-    /// A callback conversion built by the legacy fallback.
-    ///
-    /// Registry recipes handle composable callback products. Irregular layouts
-    /// still enter through this compatibility path and are indexed as fragments
-    /// so downstream emitters use the same lookup in either case.
-    pub(crate) fn by_hand_with_rust(
-        ty: TypeKey,
-        conv: ConverterImpl<KotlinMeta>,
-        rust: crate::jni::chain::JFunction,
-    ) -> Self {
-        Self {
-            conv,
-            rust,
-            layout: Some(JLayout::Leaf),
-            choice_arm: None,
-            nested_chain: None,
-            wires: None,
-            out_wires: None,
-            composed_only: false,
-            yields: Yield {
-                ty,
-                mode: Mode::Owned,
-                validity: Validity::SelfSufficient,
-            },
-        }
-    }
-
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
         let validity = validity_of(&conv, at.crossing.direction());
         let rust = crate::jni::chain::JFunction::complete(conv.function.clone());
@@ -753,6 +726,19 @@ impl JFrag {
             }
         }
         self.nested_chain.clone()
+    }
+
+    /// Exact Rust-value-to-JNI operation selected for this fragment.
+    pub(crate) fn output_abi(&self) -> OutAbi {
+        OutAbi::Value(Box::new(OutValueAbi {
+            pipeline: JCompile::<Registry>::planned_pipeline(
+                Direction::Deconstruct,
+                Mode::Owned,
+                self,
+            ),
+            projection: self.conv.metadata.projection.clone(),
+            dependency: self.rust.clone(),
+        }))
     }
 }
 
@@ -870,11 +856,7 @@ impl<R: Conversions> JCompile<'_, R> {
     /// field conversions and may select the structural row itself instead of
     /// the child recipe that produced this leaf.
     fn output_abi(&self, frag: &JFrag) -> OutAbi {
-        OutAbi::Value(Box::new(OutValueAbi {
-            pipeline: Self::planned_pipeline(Direction::Deconstruct, Mode::Owned, frag),
-            projection: frag.conv.metadata.projection.clone(),
-            dependency: frag.rust.clone(),
-        }))
+        frag.output_abi()
     }
 
     fn wrap(&self, at: At<'_>, why: &str, conv: Option<ConverterImpl<KotlinMeta>>) -> Frag<Self> {
@@ -1924,6 +1906,47 @@ pub(crate) fn freeze_output_pipeline(
     result
 }
 
+/// Compile and retain the exact composed deconstructor for a delivery crossing.
+/// Product composition lives in its explicit `parts` row; Optional and Choice
+/// composition may be the crossing's derived/default row. Selection happens
+/// here, while the registry compiler and site mode are still available.
+pub(crate) fn freeze_output_chain(
+    ext: &Declarations,
+    registry: &Registry,
+    ty: &TypeRef,
+) -> Result<Option<ComposedChain>, JErr> {
+    let mut compiler = prebindgen_registry::recipe::Compiler::resume(
+        registry.flat(),
+        ext.recipe_table(),
+        ext.site_bindings(),
+        ext.compiled.borrow().clone(),
+    );
+    let mut adapter = JCompile {
+        decls: ext,
+        registry,
+        declared_return: None,
+        site: None,
+    };
+    let crossing = prebindgen_registry::recipe::Crossing::new(ty.clone(), Direction::Deconstruct);
+    let fragment = if ext
+        .recipe_table()
+        .key_of(&crossing.key(), &crate::jni::recipes::parts())
+        .is_some()
+    {
+        compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
+    } else {
+        compiler.crossing(&mut adapter, &crossing)
+    };
+    let result = fragment
+        .map(|fragment| fragment.composed_chain())
+        .map_err(|error| JErr::Refused(error.to_string()));
+    if let Ok(Some(chain)) = &result {
+        chain.activate();
+    }
+    *ext.compiled.borrow_mut() = compiler.finish();
+    result
+}
+
 impl<R: Conversions> Compile for JCompile<'_, R> {
     type Fragment = JFrag;
     /// One site of one exported function, classified.
@@ -1935,18 +1958,6 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let emit = cx.emit();
         if let Some(frag) = self.planned_owned_handle(at) {
             return Ok(frag);
-        }
-        if at.crossing.direction() == Direction::Construct {
-            if let TypeKind::Callback { args } = ty.unwrapped().kind() {
-                if let Some((conv, rust)) =
-                    self.decls
-                        .dispatch_fn_input(ty, args, self.registry, None, emit)
-                {
-                    let mut fragment = JFrag::new(at, conv);
-                    fragment.rust = rust;
-                    return Ok(fragment);
-                }
-            }
         }
         let conv = match at.crossing.direction() {
             Direction::Construct => self
@@ -1964,6 +1975,32 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         .output_transparent_bridge(ty, self.registry, emit)
                 }),
         };
+        if conv.is_none()
+            && at.crossing.direction() == Direction::Deconstruct
+            && !self
+                .decls
+                .types
+                .contains_key(&at.crossing.value().stripped_key())
+        {
+            // A type-level output expansion is already a registry-owned
+            // deconstruction plan. Some deliberately Rust-only types have no
+            // whole JNI representation at all: only the plan's leaves cross.
+            // Retain that as an ordinary composed-only fragment so an Invoke
+            // recipe receives the same plan as ordinary output delivery instead
+            // of escaping through a callback-specific compatibility converter.
+            if let Some(plan) = crate::jni::iface::effective_callback_plan(
+                self.decls,
+                self.registry,
+                at.crossing.spelled(),
+            ) {
+                let mut fragment = JFrag::new(
+                    at,
+                    self.parts_marker(plan.leaves.iter().map(|leaf| leaf.out_ty.key()).collect()),
+                );
+                fragment.composed_only = true;
+                return Ok(fragment);
+            }
+        }
         self.wrap(at, "no JNI representation for this type", conv)
     }
 
@@ -2269,7 +2306,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         };
         let planned =
             self.decls
-                .dispatch_fn_input(ty, args, self.registry, Some(arg_fragments), cx.emit());
+                .dispatch_fn_input(ty, args, self.registry, arg_fragments, cx.emit());
         let (conv, rust) = planned.ok_or_else(|| refuse(at, "undeclared callback signature"))?;
         let mut fragment = JFrag::new(at, conv);
         fragment.rust = rust;
@@ -2635,6 +2672,11 @@ impl Conv {
     ) -> crate::jni::chain::JPipeline {
         self.activate();
         JCompile::<Registry>::planned_pipeline(direction, mode, &self.0)
+    }
+
+    /// Freeze this exact compiled fragment as one outgoing ABI operation.
+    pub(crate) fn output_abi(&self) -> OutAbi {
+        self.0.output_abi()
     }
 }
 
