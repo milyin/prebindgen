@@ -202,14 +202,29 @@ enum JValueBody {
 
 /// How a terminal codec obtains the Rust type in its generated signature.
 ///
-/// A crossing is spelled by [`Emit`] at the final write. Bare `str` is the
-/// one semantic exception: it is unsized, so its JNI codec uses an owned text
-/// carrier on input and a borrowed text carrier on output. The concrete Rust
+/// A crossing is spelled by [`Emit`] at the final write. Text terminals can
+/// instead select a semantic owned or borrowed carrier. The concrete Rust
 /// spellings for those carriers are deliberately confined to `render` too.
 #[derive(Clone, Copy)]
 enum JValueSource {
     Crossing,
-    TextCarrier,
+    Text(JTextCarrier),
+}
+
+/// Adapter-semantic text ownership, before its Rust carrier is spelled.
+#[derive(Clone, Copy)]
+pub(crate) enum JTextCarrier {
+    Owned,
+    Borrowed,
+}
+
+impl JTextCarrier {
+    fn identity(self) -> &'static str {
+        match self {
+            Self::Owned => "owned_text",
+            Self::Borrowed => "borrowed_text",
+        }
+    }
 }
 
 /// One terminal value crossing, retained without source Rust syntax.
@@ -218,9 +233,9 @@ enum JValueSource {
 /// to freeze during recipe compilation. Source Rust spelling is not: the plan
 /// keeps the Flat reading opaque until the writer supplies [`Emit`]. Most
 /// codecs retain a ready expression; fixed-size arrays retain their JNI policy
-/// and build the source-typed expression only while rendering. Bare `str`
-/// retains only the semantic fact that it needs a text carrier; the concrete
-/// owned/borrowed Rust carrier is chosen inside final rendering.
+/// and build the source-typed expression only while rendering. Text codecs
+/// retain only their ownership semantics; the concrete owned/borrowed Rust
+/// carrier is chosen inside final rendering.
 #[derive(Clone)]
 pub(crate) struct JValueCodecPlan {
     ident: syn::Ident,
@@ -249,24 +264,21 @@ impl JValueCodecPlan {
         }
     }
 
-    /// A bare-`str` codec whose concrete owned/borrowed carrier is selected
-    /// only during final rendering.
+    /// A text codec whose concrete owned/borrowed carrier is selected only
+    /// during final rendering.
     pub(crate) fn text(
         direction: Direction,
         source: TypeRef,
+        carrier: JTextCarrier,
         wire: syn::Type,
         body: syn::Expr,
     ) -> Self {
-        let semantic_source = match direction {
-            Direction::Construct => "owned_text",
-            Direction::Deconstruct => "borrowed_text",
-        };
-        let ident = planned_name_for_key(direction, semantic_source, &wire);
+        let ident = planned_name_for_key(direction, carrier.identity(), &wire);
         Self {
             ident,
             direction,
             source,
-            source_kind: JValueSource::TextCarrier,
+            source_kind: JValueSource::Text(carrier),
             wire,
             body: JValueBody::Ready(body),
         }
@@ -294,10 +306,10 @@ impl JValueCodecPlan {
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = &self.ident;
-        let source = match (self.source_kind, self.direction) {
-            (JValueSource::Crossing, _) => emit.spell(&self.source),
-            (JValueSource::TextCarrier, Direction::Construct) => quote::quote!(String),
-            (JValueSource::TextCarrier, Direction::Deconstruct) => quote::quote!(&str),
+        let source = match self.source_kind {
+            JValueSource::Crossing => emit.spell(&self.source),
+            JValueSource::Text(JTextCarrier::Owned) => quote::quote!(String),
+            JValueSource::Text(JTextCarrier::Borrowed) => quote::quote!(&str),
         };
         let wire = &self.wire;
         let body = match &self.body {

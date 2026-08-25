@@ -890,7 +890,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 } else {
                     self.decls.framework_meta(kotlin_name)
                 };
-                (wire, body, niches, metadata, false)
+                (wire, body, niches, metadata, None)
             } else if matches!(source.kind(), TypeKind::Str) {
                 let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
                 let body = match direction {
@@ -917,7 +917,11 @@ impl<R: Conversions> JCompile<'_, R> {
                     .decls
                     .override_kotlin_name(&source.key(), Some(KtType::string()));
                 let metadata = self.decls.framework_meta(kotlin_name);
-                (wire, body, niches, metadata, true)
+                let carrier = match direction {
+                    Direction::Construct => crate::jni::chain::JTextCarrier::Owned,
+                    Direction::Deconstruct => crate::jni::chain::JTextCarrier::Borrowed,
+                };
+                (wire, body, niches, metadata, Some(carrier))
             } else if direction == Direction::Deconstruct
                 && matches!(
                     source.kind(),
@@ -942,7 +946,13 @@ impl<R: Conversions> JCompile<'_, R> {
                     .decls
                     .override_kotlin_name(&source.key(), Some(KtType::string()));
                 let metadata = self.decls.framework_meta(kotlin_name);
-                (wire, body, niches, metadata, true)
+                (
+                    wire,
+                    body,
+                    niches,
+                    metadata,
+                    Some(crate::jni::chain::JTextCarrier::Borrowed),
+                )
             } else if direction == Direction::Deconstruct
                 && matches!(source.kind(), TypeKind::Cow { .. })
                 && matches!(
@@ -964,7 +974,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     .decls
                     .override_kotlin_name(&source.key(), Some(KtType::byte_array()));
                 let metadata = self.decls.framework_meta(kotlin_name);
-                (wire, body, niches, metadata, false)
+                (wire, body, niches, metadata, None)
             } else if !matches!(source.kind(), TypeKind::Str)
                 && matches!(source.unwrapped().kind(), TypeKind::Str | TypeKind::String)
             {
@@ -1004,7 +1014,9 @@ impl<R: Conversions> JCompile<'_, R> {
                     .decls
                     .override_kotlin_name(&source.key(), Some(KtType::string()));
                 let metadata = self.decls.framework_meta(kotlin_name);
-                (wire, body, niches, metadata, false)
+                let carrier = matches!(source.kind(), TypeKind::String)
+                    .then_some(crate::jni::chain::JTextCarrier::Owned);
+                (wire, body, niches, metadata, carrier)
             } else if direction == Direction::Deconstruct && matches!(source.kind(), TypeKind::Unit)
             {
                 (
@@ -1012,13 +1024,19 @@ impl<R: Conversions> JCompile<'_, R> {
                     syn::parse_quote!(v),
                     Niches::empty(),
                     KotlinMeta::default(),
-                    false,
+                    None,
                 )
             } else {
                 return None;
             };
-        let plan = if text_carrier {
-            crate::jni::chain::JValueCodecPlan::text(direction, source.clone(), wire.clone(), body)
+        let plan = if let Some(carrier) = text_carrier {
+            crate::jni::chain::JValueCodecPlan::text(
+                direction,
+                source.clone(),
+                carrier,
+                wire.clone(),
+                body,
+            )
         } else {
             crate::jni::chain::JValueCodecPlan::new(direction, source.clone(), wire.clone(), body)
         };
