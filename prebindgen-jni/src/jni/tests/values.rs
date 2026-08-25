@@ -1613,6 +1613,56 @@ fn recursive_flattening_counts_long_as_two_and_rejects_jvm_parameter_slot_overfl
     assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
     assert!(error.contains("jobject_input"), "{error}");
 
+    // Pin the two other two-slot paths independently. An ordinary i64 reads
+    // its width from the frozen converter wire, while a handle stores its
+    // primitive jlong width directly in the native parameter plan.
+    let plain_params = (0..127)
+        .map(|index| format!("p{index}: i64"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let use_plain_wide: syn::ItemFn = syn::parse_str(&format!(
+        "pub fn use_plain_wide({plain_params}) -> i64 {{ unimplemented!() }}"
+    ))
+    .expect("parse wide plain function");
+    let registry = crate::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(use_plain_wide),
+        loc.clone(),
+    )]))
+    .expect("index plain function");
+    let error = JniGenBuilder::new()
+        .package(crate::package!().fun(prebindgen_registry::fun!(use_plain_wide)))
+        .build_with(registry)
+        .expect_err("127 ordinary Long parameters plus infrastructure must fail")
+        .to_string();
+    assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
+
+    let handle_params = (0..127)
+        .map(|index| format!("p{index}: &Token"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let token: syn::ItemStruct = syn::parse_quote!(
+        pub struct Token;
+    );
+    let use_handle_wide: syn::ItemFn = syn::parse_str(&format!(
+        "pub fn use_handle_wide({handle_params}) -> i64 {{ unimplemented!() }}"
+    ))
+    .expect("parse wide handle function");
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(token), loc.clone()),
+        (syn::Item::Fn(use_handle_wide), loc.clone()),
+    ]))
+    .expect("index handle function");
+    let error = JniGenBuilder::new()
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Token))
+                .fun(prebindgen_registry::fun!(use_handle_wide)),
+        )
+        .build_with(registry)
+        .expect_err("127 handle Long parameters plus infrastructure must fail")
+        .to_string();
+    assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
+
     // The explicit object boundary keeps the same public Kotlin data class,
     // but the native method receives it in one slot and performs the legacy
     // whole-object field decode instead of producing an illegal signature.
