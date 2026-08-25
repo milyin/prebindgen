@@ -46,38 +46,6 @@ pub(crate) fn generated_converter_attr() -> syn::Attribute {
 // ──────────────────────────────────────────────────────────────────────
 
 impl Declarations {
-    /// Build the standard JNI input-converter `fn` for a Rust type this
-    /// **adapter composed**. Body assumes in-scope `env: &mut JNIEnv` and
-    /// `v: &<wire>` (or `v: <wire>` for raw-pointer wires); produces a value of
-    /// `rust`. Returned function has its name already set per the JNI plugin's
-    /// naming convention.
-    ///
-    /// There are three composed types: `impl Fn(..)` for a callback, `String`
-    /// for the `str` terminal (which yields an owned value the call site
-    /// borrows), and `Vec<T>` for the `&[T]` parameter, likewise. None is a
-    /// borrow, which is why this spells its input verbatim — there is no `&_`
-    /// to splice `'env` into. [`Self::build_input_fn_of`] is the door that
-    /// annotates, and it does so off `TypeKind::Ref`, where
-    /// `annotate_borrow_with_lifetime` matched a `syn::Type::Reference` and
-    /// rebuilt it.
-    ///
-    /// `exc` ties the body convention to the `Result`'s Rust error type:
-    /// * `None` → signature `Result<rust, __JniErr>` and the body is
-    ///   wrapped `Ok(<body>)`; `?` inside propagates the framework error.
-    /// * `Some(E)` → signature `Result<rust, E>` and the body is emitted
-    ///   as-is — `<body>` already evaluates to that `Result`, so no `Ok`
-    ///   wrap. `E` is the raw error type peeled from a `Result<T, E>`.
-    pub(crate) fn build_input_fn_composed(
-        &self,
-        rust: &syn::Type,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-    ) -> syn::ItemFn {
-        let spelled = rust.to_token_stream();
-        self.build_input_fn_parts(&spelled, &spelled, wire, body, exc)
-    }
-
     /// [`Self::build_input_fn`] for a caller holding the **reading** of the Rust
     /// type this converter yields — the terminals and the transparent bridges.
     ///
@@ -189,37 +157,6 @@ impl Declarations {
                 #ret_body
             }
         )
-    }
-
-    /// Borrowed string-slice output converter (`&str → jstring`, a single
-    /// copy — the dual of the `str` input arm). Shared by two resolver arms so
-    /// they emit the SAME-named fn (write.rs dedups by `sig.ident`):
-    /// * the rank-1 `&str` arm — the converter actually used for a reference
-    ///   accessor leaf (`f(&T) -> &str`, output expansion);
-    /// * the rank-0 `str` arm — resolves the unsized `str` reached as the sub
-    ///   of `&str` (so required-propagation doesn't flag `str` unresolved).
-    ///
-    /// Surfaces as Kotlin `String`. Built from a normalized (lifetime-free)
-    /// `&str` so both arms produce an identical [`output_name`].
-    fn str_ref_output(&self) -> ConverterImpl<KotlinMeta> {
-        let outer_ty: syn::Type = syn::parse_quote!(&str);
-        let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-        let body: syn::Expr = syn::parse_quote!({
-            env.new_string(v).map_err(|e| {
-                <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
-            })?
-        });
-        let kotlin_name =
-            self.override_kotlin_name(&TypeKey::from_type(&outer_ty), Some(KtType::string()));
-        let niches = default_niches_for_wire(&wire);
-        ConverterImpl {
-            subs: vec![],
-            pre_stages: vec![],
-            function: self.build_output_fn(&outer_ty, &wire, &body, None),
-            destination: wire,
-            niches,
-            metadata: self.framework_meta(kotlin_name),
-        }
     }
 
     /// `Cow<[u8]>` output converter (any lifetime form) — see the call site
@@ -1854,11 +1791,11 @@ impl Declarations {
     // ── Input converters ─────────────────────────────────────────────
 
     /// Remaining whole-type **input** compatibility categories (opaque
-    /// handle, enum, `convert!`, unsized `str`, byte run, struct) — depends on
-    /// nothing, `subs` empty.
+    /// handle, enum, `convert!`, byte run, struct) — depends on nothing,
+    /// `subs` empty.
     ///
-    /// Bare scalars and owned strings are compiled as `JValueCodecPlan`s
-    /// before this fallback is entered.
+    /// Bare scalars and all string terminals are compiled as
+    /// `JValueCodecPlan`s before this fallback is entered.
     pub(crate) fn input_terminal(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
@@ -1929,35 +1866,6 @@ impl Declarations {
         }
         if let Some(conv) = self.lookup_input(reading, registry, emit) {
             return Some(conv);
-        }
-        // `str` is unsized, so converters can't return it directly.
-        // Still register a rank-0 entry to satisfy resolution for
-        // borrowed `&str` parameters: decode `JString` to owned `String`
-        // and let call sites borrow as needed.
-        if reading.key().as_str() == "str" {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-            let body: syn::Expr = syn::parse_quote!({
-                let s = env.get_string(v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "decode_string: {}",
-                        e
-                    ))
-                })?;
-                s.into()
-            });
-            // The unsized `str` yields an OWNED `String` the call site borrows,
-            // so this converter's Rust type is not the reading's spelling.
-            let rust_ty: syn::Type = syn::parse_quote!(String);
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
-            let niches = default_niches_for_wire(&wire);
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_composed(&rust_ty, &wire, &body, None),
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
         }
         if let Some((wire, body)) = (!matches!(
             reading.unwrapped().kind(),
@@ -2206,10 +2114,10 @@ impl Declarations {
     // ── Output converters ────────────────────────────────────────────
 
     /// Remaining whole-type **output** compatibility categories (the dual of
-    /// [`Self::input_terminal`]: opaque handle, enum, user table, unsized
-    /// `str`, byte runs, struct) — `subs` empty.
+    /// [`Self::input_terminal`]: opaque handle, enum, user table, byte runs,
+    /// struct) — `subs` empty.
     ///
-    /// Bare scalars, owned strings, and unit are compiled as
+    /// Bare scalars, all string terminals, and unit are compiled as
     /// `JValueCodecPlan`s before this fallback is entered.
     pub(crate) fn output_terminal(
         &self,
@@ -2274,13 +2182,6 @@ impl Declarations {
         if let Some(conv) = self.lookup_output(reading, registry, emit) {
             return Some(conv);
         }
-        // `str` is unsized, so it has no by-value output converter — but it is
-        // reached as the sub of a `&str` reference accessor leaf. Resolve it to
-        // the same `&str → jstring` fn the rank-1 `&str` arm uses (deduped by
-        // name) so required-propagation doesn't flag it unresolved.
-        if reading.key().as_str() == "str" {
-            return Some(self.str_ref_output());
-        }
         // `Cow<'_, [u8]>` (any lifetime): a borrow-or-owned byte container —
         // one copy into the JVM array straight off the `Deref<[u8]>`, no
         // intermediate owned `Vec` (the zero-copy dual of the `Vec<u8>`
@@ -2337,7 +2238,7 @@ impl Declarations {
         None
     }
 
-    /// Borrowed-handle and borrowed-string output terminals.
+    /// Borrowed-handle output terminals.
     pub(crate) fn output_borrow(
         &self,
         produced: &prebindgen_registry::flat::TypeRef,
@@ -2370,18 +2271,6 @@ impl Declarations {
                 niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
                 metadata: self.opaque_leaf_meta(t1.key()),
             });
-        }
-        // Borrowed string slice output (`&str` / `&'a str`): the converter used
-        // for a zero-copy reference accessor return (`f(&T) -> &str`, output
-        // expansion). The single copy into the JVM is `&str → jstring` (no
-        // intermediate owned `String`). The unsized `str` sub resolves via the
-        // rank-0 arm to the same fn (see [`Self::str_ref_output`]).
-        if matches!(
-            produced.kind(),
-            prebindgen_registry::flat::TypeKind::Ref { mutable: false, .. }
-        ) && t1.key().as_str() == "str"
-        {
-            return Some(self.str_ref_output());
         }
         None
     }

@@ -204,6 +204,7 @@ pub(crate) struct JValueCodecPlan {
     ident: syn::Ident,
     direction: Direction,
     source: TypeRef,
+    adapter_source: Option<syn::Type>,
     wire: syn::Type,
     body: syn::Expr,
 }
@@ -220,6 +221,37 @@ impl JValueCodecPlan {
             ident,
             direction,
             source,
+            adapter_source: None,
+            wire,
+            body,
+        }
+    }
+
+    /// A codec whose Rust signature deliberately differs from its crossing.
+    ///
+    /// The supplied type is adapter-authored syntax, not syntax extracted from
+    /// `source`: bare `str` is unsized, so JNI decodes it into `String` and
+    /// encodes it through `&str`. Keeping that exception explicit lets the
+    /// crossing remain opaque while preserving the actual converter contract.
+    pub(crate) fn with_adapter_source(
+        direction: Direction,
+        source: TypeRef,
+        adapter_source: syn::Type,
+        wire: syn::Type,
+        body: syn::Expr,
+    ) -> Self {
+        use quote::ToTokens as _;
+
+        let source_tokens = adapter_source.to_token_stream();
+        let ident = match direction {
+            Direction::Construct => crate::jni::emit::input_name(&source_tokens, &wire),
+            Direction::Deconstruct => crate::jni::emit::output_name(&source_tokens, &wire),
+        };
+        Self {
+            ident,
+            direction,
+            source,
+            adapter_source: Some(adapter_source),
             wire,
             body,
         }
@@ -231,7 +263,11 @@ impl JValueCodecPlan {
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = &self.ident;
-        let source = emit.spell(&self.source);
+        let source = self
+            .adapter_source
+            .as_ref()
+            .map(|source| quote::quote!(#source))
+            .unwrap_or_else(|| emit.spell(&self.source));
         let wire = &self.wire;
         let body = super::builder::body_for_exc(&self.body, None);
         let allow = super::trait_impl::generated_converter_attr();
