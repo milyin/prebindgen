@@ -261,6 +261,56 @@ fn output_terminals_stay_unrendered_until_final_write() {
     );
 }
 
+#[test]
+fn input_terminals_stay_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Handle;",
+        "pub struct Payload;",
+        "pub enum Mode { First, Second }",
+        "pub fn input_handle(v: Handle) {}",
+        "pub fn input_value_opaque(v: Payload) {}",
+        "pub fn input_enum(v: Mode) {}",
+        "pub fn input_string(v: String) {}",
+        "pub fn input_str(v: &str) {}",
+        "pub fn input_bool(v: bool) {}",
+        "pub fn input_scalar(v: u64) {}",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_owned_struct(syn::parse_quote!(Payload), syn::parse_quote!(OpaquePayload))
+        .enum_type(syn::parse_quote!(Mode))
+        .function(syn::parse_quote!(input_handle))
+        .panic()
+        .function(syn::parse_quote!(input_value_opaque))
+        .panic()
+        .function(syn::parse_quote!(input_enum))
+        .panic()
+        .function(syn::parse_quote!(input_string))
+        .panic()
+        .function(syn::parse_quote!(input_str))
+        .panic()
+        .function(syn::parse_quote!(input_bool))
+        .function(syn::parse_quote!(input_scalar))
+        .build_with(registry)
+        .expect("resolve");
+
+    assert_eq!(
+        generated
+            .gen
+            .compiled_fns
+            .iter()
+            .filter(|function| function.is_input_terminal())
+            .count(),
+        7,
+        "every whole-value input operation must retain a semantic plan before final writing"
+    );
+}
+
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {

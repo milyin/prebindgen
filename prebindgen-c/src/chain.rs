@@ -57,6 +57,7 @@ pub(crate) struct CFunction {
 enum CBody {
     Complete(syn::ItemFn),
     Custom(CustomPlan),
+    InputTerminal(InputTerminalPlan),
     OutputTerminal(OutputTerminalPlan),
     Product(ProductPlan),
     Optional(OptionalPlan),
@@ -101,6 +102,18 @@ impl CFunction {
         Self {
             call,
             body: CBody::OutputTerminal(plan),
+        }
+    }
+
+    pub(crate) fn input_terminal(plan: InputTerminalPlan) -> Self {
+        let call = CCall(chain::Call::new(
+            plan.ident.clone(),
+            plan.operation.fallible(),
+            plan.operation.unsafe_(),
+        ));
+        Self {
+            call,
+            body: CBody::InputTerminal(plan),
         }
     }
 
@@ -167,6 +180,11 @@ impl CFunction {
         matches!(self.body, CBody::OutputTerminal(_))
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_input_terminal(&self) -> bool {
+        matches!(self.body, CBody::InputTerminal(_))
+    }
+
     pub(crate) fn call(&self) -> &CCall {
         &self.call
     }
@@ -181,6 +199,7 @@ impl RustFunction for CFunction {
         match &self.body {
             CBody::Complete(function) => function.clone(),
             CBody::Custom(plan) => plan.render(emit),
+            CBody::InputTerminal(plan) => plan.render(emit),
             CBody::OutputTerminal(plan) => plan.render(emit),
             CBody::Product(plan) => plan.render(emit),
             CBody::Choice(plan) => plan.render(emit),
@@ -189,6 +208,206 @@ impl RustFunction for CFunction {
             CBody::DeferredInvoke => {
                 unreachable!("a deferred C Invoke helper is rendered by its callback artifact")
             }
+        }
+    }
+}
+
+/// One whole-value C input operation selected without spelling its source.
+#[derive(Clone)]
+pub(crate) enum InputTerminalOperation {
+    OwnedHandle {
+        null_message: String,
+    },
+    ValueOpaque {
+        opaque: syn::Type,
+        writeback: ValueOpaqueWriteback,
+        null_message: String,
+    },
+    Enum {
+        c_name: syn::Ident,
+        variants: Vec<syn::Ident>,
+        invalid_message: String,
+        size_message: String,
+        align_message: String,
+    },
+    String,
+    StrMarker,
+    Bool,
+    Scalar,
+}
+
+/// How a consumed value-opaque C slot is left safely droppable.
+#[derive(Clone)]
+pub(crate) enum ValueOpaqueWriteback {
+    None,
+    NullFields(Vec<syn::Ident>),
+    Gravestone,
+}
+
+impl ValueOpaqueWriteback {
+    pub(crate) fn render(&self, slot: &syn::Ident, opaque: &syn::Type) -> TokenStream {
+        match self {
+            Self::None => TokenStream::new(),
+            Self::NullFields(fields) => {
+                quote!(#( (*#slot).#fields = ::core::ptr::null_mut(); )*)
+            }
+            Self::Gravestone => quote!(
+                ::core::ptr::write(
+                    #slot,
+                    <#opaque as ::prebindgen_c_runtime::Gravestone>::gravestone(),
+                );
+            ),
+        }
+    }
+}
+
+impl InputTerminalOperation {
+    fn fallible(&self) -> bool {
+        matches!(
+            self,
+            Self::OwnedHandle { .. } | Self::ValueOpaque { .. } | Self::Enum { .. } | Self::String
+        )
+    }
+
+    fn unsafe_(&self) -> bool {
+        !matches!(self, Self::StrMarker | Self::Scalar)
+    }
+}
+
+/// A whole-value C input retained until the final writer owns [`Emit`].
+#[derive(Clone)]
+pub(crate) struct InputTerminalPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) source_module: Option<syn::Path>,
+    pub(crate) wire: syn::Type,
+    pub(crate) operation: InputTerminalOperation,
+}
+
+impl InputTerminalPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let wire = &self.wire;
+        match &self.operation {
+            InputTerminalOperation::OwnedHandle { null_message } => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name(
+                    v: #wire,
+                ) -> ::core::result::Result<#source, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_message),
+                        );
+                    }
+                    ::core::result::Result::Ok(
+                        *::std::boxed::Box::from_raw(v as *mut #source)
+                    )
+                }
+            ),
+            InputTerminalOperation::ValueOpaque {
+                opaque,
+                writeback,
+                null_message,
+            } => {
+                let writeback = writeback.render(&format_ident!("v"), opaque);
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) unsafe fn #name(
+                        v: #wire,
+                    ) -> ::core::result::Result<#source, ::std::string::String> {
+                        if v.is_null() {
+                            return ::core::result::Result::Err(
+                                ::std::string::String::from(#null_message),
+                            );
+                        }
+                        let __live = <#opaque as ::prebindgen_c_runtime::Transmute>::into_rust(
+                            ::core::ptr::read(v),
+                        );
+                        #writeback
+                        ::core::result::Result::Ok(__live)
+                    }
+                )
+            }
+            InputTerminalOperation::Enum {
+                c_name,
+                variants,
+                invalid_message,
+                size_message,
+                align_message,
+            } => {
+                let arms = variants.iter().map(|variant| {
+                    quote!(
+                        if __raw == #c_name::#variant as ::core::ffi::c_int {
+                            return ::core::result::Result::Ok(#source::#variant);
+                        }
+                    )
+                });
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) unsafe fn #name(
+                        v: #wire,
+                    ) -> ::core::result::Result<#source, ::std::string::String> {
+                        const _: () = {
+                            assert!(
+                                ::core::mem::size_of::<#c_name>()
+                                    == ::core::mem::size_of::<::core::ffi::c_int>(),
+                                #size_message
+                            );
+                            assert!(
+                                ::core::mem::align_of::<#c_name>()
+                                    == ::core::mem::align_of::<::core::ffi::c_int>(),
+                                #align_message
+                            );
+                        };
+                        let __raw: ::core::ffi::c_int =
+                            ::core::ptr::read(v.as_ptr() as *const ::core::ffi::c_int);
+                        #(#arms)*
+                        ::core::result::Result::Err(::std::format!(#invalid_message, __raw))
+                    }
+                )
+            }
+            InputTerminalOperation::String => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name(
+                    v: #wire,
+                ) -> ::core::result::Result<#source, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from("null pointer passed for String argument"),
+                        );
+                    }
+                    match ::std::ffi::CStr::from_ptr(v).to_str() {
+                        ::core::result::Result::Ok(s) => {
+                            ::core::result::Result::Ok(s.to_owned())
+                        }
+                        ::core::result::Result::Err(_) => {
+                            ::core::result::Result::Err(
+                                ::std::string::String::from("invalid UTF-8 in String argument"),
+                            )
+                        }
+                    }
+                }
+            ),
+            InputTerminalOperation::StrMarker => syn::parse_quote!(
+                #[allow(non_snake_case, dead_code, unused_variables)]
+                pub(crate) fn #name() {}
+            ),
+            InputTerminalOperation::Bool => {
+                let read = bool_in_expr(quote!(v));
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) unsafe fn #name(v: #wire) -> #source {
+                        #read
+                    }
+                )
+            }
+            InputTerminalOperation::Scalar => syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #wire) -> #source {
+                    v
+                }
+            ),
         }
     }
 }

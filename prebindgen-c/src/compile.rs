@@ -514,6 +514,34 @@ impl CFrag {
             value,
         }
     }
+
+    /// A whole-value input retained as an operation until final Rust emission.
+    fn from_input_terminal(at: At<'_>, plan: crate::chain::InputTerminalPlan) -> Self {
+        let destination = plan.wire.clone();
+        let function = CFunction::input_terminal(plan);
+        let niches = Niches::empty();
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            function,
+            niches,
+            subs: vec![],
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            shape: CShape::Atomic,
+            value,
+        }
+    }
 }
 
 /// How long what this conversion produces stays usable.
@@ -647,11 +675,15 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             return self.wrap(at, "no payload reading for this handle", conv);
         }
         if at.recipe.name() == &crate::recipes::in_field() {
-            let conv = match at.crossing.direction() {
-                Direction::Construct => self
+            if at.crossing.direction() == Direction::Construct && r_is_bool(ty) {
+                let plan = self
                     .gen
-                    .in_bool(ty)
-                    .or_else(|| self.gen.in_string_field(ty)),
+                    .in_terminal(ty, self.registry)
+                    .expect("bool has an ordinary input-terminal plan");
+                return Ok(CFrag::from_input_terminal(at, plan));
+            }
+            let conv = match at.crossing.direction() {
+                Direction::Construct => self.gen.in_string_field(ty),
                 // Only `bool` reads differently on the way out; a `String`
                 // field is allocated exactly as a `String` return is.
                 Direction::Deconstruct => self.gen.out_bool_field(ty),
@@ -669,17 +701,13 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 return Ok(CFrag::from_output_terminal(at, plan));
             }
         }
+        if at.crossing.direction() == Direction::Construct {
+            if let Some(plan) = self.gen.in_terminal(ty, self.registry) {
+                return Ok(CFrag::from_input_terminal(at, plan));
+            }
+        }
         let conv = match at.crossing.direction() {
-            Direction::Construct => self
-                .gen
-                .in_opaque_handle(ty)
-                .or_else(|| self.gen.in_value_opaque(ty, self.registry))
-                .or_else(|| self.gen.in_enum(ty, self.registry))
-                .or_else(|| self.gen.in_string(ty))
-                .or_else(|| self.gen.in_str(ty))
-                .or_else(|| self.gen.in_bool(ty))
-                .or_else(|| self.gen.in_scalar(ty))
-                .or_else(|| self.gen.in_borrow(ty)),
+            Direction::Construct => self.gen.in_borrow(ty),
             Direction::Deconstruct => self.gen.out_borrow_or_result(ty),
         };
         self.wrap(at, "no C representation for this type", conv)
