@@ -250,7 +250,7 @@ fn fixed_primitive_arrays_retain_late_registry_plans() {
 }
 
 #[test]
-fn cow_byte_slices_retain_a_late_adapter_typed_value_codec() {
+fn cow_byte_slices_retain_a_late_value_codec() {
     let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
         syn::parse_quote!(
             pub fn cow_bytes() -> Cow<'static, [u8]> {
@@ -270,13 +270,20 @@ fn cow_byte_slices_retain_a_late_adapter_typed_value_codec() {
         .reading(&TypeKey::from_type(&syn::parse_quote!(Cow<'static, [u8]>)))
         .expect("Cow-byte reading");
 
+    let output = generation
+        .decls
+        .out_frag(&reading)
+        .expect("Cow-byte output");
     assert!(
-        generation
-            .decls
-            .out_frag(&reading)
-            .expect("Cow-byte output")
-            .is_value_codec_plan(),
-        "Cow<[u8]> output must retain an unrendered adapter-typed value codec"
+        output.is_value_codec_plan(),
+        "Cow<[u8]> output must retain an unrendered value codec"
+    );
+    assert!(
+        output
+            .converter_ident()
+            .to_string()
+            .contains("Cow_static_u8"),
+        "the late codec identity must preserve the crossing's lifetime"
     );
 }
 

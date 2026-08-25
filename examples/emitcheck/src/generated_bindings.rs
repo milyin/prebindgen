@@ -179,6 +179,32 @@ pub(crate) unsafe fn Cow_static_str_to_JString_47272020<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Cow_static_u8_to_JByteArray_5ff7543f<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: ::std::borrow::Cow<'static, [u8]>,
+) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
+    Ok({
+        env.byte_array_from_slice(&v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("encode_byte_array: {}", e))
+            })?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -287,7 +313,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_ZSample_Send_Sync_static_24e97b15<'env, 
                         __enc2.into()
                     };
                     let __cb0_obj3: jni::objects::JObject = {
-                        let __enc3 = match std_borrow_Cow_u8_to_JByteArray_c6a6bddf(
+                        let __enc3 = match Cow_static_u8_to_JByteArray_5ff7543f(
                             &mut env,
                             __vf0.seq_cow.clone(),
                         ) {
@@ -489,32 +515,6 @@ pub(crate) unsafe fn ZSample_to_jlong_757bca9c<'a>(
     v: myflat::ZSample,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn std_borrow_Cow_u8_to_JByteArray_c6a6bddf<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: ::std::borrow::Cow<'_, [u8]>,
-) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
-    Ok({
-        env.byte_array_from_slice(&v)
-            .map_err(|e| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("encode_byte_array: {}", e))
-            })?
-    })
 }
 #[allow(
     non_snake_case,

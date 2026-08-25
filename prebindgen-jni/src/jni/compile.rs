@@ -962,7 +962,6 @@ impl<R: Conversions> JCompile<'_, R> {
                     TypeKind::Cow { inner, .. } if inner.key().as_str() == "[u8]"
                 )
             {
-                let adapter_source: syn::Type = syn::parse_quote!(::std::borrow::Cow<'_, [u8]>);
                 let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
                 let body: syn::Expr = syn::parse_quote!({
                     env.byte_array_from_slice(&v).map_err(|e| {
@@ -977,7 +976,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     .decls
                     .override_kotlin_name(&source.key(), Some(KtType::byte_array()));
                 let metadata = self.decls.framework_meta(kotlin_name);
-                (wire, body, niches, metadata, Some(adapter_source))
+                (wire, body, niches, metadata, None)
             } else if !matches!(source.kind(), TypeKind::Str)
                 && matches!(source.unwrapped().kind(), TypeKind::Str | TypeKind::String)
             {
