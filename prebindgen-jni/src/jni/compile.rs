@@ -875,6 +875,9 @@ impl<R: Conversions> JCompile<'_, R> {
 
     /// Freeze a terminal value codec without asking `Emit` to spell its source.
     fn planned_value_codec(&self, at: At<'_>) -> Option<JFrag> {
+        if let Some(fragment) = self.planned_enum_codec(at) {
+            return Some(fragment);
+        }
         let source = at.crossing.spelled();
         let direction = at.crossing.direction();
         let (wire, body, niches, metadata, text_carrier) =
@@ -1040,6 +1043,71 @@ impl<R: Conversions> JCompile<'_, R> {
         } else {
             crate::jni::chain::JValueCodecPlan::new(direction, source.clone(), wire.clone(), body)
         };
+        let ident = plan.name().clone();
+        let conv = ConverterImpl {
+            subs: vec![],
+            pre_stages: vec![],
+            function: crate::jni::chain::planned_marker(&ident),
+            destination: wire,
+            niches,
+            metadata,
+        };
+        Some(JFrag::planned(
+            at,
+            conv,
+            crate::jni::chain::JFunction::value_codec(plan),
+        ))
+    }
+
+    /// Freeze a declared fieldless enum as Flat variant/discriminant facts.
+    /// The plan deliberately does not retain an enum path or a rendered Rust
+    /// body: final emission supplies the source type and constructs the variant
+    /// paths from it.
+    fn planned_enum_codec(&self, at: At<'_>) -> Option<JFrag> {
+        let source = at.crossing.spelled();
+        let key = source.key();
+        let cfg = self.decls.types.get(&key)?;
+        if !cfg.is_enum_class() {
+            return None;
+        }
+        let name = key.ident()?;
+        let item = crate::jni::trait_impl::flat_unit_enum(self.registry, &name, "enum_class");
+        let item = item?;
+        let variants = item
+            .discriminant_values()
+            .unwrap_or_else(|variant| {
+                panic!(
+                    "enum `{}` variant `{variant}` has a non-literal discriminant; use a literal \
+                     integer value (e.g. `= 1`) or an implicit discriminant",
+                    item.name
+                )
+            })
+            .into_iter()
+            .map(|(variant, value)| (variant.clone(), value))
+            .collect();
+        let wire: syn::Type = syn::parse_quote!(jni::sys::jint);
+        let direction = at.crossing.direction();
+        let plan = match direction {
+            Direction::Construct => crate::jni::chain::JValueCodecPlan::enum_input(
+                source.clone(),
+                self.decls.fn_module(self.registry, &item.name),
+                item.name.clone(),
+                variants,
+            ),
+            Direction::Deconstruct => crate::jni::chain::JValueCodecPlan::new(
+                direction,
+                source.clone(),
+                wire.clone(),
+                syn::parse_quote!({ v as jni::sys::jint }),
+            ),
+        };
+        let (niches, niche_sentinels) = self.decls.enum_niches(item, self.registry, direction);
+        let kotlin_name = cfg
+            .name_spec
+            .as_ref()
+            .map(|spec| KtType::cls(self.decls.fqn_of(spec)));
+        let mut metadata = self.decls.framework_meta(kotlin_name);
+        metadata.niche_sentinels = niche_sentinels;
         let ident = plan.name().clone();
         let conv = ConverterImpl {
             subs: vec![],

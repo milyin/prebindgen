@@ -1,6 +1,4 @@
-//! Scalar / `Option` / enum converter bodies and their wire probes.
-
-use prebindgen_registry::Conversions;
+//! Scalar and `Option` converter bodies and their wire probes.
 
 use super::*;
 
@@ -262,80 +260,6 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
     } else {
         Niches::empty()
     }
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Struct rank-0 bodies
-// ──────────────────────────────────────────────────────────────────────
-
-/// `jint → Rust enum` decoder body for a `enum_class`-declared enum.
-/// Wire is `jni::sys::jint`. The framework builds the decode `match`
-/// directly from the enum's own discriminants — no `TryFrom<i32>` impl
-/// is required on the flat enum (the enum declaration is the single
-/// source of truth for the int↔variant mapping, shared with the Kotlin
-/// `value(N)` constants via [`enum_discriminant_values`]). An unknown
-/// discriminant surfaces as the framework `__JniErr`.
-///
-/// The arms use the bare ident — same shape as the wrapper function's
-/// `v: <ident>` signature — so binding crates can pick whichever
-/// upstream type a bare `<ident>` resolves to in their include-site
-/// `use` statements. Pairs with output body below.
-pub(crate) fn enum_input_body(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    e: &prebindgen_registry::flat::Enum,
-) -> (syn::Type, syn::Expr) {
-    let ident = &e.name;
-    let ident_name = ident.to_string();
-    // Qualify the variant constructors with the enum's origin module,
-    // exactly as the type-position pass qualifies the enum's return type —
-    // otherwise a bare `Enum::Variant` fails to resolve when the enum lives
-    // in a source crate (the usual flat-library case).
-    let source_module = ext.fn_module(registry, ident);
-    // The model's numbering, not a second copy of it: `Enum::discriminant_values`
-    // is what the frontend computed at parse time, overflow rule and all.
-    let arms = e
-        .discriminant_values()
-        .unwrap_or_else(|name| {
-            panic!(
-                "enum `{}` variant `{name}` has a non-literal discriminant; use a literal \
-                 integer value (e.g. `= 1`) or an implicit discriminant",
-                e.name
-            )
-        })
-        .into_iter()
-        .map(|(variant, value)| {
-            let lit = proc_macro2::Literal::i64_unsuffixed(value);
-            quote! { #lit => #source_module::#ident::#variant, }
-        });
-    let body: syn::Expr = syn::parse_quote!({
-        match *v as i64 {
-            #(#arms)*
-            other => {
-                return ::core::result::Result::Err(
-                    <__JniErr as ::core::convert::From<String>>::from(
-                        format!("invalid {} discriminant: {}", #ident_name, other)
-                    )
-                );
-            }
-        }
-    });
-    (syn::parse_quote!(jni::sys::jint), body)
-}
-
-/// `Rust enum → jint` encoder body for a `enum_class`-declared enum.
-/// Wire is `jni::sys::jint`. Relies on the declared enum's repr
-/// supporting an `as` cast (i.e. C-like enum, no fields); the
-/// [`assert_only_unit_variants`] check below catches violations
-/// upstream of the cast. The body works without naming the enum type
-/// at all — `v` is already typed via the wrapper signature, so the
-/// `as` cast picks up the right type by inference.
-pub(crate) fn enum_output_body(
-    _ext: &Declarations,
-    _e: &prebindgen_registry::flat::Enum,
-) -> (syn::Type, syn::Expr) {
-    let body: syn::Expr = syn::parse_quote!({ v as jni::sys::jint });
-    (syn::parse_quote!(jni::sys::jint), body)
 }
 
 // ──────────────────────────────────────────────────────────────────────

@@ -194,6 +194,15 @@ impl RustFunction for JFunction {
 #[derive(Clone)]
 enum JValueBody {
     Ready(syn::Expr),
+    /// A fieldless enum decoder. Variant identity and discriminants are Flat
+    /// facts; the enum's Rust spelling is deliberately supplied only while
+    /// rendering the final file.
+    EnumInput {
+        diagnostic_name: String,
+        source_module: syn::Path,
+        enum_name: syn::Ident,
+        variants: Vec<(syn::Ident, i64)>,
+    },
     /// Array classification and JNI method selection are adapter policy. The
     /// decoder's element and full-array type ascriptions are source spelling,
     /// so its body is built only during final rendering.
@@ -300,20 +309,71 @@ impl JValueCodecPlan {
         }
     }
 
+    pub(crate) fn enum_input(
+        source: TypeRef,
+        source_module: syn::Path,
+        enum_name: syn::Ident,
+        variants: Vec<(syn::Ident, i64)>,
+    ) -> Self {
+        let wire = syn::parse_quote!(jni::sys::jint);
+        let ident = planned_name(Direction::Construct, &source, &wire);
+        let diagnostic_name = enum_name.to_string();
+        Self {
+            ident,
+            direction: Direction::Construct,
+            source,
+            source_kind: JValueSource::Crossing,
+            wire,
+            body: JValueBody::EnumInput {
+                diagnostic_name,
+                source_module,
+                enum_name,
+                variants,
+            },
+        }
+    }
+
     pub(crate) fn name(&self) -> &syn::Ident {
         &self.ident
     }
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = &self.ident;
-        let source = match self.source_kind {
-            JValueSource::Crossing => emit.spell(&self.source),
-            JValueSource::Text(JTextCarrier::Owned) => quote::quote!(String),
-            JValueSource::Text(JTextCarrier::Borrowed) => quote::quote!(&str),
+        let source: syn::Type = match self.source_kind {
+            JValueSource::Crossing => emit.spell_ty(&self.source),
+            JValueSource::Text(JTextCarrier::Owned) => syn::parse_quote!(String),
+            JValueSource::Text(JTextCarrier::Borrowed) => syn::parse_quote!(&str),
         };
         let wire = &self.wire;
         let body = match &self.body {
             JValueBody::Ready(body) => body.clone(),
+            JValueBody::EnumInput {
+                diagnostic_name,
+                source_module,
+                enum_name,
+                variants,
+            } => {
+                let arms = variants.iter().map(|(variant, value)| {
+                    let value = proc_macro2::Literal::i64_unsuffixed(*value);
+                    quote::quote!(#value => #source_module::#enum_name::#variant,)
+                });
+                syn::parse_quote!({
+                    match *v as i64 {
+                        #(#arms)*
+                        other => {
+                            return ::core::result::Result::Err(
+                                <__JniErr as ::core::convert::From<String>>::from(
+                                    format!(
+                                        "invalid {} discriminant: {}",
+                                        #diagnostic_name,
+                                        other
+                                    )
+                                )
+                            );
+                        }
+                    }
+                })
+            }
             JValueBody::PrimitiveArray(spec) => match self.direction {
                 Direction::Construct => {
                     crate::jni::prim_array::input_body(&self.source, spec, emit)

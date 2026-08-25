@@ -410,6 +410,10 @@ fn enum_terminal_allocates_one_niche_per_optional_layer() {
     let reading = gen.registry.reading(&key).expect("Priority reading");
     let input = gen.decls.in_frag(&reading).expect("Priority input");
     let output = gen.decls.out_frag(&reading).expect("Priority output");
+    assert!(
+        input.is_value_codec_plan() && output.is_value_codec_plan(),
+        "both Priority directions must retain unrendered enum codec plans"
+    );
     assert_eq!(input.niches.len(), 2);
     assert_eq!(output.niches.len(), 2);
     assert_eq!(
