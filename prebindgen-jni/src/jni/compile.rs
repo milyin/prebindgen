@@ -893,9 +893,12 @@ impl<R: Conversions> JCompile<'_, R> {
         let direction = at.crossing.direction();
         let (wire, body, niches, metadata, text_carrier) =
             if matches!(source.kind(), TypeKind::Scalar(_)) {
+                let TypeKind::Scalar(kind) = source.kind() else {
+                    unreachable!("the scalar branch is guarded by the Flat kind")
+                };
                 let (wire, body) = match direction {
-                    Direction::Construct => crate::jni::emit::primitive_input(&source.key()),
-                    Direction::Deconstruct => crate::jni::emit::primitive_output(&source.key()),
+                    Direction::Construct => crate::jni::emit::scalar_input(*kind),
+                    Direction::Deconstruct => crate::jni::emit::scalar_output(*kind),
                 }?;
                 let niches = default_niches_for_wire(&wire);
                 let kotlin_name = kotlin_for_wire(&wire);
@@ -904,6 +907,21 @@ impl<R: Conversions> JCompile<'_, R> {
                 } else {
                     self.decls.framework_meta(kotlin_name)
                 };
+                (wire, body, niches, metadata, None)
+            } else if matches!(
+                source.kind(),
+                TypeKind::Vec(element)
+                    if matches!(element.kind(), TypeKind::Scalar(ScalarKind::U8))
+            ) {
+                let (wire, body) = match direction {
+                    Direction::Construct => crate::jni::emit::byte_vector_input(),
+                    Direction::Deconstruct => crate::jni::emit::byte_vector_output(),
+                };
+                let niches = default_niches_for_wire(&wire);
+                let kotlin_name = self
+                    .decls
+                    .override_kotlin_name(&source.key(), Some(KtType::byte_array()));
+                let metadata = self.decls.framework_meta(kotlin_name);
                 (wire, body, niches, metadata, None)
             } else if matches!(source.kind(), TypeKind::Str) {
                 let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
@@ -2746,7 +2764,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     type Plan = JPlan;
     type Error = JErr;
 
-    fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+    fn atomic(&mut self, _cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
         if let Some(frag) = self.planned_value_codec(at) {
             return Ok(frag);
@@ -2772,16 +2790,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(frag) = self.planned_sum_codec(at) {
             return Ok(frag);
         }
-        let emit = cx.emit();
         let conv = match at.crossing.direction() {
-            Direction::Construct => self
-                .decls
-                .input_terminal(ty, emit)
-                .or_else(|| self.borrow(ty, true)),
-            Direction::Deconstruct => self
-                .decls
-                .output_terminal(ty, emit)
-                .or_else(|| self.borrow(ty, false)),
+            Direction::Construct => self.borrow(ty, true),
+            Direction::Deconstruct => self.borrow(ty, false),
         };
         if conv.is_none()
             && at.crossing.direction() == Direction::Deconstruct
@@ -2915,7 +2926,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
 
     fn sequence(
         &mut self,
-        cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_>,
         at: At<'_>,
         elements: Mode,
         inner: &JFrag,
@@ -2936,16 +2947,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(planned) = self.planned_transparent_bridge(at) {
             return Ok(planned);
         }
-        let emit = cx.emit();
         let conv = match at.crossing.direction() {
-            Direction::Construct => self
-                .decls
-                .input_terminal(ty, emit)
-                .or_else(|| self.borrow(ty, true)),
-            Direction::Deconstruct => self
-                .decls
-                .output_terminal(ty, emit)
-                .or_else(|| self.borrow(ty, false)),
+            Direction::Construct => self.borrow(ty, true),
+            Direction::Deconstruct => self.borrow(ty, false),
         };
         let mut frag = self.wrap(at, "no JNI representation for this run", conv)?;
         frag.nested_chain = inner.composed_chain();
