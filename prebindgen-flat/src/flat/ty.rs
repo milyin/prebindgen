@@ -122,6 +122,16 @@ impl TypeRef {
     /// let forged = TypeRef { kind: TypeKind::Unit, origin: todo!() };
     /// ```
     ///
+    /// The same visibility seal prevents using the declaration-only spelling API
+    /// on a captured reading:
+    ///
+    /// ```compile_fail
+    /// # use prebindgen_flat::flat::TypeRef;
+    /// # fn leak(reading: &TypeRef) {
+    /// let _ = reading.origin.declared_spelling();
+    /// # }
+    /// ```
+    ///
     /// The public composition constructors (`borrowed`, `optional`, `vector`,
     /// `scalar`) are intentional flat-model API: collectors can derive readings
     /// without reparsing Rust. They construct a matching kind and origin together,
