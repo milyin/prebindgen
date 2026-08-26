@@ -53,6 +53,16 @@ use proc_macro2::TokenStream;
 
 use super::{Alternative, Element, EnumValue, Struct, Type, TypeRef};
 
+/// Turn an opaque captured spelling into its final typed output item.
+///
+/// This is deliberately a rendering operation. Consumers cannot borrow the
+/// captured `syn` node and therefore cannot use it to classify or inspect the
+/// source; the parse happens only after the pipeline has entered the explicit
+/// `RustEmitter` boundary to assemble generated Rust.
+fn final_item<T: syn::parse::Parse>(tokens: TokenStream) -> T {
+    syn::parse2(tokens).expect("captured Rust item must parse at final emission")
+}
+
 /// Rendering operations supplied by a pipeline-owned callback key.
 ///
 /// All methods are renderings: they answer what the source wrote, never what
@@ -112,27 +122,27 @@ pub trait RustEmitter {
 
     /// Re-emit a captured function verbatim.
     fn verbatim_fn(&self, function: &super::Function) -> syn::ItemFn {
-        function.origin.as_syn().clone()
+        final_item(function.origin.spell())
     }
 
     /// Re-emit a captured struct verbatim.
     fn verbatim_struct(&self, item: &Struct) -> syn::ItemStruct {
-        item.origin.as_syn().clone()
+        final_item(item.origin.spell())
     }
 
     /// Re-emit a captured payload enum verbatim.
     fn verbatim_variant(&self, item: &super::Variant) -> syn::ItemEnum {
-        item.origin.as_syn().clone()
+        final_item(item.origin.spell())
     }
 
     /// Re-emit a captured fieldless enum verbatim.
     fn verbatim_enum(&self, item: &super::Enum) -> syn::ItemEnum {
-        item.origin.as_syn().clone()
+        final_item(item.origin.spell())
     }
 
     /// Re-emit a constant as an alias to its source module.
     fn const_alias(&self, item: &super::Constant, source_module: &syn::Path) -> syn::ItemConst {
-        let mut alias = item.origin.as_syn().clone();
+        let mut alias: syn::ItemConst = final_item(item.origin.spell());
         let ident = &alias.ident;
         alias.expr = Box::new(syn::parse_quote!(#source_module::#ident));
         alias
@@ -140,7 +150,7 @@ pub trait RustEmitter {
 
     /// Re-emit a captured constant verbatim.
     fn const_verbatim(&self, item: &super::Constant) -> syn::ItemConst {
-        item.origin.as_syn().clone()
+        final_item(item.origin.spell())
     }
 
     /// Re-emit an anonymous feature guard.
