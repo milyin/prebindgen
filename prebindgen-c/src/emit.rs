@@ -507,7 +507,7 @@ impl CbindgenBuilder {
         &self,
         f: &prebindgen_registry::flat::Function,
         emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
+    ) -> syn::ItemFn {
         let orig = &f.name;
         let call_path = self.src_fn(orig);
         let sym = self.fn_symbol(orig);
@@ -767,7 +767,7 @@ impl CbindgenBuilder {
             }
         };
 
-        quote! {
+        syn::parse_quote! {
             #[no_mangle]
             #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
             pub unsafe extern "C" fn #sym(

@@ -116,9 +116,9 @@ impl RegistryBuilder {
     /// A const this binding exports.
     ///
     /// Separate from [`Self::export`] only because *having a const mechanism at
-    /// all* is itself a fact: a binding that never calls this re-emits every
-    /// captured const verbatim, while one that calls it emits exactly what it
-    /// names. See [`Self::declares_consts`].
+    /// all* is itself a fact: a binding that never calls this applies its
+    /// `on_const` policy to every captured const, while one that calls it emits
+    /// exactly what it names. See [`Self::declares_consts`].
     pub fn export_const(mut self, name: &syn::Ident) -> Self {
         self.registry
             .declared
@@ -129,7 +129,8 @@ impl RegistryBuilder {
     }
 
     /// Declare that this binding has a const mechanism, even if it exports no
-    /// consts. Without it every captured const is re-emitted verbatim.
+    /// consts. Without it every captured const reaches the adapter's mandatory
+    /// `on_const` policy.
     pub fn declares_consts(mut self) -> Self {
         self.registry
             .declared

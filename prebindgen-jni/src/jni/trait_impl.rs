@@ -1418,9 +1418,7 @@ impl Prebindgen for Declarations {
             });
             let wrapper =
                 emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
-            items.push(syn::parse2::<syn::Item>(wrapper).expect(
-                "constant_expr: generated getter wrapper is a single item by construction",
-            ));
+            items.push(syn::Item::Fn(wrapper));
         }
         items
     }
@@ -1441,8 +1439,10 @@ impl Prebindgen for Declarations {
         f: &prebindgen_registry::flat::Function,
         registry: &Registry,
         emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        emit_jni_function_wrapper(self, f, registry, emit)
+    ) -> Vec<syn::Item> {
+        vec![syn::Item::Fn(emit_jni_function_wrapper(
+            self, f, registry, emit,
+        ))]
     }
 
     fn on_struct(
@@ -1450,10 +1450,10 @@ impl Prebindgen for Declarations {
         _s: &prebindgen_registry::flat::Struct,
         _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
+    ) -> Vec<syn::Item> {
         // Struct converter bodies are emitted from retained registry plans;
         // no separate per-struct item is needed.
-        TokenStream::new()
+        Vec::new()
     }
 
     fn on_variant(
@@ -1461,8 +1461,8 @@ impl Prebindgen for Declarations {
         _v: &prebindgen_registry::flat::Variant,
         _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
 
     fn on_enum(
@@ -1470,8 +1470,8 @@ impl Prebindgen for Declarations {
         _e: &prebindgen_registry::flat::Enum,
         _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
 
     /// Declared consts only reach here (undeclared ones are gated out before
@@ -1486,7 +1486,7 @@ impl Prebindgen for Declarations {
         c: &prebindgen_registry::flat::Constant,
         registry: &Registry,
         emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
+    ) -> Vec<syn::Item> {
         reject_handle_const(self, c);
         let getter = const_getter_fn(c);
         let const_ident = &c.name;
@@ -1495,10 +1495,7 @@ impl Prebindgen for Declarations {
         let wrapper =
             emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
         let alias = emit.const_alias(c, &source_module);
-        quote! {
-            #alias
-            #wrapper
-        }
+        vec![syn::Item::Const(alias), syn::Item::Fn(wrapper)]
     }
 }
 

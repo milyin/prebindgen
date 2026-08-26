@@ -243,10 +243,20 @@ facts, not generated source Rust syntax.
 
 The writer then goes over the declared items in name order and calls the
 adapter back once per kind — `on_function`, `on_struct`, `on_enum`, `on_const`
-— handing over the model element and taking a `TokenStream`. It parses that as
-Rust items and keeps them all. Nothing else is checked: not that a function
-comes out, not that it is one item, not that it mentions the item declared.
-JniGen's constant hook returns two, a getter and an alias.
+— handing over the model element and taking typed `syn::Item`s. The writer
+keeps those items directly; no arbitrary token stream crosses the callback
+boundary and no generated source is reparsed there. A callback may return zero
+or several items: JniGen's constant hook returns two, a getter and an alias.
+
+Typed output is not a route back to captured Rust syntax. Adapters construct
+those items from Flat facts and may ask `Emit` to spell a `TypeRef` or another
+leaf only while assembling the final item. `Emit` deliberately has no API that
+returns a captured function, struct or enum as `syn`; doing so would let an
+adapter inspect the source item instead of using its Flat representation. A
+named const alias is likewise generated from the modeled name and type. If an
+adapter has no source module and therefore no model-defined value to reference,
+it must declare another value policy explicitly: `on_const` has no default and
+the captured initializer is not an available fallback.
 
 **Finally the file.** The writer concatenates, in this order:
 

@@ -19,8 +19,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use proc_macro2::TokenStream;
-
 use crate::{
     destination::Destination,
     prebindgen::Prebindgen,
@@ -37,12 +35,6 @@ use crate::{
 /// while per-item output is assembled.
 #[derive(Debug)]
 pub enum WriteError {
-    /// A `TokenStream` produced by an `on_*` trait method failed to parse
-    /// as `syn::Item`s. Indicates a codegen bug in the adapter.
-    BadTokens {
-        phase: &'static str,
-        source: syn::Error,
-    },
     /// Generated code calls a planned private converter whose function was
     /// removed by reachability filtering.
     UnrenderedConverterCalls {
@@ -54,13 +46,6 @@ pub enum WriteError {
 impl std::fmt::Display for WriteError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WriteError::BadTokens { phase, source } => {
-                write!(
-                    f,
-                    "generated tokens from {} did not parse: {}",
-                    phase, source
-                )
-            }
             WriteError::UnrenderedConverterCalls { calls } => {
                 write!(
                     f,
@@ -145,30 +130,27 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     let declared_types = &declared.types;
     let flat = registry.flat();
     let mut body_items: Vec<syn::Item> = Vec::new();
-    body_items.extend(parse_items_from_tokens(
-        "on_function",
+    body_items.extend(
         sorted_by_name(flat.functions().map(|f| (&f.name, f)))
             .into_iter()
             .filter(|(ident, _)| declared_fns.contains(*ident))
-            .map(|(_, item)| ext.on_function(item, registry, &emit)),
-    )?);
-    body_items.extend(parse_items_from_tokens(
-        "on_struct",
+            .flat_map(|(_, item)| ext.on_function(item, registry, &emit)),
+    );
+    body_items.extend(
         sorted_by_name(flat.types().filter_map(|t| match t {
             prebindgen_flat::flat::Type::Struct(s) => Some((&s.name, s)),
             _ => None,
         }))
         .into_iter()
         .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
-        .map(|(_, item)| ext.on_struct(item, registry, &emit)),
-    )?);
+        .flat_map(|(_, item)| ext.on_struct(item, registry, &emit)),
+    );
     // Both enum shapes emit through `on_enum` and sort together: they were one
     // map here before they were two elements. They still SORT together — the
     // emission order is one sequence — but they dispatch to their own methods
     // now, because handing an adapter a `Type` it has to re-match is worse than
     // handing it the element the model already decided on.
-    body_items.extend(parse_items_from_tokens(
-        "on_enum",
+    body_items.extend(
         sorted_by_name(flat.types().filter_map(|t| match t {
             prebindgen_flat::flat::Type::Variant(v) => Some((&v.name, t)),
             prebindgen_flat::flat::Type::Enum(e) => Some((&e.name, t)),
@@ -176,20 +158,19 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
         }))
         .into_iter()
         .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
-        .map(|(_, t)| match t {
+        .flat_map(|(_, t)| match t {
             prebindgen_flat::flat::Type::Variant(v) => ext.on_variant(v, registry, &emit),
             prebindgen_flat::flat::Type::Enum(e) => ext.on_enum(e, registry, &emit),
             _ => unreachable!("filtered to the two enum shapes above"),
         }),
-    )?);
+    );
     // Consts: an adapter WITH a const declaration mechanism
     // (`declared_consts() == Some(set)`) emits declared consts only,
     // symmetric with functions; an adapter without one (`None`) gets every
-    // const passed through verbatim via the default `on_const`. Prebindgen's
+    // const through its own mandatory `on_const` policy. Prebindgen's
     // own injected feature guards are not consts at all — see the guards loop.
     let declared_consts = &declared.consts;
-    body_items.extend(parse_items_from_tokens(
-        "on_const",
+    body_items.extend(
         sorted_by_name(flat.constants().map(|c| (&c.name, c)))
             .into_iter()
             .filter(|(ident, _)| {
@@ -197,8 +178,8 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
                     .as_ref()
                     .is_none_or(|set| set.contains(*ident))
             })
-            .map(|(_, item)| ext.on_const(item, registry, &emit)),
-    )?);
+            .flat_map(|(_, item)| ext.on_const(item, registry, &emit)),
+    );
 
     // Select one semantic operation only after per-item planning has marked
     // late plans reachable. This lets a reached twin replace an earlier
@@ -263,24 +244,6 @@ where
     let mut items: Vec<(&syn::Ident, &T)> = items.collect();
     items.sort_by_key(|(left, _)| left.to_string());
     items
-}
-
-/// Parse a per-item `TokenStream` (which may be empty) as a sequence of
-/// `syn::Item`s. Empty token streams yield zero items.
-fn parse_items_from_tokens<I: IntoIterator<Item = TokenStream>>(
-    phase: &'static str,
-    iter: I,
-) -> Result<Vec<syn::Item>, WriteError> {
-    let mut out = Vec::new();
-    for ts in iter {
-        if ts.is_empty() {
-            continue;
-        }
-        let file: syn::File =
-            syn::parse2(ts.clone()).map_err(|source| WriteError::BadTokens { phase, source })?;
-        out.extend(file.items);
-    }
-    Ok(out)
 }
 
 /// Refuse a generated file whose rendered functions still call a private

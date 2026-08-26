@@ -51,18 +51,7 @@
 
 use proc_macro2::TokenStream;
 
-use super::{Alternative, Element, EnumValue, Struct, Type, TypeRef};
-
-fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStream {
-    let attrs = &c.attrs;
-    let vis = &c.vis;
-    let ident = &c.ident;
-    let ty = &c.ty;
-    quote::quote! {
-        #(#attrs)*
-        #vis const #ident: #ty = #source_module::#ident;
-    }
-}
+use super::{Alternative, EnumValue, Struct, TypeRef};
 
 /// Rendering operations supplied by a pipeline-owned callback key.
 ///
@@ -111,44 +100,23 @@ pub trait RustEmitter {
         ty.stripped_syntax()
     }
 
-    /// Re-emit a captured item verbatim.
-    fn item(&self, element: &Element) -> syn::Item {
-        element.as_syn()
-    }
-
-    /// Re-emit a captured type declaration verbatim.
-    fn type_item(&self, ty: &Type) -> syn::Item {
-        ty.as_syn()
-    }
-
-    /// Re-emit a captured function verbatim.
-    fn verbatim_fn(&self, function: &super::Function) -> TokenStream {
-        function.origin.spell()
-    }
-
-    /// Re-emit a captured struct verbatim.
-    fn verbatim_struct(&self, item: &Struct) -> TokenStream {
-        item.origin.spell()
-    }
-
-    /// Re-emit a captured payload enum verbatim.
-    fn verbatim_variant(&self, item: &super::Variant) -> TokenStream {
-        item.origin.spell()
-    }
-
-    /// Re-emit a captured fieldless enum verbatim.
-    fn verbatim_enum(&self, item: &super::Enum) -> TokenStream {
-        item.origin.spell()
-    }
-
     /// Re-emit a constant as an alias to its source module.
-    fn const_alias(&self, item: &super::Constant, source_module: &syn::Path) -> TokenStream {
-        const_path_alias(item.origin.as_syn(), source_module)
-    }
-
-    /// Re-emit a captured constant verbatim.
-    fn const_verbatim(&self, item: &super::Constant) -> TokenStream {
-        item.origin.spell()
+    fn const_alias(&self, item: &super::Constant, source_module: &syn::Path) -> syn::ItemConst {
+        let ident = &item.name;
+        let ty = self.spell(&item.ty);
+        let docs: Vec<syn::Attribute> = item
+            .docs()
+            .into_iter()
+            .flat_map(|docs| {
+                docs.lines()
+                    .map(|line| {
+                        let doc = format!(" {line}");
+                        syn::parse_quote!(#[doc = #doc])
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        syn::parse_quote!(#(#docs)* pub const #ident: #ty = #source_module::#ident;)
     }
 
     /// Re-emit an anonymous feature guard.

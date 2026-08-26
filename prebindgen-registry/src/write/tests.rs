@@ -5,7 +5,6 @@ use std::{
 };
 
 use prebindgen::SourceLocation;
-use proc_macro2::TokenStream;
 
 use super::*;
 use crate::registry::RegistryBuilder;
@@ -31,36 +30,51 @@ impl Prebindgen for IdentityExt {
         &self,
         f: &prebindgen_flat::flat::Function,
         _registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream {
-        emit.verbatim_fn(f)
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        let ident = &f.name;
+        vec![syn::parse_quote!(fn #ident() {})]
     }
 
     fn on_struct(
         &self,
         s: &prebindgen_flat::flat::Struct,
         _registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream {
-        emit.verbatim_struct(s)
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        let ident = &s.name;
+        vec![syn::parse_quote!(pub struct #ident;)]
     }
 
     fn on_variant(
         &self,
         v: &prebindgen_flat::flat::Variant,
         _registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream {
-        emit.verbatim_variant(v)
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        let ident = &v.name;
+        vec![syn::parse_quote!(pub enum #ident {})]
     }
 
     fn on_enum(
         &self,
         e: &prebindgen_flat::flat::Enum,
         _registry: &Registry,
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        let ident = &e.name;
+        vec![syn::parse_quote!(pub enum #ident {})]
+    }
+
+    fn on_const(
+        &self,
+        c: &prebindgen_flat::flat::Constant,
+        _registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream {
-        emit.verbatim_enum(e)
+    ) -> Vec<syn::Item> {
+        let ident = &c.name;
+        let ty = emit.spell(&c.ty);
+        vec![syn::parse_quote!(pub const #ident: #ty = 0;)]
     }
 }
 
@@ -125,16 +139,19 @@ impl Prebindgen for LateExt {
         f: &prebindgen_flat::flat::Function,
         _registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream {
+    ) -> Vec<syn::Item> {
         if self.activate {
             self.reachable.set(true);
         }
         if self.call_converter {
             let ident = &f.name;
             let converter = emit.operation_ident("test", &self.operation);
-            quote::quote!(fn #ident() { #converter(); })
+            vec![syn::Item::Fn(
+                syn::parse_quote!(fn #ident() { #converter(); }),
+            )]
         } else {
-            emit.verbatim_fn(f)
+            let ident = &f.name;
+            vec![syn::parse_quote!(fn #ident() {})]
         }
     }
 
@@ -142,27 +159,39 @@ impl Prebindgen for LateExt {
         &self,
         s: &prebindgen_flat::flat::Struct,
         _registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream {
-        emit.verbatim_struct(s)
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        let ident = &s.name;
+        vec![syn::parse_quote!(pub struct #ident;)]
     }
 
     fn on_variant(
         &self,
         v: &prebindgen_flat::flat::Variant,
         _registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream {
-        emit.verbatim_variant(v)
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        let ident = &v.name;
+        vec![syn::parse_quote!(pub enum #ident {})]
     }
 
     fn on_enum(
         &self,
         e: &prebindgen_flat::flat::Enum,
         _registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream {
-        emit.verbatim_enum(e)
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        let ident = &e.name;
+        vec![syn::parse_quote!(pub enum #ident {})]
+    }
+
+    fn on_const(
+        &self,
+        _c: &prebindgen_flat::flat::Constant,
+        _registry: &Registry,
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
 }
 
@@ -247,7 +276,6 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
                 .to_string();
             assert_eq!(calls, vec![("a_fn".to_string(), missing)]);
         }
-        other => panic!("unexpected writer error: {other}"),
     }
     assert!(
         !path.exists(),
@@ -392,14 +420,21 @@ fn write_rust_sorts_declared_items_by_ident() {
 }
 
 #[test]
-fn bad_generated_tokens_report_emission_phase() {
-    let err = parse_items_from_tokens("on_function", [quote::quote!(fn broken)])
-        .expect_err("invalid item tokens should fail");
-    assert!(
-        err.to_string().contains("on_function"),
-        "error should mention the adapter emission phase: {}",
-        err
-    );
+fn per_item_emission_carries_typed_items_without_reparsing() {
+    let contract = include_str!("../prebindgen.rs");
+    let item_methods = contract
+        .split_once("// ── Item methods")
+        .expect("item methods")
+        .1;
+    assert_eq!(item_methods.matches("-> Vec<syn::Item>").count(), 5);
+
+    let writer = include_str!("../write.rs");
+    for removed in ["parse_items_from_tokens", "BadTokens", "syn::parse2"] {
+        assert!(
+            !writer.contains(removed),
+            "typed per-item emission must not restore `{removed}`"
+        );
+    }
 }
 
 /// An adapter with a const mechanism gates **named** consts and cannot gate
@@ -429,35 +464,43 @@ fn guards_emit_ungated_and_in_stream_order() {
     impl Prebindgen for ConstGatingExt {
         fn on_function(
             &self,
-            f: &prebindgen_flat::flat::Function,
+            _f: &prebindgen_flat::flat::Function,
             _r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
-            _emit.verbatim_fn(f)
+        ) -> Vec<syn::Item> {
+            Vec::new()
         }
         fn on_struct(
             &self,
-            s: &prebindgen_flat::flat::Struct,
+            _s: &prebindgen_flat::flat::Struct,
             _r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
-            _emit.verbatim_struct(s)
+        ) -> Vec<syn::Item> {
+            Vec::new()
         }
         fn on_variant(
             &self,
-            v: &prebindgen_flat::flat::Variant,
+            _v: &prebindgen_flat::flat::Variant,
             _r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
-            _emit.verbatim_variant(v)
+        ) -> Vec<syn::Item> {
+            Vec::new()
         }
         fn on_enum(
             &self,
-            e: &prebindgen_flat::flat::Enum,
+            _e: &prebindgen_flat::flat::Enum,
             _r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
-            _emit.verbatim_enum(e)
+        ) -> Vec<syn::Item> {
+            Vec::new()
+        }
+        fn on_const(
+            &self,
+            _c: &prebindgen_flat::flat::Constant,
+            _r: &Registry,
+            _emit: &crate::Emit,
+        ) -> Vec<syn::Item> {
+            Vec::new()
         }
     }
 

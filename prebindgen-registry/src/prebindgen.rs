@@ -1,7 +1,7 @@
 //! `Prebindgen` — what a generator still hands the emitter.
 //!
 //! One method per `#[prebindgen]` item kind (`on_function`, `on_struct`,
-//! `on_enum`, `on_const`) returning the wrapper Rust tokens to emit, plus the
+//! `on_enum`, `on_const`) returning typed Rust items to emit, plus the
 //! items they depend on (`prerequisites`), a cross-cutting rewrite
 //! (`post_process_item`) and two invariant checks.
 //!
@@ -14,8 +14,6 @@
 //! converter. Its executable artifact is retained separately by the adapter's
 //! frozen generation plan; this shared registry carrier never stores rendered
 //! Rust syntax.
-
-use proc_macro2::TokenStream;
 
 use crate::{generation::OperationId, niches::Niches, registry::Registry};
 
@@ -258,10 +256,9 @@ pub trait Prebindgen {
 
     /// Absolute path under which the source crate's items are reachable
     /// from the generated file (e.g. `zenoh_flat`), for adapters that
-    /// qualify emitted references against one. Drives the default
-    /// [`Self::on_const`]: with a source module available, a named const
-    /// re-emits as a path-alias to the source item instead of copying its
-    /// initializer tokens. Default: `None`.
+    /// qualify emitted references against one. An adapter may also use it in
+    /// its required [`Self::on_const`] policy to generate a path-alias to the
+    /// source item instead of copying initializer tokens. Default: `None`.
     fn source_module(&self) -> Option<&syn::Path> {
         None
     }
@@ -284,7 +281,7 @@ pub trait Prebindgen {
         f: &prebindgen_flat::flat::Function,
         registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream;
+    ) -> Vec<syn::Item>;
 
     /// Per-struct emission. Typically empty for languages that get
     /// everything they need from auto-generated converters.
@@ -293,20 +290,20 @@ pub trait Prebindgen {
         s: &prebindgen_flat::flat::Struct,
         registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream;
+    ) -> Vec<syn::Item>;
 
     /// Per-sum emission — an `enum` whose alternatives carry payloads.
     ///
     /// Separate from [`Self::on_enum`] because the model separates them: the
     /// two are numbered differently and consumed as different constructs. An
-    /// adapter with nothing to say about one shape returns an empty stream, as
+    /// adapter with nothing to say about one shape returns an empty vector, as
     /// both in-tree adapters do for both.
     fn on_variant(
         &self,
         v: &prebindgen_flat::flat::Variant,
         registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream;
+    ) -> Vec<syn::Item>;
 
     /// Per-enum emission — the fieldless shape, a named set of integers.
     fn on_enum(
@@ -314,13 +311,13 @@ pub trait Prebindgen {
         e: &prebindgen_flat::flat::Enum,
         registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream;
+    ) -> Vec<syn::Item>;
 
-    /// Per-const emission. Default: a named const re-emits as a path-alias
-    /// when [`Self::source_module`] is available —
-    /// initializer tokens are never copied, so a const whose initializer
-    /// references source-crate internals stays valid in the generated file.
-    /// An adapter without a source module passes the const through verbatim.
+    /// Per-const emission. There is deliberately no default: Flat models the
+    /// const's name, type and documentation, but not an arbitrary Rust
+    /// initializer expression. Each adapter must therefore state its value
+    /// policy explicitly, commonly by generating a path-alias to a source
+    /// module. Initializer tokens are never copied or parsed.
     ///
     /// A const reaching here is always named: prebindgen's own injected feature
     /// checks are [`Guard`](prebindgen_flat::flat::Guard)s, not consts, so this
@@ -328,12 +325,7 @@ pub trait Prebindgen {
     fn on_const(
         &self,
         c: &prebindgen_flat::flat::Constant,
-        _registry: &Registry,
+        registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream {
-        match self.source_module() {
-            Some(m) => emit.const_alias(c, m),
-            None => emit.const_verbatim(c),
-        }
-    }
+    ) -> Vec<syn::Item>;
 }

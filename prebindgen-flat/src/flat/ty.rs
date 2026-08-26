@@ -90,6 +90,11 @@ pub struct TypeRef {
     /// It says exactly what `kind` says — that is the invariant
     /// [`TypeKind::to_syn`] checks — and it says it in the source's own tokens,
     /// which is why generated Rust re-emits this rather than a reconstruction.
+    // Keep this narrower than `pub(crate)`, and never add a public accessor.
+    // `Origin<syn::Type>::declared_spelling` is public for build-script
+    // declarations of that same Rust type; exposing this captured origin would
+    // accidentally make that declaration-only spelling route available to
+    // adapters without an `Emit` capability.
     pub(super) origin: Origin<syn::Type>,
 }
 
