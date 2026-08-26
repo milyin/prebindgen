@@ -119,23 +119,7 @@ impl Declarations {
         }
     }
 
-    /// Build the standard JNI output-converter `fn`. Body assumes in-scope
-    /// `env: &mut JNIEnv` and `v: <rust>` (by value — handles like
-    /// `Subscriber<()>` aren't `Clone`, so callers move into the converter).
-    ///
-    /// `exc` — see [`Self::build_input_fn`]; same body↔exception coupling,
-    /// output side.
-    pub(crate) fn build_output_fn(
-        &self,
-        rust: &syn::Type,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-    ) -> syn::ItemFn {
-        self.build_output_fn_parts(&rust.to_token_stream(), wire, body, exc)
-    }
-
-    /// [`Self::build_output_fn`] off the **reading**. The output signature takes
+    /// [`Self::build_output_fn_parts`] off the **reading**. The output signature takes
     /// the value by move and needs no lifetime splice, so this is the spelling
     /// and nothing else.
     pub(crate) fn build_output_fn_of(
@@ -938,12 +922,14 @@ impl JniGenBuilder {
             // the case the converter table could hold only because it kept a
             // list beside the conversion; a fragment says it directly.
             .flat_map(|f| {
-                std::iter::once(f.rust.clone()).chain(
-                    f.conv
-                        .pre_stages
-                        .iter()
-                        .map(|s| crate::jni::chain::JFunction::retained(s.function.clone())),
-                )
+                std::iter::once(f.rust.clone())
+                    .chain(f.rust_stages.iter().cloned())
+                    .chain(
+                        f.conv
+                            .pre_stages
+                            .iter()
+                            .map(|s| crate::jni::chain::JFunction::retained(s.function.clone())),
+                    )
             })
             .collect();
         let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry);
@@ -1642,9 +1628,8 @@ impl Prebindgen for Declarations {
 impl Declarations {
     // ── Input converters ─────────────────────────────────────────────
 
-    /// Remaining whole-type **input** compatibility categories (opaque
-    /// handle, enum, `convert!`, byte run, struct) — depends on nothing,
-    /// `subs` empty.
+    /// Remaining whole-type **input** compatibility categories: destination
+    /// primitive overrides and explicit whole-object sum/struct decoders.
     ///
     /// Bare scalars and all string terminals are compiled as
     /// `JValueCodecPlan`s before this fallback is entered.
@@ -1659,12 +1644,9 @@ impl Declarations {
         // generated Rust uses this.
         // Everything below reads the reading: the identity for a lookup, the
         // spelling for what generated Rust says. Neither needs a node.
-        // Structured-config overrides first (user-registered rank-0 wrappers,
-        // then built-ins). Opaque handles are retained before this fallback.
+        // Opaque handles and canonical custom conversions are retained before
+        // this fallback.
         let key = reading.key();
-        if let Some(conv) = self.lookup_input(reading, registry, emit) {
-            return Some(conv);
-        }
         if let Some((wire, body)) = (!matches!(
             reading.unwrapped().kind(),
             prebindgen_registry::flat::TypeKind::Scalar(_)
@@ -1752,10 +1734,8 @@ impl Declarations {
 
     // ── Output converters ────────────────────────────────────────────
 
-    /// Remaining whole-type **output** compatibility categories (the dual of
-    /// [`Self::input_terminal`]: opaque handle, enum, user table, byte runs,
-    /// struct) — `subs` empty.
-    ///
+    /// Remaining whole-type **output** compatibility categories: destination
+    /// primitive overrides and explicit whole-object struct encoders.
     /// Bare scalars, all string terminals, and unit are compiled as
     /// `JValueCodecPlan`s before this fallback is entered.
     pub(crate) fn output_terminal(
@@ -1767,12 +1747,9 @@ impl Declarations {
         // Classify off `kind`, spell with `spell()` — see `input_terminal`.
         // Everything below reads the reading: the identity for a lookup, the
         // spelling for what generated Rust says. Neither needs a node.
-        // Structured-config overrides first (built-ins). Opaque handles are
-        // retained before this fallback.
+        // Opaque handles and canonical custom conversions are retained before
+        // this fallback.
         let key = reading.key();
-        if let Some(conv) = self.lookup_output(reading, registry, emit) {
-            return Some(conv);
-        }
         if let Some((wire, body)) = (!matches!(
             reading.unwrapped().kind(),
             prebindgen_registry::flat::TypeKind::Scalar(_)

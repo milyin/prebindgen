@@ -189,6 +189,10 @@ pub(crate) fn optional_pair_plan(
 pub(crate) struct JFrag {
     pub(crate) conv: ConverterImpl<KotlinMeta>,
     pub(crate) rust: crate::jni::chain::JFunction,
+    /// Frozen semantic stages beside the wire-facing converter. The
+    /// compatibility ConverterImpl keeps marker functions for ordering and
+    /// call names; these are the artifacts that render those markers.
+    pub(crate) rust_stages: Vec<crate::jni::chain::JFunction>,
     pub(crate) yields: Yield,
     /// Shape of the single adapter-side intermediate over flattened ABI leaves.
     pub(crate) layout: Option<JLayout>,
@@ -710,6 +714,7 @@ impl JFrag {
         Self {
             conv,
             rust,
+            rust_stages: Vec::new(),
             choice_arm: None,
             layout: Some(JLayout::Leaf),
             nested_chain: None,
@@ -857,6 +862,12 @@ impl std::fmt::Display for JErr {
 
 fn refuse(at: At<'_>, why: &str) -> JErr {
     JErr::Refused(format!("JniGen: {} ({why})", at.crossing.key()))
+}
+
+/// Readable label for syntax explicitly supplied by the adapter declaration.
+/// This is not captured source syntax and never accepts a TypeRef.
+fn declared_type_name(ty: &syn::Type) -> String {
+    crate::jni::emit::sanitize_for_ident(&ty.to_token_stream().to_string())
 }
 
 impl<R: Conversions> JCompile<'_, R> {
@@ -1323,6 +1334,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             choice_arm: None,
             rust,
+            rust_stages: Vec::new(),
             layout: Some(JLayout::Leaf),
             nested_chain: None,
             wires: None,
@@ -1467,6 +1479,170 @@ impl<R: Conversions> JCompile<'_, R> {
         ))
     }
 
+    /// Retain one composed convert declaration as a semantic stage over the
+    /// already-compiled converter for its representation.
+    fn planned_custom_conversion(&self, at: At<'_>) -> Option<JFrag> {
+        let source = at.crossing.spelled();
+        let direction = at.crossing.direction();
+        let decl = self
+            .decls
+            .convert_decls
+            .iter()
+            .find(|decl| decl.key() == &source.key())?;
+        let spec = match direction {
+            Direction::Construct => decl.input_spec().as_ref()?,
+            Direction::Deconstruct => decl.output_spec().as_ref()?,
+        };
+        let (representation, representation_key, inner, call) = match spec {
+            ConvertSpec::PrebindgenFn(function) => {
+                let item = self.registry.flat().function(function).unwrap_or_else(|| {
+                    panic!("convert!({source}): function {function} is absent from the Flat model")
+                });
+                assert!(
+                    item.params.len() == 1,
+                    "convert function {function} must take exactly one parameter, it takes {}",
+                    item.params.len(),
+                );
+                let parameter = &item.params[0].ty;
+                let (parameter, by_ref) = match parameter.kind() {
+                    TypeKind::Ref { inner, .. } => (inner.as_ref(), true),
+                    _ => (parameter, false),
+                };
+                let (result, error) = item
+                    .ret
+                    .fallible_parts()
+                    .map_or((&item.ret, None), |(ok, error)| (ok, Some(error)));
+                let representation = match direction {
+                    Direction::Construct => {
+                        assert!(
+                            result.key() == source.key(),
+                            "convert!({source}).input({function}): the function produces `{}`, not `{source}`",
+                            result,
+                        );
+                        assert!(
+                            parameter.key() != source.key(),
+                            "convert!({source}).input({function}) must take the converted form",
+                        );
+                        parameter.clone()
+                    }
+                    Direction::Deconstruct => {
+                        assert!(
+                            parameter.key() == source.key(),
+                            "convert!({source}).output({function}): the function takes `{}`, not `{source}`",
+                            parameter,
+                        );
+                        assert!(
+                            result.key() != source.key(),
+                            "convert!({source}).output({function}) must return the converted form",
+                        );
+                        result.clone()
+                    }
+                };
+                let inner = match direction {
+                    Direction::Construct => self.decls.in_frag(&representation)?,
+                    Direction::Deconstruct => self.decls.out_frag(&representation)?,
+                };
+                let module = self.decls.fn_module(self.registry, function);
+                (
+                    crate::jni::chain::JCustomType::Model(representation.clone()),
+                    representation.key(),
+                    inner,
+                    crate::jni::chain::JCustomCall::Function {
+                        module,
+                        function: function.clone(),
+                        by_ref,
+                        error: error.cloned().map(Box::new),
+                    },
+                )
+            }
+            ConvertSpec::Trait { repr, fallible } => {
+                let reading = self.registry.reading_of(repr)?;
+                let inner = match direction {
+                    Direction::Construct => self.decls.in_frag(&reading)?,
+                    Direction::Deconstruct => self.decls.out_frag(&reading)?,
+                };
+                (
+                    crate::jni::chain::JCustomType::Declared(repr.clone()),
+                    reading.key(),
+                    inner,
+                    crate::jni::chain::JCustomCall::Trait {
+                        fallible: *fallible,
+                    },
+                )
+            }
+        };
+        if let Some(domain) = decl.domain() {
+            let domain_key = TypeKey::from_type(domain.ty());
+            if domain_key != representation_key {
+                let direction = match direction {
+                    Direction::Construct => "input",
+                    Direction::Deconstruct => "output",
+                };
+                let domain = declared_type_name(domain.ty());
+                match &representation {
+                    crate::jni::chain::JCustomType::Model(reading) => panic!(
+                        "convert!({source}): domain type {domain} does not match {direction} representation {reading}"
+                    ),
+                    crate::jni::chain::JCustomType::Declared(ty) => {
+                        let representation = declared_type_name(ty);
+                        panic!(
+                            "convert!({source}): domain type {domain} does not match {direction} representation {representation}"
+                        )
+                    }
+                }
+            }
+        }
+        let operation = match direction {
+            Direction::Construct => "conversion_into",
+            Direction::Deconstruct => "conversion_from",
+        };
+        let ident = match source.unwrapped().kind() {
+            TypeKind::Named { id, .. } => {
+                crate::jni::chain::named_model_operation_name(operation, id, &source.key())
+            }
+            _ => crate::jni::chain::model_operation_name(operation, &source.key()),
+        };
+        let plan = crate::jni::chain::JFunction::custom_conversion(
+            crate::jni::chain::JCustomConversionPlan {
+                ident: ident.clone(),
+                source: source.clone(),
+                representation,
+                direction,
+                call,
+                domain: decl.domain().clone(),
+            },
+        );
+        let mut pre_stages = vec![Stage {
+            function: crate::jni::chain::planned_marker(&ident),
+            metadata: KotlinMeta::default(),
+        }];
+        pre_stages.extend(inner.pre_stages.iter().cloned());
+        let (niches, sentinels) = self.decls.conversion_domain_niches(
+            &source.key(),
+            self.registry,
+            direction,
+            &inner.destination,
+        );
+        let mut metadata = KotlinMeta {
+            kotlin_name: inner.metadata.kotlin_name.clone(),
+            value_reading: None,
+            projection: inner.metadata.projection.clone(),
+            niche_sentinels: Vec::new(),
+        };
+        Declarations::attach_domain_sentinels(&mut metadata, sentinels);
+        let conv = ConverterImpl {
+            destination: inner.destination.clone(),
+            function: inner.function.clone(),
+            pre_stages,
+            niches,
+            metadata,
+            subs: vec![representation_key],
+        };
+        let mut fragment = JFrag::planned(at, conv, inner.0.rust.clone());
+        fragment.rust_stages.push(plan);
+        Some(fragment)
+    }
+
     fn planned_child(
         direction: Direction,
         part: &Part<'_>,
@@ -1606,6 +1782,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 subs: parts.iter().map(|(part, _)| part.ty.key()).collect(),
             },
             rust,
+            rust_stages: Vec::new(),
             layout: Some(JLayout::Product(layouts)),
             choice_arm: None,
             nested_chain: None,
@@ -1768,6 +1945,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 subs: parts_subs(arms),
             },
             rust,
+            rust_stages: Vec::new(),
             layout: Some(JLayout::Choice(layouts)),
             choice_arm: None,
             nested_chain: None,
@@ -1928,6 +2106,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 subs: vec![element.key()],
             },
             rust,
+            rust_stages: Vec::new(),
             layout: Some(JLayout::Leaf),
             choice_arm: None,
             // Iterable callback delivery converts one element at a time. Keep
@@ -2012,6 +2191,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 subs: vec![target.key()],
             },
             rust,
+            rust_stages: Vec::new(),
             layout: Some(JLayout::Leaf),
             choice_arm: None,
             nested_chain: None,
@@ -2304,6 +2484,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 subs: vec![element.key()],
             },
             rust,
+            rust_stages: Vec::new(),
             layout: Some(layout),
             choice_arm: None,
             nested_chain: None,
@@ -2459,6 +2640,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             return Ok(frag);
         }
         if let Some(frag) = self.planned_result(at) {
+            return Ok(frag);
+        }
+        if let Some(frag) = self.planned_custom_conversion(at) {
             return Ok(frag);
         }
         if let Some(frag) = self.planned_transparent_bridge(at) {
@@ -2617,6 +2801,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // its declared JNI representation is one terminal byte array. Freeze
         // that terminal before attempting structural List composition.
         if let Some(planned) = self.planned_value_codec(at) {
+            return Ok(planned);
+        }
+        if let Some(planned) = self.planned_custom_conversion(at) {
             return Ok(planned);
         }
         if let Some(planned) = self.planned_sequence(at, elements, inner) {
@@ -3191,6 +3378,14 @@ impl Conv {
     #[cfg(test)]
     pub(crate) fn is_handle_codec_plan(&self) -> bool {
         self.0.rust.is_handle_codec()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_custom_conversion_stage(&self) -> bool {
+        self.0
+            .rust_stages
+            .iter()
+            .any(crate::jni::chain::JFunction::is_custom_conversion)
     }
 
     #[cfg(test)]

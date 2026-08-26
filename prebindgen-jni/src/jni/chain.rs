@@ -20,6 +20,7 @@ enum JBody {
     Marker(syn::Ident),
     ValueCodec(Box<JValueCodecPlan>),
     HandleCodec(Box<JHandleCodecPlan>),
+    CustomConversion(Box<JCustomConversionPlan>),
     Result(Box<JResultPlan>),
     Transparent(Box<JTransparentPlan>),
     BorrowedOptionalHandle(Box<JBorrowedOptionalHandlePlan>),
@@ -49,6 +50,10 @@ impl JFunction {
 
     pub(crate) fn result(plan: JResultPlan) -> Self {
         Self(JBody::Result(Box::new(plan)))
+    }
+
+    pub(crate) fn custom_conversion(plan: JCustomConversionPlan) -> Self {
+        Self(JBody::CustomConversion(Box::new(plan)))
     }
 
     pub(crate) fn transparent(plan: JTransparentPlan) -> Self {
@@ -99,6 +104,11 @@ impl JFunction {
     }
 
     #[cfg(test)]
+    pub(crate) fn is_custom_conversion(&self) -> bool {
+        matches!(self.0, JBody::CustomConversion(_))
+    }
+
+    #[cfg(test)]
     pub(crate) fn is_result(&self) -> bool {
         matches!(self.0, JBody::Result(_))
     }
@@ -129,6 +139,7 @@ impl JFunction {
         match &self.0 {
             JBody::Complete(_) => {}
             JBody::Marker(_) | JBody::ValueCodec(_) => {}
+            JBody::CustomConversion(_) => {}
             JBody::HandleCodec(plan) => plan.reachable.set(true),
             JBody::Result(plan) => {
                 plan.reachable.set(true);
@@ -179,6 +190,7 @@ impl RustFunction for JFunction {
             JBody::Marker(ident) => ident,
             JBody::ValueCodec(plan) => &plan.ident,
             JBody::HandleCodec(plan) => &plan.ident,
+            JBody::CustomConversion(plan) => &plan.ident,
             JBody::Result(plan) => &plan.ident,
             JBody::Transparent(plan) => &plan.ident,
             JBody::BorrowedOptionalHandle(plan) => &plan.ident,
@@ -199,6 +211,10 @@ impl RustFunction for JFunction {
             // planned too, every compiled value codec remains an emitted leaf.
             JBody::ValueCodec(_) => true,
             JBody::HandleCodec(plan) => plan.reachable.get(),
+            // Canonical conversion stages historically emit once compiled.
+            // Keep that reachability policy until every complete compatibility
+            // parent retains stage dependencies as well as its wire codec.
+            JBody::CustomConversion(_) => true,
             JBody::Result(plan) => plan.reachable.get(),
             JBody::Transparent(plan) => plan.reachable.get(),
             JBody::BorrowedOptionalHandle(plan) => plan.reachable.get(),
@@ -218,6 +234,7 @@ impl RustFunction for JFunction {
             JBody::Marker(ident) => planned_marker(ident),
             JBody::ValueCodec(plan) => plan.render(emit),
             JBody::HandleCodec(plan) => plan.render(emit),
+            JBody::CustomConversion(plan) => plan.render(emit),
             JBody::Result(plan) => plan.render(emit),
             JBody::Transparent(plan) => plan.render(emit),
             JBody::BorrowedOptionalHandle(plan) => plan.render(emit),
@@ -227,6 +244,164 @@ impl RustFunction for JFunction {
             JBody::Sequence(plan) => plan.render(emit),
             JBody::Invoke(plan) => plan.render(emit),
         }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum JCustomType {
+    Model(TypeRef),
+    Declared(syn::Type),
+}
+
+impl JCustomType {
+    fn spell(&self, emit: &Emit) -> syn::Type {
+        match self {
+            Self::Model(reading) => emit.spell_ty(reading),
+            Self::Declared(ty) => ty.clone(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum JCustomCall {
+    Function {
+        module: syn::Path,
+        function: syn::Ident,
+        by_ref: bool,
+        error: Option<Box<TypeRef>>,
+    },
+    Trait {
+        fallible: bool,
+    },
+}
+
+/// One adapter-declared semantic conversion stage retained without spelling
+/// either source type from the Flat model.
+#[derive(Clone)]
+pub(crate) struct JCustomConversionPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) representation: JCustomType,
+    pub(crate) direction: Direction,
+    pub(crate) call: JCustomCall,
+    pub(crate) domain: Option<prebindgen_registry::RepresentationDomain>,
+}
+
+impl JCustomConversionPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = emit.spell_ty(&self.source);
+        let representation = self.representation.spell(emit);
+        let (input, output) = match self.direction {
+            Direction::Construct => (&representation, &source),
+            Direction::Deconstruct => (&source, &representation),
+        };
+        let (raw, raw_error): (syn::Expr, Option<syn::Type>) = match &self.call {
+            JCustomCall::Function {
+                module,
+                function,
+                by_ref,
+                error,
+            } => {
+                let arg = if *by_ref { quote!(&v) } else { quote!(v) };
+                (
+                    syn::parse_quote!(#module::#function(#arg)),
+                    error.as_deref().map(|error| emit.spell_ty(error)),
+                )
+            }
+            JCustomCall::Trait { fallible } => {
+                let raw = match (self.direction, *fallible) {
+                    (Direction::Construct, false) => syn::parse_quote!(
+                        <#representation as ::core::convert::Into<#source>>::into(v)
+                    ),
+                    (Direction::Construct, true) => syn::parse_quote!(
+                        <#representation as ::core::convert::TryInto<#source>>::try_into(v)
+                    ),
+                    (Direction::Deconstruct, false) => syn::parse_quote!(
+                        <#source as ::core::convert::Into<#representation>>::into(v)
+                    ),
+                    (Direction::Deconstruct, true) => syn::parse_quote!(
+                        <#source as ::core::convert::TryInto<#representation>>::try_into(v)
+                    ),
+                };
+                let error = (*fallible).then(|| match self.direction {
+                    Direction::Construct => syn::parse_quote!(
+                        <#representation as ::core::convert::TryInto<#source>>::Error
+                    ),
+                    Direction::Deconstruct => syn::parse_quote!(
+                        <#source as ::core::convert::TryInto<#representation>>::Error
+                    ),
+                });
+                (raw, error)
+            }
+        };
+        let (body, error) = if let Some(domain) = &self.domain {
+            let valid = domain.contains_expr(match self.direction {
+                Direction::Construct => quote!(v),
+                Direction::Deconstruct => quote!(__repr),
+            });
+            let converted = if raw_error.is_some() {
+                quote!((#raw).map_err(|__e| {
+                    <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
+                }))
+            } else {
+                quote!(::core::result::Result::Ok(#raw))
+            };
+            let diagnostic = self.source.to_string();
+            let body: syn::Expr = match self.direction {
+                Direction::Construct => syn::parse_quote!({
+                    if #valid {
+                        #converted
+                    } else {
+                        ::core::result::Result::Err(
+                            <__JniErr as ::core::convert::From<String>>::from(
+                                format!(
+                                    "{} representation is outside its declared domain",
+                                    #diagnostic,
+                                )
+                            )
+                        )
+                    }
+                }),
+                Direction::Deconstruct => syn::parse_quote!({
+                    match #converted {
+                        ::core::result::Result::Ok(__repr) if #valid => {
+                            ::core::result::Result::Ok(__repr)
+                        }
+                        ::core::result::Result::Ok(_) => {
+                            ::core::result::Result::Err(
+                                <__JniErr as ::core::convert::From<String>>::from(
+                                    format!(
+                                        "{} representation is outside its declared domain",
+                                        #diagnostic,
+                                    )
+                                )
+                            )
+                        }
+                        ::core::result::Result::Err(__e) => {
+                            ::core::result::Result::Err(__e)
+                        }
+                    }
+                }),
+            };
+            (body, syn::parse_quote!(__JniErr))
+        } else {
+            (
+                crate::jni::body_for_exc(&raw, raw_error.as_ref()),
+                raw_error.unwrap_or_else(crate::jni::builder::default_err_type),
+            )
+        };
+        let allow = crate::jni::trait_impl::generated_converter_attr();
+        let lifetime = syn::Lifetime::new("\u{27}a", Span::call_site());
+        syn::parse_quote!(
+            #allow
+            pub(crate) unsafe fn #name<#lifetime>(
+                env: &mut jni::JNIEnv<#lifetime>,
+                v: #input,
+            ) -> ::core::result::Result<#output, #error> {
+                #body
+            }
+        )
     }
 }
 

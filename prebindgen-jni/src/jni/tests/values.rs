@@ -419,12 +419,12 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
     );
     assert!(
         rc.contains("Some({let__chain_s0=jlong_to_u64_")
-            && rc.contains("let__chain_s1=u64_to_Duration_"),
+            && rc.contains("let__chain_s1=conversion_into_"),
         "Option input must compose the raw u64 decoder with the Duration stage:\n{rust}"
     );
     assert!(
         rc.contains("Some(__value)=>{{let__chain_s0=")
-            && rc.contains("Duration_to_u64_")
+            && rc.contains("conversion_from_")
             && rc.contains("u64_to_jlong_"),
         "Option output must compose the Duration stage with the raw u64 encoder:\n{rust}"
     );
@@ -646,7 +646,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
         "the raw builder adapter must restore the optional niche:\n{kotlin}"
     );
     assert!(rc.contains("jlong_to_u64"), "{rust}");
-    assert!(rc.contains("u64_to_Duration"), "{rust}");
+    assert!(rc.contains("conversion_into_"), "{rust}");
     assert!(
         rc.contains("jlong_to_Option_Duration") && rc.contains("env,&__delay_raw)?"),
         "whole-JObject input must invoke the complete optional Duration converter:\n{rust}"
@@ -2192,6 +2192,24 @@ fn convert_via_trait_impls() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let reading = gen
+        .registry
+        .reading_of(&syn::parse_quote!(Celsius))
+        .expect("Celsius reading");
+    assert!(
+        gen.decls
+            .in_frag(&reading)
+            .expect("Celsius input")
+            .has_custom_conversion_stage(),
+        "trait input must retain an unrendered custom-conversion operation"
+    );
+    assert!(
+        gen.decls
+            .out_frag(&reading)
+            .expect("Celsius output")
+            .has_custom_conversion_stage(),
+        "trait output must retain an unrendered custom-conversion operation"
+    );
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -2307,6 +2325,24 @@ fn convert_via_local_fns() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let reading = gen
+        .registry
+        .reading_of(&syn::parse_quote!(Label))
+        .expect("Label reading");
+    assert!(
+        gen.decls
+            .in_frag(&reading)
+            .expect("Label input")
+            .has_custom_conversion_stage(),
+        "function input must retain an unrendered custom-conversion operation"
+    );
+    assert!(
+        gen.decls
+            .out_frag(&reading)
+            .expect("Label output")
+            .has_custom_conversion_stage(),
+        "function output must retain an unrendered custom-conversion operation"
+    );
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -2314,12 +2350,12 @@ fn convert_via_local_fns() {
     assert!(rc.contains("crate::conv::label_out("), "{rust}");
     assert!(
         rc.contains("let__chain_s0=JString_to_owned_text_")
-            && rc.contains("let__chain_s1=String_to_Label_")
+            && rc.contains("let__chain_s1=conversion_into_")
             && rc.contains("Result::<_,__JniErr>::Ok(__chain_s1)"),
         "the ordinary input must invoke its frozen terminal-then-stage pipeline:\n{rust}"
     );
     assert!(
-        rc.contains("let__chain_s0=Label_to_String_")
+        rc.contains("let__chain_s0=conversion_from_")
             && rc.contains("owned_text_to_JString_")
             && rc.contains("env,__chain_s0)"),
         "the ordinary output must invoke its frozen stage-then-terminal pipeline:\n{rust}"
@@ -2373,14 +2409,14 @@ fn multi_stage_pipeline_preserves_registry_order() {
 
     assert!(
         rc.contains("let__chain_s0=JString_to_owned_text_")
-            && rc.contains("let__chain_s1=String_to_Label_")
-            && rc.contains("let__chain_s2=Label_to_Tag_")
+            && rc.contains("let__chain_s1=conversion_into_")
+            && rc.contains("let__chain_s2=conversion_into_")
             && rc.contains("Result::<_,__JniErr>::Ok(__chain_s2)"),
         "construct must run terminal, inner stage, then outer stage:\n{rust}"
     );
     assert!(
-        rc.contains("let__chain_s0=Tag_to_Label_")
-            && rc.contains("let__chain_s1=Label_to_String_")
+        rc.contains("let__chain_s0=conversion_from_")
+            && rc.contains("let__chain_s1=conversion_from_")
             && rc.contains("owned_text_to_JString_")
             && rc.contains("env,__chain_s1)"),
         "deconstruct must run outer stage, inner stage, then terminal:\n{rust}"

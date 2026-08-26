@@ -974,7 +974,10 @@ pub(crate) unsafe fn CallbackHolder_to_JObject_81e45598<'a>(
     Ok({
         let ___tag: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.tag.clone())?;
         let ___token: jni::sys::jlong = {
-            let ___token_s0 = CallbackToken_to_Ingot_c7696aa6(env, v.token.clone())
+            let ___token_s0 = conversion_from_CallbackToken_f4b882a0(
+                    env,
+                    v.token.clone(),
+                )
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -1018,51 +1021,13 @@ pub(crate) unsafe fn CallbackHolder_to_tuple2_14aebb91<'a>(
     ::core::result::Result::Ok((
         i64_to_jlong_fbf9a9bc(env, v.tag)?,
         {
-            let __chain_s0 = CallbackToken_to_Ingot_c7696aa6(env, v.token)
+            let __chain_s0 = conversion_from_CallbackToken_f4b882a0(env, v.token)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
             Ingot_to_jlong_020c3a86(env, __chain_s0)
         }?,
     ))
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn CallbackToken_to_Ingot_c7696aa6<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::CallbackToken,
-) -> ::core::result::Result<perftest_flat::Ingot, __JniErr> {
-    Ok(perftest_flat::callback_token_into_ingot(v))
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Celsius_to_i32_88c8e884<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Celsius,
-) -> ::core::result::Result<i32, __JniErr> {
-    Ok(<perftest_flat::Celsius as ::core::convert::Into<i32>>::into(v))
 }
 #[allow(
     non_snake_case,
@@ -1187,7 +1152,10 @@ pub(crate) unsafe fn DurationBoundary_to_JObject_9c5bf9bc<'a>(
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
         let ___required: jni::sys::jlong = {
-            let ___required_s0 = Duration_to_u64_e3980876(env, v.required.clone())
+            let ___required_s0 = conversion_from_Duration_8ead4928(
+                    env,
+                    v.required.clone(),
+                )
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -1234,7 +1202,7 @@ pub(crate) unsafe fn DurationBoundary_to_tuple2_3834b601<'a>(
 ) -> ::core::result::Result<(jni::sys::jlong, jni::sys::jlong), __JniErr> {
     ::core::result::Result::Ok((
         {
-            let __chain_s0 = Duration_to_u64_e3980876(env, v.required)
+            let __chain_s0 = conversion_from_Duration_8ead4928(env, v.required)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -1242,50 +1210,6 @@ pub(crate) unsafe fn DurationBoundary_to_tuple2_3834b601<'a>(
         }?,
         Option_Duration_to_jlong_1cfa4d44(env, v.delay)?,
     ))
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Duration_to_u64_e3980876<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Duration,
-) -> ::core::result::Result<u64, __JniErr> {
-    {
-        match (crate::duration_to_millis(v))
-            .map_err(|__e| {
-                <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
-            })
-        {
-            ::core::result::Result::Ok(
-                __repr,
-            ) if (true && true && (__repr) <= 86400000u64) && !(false) => {
-                ::core::result::Result::Ok(__repr)
-            }
-            ::core::result::Result::Ok(_) => {
-                ::core::result::Result::Err(
-                    <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(
-                        format!(
-                            "{} representation is outside its declared domain",
-                            "Duration"
-                        ),
-                    ),
-                )
-            }
-            ::core::result::Result::Err(__e) => ::core::result::Result::Err(__e),
-        }
-    }
 }
 #[allow(
     non_snake_case,
@@ -1333,7 +1257,10 @@ pub(crate) unsafe fn HoldPolicy_to_JObject_d2a5bcc4<'a>(
             }
             perftest_flat::Hold::For(__s0_0) => {
                 let ___hold_for_v0: jni::sys::jlong = {
-                    let ___hold_for_v0_s0 = Duration_to_u64_e3980876(env, __s0_0.clone())
+                    let ___hold_for_v0_s0 = conversion_from_Duration_8ead4928(
+                            env,
+                            __s0_0.clone(),
+                        )
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
@@ -1357,7 +1284,7 @@ pub(crate) unsafe fn HoldPolicy_to_JObject_d2a5bcc4<'a>(
                     }
                     perftest_flat::Hold::For(__s0_0) => {
                         let ___grace_for_v0: jni::sys::jlong = {
-                            let ___grace_for_v0_s0 = Duration_to_u64_e3980876(
+                            let ___grace_for_v0_s0 = conversion_from_Duration_8ead4928(
                                     env,
                                     __s0_0.clone(),
                                 )
@@ -1424,7 +1351,10 @@ pub(crate) unsafe fn Hold_to_tuple3_bf18c116<'a>(
                     (),
                     (
                         {
-                            let __chain_s0 = Duration_to_u64_e3980876(env, __part0)
+                            let __chain_s0 = conversion_from_Duration_8ead4928(
+                                    env,
+                                    __part0,
+                                )
                                 .map_err(|__e| <__JniErr as ::core::convert::From<
                                     String,
                                 >>::from(__e.to_string()))?;
@@ -2350,7 +2280,7 @@ pub(crate) unsafe fn JObject_to_DurationBoundary_9c5bf9bc<'env, 'v>(
             >>::from(format!("DurationBoundary.required: {}", e)))?;
         let required = {
             let required_s0 = jlong_to_u64_4384a5d6(env, &__required_raw)?;
-            let required_s1 = u64_to_Duration_7c0845f9(env, required_s0)
+            let required_s1 = conversion_into_Duration_7a843fda(env, required_s0)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -2476,7 +2406,7 @@ pub(crate) unsafe fn JObject_to_Hold_5f85caaf<'env, 'v>(
                     >>::from(format!("Hold.For.v0: {}", e)))? as _;
                 let __p_v0 = {
                     let __p_v0_s0 = jlong_to_u64_4384a5d6(env, &__p_v0_raw)?;
-                    let __p_v0_s1 = u64_to_Duration_7c0845f9(env, __p_v0_s0)
+                    let __p_v0_s1 = conversion_into_Duration_7a843fda(env, __p_v0_s0)
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
@@ -3277,7 +3207,7 @@ pub(crate) unsafe fn JObject_to_Option_Percent_544dd364<'env, 'v>(
             ::core::option::Option::Some(
                 {
                     let __chain_s0 = jint_to_i32_a3e3b6ef(env, &__present)?;
-                    let __chain_s1 = i32_to_Percent_db3641cc(env, __chain_s0)
+                    let __chain_s1 = conversion_into_Percent_edf2da53(env, __chain_s0)
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
@@ -3841,7 +3771,7 @@ pub(crate) unsafe fn JObject_to_Vec_Label_3fdf860d<'env, 'a>(
                             env,
                             &__sequence_part,
                         )?;
-                        let __chain_s1 = String_to_Label_c1a79668(env, __chain_s0)
+                        let __chain_s1 = conversion_into_Label_9e60aa38(env, __chain_s0)
                             .map_err(|__e| <__JniErr as ::core::convert::From<
                                 String,
                             >>::from(__e.to_string()))?;
@@ -4072,7 +4002,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Duration_Send_Sync_static_98c9f460<'env,
                 let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
                     let __cb0_enc = (|| -> ::core::result::Result<_, __JniErr> {
                         {
-                            let __chain_s0 = Duration_to_u64_e3980876(
+                            let __chain_s0 = conversion_from_Duration_8ead4928(
                                     &mut env,
                                     __cb_arg0,
                                 )
@@ -6641,25 +6571,6 @@ pub(crate) unsafe fn JString_to_owned_text_220e25c6<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn Label_to_String_63dec766<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Label,
-) -> ::core::result::Result<String, __JniErr> {
-    Ok(crate::label_out(v))
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 #[inline(always)]
 pub(crate) unsafe fn Layered_to_tuple8_4f5948ba<'a>(
     env: &mut jni::JNIEnv<'a>,
@@ -6882,25 +6793,6 @@ pub(crate) unsafe fn MaybeHolder_to_JObject_1c68fbac<'a>(
             >>::from(format!("encode struct via fromParts: {}", e)))?;
         __obj
     })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Millis_to_i64_61ecf054<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Millis,
-) -> ::core::result::Result<i64, __JniErr> {
-    Ok(cov_helpers::millis_value(&v))
 }
 #[allow(
     non_snake_case,
@@ -9462,7 +9354,7 @@ pub(crate) unsafe fn Option_Duration_to_jlong_1cfa4d44<'a>(
         match v {
             ::core::option::Option::Some(__value) => {
                 {
-                    let __chain_s0 = Duration_to_u64_e3980876(env, __value)
+                    let __chain_s0 = conversion_from_Duration_8ead4928(env, __value)
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
@@ -9621,7 +9513,7 @@ pub(crate) unsafe fn Option_Percent_to_JObject_544dd364<'a>(
         match v {
             ::core::option::Option::Some(__value) => {
                 let __raw: jni::sys::jint = {
-                    let __chain_s0 = Percent_to_i32_01484801(env, __value)
+                    let __chain_s0 = conversion_from_Percent_7aab8720(env, __value)
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
@@ -9889,7 +9781,7 @@ pub(crate) unsafe fn Option_Ticks_to_JObject_95efad57<'a>(
         match v {
             ::core::option::Option::Some(__value) => {
                 let __raw: jni::sys::jlong = {
-                    let __chain_s0 = Ticks_to_u64_78fe2120(env, __value)
+                    let __chain_s0 = conversion_from_Ticks_bdccbef5(env, __value)
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
@@ -10177,25 +10069,6 @@ pub(crate) unsafe fn Payload_to_tuple5_bbb055bc<'a>(
         bool_to_jboolean_31306d98(env, v.flag)?,
         Option_Box_String_to_JString_071e4c8c(env, v.label)?,
     ))
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Percent_to_i32_01484801<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Percent,
-) -> ::core::result::Result<i32, String> {
-    crate::percent_out(v)
 }
 #[allow(
     non_snake_case,
@@ -10624,25 +10497,6 @@ pub(crate) unsafe fn Storage_to_jlong_1b233abd<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn String_to_Label_c1a79668<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: String,
-) -> ::core::result::Result<perftest_flat::Label, String> {
-    crate::label_in(v)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn Summary_to_jlong_3cb103b9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Summary,
@@ -10720,25 +10574,6 @@ pub(crate) unsafe fn Tagged_to_JObject_641b984c<'a>(
             >>::from(format!("encode struct via fromParts: {}", e)))?;
         __obj
     })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn Ticks_to_u64_78fe2120<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Ticks,
-) -> ::core::result::Result<u64, __JniErr> {
-    Ok(perftest_flat::ticks_value(&v))
 }
 #[allow(
     non_snake_case,
@@ -10870,7 +10705,7 @@ pub(crate) unsafe fn Vec_Label_to_JObject_3fdf860d<'a>(
             >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
         for __sequence_element in __sequence_source.into_iter() {
             let __sequence_part = {
-                let __chain_s0 = Label_to_String_63dec766(env, __sequence_element)
+                let __chain_s0 = conversion_from_Label_957b37c5(env, __sequence_element)
                     .map_err(|__e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(__e.to_string()))?;
@@ -11304,6 +11139,276 @@ pub(crate) unsafe fn borrowed_text_to_JString_b6a9f7b3<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn conversion_from_CallbackToken_f4b882a0<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::CallbackToken,
+) -> ::core::result::Result<perftest_flat::Ingot, __JniErr> {
+    Ok(perftest_flat::callback_token_into_ingot(v))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_from_Celsius_e830784c<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Celsius,
+) -> ::core::result::Result<i32, __JniErr> {
+    Ok(<perftest_flat::Celsius as ::core::convert::Into<i32>>::into(v))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_from_Duration_8ead4928<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Duration,
+) -> ::core::result::Result<u64, __JniErr> {
+    {
+        match (crate::duration_to_millis(v))
+            .map_err(|__e| {
+                <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
+            })
+        {
+            ::core::result::Result::Ok(
+                __repr,
+            ) if (true && true && (__repr) <= 86400000u64) && !(false) => {
+                ::core::result::Result::Ok(__repr)
+            }
+            ::core::result::Result::Ok(_) => {
+                ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "{} representation is outside its declared domain",
+                            "Duration",
+                        ),
+                    ),
+                )
+            }
+            ::core::result::Result::Err(__e) => ::core::result::Result::Err(__e),
+        }
+    }
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_from_Label_957b37c5<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Label,
+) -> ::core::result::Result<String, __JniErr> {
+    Ok(crate::label_out(v))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_from_Millis_9d907e1e<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Millis,
+) -> ::core::result::Result<i64, __JniErr> {
+    Ok(cov_helpers::millis_value(&v))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_from_Percent_7aab8720<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Percent,
+) -> ::core::result::Result<i32, String> {
+    crate::percent_out(v)
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_from_Ticks_bdccbef5<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Ticks,
+) -> ::core::result::Result<u64, __JniErr> {
+    Ok(perftest_flat::ticks_value(&v))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_into_Celsius_fa44b12a<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: i32,
+) -> ::core::result::Result<perftest_flat::Celsius, __JniErr> {
+    Ok(<i32 as ::core::convert::Into<perftest_flat::Celsius>>::into(v))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_into_Duration_7a843fda<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: u64,
+) -> ::core::result::Result<perftest_flat::Duration, __JniErr> {
+    {
+        if (true && true && (v) <= 86400000u64) && !(false) {
+            ::core::result::Result::Ok(crate::duration_from_millis(v))
+        } else {
+            ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        "{} representation is outside its declared domain", "Duration",
+                    ),
+                ),
+            )
+        }
+    }
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_into_Label_9e60aa38<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: String,
+) -> ::core::result::Result<perftest_flat::Label, String> {
+    crate::label_in(v)
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_into_Millis_57324fb1<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: i64,
+) -> ::core::result::Result<perftest_flat::Millis, __JniErr> {
+    Ok(cov_helpers::millis_from_long(v))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn conversion_into_Percent_edf2da53<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: i32,
+) -> ::core::result::Result<
+    perftest_flat::Percent,
+    <i32 as ::core::convert::TryInto<perftest_flat::Percent>>::Error,
+> {
+    <i32 as ::core::convert::TryInto<perftest_flat::Percent>>::try_into(v)
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn f64_2_to_JDoubleArray_dc30d1f9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: [f64; 2],
@@ -11437,47 +11542,6 @@ pub(crate) unsafe fn i32_3_to_JIntArray_60e5e35a<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn i32_to_Celsius_8c363100<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: i32,
-) -> ::core::result::Result<perftest_flat::Celsius, __JniErr> {
-    Ok(<i32 as ::core::convert::Into<perftest_flat::Celsius>>::into(v))
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn i32_to_Percent_db3641cc<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: i32,
-) -> ::core::result::Result<
-    perftest_flat::Percent,
-    <i32 as ::core::convert::TryInto<perftest_flat::Percent>>::Error,
-> {
-    <i32 as ::core::convert::TryInto<perftest_flat::Percent>>::try_into(v)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn i32_to_jint_a3e3b6ef<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: i32,
@@ -11521,25 +11585,6 @@ pub(crate) unsafe fn i64_2_to_JLongArray_73596912<'a>(
             })?;
         __arr
     })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn i64_to_Millis_bb88777a<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: i64,
-) -> ::core::result::Result<perftest_flat::Millis, __JniErr> {
-    Ok(cov_helpers::millis_from_long(v))
 }
 #[allow(
     non_snake_case,
@@ -11914,7 +11959,7 @@ pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
             ::core::option::Option::Some(
                 {
                     let __chain_s0 = jlong_to_u64_4384a5d6(env, __present)?;
-                    let __chain_s1 = u64_to_Duration_7c0845f9(env, __chain_s0)
+                    let __chain_s1 = conversion_into_Duration_7a843fda(env, __chain_s0)
                         .map_err(|__e| <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string()))?;
@@ -12379,7 +12424,7 @@ pub(crate) unsafe fn transparent_input_Duration_c2fb7f56<'env, 'v>(
     ::core::result::Result::Ok({
         let __inner = {
             let __chain_s0 = jlong_to_u64_4384a5d6(env, v)?;
-            let __chain_s1 = u64_to_Duration_7c0845f9(env, __chain_s0)
+            let __chain_s1 = conversion_into_Duration_7a843fda(env, __chain_s0)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -12430,7 +12475,7 @@ pub(crate) unsafe fn transparent_output_Duration_dffc5863<'a>(
     ::core::result::Result::Ok({
         let __inner = *v;
         {
-            let __chain_s0 = Duration_to_u64_e3980876(env, __inner)
+            let __chain_s0 = conversion_from_Duration_8ead4928(env, __inner)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -13443,39 +13488,6 @@ pub(crate) unsafe fn u64_2_to_JLongArray_60bcc6a5<'a>(
             })?;
         __arr
     })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn u64_to_Duration_7c0845f9<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: u64,
-) -> ::core::result::Result<perftest_flat::Duration, __JniErr> {
-    {
-        if (true && true && (v) <= 86400000u64) && !(false) {
-            ::core::result::Result::Ok(crate::duration_from_millis(v))
-        } else {
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        "{} representation is outside its declared domain", "Duration"
-                    ),
-                ),
-            )
-        }
-    }
 }
 #[allow(
     non_snake_case,
@@ -15359,7 +15371,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_celsiusDouble<'a
     let c = match (|| -> ::core::result::Result<_, __JniErr> {
         {
             let __chain_s0 = jint_to_i32_a3e3b6ef(&mut env, &c)?;
-            let __chain_s1 = i32_to_Celsius_8c363100(&mut env, __chain_s0)
+            let __chain_s1 = conversion_into_Celsius_fa44b12a(&mut env, __chain_s0)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -15382,7 +15394,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_celsiusDouble<'a
     let __out = perftest_flat::celsius_double(c);
     match (|| -> ::core::result::Result<_, __JniErr> {
         {
-            let __chain_s0 = Celsius_to_i32_88c8e884(&mut env, __out)
+            let __chain_s0 = conversion_from_Celsius_e830784c(&mut env, __out)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -15695,7 +15707,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_durationEmit<'a>
     let value = match (|| -> ::core::result::Result<_, __JniErr> {
         {
             let __chain_s0 = jlong_to_u64_4384a5d6(&mut env, &value)?;
-            let __chain_s1 = u64_to_Duration_7c0845f9(&mut env, __chain_s0)
+            let __chain_s1 = conversion_into_Duration_7a843fda(&mut env, __chain_s0)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -16241,7 +16253,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelBorrowedCon
     let __out = perftest_flat::label_borrowed_concat(&labels);
     match (|| -> ::core::result::Result<_, __JniErr> {
         {
-            let __chain_s0 = Label_to_String_63dec766(&mut env, __out)
+            let __chain_s0 = conversion_from_Label_957b37c5(&mut env, __out)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -16277,7 +16289,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
     let l = match (|| -> ::core::result::Result<_, __JniErr> {
         {
             let __chain_s0 = JString_to_owned_text_220e25c6(&mut env, &l)?;
-            let __chain_s1 = String_to_Label_c1a79668(&mut env, __chain_s0)
+            let __chain_s1 = conversion_into_Label_9e60aa38(&mut env, __chain_s0)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -16300,7 +16312,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
     let __out = perftest_flat::label_reverse(l);
     match (|| -> ::core::result::Result<_, __JniErr> {
         {
-            let __chain_s0 = Label_to_String_63dec766(&mut env, __out)
+            let __chain_s0 = conversion_from_Label_957b37c5(&mut env, __out)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -17657,7 +17669,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     let a = match (|| -> ::core::result::Result<_, __JniErr> {
         {
             let __chain_s0 = jlong_to_i64_fbf9a9bc(&mut env, &a)?;
-            let __chain_s1 = i64_to_Millis_bb88777a(&mut env, __chain_s0)
+            let __chain_s1 = conversion_into_Millis_57324fb1(&mut env, __chain_s0)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -17680,7 +17692,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     let b = match (|| -> ::core::result::Result<_, __JniErr> {
         {
             let __chain_s0 = jlong_to_i64_fbf9a9bc(&mut env, &b)?;
-            let __chain_s1 = i64_to_Millis_bb88777a(&mut env, __chain_s0)
+            let __chain_s1 = conversion_into_Millis_57324fb1(&mut env, __chain_s0)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -17703,7 +17715,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     let __out = perftest_flat::millis_add(a, b);
     match (|| -> ::core::result::Result<_, __JniErr> {
         {
-            let __chain_s0 = Millis_to_i64_61ecf054(&mut env, __out)
+            let __chain_s0 = conversion_from_Millis_9d907e1e(&mut env, __out)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -18285,7 +18297,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
     let p = match (|| -> ::core::result::Result<_, __JniErr> {
         {
             let __chain_s0 = jint_to_i32_a3e3b6ef(&mut env, &p)?;
-            let __chain_s1 = i32_to_Percent_db3641cc(&mut env, __chain_s0)
+            let __chain_s1 = conversion_into_Percent_edf2da53(&mut env, __chain_s0)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -18322,7 +18334,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
     let __out = perftest_flat::percent_scale(p, factor);
     match (|| -> ::core::result::Result<_, __JniErr> {
         {
-            let __chain_s0 = Percent_to_i32_01484801(&mut env, __out)
+            let __chain_s0 = conversion_from_Percent_7aab8720(&mut env, __out)
                 .map_err(|__e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string()))?;
@@ -19699,7 +19711,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_spanHolderNew<'a
             let __obj0: jni::objects::JObject = {
                 let __enc0 = match (|| -> ::core::result::Result<_, __JniErr> {
                     {
-                        let __chain_s0 = Duration_to_u64_e3980876(
+                        let __chain_s0 = conversion_from_Duration_8ead4928(
                                 &mut env,
                                 __u0.required.clone(),
                             )
