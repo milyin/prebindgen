@@ -169,10 +169,11 @@ impl CValue {
         val: TokenStream,
         targets: &[TokenStream],
         route: &ErrRoute<'_>,
+        emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         match self {
             Self::Direct { converter, .. } => {
-                let conv = converter.ident();
+                let conv = converter.ident(emit);
                 let converted = if converter.fallible() {
                     route_result(quote!(#conv(#val)), route)
                 } else {
@@ -185,7 +186,7 @@ impl CValue {
                 inner,
                 absent: Some(slot),
             } => {
-                let inner_encode = inner.encode(quote!(__x), targets, route);
+                let inner_encode = inner.encode(quote!(__x), targets, route, emit);
                 let absent = &slot.value;
                 let target = &targets[0];
                 quote!(
@@ -200,7 +201,7 @@ impl CValue {
                 absent: None,
             } => {
                 let present = &targets[0];
-                let inner_encode = inner.encode(quote!(__x), &targets[1..], route);
+                let inner_encode = inner.encode(quote!(__x), &targets[1..], route, emit);
                 quote!(
                     match #val {
                         ::core::option::Option::Some(__x) => {
@@ -215,7 +216,7 @@ impl CValue {
                 element_wire,
                 converter,
             } => {
-                let conv = converter.ident();
+                let conv = converter.ident(emit);
                 let converted = if converter.fallible() {
                     route_result(quote!(#conv(#val)), route)
                 } else {
@@ -234,7 +235,7 @@ impl CValue {
                 element_wire,
                 converter,
             } => {
-                let conv = converter.ident();
+                let conv = converter.ident(emit);
                 let pointer = &targets[0];
                 let length = &targets[1];
                 if converter.fallible() {
@@ -249,7 +250,7 @@ impl CValue {
                         #length = __n;
                     )
                 } else {
-                    let map = map_arg(conv, converter.unsafe_());
+                    let map = map_arg(&conv, converter.unsafe_());
                     quote!(
                         let __arr: ::std::vec::Vec<#element_wire> =
                             #val.iter().copied().map(#map).collect();
@@ -378,6 +379,14 @@ fn model_operation_for(
     name: impl Into<String>,
 ) -> OperationId {
     OperationId::model_artifact(source, c_artifact(kind, name), at.crossing.direction())
+}
+
+pub(crate) fn callback_operation(source: &TypeRef) -> OperationId {
+    OperationId::model_artifact(
+        source,
+        c_artifact("c-invoke", "callback-capture"),
+        Direction::Construct,
+    )
 }
 
 fn marker_name(operation: &MarkerOperation) -> &'static str {
@@ -922,7 +931,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         let function = CFunction::optional(
             operation,
             OptionalPlan {
-                ident: format_ident!("__cbg_in_option_{}", sanitize(&elem.key())),
                 source: at.crossing.spelled().clone(),
                 source_module: self.gen.source_module.clone(),
                 wire: wire.clone(),
@@ -969,10 +977,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     let function = CFunction::sequence(
                         operation,
                         SequencePlan {
-                            ident: format_ident!(
-                                "__cbg_out_chain_vec_{}",
-                                sanitize(&element.key())
-                            ),
                             source: ty.clone(),
                             element: (**element).clone(),
                             source_module: self.gen.source_module.clone(),
@@ -1140,7 +1144,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             let function = CFunction::marker(
                 operation,
                 MarkerPlan {
-                    ident: format_ident!("__cbg_arm"),
                     operation: MarkerOperation::ChoiceArm,
                     // Choice retains the exact part FragmentUse edges; this
                     // transient bridge has no independent dependency.
@@ -1218,10 +1221,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             .collect();
         let subs: Vec<TypeKey> = parts.iter().map(|(p, _)| p.ty.key()).collect();
         let direction = at.crossing.direction();
-        let ident = match direction {
-            Direction::Construct => CbindgenBuilder::in_name_of(&key),
-            Direction::Deconstruct => CbindgenBuilder::out_name_of(&key),
-        };
         let wire: syn::Type = syn::parse_quote!(#c_struct);
         let operation = OperationId::product_converter(
             at.crossing.value(),
@@ -1232,7 +1231,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         let function = CFunction::product(
             operation,
             ProductPlan {
-                ident,
                 source: at.crossing.spelled().clone(),
                 source_module: self.gen.source_module.clone(),
                 wire: wire.clone(),
@@ -1310,10 +1308,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         }
 
         let destination: syn::Type = syn::parse_quote!(::core::mem::MaybeUninit<#cname>);
-        let ident = match direction {
-            Direction::Construct => CbindgenBuilder::in_name_of(&key),
-            Direction::Deconstruct => CbindgenBuilder::out_name_of(&key),
-        };
         let shape_arms = arms
             .iter()
             .map(|(_, fragment)| {
@@ -1336,7 +1330,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         let function = CFunction::choice(
             operation,
             ChoicePlan {
-                ident,
                 source: at.crossing.spelled().clone(),
                 source_module: self.gen.source_module.clone(),
                 wire: cname,
@@ -1383,11 +1376,8 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         }
         let c_struct = self.gen.callback_c_ident(&key);
         let destination: syn::Type = syn::parse_quote!(#c_struct);
-        let operation = model_operation(at, "c-invoke", "callback-capture");
-        let function = CFunction::deferred_invoke(
-            operation,
-            format_ident!("__cbg_in_{}", self.gen.callback_c_name(&key)),
-        );
+        let operation = callback_operation(at.crossing.value());
+        let function = CFunction::deferred_invoke(operation);
         let value = CValue::Direct {
             wire: destination.clone(),
             converter: function.call().clone(),

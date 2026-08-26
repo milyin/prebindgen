@@ -75,9 +75,12 @@ fn result_string_uses_owned_string_wire() {
         "{src}"
     );
     // Ok arm encodes the pointer into the return slot; error → NULL.
-    assert!(compact.contains("__ret=__cbg_out_String(__v);"), "{src}");
     assert!(
-        compact.contains("=>{if!e.is_null(){*e=__cbg_out_Error(__err);}::core::ptr::null_mut()}"),
+        operation_call(&compact, "__c_out_convert_String_", "__v"),
+        "{src}"
+    );
+    assert!(
+        operation_call(&compact, "__c_out_convert_Error_", "__err"),
         "{src}"
     );
 }
@@ -115,7 +118,7 @@ fn option_string_returns_pointer_null_for_none() {
     assert!(!compact.contains("e:*mut"), "{src}");
     // Inline Option encoding into the return slot: Some → inner wire, None → NULL.
     assert!(
-        compact.contains("::core::option::Option::Some(__x)=>{__ret=__cbg_out_String(__x);}"),
+        operation_call(&compact, "__c_out_convert_String_", "__x"),
         "{src}"
     );
     assert!(
@@ -162,7 +165,10 @@ fn result_option_uses_out_param() {
     assert!(compact.contains("out:*mut*mutz_thing"), "{src}");
     assert!(compact.contains("e:*mutz_error"), "{src}");
     // Ok arm writes the Option (pointer-or-NULL) through `out`, returns true.
-    assert!(compact.contains("*out=__cbg_out_ZThing(__x);"), "{src}");
+    assert!(
+        operation_call(&compact, "__c_out_convert_ZThing_", "__x"),
+        "{src}"
+    );
     assert!(
         compact.contains("::core::option::Option::None=>{*out=::core::ptr::null_mut();}"),
         "{src}"
@@ -206,14 +212,19 @@ fn vec_string_returns_ptr_and_len() {
     assert!(!compact.contains("e:*mut"), "{src}");
     // The registry-owned Sequence loop invokes the element converter; the ABI
     // wrapper only transfers its one Vec intermediate to the array helper.
-    assert!(compact.contains("fn__cbg_out_chain_vec_String("), "{src}");
     assert!(
-        compact.contains("__cbg_out_String(__sequence_element)"),
+        compact.contains("fn__c_out_convert_sequence_Vec_String_to_wire_"),
         "{src}"
     );
     assert!(
-        compact.contains(
-            "let__arr:::std::vec::Vec<*mut::core::ffi::c_char>=__cbg_out_chain_vec_String("
+        operation_call(&compact, "__c_out_convert_String_", "__sequence_element",),
+        "{src}"
+    );
+    assert!(
+        operation_call(
+            &compact,
+            "__c_out_convert_sequence_Vec_String_to_wire_",
+            "__v",
         ),
         "{src}"
     );
@@ -288,7 +299,8 @@ fn cow_u8_returns_scalar_array() {
     assert!(compact.contains("->*mutu8"), "{src}");
     assert!(compact.contains("len:*mutusize"), "{src}");
     assert!(
-        compact.contains(".iter().copied().map(__cbg_out_u8).collect()"),
+        compact.contains(".iter().copied().map(__c_out_convert_u8_")
+            && compact.contains(").collect()"),
         "{src}"
     );
     assert!(compact.contains("__cbg_alloc_array(__arr)"), "{src}");
@@ -325,7 +337,8 @@ fn slice_returns_scalar_array() {
     assert!(compact.contains("->*mutu64"), "{src}");
     assert!(compact.contains("len:*mutusize"), "{src}");
     assert!(
-        compact.contains(".iter().copied().map(__cbg_out_u64).collect()"),
+        compact.contains(".iter().copied().map(__c_out_convert_u64_")
+            && compact.contains(").collect()"),
         "{src}"
     );
     assert!(compact.contains("__cbg_alloc_array(__arr)"), "{src}");
@@ -366,11 +379,15 @@ fn vec_of_borrows_calls_the_unsafe_element_converter() {
 
     assert!(compact.contains("->*mut*constz_handle"), "{src}");
     assert!(
-        compact.contains("unsafefn__cbg_out_chain_vec____static_ZHandle("),
+        compact.contains("unsafefn__c_out_convert_sequence_Vec_static_ZHandle_to_wire_"),
         "{src}"
     );
     assert!(
-        compact.contains("__cbg_out_ref_ZHandle(__sequence_element)"),
+        operation_call(
+            &compact,
+            "__c_out_convert_ZHandle_c_borrow_shared_output_to_wire_",
+            "__sequence_element",
+        ),
         "{src}"
     );
 }
@@ -568,7 +585,11 @@ fn borrowed_ref_output_is_const_non_owning() {
         "{src}"
     );
     assert!(
-        compact.contains("__ret=__cbg_out_ref_ZBytes(__v);"),
+        operation_call(
+            &compact,
+            "__c_out_convert_ZBytes_c_borrow_shared_output_to_wire_",
+            "__v",
+        ),
         "{src}"
     );
 }
@@ -602,6 +623,9 @@ fn borrowed_option_ref_output_nullable() {
     // Nullable const loaned pointer rides the return (no out-param needed:
     // the pointer's NULL niche encodes `None`).
     assert!(compact.contains("->*constz_timestamp_t"), "{src}");
-    assert!(compact.contains("__cbg_out_ref_ZTimestamp"), "{src}");
+    assert!(
+        compact.contains("__c_out_convert_ZTimestamp_c_borrow_shared_output_to_wire_"),
+        "{src}"
+    );
     assert!(!compact.contains("out:*mut*constz_timestamp_t"), "{src}");
 }

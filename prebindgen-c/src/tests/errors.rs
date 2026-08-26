@@ -119,15 +119,19 @@ fn error_out_param_is_null_guarded() {
 
     let src = write(cbindgen, registry, "err_null_guard");
     let compact: String = src.split_whitespace().collect();
+    let error_converter =
+        operation_name(&compact, "__c_out_convert_Error_").expect("semantic error converter name");
 
     // Pointer-return Err arm: guarded write, then NULL.
     assert!(
-        compact.contains("=>{if!e.is_null(){*e=__cbg_out_Error(__err);}::core::ptr::null_mut()}"),
+        compact.contains(&format!("if!e.is_null(){{*e={error_converter}(__err,);}}"))
+            && compact.contains("::core::ptr::null_mut()"),
         "{src}"
     );
     // `Result<(),E>` Err arm: guarded write, then `false`.
     assert!(
-        compact.contains("=>{if!e.is_null(){*e=__cbg_out_Error(__err);}false}"),
+        compact.contains(&format!("if!e.is_null(){{*e={error_converter}(__err,);}}"))
+            && compact.contains("false"),
         "{src}"
     );
     // The input-decode failure path also guards the write (it routes the
@@ -135,7 +139,7 @@ fn error_out_param_is_null_guarded() {
     // input plus a `Result::Err` arm, so the guarded write appears ≥4 times.
     assert!(
         compact
-            .matches("if!e.is_null(){*e=__cbg_out_Error(")
+            .matches(&format!("if!e.is_null(){{*e={error_converter}("))
             .count()
             >= 4,
         "expected ≥4 guarded `*e =` writes (2 input-decode + 2 Err arms):\n{src}"

@@ -80,10 +80,6 @@ impl CbindgenBuilder {
                 }
             );
         }
-        let ident = match direction {
-            Direction::Construct => Self::in_name_of(&key),
-            Direction::Deconstruct => Self::out_name_of(&key),
-        };
         let valid = decl
             .domain()
             .as_ref()
@@ -98,7 +94,6 @@ impl CbindgenBuilder {
         let niches = self.c_domain_niches(decl, registry, direction);
         Some((
             crate::chain::CustomPlan {
-                ident,
                 source: ty.clone(),
                 source_module: self.source_module.clone(),
                 wire: repr,

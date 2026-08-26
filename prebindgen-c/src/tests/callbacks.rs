@@ -155,18 +155,19 @@ fn callback_subscriber_emits_closure_structs() {
 
     // Trampoline: by-value struct in, `impl Fn(<src arg>)` out; Arc-held ctx.
     assert!(
-            compact.contains(
-                "fn__cbg_in_z_closure_sample_t(c:z_closure_sample_t,)->implFn(zenoh_flat::ZSample)+Send+Sync+'static"
-            ),
-            "{src}"
-        );
+        compact.contains(
+            "fn__c_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_c_invoke_callback_capture_"
+        ) && compact
+            .contains("(c:z_closure_sample_t,)->implFn(zenoh_flat::ZSample)+Send+Sync+'static"),
+        "{src}"
+    );
     assert!(
         compact.contains("Arc::new(__Ctx{context:c.context,drop:c.drop"),
         "{src}"
     );
     // Arg encoded via its OUTPUT converter, then passed (owned) with context.
     assert!(
-        compact.contains("let__w0=__cbg_out_ZSample(__a0);"),
+        operation_call(&compact, "__c_out_convert_ZSample_", "__a0"),
         "{src}"
     );
     assert!(compact.contains("__f(__w0,__ctx.context)"), "{src}");
@@ -174,8 +175,8 @@ fn callback_subscriber_emits_closure_structs() {
     // Zero-arg trampoline.
     assert!(
         compact.contains(
-            "fn__cbg_in_z_closure_drop_t(c:z_closure_drop_t,)->implFn()+Send+Sync+'static"
-        ),
+            "fn__c_in_convert_wire_to_impl_Fn_Send_Sync_static_c_invoke_callback_capture_"
+        ) && compact.contains("(c:z_closure_drop_t,)->implFn()+Send+Sync+'static"),
         "{src}"
     );
     assert!(compact.contains("move||{"), "{src}");
@@ -188,11 +189,19 @@ fn callback_subscriber_emits_closure_structs() {
     assert!(compact.contains("callback:z_closure_sample_t"), "{src}");
     assert!(compact.contains("on_close:z_closure_drop_t"), "{src}");
     assert!(
-        compact.contains("letcallback=__cbg_in_z_closure_sample_t(callback);"),
+        operation_call(
+            &compact,
+            "__c_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_c_invoke_callback_capture_",
+            "callback",
+        ),
         "{src}"
     );
     assert!(
-        compact.contains("leton_close=__cbg_in_z_closure_drop_t(on_close);"),
+        operation_call(
+            &compact,
+            "__c_in_convert_wire_to_impl_Fn_Send_Sync_static_c_invoke_callback_capture_",
+            "on_close",
+        ),
         "{src}"
     );
     // Result of an opaque handle rides the return (NULL = Err); `e` out-param.
@@ -237,8 +246,8 @@ fn callback_scalar_arg_not_module_qualified() {
     assert!(compact.contains("move|__a0:f64|"), "{src}");
     assert!(
         compact.contains(
-            "fn__cbg_in_z_closure_value_t(c:z_closure_value_t,)->implFn(f64)+Send+Sync+'static"
-        ),
+            "fn__c_in_convert_wire_to_impl_Fn_f64_Send_Sync_static_c_invoke_callback_capture_"
+        ) && compact.contains("(c:z_closure_value_t,)->implFn(f64)+Send+Sync+'static"),
         "{src}"
     );
 }
@@ -531,7 +540,7 @@ fn a_converted_optional_callback_arg_keeps_its_declared_wire() {
     // One parameter, the declared representation — not a decomposition.
     assert!(
         compact.contains("unsafeextern\"C\"fn(i64,*mut::core::ffi::c_void)")
-            && compact.contains("__cbg_out_Option___Duration__(__a0)"),
+            && operation_call(&compact, "__c_out_convert_Option_Duration_", "__a0",),
         "the declared wire survives in the closure struct:\n{src}"
     );
     // …and the closure calls that converter rather than filling lowered slots.
@@ -594,7 +603,7 @@ fn a_run_of_converted_optionals_uses_the_declared_wire() {
     );
     // …and each element goes through that converter, not through a decomposition.
     assert!(
-        compact.contains("__cbg_out_Option___Duration__"),
+        compact.contains("__c_out_convert_Option_Duration_"),
         "the declared element converter is what fills the array:\n{src}"
     );
 }

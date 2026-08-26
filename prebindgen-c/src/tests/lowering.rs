@@ -135,11 +135,12 @@ fn custom_conversion_without_domain_stays_infallible() {
     let compact: String = src.split_whitespace().collect();
 
     assert!(
-        compact.contains("fn__cbg_in_Ratio(v:f64)->myflat::Ratio"),
+        compact.contains("fn__c_in_convert_wire_to_Ratio_")
+            && compact.contains("(v:f64,)->myflat::Ratio"),
         "{src}"
     );
     assert!(
-        compact.contains("fn__cbg_out_Ratio(v:myflat::Ratio)->f64"),
+        compact.contains("fn__c_out_convert_Ratio_") && compact.contains("(v:myflat::Ratio,)->f64"),
         "{src}"
     );
     assert!(
@@ -595,7 +596,7 @@ fn keyexpr_try_from_lowering() {
         compact.contains("as::core::convert::From<::std::string::String"),
         "{src}"
     );
-    assert!(compact.contains("__cbg_out_Error"), "{src}");
+    assert!(compact.contains("__c_out_convert_Error_"), "{src}");
     assert!(compact.contains("return::core::ptr::null_mut()"), "{src}");
 }
 
@@ -718,7 +719,7 @@ fn a_declared_conversion_owns_its_own_fallibility() {
         "fallible_custom_option_panic",
     );
     assert!(
-        src.contains("__cbg_out_Option___Duration__"),
+        src.contains("__c_out_convert_Option_Duration_"),
         "the declared converter is what the wrapper calls:\n{src}"
     );
 }
