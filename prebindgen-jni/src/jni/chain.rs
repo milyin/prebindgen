@@ -29,6 +29,7 @@ enum JBody {
     Sequence(Box<JSequencePlan>),
     Optional(Box<JOptionalPlan>),
     StructCodec(Box<JStructCodecPlan>),
+    SumCodec(Box<JSumCodecPlan>),
     Invoke(Box<crate::jni::emit::JInvokePlan>),
 }
 
@@ -89,6 +90,10 @@ impl JFunction {
         Self(JBody::StructCodec(Box::new(plan)))
     }
 
+    pub(crate) fn sum_codec(plan: JSumCodecPlan) -> Self {
+        Self(JBody::SumCodec(Box::new(plan)))
+    }
+
     pub(crate) fn invoke(plan: crate::jni::emit::JInvokePlan) -> Self {
         Self(JBody::Invoke(Box::new(plan)))
     }
@@ -111,6 +116,11 @@ impl JFunction {
     #[cfg(test)]
     pub(crate) fn is_struct_codec(&self) -> bool {
         matches!(self.0, JBody::StructCodec(_))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_sum_codec(&self) -> bool {
+        matches!(self.0, JBody::SumCodec(_))
     }
 
     #[cfg(test)]
@@ -185,9 +195,11 @@ impl JFunction {
                 }
             }
             // The legacy whole-object parents still make every terminal
-            // reachable. Struct codecs retain no source syntax, but keep that
-            // compatibility reachability until those parents are planned too.
+            // reachable. Whole-object codecs retain no source syntax, but keep
+            // that compatibility reachability until those parents are planned
+            // too.
             JBody::StructCodec(_) => {}
+            JBody::SumCodec(_) => {}
             // An Invoke plan exists only for a declared callback crossing and
             // is called directly by that crossing's wrapper. Unlike reusable
             // child converters, it is reachable by construction and needs no
@@ -213,6 +225,7 @@ impl RustFunction for JFunction {
             JBody::Sequence(plan) => &plan.ident,
             JBody::Optional(plan) => &plan.ident,
             JBody::StructCodec(plan) => &plan.ident,
+            JBody::SumCodec(plan) => &plan.ident,
             JBody::Invoke(plan) => plan.name(),
         }
     }
@@ -238,6 +251,7 @@ impl RustFunction for JFunction {
             JBody::Sequence(plan) => plan.reachable.get(),
             JBody::Choice(plan) => plan.reachable.get(),
             JBody::StructCodec(_) => true,
+            JBody::SumCodec(_) => true,
             // See `mark_reachable`: callback converters are roots, never
             // dormant dependencies waiting for a parent to activate them.
             JBody::Invoke(_) => true,
@@ -259,6 +273,7 @@ impl RustFunction for JFunction {
             JBody::Choice(plan) => plan.render(emit),
             JBody::Sequence(plan) => plan.render(emit),
             JBody::StructCodec(plan) => plan.render(emit),
+            JBody::SumCodec(plan) => plan.render(emit),
             JBody::Invoke(plan) => plan.render(emit),
         }
     }
@@ -326,6 +341,36 @@ impl JStructCodecPlan {
                 )
             }
         }
+    }
+}
+
+/// One whole-object sealed-sum input retained as Flat alternatives plus JNI
+/// property policy. Source spelling and alternative construction are deferred
+/// to the final writer-owned [`Emit`] pass.
+#[derive(Clone)]
+pub(crate) struct JSumCodecPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) body: crate::jni::emit::JObjectSumInputPlan,
+}
+
+impl JSumCodecPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = emit.spell_ty(&self.source);
+        let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
+        let wire = annotate_jobject_with_lifetime(&wire, "v");
+        let body = self.body.render(emit);
+        let allow = crate::jni::trait_impl::generated_converter_attr();
+        syn::parse_quote!(
+            #allow
+            pub(crate) unsafe fn #name<'env, 'v>(
+                env: &mut jni::JNIEnv<'env>,
+                v: &#wire,
+            ) -> ::core::result::Result<#source, __JniErr> {
+                Ok(#body)
+            }
+        )
     }
 }
 

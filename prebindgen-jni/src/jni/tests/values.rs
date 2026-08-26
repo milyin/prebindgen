@@ -333,31 +333,48 @@ fn fixed_primitive_arrays_retain_late_registry_plans() {
     );
 }
 
-/// Whole-struct planning may inspect Flat fields and freeze JNI property
-/// policy, but it must not receive the capability that spells captured source
-/// types. Pin both entry points: the recipe compiler never asks its context for
-/// `Emit`, and the JObject plan builder cannot accept one later.
+/// Whole-object planning may inspect Flat fields/alternatives and freeze JNI
+/// property policy, but it must not receive the capability that spells
+/// captured source types. Pin both struct and sum entry points: the recipe
+/// compiler never asks its context for `Emit`, and neither JObject plan builder
+/// can accept one later.
 #[test]
-fn whole_struct_planning_has_no_source_spelling_access() {
+fn whole_object_planning_has_no_source_spelling_access() {
     let compile = include_str!("../compile.rs");
-    let planner = compile
+    let struct_planner = compile
         .split_once("    fn planned_struct_codec(&self, at: At<'_>)")
         .expect("whole-struct planner")
         .1
-        .split_once("    /// Freeze a declared fieldless enum")
+        .split_once("    /// Freeze the explicit whole-object decoder")
         .expect("end of whole-struct planner")
         .0;
-    assert!(!planner.contains(".emit()"), "{planner}");
+    assert!(!struct_planner.contains(".emit()"), "{struct_planner}");
+    let sum_planner = compile
+        .split_once("    fn planned_sum_codec(&self, at: At<'_>)")
+        .expect("whole-sum planner")
+        .1
+        .split_once("    /// Freeze a declared fieldless enum")
+        .expect("end of whole-sum planner")
+        .0;
+    assert!(!sum_planner.contains(".emit()"), "{sum_planner}");
 
     let input = include_str!("../emit/flat_input.rs");
-    let signature = input
+    let struct_signature = input
         .split_once("pub(crate) fn build_jobject_struct_input_plan(")
         .expect("JObject struct plan builder")
         .1
         .split_once(") -> Option<JObjectStructInputPlan>")
         .expect("JObject struct plan signature")
         .0;
-    assert!(!signature.contains("Emit"), "{signature}");
+    assert!(!struct_signature.contains("Emit"), "{struct_signature}");
+    let sum_signature = input
+        .split_once("pub(crate) fn build_jobject_sum_input_plan(")
+        .expect("JObject sum plan builder")
+        .1
+        .split_once(") -> Option<JObjectSumInputPlan>")
+        .expect("JObject sum plan signature")
+        .0;
+    assert!(!sum_signature.contains("Emit"), "{sum_signature}");
 }
 
 #[test]
