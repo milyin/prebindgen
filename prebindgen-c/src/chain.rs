@@ -51,6 +51,7 @@ impl chain::Child for CCall {
 /// A typed converter plan waiting for final rendering.
 #[derive(Clone)]
 pub(crate) struct CFunction {
+    operation: prebindgen_registry::OperationId,
     call: CCall,
     body: CBody,
 }
@@ -74,111 +75,136 @@ enum CBody {
 }
 
 impl CFunction {
-    pub(crate) fn product(plan: ProductPlan) -> Self {
+    pub(crate) fn product(operation: prebindgen_registry::OperationId, plan: ProductPlan) -> Self {
         let call = CCall(chain::Call::new(
             plan.ident.clone(),
             plan.fields.iter().any(|field| field.converter.fallible()),
             plan.direction == Direction::Construct,
         ));
         Self {
+            operation,
             call,
             body: CBody::Product(plan),
         }
     }
 
-    pub(crate) fn custom(plan: CustomPlan) -> Self {
+    pub(crate) fn custom(operation: prebindgen_registry::OperationId, plan: CustomPlan) -> Self {
         let call = CCall(chain::Call::new(plan.ident.clone(), plan.fallible(), false));
         Self {
+            operation,
             call,
             body: CBody::Custom(plan),
         }
     }
 
-    pub(crate) fn output_terminal(plan: OutputTerminalPlan) -> Self {
+    pub(crate) fn output_terminal(
+        operation: prebindgen_registry::OperationId,
+        plan: OutputTerminalPlan,
+    ) -> Self {
         let call = CCall(chain::Call::new(plan.ident.clone(), false, false));
         Self {
+            operation,
             call,
             body: CBody::OutputTerminal(plan),
         }
     }
 
-    pub(crate) fn input_terminal(plan: InputTerminalPlan) -> Self {
+    pub(crate) fn input_terminal(
+        operation: prebindgen_registry::OperationId,
+        plan: InputTerminalPlan,
+    ) -> Self {
         let call = CCall(chain::Call::new(
             plan.ident.clone(),
             plan.operation.fallible(),
             plan.operation.unsafe_(),
         ));
         Self {
+            operation,
             call,
             body: CBody::InputTerminal(plan),
         }
     }
 
-    pub(crate) fn payload(plan: PayloadPlan) -> Self {
+    pub(crate) fn payload(operation: prebindgen_registry::OperationId, plan: PayloadPlan) -> Self {
         let call = CCall(chain::Call::new(
             plan.ident.clone(),
             plan.direction == Direction::Construct && !plan.optional,
             plan.direction == Direction::Construct,
         ));
         Self {
+            operation,
             call,
             body: CBody::Payload(plan),
         }
     }
 
-    pub(crate) fn borrow(plan: BorrowPlan) -> Self {
+    pub(crate) fn borrow(operation: prebindgen_registry::OperationId, plan: BorrowPlan) -> Self {
         let call = CCall(chain::Call::new(
             plan.ident.clone(),
             plan.operation.fallible(),
             true,
         ));
         Self {
+            operation,
             call,
             body: CBody::Borrow(plan),
         }
     }
 
-    pub(crate) fn slice_input(plan: SliceInputPlan) -> Self {
+    pub(crate) fn slice_input(
+        operation: prebindgen_registry::OperationId,
+        plan: SliceInputPlan,
+    ) -> Self {
         let call = CCall(chain::Call::new(plan.ident.clone(), false, false));
         Self {
+            operation,
             call,
             body: CBody::SliceInput(plan),
         }
     }
 
-    pub(crate) fn marker(plan: MarkerPlan) -> Self {
+    pub(crate) fn marker(operation: prebindgen_registry::OperationId, plan: MarkerPlan) -> Self {
         let call = CCall(chain::Call::new(plan.ident.clone(), false, false));
         Self {
+            operation,
             call,
             body: CBody::Marker(plan),
         }
     }
 
-    pub(crate) fn optional(plan: OptionalPlan) -> Self {
+    pub(crate) fn optional(
+        operation: prebindgen_registry::OperationId,
+        plan: OptionalPlan,
+    ) -> Self {
         let call = CCall(chain::Call::new(
             plan.ident.clone(),
             plan.converter.fallible(),
             true,
         ));
         Self {
+            operation,
             call,
             body: CBody::Optional(plan),
         }
     }
 
-    pub(crate) fn sequence(plan: SequencePlan) -> Self {
+    pub(crate) fn sequence(
+        operation: prebindgen_registry::OperationId,
+        plan: SequencePlan,
+    ) -> Self {
         let call = CCall(chain::Call::new(
             plan.ident.clone(),
             plan.child.fallible(),
             plan.child.unsafe_(),
         ));
         Self {
+            operation,
             call,
             body: CBody::Sequence(plan),
         }
     }
 
-    pub(crate) fn choice(plan: ChoicePlan) -> Self {
+    pub(crate) fn choice(operation: prebindgen_registry::OperationId, plan: ChoicePlan) -> Self {
         let fallible = plan.direction == Direction::Construct
             || plan
                 .arms
@@ -191,13 +217,18 @@ impl CFunction {
             plan.direction == Direction::Construct,
         ));
         Self {
+            operation,
             call,
             body: CBody::Choice(plan),
         }
     }
 
-    pub(crate) fn deferred_invoke(ident: syn::Ident) -> Self {
+    pub(crate) fn deferred_invoke(
+        operation: prebindgen_registry::OperationId,
+        ident: syn::Ident,
+    ) -> Self {
         Self {
+            operation,
             call: CCall(chain::Call::new(ident, false, true)),
             body: CBody::DeferredInvoke,
         }
@@ -205,6 +236,13 @@ impl CFunction {
 
     pub(crate) fn is_deferred_invoke(&self) -> bool {
         matches!(self.body, CBody::DeferredInvoke)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn operation_and_compatibility_name(
+        &self,
+    ) -> (&prebindgen_registry::OperationId, &syn::Ident) {
+        (&self.operation, self.call.ident())
     }
 
     #[cfg(test)]
@@ -279,6 +317,10 @@ impl CFunction {
 }
 
 impl RustFunction for CFunction {
+    fn operation_id(&self) -> Option<&prebindgen_registry::OperationId> {
+        Some(&self.operation)
+    }
+
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         match &self.body {
             CBody::Custom(plan) => plan.render(emit),
