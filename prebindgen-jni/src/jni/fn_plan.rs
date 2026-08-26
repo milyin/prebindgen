@@ -907,26 +907,6 @@ fn return_site(
     planned.ok().flatten()
 }
 
-/// The values one function's decomposed return hands out, compiled through
-/// `Compiler::site`.
-///
-/// Test support until the encode side takes it: this is the whole of what a
-/// decomposed return site produces, and holding it to the expansion plan is
-/// what says the two agree before anything depends on it.
-#[cfg(test)]
-pub(crate) fn decomposed_return_for_test(
-    ext: &Declarations,
-    registry: &Registry,
-    func: &syn::Ident,
-) -> Option<Vec<crate::jni::compile::OutWire>> {
-    let f = registry.flat().function(func)?;
-    let ret = f.ret.borrow_target().unwrap_or(&f.ret);
-    let ret = ret.optional_inner().unwrap_or(ret);
-    let ret = ret.sequence_elem().unwrap_or(ret);
-    let ret = ret.borrow_target().unwrap_or(ret);
-    return_site(ext, registry, func, ret, None).and_then(|p| p.decomposed())
-}
-
 /// Freeze the exact Rust-to-JNI delivery selected for one domain-error plan.
 ///
 /// Error decompositions may be function-unique value-form walks, so their

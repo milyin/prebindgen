@@ -729,6 +729,24 @@ impl JFrag {
         }
     }
 
+    /// Every private Rust artifact carried by this registry fragment.
+    ///
+    /// A custom conversion may add semantic Rust-side stages beside its
+    /// wire-facing converter. Marker-only compatibility stages stay in the
+    /// ordered list so the shared writer can de-duplicate them by identity;
+    /// their `should_emit` policy keeps them out of the final file.
+    pub(crate) fn converter_artifacts(&self) -> Vec<crate::jni::chain::JFunction> {
+        std::iter::once(self.rust.clone())
+            .chain(self.rust_stages.iter().cloned())
+            .chain(
+                self.conv
+                    .pre_stages
+                    .iter()
+                    .map(|stage| crate::jni::chain::JFunction::marker(stage.converter.clone())),
+            )
+            .collect()
+    }
+
     pub(crate) fn composed_chain(&self) -> Option<ComposedChain> {
         if !self.composed_only {
             if let Some(layout) = self.layout.clone().filter(JLayout::is_composed) {
@@ -3378,7 +3396,12 @@ impl crate::jni::Declarations {
     /// The conversion for `ty` in the given direction, from the fragments
     /// compiled so far.
     pub(crate) fn frag(&self, ty: &TypeRef, direction: Direction) -> Option<Conv> {
-        Some(Conv(self.compiled.borrow().fragment(&ty.key(), direction)?))
+        let key = ty.key();
+        let fragment = match &self.generation {
+            Some(generation) => generation.fragment(&key, direction),
+            None => self.compiled.borrow().fragment(&key, direction),
+        }?;
+        Some(Conv(fragment))
     }
 
     pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<Conv> {
@@ -3402,12 +3425,18 @@ impl crate::jni::Declarations {
             .recipe_table()
             .key_of(&crossing.key(), &crate::jni::recipes::parts())
             .cloned();
-        let compiled = self.compiled.borrow();
-        parts
-            .and_then(|parts| compiled.recipe_fragment(&key, &parts))
-            .or_else(|| compiled.fragment(&key, Direction::Construct))?
-            .wires
-            .clone()
+        let fragment = match &self.generation {
+            Some(generation) => parts
+                .and_then(|parts| generation.recipe_fragment(&key, &parts))
+                .or_else(|| generation.fragment(&key, Direction::Construct)),
+            None => {
+                let compiled = self.compiled.borrow();
+                parts
+                    .and_then(|parts| compiled.recipe_fragment(&key, &parts))
+                    .or_else(|| compiled.fragment(&key, Direction::Construct))
+            }
+        }?;
+        fragment.wires.clone()
     }
 
     /// The exact registry-composed converter for a crossing.
@@ -3426,10 +3455,12 @@ impl crate::jni::Declarations {
             .recipe_table()
             .key_of(&crossing.key(), &crate::jni::recipes::parts())
             .cloned();
-        let compiled = self.compiled.borrow();
-        let frag = match row {
-            Some(row) => compiled.recipe_fragment(&ty.key(), &row)?,
-            None => compiled.fragment(&ty.key(), direction)?,
+        let key = ty.key();
+        let frag = match (&self.generation, row) {
+            (Some(generation), Some(row)) => generation.recipe_fragment(&key, &row)?,
+            (Some(generation), None) => generation.fragment(&key, direction)?,
+            (None, Some(row)) => self.compiled.borrow().recipe_fragment(&key, &row)?,
+            (None, None) => self.compiled.borrow().fragment(&key, direction)?,
         };
         frag.composed_chain()
     }
