@@ -1070,6 +1070,76 @@ impl<R: Conversions> JCompile<'_, R> {
         ))
     }
 
+    /// Freeze a whole-object struct terminal from the Flat declaration and
+    /// already-selected child chains. No source type is spelled and no Rust
+    /// body is assembled here; [`JStructCodecPlan`](crate::jni::chain::JStructCodecPlan)
+    /// performs both only when the shared writer supplies `Emit`.
+    fn planned_struct_codec(&self, at: At<'_>) -> Option<JFrag> {
+        let source = at.crossing.spelled();
+        let TypeKind::Named { id, .. } = source.kind() else {
+            return None;
+        };
+        let name = id.ident()?;
+        let st = self.registry.flat().struct_type(&name)?;
+        let direction = at.crossing.direction();
+        let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
+        let body = match direction {
+            Direction::Construct => crate::jni::chain::JStructCodecBody::Input(Box::new(
+                crate::jni::emit::build_jobject_struct_input_plan(self.decls, st, self.registry)?,
+            )),
+            Direction::Deconstruct => {
+                let plan = self.decls.struct_plan(self.registry, st, 0)?;
+                let registered = self
+                    .decls
+                    .types
+                    .get(&source.key())
+                    .and_then(|config| config.name_spec.as_ref())
+                    .map(|spec| self.decls.fqn_of(spec));
+                let prefix = self.decls.java_class_prefix();
+                let java_class_name = registered.map_or_else(
+                    || {
+                        if prefix.is_empty() {
+                            st.name.to_string()
+                        } else {
+                            format!("{prefix}/{}", st.name)
+                        }
+                    },
+                    |fqn| fqn.replace('.', "/"),
+                );
+                crate::jni::chain::JStructCodecBody::Output {
+                    plan,
+                    java_class_name,
+                }
+            }
+        };
+        let ident = crate::jni::chain::planned_name(direction, source, &wire);
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let niches = default_niches_for_wire(&wire);
+        let kotlin_name = self
+            .decls
+            .types
+            .get(&source.key())
+            .and_then(|config| config.name_spec.as_ref())
+            .map(|spec| KtType::cls(self.decls.fqn_of(spec)));
+        Some(JFrag::planned(
+            at,
+            ConverterImpl {
+                subs: Vec::new(),
+                pre_stages: Vec::new(),
+                function: marker,
+                destination: wire,
+                niches,
+                metadata: self.decls.framework_meta(kotlin_name),
+            },
+            crate::jni::chain::JFunction::struct_codec(crate::jni::chain::JStructCodecPlan {
+                ident,
+                source: source.clone(),
+                direction,
+                body,
+            }),
+        ))
+    }
+
     /// Freeze a declared fieldless enum as Flat variant/discriminant facts.
     /// The plan deliberately does not retain an enum path or a rendered Rust
     /// body: final emission supplies the source type and constructs the variant
@@ -2648,6 +2718,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(frag) = self.planned_transparent_bridge(at) {
             return Ok(frag);
         }
+        if let Some(frag) = self.planned_struct_codec(at) {
+            return Ok(frag);
+        }
         let emit = cx.emit();
         let conv = match at.crossing.direction() {
             Direction::Construct => self
@@ -2656,7 +2729,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 .or_else(|| self.borrow(ty, true)),
             Direction::Deconstruct => self
                 .decls
-                .output_terminal(ty, self.registry, emit)
+                .output_terminal(ty, emit)
                 .or_else(|| self.borrow(ty, false)),
         };
         if conv.is_none()
@@ -2820,7 +2893,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 .or_else(|| self.borrow(ty, true)),
             Direction::Deconstruct => self
                 .decls
-                .output_terminal(ty, self.registry, emit)
+                .output_terminal(ty, emit)
                 .or_else(|| self.borrow(ty, false)),
         };
         let mut frag = self.wrap(at, "no JNI representation for this run", conv)?;
@@ -3365,6 +3438,14 @@ impl Conv {
         JCompile::<Registry>::planned_pipeline(direction, mode, &self.0)
     }
 
+    pub(crate) fn destination(&self) -> &syn::Type {
+        &self.0.conv.destination
+    }
+
+    pub(crate) fn projection(&self) -> Option<Projection> {
+        self.0.conv.metadata.projection.clone()
+    }
+
     /// Freeze this exact compiled fragment as one outgoing ABI operation.
     pub(crate) fn output_abi(&self) -> OutAbi {
         self.0.output_abi()
@@ -3378,6 +3459,11 @@ impl Conv {
     #[cfg(test)]
     pub(crate) fn is_handle_codec_plan(&self) -> bool {
         self.0.rust.is_handle_codec()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_struct_codec_plan(&self) -> bool {
+        self.0.rust.is_struct_codec()
     }
 
     #[cfg(test)]

@@ -19,7 +19,7 @@ pub(crate) fn handle_field_fqn(ext: &Declarations, h: &Projection) -> String {
             FoldStrategy::Iterable(_) => panic!(
                 "struct handle field: collection (Vec<Handle>) layers are not yet \
                  supported by the struct encode/decode bridge — add array codegen \
-                 to struct_output_body/struct_input_body to lift this guard"
+                 to the late struct output/input plans to lift this guard"
             ),
         }
     }
@@ -98,31 +98,6 @@ pub(crate) fn synth_value_struct_leaves(
             })
             .collect(),
     )
-}
-
-/// Recursively flatten a struct's output encode into a list of leaf wire
-/// slots plus the preludes that compute them, so the whole object graph can
-/// be built by a **single** Kotlin `fromParts` call (no per-nested-struct
-/// `call_static_method`). Nested non-optional data-class fields are inlined;
-/// nested `Option<data-class>` fields emit a `present` `jboolean` slot followed
-/// by the child's leaves (encoded in the `Some` arm, defaulted in the `None`
-/// arm). Leaves (primitives, handles→`jlong`, enums→`jint`, strings, arrays,
-/// `Vec`) terminate the recursion.
-///
-/// The field classification is the shared [`build_struct_plan`] — the same
-/// plan `flatten_struct_factory` walks for the Kotlin side, so the slot
-/// order and JVM descriptors agree by construction.
-pub(crate) fn flatten_struct_encode(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    s: &prebindgen_registry::flat::Struct,
-    access: &TokenStream,
-    prefix: &str,
-    depth: usize,
-    env_expr: &TokenStream,
-) -> Option<(TokenStream, Vec<EncSlot>)> {
-    let plan = ext.struct_plan(registry, s, depth)?;
-    Some(encode_plan(&plan, access, prefix, depth, env_expr))
 }
 
 /// Walk a [`StructPlan`] emitting the Rust-side wire encode: per leaf a
@@ -539,38 +514,19 @@ fn encode_field(
     (preludes, slots)
 }
 
-pub(crate) fn struct_output_body(
-    ext: &Declarations,
-    s: &prebindgen_registry::flat::Struct,
-    registry: &impl Conversions,
-) -> Option<(syn::Type, syn::Expr)> {
-    let struct_name = s.name.to_string();
-    // Prefer the registered Kotlin FQN (`io.zenoh.jni.JniSample`) so the
-    // mangle closure flows through; fall back to the bare struct ident
-    // qualified with the package when no `data_class` /
-    // `ptr_class` declaration exists for this Rust type.
-    let struct_ident = &s.name;
-    let struct_ty: syn::Type = syn::parse_quote!(#struct_ident);
-    let registered_fqn = ext
-        .types
-        .get(&TypeKey::from_type(&struct_ty))
-        .and_then(|cfg| cfg.name_spec.as_ref())
-        .map(|s| ext.fqn_of(s));
-    let java_class_prefix = ext.java_class_prefix();
-    let java_class_name = if let Some(fqn) = registered_fqn {
-        fqn.replace('.', "/")
-    } else if java_class_prefix.is_empty() {
-        struct_name.clone()
-    } else {
-        format!("{}/{}", java_class_prefix, struct_name)
-    };
-
+/// Assemble the Rust→JVM half of a frozen whole-struct codec.
+///
+/// Classification, child selection, JVM descriptors, and the target Kotlin
+/// class are all frozen before this point. This function only turns that plan
+/// into the final converter body; it performs no registry or declaration
+/// lookup and cannot rediscover source-type facts.
+pub(crate) fn render_struct_output_body(plan: &StructPlan, java_class_name: &str) -> syn::Expr {
     // Recursively flatten the whole object graph into leaf wires, then build it
     // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI
     // crossing. The Kotlin `fromParts` factory (recursively flattened the same
     // way in `render_data_class_source`) reassembles the graph in bytecode.
     let access = quote!(v);
-    let (preludes, slots) = flatten_struct_encode(ext, registry, s, &access, "", 0, &quote!(env))?;
+    let (preludes, slots) = encode_plan(plan, &access, "", 0, &quote!(env));
 
     let mut sig = String::from("(");
     let mut args: Vec<TokenStream> = Vec::new();
@@ -598,7 +554,7 @@ pub(crate) fn struct_output_body(
         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("encode struct via fromParts: {}", e)))?;
         __obj
     });
-    Some((syn::parse_quote!(jni::objects::JObject), body))
+    body
 }
 
 pub(crate) fn struct_module_path(

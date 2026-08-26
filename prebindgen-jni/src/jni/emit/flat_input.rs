@@ -16,262 +16,341 @@ use crate::jni::trait_impl::build_through_erased_wrappers;
 /// answer rather than a last-path-segment test on tokens that had a reading one
 /// level up. Same move `build_flat_struct_node` made for the flatten path; this
 /// is the whole-object `.jobject_input()` decoder.
-pub(crate) fn struct_input_body(
+#[derive(Clone)]
+pub(crate) struct JObjectStructInputPlan {
+    shape: flat::Struct,
+    source_module: syn::Path,
+    fields: Vec<JObjectStructFieldPlan>,
+}
+
+#[derive(Clone)]
+struct JObjectStructFieldPlan {
+    name: syn::Ident,
+    property: String,
+    error: String,
+    kind: JObjectStructFieldKind,
+}
+
+#[derive(Clone)]
+enum JObjectStructFieldKind {
+    Handle {
+        descriptor: String,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    Unsigned64 {
+        optional: bool,
+        wrap_some: bool,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    Enum {
+        descriptor: String,
+        optional: bool,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    Primitive {
+        wire: syn::Type,
+        descriptor: String,
+        accessor: syn::Ident,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    IntoObject {
+        wire: syn::Type,
+        descriptor: String,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    Object {
+        descriptor: String,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+}
+
+/// Freeze the explicit whole-`JObject` struct decoder without assembling Rust
+/// source. Every branch below selects JVM property policy from Flat readings
+/// and already-compiled registry fragments. The final writer alone constructs
+/// bindings, child calls, and the source struct literal.
+pub(crate) fn build_jobject_struct_input_plan(
     ext: &Declarations,
     s: &flat::Struct,
     registry: &impl Conversions,
-    emit: &prebindgen_registry::Emit,
-) -> Option<(syn::Type, syn::Expr)> {
+) -> Option<JObjectStructInputPlan> {
     let struct_name = s.name.to_string();
-    let struct_module = struct_module_path(ext, registry, &s.name);
-    let struct_ident = &s.name;
-
-    let mut field_preludes: Vec<TokenStream> = Vec::new();
-    let mut field_init: Vec<TokenStream> = Vec::new();
-
+    let mut fields = Vec::new();
     for field in &s.fields {
-        // A positional field has no name to read a JVM slot by, which is what
-        // the `syn::Fields::Named` guard used to say one level up. Said per
-        // field now, because the element models a field list rather than a
-        // `syn::Fields` shape.
-        let fname_ident = field.name.clone()?;
-        // The name the property was DECLARED with — `GetFieldID` takes the
-        // slot's exact name, so this cannot be derived a second way.
-        let camel = kotlin_property_name(&fname_ident);
-        let err_prefix = format!("{struct_name}.{camel}: {{}}");
-        let raw_ident = format_ident!("__{}_raw", fname_ident);
-
-        // Defer if any field's input converter isn't resolved yet — the
-        // fixed-point loop will retry on the next iteration. The field's own
-        // reading straight to its entry — the `reading_of` hop only ever
-        // recovered what the field already carried.
-        let field_entry = ext.in_frag(&field.ty)?;
-        field_entry.activate();
-        // The optional layer off the MODEL, asked once and reused: every site
-        // below that wants "is this field optional" reads this, so they cannot
-        // disagree with each other the way four independent path-segment tests
-        // could (#273). `option_inner_type` compared the last path segment, so
-        // a field spelled `Box<Option<T>>` answered "not optional" here.
-        let field_optional = field.ty.optional_inner().is_some();
+        let name = field.name.clone()?;
+        let property = kotlin_property_name(&name);
+        let error = format!("{struct_name}.{property}: {{}}");
+        let optional = field.ty.optional_inner().is_some();
         let inner = field.ty.optional_inner().unwrap_or(&field.ty);
-        let field_wire = field_entry.destination.clone();
-        // The field's COMPLETE decode, stages included — a `convert!` type
-        // reaches its Rust value through them (`jlong -> u64 -> Duration`).
-        let field_conv = composed_entry_decode(&field_entry, &raw_ident, &fname_ident);
+        let entry = ext.in_frag(&field.ty)?;
+        let wire = entry.destination().clone();
+        let projection = entry.projection();
+        let whole = entry.pipeline(
+            prebindgen_registry::recipe::Direction::Construct,
+            prebindgen_registry::recipe::Mode::Owned,
+        );
 
-        // Projection fields — mirror of `struct_output_body`'s kind branch:
-        //  * Handle: read the JNINativeHandle object from the JVM slot,
-        //    `peek()` the raw jlong, then run the per-field input converter
-        //    (jlong-keyed; null handle ⇒ jlong 0 ⇒ `None` via the niche path).
-        if let Some(proj) = &field_entry.metadata.projection {
-            match proj.kind {
-                ProjectionKind::Handle => {
-                    let java_path = handle_field_fqn(ext, proj).replace('.', "/");
-                    let sig = format!("L{};", java_path);
-                    let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                    field_preludes.push(quote! {
-                        let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                            .and_then(|val| val.l())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                        let #raw_ident: jni::sys::jlong = if #tmp_ident.is_null() {
-                            0
-                        } else {
-                            env.call_method(&#tmp_ident, "peek", "()J", &[])
-                                .and_then(|val| val.j())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
-                        };
-                        let #fname_ident = #field_conv;
-                    });
-                }
+        let kind = if let Some(projection) = projection {
+            match projection.kind {
+                ProjectionKind::Handle => JObjectStructFieldKind::Handle {
+                    descriptor: format!(
+                        "L{};",
+                        handle_field_fqn(ext, &projection).replace('.', "/")
+                    ),
+                    pipeline: whole,
+                },
                 ProjectionKind::Unsigned64 => {
-                    if field_optional {
-                        let niche = matches!(
-                            proj.strategy,
+                    let niche = optional
+                        && matches!(
+                            projection.strategy,
                             FoldStrategy::Optional(NullableKind::Niche, _)
                         );
-                        let inner_entry = ext.in_frag(inner)?;
-                        inner_entry.activate();
-                        let inner_conv =
-                            composed_entry_decode(&inner_entry, &raw_ident, &fname_ident);
-                        let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                        let decode = if niche {
-                            // The Kotlin data-class property is still `ULong?`
-                            // (and therefore boxed in object storage), but its
-                            // JNI converter is niche-keyed on primitive jlong.
-                            // Run the complete field converter so every custom
-                            // semantic stage (e.g. u64 -> Duration) is applied.
-                            quote! { #field_conv }
-                        } else {
-                            quote! {
-                                ::core::option::Option::Some(#inner_conv)
-                            }
-                        };
-                        field_preludes.push(quote! {
-                            let #tmp_ident: jni::objects::JObject = env
-                                .get_field(v, #camel, "Lkotlin/ULong;")
-                                .and_then(|val| val.l())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                            let #fname_ident = if #tmp_ident.is_null() {
-                                ::core::option::Option::None
-                            } else {
-                                let #raw_ident: jni::sys::jlong = env
-                                    .call_method(&#tmp_ident, "unbox-impl", "()J", &[])
-                                    .and_then(|val| val.j())
-                                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                                #decode
-                            };
-                        });
+                    let pipeline = if optional && !niche {
+                        ext.in_frag(inner)?.pipeline(
+                            prebindgen_registry::recipe::Direction::Construct,
+                            prebindgen_registry::recipe::Mode::Owned,
+                        )
                     } else {
-                        field_preludes.push(quote! {
-                            let #raw_ident: jni::sys::jlong = env
-                                .get_field(v, #camel, "J")
-                                .and_then(|val| val.j())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                            let #fname_ident = #field_conv;
-                        });
+                        whole
+                    };
+                    JObjectStructFieldKind::Unsigned64 {
+                        optional,
+                        wrap_some: optional && !niche,
+                        pipeline,
                     }
                 }
             }
-            field_init.push(quote!(#fname_ident));
-            continue;
-        }
-
-        // Enum-typed field (bare or `Option`-wrapped): the Kotlin data class
-        // stores the TYPED enum object (`Priority` / `Priority?`), so read the
-        // slot with the enum-class descriptor and decode the discriminant via
-        // its `value` getter (`getValue()I`); a null object is the `None` arm.
-        // (The generic converters can't be used here: both are jint-keyed,
-        // while this Kotlin property is an enum object or null.)
-        if ext.is_kotlin_enum_reading(inner) {
-            // The NAME off the classification, not off the last path segment:
-            // `Box<T>` IS `T` here, and taking the spelling apart would answer
-            // about the wrapper.
-            if let Some(fqn) = match inner.unwrapped().kind() {
+        } else if ext.is_kotlin_enum_reading(inner) {
+            let fqn = match inner.unwrapped().kind() {
                 flat::TypeKind::Named { id, .. } => id.ident(),
                 _ => None,
             }
-            .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
-            .map(|v| v.to_string())
-            {
-                let sig = format!("L{};", fqn.replace('.', "/"));
-                let inner_entry = ext.in_frag(inner)?;
-                inner_entry.activate();
-                let inner_conv = composed_entry_decode(&inner_entry, &raw_ident, &fname_ident);
-                let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                let decode = if field_optional {
-                    quote! {
-                        let #fname_ident = if #tmp_ident.is_null() {
-                            ::core::option::Option::None
-                        } else {
-                            let #raw_ident: jni::sys::jint = env.call_method(&#tmp_ident, "getValue", "()I", &[])
-                                .and_then(|val| val.i())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                            ::core::option::Option::Some(#inner_conv)
-                        };
-                    }
-                } else {
-                    quote! {
-                        let #raw_ident: jni::sys::jint = env.call_method(&#tmp_ident, "getValue", "()I", &[])
-                            .and_then(|val| val.i())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                        let #fname_ident = #inner_conv;
-                    }
-                };
-                field_preludes.push(quote! {
-                    let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    #decode
-                });
-                field_init.push(quote!(#fname_ident));
-                continue;
+            .and_then(|ident| ext.kotlin_fqn(&TypeKey::from_ident(&ident)))?;
+            let pipeline = if optional {
+                ext.in_frag(inner)?.pipeline(
+                    prebindgen_registry::recipe::Direction::Construct,
+                    prebindgen_registry::recipe::Mode::Owned,
+                )
+            } else {
+                whole
+            };
+            JObjectStructFieldKind::Enum {
+                descriptor: format!("L{};", fqn.replace('.', "/")),
+                optional,
+                pipeline,
             }
-        }
-
-        match jni_field_access(&field_wire) {
-            Some((sig, accessor, false)) => {
-                field_preludes.push(quote! {
-                    let #raw_ident: #field_wire = env.get_field(v, #camel, #sig)
-                        .and_then(|val| val.#accessor())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))? as _;
-                    let #fname_ident = #field_conv;
-                });
-            }
-            Some((sig, _, true)) => {
-                let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                field_preludes.push(quote! {
-                    let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #raw_ident: #field_wire = #tmp_ident.into();
-                    let #fname_ident = #field_conv;
-                });
-            }
-            None => {
-                // Wire is JObject — fetch via .l() and pass by reference. JNI
-                // `GetFieldID` needs the slot's EXACT static descriptor: the
-                // box class for an `Option`-boxed primitive, the registered
-                // Kotlin class for a nested data-class field (Option-stripped
-                // — a nullable field keeps the same descriptor), `List` for a
-                // `Vec` field.
-                let sig = ext
-                    .in_frag(inner)
-                    .and_then(|e| jni_field_access(&e.destination))
-                    .and_then(|(sig, _, is_obj)| {
-                        if is_obj {
-                            Some(sig.to_string())
-                        } else {
-                            box_descriptor_for_primitive(sig).map(str::to_string)
-                        }
-                    })
-                    .or_else(|| {
-                        // The NAME off the classification, not off the last
-                        // path segment.
-                        match inner.unwrapped().kind() {
-                            flat::TypeKind::Named { id, .. } => id.ident(),
-                            _ => None,
-                        }
-                        .and_then(|name| {
-                            ext.kotlin_fqn(&TypeKey::from_ident(&name))
-                                .map(|v| format!("L{};", v.replace('.', "/")))
+        } else {
+            match jni_field_access(&wire) {
+                Some((descriptor, accessor, false)) => JObjectStructFieldKind::Primitive {
+                    wire,
+                    descriptor: descriptor.to_string(),
+                    accessor,
+                    pipeline: whole,
+                },
+                Some((descriptor, _, true)) => JObjectStructFieldKind::IntoObject {
+                    wire,
+                    descriptor: descriptor.to_string(),
+                    pipeline: whole,
+                },
+                None => {
+                    let descriptor = ext
+                        .in_frag(inner)
+                        .and_then(|entry| jni_field_access(entry.destination()))
+                        .and_then(|(descriptor, _, is_object)| {
+                            if is_object {
+                                Some(descriptor.to_string())
+                            } else {
+                                box_descriptor_for_primitive(descriptor).map(str::to_string)
+                            }
                         })
-                    })
-                    .or_else(|| {
-                        // A run of values is what `kind` says it is.
-                        // `pat_match_top(.., "Vec")` compared the last path
-                        // segment, so a `Box<Vec<T>>` answered false.
-                        if inner.sequence_elem().is_some() {
-                            Some("Ljava/util/List;".to_string())
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
-                field_preludes.push(quote! {
-                    let #raw_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #fname_ident = #field_conv;
-                });
+                        .or_else(|| {
+                            match inner.unwrapped().kind() {
+                                flat::TypeKind::Named { id, .. } => id.ident(),
+                                _ => None,
+                            }
+                            .and_then(|ident| {
+                                ext.kotlin_fqn(&TypeKey::from_ident(&ident))
+                                    .map(|fqn| format!("L{};", fqn.replace('.', "/")))
+                            })
+                        })
+                        .or_else(|| {
+                            inner
+                                .sequence_elem()
+                                .is_some()
+                                .then(|| "Ljava/util/List;".to_string())
+                        })
+                        .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
+                    JObjectStructFieldKind::Object {
+                        descriptor,
+                        pipeline: whole,
+                    }
+                }
             }
-        }
-        field_init.push(quote!(#fname_ident));
+        };
+        fields.push(JObjectStructFieldPlan {
+            name,
+            property,
+            error,
+            kind,
+        });
     }
+    Some(JObjectStructInputPlan {
+        shape: s.clone(),
+        source_module: struct_module_path(ext, registry, &s.name),
+        fields,
+    })
+}
 
-    // The struct's OWN delimiters, from the one place that chooses them.
-    // `flat::Struct` does not record whether its fields were named — that is
-    // spelling — so hard-coding braces here emitted `Unit {}` for
-    // `struct Unit;` and `Empty {}` for `struct Empty()`, neither of which is
-    // Rust. The `syn::Fields::Named` guard this walk replaced happened to
-    // refuse both; the per-field name check cannot, because an empty struct
-    // has no field to refuse. `Struct::spell` is the dual of the
-    // `Alternative::spell` the sum decoder uses for exactly this.
-    let ctor = emit.shape_struct(s, quote!(#struct_module::#struct_ident), &field_init);
-    let body: syn::Expr = syn::parse_quote!({
-        #(#field_preludes)*
-        #ctor
-    });
-    Some((syn::parse_quote!(jni::objects::JObject), body))
+impl JObjectStructInputPlan {
+    pub(crate) fn render(&self, emit: &prebindgen_registry::Emit) -> syn::Expr {
+        let mut preludes = Vec::new();
+        let mut inits = Vec::new();
+        for field in &self.fields {
+            let name = &field.name;
+            let property = &field.property;
+            let error = &field.error;
+            let raw = format_ident!("__{}_raw", name);
+            let object = format_ident!("__{}_jobj", name);
+            let code = match &field.kind {
+                JObjectStructFieldKind::Handle {
+                    descriptor,
+                    pipeline,
+                } => {
+                    let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                    quote! {
+                        let #object: jni::objects::JObject = env.get_field(v, #property, #descriptor)
+                            .and_then(|val| val.l())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                        let #raw: jni::sys::jlong = if #object.is_null() {
+                            0
+                        } else {
+                            env.call_method(&#object, "peek", "()J", &[])
+                                .and_then(|val| val.j())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?
+                        };
+                        let #name = #decode;
+                    }
+                }
+                JObjectStructFieldKind::Unsigned64 {
+                    optional,
+                    wrap_some,
+                    pipeline,
+                } => {
+                    let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                    if *optional {
+                        let decoded = if *wrap_some {
+                            quote!(::core::option::Option::Some(#decode))
+                        } else {
+                            quote!(#decode)
+                        };
+                        quote! {
+                            let #object: jni::objects::JObject = env
+                                .get_field(v, #property, "Lkotlin/ULong;")
+                                .and_then(|val| val.l())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                            let #name = if #object.is_null() {
+                                ::core::option::Option::None
+                            } else {
+                                let #raw: jni::sys::jlong = env
+                                    .call_method(&#object, "unbox-impl", "()J", &[])
+                                    .and_then(|val| val.j())
+                                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                                #decoded
+                            };
+                        }
+                    } else {
+                        quote! {
+                            let #raw: jni::sys::jlong = env
+                                .get_field(v, #property, "J")
+                                .and_then(|val| val.j())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                            let #name = #decode;
+                        }
+                    }
+                }
+                JObjectStructFieldKind::Enum {
+                    descriptor,
+                    optional,
+                    pipeline,
+                } => {
+                    let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                    if *optional {
+                        quote! {
+                            let #object: jni::objects::JObject = env.get_field(v, #property, #descriptor)
+                                .and_then(|val| val.l())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                            let #name = if #object.is_null() {
+                                ::core::option::Option::None
+                            } else {
+                                let #raw: jni::sys::jint = env.call_method(&#object, "getValue", "()I", &[])
+                                    .and_then(|val| val.i())
+                                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                                ::core::option::Option::Some(#decode)
+                            };
+                        }
+                    } else {
+                        quote! {
+                            let #object: jni::objects::JObject = env.get_field(v, #property, #descriptor)
+                                .and_then(|val| val.l())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                            let #raw: jni::sys::jint = env.call_method(&#object, "getValue", "()I", &[])
+                                .and_then(|val| val.i())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                            let #name = #decode;
+                        }
+                    }
+                }
+                JObjectStructFieldKind::Primitive {
+                    wire,
+                    descriptor,
+                    accessor,
+                    pipeline,
+                } => {
+                    let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                    quote! {
+                        let #raw: #wire = env.get_field(v, #property, #descriptor)
+                            .and_then(|val| val.#accessor())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))? as _;
+                        let #name = #decode;
+                    }
+                }
+                JObjectStructFieldKind::IntoObject {
+                    wire,
+                    descriptor,
+                    pipeline,
+                } => {
+                    let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                    quote! {
+                        let #object: jni::objects::JObject = env.get_field(v, #property, #descriptor)
+                            .and_then(|val| val.l())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                        let #raw: #wire = #object.into();
+                        let #name = #decode;
+                    }
+                }
+                JObjectStructFieldKind::Object {
+                    descriptor,
+                    pipeline,
+                } => {
+                    let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                    quote! {
+                        let #raw: jni::objects::JObject = env.get_field(v, #property, #descriptor)
+                            .and_then(|val| val.l())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                        let #name = #decode;
+                    }
+                }
+            };
+            preludes.push(code);
+            inits.push(quote!(#name));
+        }
+        let module = &self.source_module;
+        let ident = &self.shape.name;
+        let ctor = emit.shape_struct(&self.shape, quote!(#module::#ident), &inits);
+        syn::parse_quote!({
+            #(#preludes)*
+            #ctor
+        })
+    }
 }
 
 /// Whole-object **input** decode for a `sealed_class` sum: a `JObject` of the
@@ -376,7 +455,7 @@ pub(crate) fn sum_input_body(
 
 /// Read one Kotlin property off `receiver` and decode it to its Rust value,
 /// binding the result to `bind`. Mirrors the per-field decode
-/// [`struct_input_body`] performs, for the positions that are properties of a
+/// [`JObjectStructInputPlan`] performs, for positions that are properties of a
 /// generated class rather than fields of a data class.
 #[allow(clippy::too_many_arguments)]
 fn read_kotlin_property(
@@ -406,7 +485,7 @@ fn read_kotlin_property(
 
     // A handle property is a `NativeHandle` object whose raw pointer comes
     // from `peek()`; an enum property is the Kotlin enum class, decoded
-    // through its `getValue`. Both mirror `struct_input_body`.
+    // through its `getValue`. Both mirror `JObjectStructInputPlan`.
     if let Some(proj) = &entry.metadata.projection {
         if matches!(proj.kind, ProjectionKind::Handle) {
             let fqn = handle_field_fqn(ext, proj).replace('.', "/");
@@ -433,7 +512,7 @@ fn read_kotlin_property(
     // An enum property — bare or under `Option` — is stored as the Kotlin
     // **enum object**, so it is read through `getValue`, NOT through the
     // generic converters: both are `jint`-keyed, and neither matches what the
-    // JVM slot actually holds. `struct_input_body` makes the same
+    // JVM slot actually holds. `JObjectStructInputPlan` makes the same
     // distinction for data-class fields; this is that logic for a property.
     if ext.is_kotlin_enum_reading(inner) {
         // The NAME off the classification, not off the last path segment.

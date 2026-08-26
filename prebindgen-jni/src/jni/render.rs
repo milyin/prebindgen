@@ -226,7 +226,7 @@ pub(crate) fn build_data_class(
         }
         class = class.member(KtFun::new("close").modifier("override").body(body));
     }
-    // `fromParts` factory: native (`struct_output_body`) makes ONE
+    // `fromParts` factory: the late native struct codec makes ONE
     // `call_static_method` passing the whole graph's flattened leaf wires;
     // this factory reassembles it (incl. nested `Child.fromParts(...)`) in
     // JVM bytecode. `public`, not `internal`: an `internal` fun is mangled

@@ -81,7 +81,7 @@ pub(crate) fn projection_wrap_expr(kind: &ProjectionKind, short: &str, raw: &str
 /// For a projection (handle / unsigned) **struct field**,
 /// compute the `(wire_param_type, wrap_expr)` the data class's `fromParts`
 /// factory uses: the wire param type matches the leaf wire
-/// `struct_output_body` passes (handle → `Long` jlong sentinel), and the wrap
+/// the late struct-output codec passes (handle → `Long` jlong sentinel), and the wrap
 /// reconstructs the typed value in JVM
 /// bytecode (`Short(arg)`, with null mapped from the `0L` sentinel for handles
 /// or the declared invalid `Long` for a bounded unsigned representation; JVM

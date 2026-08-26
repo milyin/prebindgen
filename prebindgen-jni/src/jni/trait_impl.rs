@@ -1628,7 +1628,7 @@ impl Declarations {
     // ── Input converters ─────────────────────────────────────────────
 
     /// Remaining whole-type **input** compatibility categories: destination
-    /// primitive overrides and explicit whole-object sum/struct decoders.
+    /// primitive overrides and the explicit whole-object sum decoder.
     ///
     /// Bare scalars and all string terminals are compiled as
     /// `JValueCodecPlan`s before this fallback is entered.
@@ -1703,27 +1703,6 @@ impl Declarations {
                     });
                 }
             }
-            if let Some(s) = registry.flat().struct_type(&name) {
-                let (wire, body) = struct_input_body(self, s, registry, emit)?;
-                let niches = default_niches_for_wire(&wire);
-                // Auto-generated struct: the value-context Kotlin name is
-                // whatever the user pinned via `data_class`. If
-                // they didn't, leave `kotlin_name = None` — emitter
-                // surfaces this as a build-time hard error.
-                let kotlin_name = self
-                    .types
-                    .get(&key)
-                    .and_then(|c| c.name_spec.as_ref())
-                    .map(|s| KtType::cls(self.fqn_of(s)));
-                return Some(ConverterImpl {
-                    subs: vec![],
-                    pre_stages: vec![],
-                    function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                    destination: wire,
-                    niches,
-                    metadata: self.framework_meta(kotlin_name),
-                });
-            }
             // Bare-ident enum: leave to the consuming crate to override
             // (today's CongestionControl etc. fall here — caller's wrapper
             // ext returns Some in its own input_terminal).
@@ -1733,14 +1712,13 @@ impl Declarations {
 
     // ── Output converters ────────────────────────────────────────────
 
-    /// Remaining whole-type **output** compatibility categories: destination
-    /// primitive overrides and explicit whole-object struct encoders.
+    /// Remaining whole-type **output** compatibility category: destination
+    /// primitive overrides.
     /// Bare scalars, all string terminals, and unit are compiled as
     /// `JValueCodecPlan`s before this fallback is entered.
     pub(crate) fn output_terminal(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()` — see `input_terminal`.
@@ -1748,7 +1726,6 @@ impl Declarations {
         // spelling for what generated Rust says. Neither needs a node.
         // Opaque handles and canonical custom conversions are retained before
         // this fallback.
-        let key = reading.key();
         if let Some((wire, body)) = (!matches!(
             reading.unwrapped().kind(),
             prebindgen_registry::flat::TypeKind::Scalar(_)
@@ -1774,25 +1751,6 @@ impl Declarations {
                 niches,
                 metadata,
             });
-        }
-        if let Some(name) = reading.key().ident() {
-            if let Some(s) = registry.flat().struct_type(&name) {
-                let (wire, body) = struct_output_body(self, s, registry)?;
-                let niches = default_niches_for_wire(&wire);
-                let kotlin_name = self
-                    .types
-                    .get(&key)
-                    .and_then(|c| c.name_spec.as_ref())
-                    .map(|s| KtType::cls(self.fqn_of(s)));
-                return Some(ConverterImpl {
-                    subs: vec![],
-                    pre_stages: vec![],
-                    function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                    destination: wire,
-                    niches,
-                    metadata: self.framework_meta(kotlin_name),
-                });
-            }
         }
         None
     }
