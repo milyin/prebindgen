@@ -557,7 +557,7 @@ impl CbindgenBuilder {
             else {
                 panic!("C error site must have one direct wire");
             };
-            (wire.clone(), converter.ident().clone(), self.src_ty(err_ty))
+            (wire.clone(), converter.ident(emit), self.src_ty(err_ty))
         });
 
         // No `Result` channel ⇒ a fallible input must be declared `.panic()`.
@@ -711,7 +711,7 @@ impl CbindgenBuilder {
                     let enc = value_site.map_or_else(TokenStream::new, |site| {
                         site.abi()
                             .payload()
-                            .encode(quote!(__v), &targets, &input_route)
+                            .encode(quote!(__v), &targets, &input_route, emit)
                     });
                     quote!(
                         #(#decodes)*
@@ -734,7 +734,7 @@ impl CbindgenBuilder {
                 let enc = value_site.map_or_else(TokenStream::new, |site| {
                     site.abi()
                         .payload()
-                        .encode(quote!(__v), &targets, &input_route)
+                        .encode(quote!(__v), &targets, &input_route, emit)
                 });
                 quote!(
                     #(#decodes)*
@@ -752,7 +752,7 @@ impl CbindgenBuilder {
                 let enc = value_site.map_or_else(TokenStream::new, |site| {
                     site.abi()
                         .payload()
-                        .encode(quote!(__v), &targets, &input_route)
+                        .encode(quote!(__v), &targets, &input_route, emit)
                 });
                 quote!(
                     #(#decodes)*
@@ -937,7 +937,7 @@ impl CbindgenBuilder {
                 crate::compile::CValue::Direct {
                     wire, converter, ..
                 } => {
-                    let conv = converter.ident();
+                    let conv = converter.ident(emit);
                     params.push(quote!(#ident: #wire));
                     if converter.fallible() {
                         let on_err = route_message(route);

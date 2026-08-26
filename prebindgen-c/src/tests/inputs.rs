@@ -74,12 +74,12 @@ fn option_opaque_input_reuses_pointer() {
     );
     // Non-null path consumes through the inner handle converter.
     assert!(
-        compact.contains("::core::option::Option::Some(__cbg_in_ZZBytes(__present)?)"),
+        operation_call(&compact, "__c_in_convert_wire_to_ZZBytes_", "__present"),
         "{src}"
     );
     // Fallible inner decode routes its error through the Result channel (`*e`).
     assert!(compact.contains("e:*mutz_error"), "{src}");
-    assert!(compact.contains("__cbg_out_Error"), "{src}");
+    assert!(compact.contains("__c_out_convert_Error_"), "{src}");
 }
 
 /// `Option<i64>` input (scalar inner, no niche) is boxed behind a `*const`
@@ -148,7 +148,11 @@ fn option_data_struct_input_reads_the_pointee() {
 
     assert!(compact.contains("v:*constrec"), "{src}");
     assert!(
-        compact.contains("let__present=::core::ptr::read(v);::core::option::Option::Some(__cbg_in_Rec(__present))"),
+        compact.contains("let__present=::core::ptr::read(v);"),
+        "{src}"
+    );
+    assert!(
+        operation_call(&compact, "__c_in_convert_wire_to_Rec_", "__present"),
         "{src}"
     );
 }
@@ -290,10 +294,7 @@ fn enum_input_validates_the_discriminant() {
         compact.contains("level:::core::mem::MaybeUninit<z_intersection>"),
         "{src}"
     );
-    assert!(
-        !compact.contains("fn__cbg_in_SetIntersectionLevel(v:z_intersection)"),
-        "{src}"
-    );
+    assert!(!compact.contains("(v:z_intersection)"), "{src}");
     // The discriminant is read as a plain integer and compared against the
     // mirror's variants — a `const`-driven one needs no evaluation here.
     assert!(

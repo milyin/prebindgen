@@ -22,10 +22,13 @@ use super::{builder::qualify_source_type, *};
 pub(crate) struct CCall(chain::Call);
 
 impl CCall {
-    pub(crate) fn ident(&self) -> &syn::Ident {
-        self.0
-            .ident()
-            .expect("C compatibility calls are named during planning")
+    pub(crate) fn ident(&self, emit: &Emit) -> syn::Ident {
+        emit.operation_ident(
+            "c",
+            self.0
+                .operation_id()
+                .expect("every C converter call has registry operation identity"),
+        )
     }
 
     pub(crate) fn fallible(&self) -> bool {
@@ -42,8 +45,8 @@ impl chain::Child for CCall {
         &self.0
     }
 
-    fn invoke(&self, value: TokenStream, _emit: &prebindgen_registry::Emit) -> TokenStream {
-        let ident = self.ident();
+    fn invoke(&self, value: TokenStream, emit: &prebindgen_registry::Emit) -> TokenStream {
+        let ident = self.ident(emit);
         quote!(#ident(#value))
     }
 }
@@ -76,8 +79,8 @@ enum CBody {
 
 impl CFunction {
     pub(crate) fn product(operation: prebindgen_registry::OperationId, plan: ProductPlan) -> Self {
-        let call = CCall(chain::Call::new(
-            plan.ident.clone(),
+        let call = CCall(chain::Call::operation(
+            operation.clone(),
             plan.fields.iter().any(|field| field.converter.fallible()),
             plan.direction == Direction::Construct,
         ));
@@ -89,7 +92,11 @@ impl CFunction {
     }
 
     pub(crate) fn custom(operation: prebindgen_registry::OperationId, plan: CustomPlan) -> Self {
-        let call = CCall(chain::Call::new(plan.ident.clone(), plan.fallible(), false));
+        let call = CCall(chain::Call::operation(
+            operation.clone(),
+            plan.fallible(),
+            false,
+        ));
         Self {
             operation,
             call,
@@ -101,7 +108,7 @@ impl CFunction {
         operation: prebindgen_registry::OperationId,
         plan: OutputTerminalPlan,
     ) -> Self {
-        let call = CCall(chain::Call::new(plan.ident.clone(), false, false));
+        let call = CCall(chain::Call::operation(operation.clone(), false, false));
         Self {
             operation,
             call,
@@ -113,8 +120,8 @@ impl CFunction {
         operation: prebindgen_registry::OperationId,
         plan: InputTerminalPlan,
     ) -> Self {
-        let call = CCall(chain::Call::new(
-            plan.ident.clone(),
+        let call = CCall(chain::Call::operation(
+            operation.clone(),
             plan.operation.fallible(),
             plan.operation.unsafe_(),
         ));
@@ -126,8 +133,8 @@ impl CFunction {
     }
 
     pub(crate) fn payload(operation: prebindgen_registry::OperationId, plan: PayloadPlan) -> Self {
-        let call = CCall(chain::Call::new(
-            plan.ident.clone(),
+        let call = CCall(chain::Call::operation(
+            operation.clone(),
             plan.direction == Direction::Construct && !plan.optional,
             plan.direction == Direction::Construct,
         ));
@@ -139,8 +146,8 @@ impl CFunction {
     }
 
     pub(crate) fn borrow(operation: prebindgen_registry::OperationId, plan: BorrowPlan) -> Self {
-        let call = CCall(chain::Call::new(
-            plan.ident.clone(),
+        let call = CCall(chain::Call::operation(
+            operation.clone(),
             plan.operation.fallible(),
             true,
         ));
@@ -155,7 +162,7 @@ impl CFunction {
         operation: prebindgen_registry::OperationId,
         plan: SliceInputPlan,
     ) -> Self {
-        let call = CCall(chain::Call::new(plan.ident.clone(), false, false));
+        let call = CCall(chain::Call::operation(operation.clone(), false, false));
         Self {
             operation,
             call,
@@ -164,7 +171,7 @@ impl CFunction {
     }
 
     pub(crate) fn marker(operation: prebindgen_registry::OperationId, plan: MarkerPlan) -> Self {
-        let call = CCall(chain::Call::new(plan.ident.clone(), false, false));
+        let call = CCall(chain::Call::operation(operation.clone(), false, false));
         Self {
             operation,
             call,
@@ -176,8 +183,8 @@ impl CFunction {
         operation: prebindgen_registry::OperationId,
         plan: OptionalPlan,
     ) -> Self {
-        let call = CCall(chain::Call::new(
-            plan.ident.clone(),
+        let call = CCall(chain::Call::operation(
+            operation.clone(),
             plan.converter.fallible(),
             true,
         ));
@@ -192,8 +199,8 @@ impl CFunction {
         operation: prebindgen_registry::OperationId,
         plan: SequencePlan,
     ) -> Self {
-        let call = CCall(chain::Call::new(
-            plan.ident.clone(),
+        let call = CCall(chain::Call::operation(
+            operation.clone(),
             plan.child.fallible(),
             plan.child.unsafe_(),
         ));
@@ -211,8 +218,8 @@ impl CFunction {
                 .iter()
                 .flat_map(|arm| &arm.parts)
                 .any(|part| part.child.fallible());
-        let call = CCall(chain::Call::new(
-            plan.ident.clone(),
+        let call = CCall(chain::Call::operation(
+            operation.clone(),
             fallible,
             plan.direction == Direction::Construct,
         ));
@@ -223,13 +230,10 @@ impl CFunction {
         }
     }
 
-    pub(crate) fn deferred_invoke(
-        operation: prebindgen_registry::OperationId,
-        ident: syn::Ident,
-    ) -> Self {
+    pub(crate) fn deferred_invoke(operation: prebindgen_registry::OperationId) -> Self {
         Self {
+            call: CCall(chain::Call::operation(operation.clone(), false, true)),
             operation,
-            call: CCall(chain::Call::new(ident, false, true)),
             body: CBody::DeferredInvoke,
         }
     }
@@ -239,10 +243,19 @@ impl CFunction {
     }
 
     #[cfg(test)]
-    pub(crate) fn operation_and_compatibility_name(
+    pub(crate) fn operation_and_call_identity(
         &self,
-    ) -> (&prebindgen_registry::OperationId, &syn::Ident) {
-        (&self.operation, self.call.ident())
+    ) -> (
+        &prebindgen_registry::OperationId,
+        &prebindgen_registry::OperationId,
+    ) {
+        (
+            &self.operation,
+            self.call
+                .0
+                .operation_id()
+                .expect("C converter calls are late-named operations"),
+        )
     }
 
     #[cfg(test)]
@@ -322,18 +335,19 @@ impl RustFunction for CFunction {
     }
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = emit.operation_ident("c", &self.operation);
         match &self.body {
-            CBody::Custom(plan) => plan.render(emit),
-            CBody::InputTerminal(plan) => plan.render(emit),
-            CBody::OutputTerminal(plan) => plan.render(emit),
-            CBody::Payload(plan) => plan.render(emit),
-            CBody::Borrow(plan) => plan.render(emit),
-            CBody::SliceInput(plan) => plan.render(),
-            CBody::Marker(plan) => plan.render(),
-            CBody::Product(plan) => plan.render(emit),
-            CBody::Choice(plan) => plan.render(emit),
-            CBody::Sequence(plan) => plan.render(emit),
-            CBody::Optional(plan) => plan.render(emit),
+            CBody::Custom(plan) => plan.render(emit, &name),
+            CBody::InputTerminal(plan) => plan.render(emit, &name),
+            CBody::OutputTerminal(plan) => plan.render(emit, &name),
+            CBody::Payload(plan) => plan.render(emit, &name),
+            CBody::Borrow(plan) => plan.render(emit, &name),
+            CBody::SliceInput(plan) => plan.render(&name),
+            CBody::Marker(plan) => plan.render(&name),
+            CBody::Product(plan) => plan.render(emit, &name),
+            CBody::Choice(plan) => plan.render(emit, &name),
+            CBody::Sequence(plan) => plan.render(emit, &name),
+            CBody::Optional(plan) => plan.render(emit, &name),
             CBody::DeferredInvoke => {
                 unreachable!("a deferred C Invoke helper is rendered by its callback artifact")
             }
@@ -353,23 +367,21 @@ pub(crate) enum MarkerOperation {
 /// A typed replacement for one legacy zero-argument marker converter.
 #[derive(Clone)]
 pub(crate) struct MarkerPlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) operation: MarkerOperation,
     pub(crate) subs: Vec<TypeRef>,
 }
 
 impl MarkerPlan {
-    fn render(&self) -> syn::ItemFn {
+    fn render(&self, name: &syn::Ident) -> syn::ItemFn {
         match self.operation {
             MarkerOperation::ChoiceArm => {
-                let name = &self.ident;
                 syn::parse_quote!(
                     #[allow(dead_code)]
                     fn #name() {}
                 )
             }
             MarkerOperation::Optional | MarkerOperation::Sequence | MarkerOperation::Result => {
-                render_marker(&self.ident)
+                render_marker(name)
             }
         }
     }
@@ -378,15 +390,14 @@ impl MarkerPlan {
 /// A zero-copy shared-slice input retained without a legacy converter body.
 #[derive(Clone)]
 pub(crate) struct SliceInputPlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) element: TypeRef,
     pub(crate) wire: syn::Type,
     pub(crate) reinterpret: bool,
 }
 
 impl SliceInputPlan {
-    fn render(&self) -> syn::ItemFn {
-        render_marker(&self.ident)
+    fn render(&self, name: &syn::Ident) -> syn::ItemFn {
+        render_marker(name)
     }
 }
 
@@ -416,7 +427,6 @@ impl BorrowOperation {
 /// A borrow terminal whose referent is materialized only during final emission.
 #[derive(Clone)]
 pub(crate) struct BorrowPlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) source_inner: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
@@ -425,8 +435,7 @@ pub(crate) struct BorrowPlan {
 }
 
 impl BorrowPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
         let source_inner = qualify_source_type(
             &emit.spell_ty(&self.source_inner),
             self.source_module.as_ref(),
@@ -510,7 +519,6 @@ impl BorrowPlan {
 /// A tagged-union pointer payload retained without spelling its source types.
 #[derive(Clone)]
 pub(crate) struct PayloadPlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) source: TypeRef,
     pub(crate) source_inner: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
@@ -522,8 +530,7 @@ pub(crate) struct PayloadPlan {
 }
 
 impl PayloadPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
         let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
         let source_inner = qualify_source_type(
             &emit.spell_ty(&self.source_inner),
@@ -662,7 +669,6 @@ impl InputTerminalOperation {
 /// A C input terminal retained until the final writer owns [`Emit`].
 #[derive(Clone)]
 pub(crate) struct InputTerminalPlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) source: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
@@ -670,8 +676,7 @@ pub(crate) struct InputTerminalPlan {
 }
 
 impl InputTerminalPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
         let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
         let wire = &self.wire;
         match &self.operation {
@@ -830,7 +835,6 @@ pub(crate) enum OutputTerminalOperation {
 /// A C output terminal retained until the final writer owns `Emit`.
 #[derive(Clone)]
 pub(crate) struct OutputTerminalPlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) source: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
@@ -838,8 +842,7 @@ pub(crate) struct OutputTerminalPlan {
 }
 
 impl OutputTerminalPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
         let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
         let wire = &self.wire;
         match &self.operation {
@@ -957,7 +960,6 @@ impl CustomOperation {
 /// One canonical scalar conversion, frozen before source spelling is allowed.
 #[derive(Clone)]
 pub(crate) struct CustomPlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) source: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
@@ -972,8 +974,7 @@ impl CustomPlan {
         self.valid.is_some() || self.operation.fallible()
     }
 
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
         let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
         let wire = &self.wire;
         let conversion = self.operation.expression(self.direction, &source, wire);
@@ -1088,84 +1089,11 @@ impl CallbackArgument {
     }
 
     fn invoke_part(&self, index: usize) -> InvokePart {
-        let source = invoke_argument_name(index);
-        if let Some(element) = &self.zero_copy_element {
-            return InvokePart {
-                source: source.clone(),
-                prepare: TokenStream::new(),
-                arguments: vec![
-                    quote!(#source.as_ptr() as *const #element),
-                    quote!(#source.len()),
-                ],
-                cleanup: TokenStream::new(),
-            };
-        }
-
-        let mut prepare = TokenStream::new();
-        let mut arguments = Vec::new();
-        let mut cleanup = TokenStream::new();
-        if self.takeable {
-            let (wire, converter) = self
-                .value
-                .direct()
-                .expect("a takeable callback argument must have one direct wire");
-            let target = format_ident!("__w{index}");
-            let conv = converter.ident();
-            let converted = if converter.fallible() {
-                quote!(match #conv(#source) {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
-                    }
-                })
-            } else {
-                quote!(#conv(#source))
-            };
-            prepare.extend(quote!(let mut #target = #converted;));
-            arguments.push(quote!(&mut #target as *mut #wire));
-            cleanup.extend(quote!(
-                let _ = <#wire as ::prebindgen_c_runtime::Transmute>::into_rust(#target);
-            ));
-        } else if let Some((_, converter)) = self.value.direct() {
-            let target = format_ident!("__w{index}");
-            let conv = converter.ident();
-            let converted = if converter.fallible() {
-                quote!(match #conv(#source) {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
-                    }
-                })
-            } else {
-                quote!(#conv(#source))
-            };
-            prepare.extend(quote!(let #target = #converted;));
-            arguments.push(quote!(#target));
-        } else {
-            let fields = self.value.fields();
-            let mut targets = Vec::new();
-            for (field_index, field) in fields.iter().enumerate() {
-                let target = if fields.len() == 1 {
-                    format_ident!("__w{index}")
-                } else {
-                    format_ident!("__w{index}_{field_index}")
-                };
-                let wire = &field.wire;
-                prepare
-                    .extend(quote!(let mut #target = ::core::mem::MaybeUninit::<#wire>::zeroed();));
-                targets.push(quote!(*#target.as_mut_ptr()));
-                arguments.push(quote!(#target));
-            }
-            prepare.extend(
-                self.value
-                    .encode(quote!(#source), &targets, &ErrRoute::Panic),
-            );
-        }
         InvokePart {
-            source,
-            prepare,
-            arguments,
-            cleanup,
+            source: invoke_argument_name(index),
+            value: self.value.clone(),
+            zero_copy_element: self.zero_copy_element.clone(),
+            takeable: self.takeable,
         }
     }
 }
@@ -1181,7 +1109,7 @@ pub(crate) struct CallbackArtifact {
 impl CallbackArtifact {
     pub(crate) fn new(
         c_struct: syn::Ident,
-        ident: syn::Ident,
+        operation: prebindgen_registry::OperationId,
         source: TypeRef,
         source_module: Option<syn::Path>,
         arguments: Vec<TypeRef>,
@@ -1196,7 +1124,7 @@ impl CallbackArtifact {
         Self {
             c_struct,
             invoke: InvokePlan {
-                ident,
+                operation,
                 source,
                 source_module,
                 wire,
@@ -1611,19 +1539,91 @@ impl TaggedUnionArtifact {
 #[derive(Clone)]
 pub(crate) struct InvokePart {
     pub(crate) source: syn::Ident,
-    pub(crate) prepare: TokenStream,
-    pub(crate) arguments: Vec<TokenStream>,
-    pub(crate) cleanup: TokenStream,
+    pub(crate) value: crate::compile::CValue,
+    pub(crate) zero_copy_element: Option<syn::Type>,
+    pub(crate) takeable: bool,
 }
 
 impl chain::InvokePart for InvokePart {
-    fn render(&self, value: &syn::Ident, index: usize, _emit: &Emit) -> chain::RenderedInvokePart {
+    fn render(&self, value: &syn::Ident, index: usize, emit: &Emit) -> chain::RenderedInvokePart {
         assert_eq!(value, &invoke_argument_name(index));
         assert_eq!(value, &self.source);
+
+        if let Some(element) = &self.zero_copy_element {
+            return chain::RenderedInvokePart {
+                prepare: TokenStream::new(),
+                arguments: vec![
+                    quote!(#value.as_ptr() as *const #element),
+                    quote!(#value.len()),
+                ],
+                cleanup: TokenStream::new(),
+            };
+        }
+
+        let mut prepare = TokenStream::new();
+        let mut arguments = Vec::new();
+        let mut cleanup = TokenStream::new();
+        if self.takeable {
+            let (wire, converter) = self
+                .value
+                .direct()
+                .expect("a takeable callback argument must have one direct wire");
+            let target = format_ident!("__w{index}");
+            let conv = converter.ident(emit);
+            let converted = if converter.fallible() {
+                quote!(match #conv(#value) {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__e) => {
+                        ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
+                    }
+                })
+            } else {
+                quote!(#conv(#value))
+            };
+            prepare.extend(quote!(let mut #target = #converted;));
+            arguments.push(quote!(&mut #target as *mut #wire));
+            cleanup.extend(quote!(
+                let _ = <#wire as ::prebindgen_c_runtime::Transmute>::into_rust(#target);
+            ));
+        } else if let Some((_, converter)) = self.value.direct() {
+            let target = format_ident!("__w{index}");
+            let conv = converter.ident(emit);
+            let converted = if converter.fallible() {
+                quote!(match #conv(#value) {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__e) => {
+                        ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
+                    }
+                })
+            } else {
+                quote!(#conv(#value))
+            };
+            prepare.extend(quote!(let #target = #converted;));
+            arguments.push(quote!(#target));
+        } else {
+            let fields = self.value.fields();
+            let mut targets = Vec::new();
+            for (field_index, field) in fields.iter().enumerate() {
+                let target = if fields.len() == 1 {
+                    format_ident!("__w{index}")
+                } else {
+                    format_ident!("__w{index}_{field_index}")
+                };
+                let wire = &field.wire;
+                prepare
+                    .extend(quote!(let mut #target = ::core::mem::MaybeUninit::<#wire>::zeroed();));
+                targets.push(quote!(*#target.as_mut_ptr()));
+                arguments.push(quote!(#target));
+            }
+            prepare.extend(
+                self.value
+                    .encode(quote!(#value), &targets, &ErrRoute::Panic, emit),
+            );
+        }
         chain::RenderedInvokePart {
-            prepare: self.prepare.clone(),
-            arguments: self.arguments.clone(),
-            cleanup: self.cleanup.clone(),
+            prepare,
+            arguments,
+            cleanup,
         }
     }
 }
@@ -1707,7 +1707,7 @@ impl chain::InvokeBridge for CInvokeBridge {
 /// A callback chain. Its `impl Fn(..)` spelling remains opaque until render.
 #[derive(Clone)]
 pub(crate) struct InvokePlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: prebindgen_registry::OperationId,
     pub(crate) source: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
@@ -1729,7 +1729,7 @@ impl InvokePlan {
             parts: self.parts.clone(),
         };
         let rendered = plan.render(emit);
-        let name = &self.ident;
+        let name = emit.operation_ident("c", &self.operation);
         let source = &rendered.source;
         let intermediate = &rendered.intermediate;
         let syn::Expr::Block(body) = &rendered.body else {
@@ -1788,7 +1788,6 @@ impl chain::ProductBridge for CProductBridge {
 /// A product chain. Source syntax stays behind `source` until `render`.
 #[derive(Clone)]
 pub(crate) struct ProductPlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) source: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
@@ -1797,7 +1796,7 @@ pub(crate) struct ProductPlan {
 }
 
 impl ProductPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
         let chain = chain::Product {
             source: self.source.clone(),
             direction: self.direction,
@@ -1819,7 +1818,6 @@ impl ProductPlan {
                 .collect(),
         };
         let rendered = chain.render(emit);
-        let name = &self.ident;
         let source = &rendered.source;
         let intermediate = &rendered.intermediate;
         let body = &rendered.body;
@@ -1901,7 +1899,6 @@ impl chain::OptionalBridge for COptionalBridge {
 /// An optional chain. Its source `Option<T>` remains opaque until rendering.
 #[derive(Clone)]
 pub(crate) struct OptionalPlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) source: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
@@ -1911,7 +1908,7 @@ pub(crate) struct OptionalPlan {
 }
 
 impl OptionalPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
         let chain = chain::Optional {
             source: self.source.clone(),
             direction: Direction::Construct,
@@ -1925,7 +1922,6 @@ impl OptionalPlan {
             child: self.converter.clone(),
         };
         let rendered = chain.render(emit);
-        let name = &self.ident;
         let source = &rendered.source;
         let intermediate = &rendered.intermediate;
         let body = &rendered.body;
@@ -1995,7 +1991,6 @@ impl chain::SequenceBridge for CSequenceBridge {
 /// One C Vec-output converter composed by the registry.
 #[derive(Clone)]
 pub(crate) struct SequencePlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) source: TypeRef,
     pub(crate) element: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
@@ -2004,7 +1999,7 @@ pub(crate) struct SequencePlan {
 }
 
 impl SequencePlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
         let composed = chain::Sequence {
             source: self.source.clone(),
             element: self.element.clone(),
@@ -2018,7 +2013,6 @@ impl SequencePlan {
             child: self.child.clone(),
         };
         let rendered = composed.render(emit);
-        let name = &self.ident;
         let source = &rendered.source;
         let intermediate = &rendered.intermediate;
         let body = &rendered.body;
@@ -2147,7 +2141,6 @@ impl chain::ChoiceBridge for CChoiceBridge {
 /// source syntax remains behind `source` until `render`.
 #[derive(Clone)]
 pub(crate) struct ChoicePlan {
-    pub(crate) ident: syn::Ident,
     pub(crate) source: TypeRef,
     pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Ident,
@@ -2156,7 +2149,7 @@ pub(crate) struct ChoicePlan {
 }
 
 impl ChoicePlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
         let composed = chain::Choice {
             source: self.source.clone(),
             direction: self.direction,
@@ -2174,7 +2167,6 @@ impl ChoicePlan {
             arms: self.arms.clone(),
         };
         let rendered = composed.render(emit);
-        let name = &self.ident;
         let source = &rendered.source;
         let intermediate = &rendered.intermediate;
         let body = &rendered.body;

@@ -22,30 +22,38 @@ fn write(cbindgen: CbindgenBuilder, registry: RegistryBuilder, tag: &str) -> Str
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join(format!("{tag}.rs"));
     let gen = cbindgen.build_with(registry).expect("resolve");
-    assert_converter_identity_matches_compatibility_names(&gen);
+    assert_converter_calls_retain_their_operation(&gen);
     let path = gen.write_rust(&out).expect("write_rust");
     std::fs::read_to_string(&path).unwrap()
 }
 
-fn assert_converter_identity_matches_compatibility_names(gen: &Cbindgen) {
-    let mut names_by_operation = std::collections::HashMap::new();
-    let mut operations_by_name = std::collections::HashMap::new();
+fn assert_converter_calls_retain_their_operation(gen: &Cbindgen) {
     for function in gen.gen.converter_functions() {
-        let (operation, name) = function.operation_and_compatibility_name();
-        let name = name.to_string();
-        if let Some(previous) = names_by_operation.insert(operation.clone(), name.clone()) {
-            assert_eq!(
-                previous, name,
-                "one semantic C operation must not select two compatibility names"
-            );
-        }
-        if let Some(previous) = operations_by_name.insert(name.clone(), operation.clone()) {
-            assert_eq!(
-                previous, *operation,
-                "one compatibility name must not hide two semantic C operations: {name}"
-            );
-        }
+        let (function, call) = function.operation_and_call_identity();
+        assert_eq!(
+            function, call,
+            "a C converter call must target its own operation"
+        );
     }
+}
+
+/// Whether a final registry-owned operation whose name starts with `stem`
+/// is called with `argument` in whitespace-compacted generated Rust.
+///
+/// Private converter names intentionally end in a stable identity hash. Tests
+/// should pin the readable semantic stem and the call shape, not that suffix.
+fn operation_call(compact: &str, stem: &str, argument: &str) -> bool {
+    compact.match_indices(stem).any(|(start, _)| {
+        let rest = &compact[start + stem.len()..];
+        rest.find('(')
+            .is_some_and(|open| rest[open + 1..].starts_with(argument))
+    })
+}
+
+fn operation_name<'a>(compact: &'a str, stem: &str) -> Option<&'a str> {
+    let start = compact.find(stem)?;
+    let end = compact[start..].find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))? + start;
+    Some(&compact[start..end])
 }
 
 fn error_struct() -> syn::ItemStruct {

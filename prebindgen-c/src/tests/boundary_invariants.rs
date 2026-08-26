@@ -262,8 +262,8 @@ fn restricted_inbound(
 }
 
 /// Every generated function that C can call or that decodes C's bytes: the
-/// `#[no_mangle] extern "C"` wrappers and destructors, plus the `__cbg_in_*`
-/// input converters they call.
+/// `#[no_mangle] extern "C"` wrappers and destructors, plus the registry-named
+/// `__c_in_*` input converters they call.
 fn inbound_fns(file: &syn::File) -> Vec<syn::ItemFn> {
     file.items
         .iter()
@@ -271,7 +271,7 @@ fn inbound_fns(file: &syn::File) -> Vec<syn::ItemFn> {
             syn::Item::Fn(f) => Some(f.clone()),
             _ => None,
         })
-        .filter(|f| f.sig.abi.is_some() || f.sig.ident.to_string().starts_with("__cbg_in_"))
+        .filter(|f| f.sig.abi.is_some() || f.sig.ident.to_string().starts_with("__c_in_"))
         .collect()
 }
 
@@ -670,6 +670,9 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "Complete(syn::ItemFn)",
         "CFunction::complete",
         "compiled_fns",
+        "chain::Call::new(",
+        "fn in_name_of",
+        "fn out_name_of",
     ] {
         assert!(
             !sources.contains(deleted),

@@ -51,8 +51,7 @@ impl CbindgenBuilder {
     ) -> Option<crate::chain::InputTerminalPlan> {
         use crate::chain::InputTerminalOperation;
 
-        let plan = |ident, wire, operation| crate::chain::InputTerminalPlan {
-            ident,
+        let plan = |wire, operation| crate::chain::InputTerminalPlan {
             source: ty.clone(),
             source_module: self.source_module.clone(),
             wire,
@@ -65,7 +64,6 @@ impl CbindgenBuilder {
         if self.opaque.contains_key(&key) {
             let c_struct = self.c_type_ident(&key);
             return Some(plan(
-                Self::in_name_of(&key),
                 syn::parse_quote!(*mut #c_struct),
                 InputTerminalOperation::OwnedHandle {
                     null_message: format!("null {} handle passed by value", type_short(&key)),
@@ -79,7 +77,6 @@ impl CbindgenBuilder {
         if let Some(opaque) = self.value_opaque_ty_of(&key).cloned() {
             let writeback = self.value_opaque_writeback_plan(registry, &key)?;
             return Some(plan(
-                Self::in_name_of(&key),
                 syn::parse_quote!(*mut #opaque),
                 InputTerminalOperation::ValueOpaque {
                     opaque,
@@ -96,7 +93,6 @@ impl CbindgenBuilder {
             let c_name = self.c_type_ident(&key);
             let c_name_string = c_name.to_string();
             return Some(plan(
-                Self::in_name_of(&key),
                 syn::parse_quote!(::core::mem::MaybeUninit<#c_name>),
                 InputTerminalOperation::Enum {
                     c_name,
@@ -114,31 +110,21 @@ impl CbindgenBuilder {
 
         if r_is_string(ty) {
             return Some(plan(
-                Self::in_name_of(&key),
                 syn::parse_quote!(*const ::core::ffi::c_char),
                 InputTerminalOperation::String,
             ));
         }
         if r_is_str(ty) {
             return Some(plan(
-                Self::in_name_of(&key),
                 syn::parse_quote!(*const ::core::ffi::c_char),
                 InputTerminalOperation::StrMarker,
             ));
         }
         if r_is_bool(ty) {
-            return Some(plan(
-                Self::in_name_of(&key),
-                bool_wire(),
-                InputTerminalOperation::Bool,
-            ));
+            return Some(plan(bool_wire(), InputTerminalOperation::Bool));
         }
         if r_is_scalar(ty) {
-            return Some(plan(
-                Self::in_name_of(&key),
-                scalar_ty(ty)?,
-                InputTerminalOperation::Scalar,
-            ));
+            return Some(plan(scalar_ty(ty)?, InputTerminalOperation::Scalar));
         }
         None
     }
@@ -340,7 +326,7 @@ impl CbindgenBuilder {
                 let callback_name = self.callback_c_name(&key);
                 let callback = crate::chain::CallbackArtifact::new(
                     self.callback_c_ident(&key),
-                    format_ident!("__cbg_in_{callback_name}"),
+                    crate::compile::callback_operation(&param.ty),
                     param.ty.clone(),
                     self.source_module.clone(),
                     args.to_vec(),
@@ -469,12 +455,7 @@ impl CbindgenBuilder {
                     type_short(&inner.key()),
                 )
             };
-        let prefix = match direction {
-            Direction::Construct => Self::in_name_of(&fty.key()),
-            Direction::Deconstruct => Self::out_name_of(&fty.key()),
-        };
         Some(crate::chain::PayloadPlan {
-            ident: format_ident!("{prefix}_payload"),
             source: fty.clone(),
             source_inner,
             source_module: self.source_module.clone(),
@@ -511,7 +492,6 @@ impl CbindgenBuilder {
             return None;
         }
         Some(crate::chain::InputTerminalPlan {
-            ident: format_ident!("{}_field", Self::in_name_of(&ty.key())),
             source: ty.clone(),
             source_module: self.source_module.clone(),
             wire: syn::parse_quote!(*const ::core::ffi::c_char),
@@ -535,7 +515,6 @@ impl CbindgenBuilder {
             return None;
         }
         Some(crate::chain::OutputTerminalPlan {
-            ident: format_ident!("{}_field", Self::out_name_of(&ty.key())),
             source: ty.clone(),
             source_module: self.source_module.clone(),
             wire: bool_wire(),
@@ -1300,8 +1279,7 @@ impl CbindgenBuilder {
         ty: &TypeRef,
         registry: &impl Conversions,
     ) -> Option<crate::chain::OutputTerminalPlan> {
-        let plan = |ident, wire, operation| crate::chain::OutputTerminalPlan {
-            ident,
+        let plan = |wire, operation| crate::chain::OutputTerminalPlan {
             source: ty.clone(),
             source_module: self.source_module.clone(),
             wire,
@@ -1313,7 +1291,6 @@ impl CbindgenBuilder {
         // out-param entirely (it exists only to satisfy the resolver).
         if matches!(ty.kind(), TypeKind::Unit) {
             return Some(plan(
-                format_ident!("__cbg_out_unit"),
                 syn::parse_quote!(()),
                 crate::chain::OutputTerminalOperation::Unit,
             ));
@@ -1324,9 +1301,7 @@ impl CbindgenBuilder {
         // (held by C as `string_t *`) opts out — the opaque-handle branch below
         // owns it then (mirroring the input side, where owned-handle selection wins).
         if r_is_string(ty) && !self.opaque.contains_key(&ty.key()) {
-            let name = Self::out_name_of(&ty.key());
             return Some(plan(
-                name,
                 syn::parse_quote!(*mut ::core::ffi::c_char),
                 crate::chain::OutputTerminalOperation::String,
             ));
@@ -1334,23 +1309,16 @@ impl CbindgenBuilder {
 
         // FFI-safe scalar (`bool`, integers, floats): identity pass-through.
         if r_is_scalar(ty) {
-            let name = Self::out_name_of(&ty.key());
             let spelled = scalar_ty(ty)?;
-            return Some(plan(
-                name,
-                spelled,
-                crate::chain::OutputTerminalOperation::Scalar,
-            ));
+            return Some(plan(spelled, crate::chain::OutputTerminalOperation::Scalar));
         }
 
         let key = ty.key();
 
         // Opaque handle output: `Box::into_raw` → the bare `*mut #c_struct` handle.
         if self.opaque.contains_key(&key) {
-            let name = Self::out_name_of(&ty.key());
             let c_struct = self.c_type_ident(&ty.key());
             return Some(plan(
-                name,
                 syn::parse_quote!(*mut #c_struct),
                 crate::chain::OutputTerminalOperation::OwnedHandle { c_struct },
             ));
@@ -1361,9 +1329,7 @@ impl CbindgenBuilder {
         // String`. The error out-param of a `Result<_, E>` wrapper is thus
         // `char **e`. Freed by the universal `free_memory_function`.
         if let Some(msg_fn) = self.opaque_errors.get(&key) {
-            let name = Self::out_name_of(&ty.key());
             return Some(plan(
-                name,
                 syn::parse_quote!(*mut ::core::ffi::c_char),
                 crate::chain::OutputTerminalOperation::OpaqueError {
                     message_path: self.src_fn(msg_fn),
@@ -1376,9 +1342,7 @@ impl CbindgenBuilder {
         // type's emission site (fail-closed).
         if let Some(opaque) = self.value_opaque_ty_of(&ty.key()) {
             let opaque = opaque.clone();
-            let name = Self::out_name_of(&ty.key());
             return Some(plan(
-                name,
                 opaque,
                 crate::chain::OutputTerminalOperation::ValueOpaque,
             ));
@@ -1387,10 +1351,8 @@ impl CbindgenBuilder {
         // Enum output: `match` the source enum to the C enum.
         if self.enums.contains_key(&key) {
             let e = unit_enum(registry, &ty.key())?;
-            let name = Self::out_name_of(&ty.key());
             let cname = self.c_type_ident(&ty.key());
             return Some(plan(
-                name,
                 syn::parse_quote!(#cname),
                 crate::chain::OutputTerminalOperation::Enum {
                     c_name: cname,
@@ -1437,7 +1399,6 @@ impl CbindgenBuilder {
             }
         };
         Some(crate::chain::SliceInputPlan {
-            ident: format_ident!("__cbg_inmark_slice_{}", sanitize(&e.key())),
             element: e.clone(),
             wire,
             reinterpret: scalar.is_none(),
@@ -1468,8 +1429,7 @@ impl CbindgenBuilder {
         // or its source path, both of which the model answers.
         let elem = rf_inner;
 
-        let plan = |ident, source_inner, wire, operation, null_message| BorrowPlan {
-            ident,
+        let plan = |source_inner, wire, operation, null_message| BorrowPlan {
             source_inner,
             source_module: self.source_module.clone(),
             wire,
@@ -1489,7 +1449,6 @@ impl CbindgenBuilder {
                 self.value_opaque_ty_of(&key)?.clone()
             };
             return Some(plan(
-                format_ident!("__cbg_out_ref_{}", sanitize(&key)),
                 elem.as_ref().clone(),
                 syn::parse_quote!(*const #wire_ty),
                 BorrowOperation::SharedOutput,
@@ -1500,7 +1459,6 @@ impl CbindgenBuilder {
         // `&str`: borrow a UTF-8 C string directly from the caller.
         if !*rf_mut && r_is_str(rf_inner) {
             return Some(plan(
-                Self::in_name_of(&ty.key()),
                 elem.as_ref().clone(),
                 syn::parse_quote!(*const ::core::ffi::c_char),
                 BorrowOperation::StrInput,
@@ -1519,7 +1477,6 @@ impl CbindgenBuilder {
                 let op = self.value_opaque_ty_of(&inner.key())?.clone();
                 let short = type_short(&inner.key());
                 return Some(plan(
-                    Self::in_name_of(&ty.key()),
                     inner.as_ref().clone(),
                     syn::parse_quote!(*mut #op),
                     BorrowOperation::MutableUninitInput,
@@ -1537,7 +1494,6 @@ impl CbindgenBuilder {
             };
             let short = type_short(&elem.key());
             return Some(plan(
-                Self::in_name_of(&ty.key()),
                 elem.as_ref().clone(),
                 syn::parse_quote!(*mut #wire_ty),
                 BorrowOperation::MutableInput,
@@ -1554,7 +1510,6 @@ impl CbindgenBuilder {
         };
         let short = type_short(&elem.key());
         Some(plan(
-            Self::in_name_of(&ty.key()),
             elem.as_ref().clone(),
             syn::parse_quote!(*const #wire_ty),
             BorrowOperation::SharedInput,
@@ -1571,29 +1526,17 @@ impl CbindgenBuilder {
         operation: crate::chain::MarkerOperation,
         subject: &TypeRef,
     ) -> Option<crate::chain::MarkerPlan> {
-        let (ident, subs) = match operation {
+        let subs = match operation {
             crate::chain::MarkerOperation::ChoiceArm => return None,
-            crate::chain::MarkerOperation::Optional => (
-                format_ident!("__cbg_outmark_option_{}", sanitize(&subject.key())),
-                vec![subject.clone()],
-            ),
-            crate::chain::MarkerOperation::Sequence => (
-                format_ident!("__cbg_outmark_vec_{}", sanitize(&subject.key())),
-                vec![subject.clone()],
-            ),
+            crate::chain::MarkerOperation::Optional | crate::chain::MarkerOperation::Sequence => {
+                vec![subject.clone()]
+            }
             crate::chain::MarkerOperation::Result => {
                 let (ok, err) = subject.fallible_parts()?;
-                (
-                    format_ident!("__cbg_result_{}", sanitize(&subject.key())),
-                    vec![ok.clone(), err.clone()],
-                )
+                vec![ok.clone(), err.clone()]
             }
         };
-        Some(crate::chain::MarkerPlan {
-            ident,
-            operation,
-            subs,
-        })
+        Some(crate::chain::MarkerPlan { operation, subs })
     }
 }
 
