@@ -299,6 +299,36 @@ fn undeclared_expanded_callback_retains_its_registry_invoke_plan() {
     assert!(rust.contains("ledger_archived(&__cb_arg0)"), "{rust}");
 }
 
+/// Planning an Invoke may freeze Flat/model and JNI ABI facts, but only the
+/// final `RustFunction::render` boundary may receive `Emit`. Pin both sides of
+/// that seam: the recipe hook does not ask its compiler context for spelling,
+/// and the adapter planner cannot accept an `Emit` parameter later.
+#[test]
+fn callback_planning_has_no_source_spelling_access() {
+    // These delimiters deliberately follow rustfmt's stable spelling of both
+    // private signatures. If either signature changes, update this fence's
+    // boundary before deciding whether the new capability is still forbidden.
+    let compile = include_str!("../compile.rs");
+    let callback_hook = compile
+        .split_once("    fn callback(\n")
+        .expect("callback recipe hook")
+        .1
+        .split_once("    /// One site:")
+        .expect("end of callback recipe hook")
+        .0;
+    assert!(!callback_hook.contains(".emit()"), "{callback_hook}");
+
+    let callback = include_str!("../emit/callback.rs");
+    let planner_signature = callback
+        .split_once("pub(crate) fn callback_input(\n")
+        .expect("callback planner")
+        .1
+        .split_once(") -> Option<(syn::Type, JInvokePlan)>")
+        .expect("callback planner signature")
+        .0;
+    assert!(!planner_signature.contains("Emit"), "{planner_signature}");
+}
+
 /// Regression: a callback-delivered type that has BOTH a nested handle identity
 /// (a child `ptr_class` reached by an accessor) AND its own root identity
 /// (`expand_return!` `.field_self()`) must emit the root MOVE after every borrow of

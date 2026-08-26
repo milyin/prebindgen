@@ -326,9 +326,9 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                 return #on_err;
             }
         };
+        let context = LiveDeliveryContext::new(ext, registry);
         let (ze_stmts, ze_args, _) = encode_plan_leaves(
-            ext,
-            registry,
+            &context,
             crate::jni::emit::Delivered::planned(&ep.unfold, ep.wires.clone(), ep.chain.clone()),
             &eze_idents,
             &quote!(__de),
