@@ -805,36 +805,6 @@ impl JniGenBuilder {
             }
             .into());
         }
-        // What the compilation produced, kept for emission. The converter table
-        // stays the lookup index; this is what reaches the file.
-        decls.compiled_fns = decls
-            .compiled
-            .borrow()
-            .fragments()
-            .into_iter()
-            // A composed-only fragment has no conversion to emit: the `parts`
-            // recipe states what a `data_class` is made of, and the function that
-            // reads those several values and rebuilds the struct is what the
-            // emitter switch brings. Its marker would otherwise reach the file.
-            // Deliberately not "has wires" — an `Option<data_class>` has both a
-            // wire list and a conversion of its own.
-            .filter(|f| !f.composed_only)
-            // A JNI conversion already emits more than one function: a
-            // `convert!` with a fallible or binding-local step carries it as a
-            // pre-stage, and every one of them has to reach the file. This is
-            // the case the converter table could hold only because it kept a
-            // list beside the conversion; a fragment says it directly.
-            .flat_map(|f| {
-                std::iter::once(f.rust.clone())
-                    .chain(f.rust_stages.iter().cloned())
-                    .chain(
-                        f.conv
-                            .pre_stages
-                            .iter()
-                            .map(|s| crate::jni::chain::JFunction::marker(s.converter.clone())),
-                    )
-            })
-            .collect();
         let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry);
         decls.generation = Some(std::rc::Rc::new(generation));
         Ok(JniGen { decls, registry })

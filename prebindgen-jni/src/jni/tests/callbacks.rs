@@ -772,7 +772,16 @@ fn generation_plan_freezes_and_drains_derivations() {
     assert!(ext.struct_plans.borrow().is_empty());
     assert!(ext.sum_plans.borrow().is_empty());
     assert!(ext.vec_build_plans.borrow().is_empty());
-    let (functions, interfaces, structs, sums, vec_builds) = gen.generation_plan().counts();
+    assert!(
+        ext.compiled.borrow().is_empty(),
+        "the mutable recipe compiler store is drained at freeze"
+    );
+    let (conversions, functions, interfaces, structs, sums, vec_builds) =
+        gen.generation_plan().counts();
+    assert!(
+        conversions >= 1,
+        "registry fragments are frozen for emission"
+    );
     assert_eq!(functions, 1);
     assert!(interfaces >= 1, "the binding error interface is frozen");
     assert_eq!(structs, 1);
@@ -819,6 +828,38 @@ fn generation_plan_freezes_and_drains_derivations() {
     assert!(ext.struct_plans.borrow().is_empty());
     assert!(ext.sum_plans.borrow().is_empty());
     assert!(ext.vec_build_plans.borrow().is_empty());
+}
+
+#[test]
+fn generation_has_no_parallel_converter_function_cache() {
+    fn production_sources(dir: &std::path::Path, sources: &mut String) {
+        let mut entries: Vec<_> = std::fs::read_dir(dir)
+            .expect("read JNI source directory")
+            .map(|entry| entry.expect("read JNI source entry").path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name == "tests") {
+                    continue;
+                }
+                production_sources(&path, sources);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                sources.push_str(&std::fs::read_to_string(path).expect("read JNI source file"));
+                sources.push('\n');
+            }
+        }
+    }
+
+    let mut sources = String::new();
+    production_sources(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/jni"),
+        &mut sources,
+    );
+    assert!(
+        !sources.contains("compiled_fns"),
+        "JNI converter emission must derive from frozen registry fragments"
+    );
 }
 
 /// A callback identity is the same whether its args come from the **reading**

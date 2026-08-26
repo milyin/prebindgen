@@ -13,6 +13,11 @@ use super::*;
 
 /// All cross-artifact JNI decisions frozen at the end of resolution.
 pub(crate) struct JniGenerationPlan {
+    /// Registry-compiled recipe fragments, frozen after the last site has been
+    /// planned. This is the sole post-resolution source of private converter
+    /// artifacts and fragment lookups; the mutable planning store is drained
+    /// when this plan is built.
+    conversions: prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>,
     functions: HashMap<syn::Ident, Rc<JniFunctionPlan>>,
     interfaces: BTreeMap<SpecKey, Arc<IfaceSpec>>,
     /// Every declared data class is recorded, including an explicit `None` for
@@ -78,12 +83,49 @@ impl JniGenerationPlan {
         }
 
         Self {
+            conversions: std::mem::take(&mut *decls.compiled.borrow_mut()),
             functions: std::mem::take(decls.fn_plans.get_mut()),
             interfaces: std::mem::take(decls.iface_specs.get_mut()),
             structs: std::mem::take(decls.struct_plans.get_mut()),
             sums: std::mem::take(decls.sum_plans.get_mut()),
             vec_builds: std::mem::take(decls.vec_build_plans.get_mut()),
         }
+    }
+
+    pub(crate) fn fragment(
+        &self,
+        ty: &TypeKey,
+        direction: prebindgen_registry::recipe::Direction,
+    ) -> Option<Rc<crate::jni::compile::JFrag>> {
+        self.conversions.fragment(ty, direction)
+    }
+
+    pub(crate) fn recipe_fragment(
+        &self,
+        ty: &TypeKey,
+        recipe: &prebindgen_registry::recipe::RecipeKey,
+    ) -> Option<Rc<crate::jni::compile::JFrag>> {
+        self.conversions.recipe_fragment(ty, recipe)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn conversions(
+        &self,
+    ) -> &prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag> {
+        &self.conversions
+    }
+
+    /// Frozen private converter artifacts derived from registry fragments.
+    ///
+    /// This is deliberately an ephemeral collection at the writer boundary,
+    /// not a second cache beside the fragment graph.
+    pub(crate) fn converter_functions(&self) -> Vec<crate::jni::chain::JFunction> {
+        self.conversions
+            .fragments()
+            .into_iter()
+            .filter(|fragment| !fragment.composed_only)
+            .flat_map(crate::jni::compile::JFrag::converter_artifacts)
+            .collect()
     }
 
     pub(crate) fn function(&self, ident: &syn::Ident) -> Option<Rc<JniFunctionPlan>> {
@@ -124,8 +166,9 @@ impl JniGenerationPlan {
     }
 
     #[cfg(test)]
-    pub(crate) fn counts(&self) -> (usize, usize, usize, usize, usize) {
+    pub(crate) fn counts(&self) -> (usize, usize, usize, usize, usize, usize) {
         (
+            self.conversions.len(),
             self.functions.len(),
             self.interfaces.len(),
             self.structs.len(),

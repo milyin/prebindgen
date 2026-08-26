@@ -553,7 +553,7 @@ impl JniGen {
             self.registry.flat(),
             self.decls.recipe_table(),
             self.decls.site_bindings(),
-            self.decls.compiled.borrow().clone(),
+            self.generation_plan().conversions().clone(),
         );
         let mut adapter = crate::jni::compile::JCompile {
             decls: &self.decls,
@@ -629,8 +629,9 @@ impl JniGen {
         let row =
             prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Deconstruct)
                 .row(crate::jni::recipes::parts());
-        let compiled = self.decls.compiled.borrow();
-        let wires = compiled
+        let wires = self
+            .generation_plan()
+            .conversions()
             .recipe_fragment(&reading.key(), &row)?
             .out_wires
             .clone()?;
@@ -695,8 +696,11 @@ impl JniGen {
     /// states.
     pub(crate) fn return_site_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
         let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
-        let wires =
-            crate::jni::fn_plan::decomposed_return_for_test(&self.decls, &self.registry, &ident)?;
+        let plan = self.generation_plan().function(&ident)?;
+        let crate::jni::fn_plan::FnOutputPlan::Unfold(output) = &plan.output else {
+            return None;
+        };
+        let wires = &output.wires;
         Some(
             wires
                 .iter()
@@ -792,9 +796,8 @@ impl JniGen {
             direction,
         }
         .row(crate::jni::recipes::parts());
-        self.decls
-            .compiled
-            .borrow()
+        self.generation_plan()
+            .conversions()
             .recipe_fragment(&TypeKey::from_ident(&ident), &row)
             .is_some()
     }
@@ -810,7 +813,7 @@ impl JniGen {
         let key = reading.key();
         let row = prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Construct)
             .row(crate::jni::recipes::parts());
-        let compiled = self.decls.compiled.borrow();
+        let compiled = self.generation_plan().conversions();
         // A declared class states its composition under `parts`; an optional
         // over one has no recipe of its own and composes on the recipe the registry
         // derived, which is the crossing's default.
@@ -832,8 +835,9 @@ impl JniGen {
 
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
-        let compiled = self.decls.compiled.borrow();
-        let fragment = compiled.fragment(&reading.key(), Direction::Construct)?;
+        let fragment = self
+            .generation_plan()
+            .fragment(&reading.key(), Direction::Construct)?;
         Some(fragment.rust.is_borrowed_optional_handle())
     }
 
@@ -844,8 +848,9 @@ impl JniGen {
 
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
-        let compiled = self.decls.compiled.borrow();
-        let fragment = compiled.fragment(&reading.key(), Direction::Construct)?;
+        let fragment = self
+            .generation_plan()
+            .fragment(&reading.key(), Direction::Construct)?;
         Some(fragment.rust.is_optional())
     }
 
@@ -857,8 +862,9 @@ impl JniGen {
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let key = reading.key();
-        let compiled = self.decls.compiled.borrow();
-        let fragment = compiled.fragment(&key, Direction::Construct)?;
+        let fragment = self
+            .generation_plan()
+            .fragment(&key, Direction::Construct)?;
         Some((
             fragment.conv.converter_ident().to_string(),
             fragment.rust.is_invoke(),
@@ -890,10 +896,16 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        let conversions = self
+            .decls
+            .generation
+            .as_ref()
+            .expect("resolved JniGen has no frozen generation plan")
+            .converter_functions();
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.decls,
-            &self.decls.compiled_fns,
+            &conversions,
             out_path,
         )?)
     }
@@ -993,15 +1005,6 @@ pub struct Declarations {
     /// function/trait call policy and Flat representation/error readings;
     /// final rendering spells those readings and qualifies their origins.
     pub(crate) convert_decls: Vec<ConvertDecl>,
-    /// Every conversion this binding compiled.
-    ///
-    /// Filled once by `JniGenBuilder::build_with` and handed to `write_rust`
-    /// directly. It is what reaches the generated file, so a fragment no longer
-    /// has to be expressible as one `ConverterImpl` to be emitted — only to be
-    /// looked up. The writer sorts and de-duplicates by function name, so the
-    /// order here decides which of two same-named functions wins and not where
-    /// any of them lands.
-    pub(crate) compiled_fns: Vec<chain::JFunction>,
     /// Every conversion this binding has compiled so far, keyed by crossing.
     ///
     /// What the emitters ask instead of the converter table. A table entry
@@ -1015,7 +1018,9 @@ pub struct Declarations {
     /// `convert_with`. A conversion for one type is built out of the
     /// conversions for its inners, which the resolver compiles first — the same
     /// order that filled the converter table, so a fragment is there exactly
-    /// when a table entry would have been.
+    /// when a table entry would have been. Resolution drains it into
+    /// [`generation::JniGenerationPlan`]; writers and writer-facing lookups
+    /// cannot resume or mutate this store.
     pub(crate) compiled: std::rc::Rc<
         std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>>,
     >,
