@@ -31,19 +31,6 @@ impl Call {
         }
     }
 
-    /// Recover a legacy function's callable contract during migration.
-    pub fn complete(function: &syn::ItemFn) -> Self {
-        Self::new(
-            function.sig.ident.clone(),
-            matches!(
-                &function.sig.output,
-                syn::ReturnType::Type(_, ty)
-                    if crate::types_util::result_parts(ty).is_some()
-            ),
-            function.sig.unsafety.is_some(),
-        )
-    }
-
     /// Generated function identifier.
     pub fn ident(&self) -> &syn::Ident {
         &self.ident

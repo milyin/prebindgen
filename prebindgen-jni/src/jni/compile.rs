@@ -710,7 +710,7 @@ impl JFrag {
         conv: ConverterImpl<KotlinMeta>,
         rust: crate::jni::chain::JFunction,
     ) -> Self {
-        let validity = validity_of(&conv, at.crossing.direction());
+        let validity = validity_of(at.crossing.direction(), at.crossing.mode());
         Self {
             conv,
             rust,
@@ -763,29 +763,17 @@ impl JFrag {
 /// declared opaque handle clones its referent into a fresh `Box`-handle, and a
 /// `&str` output copies into a JVM string, so both are self-sufficient although
 /// the crossing is a borrow.
-fn validity_of(conv: &ConverterImpl<KotlinMeta>, direction: Direction) -> Validity {
-    match direction {
+fn validity_of(direction: Direction, mode: Mode) -> Validity {
+    match (direction, mode) {
         // Rust to the JVM. Every JNI wire value is a `jlong` the Rust side
         // handed over or a JVM object the JVM now owns; nothing on this wire
         // points into the Rust value it came from.
-        Direction::Deconstruct => Validity::SelfSufficient,
-        // The JVM to Rust: what the converter's own function hands back. A
-        // decode that yields a borrow is valid only for the call, which is
-        // exactly right at a parameter and refused at a return.
-        Direction::Construct => match &conv.function.sig.output {
-            syn::ReturnType::Type(_, ty) if produces_borrow(ty) => Validity::Borrowed,
-            _ => Validity::SelfSufficient,
-        },
-    }
-}
-
-/// Whether a converter's return type hands back a borrow — `&T`, or a
-/// `Result<&T, E>` whose success arm is one.
-fn produces_borrow(ty: &syn::Type) -> bool {
-    match ty {
-        syn::Type::Reference(_) => true,
-        _ => prebindgen_registry::types_util::result_parts(ty)
-            .is_some_and(|(ok, _)| matches!(ok, syn::Type::Reference(_))),
+        (Direction::Deconstruct, _) => Validity::SelfSufficient,
+        // The JVM to Rust: Flat says whether the crossing lends the value. A
+        // borrowed crossing is valid only for the call, which is exactly right
+        // at a parameter and refused at a return.
+        (Direction::Construct, Mode::Shared | Mode::Exclusive) => Validity::Borrowed,
+        (Direction::Construct, Mode::Owned) => Validity::SelfSufficient,
     }
 }
 
@@ -1076,7 +1064,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            function: crate::jni::chain::planned_marker(&ident),
+            converter: ident.clone(),
             destination: wire,
             niches,
             metadata,
@@ -1131,7 +1119,6 @@ impl<R: Conversions> JCompile<'_, R> {
             }
         };
         let ident = crate::jni::chain::planned_name(direction, source, &wire);
-        let marker = crate::jni::chain::planned_marker(&ident);
         let niches = default_niches_for_wire(&wire);
         let kotlin_name = self
             .decls
@@ -1144,7 +1131,7 @@ impl<R: Conversions> JCompile<'_, R> {
             ConverterImpl {
                 subs: Vec::new(),
                 pre_stages: Vec::new(),
-                function: marker,
+                converter: ident.clone(),
                 destination: wire,
                 niches,
                 metadata: self.decls.framework_meta(kotlin_name),
@@ -1179,7 +1166,6 @@ impl<R: Conversions> JCompile<'_, R> {
         };
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
         let ident = crate::jni::chain::planned_name(Direction::Construct, source, &wire);
-        let marker = crate::jni::chain::planned_marker(&ident);
         let kotlin_name = cfg
             .name_spec
             .as_ref()
@@ -1189,7 +1175,7 @@ impl<R: Conversions> JCompile<'_, R> {
             ConverterImpl {
                 subs: Vec::new(),
                 pre_stages: Vec::new(),
-                function: marker,
+                converter: ident.clone(),
                 destination: wire.clone(),
                 niches: default_niches_for_wire(&wire),
                 metadata: self.decls.framework_meta(kotlin_name),
@@ -1259,7 +1245,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            function: crate::jni::chain::planned_marker(&ident),
+            converter: ident.clone(),
             destination: wire,
             niches,
             metadata,
@@ -1289,7 +1275,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            function: crate::jni::chain::planned_marker(&ident),
+            converter: ident.clone(),
             destination: wire,
             niches,
             metadata,
@@ -1441,10 +1427,9 @@ impl<R: Conversions> JCompile<'_, R> {
             _ => return None,
         };
         let module = self.decls.fn_module(self.registry, &target);
-        let marker = crate::jni::chain::planned_marker(&ident);
         let rust =
             crate::jni::chain::JFunction::handle_codec(crate::jni::chain::JHandleCodecPlan {
-                ident,
+                ident: ident.clone(),
                 // Borrowed-input terminals were unconditional functions before
                 // this late plan and remain so until every compatibility parent
                 // retains dependencies. Owned input and both output operations
@@ -1462,7 +1447,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination: wire,
-                function: marker,
+                converter: ident.clone(),
                 pre_stages: Vec::new(),
                 niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
                 metadata,
@@ -1495,9 +1480,8 @@ impl<R: Conversions> JCompile<'_, R> {
         let (ok, err) = source.fallible_parts()?;
         let success = self.decls.out_frag(ok)?;
         let ident = crate::jni::chain::model_operation_name("result_peel", &source.key());
-        let marker = crate::jni::chain::planned_marker(&ident);
         let mut pre_stages = vec![Stage {
-            function: marker,
+            converter: ident.clone(),
             metadata: KotlinMeta::default(),
         }];
         pre_stages.extend(success.pre_stages.iter().cloned());
@@ -1513,7 +1497,7 @@ impl<R: Conversions> JCompile<'_, R> {
             at,
             ConverterImpl {
                 destination: success.destination.clone(),
-                function: success.function.clone(),
+                converter: success.converter.clone(),
                 pre_stages,
                 niches: default_niches_for_wire(&success.destination),
                 metadata: KotlinMeta {
@@ -1559,11 +1543,11 @@ impl<R: Conversions> JCompile<'_, R> {
         let stages = match direction {
             Direction::Construct => entry
                 .input_stage_order()
-                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .map(|(_, stage)| stage.converter.clone())
                 .collect(),
             Direction::Deconstruct => entry
                 .output_stage_order()
-                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .map(|(_, stage)| stage.converter.clone())
                 .collect(),
         };
         // The outer bridge already receives the exact parameter form expected
@@ -1591,9 +1575,8 @@ impl<R: Conversions> JCompile<'_, R> {
             }
             _ => crate::jni::chain::model_operation_name(operation, &source.key()),
         };
-        let marker = crate::jni::chain::planned_marker(&ident);
         let rust = crate::jni::chain::JFunction::transparent(crate::jni::chain::JTransparentPlan {
-            ident,
+            ident: ident.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             inner: entry.0.rust.clone(),
             source: source.clone(),
@@ -1605,7 +1588,7 @@ impl<R: Conversions> JCompile<'_, R> {
             at,
             ConverterImpl {
                 destination: entry.destination.clone(),
-                function: marker,
+                converter: ident.clone(),
                 pre_stages: Vec::new(),
                 niches: entry.niches.clone(),
                 metadata: entry.metadata.clone(),
@@ -1749,7 +1732,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
         );
         let mut pre_stages = vec![Stage {
-            function: crate::jni::chain::planned_marker(&ident),
+            converter: ident.clone(),
             metadata: KotlinMeta::default(),
         }];
         pre_stages.extend(inner.pre_stages.iter().cloned());
@@ -1768,7 +1751,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Declarations::attach_domain_sentinels(&mut metadata, sentinels);
         let conv = ConverterImpl {
             destination: inner.destination.clone(),
-            function: inner.function.clone(),
+            converter: inner.converter.clone(),
             pre_stages,
             niches,
             metadata,
@@ -1796,12 +1779,12 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Construct => frag
                 .conv
                 .input_stage_order()
-                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .map(|(_, stage)| stage.converter.clone())
                 .collect(),
             Direction::Deconstruct => frag
                 .conv
                 .output_stage_order()
-                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .map(|(_, stage)| stage.converter.clone())
                 .collect(),
         };
         match direction {
@@ -1889,11 +1872,10 @@ impl<R: Conversions> JCompile<'_, R> {
                 }
             })
             .collect();
-        let marker = crate::jni::chain::planned_marker(&ident);
         let rust = crate::jni::chain::JFunction::product(crate::jni::chain::JProductPlan {
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             dependencies,
-            ident,
+            ident: ident.clone(),
             mode: at.crossing.mode(),
             chain: prebindgen_registry::chain::Product {
                 source: source.clone(),
@@ -1911,7 +1893,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination: intermediate,
-                function: marker,
+                converter: ident.clone(),
                 pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta::default(),
@@ -2048,9 +2030,8 @@ impl<R: Conversions> JCompile<'_, R> {
             .collect();
         let layouts = planned.iter().map(|(_, arm)| arm.layout.clone()).collect();
         let ident = crate::jni::chain::planned_name(direction, at.crossing.spelled(), &destination);
-        let marker = crate::jni::chain::planned_marker(&ident);
         let rust = crate::jni::chain::JFunction::choice(crate::jni::chain::JChoicePlan {
-            ident,
+            ident: ident.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             dependencies,
             mode: at.crossing.mode(),
@@ -2074,7 +2055,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination,
-                function: marker,
+                converter: ident.clone(),
                 pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta::default(),
@@ -2198,7 +2179,6 @@ impl<R: Conversions> JCompile<'_, R> {
             source.clone()
         };
         let ident = crate::jni::chain::planned_name(direction, &produced, &destination);
-        let marker = crate::jni::chain::planned_marker(&ident);
         let bridge = match direction {
             Direction::Construct => crate::jni::chain::JSequenceBridge::Input {
                 child: Box::new(child_wire),
@@ -2206,7 +2186,7 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Deconstruct => crate::jni::chain::JSequenceBridge::Output,
         };
         let rust = crate::jni::chain::JFunction::sequence(crate::jni::chain::JSequencePlan {
-            ident,
+            ident: ident.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             dependencies: vec![inner.rust.clone()],
             mode: at.crossing.mode(),
@@ -2230,7 +2210,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination,
-                function: marker,
+                converter: ident.clone(),
                 pre_stages: Vec::new(),
                 niches,
                 metadata: KotlinMeta {
@@ -2287,10 +2267,9 @@ impl<R: Conversions> JCompile<'_, R> {
         let module = self.decls.fn_module(self.registry, &source_ident);
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let ident = crate::jni::chain::planned_name(Direction::Construct, source, &wire);
-        let marker = crate::jni::chain::planned_marker(&ident);
         let rust = crate::jni::chain::JFunction::borrowed_optional_handle(
             crate::jni::chain::JBorrowedOptionalHandlePlan {
-                ident,
+                ident: ident.clone(),
                 reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
                 target: target.clone(),
                 module,
@@ -2315,7 +2294,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination: wire,
-                function: marker,
+                converter: ident.clone(),
                 pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta {
@@ -2400,12 +2379,12 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Construct => inner
                 .conv
                 .input_stage_order()
-                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .map(|(_, stage)| stage.converter.clone())
                 .collect(),
             Direction::Deconstruct => inner
                 .conv
                 .output_stage_order()
-                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .map(|(_, stage)| stage.converter.clone())
                 .collect(),
         };
 
@@ -2586,9 +2565,8 @@ impl<R: Conversions> JCompile<'_, R> {
             && matches!(&layout, JLayout::Optional(_)))
         .then(|| inner.out_wires.clone())
         .flatten();
-        let marker = crate::jni::chain::planned_marker(&ident);
         let rust = crate::jni::chain::JFunction::optional(crate::jni::chain::JOptionalPlan {
-            ident,
+            ident: ident.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             dependencies: vec![inner.rust.clone()],
             chain: prebindgen_registry::chain::Optional {
@@ -2609,7 +2587,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination,
-                function: marker,
+                converter: ident.clone(),
                 pre_stages: Vec::new(),
                 niches,
                 metadata: KotlinMeta {
@@ -3557,7 +3535,7 @@ impl std::ops::Deref for Conv {
 impl Wire {
     /// The wire-facing function this value crosses through.
     pub(crate) fn conv(&self) -> Option<&syn::Ident> {
-        self.entry.as_ref().map(|e| &e.function.sig.ident)
+        self.entry.as_ref().map(ConverterImpl::converter_ident)
     }
 
     /// Whether the conversion carries Rust-side stages beyond its wire-facing
@@ -3601,10 +3579,7 @@ impl<R: Conversions> JCompile<'_, R> {
     fn parts_marker(&self, subs: Vec<TypeKey>) -> ConverterImpl<KotlinMeta> {
         ConverterImpl {
             destination: syn::parse_quote!(()),
-            function: syn::parse_quote!(
-                #[allow(dead_code)]
-                fn __jni_parts() {}
-            ),
+            converter: format_ident!("__jni_parts"),
             pre_stages: Vec::new(),
             niches: Niches::empty(),
             metadata: KotlinMeta::default(),

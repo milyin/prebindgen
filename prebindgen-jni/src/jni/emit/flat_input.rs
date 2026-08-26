@@ -741,7 +741,7 @@ pub(crate) struct FlatInputPlan {
 // parameter spelled `impl Into<S>` never becomes a `TypeRef` and never reached
 // the call. `cargo check` confirmed it dead rather than the reasoning alone.
 // jnigen's actual `impl Into<…>` support is elsewhere: plugin wrapper exts build
-// a `ConverterImpl::function` by hand via `Declarations::input_converter_name`,
+// a converter artifact identity via `Declarations::input_converter_name`,
 // which never consults this.
 // `flat_probe_inner` lived here: it peeled `&` then `Option` off a SPELLING to
 // reach the type an enum probe should ask about. Its last caller now asks

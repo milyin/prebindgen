@@ -18,7 +18,7 @@ use super::*;
 /// let registry = Registry::builder(flat)?
 ///     .export(&name)
 ///     .decompose(decompositions)
-///     .convert_with(|crossing, built, emit| my_gen.convert(crossing, built, emit))?
+///     .convert_with(|crossing, built| my_gen.convert(crossing, built))?
 ///     .build()?;
 /// ```
 ///
@@ -361,9 +361,9 @@ impl RegistryBuilder {
     /// Build a conversion for each crossing, in dependency order.
     ///
     /// `f` is called once per crossing, and answers with an [`Answer`] rather
-    /// than the conversion itself: the conversion belongs to the adapter, which
-    /// emits from it and looks it up, and what the registry needs back is which
-    /// other crossings this one is built out of. Returning `None` records a gap
+    /// than the conversion itself: the executable conversion belongs to the
+    /// adapter's frozen plan, and what the registry needs back is which other
+    /// crossings this one is built out of. Returning `None` records a gap
     /// — whether that gap matters is decided by [`Self::build`], not here.
     ///
     /// The walk is inner types first, so by the time `f` sees `Option<Handle>`
@@ -374,16 +374,11 @@ impl RegistryBuilder {
     /// before this returns.
     pub fn convert_with<F>(mut self, mut f: F) -> Result<Self, WriteRustError>
     where
-        F: FnMut(&Crossing, &Building<'_>, &crate::Emit) -> Option<Answer>,
+        F: FnMut(&Crossing, &Building<'_>) -> Option<Answer>,
     {
-        // A converter IS generated Rust — `ConverterImpl::function` is a
-        // complete `syn::ItemFn` the adapter writes — so this closure is an
-        // emission callback and is handed the capability, exactly as the
-        // `on_*` ones are. See `prebindgen_flat::flat::emit`.
-        let emit = crate::Emit::new();
         let order = self.derive()?.to_vec();
         for crossing in &order {
-            if let Some(answer) = f(crossing, &self.view(), &emit) {
+            if let Some(answer) = f(crossing, &self.view()) {
                 self.built.insert(crossing.clone(), answer);
             }
         }

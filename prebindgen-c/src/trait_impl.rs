@@ -1049,7 +1049,7 @@ impl CbindgenBuilder {
         // conversion resolution ran. It is cloned here as a map of `Rc`s`; the
         // immutable generation plan below becomes the only rendering input.
         let registry = declared
-            .convert_with(|crossing, built, _emit| {
+            .convert_with(|crossing, built| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     &recipes,

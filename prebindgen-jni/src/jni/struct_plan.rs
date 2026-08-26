@@ -68,7 +68,7 @@ impl ConvChain {
         ConvChain {
             stages: entry
                 .output_stage_order()
-                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .map(|(_, stage)| stage.converter.clone())
                 .collect(),
             function: entry.converter_ident().clone(),
         }

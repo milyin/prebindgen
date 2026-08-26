@@ -23,7 +23,7 @@ trait DeclareAndResolve<M> {
 trait AsStub {
     fn stub(&self) -> &StubExt;
     /// Default: converts nothing, so every required crossing is a gap.
-    fn converter(&self, _ty: &syn::Type) -> Option<ConverterImpl> {
+    fn converter(&self, _ty: &prebindgen_flat::flat::TypeRef) -> Option<ConverterImpl> {
         None
     }
 }
@@ -44,8 +44,8 @@ impl DeclareAndResolve<()> for RegistryBuilder {
             .validate_with(&ext)?
             // The reading, not a spelling re-derived from the key: this is the
             // route a real generator takes, so the stub takes it too (#291).
-            .convert_with(|crossing, built, emit| {
-                let conv = ext.converter(&emit.spell_ty(&built.reading(&crossing.1)?))?;
+            .convert_with(|crossing, built| {
+                let conv = ext.converter(&built.reading(&crossing.1)?)?;
                 Some(Answer::over(conv.subs))
             })?
             .build()?;
@@ -231,26 +231,14 @@ fn scan_declared_collects_all_missing_kinds_in_one_error() {
 fn conversion_helpers_expose_converter_chain_contract() {
     let entry = crate::ConverterImpl {
         destination: syn::parse_quote!(jni::sys::jlong),
-        function: syn::parse_quote!(
-            fn __wire(v: Owned) -> jni::sys::jlong {
-                0
-            }
-        ),
+        converter: syn::parse_quote!(__wire),
         pre_stages: vec![
             crate::Stage {
-                function: syn::parse_quote!(
-                    fn __stage_rust(v: Rust) -> Result<Mid, Err> {
-                        todo!()
-                    }
-                ),
+                converter: syn::parse_quote!(__stage_rust),
                 metadata: (),
             },
             crate::Stage {
-                function: syn::parse_quote!(
-                    fn __stage_wire(v: Mid) -> Result<Owned, Err> {
-                        todo!()
-                    }
-                ),
+                converter: syn::parse_quote!(__stage_wire),
                 metadata: (),
             },
         ],
@@ -270,14 +258,14 @@ fn conversion_helpers_expose_converter_chain_contract() {
     assert_eq!(
         entry
             .output_stage_order()
-            .map(|(_, s)| s.function.sig.ident.to_string())
+            .map(|(_, s)| s.converter.to_string())
             .collect::<Vec<_>>(),
         vec!["__stage_rust", "__stage_wire"]
     );
     assert_eq!(
         entry
             .input_stage_order()
-            .map(|(_, s)| s.function.sig.ident.to_string())
+            .map(|(_, s)| s.converter.to_string())
             .collect::<Vec<_>>(),
         vec!["__stage_wire", "__stage_rust"]
     );
@@ -285,6 +273,47 @@ fn conversion_helpers_expose_converter_chain_contract() {
         entry.subs.iter().map(TypeKey::as_str).collect::<Vec<_>>(),
         vec!["Rust", "Mid"]
     );
+}
+
+/// Converter-table rows are semantic registry data. Executable Rust belongs to
+/// the adapter's frozen artifact plan and may only be assembled by its final
+/// renderer.
+#[test]
+fn conversion_carriers_cannot_store_complete_rust_syntax() {
+    let source = include_str!("../prebindgen.rs");
+    let carriers = source
+        .split_once("pub struct Stage")
+        .expect("Stage declaration")
+        .1
+        .split_once("/// The single extension point")
+        .expect("end of conversion carriers")
+        .0;
+    assert!(!carriers.contains("syn::ItemFn"), "{carriers}");
+    assert!(!carriers.contains("TokenStream"), "{carriers}");
+    assert_eq!(carriers.matches("pub converter: syn::Ident").count(), 2);
+
+    let chain = include_str!("../chain.rs");
+    assert!(!chain.contains("Call::complete"), "{chain}");
+    assert!(
+        !chain.contains("fn complete(function: &syn::ItemFn)"),
+        "{chain}"
+    );
+}
+
+/// Recipe planning sees Flat readings and already-built answers. Restoring an
+/// `Emit` argument here would reopen source spelling before final rendering.
+#[test]
+fn conversion_planning_cannot_obtain_emit() {
+    let source = include_str!("declare.rs");
+    let convert_with = source
+        .split_once("pub fn convert_with")
+        .expect("convert_with declaration")
+        .1
+        .split_once("/// The scanned registry")
+        .expect("end of convert_with")
+        .0;
+    assert!(!convert_with.contains("Emit"), "{convert_with}");
+    assert!(!convert_with.contains("spell_ty"), "{convert_with}");
 }
 
 /// A name collision across two chained source streams fails registry
@@ -1446,17 +1475,15 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         fn stub(&self) -> &StubExt {
             &self.0
         }
-        fn converter(&self, ty: &syn::Type) -> Option<ConverterImpl> {
+        fn converter(&self, ty: &prebindgen_flat::flat::TypeRef) -> Option<ConverterImpl> {
             Self::converter(ty)
         }
     }
     impl AnyConverterExt {
-        fn converter(ty: &syn::Type) -> Option<ConverterImpl> {
+        fn converter(_ty: &prebindgen_flat::flat::TypeRef) -> Option<ConverterImpl> {
             Some(ConverterImpl {
-                destination: ty.clone(),
-                function: syn::parse_quote!(
-                    fn __id() {}
-                ),
+                destination: syn::parse_quote!(()),
+                converter: syn::parse_quote!(__id),
                 pre_stages: vec![],
                 subs: vec![],
                 niches: Niches::empty(),
