@@ -13,8 +13,9 @@
 use prebindgen_registry::{
     flat::{Alternative, Function},
     generation::{
-        AbiLayout, ChoiceArity, Cleanup, ConverterPlan, Failure, FixedArity, FragmentPlan,
-        FragmentUse, NichePlan, Representation, ShapePlan, SiteId, SitePlan,
+        AbiLayout, ArtifactId, ChoiceArity, Cleanup, ConverterPlan, Failure, FixedArity,
+        FragmentPlan, FragmentUse, NichePlan, OperationId, Representation, ShapePlan, SiteId,
+        SitePlan,
     },
     recipe::{At, Carrier, Compile, Cx, Frag, Mode, Parts, Role, Validity, Yield},
     FragmentId,
@@ -362,6 +363,58 @@ fn fragment_use(fragment: &CFrag) -> FragmentUse {
     FragmentUse::new(fragment.id.clone(), fragment.yields.clone())
 }
 
+fn c_artifact(kind: &'static str, name: impl Into<String>) -> ArtifactId {
+    ArtifactId::new(kind, name).expect("C operation identity is non-empty")
+}
+
+fn model_operation(at: At<'_>, kind: &'static str, name: impl Into<String>) -> OperationId {
+    model_operation_for(at.crossing.value(), at, kind, name)
+}
+
+fn model_operation_for(
+    source: &TypeRef,
+    at: At<'_>,
+    kind: &'static str,
+    name: impl Into<String>,
+) -> OperationId {
+    OperationId::model_artifact(source, c_artifact(kind, name), at.crossing.direction())
+}
+
+fn marker_name(operation: &MarkerOperation) -> &'static str {
+    match operation {
+        MarkerOperation::ChoiceArm => "choice-arm",
+        MarkerOperation::Optional => "optional",
+        MarkerOperation::Sequence => "sequence",
+        MarkerOperation::Result => "result",
+    }
+}
+
+fn input_terminal_name(operation: &crate::chain::InputTerminalOperation) -> &'static str {
+    match operation {
+        crate::chain::InputTerminalOperation::OwnedHandle { .. } => "owned-handle",
+        crate::chain::InputTerminalOperation::ValueOpaque { .. } => "value-opaque",
+        crate::chain::InputTerminalOperation::Enum { .. } => "enum",
+        crate::chain::InputTerminalOperation::String => "string",
+        crate::chain::InputTerminalOperation::StringField => "string-field",
+        crate::chain::InputTerminalOperation::StrMarker => "str-marker",
+        crate::chain::InputTerminalOperation::Bool => "bool",
+        crate::chain::InputTerminalOperation::Scalar => "scalar",
+    }
+}
+
+fn output_terminal_name(operation: &crate::chain::OutputTerminalOperation) -> &'static str {
+    match operation {
+        crate::chain::OutputTerminalOperation::Unit => "unit",
+        crate::chain::OutputTerminalOperation::String => "string",
+        crate::chain::OutputTerminalOperation::BoolField => "bool-field",
+        crate::chain::OutputTerminalOperation::Scalar => "scalar",
+        crate::chain::OutputTerminalOperation::OwnedHandle { .. } => "owned-handle",
+        crate::chain::OutputTerminalOperation::OpaqueError { .. } => "opaque-error",
+        crate::chain::OutputTerminalOperation::ValueOpaque => "value-opaque",
+        crate::chain::OutputTerminalOperation::Enum { .. } => "enum",
+    }
+}
+
 impl Carrier for CFrag {
     fn yields(&self) -> Yield {
         self.yields.clone()
@@ -439,7 +492,8 @@ impl CFrag {
     fn from_marker(at: At<'_>, plan: MarkerPlan) -> Self {
         let destination: syn::Type = syn::parse_quote!(());
         let subs = plan.subs.iter().map(TypeRef::key).collect();
-        let function = CFunction::marker(plan);
+        let operation = model_operation(at, "c-marker", marker_name(&plan.operation));
+        let function = CFunction::marker(operation, plan);
         let niches = Niches::empty();
         let value = CValue::Direct {
             wire: destination.clone(),
@@ -469,7 +523,8 @@ impl CFrag {
     fn from_custom(at: At<'_>, plan: crate::chain::CustomPlan, niches: Niches) -> Self {
         let destination = plan.wire.clone();
         let subs = vec![TypeKey::from_type(&destination)];
-        let function = CFunction::custom(plan);
+        let operation = model_operation_for(&plan.source, at, "c-terminal", "custom");
+        let function = CFunction::custom(operation, plan);
         let value = CValue::Direct {
             wire: destination.clone(),
             converter: function.call().clone(),
@@ -496,7 +551,13 @@ impl CFrag {
     /// A whole-value output retained as an operation until final Rust emission.
     fn from_output_terminal(at: At<'_>, plan: crate::chain::OutputTerminalPlan) -> Self {
         let destination = plan.wire.clone();
-        let function = CFunction::output_terminal(plan);
+        let operation = model_operation_for(
+            &plan.source,
+            at,
+            "c-terminal-output",
+            output_terminal_name(&plan.operation),
+        );
+        let function = CFunction::output_terminal(operation, plan);
         let niches = Niches::empty();
         let value = CValue::Direct {
             wire: destination.clone(),
@@ -524,7 +585,13 @@ impl CFrag {
     /// A whole-value input retained as an operation until final Rust emission.
     fn from_input_terminal(at: At<'_>, plan: crate::chain::InputTerminalPlan) -> Self {
         let destination = plan.wire.clone();
-        let function = CFunction::input_terminal(plan);
+        let operation = model_operation_for(
+            &plan.source,
+            at,
+            "c-terminal-input",
+            input_terminal_name(&plan.operation),
+        );
+        let function = CFunction::input_terminal(operation, plan);
         let niches = Niches::empty();
         let value = CValue::Direct {
             wire: destination.clone(),
@@ -552,7 +619,9 @@ impl CFrag {
     /// A tagged-union pointer payload retained until final Rust emission.
     fn from_payload(at: At<'_>, plan: crate::chain::PayloadPlan) -> Self {
         let destination = plan.wire.clone();
-        let function = CFunction::payload(plan);
+        let payload_kind = format!("payload-optional-{}-boxed-{}", plan.optional, plan.boxed);
+        let operation = model_operation_for(&plan.source, at, "c-terminal", payload_kind);
+        let function = CFunction::payload(operation, plan);
         let niches = Niches::empty();
         let value = CValue::Direct {
             wire: destination.clone(),
@@ -581,7 +650,15 @@ impl CFrag {
     fn from_borrow(at: At<'_>, plan: crate::chain::BorrowPlan) -> Self {
         let destination = plan.wire.clone();
         let subs = vec![plan.source_inner.key()];
-        let function = CFunction::borrow(plan);
+        let borrow_kind = match plan.operation {
+            crate::chain::BorrowOperation::StrInput => "str-input",
+            crate::chain::BorrowOperation::SharedInput => "shared-input",
+            crate::chain::BorrowOperation::MutableInput => "mutable-input",
+            crate::chain::BorrowOperation::MutableUninitInput => "mutable-uninit-input",
+            crate::chain::BorrowOperation::SharedOutput => "shared-output",
+        };
+        let operation = model_operation_for(&plan.source_inner, at, "c-borrow", borrow_kind);
+        let function = CFunction::borrow(operation, plan);
         let niches = Niches::empty();
         let value = CValue::Direct {
             wire: destination.clone(),
@@ -612,7 +689,16 @@ impl CFrag {
         let element = plan.element.clone();
         let reinterpret = plan.reinterpret;
         let subs = vec![element.key()];
-        let function = CFunction::slice_input(plan);
+        let operation = model_operation(
+            at,
+            "c-slice-input",
+            if plan.reinterpret {
+                "reinterpret"
+            } else {
+                "direct"
+            },
+        );
+        let function = CFunction::slice_input(operation, plan);
         let niches = Niches::empty();
         let value = CValue::BorrowedInput {
             element,
@@ -822,15 +908,29 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 Niches::empty(),
             )
         };
-        let function = CFunction::optional(OptionalPlan {
-            ident: format_ident!("__cbg_in_option_{}", sanitize(&elem.key())),
-            source: at.crossing.spelled().clone(),
-            source_module: self.gen.source_module.clone(),
-            wire: wire.clone(),
-            converter: inner.function.call().clone(),
-            repr,
-            borrowed: elem.borrow_target().is_some(),
-        });
+        let representation = match &repr {
+            OptionalRepr::Niche { .. } => "niche",
+            OptionalRepr::Nullable { read_direct: true } => "nullable-direct",
+            OptionalRepr::Nullable { read_direct: false } => "nullable-indirect",
+        };
+        let operation = OperationId::optional_converter(
+            at.crossing.value(),
+            at.crossing.mode(),
+            c_artifact("c-optional-intermediate", representation),
+            at.crossing.direction(),
+        );
+        let function = CFunction::optional(
+            operation,
+            OptionalPlan {
+                ident: format_ident!("__cbg_in_option_{}", sanitize(&elem.key())),
+                source: at.crossing.spelled().clone(),
+                source_module: self.gen.source_module.clone(),
+                wire: wire.clone(),
+                converter: inner.function.call().clone(),
+                repr,
+                borrowed: elem.borrow_target().is_some(),
+            },
+        );
         let value = CValue::Direct {
             wire: wire.clone(),
             converter: function.call().clone(),
@@ -865,14 +965,21 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         if at.crossing.direction() == Direction::Deconstruct {
             if let TypeKind::Vec(element) = at.crossing.value().kind() {
                 if !marker_destination(&inner.destination) {
-                    let function = CFunction::sequence(SequencePlan {
-                        ident: format_ident!("__cbg_out_chain_vec_{}", sanitize(&element.key())),
-                        source: ty.clone(),
-                        element: (**element).clone(),
-                        source_module: self.gen.source_module.clone(),
-                        child_wire: inner.destination.clone(),
-                        child: inner.function.call().clone(),
-                    });
+                    let operation = at.sequence_converter_for(at.crossing.value());
+                    let function = CFunction::sequence(
+                        operation,
+                        SequencePlan {
+                            ident: format_ident!(
+                                "__cbg_out_chain_vec_{}",
+                                sanitize(&element.key())
+                            ),
+                            source: ty.clone(),
+                            element: (**element).clone(),
+                            source_module: self.gen.source_module.clone(),
+                            child_wire: inner.destination.clone(),
+                            child: inner.function.call().clone(),
+                        },
+                    );
                     let value = CValue::OwnedSequence {
                         element_wire: inner.destination.clone(),
                         converter: function.call().clone(),
@@ -1026,13 +1133,20 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 })
                 .map(|(p, _)| p.ty.key())
                 .collect();
-            let function = CFunction::marker(MarkerPlan {
-                ident: format_ident!("__cbg_arm"),
-                operation: MarkerOperation::ChoiceArm,
-                // Choice retains the exact part FragmentUse edges; this
-                // transient bridge has no independent dependency.
-                subs: Vec::new(),
-            });
+            let operation = OperationId::shared(
+                c_artifact("c-marker", "choice-arm"),
+                at.crossing.direction(),
+            );
+            let function = CFunction::marker(
+                operation,
+                MarkerPlan {
+                    ident: format_ident!("__cbg_arm"),
+                    operation: MarkerOperation::ChoiceArm,
+                    // Choice retains the exact part FragmentUse edges; this
+                    // transient bridge has no independent dependency.
+                    subs: Vec::new(),
+                },
+            );
             let destination: syn::Type = syn::parse_quote!(());
             let value = CValue::Direct {
                 wire: destination.clone(),
@@ -1109,14 +1223,23 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             Direction::Deconstruct => CbindgenBuilder::out_name_of(&key),
         };
         let wire: syn::Type = syn::parse_quote!(#c_struct);
-        let function = CFunction::product(ProductPlan {
-            ident,
-            source: at.crossing.spelled().clone(),
-            source_module: self.gen.source_module.clone(),
-            wire: wire.clone(),
-            direction,
-            fields,
-        });
+        let operation = OperationId::product_converter(
+            at.crossing.value(),
+            at.crossing.mode(),
+            c_artifact("c-product-intermediate", "repr-c-struct"),
+            at.crossing.direction(),
+        );
+        let function = CFunction::product(
+            operation,
+            ProductPlan {
+                ident,
+                source: at.crossing.spelled().clone(),
+                source_module: self.gen.source_module.clone(),
+                wire: wire.clone(),
+                direction,
+                fields,
+            },
+        );
         let value = CValue::Direct {
             wire: wire.clone(),
             converter: function.call().clone(),
@@ -1204,14 +1327,23 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     .collect()
             })
             .collect();
-        let function = CFunction::choice(ChoicePlan {
-            ident,
-            source: at.crossing.spelled().clone(),
-            source_module: self.gen.source_module.clone(),
-            wire: cname,
-            direction,
-            arms: planned_arms,
-        });
+        let operation = OperationId::choice_converter(
+            at.crossing.value(),
+            at.crossing.mode(),
+            c_artifact("c-choice-intermediate", "repr-c-tagged-union"),
+            at.crossing.direction(),
+        );
+        let function = CFunction::choice(
+            operation,
+            ChoicePlan {
+                ident,
+                source: at.crossing.spelled().clone(),
+                source_module: self.gen.source_module.clone(),
+                wire: cname,
+                direction,
+                arms: planned_arms,
+            },
+        );
         let value = CValue::Direct {
             wire: destination.clone(),
             converter: function.call().clone(),
@@ -1251,10 +1383,11 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         }
         let c_struct = self.gen.callback_c_ident(&key);
         let destination: syn::Type = syn::parse_quote!(#c_struct);
-        let function = CFunction::deferred_invoke(format_ident!(
-            "__cbg_in_{}",
-            self.gen.callback_c_name(&key)
-        ));
+        let operation = model_operation(at, "c-invoke", "callback-capture");
+        let function = CFunction::deferred_invoke(
+            operation,
+            format_ident!("__cbg_in_{}", self.gen.callback_c_name(&key)),
+        );
         let value = CValue::Direct {
             wire: destination.clone(),
             converter: function.call().clone(),

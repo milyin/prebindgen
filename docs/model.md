@@ -254,9 +254,13 @@ JniGen's constant hook returns two, a getter and an alias.
 refer to them;
 2. the converter plans it was handed. Registry-owned operations are grouped by
 their semantic `OperationId` before rendering, with a reachable representative
-preferred when fragments retain separate reachability state. Compatibility
-plans that do not yet expose an operation identity are still rendered and
-deduplicated by their preselected name;
+preferred when fragments retain separate reachability state. Both JniGen and
+Cbindgen converter plans now expose that identity. Their remaining preselected
+C helper names are compatibility formatting only: a test fence verifies that
+they describe exactly the same sharing partition as `OperationId`, while later
+slices move those private names to final `Emit` allocation. Generic
+compatibility functions that do not expose an operation identity are still
+rendered and deduplicated by their preselected name;
 3. the per-item output, in the order above;
 4. the source crate's own feature guards, verbatim.
 
