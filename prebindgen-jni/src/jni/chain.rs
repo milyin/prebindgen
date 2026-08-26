@@ -293,7 +293,7 @@ pub(crate) enum JStructCodecBody {
 impl JStructCodecPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
-        let source = emit.spell_ty(&self.source);
+        let source = emit.emit_source_type(&self.source);
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
         let body = match &self.body {
             JStructCodecBody::Input(plan) => plan.render(emit),
@@ -345,7 +345,7 @@ pub(crate) struct JSumCodecPlan {
 impl JSumCodecPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
-        let source = emit.spell_ty(&self.source);
+        let source = emit.emit_source_type(&self.source);
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
         let wire = annotate_jobject_with_lifetime(&wire, "v");
         let body = self.body.render(emit);
@@ -369,10 +369,10 @@ pub(crate) enum JCustomType {
 }
 
 impl JCustomType {
-    fn spell(&self, emit: &Emit) -> syn::Type {
+    fn spell(&self, emit: &Emit) -> TokenStream {
         match self {
-            Self::Model(reading) => emit.spell_ty(reading),
-            Self::Declared(ty) => ty.clone(),
+            Self::Model(reading) => emit.emit_source_type(reading),
+            Self::Declared(ty) => quote::quote!(#ty),
         }
     }
 }
@@ -405,13 +405,13 @@ pub(crate) struct JCustomConversionPlan {
 impl JCustomConversionPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
-        let source = emit.spell_ty(&self.source);
+        let source = emit.emit_source_type(&self.source);
         let representation = self.representation.spell(emit);
         let (input, output) = match self.direction {
             Direction::Construct => (&representation, &source),
             Direction::Deconstruct => (&source, &representation),
         };
-        let (raw, raw_error): (syn::Expr, Option<syn::Type>) = match &self.call {
+        let (raw, raw_error): (syn::Expr, Option<TokenStream>) = match &self.call {
             JCustomCall::Function {
                 module,
                 function,
@@ -421,7 +421,7 @@ impl JCustomConversionPlan {
                 let arg = if *by_ref { quote!(&v) } else { quote!(v) };
                 (
                     syn::parse_quote!(#module::#function(#arg)),
-                    error.as_deref().map(|error| emit.spell_ty(error)),
+                    error.as_deref().map(|error| emit.emit_source_type(error)),
                 )
             }
             JCustomCall::Trait { fallible } => {
@@ -440,10 +440,10 @@ impl JCustomConversionPlan {
                     ),
                 };
                 let error = (*fallible).then(|| match self.direction {
-                    Direction::Construct => syn::parse_quote!(
+                    Direction::Construct => quote::quote!(
                         <#representation as ::core::convert::TryInto<#source>>::Error
                     ),
-                    Direction::Deconstruct => syn::parse_quote!(
+                    Direction::Deconstruct => quote::quote!(
                         <#source as ::core::convert::TryInto<#representation>>::Error
                     ),
                 });
@@ -499,12 +499,14 @@ impl JCustomConversionPlan {
                     }
                 }),
             };
-            (body, syn::parse_quote!(__JniErr))
+            (body, quote::quote!(__JniErr))
         } else {
-            (
-                crate::jni::body_for_exc(&raw, raw_error.as_ref()),
-                raw_error.unwrap_or_else(crate::jni::builder::default_err_type),
-            )
+            let body = if raw_error.is_some() {
+                raw.clone()
+            } else {
+                syn::parse_quote!(Ok(#raw))
+            };
+            (body, raw_error.unwrap_or_else(|| quote::quote!(__JniErr)))
         };
         let allow = crate::jni::trait_impl::generated_converter_attr();
         let lifetime = syn::Lifetime::new("\u{27}a", Span::call_site());
@@ -538,10 +540,9 @@ pub(crate) struct JResultPlan {
 impl JResultPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
-        let source = emit.spell_ty(&self.source);
-        let ok = emit.spell_ty(&self.ok);
-        let err = emit.spell_ty(&self.err);
-        let ok = annotate_jobject_with_lifetime(&ok, "a");
+        let source = emit.emit_source_type(&self.source);
+        let ok = emit.emit_source_type(&self.ok);
+        let err = emit.emit_source_type(&self.err);
         let allow = crate::jni::trait_impl::generated_converter_attr();
         syn::parse_quote!(
             #allow
@@ -575,7 +576,7 @@ pub(crate) struct JTransparentPlan {
 impl JTransparentPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
-        let source = emit.spell_ty(&self.source);
+        let source = emit.emit_source_type(&self.source);
         let wire = &self.wire;
         let allow = crate::jni::trait_impl::generated_converter_attr();
         match self.direction {
@@ -771,10 +772,10 @@ impl JValueCodecPlan {
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
-        let source: syn::Type = match self.source_kind {
-            JValueSource::Crossing => emit.spell_ty(&self.source),
-            JValueSource::Text(JTextCarrier::Owned) => syn::parse_quote!(String),
-            JValueSource::Text(JTextCarrier::Borrowed) => syn::parse_quote!(&str),
+        let source = match self.source_kind {
+            JValueSource::Crossing => emit.emit_source_type(&self.source),
+            JValueSource::Text(JTextCarrier::Owned) => quote::quote!(String),
+            JValueSource::Text(JTextCarrier::Borrowed) => quote::quote!(&str),
         };
         let wire = &self.wire;
         let body = match &self.body {
@@ -848,43 +849,11 @@ impl JValueCodecPlan {
 #[derive(Clone)]
 pub(crate) struct JSource {
     pub(crate) wrappers: Vec<&'static str>,
-    pub(crate) module: Option<syn::Path>,
-}
-
-struct QualifySource<'a> {
-    module: &'a syn::Path,
-    target: syn::Ident,
-}
-
-impl syn::visit_mut::VisitMut for QualifySource<'_> {
-    fn visit_type_path_mut(&mut self, ty: &mut syn::TypePath) {
-        if ty.qself.is_none()
-            && ty.path.leading_colon.is_none()
-            && ty.path.segments.len() == 1
-            && ty.path.segments[0].ident == self.target
-        {
-            let mut qualified = self.module.clone();
-            qualified.segments.push(ty.path.segments[0].clone());
-            ty.path = qualified;
-        }
-        syn::visit_mut::visit_type_path_mut(self, ty);
-    }
 }
 
 impl shared::Source for JSource {
-    fn spell(&self, source: &TypeRef, emit: &Emit) -> syn::Type {
-        let mut ty = emit.spell_ty(source);
-        let (Some(module), prebindgen_registry::flat::TypeKind::Named { id, .. }) =
-            (&self.module, source.unwrapped().kind())
-        else {
-            return ty;
-        };
-        let Some(target) = id.ident() else {
-            return ty;
-        };
-        let mut qualifier = QualifySource { module, target };
-        syn::visit_mut::VisitMut::visit_type_mut(&mut qualifier, &mut ty);
-        ty
+    fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream {
+        emit.emit_source_type(source)
     }
 
     fn build(&self, canonical: TokenStream) -> TokenStream {
@@ -932,10 +901,10 @@ pub(crate) struct JOptionalSource {
 }
 
 impl shared::Source for JOptionalSource {
-    fn spell(&self, source: &TypeRef, emit: &Emit) -> syn::Type {
+    fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream {
         if let Some(target) = &self.borrowed_input {
-            let target = emit.spell_ty(target);
-            syn::parse_quote!(::core::option::Option<#target>)
+            let target = emit.emit_source_type(target);
+            quote::quote!(::core::option::Option<#target>)
         } else {
             shared::Source::spell(&self.ordinary, source, emit)
         }
@@ -1140,7 +1109,7 @@ impl JPipeline {
 
 impl JVecHandleInput {
     fn invoke(&self, handle: TokenStream, emit: &Emit) -> TokenStream {
-        let elem = emit.spell_ty(&self.elem);
+        let elem = emit.emit_source_type(&self.elem);
         if self.by_ref {
             return quote!(unsafe {
                 OwnedObject::from_raw(#handle as *const Vec<#elem>)
@@ -1318,20 +1287,13 @@ pub(crate) struct JHandleCodecPlan {
     pub(crate) operation_id: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) source: TypeRef,
-    pub(crate) module: syn::Path,
-    pub(crate) target: syn::Ident,
     pub(crate) operation: JHandleOperation,
 }
 
 impl JHandleCodecPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation_id);
-        let mut source = emit.spell_ty(&self.source);
-        let mut qualifier = QualifySource {
-            module: &self.module,
-            target: self.target.clone(),
-        };
-        syn::visit_mut::VisitMut::visit_type_mut(&mut qualifier, &mut source);
+        let source = emit.emit_source_type(&self.source);
         let allow = crate::jni::trait_impl::generated_converter_attr();
         match self.operation {
             JHandleOperation::ConsumeInput => syn::parse_quote!(
@@ -1401,7 +1363,6 @@ pub(crate) struct JBorrowedOptionalHandlePlan {
     pub(crate) operation: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) target: TypeRef,
-    pub(crate) module: syn::Path,
 }
 
 impl JBorrowedOptionalHandlePlan {
@@ -1410,7 +1371,6 @@ impl JBorrowedOptionalHandlePlan {
         let target = shared::Source::spell(
             &JSource {
                 wrappers: Vec::new(),
-                module: Some(self.module.clone()),
             },
             &self.target,
             emit,

@@ -1,7 +1,7 @@
-//! Rendering captured Rust syntax through a pipeline-owned capability.
+//! Final Rust generation through a pipeline-owned capability.
 //!
-//! The flat crate owns the captured syntax and therefore owns this rendering
-//! protocol. A collecting pipeline owns the concrete key that implements it.
+//! Flat owns the model-driven generation protocol. A collecting pipeline owns
+//! the concrete key that implements it.
 //! `prebindgen-registry`, for example, hands its unconstructable
 //! `prebindgen_registry::Emit` only to Rust-emission callbacks.
 //!
@@ -13,9 +13,9 @@
 //! ```
 //!
 //! A different collector can use `prebindgen-flat` independently and
-//! deliberately implement `RustEmitter` for its own callback key. Merely
-//! holding a flat model node does not reveal captured syntax without explicitly
-//! establishing another rendering boundary.
+//! deliberately implement `RustEmitter` for its own callback key. The protocol
+//! contains generation operations only; implementing it does not expose
+//! retained source syntax.
 //!
 //! # Direct syntax doors remain closed
 //!
@@ -55,9 +55,10 @@ use super::{Alternative, EnumValue, Struct, TypeRef};
 
 /// Rendering operations supplied by a pipeline-owned callback key.
 ///
-/// All methods are renderings: they answer what the source wrote, never what
-/// it means. Classification uses the flat model (`TypeRef::kind`, keys and
-/// structural readings) and does not need this protocol.
+/// All methods are renderings. Classification uses the flat model
+/// (`TypeRef::kind`, keys and structural readings) and does not need this
+/// protocol. Source types are generated from those facts as inert tokens;
+/// retained syntax is never returned as a typed AST.
 ///
 /// This trait intentionally has no provided concrete key. Implementing it is a
 /// collector's explicit decision to establish an emission boundary; adapters
@@ -70,6 +71,7 @@ use super::{Alternative, EnumValue, Struct, TypeRef};
 ///
 /// ```
 /// use prebindgen_flat::{Flat, RustEmitter};
+/// use std::collections::HashMap;
 ///
 /// struct MyCollectorKey;
 /// impl RustEmitter for MyCollectorKey {}
@@ -77,85 +79,62 @@ use super::{Alternative, EnumValue, Struct, TypeRef};
 /// let flat = Flat::builder().build()?;
 /// let syntax: syn::Type = syn::parse_quote!(Option<String>);
 /// let reading = flat.classify(&syntax)?;
-/// assert_eq!(
-///     MyCollectorKey.spell(&reading).to_string(),
-///     "Option < String >"
-/// );
+/// let module: syn::Path = syn::parse_quote!(source);
+/// assert_eq!(MyCollectorKey
+///     .emit_source_type(&reading, &HashMap::new(), &module)
+///     .to_string(), ":: core :: option :: Option < :: std :: string :: String >");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait RustEmitter {
-    /// Spell a type exactly as captured.
-    fn spell(&self, ty: &TypeRef) -> TokenStream {
-        ty.spell()
+    /// Generate a source type from Flat facts, qualifying model-known nominal
+    /// types and const extents to their declaration modules.
+    ///
+    /// This returns an inert output fragment. It neither exposes nor walks the
+    /// captured Rust node; all structural decisions come from `TypeKind`,
+    /// `TypeId`, and `ConstId`.
+    fn emit_source_type(
+        &self,
+        ty: &TypeRef,
+        modules: &std::collections::HashMap<String, syn::Path>,
+        default_module: &syn::Path,
+    ) -> TokenStream {
+        ty.emit_source_type(modules, default_module)
     }
 
-    /// Spell a type as a `syn::Type`.
-    fn spell_ty(&self, ty: &TypeRef) -> syn::Type {
-        let tokens = ty.spell();
-        syn::parse_quote!(#tokens)
-    }
-
-    /// Spell the type below every transparent wrapper.
-    fn spell_stripped(&self, ty: &TypeRef) -> syn::Type {
-        ty.stripped_syntax()
-    }
-
-    /// Re-emit a constant as an alias to its source module.
-    fn const_alias(&self, item: &super::Constant, source_module: &syn::Path) -> syn::ItemConst {
-        let ident = &item.name;
-        let ty = self.spell(&item.ty);
-        let docs: Vec<syn::Attribute> = item
-            .docs()
-            .into_iter()
-            .flat_map(|docs| {
-                docs.lines()
-                    .map(|line| {
-                        let doc = format!(" {line}");
-                        syn::parse_quote!(#[doc = #doc])
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-        syn::parse_quote!(#(#docs)* pub const #ident: #ty = #source_module::#ident;)
-    }
-
-    /// Re-emit an anonymous feature guard.
+    /// Copy the pipeline-owned anonymous guard into the final file.
+    ///
+    /// The item is private model output, not an adapter-visible source node.
     fn guard(&self, guard: &super::Guard) -> syn::ItemConst {
-        guard.origin.as_syn().clone()
+        guard.output.clone()
     }
 
-    /// Return an enum discriminant exactly as written.
+    /// Copy an explicit enum discriminant into the final output.
     fn discriminant(&self, value: &EnumValue) -> Option<TokenStream> {
-        value
-            .origin
-            .as_syn()
-            .discriminant
-            .as_ref()
-            .map(|(_, expr)| quote::quote!(#expr))
+        value.discriminant_output.clone()
     }
 
-    /// Render a struct pattern or constructor with its captured delimiters.
+    /// Generate a struct pattern or constructor from its modeled shape.
     fn shape_struct(&self, item: &Struct, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        super::spell::fields(super::spell::Shaped::shape(item), head, parts)
+        super::spell::fields(item.shape, head, parts)
     }
 
-    /// Render an enum alternative with its captured delimiters.
+    /// Generate an enum alternative from its modeled shape.
     fn shape_alternative(
         &self,
         item: &Alternative,
         head: TokenStream,
         parts: &[TokenStream],
     ) -> TokenStream {
-        super::spell::fields(super::spell::Shaped::shape(item), head, parts)
+        super::spell::fields(item.shape, head, parts)
     }
 
-    /// Render an enum value with its captured delimiters.
+    /// Generate a fieldless enum value from its modeled shape.
     fn shape_enum_value(
         &self,
         item: &EnumValue,
         head: TokenStream,
         parts: &[TokenStream],
     ) -> TokenStream {
-        super::spell::fields(super::spell::Shaped::shape(item), head, parts)
+        super::spell::fields(item.shape, head, parts)
     }
 }

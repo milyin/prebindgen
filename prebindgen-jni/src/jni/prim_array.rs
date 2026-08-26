@@ -142,12 +142,12 @@ pub(crate) fn input_body(
     // The element spelled from the model's own `Array`, so the local's type
     // ascription cannot disagree with what `prim_array_of` matched.
     let elem_ty = match ty.kind() {
-        prebindgen_registry::flat::TypeKind::Array { elem, .. } => emit.spell(elem),
+        prebindgen_registry::flat::TypeKind::Array { elem, .. } => emit.emit_source_type(elem),
         _ => unreachable!("prim_array_of matched a non-array"),
     };
     // The ascription the decoded array is checked against — spelled from the
     // reading, as generated Rust always spells.
-    let ty = emit.spell(ty);
+    let ty = emit.emit_source_type(ty);
     let len_err = format!("fixed-size array decode: `{key}` expects a different length");
     if spec.is_u8 {
         return syn::parse_quote!({

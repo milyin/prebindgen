@@ -532,7 +532,6 @@ impl CbindgenBuilder {
             Some((ok, e)) => (ok, Some(e)),
             None => (&f.ret, None),
         };
-        let err_ty: Option<syn::Type> = err_reading.map(|t| spelled(t, emit));
         let value_site = (!matches!(value_ty.kind(), TypeKind::Unit))
             .then(|| self.generation_site(orig, prebindgen_registry::recipe::Role::Return));
         let has_fallible_output = value_site.is_some_and(|site| {
@@ -540,15 +539,16 @@ impl CbindgenBuilder {
         });
 
         // Error wiring: the error type must be declared via `.error()`.
-        let err_bits = err_ty.as_ref().map(|err_ty| {
+        let err_bits = err_reading.map(|err| {
+            let err_key = err.key();
             assert!(
-                self.error.contains(&TypeKey::from_type(err_ty)),
+                self.error.contains(&err_key),
                 "Cbindgen: function `{}` returns `Result<_, {}>` but `{}` is not a \
                  declared error type — add `.data_struct({}).error()`",
                 orig,
-                TypeKey::from_type(err_ty),
-                TypeKey::from_type(err_ty),
-                TypeKey::from_type(err_ty),
+                err_key,
+                err_key,
+                err_key,
             );
             let site = self.generation_site(orig, prebindgen_registry::recipe::Role::Error);
             let crate::compile::CValue::Direct {
@@ -557,11 +557,15 @@ impl CbindgenBuilder {
             else {
                 panic!("C error site must have one direct wire");
             };
-            (wire.clone(), converter.ident(emit), self.src_ty(err_ty))
+            (
+                wire.clone(),
+                converter.ident(emit),
+                emit.emit_source_type(err),
+            )
         });
 
         // No `Result` channel ⇒ a fallible input must be declared `.panic()`.
-        if err_ty.is_none() {
+        if err_reading.is_none() {
             let allows_panic = self.functions.get(orig).map(|c| c.panic).unwrap_or(false);
             assert!(
                 !(has_fallible_input || has_fallible_output) || allows_panic,
@@ -588,8 +592,8 @@ impl CbindgenBuilder {
             },
         );
         let result_slot = shape.niches.clone().carve().map(|(slot, _)| slot);
-        let result_in_band = err_ty.is_some() && result_slot.is_some();
-        let field0_is_return = result_in_band || err_ty.is_none();
+        let result_in_band = err_reading.is_some() && result_slot.is_some();
+        let field0_is_return = result_in_band || err_reading.is_none();
 
         // Partition fields into the (optional) C return value + out-parameters,
         // and pick C names for the out-params (see `out_param_name`).
@@ -915,7 +919,7 @@ impl CbindgenBuilder {
                     reinterpret,
                 } => {
                     let len_id = format_ident!("{}_len", ident);
-                    let source = self.src_ty(&spelled(element, emit));
+                    let source = emit.emit_source_type(element);
                     params.push(quote!(#ident: #wire));
                     params.push(quote!(#len_id: usize));
                     let from_parts = if *reinterpret {

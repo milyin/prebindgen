@@ -95,7 +95,6 @@ impl CbindgenBuilder {
         Some((
             crate::chain::CustomPlan {
                 source: ty.clone(),
-                source_module: self.source_module.clone(),
                 wire: repr,
                 direction,
                 operation,

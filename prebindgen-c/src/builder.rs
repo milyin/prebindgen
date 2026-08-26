@@ -1,45 +1,5 @@
 use super::*;
 
-/// Fully qualify source types using the binding's final module policy.
-pub(super) fn qualify_source_type(ty: &syn::Type, source_module: Option<&syn::Path>) -> syn::Type {
-    use syn::visit_mut::VisitMut;
-
-    struct Qualifier<'a>(Option<&'a syn::Path>);
-    impl VisitMut for Qualifier<'_> {
-        fn visit_type_path_mut(&mut self, ty: &mut syn::TypePath) {
-            if ty.qself.is_none() {
-                let as_type = syn::Type::Path(ty.clone());
-                if is_scalar(&as_type) {
-                    // Primitive scalars have no module.
-                } else if is_string(&as_type) {
-                    ty.path = syn::parse_quote!(::std::string::String);
-                } else if ty.path.leading_colon.is_none() && ty.path.segments.len() == 1 {
-                    let segment = ty.path.segments[0].clone();
-                    if let Some(full) = prelude_path(&segment.ident) {
-                        let mut path: syn::Path =
-                            syn::parse_str(full).expect("a path literal in `prelude_path`");
-                        path.segments.last_mut().expect("non-empty").arguments = segment.arguments;
-                        ty.path = path;
-                    } else if let Some(module) = self.0 {
-                        let mut path = module.clone();
-                        path.segments.push(segment);
-                        ty.path = path;
-                    }
-                }
-            }
-            // Visit generic arguments after qualifying the current path, so
-            // `Option<Handle>` resolves the two names against different roots.
-            syn::visit_mut::visit_type_path_mut(self, ty);
-        }
-    }
-
-    // Trait bounds are paths rather than `TypePath`s. This deliberately leaves
-    // `impl Fn(..) + Send` alone while still reaching its argument types.
-    let mut result = ty.clone();
-    Qualifier(source_module).visit_type_mut(&mut result);
-    result
-}
-
 impl CbindgenBuilder {
     fn clear_current(&mut self) {
         self.current = None;
@@ -637,21 +597,6 @@ impl CbindgenBuilder {
     }
 
     // ── Internal helpers ───────────────────────────────────────────────
-
-    /// Fully-qualify every bare single-segment source type inside `ty` against
-    /// [`Self::source_module`] (e.g. `ZKeyExpr` → `zenoh_flat::ZKeyExpr`).
-    /// Anything already qualified, or with no `source_module` set, is returned
-    /// unchanged.
-    ///
-    /// **Every** path node in the type, not the outermost one: a source type
-    /// can sit under any accepted shape — `Option<&Handle>` in a callback
-    /// argument, `&[Payload]`, `(Rec, Rec)` — and a name left bare there does
-    /// not resolve in the consumer crate the generated file is included into
-    /// (#414). The walk is what makes one rule apply everywhere; the rule per
-    /// node is below.
-    pub(super) fn src_ty(&self, ty: &syn::Type) -> syn::Type {
-        qualify_source_type(ty, self.source_module.as_ref())
-    }
 
     /// Path to a source function (e.g. `zenoh_flat::z_keyexpr_try_from`).
     pub(super) fn src_fn(&self, ident: &syn::Ident) -> syn::Path {

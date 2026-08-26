@@ -95,8 +95,8 @@ fn snapshot_rust_side() {
     // before any dereference — the #34 guard; bit 0 is the Kotlin closed tag.
     assert!(rc.contains("if*v==0||(*v&1)==1"), "{rust}");
     // Every opaque type carries the compile-time alignment floor that keeps
-    // bit 0 free for the closed tag (source-module-qualified: the check is
-    // real AST, so it rides the `qualify_item` pass).
+    // bit 0 free for the closed tag. Its source type is qualified by the
+    // registry-owned final emitter before the guard is assembled.
     assert!(rc.contains("align_of::<myflat::ZThing>()<2"), "{rust}");
     // The freePtr destructor ignores tagged (already-closed) pointers.
     assert!(rc.contains("ifptr!=0&&(ptr&1)==0"), "{rust}");

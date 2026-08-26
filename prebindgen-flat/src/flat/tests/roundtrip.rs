@@ -1,8 +1,8 @@
 //! The round-trip property, in both directions:
 //!
-//! * an element's syntax slices are the source's own tokens, sliced — never a
-//!   reconstruction. A delimiter, a hex discriminant, a doc comment survive
-//!   because the slice was kept, and that is what generated Rust re-emits;
+//! * an element's syntax slices remain available to Flat-internal diagnostics
+//!   and fidelity tests. Facts required by generated Rust—delimiter shape and
+//!   explicit discriminant output—are also recorded explicitly in the model;
 //! * and the type grammar can spell them back. [`TypeKind`] is the accepted
 //!   subset of `syn::Type` and nothing less, so a kind that could not reproduce
 //!   the tokens it was lowered from would have dropped something —
@@ -308,9 +308,9 @@ fn struct_delimiters_survive_and_spell() {
     assert!(tokens(o.origin.as_syn()).contains("Whatever"));
 }
 
-/// A discriminant is two facts with two homes: the number is modelled, the
-/// spelling stays in the variant's slice. `0x07` must reach a C header as
-/// `0x07`, and no reconstruction from `7` can do that.
+/// A discriminant has two model facts: its evaluated number and its inert final
+/// output. `0x07` must reach a C header as `0x07`, and no reconstruction from
+/// `7` can do that.
 #[test]
 fn discriminant_number_and_spelling_both_survive() {
     let element = parse_one(syn::parse_quote!(
@@ -325,19 +325,20 @@ fn discriminant_number_and_spelling_both_survive() {
         e.discriminant_values().expect("literal discriminants"),
         vec![(&e.values[0].name, 7), (&e.values[1].name, 8)]
     );
-    let (_, expr) = e.values[0]
-        .origin
-        .syntax
-        .discriminant
-        .as_ref()
-        .expect("an explicit discriminant");
-    assert_eq!(tokens(expr), "0x07");
-    assert!(e.values[1].origin.as_syn().discriminant.is_none());
+    assert_eq!(
+        tokens(
+            &TestEmit
+                .discriminant(&e.values[0])
+                .expect("an explicit discriminant")
+        ),
+        "0x07"
+    );
+    assert!(TestEmit.discriminant(&e.values[1]).is_none());
 }
 
 /// A discriminant the frontend cannot evaluate breaks the *numeric* chain and
-/// nothing else: the spelling is still there, so a consumer that re-emits it
-/// carries on while one that needs the number is told which variant to blame.
+/// nothing else: the explicit output fragment remains available, while a
+/// consumer that needs the number is told which variant to blame.
 #[test]
 fn an_unevaluable_discriminant_keeps_its_spelling() {
     let element = parse_one(syn::parse_quote!(
@@ -349,13 +350,10 @@ fn an_unevaluable_discriminant_keeps_its_spelling() {
     let e = as_enum(&element);
     assert!(e.values.iter().all(|v| v.discriminant.is_none()));
     assert_eq!(e.discriminant_values().expect_err("no numbers"), "A");
-    let (_, expr) = e.values[0]
-        .origin
-        .syntax
-        .discriminant
-        .as_ref()
-        .expect("explicit");
-    assert_eq!(tokens(expr), "OTHER");
+    assert_eq!(
+        tokens(&TestEmit.discriminant(&e.values[0]).expect("explicit")),
+        "OTHER"
+    );
 }
 
 /// A discriminant at the top of the range is valid Rust, so running out of

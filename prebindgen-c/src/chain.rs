@@ -15,7 +15,7 @@ use prebindgen_registry::{
     Emit,
 };
 
-use super::{builder::qualify_source_type, *};
+use super::*;
 
 /// The callable facts a parent chain needs from a child converter.
 #[derive(Clone)]
@@ -417,7 +417,6 @@ impl BorrowOperation {
 #[derive(Clone)]
 pub(crate) struct BorrowPlan {
     pub(crate) source_inner: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
     pub(crate) operation: BorrowOperation,
     pub(crate) null_message: String,
@@ -425,10 +424,7 @@ pub(crate) struct BorrowPlan {
 
 impl BorrowPlan {
     fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
-        let source_inner = qualify_source_type(
-            &emit.spell_ty(&self.source_inner),
-            self.source_module.as_ref(),
-        );
+        let source_inner = emit.emit_source_type(&self.source_inner);
         let wire = &self.wire;
         let null_message = &self.null_message;
 
@@ -510,7 +506,6 @@ impl BorrowPlan {
 pub(crate) struct PayloadPlan {
     pub(crate) source: TypeRef,
     pub(crate) source_inner: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
     pub(crate) direction: Direction,
     pub(crate) optional: bool,
@@ -520,11 +515,8 @@ pub(crate) struct PayloadPlan {
 
 impl PayloadPlan {
     fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
-        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
-        let source_inner = qualify_source_type(
-            &emit.spell_ty(&self.source_inner),
-            self.source_module.as_ref(),
-        );
+        let source = emit.emit_source_type(&self.source);
+        let source_inner = emit.emit_source_type(&self.source_inner);
         let wire = &self.wire;
 
         match self.direction {
@@ -659,14 +651,13 @@ impl InputTerminalOperation {
 #[derive(Clone)]
 pub(crate) struct InputTerminalPlan {
     pub(crate) source: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
     pub(crate) operation: InputTerminalOperation,
 }
 
 impl InputTerminalPlan {
     fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
-        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let source = emit.emit_source_type(&self.source);
         let wire = &self.wire;
         match &self.operation {
             InputTerminalOperation::OwnedHandle { null_message } => syn::parse_quote!(
@@ -825,14 +816,13 @@ pub(crate) enum OutputTerminalOperation {
 #[derive(Clone)]
 pub(crate) struct OutputTerminalPlan {
     pub(crate) source: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
     pub(crate) operation: OutputTerminalOperation,
 }
 
 impl OutputTerminalPlan {
     fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
-        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let source = emit.emit_source_type(&self.source);
         let wire = &self.wire;
         match &self.operation {
             OutputTerminalOperation::Unit => syn::parse_quote!(
@@ -917,7 +907,12 @@ impl CustomOperation {
         }
     }
 
-    fn expression(&self, direction: Direction, source: &syn::Type, wire: &syn::Type) -> syn::Expr {
+    fn expression(
+        &self,
+        direction: Direction,
+        source: &TokenStream,
+        wire: &syn::Type,
+    ) -> syn::Expr {
         match self {
             Self::Function { path, by_ref, .. } => {
                 if *by_ref {
@@ -950,7 +945,6 @@ impl CustomOperation {
 #[derive(Clone)]
 pub(crate) struct CustomPlan {
     pub(crate) source: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
     pub(crate) direction: Direction,
     pub(crate) operation: CustomOperation,
@@ -964,7 +958,7 @@ impl CustomPlan {
     }
 
     fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
-        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let source = emit.emit_source_type(&self.source);
         let wire = &self.wire;
         let conversion = self.operation.expression(self.direction, &source, wire);
         let conversion_fallible = self.operation.fallible();
@@ -1100,7 +1094,6 @@ impl CallbackArtifact {
         c_struct: syn::Ident,
         operation: prebindgen_registry::OperationId,
         source: TypeRef,
-        source_module: Option<syn::Path>,
         arguments: Vec<TypeRef>,
         planned: Vec<CallbackArgument>,
     ) -> Self {
@@ -1115,7 +1108,6 @@ impl CallbackArtifact {
             invoke: InvokePlan {
                 operation,
                 source,
-                source_module,
                 wire,
                 arguments,
                 parts,
@@ -1178,7 +1170,7 @@ impl CArtifact {
 /// Render one class of C artifacts from the frozen registry plan.
 ///
 /// The deliberately narrow signature is the artifact-rendering boundary: final
-/// emission can spell retained source types through Emit, but it cannot
+/// emission can generate source-type tokens from Flat facts through Emit, but it cannot
 /// reopen the registry or the adapter's mutable compilation cache.
 pub(crate) fn render_artifacts(
     generation: &GenerationPlan<crate::compile::CRepresentation>,
@@ -1195,14 +1187,13 @@ pub(crate) fn render_artifacts(
 /// One opaque C handle declaration and its typed destructor.
 pub(crate) struct OpaqueHandleArtifact {
     pub(crate) source: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) c_struct: syn::Ident,
     pub(crate) drop_ident: syn::Ident,
 }
 
 impl OpaqueHandleArtifact {
     fn render(&self, emit: &Emit) -> Vec<syn::Item> {
-        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let source = emit.emit_source_type(&self.source);
         let c_struct = &self.c_struct;
         let drop_ident = &self.drop_ident;
         vec![
@@ -1242,7 +1233,6 @@ pub(crate) struct ValueOpaqueTake {
 /// One value-opaque declaration family retained until final source spelling.
 pub(crate) struct ValueOpaqueArtifact {
     pub(crate) source: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) opaque: syn::Type,
     pub(crate) mirror: Option<ValueOpaqueMirror>,
     pub(crate) drop_ident: syn::Ident,
@@ -1251,7 +1241,7 @@ pub(crate) struct ValueOpaqueArtifact {
 
 impl ValueOpaqueArtifact {
     fn render(&self, emit: &Emit) -> Vec<syn::Item> {
-        let source = qualify_source_type(&emit.spell_ty(&self.source), self.source_module.as_ref());
+        let source = emit.emit_source_type(&self.source);
         let opaque = &self.opaque;
         let mut items = Vec::new();
         if let Some(mirror) = &self.mirror {
@@ -1378,19 +1368,14 @@ impl PayloadCleanup {
         }
     }
 
-    fn render(
-        &self,
-        emit: &Emit,
-        source_module: Option<&syn::Path>,
-        slot: TokenStream,
-    ) -> TokenStream {
+    fn render(&self, emit: &Emit, slot: TokenStream) -> TokenStream {
         match self {
             Self::AllocatedString => quote!(
                 free(#slot as *mut ::core::ffi::c_void);
                 #slot = ::core::ptr::null_mut();
             ),
             Self::BoxedPointer { source } => {
-                let source = qualify_source_type(&emit.spell_ty(source), source_module);
+                let source = emit.emit_source_type(source);
                 quote!(
                     if !(#slot).is_null() {
                         drop(::std::boxed::Box::from_raw(#slot as *mut #source));
@@ -1400,9 +1385,9 @@ impl PayloadCleanup {
             }
             Self::NestedUnion { drop_ident, .. } => quote!(#drop_ident(&mut #slot);),
             Self::Fields(fields) => {
-                let cleanups = fields.iter().map(|(field, cleanup)| {
-                    cleanup.render(emit, source_module, quote!((#slot).#field))
-                });
+                let cleanups = fields
+                    .iter()
+                    .map(|(field, cleanup)| cleanup.render(emit, quote!((#slot).#field)));
                 quote!(#(#cleanups)*)
             }
         }
@@ -1423,7 +1408,6 @@ pub(crate) struct TaggedUnionArmArtifact {
 
 /// A tagged-union mirror and its optional typed destructor.
 pub(crate) struct TaggedUnionArtifact {
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) c_name: syn::Ident,
     pub(crate) arms: Vec<TaggedUnionArmArtifact>,
     pub(crate) drop_ident: Option<syn::Ident>,
@@ -1477,9 +1461,10 @@ impl TaggedUnionArtifact {
                     .iter()
                     .zip(&bindings)
                     .filter_map(|(field, binding)| {
-                        field.cleanup.as_ref().map(|cleanup| {
-                            cleanup.render(emit, self.source_module.as_ref(), quote!(*#binding))
-                        })
+                        field
+                            .cleanup
+                            .as_ref()
+                            .map(|cleanup| cleanup.render(emit, quote!(*#binding)))
                     });
                 quote!(#pattern => { #(#cleanups)* })
             })
@@ -1698,7 +1683,6 @@ impl chain::InvokeBridge for CInvokeBridge {
 pub(crate) struct InvokePlan {
     pub(crate) operation: prebindgen_registry::OperationId,
     pub(crate) source: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
     pub(crate) arguments: Vec<TypeRef>,
     pub(crate) parts: Vec<InvokePart>,
@@ -1709,9 +1693,7 @@ impl InvokePlan {
         let plan = chain::Invoke {
             source: self.source.clone(),
             arguments: self.arguments.clone(),
-            source_policy: CSource {
-                module: self.source_module.clone(),
-            },
+            source_policy: CSource,
             bridge: CInvokeBridge {
                 wire: self.wire.clone(),
             },
@@ -1742,13 +1724,11 @@ pub(crate) struct ProductField {
 }
 
 #[derive(Clone)]
-struct CSource {
-    module: Option<syn::Path>,
-}
+struct CSource;
 
 impl chain::Source for CSource {
-    fn spell(&self, source: &TypeRef, emit: &Emit) -> syn::Type {
-        qualify_source_type(&emit.spell_ty(source), self.module.as_ref())
+    fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream {
+        emit.emit_source_type(source)
     }
 }
 
@@ -1778,7 +1758,6 @@ impl chain::ProductBridge for CProductBridge {
 #[derive(Clone)]
 pub(crate) struct ProductPlan {
     pub(crate) source: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
     pub(crate) direction: Direction,
     pub(crate) fields: Vec<ProductField>,
@@ -1789,9 +1768,7 @@ impl ProductPlan {
         let chain = chain::Product {
             source: self.source.clone(),
             direction: self.direction,
-            source_policy: CSource {
-                module: self.source_module.clone(),
-            },
+            source_policy: CSource,
             bridge: CProductBridge {
                 wire: self.wire.clone(),
             },
@@ -1889,7 +1866,6 @@ impl chain::OptionalBridge for COptionalBridge {
 #[derive(Clone)]
 pub(crate) struct OptionalPlan {
     pub(crate) source: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Type,
     pub(crate) converter: CCall,
     pub(crate) repr: OptionalRepr,
@@ -1901,9 +1877,7 @@ impl OptionalPlan {
         let chain = chain::Optional {
             source: self.source.clone(),
             direction: Direction::Construct,
-            source_policy: CSource {
-                module: self.source_module.clone(),
-            },
+            source_policy: CSource,
             bridge: COptionalBridge {
                 wire: self.wire.clone(),
                 repr: self.repr.clone(),
@@ -1982,7 +1956,6 @@ impl chain::SequenceBridge for CSequenceBridge {
 pub(crate) struct SequencePlan {
     pub(crate) source: TypeRef,
     pub(crate) element: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) child_wire: syn::Type,
     pub(crate) child: CCall,
 }
@@ -1993,9 +1966,7 @@ impl SequencePlan {
             source: self.source.clone(),
             element: self.element.clone(),
             direction: Direction::Deconstruct,
-            source_policy: CSource {
-                module: self.source_module.clone(),
-            },
+            source_policy: CSource,
             bridge: CSequenceBridge {
                 child: self.child_wire.clone(),
             },
@@ -2131,7 +2102,6 @@ impl chain::ChoiceBridge for CChoiceBridge {
 #[derive(Clone)]
 pub(crate) struct ChoicePlan {
     pub(crate) source: TypeRef,
-    pub(crate) source_module: Option<syn::Path>,
     pub(crate) wire: syn::Ident,
     pub(crate) direction: Direction,
     pub(crate) arms: Vec<chain::ChoiceArm<chain::TupleProduct, CCall>>,
@@ -2142,9 +2112,7 @@ impl ChoicePlan {
         let composed = chain::Choice {
             source: self.source.clone(),
             direction: self.direction,
-            source_policy: CSource {
-                module: self.source_module.clone(),
-            },
+            source_policy: CSource,
             bridge: CChoiceBridge {
                 wire: self.wire.clone(),
                 alternatives: self

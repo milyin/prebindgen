@@ -73,7 +73,7 @@ impl Prebindgen for IdentityExt {
         emit: &crate::Emit,
     ) -> Vec<syn::Item> {
         let ident = &c.name;
-        let ty = emit.spell(&c.ty);
+        let ty = emit.emit_source_type(&c.ty);
         vec![syn::parse_quote!(pub const #ident: #ty = 0;)]
     }
 }

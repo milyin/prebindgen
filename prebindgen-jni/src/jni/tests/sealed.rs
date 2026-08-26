@@ -2908,7 +2908,9 @@ fn borrowed_sequences_keep_their_registry_plan_or_specialized_shape() {
     assert!(
         !specialized
             && borrowed_ident.starts_with("__jni_in_convert_")
-            && compact.contains("Result<Vec<String>,__JniErr>")
+            && compact.contains(
+                "Result<::std::vec::Vec<::std::string::String>,__JniErr>",
+            )
             && compact.contains("letmut__sequence_values")
             && compact.contains("__jni_in_convert_"),
         "the borrowed input must retain the executable registry Sequence plan: {borrowed_ident}\n{borrowed_rendered}"

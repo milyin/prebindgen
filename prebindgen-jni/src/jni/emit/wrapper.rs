@@ -673,7 +673,7 @@ pub(crate) fn emit_expanded_param(
     for (leaf, classified) in fold.leaves.iter().zip(leaves) {
         let leaf_ty = &leaf.ty;
         // The ascription generated Rust writes for this leaf's local.
-        let leaf_ty_tokens = emit.spell(leaf_ty);
+        let leaf_ty_tokens = emit.emit_source_type(leaf_ty);
         let local = format_ident!("__exp_{}", leaf.name);
         wire_params.extend(classified.native.iter().map(|native| {
             let ident = &native.rust_ident;

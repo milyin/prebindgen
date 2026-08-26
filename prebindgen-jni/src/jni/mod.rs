@@ -568,7 +568,11 @@ impl JniGen {
         }
         .map_err(|e| e.to_string())?;
         fragment.rust.mark_reachable();
-        let rendered = fragment.rust.render(&prebindgen_registry::Emit::for_test());
+        let rendered = fragment
+            .rust
+            .render(&prebindgen_registry::Emit::for_registry_test(
+                &self.registry,
+            ));
         Ok((
             fragment.composed_only,
             rendered.sig.ident.to_string(),

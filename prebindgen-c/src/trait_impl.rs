@@ -53,7 +53,6 @@ impl CbindgenBuilder {
 
         let plan = |wire, operation| crate::chain::InputTerminalPlan {
             source: ty.clone(),
-            source_module: self.source_module.clone(),
             wire,
             operation,
         };
@@ -328,7 +327,6 @@ impl CbindgenBuilder {
                     self.callback_c_ident(&key),
                     crate::compile::callback_operation(&param.ty),
                     param.ty.clone(),
-                    self.source_module.clone(),
                     args.to_vec(),
                     arguments,
                 );
@@ -458,7 +456,6 @@ impl CbindgenBuilder {
         Some(crate::chain::PayloadPlan {
             source: fty.clone(),
             source_inner,
-            source_module: self.source_module.clone(),
             wire,
             direction,
             optional,
@@ -493,7 +490,6 @@ impl CbindgenBuilder {
         }
         Some(crate::chain::InputTerminalPlan {
             source: ty.clone(),
-            source_module: self.source_module.clone(),
             wire: syn::parse_quote!(*const ::core::ffi::c_char),
             operation: crate::chain::InputTerminalOperation::StringField,
         })
@@ -516,7 +512,6 @@ impl CbindgenBuilder {
         }
         Some(crate::chain::OutputTerminalPlan {
             source: ty.clone(),
-            source_module: self.source_module.clone(),
             wire: bool_wire(),
             operation: crate::chain::OutputTerminalOperation::BoolField,
         })
@@ -651,7 +646,6 @@ impl CbindgenBuilder {
                 dependencies,
                 crate::chain::CArtifact::OpaqueHandle(crate::chain::OpaqueHandleArtifact {
                     source: reading,
-                    source_module: self.source_module.clone(),
                     c_struct: self.c_type_ident(key),
                     drop_ident: self.destructor_symbol(key),
                 }),
@@ -733,7 +727,6 @@ impl CbindgenBuilder {
                 dependencies,
                 crate::chain::CArtifact::ValueOpaque(crate::chain::ValueOpaqueArtifact {
                     source: reading,
-                    source_module: self.source_module.clone(),
                     opaque: cfg.opaque.clone(),
                     mirror,
                     drop_ident: self.destructor_symbol(key),
@@ -829,7 +822,6 @@ impl CbindgenBuilder {
                 prerequisites,
                 inputs,
                 crate::chain::CArtifact::TaggedUnion(crate::chain::TaggedUnionArtifact {
-                    source_module: self.source_module.clone(),
                     c_name: self.c_type_ident(key),
                     arms,
                     drop_ident,
@@ -1294,7 +1286,6 @@ impl CbindgenBuilder {
     ) -> Option<crate::chain::OutputTerminalPlan> {
         let plan = |wire, operation| crate::chain::OutputTerminalPlan {
             source: ty.clone(),
-            source_module: self.source_module.clone(),
             wire,
             operation,
         };
@@ -1444,7 +1435,6 @@ impl CbindgenBuilder {
 
         let plan = |source_inner, wire, operation, null_message| BorrowPlan {
             source_inner,
-            source_module: self.source_module.clone(),
             wire,
             operation,
             null_message,

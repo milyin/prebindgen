@@ -8,6 +8,15 @@ the machinery immediately around it.
 It describes the model, not the API surface an adapter programs against — the
 table, sites, the `Compile` hooks and the error set are documented separately.
 
+## Non-negotiable generation rule
+
+**Analyze the Flat model; generate Rust only.** A language adapter must never
+inspect, reparse, or walk the Rust syntax retained behind a `TypeRef`. Before
+final writing it may use only Flat facts. During final writing `Emit` can turn
+those facts into an inert token fragment for the output file; it does not hand
+the adapter a `syn::Type` that could be analyzed. If Flat cannot generate the
+required source type from its structure, the missing fact belongs in Flat.
+
 ## Where the crates sit
 
 Four take part.
@@ -249,14 +258,14 @@ boundary and no generated source is reparsed there. A callback may return zero
 or several items: JniGen's constant hook returns two, a getter and an alias.
 
 Typed output is not a route back to captured Rust syntax. Adapters construct
-those items from Flat facts and may ask `Emit` to spell a `TypeRef` or another
-leaf only while assembling the final item. `Emit` deliberately has no API that
-returns a captured function, struct or enum as `syn`; doing so would let an
-adapter inspect the source item instead of using its Flat representation. A
-named const alias is likewise generated from the modeled name and type. If an
-adapter has no source module and therefore no model-defined value to reference,
-it must declare another value policy explicitly: `on_const` has no default and
-the captured initializer is not an available fallback.
+those items from Flat facts. Only while assembling the final item may they ask
+`Emit` to generate a source-type token fragment from `TypeKind`, `TypeId`, and
+`ConstId`; there is no typed counterpart. `Emit` likewise has no API that
+returns a captured function, struct or enum as `syn`. A named const alias is
+generated from the modeled name and type. If an adapter has no source module
+and therefore no model-defined value to reference, it must declare another
+value policy explicitly: `on_const` has no default and the captured initializer
+is not an available fallback.
 
 **Finally the file.** The writer concatenates, in this order:
 
@@ -275,9 +284,10 @@ carry an operation identity; there is no preselected-name fallback;
 3. the per-item output, in the order above;
 4. the source crate's own feature guards, verbatim.
 
-It then runs one cross-cutting pass over every item — the adapter's
-`post_process_item`, which is where bare type references get qualified against
-the source module — and writes the result.
+Source qualification is part of `Emit`'s model-driven type generation. There
+is no whole-item post-processing pass: such a pass could inspect or rewrite
+unrelated generated syntax and would make every adapter responsible for
+reimplementing source-type resolution.
 
 ### What the foreign side ends up calling
 
@@ -373,9 +383,10 @@ particular, `Cx` carries no `Emit`, converter calls retain registry-owned
 `OperationId` values rather than names derived from `TypeKey`, and language
 adapters must not parse or classify a key's diagnostic text. Only the final
 `write_rust` pass mints `Emit`; at that point resolution and glue planning are
-complete, and the renderer may spell retained types and allocate private Rust
-symbols while assembling the file. Needing source Rust syntax earlier means a
-fact is missing from the Flat model and must be added there.
+complete, and the renderer may generate source-type token fragments and
+allocate private Rust symbols while assembling the file. Even there, the
+adapter cannot recover a typed source AST. Needing to inspect source Rust
+syntax means a fact is missing from the Flat model and must be added there.
 
 An operation is shared by its conversion contract, not by the recipe row that
 happened to request it. For composed converters that contract includes the
@@ -433,11 +444,12 @@ third:
 | `mode()` | `Shared` | `Owned` | `Owned` |
 | `key().ty` | `Sample` | `Sample` | `Sample` |
 
-An adapter decides how to convert from the model facts of `value()`, retains
-`spelled()` in its semantic plan, and writes that spelling only when the final
-writer supplies `Emit`. `mode()` is the third answer, kept separate because
-the table checks it: a constructor taking `Sample` cannot be handed a part
-that only yields `Shared`.
+An adapter decides how to convert from the model facts of `value()` and retains
+the complete site `TypeRef` returned by `spelled()` in its semantic plan. When
+the final writer supplies `Emit`, Flat generates that structure as Rust tokens;
+it does not copy or expose the captured spelling. `mode()` is the third answer,
+kept separate because the table checks it: a constructor taking `Sample` cannot
+be handed a part that only yields `Shared`.
 
 Note `Box<Sample>` — `value()` keeps the wrapper because a `Box` is not a
 borrow, while `key()` strips it, because `Sample`, `&Sample` and `Box<Sample>`

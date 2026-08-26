@@ -932,7 +932,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             operation,
             OptionalPlan {
                 source: at.crossing.spelled().clone(),
-                source_module: self.gen.source_module.clone(),
                 wire: wire.clone(),
                 converter: inner.function.call().clone(),
                 repr,
@@ -979,7 +978,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                         SequencePlan {
                             source: ty.clone(),
                             element: (**element).clone(),
-                            source_module: self.gen.source_module.clone(),
                             child_wire: inner.destination.clone(),
                             child: inner.function.call().clone(),
                         },
@@ -1232,7 +1230,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             operation,
             ProductPlan {
                 source: at.crossing.spelled().clone(),
-                source_module: self.gen.source_module.clone(),
                 wire: wire.clone(),
                 direction,
                 fields,
@@ -1331,7 +1328,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             operation,
             ChoicePlan {
                 source: at.crossing.spelled().clone(),
-                source_module: self.gen.source_module.clone(),
                 wire: cname,
                 direction,
                 arms: planned_arms,

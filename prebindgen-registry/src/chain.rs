@@ -54,7 +54,7 @@ impl Call {
 /// source-side type as a [`TypeRef`] and adapter-owned wrapper policy as data.
 pub trait Source: Clone {
     /// Spell the exact source type in its final generated context.
-    fn spell(&self, source: &TypeRef, emit: &Emit) -> syn::Type;
+    fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream;
 
     /// Turn a canonical shape value into the exact source spelling.
     fn build(&self, canonical: TokenStream) -> TokenStream {
@@ -493,7 +493,7 @@ pub struct Invoke<S, B, P> {
 /// A rendered chain body and the types needed to put a function around it.
 pub struct Rendered {
     /// Exact source type, spelled only at final emission.
-    pub source: syn::Type,
+    pub source: TokenStream,
     /// Adapter-selected intermediate type.
     pub intermediate: syn::Type,
     /// Function-body expression.
@@ -886,6 +886,11 @@ mod tests {
 
     fn alternative(syntax: syn::Variant, index: usize) -> Alternative {
         let location: Rc<prebindgen::SourceLocation> = Rc::new(Default::default());
+        let shape = match &syntax.fields {
+            syn::Fields::Unit => crate::flat::FieldShape::Unit,
+            syn::Fields::Unnamed(_) => crate::flat::FieldShape::Tuple,
+            syn::Fields::Named(_) => crate::flat::FieldShape::Named,
+        };
         let fields = syntax
             .fields
             .iter()
@@ -901,6 +906,7 @@ mod tests {
             name: syntax.ident.clone(),
             index,
             fields,
+            shape,
             origin: Origin::new(syntax, location),
         }
     }
@@ -911,9 +917,9 @@ mod tests {
     }
 
     impl Source for TestSource {
-        fn spell(&self, source: &TypeRef, emit: &Emit) -> syn::Type {
+        fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream {
             self.spells.set(self.spells.get() + 1);
-            emit.spell_ty(source)
+            emit.emit_source_type(source)
         }
     }
 
@@ -983,8 +989,8 @@ mod tests {
         let rendered = plan.render(&Emit::for_test());
         assert_eq!(spells.get(), 1);
         assert_eq!(
-            rendered.source.to_token_stream().to_string(),
-            "Option < i64 >"
+            rendered.source.to_string(),
+            ":: core :: option :: Option < i64 >"
         );
         let body = rendered.body.to_token_stream().to_string();
         assert!(body.contains("Option :: None"), "{body}");

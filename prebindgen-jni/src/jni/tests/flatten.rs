@@ -2075,7 +2075,8 @@ fn optional_selector_dispatch_end_to_end() {
     // must nevertheless stay allocation-free: Kotlin sends presence + raw
     // primitive, and the registry Optional chain gates the scalar conversion.
     assert_eq!(
-        rc.matches("Result<Option<u16>,__JniErr>").count(),
+        rc.matches("Result<::core::option::Option<u16>,__JniErr>")
+            .count(),
         1,
         "{rust}"
     );

@@ -1,7 +1,7 @@
 use quote::ToTokens;
 
 use super::*;
-use crate::test_util::SpellForTest;
+use crate::test_util::EmitSourceForTest;
 
 /// A fixture declaration's identity. A declaration is a key, not a spelling —
 /// see `ConstructorDecl::target`.
@@ -57,7 +57,10 @@ fn single_constructor_plan_and_fold() {
     assert_eq!(plan.selector, None);
     assert_eq!(plan.leaves.len(), 1);
     assert_eq!(plan.leaves[0].name.to_string(), "a");
-    assert_eq!(plan.leaves[0].ty.spell().to_string(), "String");
+    assert_eq!(
+        plan.leaves[0].ty.emit_source().to_string(),
+        ":: std :: string :: String"
+    );
 
     let locals = vec![ident("a")];
     let folded = emit_fold(plan, &locals, &src_qualify);
@@ -104,12 +107,15 @@ fn constructor_plan_and_fold() {
     assert_eq!(plan.selector, Some(0));
     // selector + try_from(String) + identity(ZKeyExpr) = 3 leaves
     assert_eq!(plan.leaves.len(), 3);
-    assert_eq!(plan.leaves[0].ty.spell().to_string(), "i32");
-    assert_eq!(plan.leaves[1].ty.spell().to_string(), "Option < String >");
+    assert_eq!(plan.leaves[0].ty.emit_source().to_string(), "i32");
+    assert_eq!(
+        plan.leaves[1].ty.emit_source().to_string(),
+        ":: core :: option :: Option < :: std :: string :: String >"
+    );
     // `&ZKeyExpr` consumer ⇒ borrowed identity leaf (clone-preserving).
     assert_eq!(
-        plan.leaves[2].ty.spell().to_string(),
-        "Option < & ZKeyExpr >"
+        plan.leaves[2].ty.emit_source().to_string(),
+        ":: core :: option :: Option < & crate :: ZKeyExpr >"
     );
     assert_eq!(plan.variants.len(), 2);
     assert!(plan.variants[0].ctor.is_some());
@@ -164,8 +170,8 @@ fn optional_byvalue_single_ctor() {
     assert_eq!(plan.leaves.len(), 1);
     // nullable leaf wrapping the ctor param
     assert_eq!(
-        plan.leaves[0].ty.spell().to_string(),
-        "Option < Vec < u8 > >"
+        plan.leaves[0].ty.emit_source().to_string(),
+        ":: core :: option :: Option < :: std :: vec :: Vec < u8 > >"
     );
 
     let locals = vec![ident("att")];
@@ -214,10 +220,13 @@ fn optional_byref_single_ctor() {
     assert!(matches!(plan.shape, FoldShape::Optional((), _)));
     assert!(plan.produces_option());
     assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
-    assert_eq!(plan.leaves[0].ty.spell().to_string(), "Option < String >");
     assert_eq!(
-        plan.target.spell().to_string(),
-        "ZEncoding",
+        plan.leaves[0].ty.emit_source().to_string(),
+        ":: core :: option :: Option < :: std :: string :: String >"
+    );
+    assert_eq!(
+        plan.target.emit_source().to_string(),
+        "crate :: ZEncoding",
         "target peeled through Option<&_>"
     );
 }
@@ -265,11 +274,14 @@ fn optional_byref_multi_arg_ctor() {
     // leaf 0 = present:bool, leaf 1 = id:i32, leaf 2 = schema:Option<String>
     assert_eq!(plan.leaves.len(), 3);
     assert_eq!(plan.leaves[0].name.to_string(), "encoding_present");
-    assert_eq!(plan.leaves[0].ty.spell().to_string(), "bool");
+    assert_eq!(plan.leaves[0].ty.emit_source().to_string(), "bool");
     assert_eq!(plan.leaves[1].name.to_string(), "encoding_id");
-    assert_eq!(plan.leaves[1].ty.spell().to_string(), "i32");
+    assert_eq!(plan.leaves[1].ty.emit_source().to_string(), "i32");
     assert_eq!(plan.leaves[2].name.to_string(), "encoding_schema");
-    assert_eq!(plan.leaves[2].ty.spell().to_string(), "Option < String >");
+    assert_eq!(
+        plan.leaves[2].ty.emit_source().to_string(),
+        ":: core :: option :: Option < :: std :: string :: String >"
+    );
 
     let locals = vec![ident("pres"), ident("id"), ident("schema")];
     let s = emit_fold(plan, &locals, &src_qualify)
@@ -340,16 +352,19 @@ fn optional_combined_selector_encodes_absence() {
     // (passthrough), identity:Option<&ZEncoding>.
     assert_eq!(plan.leaves.len(), 4);
     assert_eq!(plan.leaves[0].name.to_string(), "encoding_sel");
-    assert_eq!(plan.leaves[0].ty.spell().to_string(), "i32");
-    assert_eq!(plan.leaves[1].ty.spell().to_string(), "Option < i32 >");
+    assert_eq!(plan.leaves[0].ty.emit_source().to_string(), "i32");
     assert_eq!(
-        plan.leaves[2].ty.spell().to_string(),
-        "Option < String >",
+        plan.leaves[1].ty.emit_source().to_string(),
+        ":: core :: option :: Option < i32 >"
+    );
+    assert_eq!(
+        plan.leaves[2].ty.emit_source().to_string(),
+        ":: core :: option :: Option < :: std :: string :: String >",
         "already-Option ctor arg is NOT double-wrapped"
     );
     assert_eq!(
-        plan.leaves[3].ty.spell().to_string(),
-        "Option < & ZEncoding >"
+        plan.leaves[3].ty.emit_source().to_string(),
+        ":: core :: option :: Option < & crate :: ZEncoding >"
     );
     assert!(
         matches!(plan.variants[0].inputs[1], FoldArg::Leaf(2, true)),
@@ -589,7 +604,7 @@ fn recursive_input_nests_param_constructors() {
     let leaf_tys: Vec<String> = plan
         .leaves
         .iter()
-        .map(|l| l.ty.spell().to_string())
+        .map(|l| l.ty.emit_source().to_string())
         .collect();
     assert!(
         leaf_tys.iter().any(|t| t.contains("i32")),

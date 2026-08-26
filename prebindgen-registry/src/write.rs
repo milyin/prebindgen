@@ -114,7 +114,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     // Every callback below is handed a borrow; nothing else in the pipeline is.
     // See `prebindgen_flat::flat::emit` for what that buys and what it
     // deliberately does not.
-    let emit = crate::Emit::new();
+    let emit = crate::Emit::new(registry, ext.source_module());
     let mut items: Vec<syn::Item> = Vec::new();
 
     // 0. Adapter prerequisites — runtime-support items (helper structs,
@@ -219,12 +219,6 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     //    the const gate above cannot apply to them.
     for guard in flat.guards() {
         items.push(syn::Item::Const(emit.guard(guard)));
-    }
-
-    // 4. Cross-cutting post-process pass. Adapters use this to qualify
-    //    bare type references etc. — see Prebindgen::post_process_item.
-    for item in &mut items {
-        ext.post_process_item(item, registry, &emit);
     }
 
     validate_converter_calls(&mut items, &converter_names)?;

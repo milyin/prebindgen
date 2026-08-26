@@ -282,7 +282,7 @@ pub(crate) fn build_vec_build_helper_items(
     for h in collect_vec_build_helpers(ext) {
         // Generated Rust spells `spell()`; the reading is what the plan
         // and the key are taken from.
-        let elem = emit.spell(&h.elem);
+        let elem = emit.emit_source_type(&h.elem);
         let new_sym = vec_helper_symbol(ext, &h.base, "New");
         let push_sym = vec_helper_symbol(ext, &h.base, "Push");
         let free_sym = vec_helper_symbol(ext, &h.base, "Free");

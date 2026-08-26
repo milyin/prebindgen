@@ -1,6 +1,6 @@
-//! The registry-owned key for captured Rust syntax.
+//! The registry-owned key for final, model-driven Rust generation.
 
-use std::ops::Deref;
+use std::collections::HashMap;
 
 /// The capability handed to Rust-emission callbacks.
 ///
@@ -24,12 +24,48 @@ use std::ops::Deref;
 /// ```compile_fail
 /// use prebindgen_registry::flat::emit::RustEmitter;
 /// ```
+///
+/// An adapter receives only generate-only operations, not retained spelling:
+///
+/// ```compile_fail
+/// # use prebindgen_registry::{Emit, flat::TypeRef};
+/// use prebindgen_flat::RustEmitter;
+/// # fn leak(emit: &Emit, ty: &TypeRef) {
+/// let _ = emit.spell(ty);
+/// # }
+/// ```
 #[derive(Debug)]
-pub struct Emit(());
+pub struct Emit {
+    flat: FlatEmitKey,
+    source_modules: HashMap<String, syn::Path>,
+    default_module: syn::Path,
+}
+
+#[derive(Debug)]
+struct FlatEmitKey;
+
+impl prebindgen_flat::RustEmitter for FlatEmitKey {}
 
 impl Emit {
-    pub(crate) fn new() -> Self {
-        Self(())
+    pub(crate) fn new(registry: &crate::Registry, source_module: Option<&syn::Path>) -> Self {
+        let default_module = source_module
+            .cloned()
+            .or_else(|| registry.default_module())
+            .unwrap_or_else(|| syn::parse_quote!(crate));
+        let source_modules = registry
+            .named_item_idents()
+            .map(|ident| {
+                let module = registry
+                    .origin_module(ident)
+                    .unwrap_or_else(|| default_module.clone());
+                (ident.to_string(), module)
+            })
+            .collect();
+        Self {
+            flat: FlatEmitKey,
+            source_modules,
+            default_module,
+        }
     }
 
     /// Construct an emission key for an out-of-crate adapter test.
@@ -38,7 +74,91 @@ impl Emit {
     /// only in an emission callback.
     #[cfg(any(test, feature = "testing"))]
     pub fn for_test() -> Self {
-        Self::new()
+        Self {
+            flat: FlatEmitKey,
+            source_modules: HashMap::new(),
+            default_module: syn::parse_quote!(crate),
+        }
+    }
+
+    /// Construct the production emission capability for a test that renders a
+    /// frozen plan directly instead of going through `write_rust`.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn for_registry_test(registry: &crate::Registry) -> Self {
+        Self::new(registry, None)
+    }
+
+    /// Emit one source-type fragment from Flat model facts.
+    ///
+    /// Qualification is driven by Flat nominal/extent facts and the registry's
+    /// declaration-module map. No token text is inspected to decide what the
+    /// type means.
+    pub fn emit_source_type(
+        &self,
+        ty: &prebindgen_flat::flat::TypeRef,
+    ) -> proc_macro2::TokenStream {
+        prebindgen_flat::RustEmitter::emit_source_type(
+            &self.flat,
+            ty,
+            &self.source_modules,
+            &self.default_module,
+        )
+    }
+
+    /// Generate a public const alias to the source declaration.
+    pub fn const_alias(
+        &self,
+        item: &prebindgen_flat::flat::Constant,
+        source_module: &syn::Path,
+    ) -> syn::ItemConst {
+        let ident = &item.name;
+        let ty = self.emit_source_type(&item.ty);
+        let docs: Vec<syn::Attribute> = item
+            .docs()
+            .into_iter()
+            .flat_map(|docs| {
+                docs.lines()
+                    .map(|line| {
+                        let doc = format!(" {line}");
+                        syn::parse_quote!(#[doc = #doc])
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        syn::parse_quote!(#(#docs)* pub const #ident: #ty = #source_module::#ident;)
+    }
+
+    /// Copy the proc-macro's anonymous feature guard into the final file.
+    pub(crate) fn guard(&self, guard: &prebindgen_flat::flat::Guard) -> syn::ItemConst {
+        prebindgen_flat::RustEmitter::guard(&self.flat, guard)
+    }
+
+    /// Emit a fieldless enum's modeled discriminant spelling.
+    pub fn discriminant(
+        &self,
+        value: &prebindgen_flat::flat::EnumValue,
+    ) -> Option<proc_macro2::TokenStream> {
+        prebindgen_flat::RustEmitter::discriminant(&self.flat, value)
+    }
+
+    /// Generate a struct constructor or pattern with its modeled delimiter shape.
+    pub fn shape_struct(
+        &self,
+        item: &prebindgen_flat::flat::Struct,
+        head: proc_macro2::TokenStream,
+        parts: &[proc_macro2::TokenStream],
+    ) -> proc_macro2::TokenStream {
+        prebindgen_flat::RustEmitter::shape_struct(&self.flat, item, head, parts)
+    }
+
+    /// Generate an enum-alternative constructor or pattern with its modeled shape.
+    pub fn shape_alternative(
+        &self,
+        item: &prebindgen_flat::flat::Alternative,
+        head: proc_macro2::TokenStream,
+        parts: &[proc_macro2::TokenStream],
+    ) -> proc_macro2::TokenStream {
+        prebindgen_flat::RustEmitter::shape_alternative(&self.flat, item, head, parts)
     }
 
     /// Allocate the final private Rust symbol for a registry-owned operation.
@@ -98,18 +218,6 @@ fn ident_component(label: &str) -> String {
         "operation".to_owned()
     } else {
         out
-    }
-}
-
-impl prebindgen_flat::RustEmitter for Emit {}
-
-// Dereferencing to the protocol object keeps call sites ergonomic
-// (`emit.spell(ty)`) without copying its method surface into this crate.
-impl Deref for Emit {
-    type Target = dyn prebindgen_flat::RustEmitter;
-
-    fn deref(&self) -> &Self::Target {
-        self
     }
 }
 

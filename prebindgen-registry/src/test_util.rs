@@ -119,15 +119,15 @@ pub(crate) fn unique_test_dir(prefix: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{prefix}_{}_{}", std::process::id(), seq))
 }
 
-/// Test-only adapter preserving the concise spelling assertions while routing
-/// them through the same registry-owned key as production callbacks.
-pub(crate) trait SpellForTest {
-    fn spell(&self) -> proc_macro2::TokenStream;
+/// Test-only adapter exposing the same model-generated source tokens as a
+/// production emission callback.
+pub(crate) trait EmitSourceForTest {
+    fn emit_source(&self) -> proc_macro2::TokenStream;
 }
 
-impl SpellForTest for prebindgen_flat::flat::TypeRef {
-    fn spell(&self) -> proc_macro2::TokenStream {
-        crate::Emit::for_test().spell(self)
+impl EmitSourceForTest for prebindgen_flat::flat::TypeRef {
+    fn emit_source(&self) -> proc_macro2::TokenStream {
+        crate::Emit::for_test().emit_source_type(self)
     }
 }
 

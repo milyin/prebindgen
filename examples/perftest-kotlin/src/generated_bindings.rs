@@ -796,7 +796,7 @@ pub(crate) unsafe fn __jni_out_convert_unit_to_wire_9e1510fd173c1fd6<'a>(
 pub(crate) unsafe fn __jni_in_convert_wire_to_Box_String_7bf3c88ef26eb8e6<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
-) -> ::core::result::Result<Box<String>, __JniErr> {
+) -> ::core::result::Result<::std::boxed::Box<::std::string::String>, __JniErr> {
     Ok({
         let s = env
             .get_string(v)
@@ -823,7 +823,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_String_7bf3c88ef26eb8e6<'env, 
 )]
 pub(crate) unsafe fn __jni_out_convert_Box_String_to_wire_445d29257759cad9<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: Box<String>,
+    v: ::std::boxed::Box<::std::string::String>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
         env.new_string(&*v)
@@ -2762,7 +2762,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Box_String_jni_optional_int
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
-) -> ::core::result::Result<Option<Box<String>>, __JniErr> {
+) -> ::core::result::Result<
+    ::core::option::Option<::std::boxed::Box<::std::string::String>>,
+    __JniErr,
+> {
     ::core::result::Result::Ok({
         if v.is_null() {
             ::core::option::Option::None
@@ -2791,7 +2794,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Box_String_jni_optional_intermedia
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<Box<String>>,
+    v: ::core::option::Option<::std::boxed::Box<::std::string::String>>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -2819,7 +2822,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Payload_jni_optional_intermediate_
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Payload>,
+    v: ::core::option::Option<perftest_flat::Payload>,
 ) -> ::core::result::Result<
     (
         jni::sys::jboolean,

@@ -511,7 +511,6 @@ pub(crate) fn callback_input(
         arguments: args.to_vec(),
         source_policy: crate::jni::chain::JSource {
             wrappers: Vec::new(),
-            module: None,
         },
         bridge: JInvokeBridge {
             name: name_lit,

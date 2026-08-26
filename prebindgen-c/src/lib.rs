@@ -259,7 +259,7 @@ enum ErrRoute<'a> {
     /// `::core::ptr::null_mut()` for a pointer-returning wrapper).
     Result {
         e_conv: &'a syn::Ident,
-        e_ty_src: syn::Type,
+        e_ty_src: TokenStream,
         fail_return: TokenStream,
     },
     /// Non-`Result` function declared `.panic()`: abort via `panic!`.
@@ -572,17 +572,6 @@ pub fn snake_case(s: &str) -> String {
     prebindgen_registry::types_util::pascal_to_snake(s)
 }
 
-/// A reading spelled back as a `syn::Type`.
-///
-/// The source's **own tokens**, re-parsed — not [`TypeKind::to_syn`], which
-/// exists to check the lowering rather than to generate with. Every wire this
-/// back-end builds from a field's own type goes through here, so what C sees
-/// is what the source wrote.
-fn spelled(t: &TypeRef, emit: &prebindgen_registry::Emit) -> syn::Type {
-    let toks = emit.spell(t);
-    syn::parse_quote!(#toks)
-}
-
 /// `String`, off the classification.
 fn r_is_string(t: &TypeRef) -> bool {
     matches!(t.kind(), TypeKind::String)
@@ -641,36 +630,6 @@ fn r_boxed_inner(t: &TypeRef) -> Option<&TypeRef> {
         TypeKind::Boxed(inner) => Some(inner),
         _ => None,
     }
-}
-
-fn is_string(ty: &syn::Type) -> bool {
-    type_path_tail(ty).map(|i| i == "String").unwrap_or(false)
-}
-
-/// The full path for a bare name the **language** pre-declares, or `None` for a
-/// name only the source crate can be declaring.
-///
-/// Ingest reduces a captured type's spelling to the bare name the language
-/// knows the constructor by (`std::option::Option<T>` and `Option<T>` are one
-/// type), so by the time an emitter spells a type, a prelude constructor and a
-/// source-crate item look alike: both are one segment. Qualifying either
-/// against the source module produces a path that does not exist — see
-/// [`Cbindgen::src_ty`], which is the only caller.
-///
-/// The paths are spelled in full rather than left bare because the generated
-/// file is `include!`d into a consumer crate, and `MaybeUninit` is not in
-/// Rust's prelude.
-fn prelude_path(ident: &syn::Ident) -> Option<&'static str> {
-    Some(match ident.to_string().as_str() {
-        "Option" => "::core::option::Option",
-        "Result" => "::core::result::Result",
-        "Vec" => "::std::vec::Vec",
-        "Box" => "::std::boxed::Box",
-        "String" => "::std::string::String",
-        "Cow" => "::std::borrow::Cow",
-        "MaybeUninit" => "::core::mem::MaybeUninit",
-        _ => return None,
-    })
 }
 
 /// The C wire for a `bool` in any position C can write: `MaybeUninit<bool>`.
