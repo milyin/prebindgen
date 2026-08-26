@@ -14,56 +14,27 @@ use crate::{
     Emit,
 };
 
-/// Semantic target of one generated converter call.
-#[derive(Clone)]
-pub enum CallTarget {
-    /// Adapter-authored name retained by a compatibility plan.
-    Named(syn::Ident),
-    /// Registry-owned operation whose Rust name is chosen only at rendering.
-    Operation(OperationId),
-}
-
 /// The callable contract of one generated converter.
 #[derive(Clone)]
 pub struct Call {
-    target: CallTarget,
+    operation: OperationId,
     fallible: bool,
     unsafe_: bool,
 }
 
 impl Call {
-    /// Record a callable contract without retaining its rendered signature.
-    pub fn new(ident: syn::Ident, fallible: bool, unsafe_: bool) -> Self {
-        Self {
-            target: CallTarget::Named(ident),
-            fallible,
-            unsafe_,
-        }
-    }
-
     /// Record a registry-owned operation without choosing a Rust name.
     pub fn operation(operation: OperationId, fallible: bool, unsafe_: bool) -> Self {
         Self {
-            target: CallTarget::Operation(operation),
+            operation,
             fallible,
             unsafe_,
         }
     }
 
-    /// Generated function identifier.
-    pub fn ident(&self) -> Option<&syn::Ident> {
-        match &self.target {
-            CallTarget::Named(ident) => Some(ident),
-            CallTarget::Operation(_) => None,
-        }
-    }
-
-    /// Registry operation targeted by this call, if it is late-named.
-    pub fn operation_id(&self) -> Option<&OperationId> {
-        match &self.target {
-            CallTarget::Named(_) => None,
-            CallTarget::Operation(operation) => Some(operation),
-        }
+    /// Registry operation targeted by this call.
+    pub fn operation_id(&self) -> &OperationId {
+        &self.operation
     }
 
     /// Whether invoking the converter produces a `Result`.
@@ -115,19 +86,6 @@ pub trait Child: Clone {
 
     /// Invoke this child chain for one intermediate/source value.
     fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream;
-}
-
-impl Child for Call {
-    fn call(&self) -> &Call {
-        self
-    }
-
-    fn invoke(&self, value: TokenStream, _emit: &Emit) -> TokenStream {
-        let ident = self
-            .ident()
-            .expect("a registry operation needs an adapter renderer");
-        quote::quote!(#ident(#value))
-    }
 }
 
 fn child_value<C: Child>(child: &C, value: TokenStream, emit: &Emit) -> TokenStream {
@@ -921,7 +879,10 @@ mod tests {
     use quote::{quote, ToTokens};
 
     use super::*;
-    use crate::flat::{Alternative, Field, Origin, ScalarKind};
+    use crate::{
+        flat::{Alternative, Field, Origin, ScalarKind},
+        ArtifactId,
+    };
 
     fn alternative(syntax: syn::Variant, index: usize) -> Alternative {
         let location: Rc<prebindgen::SourceLocation> = Rc::new(Default::default());
@@ -953,6 +914,30 @@ mod tests {
         fn spell(&self, source: &TypeRef, emit: &Emit) -> syn::Type {
             self.spells.set(self.spells.get() + 1);
             emit.spell_ty(source)
+        }
+    }
+
+    #[derive(Clone)]
+    struct TestChild(Call);
+
+    impl TestChild {
+        fn new(name: &str, fallible: bool, unsafe_: bool) -> Self {
+            let operation = OperationId::shared(
+                ArtifactId::new("test-child", name).expect("test child identity"),
+                Direction::Construct,
+            );
+            Self(Call::operation(operation, fallible, unsafe_))
+        }
+    }
+
+    impl Child for TestChild {
+        fn call(&self) -> &Call {
+            &self.0
+        }
+
+        fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream {
+            let ident = emit.operation_ident("test", self.0.operation_id());
+            quote!(#ident(#value))
         }
     }
 
@@ -991,7 +976,7 @@ mod tests {
                 spells: spells.clone(),
             },
             bridge: TestOptional,
-            child: Call::new(syn::parse_quote!(decode), true, false),
+            child: TestChild::new("decode", true, false),
         };
 
         assert_eq!(spells.get(), 0, "planning must not spell the TypeRef");
@@ -1004,7 +989,7 @@ mod tests {
         let body = rendered.body.to_token_stream().to_string();
         assert!(body.contains("Option :: None"), "{body}");
         assert!(
-            body.contains("Option :: Some (decode (__present) ?)"),
+            body.contains("test_child_decode") && body.contains("(__present) ?"),
             "{body}"
         );
         assert!(rendered.fallible);
@@ -1059,11 +1044,7 @@ mod tests {
                     spells: spells.clone(),
                 },
                 bridge: TestSequence,
-                child: Call::new(
-                    syn::Ident::new(child_name, proc_macro2::Span::call_site()),
-                    true,
-                    false,
-                ),
+                child: TestChild::new(child_name, true, false),
             };
 
             assert_eq!(spells.get(), 0);
@@ -1076,11 +1057,18 @@ mod tests {
                         body.contains("while let :: core :: option :: Option :: Some"),
                         "{body}"
                     );
-                    assert!(body.contains("decode (__sequence_part) ?"), "{body}");
+                    assert!(
+                        body.contains("test_child_decode") && body.contains("(__sequence_part) ?"),
+                        "{body}"
+                    );
                 }
                 Direction::Deconstruct => {
                     assert!(body.contains("for __sequence_element in"), "{body}");
-                    assert!(body.contains("encode (__sequence_element) ?"), "{body}");
+                    assert!(
+                        body.contains("test_child_encode")
+                            && body.contains("(__sequence_element) ?"),
+                        "{body}"
+                    );
                 }
             }
             assert!(rendered.fallible);
@@ -1089,15 +1077,12 @@ mod tests {
     fn choice_plan(
         direction: Direction,
         spells: Rc<Cell<usize>>,
-    ) -> Choice<TestSource, TupleChoice, TupleProduct, Call> {
-        let child = Call::new(
-            syn::Ident::new(
-                match direction {
-                    Direction::Construct => "decode",
-                    Direction::Deconstruct => "encode",
-                },
-                proc_macro2::Span::call_site(),
-            ),
+    ) -> Choice<TestSource, TupleChoice, TupleProduct, TestChild> {
+        let child = TestChild::new(
+            match direction {
+                Direction::Construct => "decode",
+                Direction::Deconstruct => "encode",
+            },
             true,
             false,
         );
@@ -1149,7 +1134,11 @@ mod tests {
                 Direction::Construct => {
                     assert!(body.contains("let __tag = (v) . 0"), "{body}");
                     assert!(body.contains("match __tag"), "{body}");
-                    assert!(body.contains("i64 :: B (decode ((__arm) . 0) ?)"), "{body}");
+                    assert!(
+                        body.contains("i64 :: B (__test_in_convert_wire_to_test_child_decode_")
+                            && body.contains("((__arm) . 0) ?)"),
+                        "{body}"
+                    );
                     assert!(
                         body.contains("return :: core :: result :: Result :: Err"),
                         "{body}"
@@ -1158,9 +1147,11 @@ mod tests {
                 Direction::Deconstruct => {
                     assert!(body.contains("match v"), "{body}");
                     assert!(body.contains("i64 :: B (__part0)"), "{body}");
-                    assert!(body.contains("encode (__part0) ?"), "{body}");
+                    assert!(body.contains("test_child_encode"), "{body}");
+                    assert!(body.contains("(__part0) ?"), "{body}");
                     assert!(
-                        body.contains("(1 , () , (encode (__part0) ? ,) ,)"),
+                        body.contains("(1 , () , (__test_in_convert_wire_to_test_child_encode_")
+                            && body.contains("(__part0) ? ,) ,)"),
                         "{body}"
                     );
                 }

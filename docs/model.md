@@ -221,12 +221,13 @@ need and in what order — inner ones first, so a recipe's parts are ready befor
 the recipe that names them — and asks the adapter for a **converter** for each,
 in that order.
 
-A converter is the Rust function that performs the crossing: a constructing one
-takes wire values and returns a Rust value, a deconstructing one takes a Rust
-value and produces wire values. The adapter builds each as a complete
-`syn::ItemFn` — which is why a converter is always exactly one function — and
-keeps it. There is one per recipe, so every site that picks that recipe calls
-the same one.
+A converter plan describes the operation that performs the crossing: a
+constructing one will take wire values and return a Rust value, while a
+deconstructing one will take a Rust value and produce wire values. The adapter
+keeps the syntax-free plan and its registry-owned `OperationId`; it does not
+choose a Rust function name or materialize the function body during this
+round. Sites call the same semantic operation when their conversion contracts
+are equal.
 
 What comes back to the registry is not the function. It is one fact about it:
 which other crossings that function's body calls into. A converter for
@@ -236,9 +237,9 @@ that calls no other names nothing. Those edges are what the registry asked for
 so which converters have to exist.
 
 **Then writing.** The generated code enters here. The adapter calls the writer,
-handing it three things: the resolved registry, itself, and the converters it
-has been holding since the first round. So the registry never carries the
-generated Rust at all — it goes straight from the adapter to the writer.
+handing it three things: the resolved registry, itself, and the converter plans
+it has been holding since the first round. The plans contain model and adapter
+facts, not generated source Rust syntax.
 
 The writer then goes over the declared items in name order and calls the
 adapter back once per kind — `on_function`, `on_struct`, `on_enum`, `on_const`
@@ -252,16 +253,15 @@ JniGen's constant hook returns two, a getter and an alias.
 1. the adapter's **prerequisites** — helper functions, type aliases, the
 `#[repr(C)]` structs a C header reads — emitted first so everything below can
 refer to them;
-2. the converter plans it was handed. Registry-owned operations are grouped by
+2. the converter plans it was handed. Operations are grouped by
 their semantic `OperationId` before rendering, with a reachable representative
 preferred when fragments retain separate reachability state. Both JniGen and
 Cbindgen converter plans expose that identity, and composed calls retain the
 same identity rather than a private Rust name. Only final rendering asks
 `Emit` to allocate the identifier used by both definition and calls. The name
 keeps model and adapter vocabulary as a readable semantic stem, with a stable
-hash only as its collision suffix. Generic compatibility functions that do not
-expose an operation identity are still rendered and deduplicated by their
-preselected name;
+hash only as its collision suffix. Every converter plan and child call must
+carry an operation identity; there is no preselected-name fallback;
 3. the per-item output, in the order above;
 4. the source crate's own feature guards, verbatim.
 

@@ -362,19 +362,6 @@ pub(crate) unsafe fn __c_in_convert_wire_to_impl_Fn_f64_Send_Sync_static_c_invok
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __c_in_convert_wire_to_Calculator_c_borrow_mutable_input_f30bfe45043bc69c<
-    'a,
->(
-    v: *mut calculator_t,
-) -> ::core::result::Result<&'a mut example_flat::Calculator, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null Calculator pointer"),
-        );
-    }
-    ::core::result::Result::Ok(&mut *(v as *mut example_flat::Calculator))
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_Calculator_c_borrow_shared_input_48be88e9df13aa53<
     'a,
 >(
@@ -388,6 +375,37 @@ pub(crate) unsafe fn __c_in_convert_wire_to_Calculator_c_borrow_shared_input_48b
     ::core::result::Result::Ok(&*(v as *const example_flat::Calculator))
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_Calculator_c_borrow_mutable_input_f30bfe45043bc69c<
+    'a,
+>(
+    v: *mut calculator_t,
+) -> ::core::result::Result<&'a mut example_flat::Calculator, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Calculator pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&mut *(v as *mut example_flat::Calculator))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_str_c_borrow_str_input_246c2b9955bb6ef2<'a>(
+    v: *const ::core::ffi::c_char,
+) -> ::core::result::Result<&'a str, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null pointer passed for str argument"),
+        );
+    }
+    match ::std::ffi::CStr::from_ptr(v).to_str() {
+        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s),
+        ::core::result::Result::Err(_) => {
+            ::core::result::Result::Err(
+                ::std::string::String::from("invalid UTF-8 in str argument"),
+            )
+        }
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_Calculator_c_terminal_input_owned_handle_b7bb400a642eb999(
     v: *mut calculator_t,
 ) -> ::core::result::Result<example_flat::Calculator, ::std::string::String> {
@@ -399,6 +417,34 @@ pub(crate) unsafe fn __c_in_convert_wire_to_Calculator_c_terminal_input_owned_ha
     ::core::result::Result::Ok(
         *::std::boxed::Box::from_raw(v as *mut example_flat::Calculator),
     )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Calculator_c_terminal_output_owned_handle_to_wire_4d20353780559007(
+    v: example_flat::Calculator,
+) -> *mut calculator_t {
+    ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut calculator_t
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_String_c_terminal_input_string_field_b6091e2e8553ccde(
+    v: *const ::core::ffi::c_char,
+) -> ::std::string::String {
+    if v.is_null() {
+        ::std::string::String::new()
+    } else {
+        ::std::ffi::CStr::from_ptr(v).to_string_lossy().into_owned()
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_bool_c_terminal_input_bool_e48e0629cd6287b3(
+    v: ::core::mem::MaybeUninit<bool>,
+) -> bool {
+    ::core::ptr::read(v.as_ptr() as *const u8) != 0
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_in_convert_wire_to_u64_c_terminal_input_scalar_4e87470ad83635c8(
+    v: u64,
+) -> u64 {
+    v
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_Caption_c_product_intermediate_repr_c_struct_a9076d1a0d6740b3(
@@ -415,6 +461,165 @@ pub(crate) unsafe fn __c_in_convert_wire_to_Caption_c_product_intermediate_repr_
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_String_c_terminal_output_string_to_wire_182528409f6ab8d3(
+    v: ::std::string::String,
+) -> *mut ::core::ffi::c_char {
+    __cbg_alloc_cstr(v)
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_bool_c_terminal_output_bool_field_to_wire_6a810eb4cb986700(
+    v: bool,
+) -> ::core::mem::MaybeUninit<bool> {
+    ::core::mem::MaybeUninit::new(v)
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(
+    v: u64,
+) -> u64 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Caption_c_product_intermediate_repr_c_struct_to_wire_3bc5d236333a6e28(
+    v: example_flat::Caption,
+) -> caption_t {
+    caption_t {
+        id: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(v.id),
+        text: __c_out_convert_String_c_terminal_output_string_to_wire_182528409f6ab8d3(
+            v.text,
+        ),
+        emphatic: __c_out_convert_bool_c_terminal_output_bool_field_to_wire_6a810eb4cb986700(
+            v.emphatic,
+        ),
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_Operation_c_terminal_input_enum_a23b6023635a8da5(
+    v: ::core::mem::MaybeUninit<operation_t>,
+) -> ::core::result::Result<example_flat::Operation, ::std::string::String> {
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < operation_t > () == ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`operation_t`: a #[repr(C)] enum must have the size of a C `int`"
+        );
+        assert!(
+            ::core::mem::align_of:: < operation_t > () == ::core::mem::align_of:: <
+            ::core::ffi::c_int > (),
+            "`operation_t`: a #[repr(C)] enum must have the alignment of a C `int`"
+        );
+    };
+    let __raw: ::core::ffi::c_int = ::core::ptr::read(
+        v.as_ptr() as *const ::core::ffi::c_int,
+    );
+    if __raw == operation_t::Add as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Add);
+    }
+    if __raw == operation_t::Sub as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Sub);
+    }
+    if __raw == operation_t::Mul as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Mul);
+    }
+    if __raw == operation_t::Div as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Div);
+    }
+    ::core::result::Result::Err(
+        ::std::format!("invalid discriminant {} for `operation_t`", __raw),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_in_convert_wire_to_f64_c_terminal_input_scalar_7d8a0a733495e599(
+    v: f64,
+) -> f64 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_Shape_c_choice_intermediate_repr_c_tagged_union_8ddb52c185c8b923(
+    v: ::core::mem::MaybeUninit<shape_t>,
+) -> ::core::result::Result<example_flat::Shape, ::std::string::String> {
+    ::core::result::Result::Ok({
+        let __tag = {
+            const _: () = {
+                assert!(
+                    ::core::mem::size_of:: < shape_t > () >= ::core::mem::size_of:: <
+                    ::core::ffi::c_int > (),
+                    "`shape_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+                );
+            };
+            unsafe { ::core::ptr::read((v).as_ptr() as *const ::core::ffi::c_int) }
+        };
+        match __tag {
+            0 => example_flat::Shape::Empty,
+            1 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        shape_t::Circle(__wire_part0) => (__wire_part0,),
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
+                example_flat::Shape::Circle(
+                    __c_in_convert_wire_to_f64_c_terminal_input_scalar_7d8a0a733495e599(
+                        (__arm).0,
+                    ),
+                )
+            }
+            2 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        shape_t::Rect { width: __wire_part0, height: __wire_part1 } => {
+                            (__wire_part0, __wire_part1)
+                        }
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
+                example_flat::Shape::Rect {
+                    width: __c_in_convert_wire_to_f64_c_terminal_input_scalar_7d8a0a733495e599(
+                        (__arm).0,
+                    ),
+                    height: __c_in_convert_wire_to_f64_c_terminal_input_scalar_7d8a0a733495e599(
+                        (__arm).1,
+                    ),
+                }
+            }
+            3 => {
+                let __choice = unsafe { (v).assume_init() };
+                let __arm = {
+                    match __choice {
+                        shape_t::Labeled(__wire_part0, __wire_part1) => {
+                            (__wire_part0, __wire_part1)
+                        }
+                        _ => {
+                            unreachable!("validated Choice tag selected a different arm")
+                        }
+                    }
+                };
+                example_flat::Shape::Labeled(
+                    __c_in_convert_wire_to_String_c_terminal_input_string_field_b6091e2e8553ccde(
+                        (__arm).0,
+                    ),
+                    __c_in_convert_wire_to_Operation_c_terminal_input_enum_a23b6023635a8da5(
+                        (__arm).1,
+                    )?,
+                )
+            }
+            _ => {
+                return ::core::result::Result::Err(
+                    ::std::format!(
+                        "invalid tag {} for `{}` (expected 0..{})", __tag,
+                        stringify!(shape_t), 4usize,
+                    ),
+                );
+            }
+        }
+    })
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_Drawing_c_product_intermediate_repr_c_struct_3b927b21caf2df63(
     v: drawing_t,
 ) -> ::core::result::Result<example_flat::Drawing, ::std::string::String> {
@@ -424,6 +629,85 @@ pub(crate) unsafe fn __c_in_convert_wire_to_Drawing_c_product_intermediate_repr_
             v.shape,
         )?,
     })
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Operation_c_terminal_output_enum_to_wire_457f6036394dc821(
+    v: example_flat::Operation,
+) -> operation_t {
+    match v {
+        example_flat::Operation::Add => operation_t::Add,
+        example_flat::Operation::Sub => operation_t::Sub,
+        example_flat::Operation::Mul => operation_t::Mul,
+        example_flat::Operation::Div => operation_t::Div,
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
+    v: f64,
+) -> f64 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Shape_c_choice_intermediate_repr_c_tagged_union_to_wire_1c9175b2e9cd70a6(
+    v: example_flat::Shape,
+) -> ::core::mem::MaybeUninit<shape_t> {
+    ::core::mem::MaybeUninit::new({
+        match v {
+            example_flat::Shape::Empty => shape_t::Empty,
+            example_flat::Shape::Circle(__part0) => {
+                let __built_arm = (
+                    __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
+                        __part0,
+                    ),
+                );
+                shape_t::Circle(__built_arm.0)
+            }
+            example_flat::Shape::Rect { width: __part0, height: __part1 } => {
+                let __built_arm = (
+                    __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
+                        __part0,
+                    ),
+                    __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
+                        __part1,
+                    ),
+                );
+                shape_t::Rect {
+                    width: __built_arm.0,
+                    height: __built_arm.1,
+                }
+            }
+            example_flat::Shape::Labeled(__part0, __part1) => {
+                let __built_arm = (
+                    __c_out_convert_String_c_terminal_output_string_to_wire_182528409f6ab8d3(
+                        __part0,
+                    ),
+                    ::core::mem::MaybeUninit::new(
+                        __c_out_convert_Operation_c_terminal_output_enum_to_wire_457f6036394dc821(
+                            __part1,
+                        ),
+                    ),
+                );
+                shape_t::Labeled(__built_arm.0, __built_arm.1)
+            }
+        }
+    })
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Drawing_c_product_intermediate_repr_c_struct_to_wire_50eac9aa069a6838(
+    v: example_flat::Drawing,
+) -> drawing_t {
+    drawing_t {
+        id: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(v.id),
+        shape: __c_out_convert_Shape_c_choice_intermediate_repr_c_tagged_union_to_wire_1c9175b2e9cd70a6(
+            v.shape,
+        ),
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Error_c_terminal_output_opaque_error_to_wire_9d010015abcb2259(
+    v: example_flat::Error,
+) -> *mut ::core::ffi::c_char {
+    __cbg_alloc_cstr(example_flat::error_get_message(&v))
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_Foo_c_product_intermediate_repr_c_struct_157d1b61f2a5b9d5(
@@ -437,6 +721,29 @@ pub(crate) unsafe fn __c_in_convert_wire_to_Foo_c_product_intermediate_repr_c_st
         unstable_field: __c_in_convert_wire_to_u64_c_terminal_input_scalar_4e87470ad83635c8(
             v.unstable_field,
         ),
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Foo_c_product_intermediate_repr_c_struct_to_wire_02ab0b068798553e(
+    v: example_flat::Foo,
+) -> foo_t {
+    foo_t {
+        id: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(v.id),
+        x86_64_field: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(
+            v.x86_64_field,
+        ),
+        unstable_field: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(
+            v.unstable_field,
+        ),
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Grade_c_terminal_output_enum_to_wire_a59c7b101e0a9e37(
+    v: example_flat::Grade,
+) -> grade_t {
+    match v {
+        example_flat::Grade::Low => grade_t::Low,
+        example_flat::Grade::High => grade_t::High,
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -469,10 +776,25 @@ pub(crate) unsafe fn __c_in_convert_wire_to_InsideFoo_c_terminal_input_enum_70ed
     )
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_InsideFoo_c_terminal_output_enum_to_wire_b103ad5e4be33376(
+    v: example_flat::InsideFoo,
+) -> inside_foo_t {
+    match v {
+        example_flat::InsideFoo::DouddleDee => inside_foo_t::DouddleDee,
+        example_flat::InsideFoo::DouddleDum => inside_foo_t::DouddleDum,
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __c_in_convert_wire_to_Millis_c_terminal_custom_771f8034eae1c639(
     v: u64,
 ) -> example_flat::Millis {
     example_flat::millis_from_raw(v)
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Millis_c_terminal_custom_to_wire_0c2f6b5f81dfcd94(
+    v: example_flat::Millis,
+) -> u64 {
+    example_flat::millis_to_raw(&v)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_Note_c_choice_intermediate_repr_c_tagged_union_4de1f2981255d608(
@@ -567,248 +889,6 @@ pub(crate) unsafe fn __c_in_convert_wire_to_Note_c_choice_intermediate_repr_c_ta
     })
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __c_in_convert_wire_to_Operation_c_terminal_input_enum_a23b6023635a8da5(
-    v: ::core::mem::MaybeUninit<operation_t>,
-) -> ::core::result::Result<example_flat::Operation, ::std::string::String> {
-    const _: () = {
-        assert!(
-            ::core::mem::size_of:: < operation_t > () == ::core::mem::size_of:: <
-            ::core::ffi::c_int > (),
-            "`operation_t`: a #[repr(C)] enum must have the size of a C `int`"
-        );
-        assert!(
-            ::core::mem::align_of:: < operation_t > () == ::core::mem::align_of:: <
-            ::core::ffi::c_int > (),
-            "`operation_t`: a #[repr(C)] enum must have the alignment of a C `int`"
-        );
-    };
-    let __raw: ::core::ffi::c_int = ::core::ptr::read(
-        v.as_ptr() as *const ::core::ffi::c_int,
-    );
-    if __raw == operation_t::Add as ::core::ffi::c_int {
-        return ::core::result::Result::Ok(example_flat::Operation::Add);
-    }
-    if __raw == operation_t::Sub as ::core::ffi::c_int {
-        return ::core::result::Result::Ok(example_flat::Operation::Sub);
-    }
-    if __raw == operation_t::Mul as ::core::ffi::c_int {
-        return ::core::result::Result::Ok(example_flat::Operation::Mul);
-    }
-    if __raw == operation_t::Div as ::core::ffi::c_int {
-        return ::core::result::Result::Ok(example_flat::Operation::Div);
-    }
-    ::core::result::Result::Err(
-        ::std::format!("invalid discriminant {} for `operation_t`", __raw),
-    )
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __c_in_convert_wire_to_Shape_c_choice_intermediate_repr_c_tagged_union_8ddb52c185c8b923(
-    v: ::core::mem::MaybeUninit<shape_t>,
-) -> ::core::result::Result<example_flat::Shape, ::std::string::String> {
-    ::core::result::Result::Ok({
-        let __tag = {
-            const _: () = {
-                assert!(
-                    ::core::mem::size_of:: < shape_t > () >= ::core::mem::size_of:: <
-                    ::core::ffi::c_int > (),
-                    "`shape_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
-                );
-            };
-            unsafe { ::core::ptr::read((v).as_ptr() as *const ::core::ffi::c_int) }
-        };
-        match __tag {
-            0 => example_flat::Shape::Empty,
-            1 => {
-                let __choice = unsafe { (v).assume_init() };
-                let __arm = {
-                    match __choice {
-                        shape_t::Circle(__wire_part0) => (__wire_part0,),
-                        _ => {
-                            unreachable!("validated Choice tag selected a different arm")
-                        }
-                    }
-                };
-                example_flat::Shape::Circle(
-                    __c_in_convert_wire_to_f64_c_terminal_input_scalar_7d8a0a733495e599(
-                        (__arm).0,
-                    ),
-                )
-            }
-            2 => {
-                let __choice = unsafe { (v).assume_init() };
-                let __arm = {
-                    match __choice {
-                        shape_t::Rect { width: __wire_part0, height: __wire_part1 } => {
-                            (__wire_part0, __wire_part1)
-                        }
-                        _ => {
-                            unreachable!("validated Choice tag selected a different arm")
-                        }
-                    }
-                };
-                example_flat::Shape::Rect {
-                    width: __c_in_convert_wire_to_f64_c_terminal_input_scalar_7d8a0a733495e599(
-                        (__arm).0,
-                    ),
-                    height: __c_in_convert_wire_to_f64_c_terminal_input_scalar_7d8a0a733495e599(
-                        (__arm).1,
-                    ),
-                }
-            }
-            3 => {
-                let __choice = unsafe { (v).assume_init() };
-                let __arm = {
-                    match __choice {
-                        shape_t::Labeled(__wire_part0, __wire_part1) => {
-                            (__wire_part0, __wire_part1)
-                        }
-                        _ => {
-                            unreachable!("validated Choice tag selected a different arm")
-                        }
-                    }
-                };
-                example_flat::Shape::Labeled(
-                    __c_in_convert_wire_to_String_c_terminal_input_string_field_b6091e2e8553ccde(
-                        (__arm).0,
-                    ),
-                    __c_in_convert_wire_to_Operation_c_terminal_input_enum_a23b6023635a8da5(
-                        (__arm).1,
-                    )?,
-                )
-            }
-            _ => {
-                return ::core::result::Result::Err(
-                    ::std::format!(
-                        "invalid tag {} for `{}` (expected 0..{})", __tag,
-                        stringify!(shape_t), 4usize,
-                    ),
-                );
-            }
-        }
-    })
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __c_in_convert_wire_to_String_c_terminal_input_string_field_b6091e2e8553ccde(
-    v: *const ::core::ffi::c_char,
-) -> ::std::string::String {
-    if v.is_null() {
-        ::std::string::String::new()
-    } else {
-        ::std::ffi::CStr::from_ptr(v).to_string_lossy().into_owned()
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __c_in_convert_wire_to_bool_c_terminal_input_bool_e48e0629cd6287b3(
-    v: ::core::mem::MaybeUninit<bool>,
-) -> bool {
-    ::core::ptr::read(v.as_ptr() as *const u8) != 0
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_in_convert_wire_to_f64_c_terminal_input_scalar_7d8a0a733495e599(
-    v: f64,
-) -> f64 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __c_in_convert_wire_to_str_c_borrow_str_input_246c2b9955bb6ef2<'a>(
-    v: *const ::core::ffi::c_char,
-) -> ::core::result::Result<&'a str, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null pointer passed for str argument"),
-        );
-    }
-    match ::std::ffi::CStr::from_ptr(v).to_str() {
-        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s),
-        ::core::result::Result::Err(_) => {
-            ::core::result::Result::Err(
-                ::std::string::String::from("invalid UTF-8 in str argument"),
-            )
-        }
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_in_convert_wire_to_u64_c_terminal_input_scalar_4e87470ad83635c8(
-    v: u64,
-) -> u64 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Calculator_c_terminal_output_owned_handle_to_wire_4d20353780559007(
-    v: example_flat::Calculator,
-) -> *mut calculator_t {
-    ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut calculator_t
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Caption_c_product_intermediate_repr_c_struct_to_wire_3bc5d236333a6e28(
-    v: example_flat::Caption,
-) -> caption_t {
-    caption_t {
-        id: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(v.id),
-        text: __c_out_convert_String_c_terminal_output_string_to_wire_182528409f6ab8d3(
-            v.text,
-        ),
-        emphatic: __c_out_convert_bool_c_terminal_output_bool_field_to_wire_6a810eb4cb986700(
-            v.emphatic,
-        ),
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Drawing_c_product_intermediate_repr_c_struct_to_wire_50eac9aa069a6838(
-    v: example_flat::Drawing,
-) -> drawing_t {
-    drawing_t {
-        id: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(v.id),
-        shape: __c_out_convert_Shape_c_choice_intermediate_repr_c_tagged_union_to_wire_1c9175b2e9cd70a6(
-            v.shape,
-        ),
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Error_c_terminal_output_opaque_error_to_wire_9d010015abcb2259(
-    v: example_flat::Error,
-) -> *mut ::core::ffi::c_char {
-    __cbg_alloc_cstr(example_flat::error_get_message(&v))
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Foo_c_product_intermediate_repr_c_struct_to_wire_02ab0b068798553e(
-    v: example_flat::Foo,
-) -> foo_t {
-    foo_t {
-        id: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(v.id),
-        x86_64_field: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(
-            v.x86_64_field,
-        ),
-        unstable_field: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(
-            v.unstable_field,
-        ),
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Grade_c_terminal_output_enum_to_wire_a59c7b101e0a9e37(
-    v: example_flat::Grade,
-) -> grade_t {
-    match v {
-        example_flat::Grade::Low => grade_t::Low,
-        example_flat::Grade::High => grade_t::High,
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_InsideFoo_c_terminal_output_enum_to_wire_b103ad5e4be33376(
-    v: example_flat::InsideFoo,
-) -> inside_foo_t {
-    match v {
-        example_flat::InsideFoo::DouddleDee => inside_foo_t::DouddleDee,
-        example_flat::InsideFoo::DouddleDum => inside_foo_t::DouddleDum,
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Millis_c_terminal_custom_to_wire_0c2f6b5f81dfcd94(
-    v: example_flat::Millis,
-) -> u64 {
-    example_flat::millis_to_raw(&v)
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __c_out_convert_Note_c_choice_intermediate_repr_c_tagged_union_to_wire_c9cea85d5266d21b(
     v: example_flat::Note,
 ) -> ::core::mem::MaybeUninit<note_t> {
@@ -850,96 +930,10 @@ pub(crate) fn __c_out_convert_Note_c_choice_intermediate_repr_c_tagged_union_to_
         }
     })
 }
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Operation_c_terminal_output_enum_to_wire_457f6036394dc821(
-    v: example_flat::Operation,
-) -> operation_t {
-    match v {
-        example_flat::Operation::Add => operation_t::Add,
-        example_flat::Operation::Sub => operation_t::Sub,
-        example_flat::Operation::Mul => operation_t::Mul,
-        example_flat::Operation::Div => operation_t::Div,
-    }
-}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __c_out_convert_Option_Grade_c_marker_optional_to_wire_e2c04af90b0abd17() {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __c_out_convert_Option_f64_c_marker_optional_to_wire_c1ba5adc99623ff4() {}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Shape_c_choice_intermediate_repr_c_tagged_union_to_wire_1c9175b2e9cd70a6(
-    v: example_flat::Shape,
-) -> ::core::mem::MaybeUninit<shape_t> {
-    ::core::mem::MaybeUninit::new({
-        match v {
-            example_flat::Shape::Empty => shape_t::Empty,
-            example_flat::Shape::Circle(__part0) => {
-                let __built_arm = (
-                    __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
-                        __part0,
-                    ),
-                );
-                shape_t::Circle(__built_arm.0)
-            }
-            example_flat::Shape::Rect { width: __part0, height: __part1 } => {
-                let __built_arm = (
-                    __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
-                        __part0,
-                    ),
-                    __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
-                        __part1,
-                    ),
-                );
-                shape_t::Rect {
-                    width: __built_arm.0,
-                    height: __built_arm.1,
-                }
-            }
-            example_flat::Shape::Labeled(__part0, __part1) => {
-                let __built_arm = (
-                    __c_out_convert_String_c_terminal_output_string_to_wire_182528409f6ab8d3(
-                        __part0,
-                    ),
-                    ::core::mem::MaybeUninit::new(
-                        __c_out_convert_Operation_c_terminal_output_enum_to_wire_457f6036394dc821(
-                            __part1,
-                        ),
-                    ),
-                );
-                shape_t::Labeled(__built_arm.0, __built_arm.1)
-            }
-        }
-    })
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_String_c_terminal_output_string_to_wire_182528409f6ab8d3(
-    v: ::std::string::String,
-) -> *mut ::core::ffi::c_char {
-    __cbg_alloc_cstr(v)
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_bool_c_terminal_output_bool_field_to_wire_6a810eb4cb986700(
-    v: bool,
-) -> ::core::mem::MaybeUninit<bool> {
-    ::core::mem::MaybeUninit::new(v)
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_bool_c_terminal_output_scalar_to_wire_cc0ad9760da17efd(
-    v: bool,
-) -> bool {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
-    v: f64,
-) -> f64 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_i32_c_terminal_output_scalar_to_wire_ae82162f636ebcd5(
-    v: i32,
-) -> i32 {
-    v
-}
 #[allow(non_snake_case, unused_variables, dead_code)]
 #[inline(always)]
 pub(crate) fn __c_out_convert_sequence_Vec_f64_to_wire_ad99887ef4e62c28(
@@ -960,9 +954,15 @@ pub(crate) fn __c_out_convert_sequence_Vec_f64_to_wire_ad99887ef4e62c28(
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(
-    v: u64,
-) -> u64 {
+pub(crate) fn __c_out_convert_bool_c_terminal_output_scalar_to_wire_cc0ad9760da17efd(
+    v: bool,
+) -> bool {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_i32_c_terminal_output_scalar_to_wire_ae82162f636ebcd5(
+    v: i32,
+) -> i32 {
     v
 }
 #[no_mangle]

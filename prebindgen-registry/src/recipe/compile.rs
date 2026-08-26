@@ -386,8 +386,8 @@ impl<F> Compiled<F> {
     ///
     /// Handed back as the `Rc` it is stored under: an adapter that reads its
     /// store while compilation is still filling it cannot hold a borrow across
-    /// the next write, and a fragment holds a whole `syn::ItemFn` that a
-    /// recursive lookup should not be copying.
+    /// the next write, and a fragment may hold a nontrivial semantic plan that
+    /// a recursive lookup should not copy.
     pub fn fragment(&self, ty: &TypeKey, direction: Direction) -> Option<Rc<F>> {
         let recipe = self.defaults.get(&(ty.clone(), direction))?;
         self.recipe_fragment(ty, recipe)
