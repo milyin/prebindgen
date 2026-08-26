@@ -832,13 +832,30 @@ fn generation_plan_freezes_and_drains_derivations() {
 
 #[test]
 fn generation_has_no_parallel_converter_function_cache() {
-    let sources = [
-        include_str!("../builder.rs"),
-        include_str!("../generation.rs"),
-        include_str!("../mod.rs"),
-        include_str!("../trait_impl.rs"),
-    ]
-    .join("\n");
+    fn production_sources(dir: &std::path::Path, sources: &mut String) {
+        let mut entries: Vec<_> = std::fs::read_dir(dir)
+            .expect("read JNI source directory")
+            .map(|entry| entry.expect("read JNI source entry").path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name == "tests") {
+                    continue;
+                }
+                production_sources(&path, sources);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                sources.push_str(&std::fs::read_to_string(path).expect("read JNI source file"));
+                sources.push('\n');
+            }
+        }
+    }
+
+    let mut sources = String::new();
+    production_sources(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/jni"),
+        &mut sources,
+    );
     assert!(
         !sources.contains("compiled_fns"),
         "JNI converter emission must derive from frozen registry fragments"
