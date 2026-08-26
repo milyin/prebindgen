@@ -81,9 +81,8 @@ impl Deref for Emit {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ArtifactId, Direction, OperationId};
-
     use super::Emit;
+    use crate::{ArtifactId, Direction, OperationId};
 
     #[test]
     fn operation_symbols_are_stable_and_writer_scoped() {
