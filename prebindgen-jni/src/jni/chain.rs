@@ -28,6 +28,7 @@ enum JBody {
     Choice(Box<JChoicePlan>),
     Sequence(Box<JSequencePlan>),
     Optional(Box<JOptionalPlan>),
+    StructCodec(Box<JStructCodecPlan>),
     Invoke(Box<crate::jni::emit::JInvokePlan>),
 }
 
@@ -84,6 +85,10 @@ impl JFunction {
         Self(JBody::Choice(Box::new(plan)))
     }
 
+    pub(crate) fn struct_codec(plan: JStructCodecPlan) -> Self {
+        Self(JBody::StructCodec(Box::new(plan)))
+    }
+
     pub(crate) fn invoke(plan: crate::jni::emit::JInvokePlan) -> Self {
         Self(JBody::Invoke(Box::new(plan)))
     }
@@ -101,6 +106,11 @@ impl JFunction {
     #[cfg(test)]
     pub(crate) fn is_handle_codec(&self) -> bool {
         matches!(self.0, JBody::HandleCodec(_))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_struct_codec(&self) -> bool {
+        matches!(self.0, JBody::StructCodec(_))
     }
 
     #[cfg(test)]
@@ -174,6 +184,10 @@ impl JFunction {
                     dependency.mark_reachable();
                 }
             }
+            // The legacy whole-object parents still make every terminal
+            // reachable. Struct codecs retain no source syntax, but keep that
+            // compatibility reachability until those parents are planned too.
+            JBody::StructCodec(_) => {}
             // An Invoke plan exists only for a declared callback crossing and
             // is called directly by that crossing's wrapper. Unlike reusable
             // child converters, it is reachable by construction and needs no
@@ -198,6 +212,7 @@ impl RustFunction for JFunction {
             JBody::Choice(plan) => &plan.ident,
             JBody::Sequence(plan) => &plan.ident,
             JBody::Optional(plan) => &plan.ident,
+            JBody::StructCodec(plan) => &plan.ident,
             JBody::Invoke(plan) => plan.name(),
         }
     }
@@ -222,6 +237,7 @@ impl RustFunction for JFunction {
             JBody::Optional(plan) => plan.reachable.get(),
             JBody::Sequence(plan) => plan.reachable.get(),
             JBody::Choice(plan) => plan.reachable.get(),
+            JBody::StructCodec(_) => true,
             // See `mark_reachable`: callback converters are roots, never
             // dormant dependencies waiting for a parent to activate them.
             JBody::Invoke(_) => true,
@@ -242,7 +258,73 @@ impl RustFunction for JFunction {
             JBody::Optional(plan) => plan.render(emit),
             JBody::Choice(plan) => plan.render(emit),
             JBody::Sequence(plan) => plan.render(emit),
+            JBody::StructCodec(plan) => plan.render(emit),
             JBody::Invoke(plan) => plan.render(emit),
+        }
+    }
+}
+
+/// One whole-object struct terminal retained as Flat shape plus JNI policy.
+///
+/// The plan deliberately holds no `syn::Type` or token body for the source
+/// crossing. The writer supplies [`Emit`] once resolution, glue planning, and
+/// Kotlin planning are complete; only then is the source signature spelled and
+/// the captured struct delimiter shape assembled.
+#[derive(Clone)]
+pub(crate) struct JStructCodecPlan {
+    pub(crate) ident: syn::Ident,
+    pub(crate) source: TypeRef,
+    pub(crate) direction: Direction,
+    pub(crate) body: JStructCodecBody,
+}
+
+#[derive(Clone)]
+pub(crate) enum JStructCodecBody {
+    Input(Box<crate::jni::emit::JObjectStructInputPlan>),
+    Output {
+        plan: std::rc::Rc<crate::jni::struct_plan::StructPlan>,
+        java_class_name: String,
+    },
+}
+
+impl JStructCodecPlan {
+    fn render(&self, emit: &Emit) -> syn::ItemFn {
+        let name = &self.ident;
+        let source = emit.spell_ty(&self.source);
+        let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
+        let body = match &self.body {
+            JStructCodecBody::Input(plan) => plan.render(emit),
+            JStructCodecBody::Output {
+                plan,
+                java_class_name,
+            } => crate::jni::emit::render_struct_output_body(plan, java_class_name),
+        };
+        let allow = crate::jni::trait_impl::generated_converter_attr();
+        match self.direction {
+            Direction::Construct => {
+                let wire = annotate_jobject_with_lifetime(&wire, "v");
+                syn::parse_quote!(
+                    #allow
+                    pub(crate) unsafe fn #name<'env, 'v>(
+                        env: &mut jni::JNIEnv<'env>,
+                        v: &#wire,
+                    ) -> ::core::result::Result<#source, __JniErr> {
+                        Ok(#body)
+                    }
+                )
+            }
+            Direction::Deconstruct => {
+                let wire = annotate_jobject_with_lifetime(&wire, "a");
+                syn::parse_quote!(
+                    #allow
+                    pub(crate) unsafe fn #name<'a>(
+                        env: &mut jni::JNIEnv<'a>,
+                        v: #source,
+                    ) -> ::core::result::Result<#wire, __JniErr> {
+                        Ok(#body)
+                    }
+                )
+            }
         }
     }
 }
@@ -996,6 +1078,22 @@ impl JPipeline {
         }
     }
 
+    /// Render a converter pipeline inside another generated converter, where
+    /// `env` is already the borrowed `JNIEnv` rather than an owned wrapper
+    /// parameter. Whole-object property plans use this to retain child chains
+    /// without retaining their generated Rust expressions.
+    pub(crate) fn invoke_converter(
+        &self,
+        env: TokenStream,
+        value: TokenStream,
+        stage_base: &syn::Ident,
+    ) -> TokenStream {
+        let JPipelineBody::Converter(child) = &self.body else {
+            unreachable!("a whole-object field cannot use the transient Vec-handle site ABI")
+        };
+        child.invoke_input_value_with_env(env, value, stage_base)
+    }
+
     /// Render the already-planned call graph around `value`.
     pub(crate) fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream {
         match &self.body {
@@ -1039,6 +1137,44 @@ impl JVecHandleInput {
 }
 
 impl JChild {
+    /// Render a constructing child as the value it yields inside an enclosing
+    /// converter. Unlike the ordinary chain API this consumes `Result` here,
+    /// because the enclosing function already owns the error channel. Stage
+    /// bindings are named by the property that owns them, preventing sibling
+    /// fields from colliding.
+    fn invoke_input_value_with_env(
+        &self,
+        env: TokenStream,
+        value: TokenStream,
+        stage_base: &syn::Ident,
+    ) -> TokenStream {
+        assert_eq!(self.direction, Direction::Construct);
+        let converter = self.call.ident();
+        let value = match self.value_use {
+            JValueUse::Direct => value,
+            JValueUse::SharedRef => shared_ref(value),
+            JValueUse::Cloned => quote!((*#value).clone()),
+        };
+        let first = quote!(#converter(#env, #value));
+        if self.stages.is_empty() {
+            return quote!(#first?);
+        }
+        let first_name = format_ident!("{}_s0", stage_base);
+        let mut body = quote!(let #first_name = #first?;);
+        let mut previous = first_name;
+        for (index, stage) in self.stages.iter().enumerate() {
+            let next = format_ident!("{}_s{}", stage_base, index + 1);
+            body.extend(quote!(
+                let #next = #stage(#env, #previous)
+                    .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
+                        __e.to_string()
+                    ))?;
+            ));
+            previous = next;
+        }
+        quote!({ #body #previous })
+    }
+
     /// Render this child in a context that supplies its own `JNIEnv` expression.
     /// Registry-composed converter bodies receive an `&mut JNIEnv` named
     /// `env`; exported wrappers own a mutable `JNIEnv` and pass `&mut env`.

@@ -333,6 +333,33 @@ fn fixed_primitive_arrays_retain_late_registry_plans() {
     );
 }
 
+/// Whole-struct planning may inspect Flat fields and freeze JNI property
+/// policy, but it must not receive the capability that spells captured source
+/// types. Pin both entry points: the recipe compiler never asks its context for
+/// `Emit`, and the JObject plan builder cannot accept one later.
+#[test]
+fn whole_struct_planning_has_no_source_spelling_access() {
+    let compile = include_str!("../compile.rs");
+    let planner = compile
+        .split_once("    fn planned_struct_codec(&self, at: At<'_>)")
+        .expect("whole-struct planner")
+        .1
+        .split_once("    /// Freeze a declared fieldless enum")
+        .expect("end of whole-struct planner")
+        .0;
+    assert!(!planner.contains(".emit()"), "{planner}");
+
+    let input = include_str!("../emit/flat_input.rs");
+    let signature = input
+        .split_once("pub(crate) fn build_jobject_struct_input_plan(")
+        .expect("JObject struct plan builder")
+        .1
+        .split_once(") -> Option<JObjectStructInputPlan>")
+        .expect("JObject struct plan signature")
+        .0;
+    assert!(!signature.contains("Emit"), "{signature}");
+}
+
 #[test]
 fn cow_byte_slices_retain_a_late_value_codec() {
     let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
@@ -1524,6 +1551,26 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    let object_child = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(ObjectChild)))
+        .expect("ObjectChild reading");
+    assert!(
+        generation
+            .decls
+            .in_frag(&object_child)
+            .expect("ObjectChild whole input")
+            .is_struct_codec_plan(),
+        "the explicit JObject decoder must remain an unrendered struct plan"
+    );
+    assert!(
+        generation
+            .decls
+            .out_frag(&object_child)
+            .expect("ObjectChild whole output")
+            .is_struct_codec_plan(),
+        "the fromParts encoder must remain an unrendered struct plan"
+    );
     // The two boundaries this fixture draws, stated as the recipe states them:
     // `object` is declared `.jobject_input()` and stays ONE value, and `maybe`
     // is an `Option<data_class>`, which is a presence flag plus the inner's
