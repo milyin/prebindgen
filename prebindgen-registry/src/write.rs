@@ -15,7 +15,7 @@
 //! adapters migrating incrementally.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     path::{Path, PathBuf},
 };
 
@@ -87,6 +87,16 @@ impl std::error::Error for WriteError {}
 /// validation are complete, with the same [`crate::Emit`] capability used for
 /// the rest of final Rust emission.
 pub trait RustFunction {
+    /// Registry-owned semantic identity of this operation.
+    ///
+    /// Plans that return an identity are de-duplicated before rendering, so
+    /// sharing never depends on the Rust symbol selected by final emission.
+    /// `None` is the compatibility path for adapters that still retain a
+    /// preselected function name.
+    fn operation_id(&self) -> Option<&crate::generation::OperationId> {
+        None
+    }
+
     /// Whether this plan is reachable from the generated adapter surface.
     /// Validation-only plans may return false and remain available for diagnostics.
     fn should_emit(&self) -> bool {
@@ -106,12 +116,14 @@ impl RustFunction for syn::ItemFn {
 /// Emit a resolved registry whose private converters are rendered at this
 /// final writing boundary.
 ///
-/// `conversions` is what the adapter's compilation produced. It is sorted and
-/// de-duplicated by function name here, so the order decides which of two
-/// same-named functions wins and not where any of them lands. Handing them
-/// over directly is what frees an adapter to emit a conversion the converter
-/// table could not hold — several functions for one crossing, or one occupying
-/// more than a single wire value.
+/// `conversions` is what the adapter's compilation produced. Registry-owned
+/// operations are de-duplicated by [`crate::generation::OperationId`] before
+/// rendering; if separate fragments retain separate reachability state, a
+/// reachable representative wins. Compatibility plans without semantic
+/// identity are still sorted and de-duplicated by their preselected function
+/// name after rendering. Handing the plans over directly is what frees an
+/// adapter to emit a conversion the converter table could not hold — several
+/// functions for one crossing, or one occupying more than a single wire value.
 ///
 /// Already-rendered [`syn::ItemFn`] values implement [`RustFunction`], so
 /// adapters can migrate to semantic plans incrementally without a second API.
@@ -203,10 +215,29 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
             .map(|(_, item)| ext.on_const(item, registry, &emit)),
     )?);
 
-    // Render converters only after per-item planning has marked the late plans
-    // reachable, while still placing them before adapter output in the file.
-    let conversions: Vec<_> = conversions
-        .iter()
+    // Select one semantic operation only after per-item planning has marked
+    // late plans reachable. This lets a reached twin replace an earlier
+    // dormant twin without materializing either Rust function first.
+    let mut operation_positions: HashMap<crate::generation::OperationId, usize> = HashMap::new();
+    let mut unique_conversions: Vec<&C> = Vec::new();
+    for plan in conversions {
+        let Some(operation) = plan.operation_id() else {
+            unique_conversions.push(plan);
+            continue;
+        };
+        match operation_positions.get(operation).copied() {
+            Some(position) if !unique_conversions[position].should_emit() && plan.should_emit() => {
+                unique_conversions[position] = plan;
+            }
+            Some(_) => {}
+            None => {
+                operation_positions.insert(operation.clone(), unique_conversions.len());
+                unique_conversions.push(plan);
+            }
+        }
+    }
+    let conversions: Vec<_> = unique_conversions
+        .into_iter()
         .map(|plan| (plan.should_emit(), plan.render(&emit)))
         .collect();
     let converter_names: BTreeSet<String> = conversions

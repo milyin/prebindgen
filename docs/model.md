@@ -252,8 +252,11 @@ JniGen's constant hook returns two, a getter and an alias.
 1. the adapter's **prerequisites** — helper functions, type aliases, the
 `#[repr(C)]` structs a C header reads — emitted first so everything below can
 refer to them;
-2. the converters it was handed, sorted by name and deduplicated, so one
-function per name reaches the file however many crossings produced it;
+2. the converter plans it was handed. Registry-owned operations are grouped by
+their semantic `OperationId` before rendering, with a reachable representative
+preferred when fragments retain separate reachability state. Compatibility
+plans that do not yet expose an operation identity are still rendered and
+deduplicated by their preselected name;
 3. the per-item output, in the order above;
 4. the source crate's own feature guards, verbatim.
 
@@ -366,7 +369,9 @@ adapter-declared intermediate representation. Adapter terminals likewise name
 their semantic operation, such as borrowing or consuming an opaque handle.
 The final writer turns that identity into a readable private symbol: a bounded
 semantic stem followed by a stable hash. The hash disambiguates the name; it
-does not replace the model and adapter vocabulary useful to a reader.
+does not replace the model and adapter vocabulary useful to a reader. The
+writer also groups plans by this identity before invoking their renderer, so
+sharing is decided before either the symbol or function body exists.
 
 The generated code has to name Rust types. Where a source function's parameter
 is written `&Sample`, the converter for it has to produce a `&Sample`, because

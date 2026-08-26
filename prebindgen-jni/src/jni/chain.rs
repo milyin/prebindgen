@@ -201,6 +201,25 @@ impl JFunction {
 }
 
 impl RustFunction for JFunction {
+    fn operation_id(&self) -> Option<&OperationId> {
+        Some(match &self.0 {
+            JBody::Marker(operation) => operation,
+            JBody::ValueCodec(plan) => &plan.operation,
+            JBody::HandleCodec(plan) => &plan.operation_id,
+            JBody::CustomConversion(plan) => &plan.operation,
+            JBody::Result(plan) => &plan.operation,
+            JBody::Transparent(plan) => &plan.operation,
+            JBody::BorrowedOptionalHandle(plan) => &plan.operation,
+            JBody::Product(plan) => &plan.operation,
+            JBody::Choice(plan) => &plan.operation,
+            JBody::Sequence(plan) => &plan.operation,
+            JBody::Optional(plan) => &plan.operation,
+            JBody::StructCodec(plan) => &plan.operation,
+            JBody::SumCodec(plan) => &plan.operation,
+            JBody::Invoke(plan) => plan.operation_id(),
+        })
+    }
+
     fn should_emit(&self) -> bool {
         match &self.0 {
             JBody::Marker(_) => false,
