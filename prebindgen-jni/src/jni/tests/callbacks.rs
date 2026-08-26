@@ -305,6 +305,9 @@ fn undeclared_expanded_callback_retains_its_registry_invoke_plan() {
 /// and the adapter planner cannot accept an `Emit` parameter later.
 #[test]
 fn callback_planning_has_no_source_spelling_access() {
+    // These delimiters deliberately follow rustfmt's stable spelling of both
+    // private signatures. If either signature changes, update this fence's
+    // boundary before deciding whether the new capability is still forbidden.
     let compile = include_str!("../compile.rs");
     let callback_hook = compile
         .split_once("    fn callback(\n")
