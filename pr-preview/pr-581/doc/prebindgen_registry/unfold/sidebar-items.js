@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DeconId","DeconRecord","DeconSel","DeconTarget","Delivery","FieldDecon","LeafSource","PathStep","UnfoldDeclError","UnfoldError","UnfoldShape"],"fn":["dedup_names","steps_are_movable"],"struct":["DeconSpec","DeconstructorDecl","Deconstructors","FieldRecord","Hoist","OutputDecl","SumDecon","UnfoldLeaf","UnfoldPlan","ValueDecon"]};
