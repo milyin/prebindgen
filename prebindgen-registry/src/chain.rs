@@ -3,7 +3,7 @@
 //! Adapters choose an intermediate representation and implement its bridge
 //! operations. The registry owns the source-value walk and child-call/error
 //! propagation. Source [`TypeRef`]s remain opaque until [`Chain::render`] is
-//! called by the final Rust writer with [`Emit`].
+//! called by the final Rust writer with [`RustWriter`].
 
 use proc_macro2::TokenStream;
 
@@ -280,7 +280,7 @@ pub struct ChoicePart<C> {
 pub struct ChoiceArm<B, C> {
     /// The Flat alternative, including its field addresses and delimiters.
     ///
-    /// It remains model data until [`Chain::render`] hands it to [`Emit`].
+    /// It remains model data until [`Chain::render`] hands it to [`RustWriter`].
     pub alternative: Alternative,
     /// Adapter tag pattern selecting this arm.
     pub tag: syn::Pat,
