@@ -41,6 +41,7 @@ pub(crate) fn emit_unfold_delivery(
     emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
     use prebindgen_registry::unfold::UnfoldShape;
+    let context = LiveDeliveryContext::new(ext, registry);
 
     let n = plan.leaves.len();
 
@@ -65,7 +66,7 @@ pub(crate) fn emit_unfold_delivery(
     let encode_leaves = |value: &TokenStream, optional: bool| {
         let mut delivered = Delivered::planned(plan, output.wires.clone(), output.chain.clone());
         delivered.optional = optional;
-        encode_plan_leaves(ext, registry, delivered, &obj_idents, value, &fail, emit)
+        encode_plan_leaves(&context, delivered, &obj_idents, value, &fail, emit)
     };
 
     // Cached-interface call statics for the builder / folder `run`.
@@ -547,6 +548,193 @@ pub(crate) struct Delivered<'a> {
     pub(crate) chain: Option<crate::jni::compile::ComposedChain>,
 }
 
+/// Facts the leaf renderer may consult after a delivery operation has been
+/// selected. The live implementation serves ordinary wrapper rendering; an
+/// Invoke plan freezes the same answers so callback planning does not retain a
+/// registry or obtain [`prebindgen_registry::Emit`].
+pub(crate) trait DeliveryContext {
+    fn qualify(&self, ident: &syn::Ident) -> syn::Path;
+    fn leaf_is_prim(&self, leaf: &crate::jni::compile::OutWire) -> bool;
+    fn leaf_wire(&self, leaf: &crate::jni::compile::OutWire) -> syn::Type;
+    fn sum(
+        &self,
+        leaf: &crate::jni::compile::OutWire,
+    ) -> (syn::Path, &prebindgen_registry::flat::Variant);
+}
+
+pub(crate) struct LiveDeliveryContext<'a, R> {
+    ext: &'a Declarations,
+    registry: &'a R,
+}
+
+impl<'a, R> LiveDeliveryContext<'a, R> {
+    pub(crate) fn new(ext: &'a Declarations, registry: &'a R) -> Self {
+        Self { ext, registry }
+    }
+}
+
+impl<R: Conversions> DeliveryContext for LiveDeliveryContext<'_, R> {
+    fn qualify(&self, ident: &syn::Ident) -> syn::Path {
+        self.ext.fn_module(self.registry, ident)
+    }
+
+    fn leaf_is_prim(&self, leaf: &crate::jni::compile::OutWire) -> bool {
+        leaf_is_prim(self.ext, leaf)
+    }
+
+    fn leaf_wire(&self, leaf: &crate::jni::compile::OutWire) -> syn::Type {
+        leaf_wire(self.ext, leaf)
+    }
+
+    fn sum(
+        &self,
+        leaf: &crate::jni::compile::OutWire,
+    ) -> (syn::Path, &prebindgen_registry::flat::Variant) {
+        let prebindgen_registry::flat::TypeKind::Named { id, .. } = leaf.out_ty.unwrapped().kind()
+        else {
+            panic!("jnigen sum unfold: selector type is not named")
+        };
+        let ident = id
+            .ident()
+            .unwrap_or_else(|| panic!("jnigen sum unfold: selector type is not an identifier"));
+        let module = self.ext.fn_module(self.registry, &ident);
+        let source = syn::parse_quote!(#module::#ident);
+        let Some(prebindgen_registry::flat::Type::Variant(sum)) =
+            self.registry.flat().declared_type(&ident)
+        else {
+            panic!("jnigen sum unfold: no indexed sum `{ident}`")
+        };
+        (source, sum)
+    }
+}
+
+#[derive(Clone)]
+struct FrozenSum {
+    source: syn::Path,
+    model: prebindgen_registry::flat::Variant,
+}
+
+/// Callback delivery facts frozen while the registry is available. Rust
+/// source types remain as opaque readings inside the wires/pipelines; the only
+/// syntax retained here is origin qualification and Flat alternative shape,
+/// both consumed with `Emit` by the final Invoke renderer.
+#[derive(Clone)]
+pub(crate) struct FrozenDelivery {
+    wires: Vec<crate::jni::compile::OutWire>,
+    hoists: Vec<prebindgen_registry::unfold::Hoist>,
+    by_ref: bool,
+    fixed_product: bool,
+    optional: bool,
+    chain: Option<crate::jni::compile::ComposedChain>,
+    modules: std::collections::BTreeMap<String, syn::Path>,
+    sums: std::collections::BTreeMap<String, FrozenSum>,
+}
+
+impl FrozenDelivery {
+    pub(crate) fn new(
+        ext: &Declarations,
+        registry: &impl Conversions,
+        plan: &prebindgen_registry::unfold::UnfoldPlan,
+        wires: Vec<crate::jni::compile::OutWire>,
+        chain: Option<crate::jni::compile::ComposedChain>,
+    ) -> Self {
+        let mut modules = std::collections::BTreeMap::new();
+        for step in plan
+            .hoists
+            .iter()
+            .flat_map(|hoist| &hoist.prefix)
+            .chain(wires.iter().flat_map(|wire| wire.reach()))
+        {
+            if let prebindgen_registry::unfold::PathStep::Call { ident, .. } = step {
+                modules
+                    .entry(ident.to_string())
+                    .or_insert_with(|| ext.fn_module(registry, ident));
+            }
+        }
+        let mut sums = std::collections::BTreeMap::new();
+        for wire in wires.iter().filter(|wire| wire.is_tag()) {
+            let prebindgen_registry::flat::TypeKind::Named { id, .. } =
+                wire.out_ty.unwrapped().kind()
+            else {
+                panic!("jnigen sum unfold: selector type is not named")
+            };
+            let ident = id.ident().unwrap_or_else(|| {
+                panic!(
+                    "jnigen sum unfold: selector type `{}` is not an identifier",
+                    id.name
+                )
+            });
+            let Some(prebindgen_registry::flat::Type::Variant(sum)) =
+                registry.flat().declared_type(&ident)
+            else {
+                panic!("jnigen sum unfold: no indexed sum `{ident}`")
+            };
+            let module = ext.fn_module(registry, &ident);
+            sums.entry(id.name.clone()).or_insert_with(|| FrozenSum {
+                source: syn::parse_quote!(#module::#ident),
+                model: sum.clone(),
+            });
+        }
+        Self {
+            wires,
+            hoists: plan.hoists.clone(),
+            by_ref: plan.by_ref,
+            fixed_product: plan.fixed_builder,
+            optional: plan.is_optional_base(),
+            chain,
+            modules,
+            sums,
+        }
+    }
+
+    pub(crate) fn delivered(&self) -> Delivered<'_> {
+        Delivered {
+            wires: self.wires.clone(),
+            hoists: &self.hoists,
+            by_ref: self.by_ref,
+            fixed_product: self.fixed_product,
+            optional: self.optional,
+            chain: self.chain.clone(),
+        }
+    }
+
+    pub(crate) fn wire_count(&self) -> usize {
+        self.wires.len()
+    }
+}
+
+impl DeliveryContext for FrozenDelivery {
+    fn qualify(&self, ident: &syn::Ident) -> syn::Path {
+        self.modules
+            .get(&ident.to_string())
+            .unwrap_or_else(|| panic!("frozen JNI delivery has no origin for `{ident}`"))
+            .clone()
+    }
+
+    fn leaf_is_prim(&self, leaf: &crate::jni::compile::OutWire) -> bool {
+        frozen_leaf_is_prim(leaf)
+    }
+
+    fn leaf_wire(&self, leaf: &crate::jni::compile::OutWire) -> syn::Type {
+        frozen_leaf_wire(leaf)
+    }
+
+    fn sum(
+        &self,
+        leaf: &crate::jni::compile::OutWire,
+    ) -> (syn::Path, &prebindgen_registry::flat::Variant) {
+        let prebindgen_registry::flat::TypeKind::Named { id, .. } = leaf.out_ty.unwrapped().kind()
+        else {
+            panic!("jnigen sum unfold: selector type is not named")
+        };
+        let sum = self
+            .sums
+            .get(&id.name)
+            .unwrap_or_else(|| panic!("frozen JNI delivery has no sum `{}`", id.name));
+        (sum.source.clone(), &sum.model)
+    }
+}
+
 impl<'a> Delivered<'a> {
     /// Delivery from a registry-compiled return, callback, or error site.
     pub(crate) fn planned(
@@ -908,8 +1096,7 @@ fn reach_leaf(
 /// arm of fallible externs (whose `fail` routes an encoding failure to the
 /// binding-error channel).
 pub(crate) fn encode_plan_leaves(
-    ext: &Declarations,
-    registry: &impl Conversions,
+    context: &impl DeliveryContext,
     site: Delivered<'_>,
     obj_idents: &[syn::Ident],
     value: &TokenStream,
@@ -926,7 +1113,7 @@ pub(crate) fn encode_plan_leaves(
     } = site;
     // Per-fn origin qualification: each accessor call is prefixed with the
     // module of the crate that defines it (multi-source bindings).
-    let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
+    let qualify = |id: &syn::Ident| -> syn::Path { context.qualify(id) };
     let n = wires.len();
 
     // Typed `jvalue` argument expression per leaf, in leaf order: a non-null
@@ -937,7 +1124,7 @@ pub(crate) fn encode_plan_leaves(
     let mut arg_exprs: Vec<TokenStream> = Vec::with_capacity(n);
     for (idx, leaf) in wires.iter().enumerate() {
         let obj_ident = &obj_idents[idx];
-        if leaf_is_prim(ext, leaf) {
+        if context.leaf_is_prim(leaf) {
             arg_exprs.push(quote!(#obj_ident));
         } else {
             arg_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
@@ -984,8 +1171,8 @@ pub(crate) fn encode_plan_leaves(
                     });
                     continue;
                 }
-                let wire = leaf_wire(ext, leaf);
-                if leaf_is_prim(ext, leaf) {
+                let wire = context.leaf_wire(leaf);
+                if context.leaf_is_prim(leaf) {
                     let (_, member, _) = jni_field_access(&wire)
                         .expect("a primitive Product leaf has a JNI jvalue member");
                     stmts.extend(quote! {
@@ -1130,8 +1317,7 @@ pub(crate) fn encode_plan_leaves(
             }
         };
         let (group_stmts, group_args) = encode_sum_group(
-            ext,
-            registry,
+            context,
             &wires[seg.clone()],
             &obj_idents[seg.clone()],
             matched,
@@ -1144,7 +1330,7 @@ pub(crate) fn encode_plan_leaves(
                 let ids: Vec<&syn::Ident> = obj_idents[seg.clone()].iter().collect();
                 let slots: Vec<Slot> = wires[seg.clone()]
                     .iter()
-                    .map(|l| leaf_slot(ext, l))
+                    .map(|l| leaf_slot(context, l))
                     .collect();
                 let tys = slots.iter().map(|s| &s.ty);
                 let defaults = slots.iter().map(|s| &s.default);
@@ -1492,7 +1678,7 @@ pub(crate) fn encode_plan_leaves(
         // leaves whose `None` arm must yield a JVM null) encodes the reached
         // value with the leaf's output converter and casts to JObject.
         let enc_ident = format_ident!("__enc{}", idx);
-        if leaf_is_prim(ext, leaf) {
+        if context.leaf_is_prim(leaf) {
             let letter = jni_field_access(&wire)
                 .expect("leaf_is_prim guarantees a primitive wire")
                 .1;
@@ -1535,8 +1721,8 @@ pub(crate) fn encode_plan_leaves(
             })
             .collect();
         let ids: Vec<&syn::Ident> = idxs.iter().map(|&k| &obj_idents[k]).collect();
-        let tys = idxs.iter().map(|&k| leaf_slot(ext, &wires[k]).ty);
-        let defaults = idxs.iter().map(|&k| leaf_slot(ext, &wires[k]).default);
+        let tys = idxs.iter().map(|&k| leaf_slot(context, &wires[k]).ty);
+        let defaults = idxs.iter().map(|&k| leaf_slot(context, &wires[k]).default);
         // Matched BY VALUE: the local is this arm's alone (every leaf under the
         // hoist is in it), so a consuming value form's fields move out here
         // exactly as they do at an unconditional one.
@@ -1599,6 +1785,34 @@ pub(crate) fn leaf_wire(ext: &Declarations, leaf: &crate::jni::compile::OutWire)
             .destination
             .clone(),
     }
+}
+
+fn frozen_leaf_wire(leaf: &crate::jni::compile::OutWire) -> syn::Type {
+    match &leaf.abi {
+        Some(crate::jni::compile::OutAbi::Tag) => syn::parse_quote!(jni::sys::jint),
+        Some(crate::jni::compile::OutAbi::Value(value)) => value.pipeline.wire().clone(),
+        None => panic!("frozen JNI delivery leaf `{}` has no output ABI", leaf.name),
+    }
+}
+
+fn frozen_leaf_is_prim(leaf: &crate::jni::compile::OutWire) -> bool {
+    if leaf.is_tag() {
+        return !leaf.nullable;
+    }
+    if leaf.nullable {
+        return false;
+    }
+    let Some(crate::jni::compile::OutAbi::Value(value)) = &leaf.abi else {
+        panic!("frozen JNI delivery leaf `{}` has no output ABI", leaf.name)
+    };
+    let proj_ok = match &value.projection {
+        None => true,
+        Some(projection) => matches!(
+            projection.kind,
+            ProjectionKind::Handle | ProjectionKind::Unsigned64
+        ),
+    };
+    proj_ok && matches!(jni_field_access(value.pipeline.wire()), Some((_, _, false)))
 }
 
 /// The wire half of [`leaf_is_prim`]: does a leaf of this type occupy a **raw

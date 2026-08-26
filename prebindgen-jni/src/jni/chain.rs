@@ -977,17 +977,29 @@ impl JPipeline {
         }
     }
 
+    /// Render an already-planned Rust-to-JNI call graph.
+    ///
+    /// Output pipelines can only contain converter children. The transient
+    /// Vec-handle operation is an input-site ABI and is the sole pipeline body
+    /// that needs [`Emit`] to spell its element type. Keeping that case out of
+    /// this API lets return, error, and callback delivery assemble their JNI
+    /// protocol without gaining access to source Rust spelling.
+    pub(crate) fn invoke_output(&self, value: TokenStream) -> TokenStream {
+        let JPipelineBody::Converter(child) = &self.body else {
+            unreachable!("a Rust-to-JNI pipeline cannot contain an input Vec handle")
+        };
+        let call = child.invoke_with_env(quote!(&mut env), value);
+        if child.stages.is_empty() {
+            call
+        } else {
+            quote!((|| -> ::core::result::Result<_, __JniErr> { #call })())
+        }
+    }
+
     /// Render the already-planned call graph around `value`.
     pub(crate) fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream {
         match &self.body {
-            JPipelineBody::Converter(child) => {
-                let call = child.invoke_with_env(quote!(&mut env), value);
-                if child.stages.is_empty() {
-                    call
-                } else {
-                    quote!((|| -> ::core::result::Result<_, __JniErr> { #call })())
-                }
-            }
+            JPipelineBody::Converter(_) => self.invoke_output(value),
             JPipelineBody::VecHandle(plan) => {
                 let value = plan.invoke(value, emit);
                 quote!(::core::result::Result::<_, __JniErr>::Ok(#value))

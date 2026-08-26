@@ -6,10 +6,23 @@ use prebindgen_registry::{chain::Chain as _, Conversions};
 use super::*;
 
 #[derive(Clone)]
-struct JInvokePart {
-    source: syn::Ident,
-    prepare: TokenStream,
-    arguments: Vec<TokenStream>,
+enum JInvokePart {
+    Fold {
+        delivery: FrozenDelivery,
+        fold_obj: syn::Ident,
+        fold_id: syn::Ident,
+        element_frame: syn::LitInt,
+    },
+    Decomposed {
+        delivery: FrozenDelivery,
+        optional: bool,
+    },
+    Whole {
+        pipeline: Box<crate::jni::chain::JPipeline>,
+        projection: Option<Projection>,
+        wire: syn::Type,
+        primitive: bool,
+    },
 }
 
 impl prebindgen_registry::chain::InvokePart for JInvokePart {
@@ -17,13 +30,123 @@ impl prebindgen_registry::chain::InvokePart for JInvokePart {
         &self,
         value: &syn::Ident,
         index: usize,
-        _emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> prebindgen_registry::chain::RenderedInvokePart {
         assert_eq!(value, &callback_argument_name(index));
-        assert_eq!(value, &self.source);
+        let fail = |msg: TokenStream| -> TokenStream {
+            quote! {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<String>>::from(#msg));
+            }
+        };
+        let (prepare, arguments) = match self {
+            Self::Fold {
+                delivery,
+                fold_obj,
+                fold_id,
+                element_frame,
+            } => {
+                let obj_idents: Vec<syn::Ident> = (0..delivery.wire_count())
+                    .map(|part| format_ident!("__cbfold{}_obj{}", index, part))
+                    .collect();
+                let (leaf_stmts, leaf_args, _) = encode_plan_leaves(
+                    delivery,
+                    delivery.delivered(),
+                    &obj_idents,
+                    &quote!(__cb_elem),
+                    &fail,
+                    emit,
+                );
+                let acc = format_ident!("__fold{}_acc", index);
+                (
+                    quote! {
+                        let #acc: jni::objects::JObject = env
+                            .new_object("java/util/ArrayList", "()V", &[])
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: new ArrayList: {}", e)))?;
+                        for __cb_elem in #value.iter() {
+                            env.push_local_frame(#element_frame)
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: push frame: {}", e)))?;
+                            let __fold_res = (|| -> ::core::result::Result<(), __JniErr> {
+                                #leaf_stmts
+                                let _ = unsafe {
+                                    env.call_method_unchecked(
+                                        &#fold_obj,
+                                        #fold_id,
+                                        jni::signature::ReturnType::Object,
+                                        &[jni::sys::jvalue { l: #acc.as_raw() }, #(#leaf_args),*],
+                                    )
+                                }
+                                .map_err(|e| {
+                                    let _ = env.exception_describe();
+                                    <__JniErr as ::core::convert::From<String>>::from(format!("fold run: {}", e))
+                                })?;
+                                ::core::result::Result::Ok(())
+                            })();
+                            let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                            __fold_res?;
+                        }
+                    },
+                    vec![quote!(jni::sys::jvalue { l: #acc.as_raw() })],
+                )
+            }
+            Self::Decomposed { delivery, optional } => {
+                let obj_idents: Vec<syn::Ident> = (0..delivery.wire_count())
+                    .map(|part| format_ident!("__cb{}_obj{}", index, part))
+                    .collect();
+                let (stmts, mut arguments, present) = encode_plan_leaves(
+                    delivery,
+                    delivery.delivered(),
+                    &obj_idents,
+                    &quote!(#value),
+                    &fail,
+                    emit,
+                );
+                if *optional {
+                    let present = present.expect("a frozen optional callback delivery has a gate");
+                    arguments.insert(0, quote!(jni::sys::jvalue { z: #present }));
+                }
+                (stmts, arguments)
+            }
+            Self::Whole {
+                pipeline,
+                projection,
+                wire,
+                primitive,
+            } => {
+                let enc = format_ident!("__cb{}_enc", index);
+                let call = pipeline.invoke_output(quote!(#value));
+                if projection
+                    .as_ref()
+                    .is_some_and(|projection| projection.kind == ProjectionKind::Handle)
+                {
+                    (
+                        quote!(let #enc = #call?;),
+                        vec![quote!(jni::sys::jvalue { j: #enc })],
+                    )
+                } else if *primitive {
+                    let letter = jni_field_access(wire)
+                        .expect("a primitive callback wire has a jvalue member")
+                        .1;
+                    (
+                        quote!(let #enc = #call?;),
+                        vec![quote!(jni::sys::jvalue { #letter: #enc })],
+                    )
+                } else {
+                    let object = format_ident!("__cb{}_obj", index);
+                    let cast = cast_wire_to_jobject(&enc, wire, &fail);
+                    (
+                        quote! {
+                            let #enc = #call?;
+                            let #object: jni::objects::JObject = #cast;
+                        },
+                        vec![quote!(jni::sys::jvalue { l: #object.as_raw() })],
+                    )
+                }
+            }
+        };
         prebindgen_registry::chain::RenderedInvokePart {
-            prepare: self.prepare.clone(),
-            arguments: self.arguments.clone(),
+            prepare,
+            arguments,
             cleanup: TokenStream::new(),
         }
     }
@@ -247,7 +370,6 @@ pub(crate) fn callback_input(
     args: &[prebindgen_registry::flat::TypeRef],
     registry: &impl Conversions,
     arg_fragments: &[&crate::jni::compile::JFrag],
-    emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, JInvokePlan)> {
     // Human-readable tag for attach/log messages.
     let name = format!(
@@ -259,35 +381,13 @@ pub(crate) fn callback_input(
     );
     let name_lit = syn::LitStr::new(&name, Span::call_site());
 
-    // Trampoline error path for the shared leaf encoder: convert the message
-    // to `__JniErr` inside the per-invocation `Result` closure.
-    let fail = |msg: TokenStream| -> TokenStream {
-        quote! {
-            return ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<String>>::from(#msg));
-        }
-    };
-
-    let arg_names: Vec<syn::Ident> = (0..args.len()).map(callback_argument_name).collect();
-    // Per-arg encode preludes binding the typed `run`'s args in declared
-    // order (a decomposed arg contributes one arg per leaf). Each entry of
-    // `jvalue_exprs` is a typed `jvalue`: raw primitives for primitive-wire
-    // leaves, `{ l: obj.as_raw() }` for object leaves — matching the
-    // descriptor of the generated callback interface's `run`.
-    let mut preludes: Vec<TokenStream> = Vec::new();
-    let mut jvalue_exprs: Vec<TokenStream> = Vec::new();
+    let mut parts = Vec::with_capacity(args.len());
     let mut total: usize = 0;
     // One-time setup statements (folder singleton + method id for an
     // `&[data_class]` fold arg), spliced before the `Box::new` so the move
     // closure captures them.
     let mut fold_setups: Vec<TokenStream> = Vec::new();
-    let mut part_ranges = Vec::with_capacity(args.len());
-
     for (i, arg_ty) in args.iter().enumerate() {
-        let prelude_start = preludes.len();
-        let argument_start = jvalue_exprs.len();
-        let cb_arg = &arg_names[i];
-
         // `&[data_class]` fold arg: instead of building the whole `List` on the
         // Rust side, allocate an empty `ArrayList` and fold each element's raw
         // leaves through the hoisted `__<Folder>Holder.instance` (Kotlin does
@@ -330,64 +430,14 @@ pub(crate) fn callback_input(
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("resolve folder run {}: {}", #run_cls, e)))?
                 };
             });
-            // Per fire: one `ArrayList`, fold each element's leaves through the
-            // appender (which mutates the list in place and returns it — the
-            // return is ignored). Each element's leaf locals live in a nested
-            // local frame so they are freed per element (the daemon-thread
-            // local-ref discipline — only the `acc` ref crosses iterations).
-            let acc = format_ident!("__fold{}_acc", i);
-            let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
-                .map(|k| format_ident!("__cbfold{}_obj{}", i, k))
-                .collect();
-            let (leaf_stmts, leaf_args, _) = encode_plan_leaves(
-                ext,
-                registry,
-                crate::jni::emit::Delivered::planned(plan, wires, chain),
-                &obj_idents,
-                &quote!(__cb_elem),
-                &fail,
-                emit,
-            );
             let elem_frame = std::cmp::max(16, 2 * plan.leaves.len() + 6);
-            let elem_frame_lit = syn::LitInt::new(&elem_frame.to_string(), Span::call_site());
-            preludes.push(quote! {
-                let #acc: jni::objects::JObject = env
-                    .new_object("java/util/ArrayList", "()V", &[])
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: new ArrayList: {}", e)))?;
-                for __cb_elem in #cb_arg.iter() {
-                    env.push_local_frame(#elem_frame_lit)
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: push frame: {}", e)))?;
-                    let __fold_res = (|| -> ::core::result::Result<(), __JniErr> {
-                        #leaf_stmts
-                        // The appender returns the same list it mutates, so the
-                        // result is discarded; `#acc` (an outer-frame ref) stays
-                        // valid across the nested frame.
-                        let _ = unsafe {
-                            env.call_method_unchecked(
-                                &#fold_obj,
-                                #fold_id,
-                                jni::signature::ReturnType::Object,
-                                &[jni::sys::jvalue { l: #acc.as_raw() }, #(#leaf_args),*],
-                            )
-                        }
-                        .map_err(|e| {
-                            let _ = env.exception_describe();
-                            <__JniErr as ::core::convert::From<String>>::from(format!("fold run: {}", e))
-                        })?;
-                        ::core::result::Result::Ok(())
-                    })();
-                    let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
-                    __fold_res?;
-                }
+            parts.push(JInvokePart::Fold {
+                delivery: FrozenDelivery::new(ext, registry, plan, wires, chain),
+                fold_obj,
+                fold_id,
+                element_frame: syn::LitInt::new(&elem_frame.to_string(), Span::call_site()),
             });
-            jvalue_exprs.push(quote!(jni::sys::jvalue { l: #acc.as_raw() }));
             total += 1;
-            part_ranges.push((
-                prelude_start,
-                preludes.len(),
-                argument_start,
-                jvalue_exprs.len(),
-            ));
             continue;
         }
 
@@ -396,34 +446,21 @@ pub(crate) fn callback_input(
         if let Some(plan) = effective_callback_plan(ext, registry, arg_ty) {
             let fragment = *arg_fragments.get(i)?;
             let (wires, chain) = freeze_callback_delivery(ext, plan, fragment)?;
-            let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
-                .map(|k| format_ident!("__cb{}_obj{}", i, k))
-                .collect();
-            let (stmts, mut arg_exprs, present) = encode_plan_leaves(
-                ext,
-                registry,
-                crate::jni::emit::Delivered::planned(plan, wires, chain),
-                &obj_idents,
-                &quote!(#cb_arg),
-                &fail,
-                emit,
-            );
             let optional = plan.is_optional_base();
-            if optional && present.is_none() {
+            if optional
+                && !matches!(
+                    chain.as_ref().map(|chain| &chain.layout),
+                    Some(crate::jni::compile::JLayout::Optional(inner))
+                        if inner.leaf_count() == plan.leaves.len()
+                )
+            {
                 return None;
             }
-            if let Some(present) = present {
-                arg_exprs.insert(0, quote!(jni::sys::jvalue { z: #present }));
-            }
-            preludes.push(stmts);
-            total += arg_exprs.len();
-            jvalue_exprs.extend(arg_exprs);
-            part_ranges.push((
-                prelude_start,
-                preludes.len(),
-                argument_start,
-                jvalue_exprs.len(),
-            ));
+            total += plan.leaves.len() + usize::from(optional);
+            parts.push(JInvokePart::Decomposed {
+                delivery: FrozenDelivery::new(ext, registry, plan, wires, chain),
+                optional,
+            });
             continue;
         }
 
@@ -433,83 +470,25 @@ pub(crate) fn callback_input(
         // projection, and the final JNI wire; rendering does not look the type
         // up again or reconstruct any of those decisions.
         let fragment = *arg_fragments.get(i)?;
-        let cb_val = quote!(#cb_arg);
         let arg_abi = fragment.output_abi();
         arg_abi.activate();
         let crate::jni::compile::OutAbi::Value(arg_value) = arg_abi else {
             unreachable!("a whole callback argument is not a synthesized selector")
         };
         let arg_wire = arg_value.pipeline.wire().clone();
-        let enc_ident = format_ident!("__cb{}_enc", i);
-        let obj_ident = format_ident!("__cb{}_obj", i);
-
-        let conversion = arg_value.pipeline.invoke(cb_val, emit);
-        let conv = quote!(#conversion?);
-
-        // Plan-less opaque-handle arg: encode to a raw `jlong` (`Box::into_raw`)
-        // and deliver it as-is. The typed handle class is constructed Kotlin-side
-        // by the generated `asRaw` proxy (`WrapKind::HandleOwned`), which also
-        // `close()`s it after `run` (close-unless-taken) — so no Rust
-        // `new_object` and no post-invoke close. The Kotlin wrap lets a queryable
-        // consumer reply through the handle inside the callback (a consuming
-        // reply zeroes the slot, making the proxy's `close` a no-op). See
-        // `owned_handle_iface_param`.
-        if let Some(h) = &arg_value.projection {
-            if matches!(h.kind, ProjectionKind::Handle) {
-                preludes.push(quote! {
-                    let #enc_ident = #conv;
-                });
-                jvalue_exprs.push(quote!(jni::sys::jvalue { j: #enc_ident }));
-                total += 1;
-                part_ranges.push((
-                    prelude_start,
-                    preludes.len(),
-                    argument_start,
-                    jvalue_exprs.len(),
-                ));
-                continue;
-            }
-        }
-
-        // Whole-value arg (scalar / String / data-class …):
-        // encode with its output converter. A non-`Option` primitive-wire arg
-        // passes its raw primitive; everything else casts to JObject. Output
-        // converters take the value by move; `cb_arg` is the closure
-        // parameter, so pass it directly.
         let arg_is_prim = arg_value
             .projection
             .as_ref()
             .is_none_or(|p| p.kind == ProjectionKind::Unsigned64)
             && arg_ty.optional_inner().is_none()
             && matches!(jni_field_access(&arg_wire), Some((_, _, false)));
-        if arg_is_prim {
-            let letter = jni_field_access(&arg_wire).unwrap().1;
-            preludes.push(quote! {
-                let #enc_ident = #conv;
-            });
-            jvalue_exprs.push(quote!(jni::sys::jvalue { #letter: #enc_ident }));
-            total += 1;
-            part_ranges.push((
-                prelude_start,
-                preludes.len(),
-                argument_start,
-                jvalue_exprs.len(),
-            ));
-            continue;
-        }
-        let cast = cast_wire_to_jobject(&enc_ident, &arg_wire, &fail);
-        preludes.push(quote! {
-            let #enc_ident = #conv;
-            let #obj_ident: jni::objects::JObject = #cast;
+        parts.push(JInvokePart::Whole {
+            pipeline: Box::new(arg_value.pipeline.clone()),
+            projection: arg_value.projection.clone(),
+            wire: arg_wire,
+            primitive: arg_is_prim,
         });
-        jvalue_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
         total += 1;
-        part_ranges.push((
-            prelude_start,
-            preludes.len(),
-            argument_start,
-            jvalue_exprs.len(),
-        ));
     }
 
     // Typed `run` descriptor of the generated callback interface — the SAME
@@ -526,18 +505,6 @@ pub(crate) fn callback_input(
     let frame_cap = std::cmp::max(16, 2 * total + 6);
     let frame_cap_lit = syn::LitInt::new(&frame_cap.to_string(), Span::call_site());
 
-    let parts = part_ranges
-        .into_iter()
-        .enumerate()
-        .map(|(index, (ps, pe, as_, ae))| JInvokePart {
-            source: arg_names[index].clone(),
-            prepare: {
-                let values = &preludes[ps..pe];
-                quote!(#(#values)*)
-            },
-            arguments: jvalue_exprs[as_..ae].to_vec(),
-        })
-        .collect::<Vec<_>>();
     let chain = prebindgen_registry::chain::Invoke {
         source: source.clone(),
         arguments: args.to_vec(),

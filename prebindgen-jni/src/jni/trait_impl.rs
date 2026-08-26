@@ -1252,9 +1252,8 @@ impl Declarations {
         args: &[prebindgen_registry::flat::TypeRef],
         registry: &impl Conversions,
         arg_fragments: &[&crate::jni::compile::JFrag],
-        emit: &prebindgen_registry::Emit,
     ) -> Option<(ConverterImpl<KotlinMeta>, crate::jni::chain::JFunction)> {
-        let (wire, plan) = callback_input(self, source, args, registry, arg_fragments, emit)?;
+        let (wire, plan) = callback_input(self, source, args, registry, arg_fragments)?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
         // (`Any`) — same as the unfold builder / error-sink params. The typed

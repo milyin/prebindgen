@@ -2986,7 +2986,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
 
     fn callback(
         &mut self,
-        cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_>,
         at: At<'_>,
         arg_fragments: &[&JFrag],
         _result: Option<&JFrag>,
@@ -2995,9 +2995,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let TypeKind::Callback { args } = ty.unwrapped().kind() else {
             return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
-        let planned =
-            self.decls
-                .dispatch_fn_input(ty, args, self.registry, arg_fragments, cx.emit());
+        let planned = self
+            .decls
+            .dispatch_fn_input(ty, args, self.registry, arg_fragments);
         let (conv, rust) = planned.ok_or_else(|| refuse(at, "undeclared callback signature"))?;
         let mut fragment = JFrag::new(at, conv);
         fragment.rust = rust;

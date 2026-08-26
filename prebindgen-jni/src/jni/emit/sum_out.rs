@@ -86,8 +86,11 @@ pub(crate) struct Slot {
     pub(crate) default: TokenStream,
 }
 
-pub(crate) fn leaf_slot(ext: &Declarations, leaf: &crate::jni::compile::OutWire) -> Slot {
-    if !leaf_is_prim(ext, leaf) {
+pub(crate) fn leaf_slot(
+    context: &impl DeliveryContext,
+    leaf: &crate::jni::compile::OutWire,
+) -> Slot {
+    if !context.leaf_is_prim(leaf) {
         return Slot {
             prim: false,
             ty: quote!(jni::objects::JObject),
@@ -99,7 +102,7 @@ pub(crate) fn leaf_slot(ext: &Declarations, leaf: &crate::jni::compile::OutWire)
     let (sig, letter) = if leaf.is_tag() {
         ("I", format_ident!("i"))
     } else {
-        let wire = leaf_wire(ext, leaf);
+        let wire = context.leaf_wire(leaf);
         let (sig, letter, _) =
             jni_field_access(&wire).expect("leaf_is_prim guarantees a primitive wire");
         (sig, letter)
@@ -136,8 +139,7 @@ pub(crate) fn is_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
 /// is that a leaf here is not an independent expression — its slot exists in
 /// every arm and only one arm computes it.
 pub(crate) fn encode_sum_group(
-    ext: &Declarations,
-    registry: &impl Conversions,
+    context: &impl DeliveryContext,
     leaves: &[crate::jni::compile::OutWire],
     obj_idents: &[syn::Ident],
     matched: TokenStream,
@@ -151,27 +153,9 @@ pub(crate) fn encode_sum_group(
         .iter()
         .find(|l| l.is_tag())
         .expect("a sum segment carries its selector leaf");
-    // The name off the reading — `TypeId` IS the name, so nothing takes a path
-    // apart to re-derive one.
-    let prebindgen_registry::flat::TypeKind::Named { id, .. } = tag_leaf.out_ty.unwrapped().kind()
-    else {
-        panic!(
-            "jnigen sum unfold: selector type `{}` is not a named type",
-            tag_leaf.out_ty.key()
-        )
-    };
-    // Raw-aware: a sum may legitimately be named `r#type`, and `Ident::new`
-    // rejects that spelling.
-    let ident = id.ident().unwrap_or_else(|| {
-        panic!(
-            "jnigen sum unfold: selector type `{}` is not a single identifier",
-            id.name
-        )
-    });
-    let module = ext.fn_module(registry, &ident);
-    let source: syn::Path = syn::parse_quote!(#module::#ident);
+    let (source, sum) = context.sum(tag_leaf);
 
-    let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(ext, l)).collect();
+    let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(context, l)).collect();
 
     let arg_exprs: Vec<TokenStream> = leaves
         .iter()
@@ -205,15 +189,6 @@ pub(crate) fn encode_sum_group(
         .position(|l| l.is_tag())
         .expect("a sum plan carries its selector leaf");
     let tag_id = &obj_idents[tag_idx];
-    // A unit variant contributes no leaf, so the arm list is driven by the
-    // enum's own alternatives, not by the grouped leaves. `enum_item` hands
-    // back only the `syn::ItemEnum`, deliberately — a consumer that acts on the
-    // Variant/Enum distinction asks `declared_type` (#289).
-    let Some(prebindgen_registry::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
-    else {
-        panic!("jnigen sum unfold: no indexed sum `{ident}` for the decomposed sum")
-    };
-
     let arms: Vec<TokenStream> = sum
         .alternatives
         .iter()
@@ -252,7 +227,7 @@ pub(crate) fn encode_sum_group(
                 .zip(&binds)
                 .map(|(&idx, bind)| {
                     encode_group_leaf(
-                        ext,
+                        context,
                         &leaves[idx],
                         &obj_idents[idx],
                         slots[idx].prim,
@@ -310,7 +285,7 @@ pub(crate) fn encode_sum_group(
 /// payload and a struct field of the same type reach their converter the same
 /// way.
 fn encode_group_leaf(
-    ext: &Declarations,
+    context: &impl DeliveryContext,
     leaf: &crate::jni::compile::OutWire,
     obj_ident: &syn::Ident,
     prim: bool,
@@ -328,7 +303,7 @@ fn encode_group_leaf(
             leaf.name
         ),
     };
-    let wire = leaf_wire(ext, leaf);
+    let wire = context.leaf_wire(leaf);
     let conv_fail = fail(quote!(__e.to_string()));
     let enc = format_ident!("__enc_{}", obj_ident);
     let mut encode = TokenStream::new();
