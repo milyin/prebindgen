@@ -10,13 +10,12 @@ use prebindgen_registry::{
 
 use super::*;
 
-/// A complete legacy JNI converter or a registry-composed late plan.
+/// A registry-composed JNI converter plan or a non-emitting compatibility marker.
 #[derive(Clone)]
 pub(crate) struct JFunction(JBody);
 
 #[derive(Clone)]
 enum JBody {
-    Complete(Box<syn::ItemFn>),
     Marker(syn::Ident),
     ValueCodec(Box<JValueCodecPlan>),
     HandleCodec(Box<JHandleCodecPlan>),
@@ -34,16 +33,8 @@ enum JBody {
 }
 
 impl JFunction {
-    pub(crate) fn complete(function: syn::ItemFn) -> Self {
-        Self(JBody::Complete(Box::new(function)))
-    }
-
-    pub(crate) fn retained(function: syn::ItemFn) -> Self {
-        if is_planned_marker(&function) {
-            Self(JBody::Marker(function.sig.ident))
-        } else {
-            Self::complete(function)
-        }
+    pub(crate) fn marker(ident: syn::Ident) -> Self {
+        Self(JBody::Marker(ident))
     }
 
     pub(crate) fn handle_codec(plan: JHandleCodecPlan) -> Self {
@@ -157,7 +148,6 @@ impl JFunction {
 
     pub(crate) fn mark_reachable(&self) {
         match &self.0 {
-            JBody::Complete(_) => {}
             JBody::Marker(_) | JBody::ValueCodec(_) => {}
             JBody::CustomConversion(_) => {}
             JBody::HandleCodec(plan) => plan.reachable.set(true),
@@ -212,7 +202,6 @@ impl JFunction {
 impl RustFunction for JFunction {
     fn ident(&self) -> &syn::Ident {
         match &self.0 {
-            JBody::Complete(function) => &function.sig.ident,
             JBody::Marker(ident) => ident,
             JBody::ValueCodec(plan) => &plan.ident,
             JBody::HandleCodec(plan) => &plan.ident,
@@ -232,11 +221,10 @@ impl RustFunction for JFunction {
 
     fn should_emit(&self) -> bool {
         match &self.0 {
-            JBody::Complete(_) => true,
             JBody::Marker(_) => false,
-            // Complete compatibility parents do not yet propagate
-            // reachability to the children they call. Until those parents are
-            // planned too, every compiled value codec remains an emitted leaf.
+            // Compatibility parents do not yet propagate reachability to the
+            // children they call. Until those parents are planned too, every
+            // compiled value codec remains an emitted leaf.
             JBody::ValueCodec(_) => true,
             JBody::HandleCodec(plan) => plan.reachable.get(),
             // Canonical conversion stages historically emit once compiled.
@@ -260,7 +248,6 @@ impl RustFunction for JFunction {
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         match &self.0 {
-            JBody::Complete(function) => (**function).clone(),
             JBody::Marker(ident) => planned_marker(ident),
             JBody::ValueCodec(plan) => plan.render(emit),
             JBody::HandleCodec(plan) => plan.render(emit),
@@ -1851,19 +1838,6 @@ pub(crate) fn planned_marker(ident: &syn::Ident) -> syn::ItemFn {
     syn::parse_quote!(fn #ident() {})
 }
 
-fn is_planned_marker(function: &syn::ItemFn) -> bool {
-    function.attrs.is_empty()
-        && function.vis == syn::Visibility::Inherited
-        && function.sig.constness.is_none()
-        && function.sig.asyncness.is_none()
-        && function.sig.unsafety.is_none()
-        && function.sig.abi.is_none()
-        && function.sig.generics.params.is_empty()
-        && function.sig.inputs.is_empty()
-        && matches!(function.sig.output, syn::ReturnType::Default)
-        && function.block.stmts.is_empty()
-}
-
 /// Stable private name for a converter whose source spelling is deliberately
 /// unavailable until final rendering.
 pub(crate) fn planned_name(
@@ -1946,6 +1920,29 @@ mod tests {
         .to_string();
         assert!(name.starts_with("tuple64_to_i64_"), "{name}");
         assert!(name.len() < 64, "{name}");
+    }
+
+    /// The writer-facing carrier may retain semantic plans and marker
+    /// identities, but never a pre-rendered Rust function. Otherwise a new
+    /// compatibility caller could silently restore the old eager path.
+    #[test]
+    fn function_carrier_cannot_store_complete_rust_syntax() {
+        let source = include_str!("chain.rs");
+        let body = source
+            .split_once("enum JBody {")
+            .expect("JBody declaration")
+            .1
+            .split_once("impl JFunction")
+            .expect("end of JBody declaration")
+            .0;
+        assert!(!body.contains("syn::ItemFn"), "{body}");
+        assert!(!body.contains("Complete"), "{body}");
+    }
+
+    #[test]
+    fn compatibility_markers_never_emit() {
+        let marker = JFunction::marker(format_ident!("__jni_parts"));
+        assert!(!marker.should_emit());
     }
 
     #[test]

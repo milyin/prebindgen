@@ -701,7 +701,7 @@ impl Carrier for JFrag {
 
 impl JFrag {
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
-        let rust = crate::jni::chain::JFunction::retained(conv.function.clone());
+        let rust = crate::jni::chain::JFunction::marker(conv.converter_ident().clone());
         Self::planned(at, conv, rust)
     }
 
