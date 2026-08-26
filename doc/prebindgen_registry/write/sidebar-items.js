@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WriteError"],"fn":["write_rust"],"trait":["RustFunction"]};
