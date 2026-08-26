@@ -150,6 +150,24 @@ impl OperationId {
         hash
     }
 
+    /// Human-readable semantic owner used as the prefix of the final private
+    /// Rust symbol. This is deliberately available only inside the registry:
+    /// adapters retain the identity, while the writer decides how model
+    /// identity is presented in generated Rust.
+    pub(crate) fn semantic_label(&self) -> String {
+        match &self.owner {
+            OperationOwner::Fragment(fragment) => fragment.spelling().as_str().to_owned(),
+            OperationOwner::Composed {
+                shape: ComposedShape::Sequence,
+                carrier,
+                ..
+            } => format!("sequence_{}", carrier.as_str()),
+            OperationOwner::Shared { artifact, .. } => {
+                format!("{}_{}", artifact.kind(), artifact.name())
+            }
+        }
+    }
+
     fn stable_key(&self) -> String {
         let owner = match &self.owner {
             OperationOwner::Fragment(fragment) => format!("fragment\0{}", fragment.stable_key()),

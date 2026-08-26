@@ -753,7 +753,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
     );
     assert!(rc.contains("__jni_in_stage_0_"), "{rust}");
     assert!(
-        rc.contains("__jni_in_convert_") && rc.contains("env,&__delay_raw)?"),
+        rc.contains("__jni_in_convert_") && rc.contains("env,&__delay_raw"),
         "whole-JObject input must invoke the complete optional Duration converter:\n{rust}"
     );
     assert!(
@@ -763,7 +763,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
     );
     assert!(!rc.contains("let___delay:jni::objects::JObject"), "{rust}");
     assert!(
-        rc.contains("__jni_in_convert_") && rc.contains("(&mutenv,(value_delay,))"),
+        rc.contains("__jni_in_convert_") && rc.contains("(&mutenv,(value_delay,"),
         "the wrapper must delegate Product reconstruction to its registry chain:\n{rust}"
     );
     assert!(
@@ -2455,7 +2455,7 @@ fn convert_via_local_fns() {
     assert!(
         rc.contains("let__chain_s0=__jni_out_stage_0_")
             && rc.contains("__jni_out_convert_")
-            && rc.contains("env,__chain_s0)"),
+            && rc.contains("env,__chain_s0"),
         "the ordinary output must invoke its frozen stage-then-terminal pipeline:\n{rust}"
     );
 }
@@ -2516,7 +2516,7 @@ fn multi_stage_pipeline_preserves_registry_order() {
         rc.contains("let__chain_s0=__jni_out_stage_0_")
             && rc.contains("let__chain_s1=__jni_out_stage_0_")
             && rc.contains("__jni_out_convert_")
-            && rc.contains("env,__chain_s1)"),
+            && rc.contains("env,__chain_s1"),
         "deconstruct must run outer stage, inner stage, then terminal:\n{rust}"
     );
 }
