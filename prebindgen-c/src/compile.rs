@@ -459,7 +459,7 @@ impl CFrag {
     }
 
     /// A canonical scalar conversion retained as an operation until final
-    /// Rust emission rather than routed through `ConverterImpl::function`.
+    /// Rust emission rather than routed through a complete-function carrier.
     fn from_custom(at: At<'_>, plan: crate::chain::CustomPlan, niches: Niches) -> Self {
         let destination = plan.wire.clone();
         let subs = vec![TypeKey::from_type(&destination)];

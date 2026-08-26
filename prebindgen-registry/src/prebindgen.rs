@@ -10,10 +10,10 @@
 //! `on_input_type`, no deferral, and no fixed-point loop retrying until it
 //! converges.
 //!
-//! [`ConverterImpl::function`] is the **complete** Rust function for a
-//! converter — signature, body, attributes, lifetimes. The generator owns 100%
-//! of the shape. Callers read the name from `function.sig.ident` and the wire
-//! form from `destination`.
+//! [`ConverterImpl::converter`] is the stable identity of the wire-facing
+//! converter. Its executable artifact is retained separately by the adapter's
+//! frozen generation plan; this shared registry carrier never stores rendered
+//! Rust syntax.
 
 use proc_macro2::TokenStream;
 
@@ -27,19 +27,18 @@ pub type NamePredicate = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
 /// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
 /// a value-inspecting step that sits between the rust value the
 /// `#[prebindgen]` fn yields/receives and the wire-facing
-/// [`ConverterImpl::function`].
+/// [`ConverterImpl::converter`].
 ///
 /// Each stage is a fallible `In → Result<Out, Err>` function. The core
-/// pipeline only ever emits and de-duplicates [`Self::function`]; how a
+/// pipeline only ever orders [`Self::converter`]; how a
 /// stage's `Err` arm is surfaced to the foreign side — throw an exception,
 /// return an error code, set `errno`, … — is entirely up to the
 /// destination-language adapter and is described by [`Self::metadata`].
 #[derive(Clone)]
 pub struct Stage<M = ()> {
-    /// Complete function definition for this stage. Same shape as
-    /// [`ConverterImpl::function`] but typed for this stage's own `In →
-    /// Out` and own error type.
-    pub function: syn::ItemFn,
+    /// Stable identity of this stage's separately retained executable
+    /// artifact.
+    pub converter: syn::Ident,
     /// Adapter-specific extras for this stage — the same type as the owning
     /// converter's ([`ConverterImpl::metadata`]). The core never
     /// inspects this; the adapter's emitter reads it to decide how the
@@ -50,9 +49,10 @@ pub struct Stage<M = ()> {
 }
 
 /// Result of resolving one converter — the wire (destination) type the rest
-/// of the registry sees, plus the complete generated function.
+/// of the registry sees, plus the identity of its separately retained
+/// executable artifact.
 ///
-/// Invariant: `function.sig.ident` MUST be a deterministic function of the
+/// Invariant: `converter` MUST be a deterministic function of the
 /// `(rust_type, destination)` pair so that callers of this converter — both
 /// other generated converters from the same adapter and any hand-written code
 /// that knows the convention — can compute or look up the name.
@@ -64,14 +64,14 @@ pub struct ConverterImpl<M = ()> {
     /// is the adapter's internal calling convention; `destination` is the
     /// value the wire carries on success.
     pub destination: syn::Type,
-    /// Complete function definition for the **wire-facing** stage. The
-    /// adapter owns the parameter list, return type, `unsafe`/`pub`
-    /// modifiers, lifetime parameters, and any attribute annotations.
+    /// Stable identity of the **wire-facing** stage. The adapter's frozen
+    /// generation plan owns its parameter list, return type, body, and other
+    /// Rust emission policy.
     /// For input direction this is the FIRST stage in execution order
     /// (it takes the wire); for output direction this is the LAST stage
     /// (it produces the wire).
-    pub function: syn::ItemFn,
-    /// **Rust-side** stages that compose with [`Self::function`] to form
+    pub converter: syn::Ident,
+    /// **Rust-side** stages that compose with [`Self::converter`] to form
     /// the full conversion chain. Default empty — a 1-stage converter
     /// is just `function`.
     ///
@@ -118,7 +118,7 @@ pub struct ConverterImpl<M = ()> {
 impl<M> ConverterImpl<M> {
     /// Identifier of the wire-facing converter function.
     pub fn converter_ident(&self) -> &syn::Ident {
-        &self.function.sig.ident
+        &self.converter
     }
 
     /// Wire type this conversion carries on success.

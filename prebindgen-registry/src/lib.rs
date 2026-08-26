@@ -18,8 +18,8 @@
 //! Write one generator per destination language. It does two things:
 //!
 //! * **Says how the language represents Rust types on the wire** — it builds a
-//!   [`ConverterImpl`] (a generated converter fn plus its wire type) for each
-//!   crossing the registry hands it, and gives them all back through
+//!   [`ConverterImpl`] (a converter artifact identity plus its wire type) for
+//!   each crossing the registry hands it, and gives them all back through
 //!   `RegistryBuilder::convert_with`.
 //! * **Owns the Rust-emission key** and emits wrapper code per item —
 //!   `on_function` / `on_struct` / `on_enum` / `on_const` on the
@@ -63,12 +63,14 @@
 //! The same machinery serves very different languages:
 //!
 //! * **C / cbindgen back-end** (the separate `prebindgen-c` crate): wire types
-//!   are raw pointers and primitive C types; converters are thin transmutes;
-//!   `pre_stages` are usually empty (errors surface as return codes).
+//!   are raw pointers and primitive C types; converter artifacts are thin
+//!   transmutes; `pre_stages` are usually empty (errors surface as return
+//!   codes).
 //! * **JNI / Kotlin back-end** (the separate `prebindgen-jni` crate): wire
-//!   types are JNI handles (`jlong`, `JObject`); converters marshal across the
-//!   JVM boundary; `pre_stages` carry fallible steps whose `Err` arms throw
-//!   JVM exceptions (the exception info lives in that back-end's `Metadata`).
+//!   types are JNI handles (`jlong`, `JObject`); converter artifacts marshal
+//!   across the JVM boundary; `pre_stages` carry fallible steps whose `Err`
+//!   arms throw JVM exceptions (the exception info lives in that back-end's
+//!   `Metadata`).
 //!
 //! # Macros
 //!

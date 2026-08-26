@@ -116,8 +116,8 @@ impl Declarations {
     }
 
     /// Canonical input-converter name for `(rust, wire)` — exposed
-    /// for plugin wrapper exts that build `ConverterImpl::function`
-    /// manually with a non-standard return type (e.g.
+    /// for plugin wrapper exts that name a converter artifact with a
+    /// non-standard return type (e.g.
     /// `impl Into<…>` parameters that can't be expressed via
     /// `input_wrapper_shape`'s fixed signature shape).
     pub fn input_converter_name(&self, rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
@@ -573,7 +573,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![],
             destination: inner.destination.clone(),
-            function: inner.function.clone(),
+            converter: inner.converter.clone(),
             pre_stages: vec![],
             niches: inner.niches.clone(),
             metadata: KotlinMeta {
@@ -704,7 +704,7 @@ impl JniGenBuilder {
         // invariants, reported together once the walk is done.
         let mut refusals: Vec<String> = Vec::new();
         let registry = declared
-            .convert_with(|crossing, built, _emit| {
+            .convert_with(|crossing, built| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     decls.recipe_table(),
@@ -827,9 +827,12 @@ impl JniGenBuilder {
             .flat_map(|f| {
                 std::iter::once(f.rust.clone())
                     .chain(f.rust_stages.iter().cloned())
-                    .chain(f.conv.pre_stages.iter().map(|s| {
-                        crate::jni::chain::JFunction::marker(s.function.sig.ident.clone())
-                    }))
+                    .chain(
+                        f.conv
+                            .pre_stages
+                            .iter()
+                            .map(|s| crate::jni::chain::JFunction::marker(s.converter.clone())),
+                    )
             })
             .collect();
         let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry);
@@ -1162,7 +1165,7 @@ impl Declarations {
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            function: crate::jni::chain::planned_marker(plan.name()),
+            converter: plan.name().clone(),
             destination: wire,
             niches,
             metadata: self.framework_meta(Some(KtType::any())),
