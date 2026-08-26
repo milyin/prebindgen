@@ -56,103 +56,6 @@ pub(crate) fn generated_converter_attr() -> syn::Attribute {
 // ──────────────────────────────────────────────────────────────────────
 
 impl Declarations {
-    /// [`Self::build_input_fn`] for a caller holding the **reading** of the Rust
-    /// type this converter yields — the terminals and the transparent bridges.
-    ///
-    /// The borrow annotation is the only thing it does differently:
-    /// [`annotate_borrow_with_lifetime`] matched a `syn::Type::Reference` with
-    /// no lifetime, and the model states both facts on
-    /// [`TypeKind::Ref`](prebindgen_registry::flat::TypeKind::Ref), so this spells
-    /// `&'env [mut] <inner>` off the classification. Everything else the
-    /// signature needs is the spelling, which is the reading's own tokens.
-    pub(crate) fn build_input_fn_of(
-        &self,
-        rust: &prebindgen_registry::flat::TypeRef,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-        emit: &prebindgen_registry::Emit,
-    ) -> syn::ItemFn {
-        let spelled = emit.spell(rust);
-        let rust_with_lifetime = match rust.kind() {
-            prebindgen_registry::flat::TypeKind::Ref {
-                lifetime: None,
-                mutable,
-                inner,
-            } => {
-                let inner = emit.spell(inner);
-                let m = if *mutable { quote!(mut) } else { quote!() };
-                quote!(&'env #m #inner)
-            }
-            _ => spelled.clone(),
-        };
-        self.build_input_fn_parts(&spelled, &rust_with_lifetime, wire, body, exc)
-    }
-
-    pub(crate) fn build_input_fn_parts(
-        &self,
-        rust: &TokenStream,
-        rust_with_lifetime: &TokenStream,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-    ) -> syn::ItemFn {
-        let name = input_name(rust, wire);
-        let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "v");
-        let err_type = exc.cloned().unwrap_or_else(default_err_type);
-        let ret_body = body_for_exc(body, exc);
-        let gen_allow = generated_converter_attr();
-        if matches!(wire, syn::Type::Ptr(_)) {
-            syn::parse_quote!(
-                #gen_allow
-                pub(crate) unsafe fn #name<'env>(env: &mut jni::JNIEnv<'env>, v: #wire) -> ::core::result::Result<#rust_with_lifetime, #err_type> {
-                    #ret_body
-                }
-            )
-        } else {
-            syn::parse_quote!(
-                #gen_allow
-                pub(crate) unsafe fn #name<'env, 'v>(env: &mut jni::JNIEnv<'env>, v: &#wire_with_lifetime) -> ::core::result::Result<#rust_with_lifetime, #err_type> {
-                    #ret_body
-                }
-            )
-        }
-    }
-
-    /// [`Self::build_output_fn_parts`] off the **reading**. The output signature takes
-    /// the value by move and needs no lifetime splice, so this is the spelling
-    /// and nothing else.
-    pub(crate) fn build_output_fn_of(
-        &self,
-        rust: &prebindgen_registry::flat::TypeRef,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-        emit: &prebindgen_registry::Emit,
-    ) -> syn::ItemFn {
-        self.build_output_fn_parts(&emit.spell(rust), wire, body, exc)
-    }
-
-    pub(crate) fn build_output_fn_parts(
-        &self,
-        rust: &TokenStream,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-    ) -> syn::ItemFn {
-        let name = output_name(rust, wire);
-        let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
-        let err_type = exc.cloned().unwrap_or_else(default_err_type);
-        let ret_body = body_for_exc(body, exc);
-        let gen_allow = generated_converter_attr();
-        syn::parse_quote!(
-            #gen_allow
-            pub(crate) unsafe fn #name<'a>(env: &mut jni::JNIEnv<'a>, v: #rust) -> ::core::result::Result<#wire_with_lifetime, #err_type> {
-                #ret_body
-            }
-        )
-    }
-
     /// Leaf metadata for an opaque handle: value-context name `Long` plus the
     /// projection that folds outward through wrappers. The corresponding
     /// ownership, null-niche, and odd-pointer-tag operations live in the late
@@ -1570,9 +1473,8 @@ impl Prebindgen for Declarations {
         _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
-        // Struct converter bodies are emitted by the resolver via
-        // input_terminal / output_terminal below; no separate
-        // per-struct item is needed.
+        // Struct converter bodies are emitted from retained registry plans;
+        // no separate per-struct item is needed.
         TokenStream::new()
     }
 
@@ -1619,103 +1521,6 @@ impl Prebindgen for Declarations {
             #alias
             #wrapper
         }
-    }
-}
-
-/// Remaining rank-0 compatibility terminal builders, now inherent helpers
-/// called by registry recipe compilation.
-impl Declarations {
-    // ── Input converters ─────────────────────────────────────────────
-
-    /// Remaining whole-type **input** compatibility categories: destination
-    /// primitive overrides and the explicit whole-object sum decoder.
-    ///
-    /// Bare scalars and all string terminals are compiled as
-    /// `JValueCodecPlan`s before this fallback is entered.
-    pub(crate) fn input_terminal(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Classify off `kind`, spell with `spell()`: the arms below that ask what
-        // a type IS use `reading`, and everything that has to name it in
-        // generated Rust uses this.
-        // Everything below reads the reading: the identity for a lookup, the
-        // spelling for what generated Rust says. Neither needs a node.
-        // Opaque handles and canonical custom conversions are retained before
-        // this fallback.
-        if let Some((wire, body)) = (!matches!(
-            reading.unwrapped().kind(),
-            prebindgen_registry::flat::TypeKind::Scalar(_)
-                | prebindgen_registry::flat::TypeKind::Str
-                | prebindgen_registry::flat::TypeKind::String
-                | prebindgen_registry::flat::TypeKind::Unit
-        ))
-        .then(|| primitive_input(&reading.key()))
-        .flatten()
-        {
-            let niches = default_niches_for_wire(&wire);
-            let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if is_unsigned64(reading) {
-                self.unsigned64_leaf_meta()
-            } else {
-                self.framework_meta(kotlin_name)
-            };
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata,
-            });
-        }
-        None
-    }
-
-    // ── Output converters ────────────────────────────────────────────
-
-    /// Remaining whole-type **output** compatibility category: destination
-    /// primitive overrides.
-    /// Bare scalars, all string terminals, and unit are compiled as
-    /// `JValueCodecPlan`s before this fallback is entered.
-    pub(crate) fn output_terminal(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Classify off `kind`, spell with `spell()` — see `input_terminal`.
-        // Everything below reads the reading: the identity for a lookup, the
-        // spelling for what generated Rust says. Neither needs a node.
-        // Opaque handles and canonical custom conversions are retained before
-        // this fallback.
-        if let Some((wire, body)) = (!matches!(
-            reading.unwrapped().kind(),
-            prebindgen_registry::flat::TypeKind::Scalar(_)
-                | prebindgen_registry::flat::TypeKind::Str
-                | prebindgen_registry::flat::TypeKind::String
-                | prebindgen_registry::flat::TypeKind::Unit
-        ))
-        .then(|| primitive_output(&reading.key()))
-        .flatten()
-        {
-            let niches = default_niches_for_wire(&wire);
-            let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if is_unsigned64(reading) {
-                self.unsigned64_leaf_meta()
-            } else {
-                self.framework_meta(kotlin_name)
-            };
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata,
-            });
-        }
-        None
     }
 }
 

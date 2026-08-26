@@ -1,4 +1,4 @@
-//! Scalar and `Option` converter bodies and their wire probes.
+//! JNI scalar/byte-vector terminal bodies and shared wire probes.
 
 use super::*;
 
@@ -34,17 +34,19 @@ pub(crate) fn sentinel_for_wire(wire: &syn::Type) -> TokenStream {
 // Primitive bodies
 // ──────────────────────────────────────────────────────────────────────
 
-pub(crate) fn primitive_input(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> {
-    let key = key.as_str().to_string();
+pub(crate) fn scalar_input(
+    kind: prebindgen_registry::flat::ScalarKind,
+) -> Option<(syn::Type, syn::Expr)> {
+    use prebindgen_registry::flat::ScalarKind;
     // Bodies receive `v: &<wire>`; primitives are Copy so `*v` works.
-    Some(match key.as_str() {
-        "bool" => (
+    Some(match kind {
+        ScalarKind::Bool => (
             syn::parse_quote!(jni::sys::jboolean),
             syn::parse_quote!(*v != 0),
         ),
-        "i32" => (syn::parse_quote!(jni::sys::jint), syn::parse_quote!(*v)),
-        "i64" => (syn::parse_quote!(jni::sys::jlong), syn::parse_quote!(*v)),
-        "u8" => (
+        ScalarKind::I32 => (syn::parse_quote!(jni::sys::jint), syn::parse_quote!(*v)),
+        ScalarKind::I64 => (syn::parse_quote!(jni::sys::jlong), syn::parse_quote!(*v)),
+        ScalarKind::U8 => (
             syn::parse_quote!(jni::sys::jint),
             syn::parse_quote!(::core::primitive::u8::try_from(*v).map_err(|_| {
                 <__JniErr as ::core::convert::From<String>>::from(format!(
@@ -53,7 +55,7 @@ pub(crate) fn primitive_input(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> {
                 ))
             })?),
         ),
-        "u16" => (
+        ScalarKind::U16 => (
             syn::parse_quote!(jni::sys::jint),
             syn::parse_quote!(::core::primitive::u16::try_from(*v).map_err(|_| {
                 <__JniErr as ::core::convert::From<String>>::from(format!(
@@ -62,7 +64,7 @@ pub(crate) fn primitive_input(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> {
                 ))
             })?),
         ),
-        "u32" => (
+        ScalarKind::U32 => (
             syn::parse_quote!(jni::sys::jlong),
             syn::parse_quote!(::core::primitive::u32::try_from(*v).map_err(|_| {
                 <__JniErr as ::core::convert::From<String>>::from(format!(
@@ -74,96 +76,77 @@ pub(crate) fn primitive_input(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> {
         // Kotlin's public surface is `ULong`, but the JNI tier receives its
         // underlying `Long` bit pattern. Rust's `as u64` is the inverse of
         // Kotlin's `ULong.toLong()` for all 64 bits.
-        "u64" => (
+        ScalarKind::U64 => (
             syn::parse_quote!(jni::sys::jlong),
             syn::parse_quote!(*v as ::core::primitive::u64),
         ),
-        "f64" => (syn::parse_quote!(jni::sys::jdouble), syn::parse_quote!(*v)),
-        "String" => (
-            syn::parse_quote!(jni::objects::JString),
-            syn::parse_quote!({
-                let s = env.get_string(v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "decode_string: {}",
-                        e
-                    ))
-                })?;
-                s.into()
-            }),
-        ),
-        "Vec < u8 >" => (
-            syn::parse_quote!(jni::objects::JByteArray),
-            syn::parse_quote!({
-                env.convert_byte_array(v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "decode_byte_array: {}",
-                        e
-                    ))
-                })?
-            }),
-        ),
+        ScalarKind::F64 => (syn::parse_quote!(jni::sys::jdouble), syn::parse_quote!(*v)),
         _ => return None,
     })
 }
 
-pub(crate) fn primitive_output(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> {
-    let key = key.as_str().to_string();
+pub(crate) fn scalar_output(
+    kind: prebindgen_registry::flat::ScalarKind,
+) -> Option<(syn::Type, syn::Expr)> {
+    use prebindgen_registry::flat::ScalarKind;
     // Output wrappers take v by value (move). Primitives are Copy, so
-    // `v as wire` works. String/Vec consume v.
-    Some(match key.as_str() {
-        "bool" => (
+    // `v as wire` works.
+    Some(match kind {
+        ScalarKind::Bool => (
             syn::parse_quote!(jni::sys::jboolean),
             syn::parse_quote!(v as jni::sys::jboolean),
         ),
-        "i32" => (
+        ScalarKind::I32 => (
             syn::parse_quote!(jni::sys::jint),
             syn::parse_quote!(v as jni::sys::jint),
         ),
-        "i64" => (
+        ScalarKind::I64 => (
             syn::parse_quote!(jni::sys::jlong),
             syn::parse_quote!(v as jni::sys::jlong),
         ),
-        "u8" | "u16" => (
+        ScalarKind::U8 | ScalarKind::U16 => (
             syn::parse_quote!(jni::sys::jint),
             syn::parse_quote!(v as jni::sys::jint),
         ),
-        "u32" | "u64" => (
+        ScalarKind::U32 | ScalarKind::U64 => (
             syn::parse_quote!(jni::sys::jlong),
             syn::parse_quote!(v as jni::sys::jlong),
         ),
-        "f64" => (
+        ScalarKind::F64 => (
             syn::parse_quote!(jni::sys::jdouble),
             syn::parse_quote!(v as jni::sys::jdouble),
-        ),
-        "String" => (
-            syn::parse_quote!(jni::objects::JString),
-            syn::parse_quote!({
-                env.new_string(v.as_str()).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "encode_string: {}",
-                        e
-                    ))
-                })?
-            }),
-        ),
-        "Vec < u8 >" => (
-            syn::parse_quote!(jni::objects::JByteArray),
-            syn::parse_quote!({
-                env.byte_array_from_slice(v.as_slice()).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "encode_byte_array: {}",
-                        e
-                    ))
-                })?
-            }),
         ),
         _ => return None,
     })
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Option<_> wrappers
-// ──────────────────────────────────────────────────────────────────────
+pub(crate) fn byte_vector_input() -> (syn::Type, syn::Expr) {
+    (
+        syn::parse_quote!(jni::objects::JByteArray),
+        syn::parse_quote!({
+            env.convert_byte_array(v).map_err(|e| {
+                <__JniErr as ::core::convert::From<String>>::from(format!(
+                    "decode_byte_array: {}",
+                    e
+                ))
+            })?
+        }),
+    )
+}
+
+pub(crate) fn byte_vector_output() -> (syn::Type, syn::Expr) {
+    (
+        syn::parse_quote!(jni::objects::JByteArray),
+        syn::parse_quote!({
+            env.byte_array_from_slice(v.as_slice()).map_err(|e| {
+                <__JniErr as ::core::convert::From<String>>::from(format!(
+                    "encode_byte_array: {}",
+                    e
+                ))
+            })?
+        }),
+    )
+}
 
 // ──────────────────────────────────────────────────────────────────────
 // Callback wrappers — impl Fn(args) -> JObject (erased Kotlin lambda)

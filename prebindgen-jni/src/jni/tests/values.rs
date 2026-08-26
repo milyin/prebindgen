@@ -104,6 +104,68 @@ fn bare_scalars_retain_late_registry_plans_in_both_directions() {
 }
 
 #[test]
+fn byte_vectors_retain_late_registry_plans_in_both_directions() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::parse_quote!(
+            pub fn bytes_echo(value: Vec<u8>) -> Vec<u8> {
+                value
+            }
+        ),
+        myflat_loc(),
+    )]))
+    .expect("index byte-vector fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(bytes_echo)))
+        .build_with(registry)
+        .expect("resolve byte-vector fixture");
+    let reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(Vec<u8>)))
+        .expect("Vec<u8> reading");
+
+    assert!(
+        generation
+            .decls
+            .in_frag(&reading)
+            .expect("Vec<u8> input")
+            .is_value_codec_plan(),
+        "the byte-vector input must retain an unrendered value codec plan"
+    );
+    assert!(
+        generation
+            .decls
+            .out_frag(&reading)
+            .expect("Vec<u8> output")
+            .is_value_codec_plan(),
+        "the byte-vector output must retain an unrendered value codec plan"
+    );
+}
+
+/// Recipe compilation selects terminal representations from Flat kinds and
+/// retains source readings; it cannot spell source Rust or recover a kind by
+/// parsing a key string. `Emit` belongs only to the final renderer.
+#[test]
+fn jni_recipe_planning_has_no_emit_or_key_text_escape() {
+    let compile = include_str!("../compile.rs");
+    assert!(!compile.contains(".emit()"), "{compile}");
+
+    let terminals = include_str!("../emit/convert.rs");
+    assert!(!terminals.contains("TypeKey"), "{terminals}");
+    let terminal_selection = terminals
+        .split_once("pub(crate) fn scalar_input(")
+        .expect("scalar terminal policy")
+        .1
+        .split_once("// Callback wrappers")
+        .expect("end of terminal policy")
+        .0;
+    assert!(
+        !terminal_selection.contains(".as_str()"),
+        "{terminal_selection}"
+    );
+}
+
+#[test]
 fn owned_strings_and_unit_retain_late_value_codec_plans() {
     let registry = crate::test_util::reg_from_items(declare_referenced(vec![
         (
