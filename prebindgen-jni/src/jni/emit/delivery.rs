@@ -38,7 +38,7 @@ pub(crate) fn emit_unfold_delivery(
     output: &crate::jni::fn_plan::UnfoldOutputPlan,
     call_expr: &TokenStream,
     on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> TokenStream {
     use prebindgen_registry::unfold::UnfoldShape;
     let context = LiveDeliveryContext::new(ext, registry);
@@ -551,7 +551,7 @@ pub(crate) struct Delivered<'a> {
 /// Facts the leaf renderer may consult after a delivery operation has been
 /// selected. The live implementation serves ordinary wrapper rendering; an
 /// Invoke plan freezes the same answers so callback planning does not retain a
-/// registry or obtain [`prebindgen_registry::Emit`].
+/// registry or obtain [`prebindgen_registry::RustWriter`].
 pub(crate) trait DeliveryContext {
     fn qualify(&self, ident: &syn::Ident) -> syn::Path;
     fn leaf_is_prim(&self, leaf: &crate::jni::compile::OutWire) -> bool;
@@ -1101,7 +1101,7 @@ pub(crate) fn encode_plan_leaves(
     obj_idents: &[syn::Ident],
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (TokenStream, Vec<TokenStream>, Option<syn::Ident>) {
     let Delivered {
         wires,

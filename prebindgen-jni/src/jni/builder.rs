@@ -1697,10 +1697,6 @@ impl Declarations {
     }
 }
 
-pub(crate) fn default_err_type() -> syn::Type {
-    syn::parse_quote!(__JniErr)
-}
-
 /// The actual framework error type the `__JniErr` alias resolves to: the
 /// E-agnostic `JniBindingError<()>` whose failures are always `JniError`
 /// (binding-layer). A `Result<T, E>` return carries its own raw `E`, surfaced

@@ -1512,7 +1512,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_sequence_Vec_Label_ae8a3bfd5821a2b
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'a>,
-) -> ::core::result::Result<Vec<perftest_flat::Label>, __JniErr> {
+) -> ::core::result::Result<::std::vec::Vec<perftest_flat::Label>, __JniErr> {
     ::core::result::Result::Ok({
         let __sequence_list = jni::objects::JList::from_env(env, v)
             .map_err(|e| <__JniErr as ::core::convert::From<
@@ -2180,7 +2180,9 @@ pub(crate) unsafe fn __jni_out_convert_Box_Box_Option_String_jni_optional_interm
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Box<Box<Option<String>>>,
+    v: ::std::boxed::Box<
+        ::std::boxed::Box<::core::option::Option<::std::string::String>>,
+    >,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match **v {
@@ -2210,7 +2212,7 @@ pub(crate) unsafe fn __jni_out_convert_Box_Box_Option_String_jni_optional_interm
 pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Duration_f559e4f7f273939a<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
-) -> ::core::result::Result<Box<perftest_flat::Duration>, __JniErr> {
+) -> ::core::result::Result<::std::boxed::Box<perftest_flat::Duration>, __JniErr> {
     ::core::result::Result::Ok({
         let __inner = {
             let __chain_s0 = __jni_in_convert_wire_to_u64_8507143745dc33b9(env, v)?;
@@ -2241,7 +2243,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Duration_f559e4f7f273939a<'env
 )]
 pub(crate) unsafe fn __jni_out_convert_Box_Duration_to_wire_da123336f8d927bd<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: Box<perftest_flat::Duration>,
+    v: ::std::boxed::Box<perftest_flat::Duration>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     ::core::result::Result::Ok({
         let __inner = *v;
@@ -2285,7 +2287,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Option_Payload_jni_optional_in
             jni::objects::JString<'v>,
         ),
     ),
-) -> ::core::result::Result<Box<Option<perftest_flat::Payload>>, __JniErr> {
+) -> ::core::result::Result<
+    ::std::boxed::Box<::core::option::Option<perftest_flat::Payload>>,
+    __JniErr,
+> {
     ::core::result::Result::Ok(
         ::std::boxed::Box::new({
             if (v).0 == 0u8 {
@@ -2321,7 +2326,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Option_Priority_jni_optional_i
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
-) -> ::core::result::Result<Box<Option<perftest_flat::Priority>>, __JniErr> {
+) -> ::core::result::Result<
+    ::std::boxed::Box<::core::option::Option<perftest_flat::Priority>>,
+    __JniErr,
+> {
     ::core::result::Result::Ok(
         ::std::boxed::Box::new({
             if *v == -2147483648i32 {
@@ -2354,7 +2362,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Option_String_jni_optional_int
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
-) -> ::core::result::Result<Box<Option<String>>, __JniErr> {
+) -> ::core::result::Result<
+    ::std::boxed::Box<::core::option::Option<::std::string::String>>,
+    __JniErr,
+> {
     ::core::result::Result::Ok(
         ::std::boxed::Box::new({
             if v.is_null() {
@@ -2390,7 +2401,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Option_i64_jni_optional_interm
 >(
     env: &mut jni::JNIEnv<'env>,
     v: (jni::sys::jboolean, jni::sys::jlong),
-) -> ::core::result::Result<Box<Option<i64>>, __JniErr> {
+) -> ::core::result::Result<::std::boxed::Box<::core::option::Option<i64>>, __JniErr> {
     ::core::result::Result::Ok(
         ::std::boxed::Box::new({
             if (v).0 == 0u8 {
@@ -2423,7 +2434,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Option_i64_jni_optional_interm
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Box<Option<i64>>, __JniErr> {
+) -> ::core::result::Result<::std::boxed::Box<::core::option::Option<i64>>, __JniErr> {
     ::core::result::Result::Ok(
         ::std::boxed::Box::new({
             if (v).is_null() {
@@ -2461,7 +2472,7 @@ pub(crate) unsafe fn __jni_out_convert_Box_Option_i64_jni_optional_intermediate_
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Box<Option<i64>>,
+    v: ::std::boxed::Box<::core::option::Option<i64>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match *v {
@@ -2505,7 +2516,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Payload_jni_product_intermedia
         jni::sys::jboolean,
         jni::objects::JString<'a>,
     ),
-) -> ::core::result::Result<Box<perftest_flat::Payload>, __JniErr> {
+) -> ::core::result::Result<::std::boxed::Box<perftest_flat::Payload>, __JniErr> {
     ::core::result::Result::Ok(
         ::std::boxed::Box::new(perftest_flat::Payload {
             id: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &((v).0))?,
@@ -2535,7 +2546,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Payload_jni_product_intermedia
 pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Priority_781460985a632f7e<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
-) -> ::core::result::Result<Box<perftest_flat::Priority>, __JniErr> {
+) -> ::core::result::Result<::std::boxed::Box<perftest_flat::Priority>, __JniErr> {
     ::core::result::Result::Ok({
         let __inner = __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(env, v)?;
         ::std::boxed::Box::new(__inner)
@@ -2556,7 +2567,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_Priority_781460985a632f7e<'env
 )]
 pub(crate) unsafe fn __jni_out_convert_Box_Priority_to_wire_571b2da18b468f4d<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: Box<perftest_flat::Priority>,
+    v: ::std::boxed::Box<perftest_flat::Priority>,
 ) -> ::core::result::Result<jni::sys::jint, __JniErr> {
     ::core::result::Result::Ok({
         let __inner = *v;
@@ -2579,7 +2590,7 @@ pub(crate) unsafe fn __jni_out_convert_Box_Priority_to_wire_571b2da18b468f4d<'a>
 pub(crate) unsafe fn __jni_in_convert_wire_to_Box_String_7bf3c88ef26eb8e6<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
-) -> ::core::result::Result<Box<String>, __JniErr> {
+) -> ::core::result::Result<::std::boxed::Box<::std::string::String>, __JniErr> {
     Ok({
         let s = env
             .get_string(v)
@@ -2606,7 +2617,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Box_String_7bf3c88ef26eb8e6<'env, 
 )]
 pub(crate) unsafe fn __jni_out_convert_Box_String_to_wire_445d29257759cad9<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: Box<String>,
+    v: ::std::boxed::Box<::std::string::String>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
         env.new_string(&*v)
@@ -3921,8 +3932,8 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Ingot_jni_handle_codec_consume_inp
 )]
 pub(crate) unsafe fn __jni_in_stage_0_wire_to_Label_6b37593fb97869ed<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: String,
-) -> ::core::result::Result<perftest_flat::Label, String> {
+    v: ::std::string::String,
+) -> ::core::result::Result<perftest_flat::Label, ::std::string::String> {
     crate::label_in(v)
 }
 #[allow(
@@ -3967,7 +3978,7 @@ pub(crate) unsafe fn __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9a
 pub(crate) unsafe fn __jni_out_stage_0_Label_to_wire_643d61782530cfc4<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Label,
-) -> ::core::result::Result<String, __JniErr> {
+) -> ::core::result::Result<::std::string::String, __JniErr> {
     Ok(crate::label_out(v))
 }
 #[allow(
@@ -7694,7 +7705,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Reading_jni_optional_intermediate_
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<&perftest_flat::Reading>,
+    v: ::core::option::Option<&perftest_flat::Reading>,
 ) -> ::core::result::Result<
     (
         jni::sys::jboolean,
@@ -7818,7 +7829,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Summary_jni_optional_intermediate_
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<&perftest_flat::Summary>,
+    v: ::core::option::Option<&perftest_flat::Summary>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -7851,7 +7862,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Box_String_jni_optional_int
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
-) -> ::core::result::Result<Option<Box<String>>, __JniErr> {
+) -> ::core::result::Result<
+    ::core::option::Option<::std::boxed::Box<::std::string::String>>,
+    __JniErr,
+> {
     ::core::result::Result::Ok({
         if v.is_null() {
             ::core::option::Option::None
@@ -7880,7 +7894,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Box_String_jni_optional_intermedia
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<Box<String>>,
+    v: ::core::option::Option<::std::boxed::Box<::std::string::String>>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -7910,7 +7924,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_CacheConfig_jni_optional_in
 >(
     env: &mut jni::JNIEnv<'env>,
     v: (jni::sys::jboolean, ((jni::sys::jint, jni::sys::jlong), jni::sys::jlong)),
-) -> ::core::result::Result<Option<perftest_flat::CacheConfig>, __JniErr> {
+) -> ::core::result::Result<
+    ::core::option::Option<perftest_flat::CacheConfig>,
+    __JniErr,
+> {
     ::core::result::Result::Ok({
         if (v).0 == 0u8 {
             ::core::option::Option::None
@@ -7942,7 +7959,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_CallbackHolder_jni_optional_interm
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::CallbackHolder>,
+    v: ::core::option::Option<perftest_flat::CallbackHolder>,
 ) -> ::core::result::Result<
     (jni::sys::jboolean, (jni::sys::jlong, jni::sys::jlong)),
     __JniErr,
@@ -7983,7 +8000,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Duration_jni_optional_inter
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
-) -> ::core::result::Result<Option<perftest_flat::Duration>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Duration>, __JniErr> {
     ::core::result::Result::Ok({
         if *v == -1i64 {
             ::core::option::Option::None
@@ -8025,7 +8042,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Duration_jni_optional_intermediate
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Duration>,
+    v: ::core::option::Option<perftest_flat::Duration>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8064,7 +8081,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Hold_jni_optional_intermedi
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Option<perftest_flat::Hold>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Hold>, __JniErr> {
     ::core::result::Result::Ok({
         if v.is_null() {
             ::core::option::Option::None
@@ -8095,7 +8112,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Holder_jni_optional_interme
 >(
     env: &mut jni::JNIEnv<'env>,
     v: (jni::sys::jboolean, (jni::sys::jlong, jni::sys::jlong)),
-) -> ::core::result::Result<Option<perftest_flat::Holder>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Holder>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).0 == 0u8 {
             ::core::option::Option::None
@@ -8129,7 +8146,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Ingot_jni_optional_intermed
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
-) -> ::core::result::Result<Option<perftest_flat::Ingot>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Ingot>, __JniErr> {
     ::core::result::Result::Ok({
         if *v == 0 {
             ::core::option::Option::None
@@ -8161,7 +8178,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Ingot_jni_optional_intermediate_ou
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Ingot>,
+    v: ::core::option::Option<perftest_flat::Ingot>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8194,7 +8211,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Option_Priority_jni_optiona
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
-) -> ::core::result::Result<Option<Option<perftest_flat::Priority>>, __JniErr> {
+) -> ::core::result::Result<
+    ::core::option::Option<::core::option::Option<perftest_flat::Priority>>,
+    __JniErr,
+> {
     ::core::result::Result::Ok({
         if *v == -2147483647i32 {
             ::core::option::Option::None
@@ -8226,7 +8246,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Option_Priority_jni_optional_inter
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<Option<perftest_flat::Priority>>,
+    v: ::core::option::Option<::core::option::Option<perftest_flat::Priority>>,
 ) -> ::core::result::Result<jni::sys::jint, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8268,7 +8288,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Payload_jni_optional_interm
             jni::objects::JString<'v>,
         ),
     ),
-) -> ::core::result::Result<Option<perftest_flat::Payload>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Payload>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).0 == 0u8 {
             ::core::option::Option::None
@@ -8302,7 +8322,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Payload_jni_optional_interm
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Option<perftest_flat::Payload>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Payload>, __JniErr> {
     ::core::result::Result::Ok({
         if v.is_null() {
             ::core::option::Option::None
@@ -8331,7 +8351,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Payload_jni_optional_intermediate_
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Payload>,
+    v: ::core::option::Option<perftest_flat::Payload>,
 ) -> ::core::result::Result<
     (
         jni::sys::jboolean,
@@ -8388,7 +8408,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Payload_jni_optional_intermediate_
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Payload>,
+    v: ::core::option::Option<perftest_flat::Payload>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8418,7 +8438,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Percent_jni_optional_interm
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Option<perftest_flat::Percent>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Percent>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).is_null() {
             ::core::option::Option::None
@@ -8467,7 +8487,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Percent_jni_optional_intermediate_
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Percent>,
+    v: ::core::option::Option<perftest_flat::Percent>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8510,7 +8530,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Priority_jni_optional_inter
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
-) -> ::core::result::Result<Option<perftest_flat::Priority>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Priority>, __JniErr> {
     ::core::result::Result::Ok({
         if *v == -2147483648i32 {
             ::core::option::Option::None
@@ -8539,7 +8559,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Priority_jni_optional_intermediate
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Priority>,
+    v: ::core::option::Option<perftest_flat::Priority>,
 ) -> ::core::result::Result<jni::sys::jint, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8579,7 +8599,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Reading_jni_optional_interm
             (jni::sys::jlong,),
         ),
     ),
-) -> ::core::result::Result<Option<perftest_flat::Reading>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Reading>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).0 == 0u8 {
             ::core::option::Option::None
@@ -8613,7 +8633,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Reading_jni_optional_interm
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Option<perftest_flat::Reading>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Reading>, __JniErr> {
     ::core::result::Result::Ok({
         if v.is_null() {
             ::core::option::Option::None
@@ -8642,7 +8662,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Reading_jni_optional_intermediate_
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Reading>,
+    v: ::core::option::Option<perftest_flat::Reading>,
 ) -> ::core::result::Result<
     (
         jni::sys::jboolean,
@@ -8701,7 +8721,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Stamp_jni_optional_intermediate_ou
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Stamp>,
+    v: ::core::option::Option<perftest_flat::Stamp>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8731,7 +8751,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_String_jni_optional_interme
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
-) -> ::core::result::Result<Option<String>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<::std::string::String>, __JniErr> {
     ::core::result::Result::Ok({
         if v.is_null() {
             ::core::option::Option::None
@@ -8763,7 +8783,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_String_jni_optional_intermediate_o
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<String>,
+    v: ::core::option::Option<::std::string::String>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8796,7 +8816,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Summary_jni_optional_interm
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
-) -> ::core::result::Result<Option<perftest_flat::Summary>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Summary>, __JniErr> {
     ::core::result::Result::Ok({
         if *v == 0 {
             ::core::option::Option::None
@@ -8828,7 +8848,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Summary_jni_optional_intermediate_
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Summary>,
+    v: ::core::option::Option<perftest_flat::Summary>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8859,7 +8879,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Ticks_jni_optional_intermediate_ou
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<perftest_flat::Ticks>,
+    v: ::core::option::Option<perftest_flat::Ticks>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8900,7 +8920,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_Vec_Option_u64_jni_optional_interm
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<Vec<Option<u64>>>,
+    v: ::core::option::Option<::std::vec::Vec<::core::option::Option<u64>>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -8933,7 +8953,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Vec_u8_jni_optional_interme
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JByteArray<'v>,
-) -> ::core::result::Result<Option<Vec<u8>>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<::std::vec::Vec<u8>>, __JniErr> {
     ::core::result::Result::Ok({
         if v.is_null() {
             ::core::option::Option::None
@@ -8964,7 +8984,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_f64_jni_optional_intermedia
 >(
     env: &mut jni::JNIEnv<'env>,
     v: (jni::sys::jboolean, jni::sys::jdouble),
-) -> ::core::result::Result<Option<f64>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<f64>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).0 == 0u8 {
             ::core::option::Option::None
@@ -8993,7 +9013,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_f64_jni_optional_intermediate_outp
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<f64>,
+    v: ::core::option::Option<f64>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -9030,7 +9050,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_i64_jni_optional_intermedia
 >(
     env: &mut jni::JNIEnv<'env>,
     v: (jni::sys::jboolean, jni::sys::jlong),
-) -> ::core::result::Result<Option<i64>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<i64>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).0 == 0u8 {
             ::core::option::Option::None
@@ -9061,7 +9081,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_i64_jni_optional_intermedia
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Option<i64>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<i64>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).is_null() {
             ::core::option::Option::None
@@ -9097,7 +9117,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_i64_jni_optional_intermediate_outp
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<i64>,
+    v: ::core::option::Option<i64>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -9134,7 +9154,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_u16_jni_optional_intermedia
 >(
     env: &mut jni::JNIEnv<'env>,
     v: (jni::sys::jboolean, jni::sys::jint),
-) -> ::core::result::Result<Option<u16>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<u16>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).0 == 0u8 {
             ::core::option::Option::None
@@ -9165,7 +9185,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_u64_jni_optional_intermedia
 >(
     env: &mut jni::JNIEnv<'env>,
     v: (jni::sys::jboolean, jni::sys::jlong),
-) -> ::core::result::Result<Option<u64>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<u64>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).0 == 0u8 {
             ::core::option::Option::None
@@ -9196,7 +9216,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_u64_jni_optional_intermedia
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<Option<u64>, __JniErr> {
+) -> ::core::result::Result<::core::option::Option<u64>, __JniErr> {
     ::core::result::Result::Ok({
         if (v).is_null() {
             ::core::option::Option::None
@@ -9232,7 +9252,7 @@ pub(crate) unsafe fn __jni_out_convert_Option_u64_jni_optional_intermediate_outp
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Option<u64>,
+    v: ::core::option::Option<u64>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         match v {
@@ -9429,7 +9449,7 @@ pub(crate) unsafe fn __jni_in_stage_0_wire_to_Percent_7054a66fc21e9f09<'a>(
 pub(crate) unsafe fn __jni_out_stage_0_Percent_to_wire_8c2804ab9a71a75c<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Percent,
-) -> ::core::result::Result<i32, String> {
+) -> ::core::result::Result<i32, ::std::string::String> {
     crate::percent_out(v)
 }
 #[allow(
@@ -10000,8 +10020,8 @@ pub(crate) unsafe fn __jni_out_stage_0_Result_Summary_String_to_wire_c1ba1bf6ad7
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Result<perftest_flat::Summary, String>,
-) -> ::core::result::Result<perftest_flat::Summary, String> {
+    v: ::core::result::Result<perftest_flat::Summary, ::std::string::String>,
+) -> ::core::result::Result<perftest_flat::Summary, ::std::string::String> {
     v
 }
 #[allow(
@@ -10508,7 +10528,7 @@ pub(crate) unsafe fn __jni_out_convert_VaultHolder_jni_handle_codec_own_output_t
 )]
 pub(crate) unsafe fn __jni_out_convert_sequence_Vec_Label_to_wire_9d2fc29fc187892e<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: Vec<perftest_flat::Label>,
+    v: ::std::vec::Vec<perftest_flat::Label>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         let __sequence_source = v;
@@ -10562,7 +10582,7 @@ pub(crate) unsafe fn __jni_out_convert_sequence_Vec_Option_Ticks_to_wire_43205c6
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Vec<Option<perftest_flat::Ticks>>,
+    v: ::std::vec::Vec<::core::option::Option<perftest_flat::Ticks>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         let __sequence_source = v;
@@ -10607,7 +10627,7 @@ pub(crate) unsafe fn __jni_out_convert_sequence_Vec_Option_u64_to_wire_2451c3746
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Vec<Option<u64>>,
+    v: ::std::vec::Vec<::core::option::Option<u64>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         let __sequence_source = v;
@@ -10652,7 +10672,7 @@ pub(crate) unsafe fn __jni_out_convert_sequence_Vec_Vec_Option_u64_to_wire_f786c
     'a,
 >(
     env: &mut jni::JNIEnv<'a>,
-    v: Vec<Vec<Option<u64>>>,
+    v: ::std::vec::Vec<::std::vec::Vec<::core::option::Option<u64>>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         let __sequence_source = v;
@@ -10699,7 +10719,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_sequence_Vec_Vec_u8_6085b266063559
 >(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'a>,
-) -> ::core::result::Result<Vec<Vec<u8>>, __JniErr> {
+) -> ::core::result::Result<::std::vec::Vec<::std::vec::Vec<u8>>, __JniErr> {
     ::core::result::Result::Ok({
         let __sequence_list = jni::objects::JList::from_env(env, v)
             .map_err(|e| <__JniErr as ::core::convert::From<
@@ -10710,7 +10730,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_sequence_Vec_Vec_u8_6085b266063559
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Vec<_>: list-iter: {}", e)))?;
-        let mut __sequence_values: ::std::vec::Vec<Vec<u8>> = ::std::vec::Vec::new();
+        let mut __sequence_values: ::std::vec::Vec<::std::vec::Vec<u8>> = ::std::vec::Vec::new();
         while let ::core::option::Option::Some(__sequence_part) = match __sequence_iter
             .next(env)
             .map_err(|e| <__JniErr as ::core::convert::From<
@@ -10749,7 +10769,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_sequence_Vec_Vec_u8_6085b266063559
 )]
 pub(crate) unsafe fn __jni_out_convert_sequence_Vec_Vec_u8_to_wire_4535a1b4eafc6f01<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: Vec<Vec<u8>>,
+    v: ::std::vec::Vec<::std::vec::Vec<u8>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     ::core::result::Result::Ok({
         let __sequence_source = v;
@@ -10793,7 +10813,7 @@ pub(crate) unsafe fn __jni_out_convert_sequence_Vec_Vec_u8_to_wire_4535a1b4eafc6
 pub(crate) unsafe fn __jni_in_convert_wire_to_Vec_u8_80984e9556387695<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JByteArray<'v>,
-) -> ::core::result::Result<Vec<u8>, __JniErr> {
+) -> ::core::result::Result<::std::vec::Vec<u8>, __JniErr> {
     Ok({
         env.convert_byte_array(v)
             .map_err(|e| {
@@ -10818,7 +10838,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Vec_u8_80984e9556387695<'env, 'v>(
 )]
 pub(crate) unsafe fn __jni_out_convert_Vec_u8_to_wire_e9499bf0a706b1a2<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: Vec<u8>,
+    v: ::std::vec::Vec<u8>,
 ) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
     Ok({
         env.byte_array_from_slice(v.as_slice())
@@ -13195,7 +13215,9 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Option_CallbackHolder_Send
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<
-    impl Fn(Option<perftest_flat::CallbackHolder>) + Send + Sync + 'static,
+    impl Fn(
+        ::core::option::Option<perftest_flat::CallbackHolder>,
+    ) + Send + Sync + 'static,
     __JniErr,
 > {
     Ok({
@@ -13232,7 +13254,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Option_CallbackHolder_Send
                     e
                 ),
             ))?;
-        Box::new(move |__cb_arg0: Option<perftest_flat::CallbackHolder>| {
+        Box::new(move |__cb_arg0: ::core::option::Option<perftest_flat::CallbackHolder>| {
             let _ = (|| -> ::core::result::Result<(), __JniErr> {
                 let mut env = java_vm
                     .attach_current_thread_as_daemon()
@@ -13331,7 +13353,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Option_Payload_Send_Sync_s
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<
-    impl Fn(Option<perftest_flat::Payload>) + Send + Sync + 'static,
+    impl Fn(::core::option::Option<perftest_flat::Payload>) + Send + Sync + 'static,
     __JniErr,
 > {
     Ok({
@@ -13365,7 +13387,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Option_Payload_Send_Sync_s
             >>::from(
                 format!("Unable to resolve run for {}: {}", "Fn(Option < Payload >)", e),
             ))?;
-        Box::new(move |__cb_arg0: Option<perftest_flat::Payload>| {
+        Box::new(move |__cb_arg0: ::core::option::Option<perftest_flat::Payload>| {
             let _ = (|| -> ::core::result::Result<(), __JniErr> {
                 let mut env = java_vm
                     .attach_current_thread_as_daemon()
@@ -14194,7 +14216,9 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Vec_Option_Ticks_Send_Sync
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<
-    impl Fn(Vec<Option<perftest_flat::Ticks>>) + Send + Sync + 'static,
+    impl Fn(
+        ::std::vec::Vec<::core::option::Option<perftest_flat::Ticks>>,
+    ) + Send + Sync + 'static,
     __JniErr,
 > {
     Ok({
@@ -14230,7 +14254,9 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Vec_Option_Ticks_Send_Sync
                     "Unable to resolve run for {}: {}", "Fn(Vec < Option < Ticks > >)", e
                 ),
             ))?;
-        Box::new(move |__cb_arg0: Vec<Option<perftest_flat::Ticks>>| {
+        Box::new(move |
+            __cb_arg0: ::std::vec::Vec<::core::option::Option<perftest_flat::Ticks>>|
+        {
             let _ = (|| -> ::core::result::Result<(), __JniErr> {
                 let mut env = java_vm
                     .attach_current_thread_as_daemon()
@@ -15355,7 +15381,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
             return ();
         }
     };
-    let __exp_s_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_s_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (s_0_0_present, s_0_0_value),
     ) {
@@ -15372,7 +15398,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
             return ();
         }
     };
-    let __exp_s_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_s_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (s_0_1_present, s_0_1_value),
     ) {
@@ -20681,7 +20707,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_selectorCodeScor
             return 0 as jni::sys::jlong;
         }
     };
-    let __exp_value_0_0: Option<u16> = match __jni_in_convert_wire_to_Option_u16_jni_optional_intermediate_input_gated_ff09dbf66b457369(
+    let __exp_value_0_0: ::core::option::Option<u16> = match __jni_in_convert_wire_to_Option_u16_jni_optional_intermediate_input_gated_ff09dbf66b457369(
         &mut env,
         (value_0_0_present, value_0_0_value),
     ) {
@@ -21661,7 +21687,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
             return 0 as jni::sys::jboolean;
         }
     };
-    let __exp_expected_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_expected_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (expected_0_0_present, expected_0_0_value),
     ) {
@@ -21678,7 +21704,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
             return 0 as jni::sys::jboolean;
         }
     };
-    let __exp_expected_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_expected_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (expected_0_1_present, expected_0_1_value),
     ) {
@@ -22250,7 +22276,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
             return 0 as jni::sys::jboolean;
         }
     };
-    let __exp_expected_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_expected_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (expected_0_0_present, expected_0_0_value),
     ) {
@@ -22267,7 +22293,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
             return 0 as jni::sys::jboolean;
         }
     };
-    let __exp_expected_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_expected_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (expected_0_1_present, expected_0_1_value),
     ) {
@@ -23730,7 +23756,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
             return jni::objects::JObject::null().into();
         }
     };
-    let __exp_s_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_s_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (s_0_0_present, s_0_0_value),
     ) {
@@ -23747,7 +23773,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
             return jni::objects::JObject::null().into();
         }
     };
-    let __exp_s_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_s_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (s_0_1_present, s_0_1_value),
     ) {
@@ -23908,7 +23934,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryEnvelopeS
             return 0 as jni::sys::jlong;
         }
     };
-    let __exp_value_summary_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_value_summary_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (value_summary_0_0_present, value_summary_0_0_value),
     ) {
@@ -23925,7 +23951,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryEnvelopeS
             return 0 as jni::sys::jlong;
         }
     };
-    let __exp_value_summary_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_value_summary_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (value_summary_0_1_present, value_summary_0_1_value),
     ) {
@@ -24216,7 +24242,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __exp_primary_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_primary_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (primary_0_0_present, primary_0_0_value),
     ) {
@@ -24233,7 +24259,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __exp_primary_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_primary_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (primary_0_1_present, primary_0_1_value),
     ) {
@@ -24338,7 +24364,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __exp_fallback_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_fallback_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (fallback_0_0_present, fallback_0_0_value),
     ) {
@@ -24355,7 +24381,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __exp_fallback_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_fallback_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (fallback_0_1_present, fallback_0_1_value),
     ) {
@@ -24616,7 +24642,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
             return 0 as jni::sys::jlong;
         }
     };
-    let __exp_primary_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_primary_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (primary_0_0_present, primary_0_0_value),
     ) {
@@ -24633,7 +24659,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
             return 0 as jni::sys::jlong;
         }
     };
-    let __exp_primary_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_primary_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (primary_0_1_present, primary_0_1_value),
     ) {
@@ -24738,7 +24764,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
             return 0 as jni::sys::jlong;
         }
     };
-    let __exp_fallback_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_fallback_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (fallback_0_0_present, fallback_0_0_value),
     ) {
@@ -24755,7 +24781,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
             return 0 as jni::sys::jlong;
         }
     };
-    let __exp_fallback_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_fallback_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (fallback_0_1_present, fallback_0_1_value),
     ) {
@@ -25255,7 +25281,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
             return 0.0 as jni::sys::jdouble;
         }
     };
-    let __exp_s_0_0: Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
+    let __exp_s_0_0: ::core::option::Option<i64> = match __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_gated_89d088af3f259362(
         &mut env,
         (s_0_0_present, s_0_0_value),
     ) {
@@ -25272,7 +25298,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
             return 0.0 as jni::sys::jdouble;
         }
     };
-    let __exp_s_0_1: Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
+    let __exp_s_0_1: ::core::option::Option<f64> = match __jni_in_convert_wire_to_Option_f64_jni_optional_intermediate_input_gated_10d98a298d62e1f5(
         &mut env,
         (s_0_1_present, s_0_1_value),
     ) {

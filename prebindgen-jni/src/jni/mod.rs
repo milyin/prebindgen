@@ -568,7 +568,11 @@ impl JniGen {
         }
         .map_err(|e| e.to_string())?;
         fragment.rust.mark_reachable();
-        let rendered = fragment.rust.render(&prebindgen_registry::Emit::for_test());
+        let rendered = fragment
+            .rust
+            .render(&prebindgen_registry::RustWriter::for_registry_test(
+                &self.registry,
+            ));
         Ok((
             fragment.composed_only,
             rendered.sig.ident.to_string(),
@@ -866,7 +870,7 @@ impl JniGen {
             .fragment(&key, Direction::Construct)?;
         let rendered = prebindgen_registry::write::RustFunction::render(
             &fragment.rust,
-            &prebindgen_registry::Emit::for_test(),
+            &prebindgen_registry::RustWriter::for_test(),
         );
         Some((rendered.sig.ident.to_string(), fragment.rust.is_invoke()))
     }

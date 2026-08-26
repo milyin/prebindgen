@@ -30,7 +30,7 @@ impl prebindgen_registry::chain::InvokePart for JInvokePart {
         &self,
         value: &syn::Ident,
         index: usize,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> prebindgen_registry::chain::RenderedInvokePart {
         assert_eq!(value, &callback_argument_name(index));
         let fail = |msg: TokenStream| -> TokenStream {
@@ -230,7 +230,7 @@ impl JInvokePlan {
         &self.operation
     }
 
-    pub(crate) fn render(&self, emit: &prebindgen_registry::Emit) -> syn::ItemFn {
+    pub(crate) fn render(&self, emit: &prebindgen_registry::RustWriter) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
         let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;
@@ -511,7 +511,6 @@ pub(crate) fn callback_input(
         arguments: args.to_vec(),
         source_policy: crate::jni::chain::JSource {
             wrappers: Vec::new(),
-            module: None,
         },
         bridge: JInvokeBridge {
             name: name_lit,

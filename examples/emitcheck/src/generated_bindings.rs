@@ -176,7 +176,7 @@ pub(crate) unsafe fn __jni_out_convert_unit_to_wire_9e1510fd173c1fd6<'a>(
 )]
 pub(crate) unsafe fn __jni_out_convert_Box_String_to_wire_445d29257759cad9<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: Box<String>,
+    v: ::std::boxed::Box<::std::string::String>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
         env.new_string(&*v)
@@ -280,7 +280,7 @@ pub(crate) unsafe fn __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9a
 )]
 pub(crate) unsafe fn __jni_out_convert_Vec_u8_to_wire_e9499bf0a706b1a2<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: Vec<u8>,
+    v: ::std::vec::Vec<u8>,
 ) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
     Ok({
         env.byte_array_from_slice(v.as_slice())

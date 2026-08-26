@@ -430,7 +430,7 @@ fn callback_renderer_accepts_only_the_frozen_plan() {
     let renderer: fn(
         &prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>,
         &str,
-        &prebindgen_registry::Emit,
+        &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> = crate::chain::render_artifacts;
     let _ = renderer;
 }

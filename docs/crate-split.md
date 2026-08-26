@@ -77,22 +77,22 @@ never a Kotlin or JNI type.
 
 ## What the split costs — and how the emission boundary works
 
-`prebindgen-flat` owns the captured syntax, but
-`prebindgen-registry` owns the policy deciding where adapters may render it.
-Rust has no cross-crate friend visibility, so one concrete capability type
-cannot honestly be private to both crates.
+`prebindgen-flat` owns the facts required to generate Rust, while
+`prebindgen-registry` owns the final-file policy and source-module map. Retained
+frontend syntax remains private diagnostic/round-trip state; it is not an
+emission source.
 
 The boundary is therefore split into protocol and key:
 
-- `prebindgen-flat::RustEmitter` is the object-safe rendering protocol. Its
-  default methods are the single implementation of spelling, verbatim-item,
-  discriminant, and captured-shape rendering.
-- `prebindgen-registry::Emit` is the concrete registry key. Its constructor
-  is registry-private; `write_rust` and `RegistryBuilder::convert_with`
-  hand references to it only to emission callbacks.
-- `Emit` implements and dereferences to `RustEmitter`, so adapters retain
-  the concise `emit.spell(ty)` API without a duplicate forwarding surface in
-  the registry crate.
+- `prebindgen-flat::RustEmitter` is the object-safe, generate-only protocol. Its
+  methods emit source types from `TypeKind`/identities, constructors from
+  `FieldShape`, and private output fragments recorded by Flat. It has no method
+  returning a captured spelling or typed source AST.
+- `prebindgen-registry::Emit` is the concrete, zero-sized registry key. Its
+  constructor is registry-private and it carries no qualification or model state.
+- `prebindgen-registry::RustWriter` owns the frozen source-module map and the
+  private `Emit` token. Emission callbacks receive `&RustWriter`; its narrow
+  surface generates inert fragments and never returns a captured or typed AST.
 
 This preserves the dependency and mental model:
 
@@ -102,22 +102,19 @@ prebindgen -> prebindgen-flat -> prebindgen-registry -> prebindgen-{c,jni}
 ```
 
 It also preserves independent use. A different collector can depend directly
-on `prebindgen-flat` and deliberately implement `RustEmitter` for a key that
-it owns. The trait is intentionally not sealed: establishing a separate
-emission boundary is collector API.
+on `prebindgen-flat` and implement `RustEmitter` for a key it owns, without
+gaining access to retained source syntax.
 
 The registry's default path is compiler-checked. `prebindgen-registry` does
 not re-export `RustEmitter` through its `flat` model path, so an adapter that
 depends only on the registry cannot name the protocol or construct
-`prebindgen-registry::Emit`; it can render only after receiving `&Emit` in
+`prebindgen-registry::Emit`; it can render only after receiving `&RustWriter` in
 an emission callback. A compile-fail doctest pins both restrictions.
 
-Rust cannot prevent an adapter from deliberately adding a direct
-`prebindgen-flat` dependency and implementing the public protocol for a new
-key. That is the unavoidable residual of keeping the flat layer independently
-usable, but it is explicit in both the manifest and an `impl RustEmitter`.
-Workspace CI rejects such implementations in `prebindgen-c` and
-`prebindgen-jni`.
+An adapter could add a direct `prebindgen-flat` dependency and implement the
+public protocol, but that only reproduces the same generate-only operations.
+Workspace adapters use registry `RustWriter`, keeping qualification and final
+symbol policy centralized.
 
 The accidental direct doors introduced by the split are closed:
 `TypeRef::spell` and `Origin::spell` are crate-private, the test-only
@@ -205,8 +202,9 @@ compiler names exactly which items need `pub`.
 - `cargo clippy --all-targets --all-features -- --deny warnings` and
   `cargo fmt --check -- --config "unstable_features=true,imports_granularity=Crate,group_imports=StdExternalCrate"`
   on **both 1.85.0 and stable** — stable-only clippy misses MSRV lints
-- `./examples/regen-check.sh` — byte-identical, except where a phase changes an
-  emitted path on purpose; that is what proves a move was a pure move
+- `./examples/regen-check.sh` — deterministic against committed goldens;
+  intentional semantic-preserving output changes are reviewed and committed
+  once, then the check pins their new form
 - `./examples/smoke-asan.sh`, and the covertest-kotlin JVM harness
 - layer DAG: `cargo tree -i -p prebindgen-jni` must not list `prebindgen-c`, and
   the reverse; `cargo tree -p prebindgen-c-runtime` must show no dependencies

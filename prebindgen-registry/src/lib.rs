@@ -119,7 +119,7 @@ pub mod write;
 /// The flat model itself lives in the separate `prebindgen-flat` crate —
 /// re-exported here so an adapter names one crate root for the whole
 /// pipeline. `RustEmitter` is deliberately omitted: registry-only adapters
-/// receive rendering authority as [`Emit`] in callbacks. A different collector
+/// receive final rendering authority as [`RustWriter`] in callbacks. A different collector
 /// depends on `prebindgen-flat` directly to implement its own key.
 pub use ::prebindgen_flat::{flat, shape, types_util};
 pub use ::prebindgen_flat::{Element, Flat};
@@ -131,7 +131,7 @@ pub use self::{
     },
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
-    emit::Emit,
+    emit::{Emit, RustWriter},
     generation::{
         AbiLayout, ArtifactId, ArtifactInput, ArtifactPlan, ChainValue, ChoiceArity, Cleanup,
         ContractAt, ConversionChain, ConverterPlan, ConverterStep, Failure, FixedArity, FragmentId,

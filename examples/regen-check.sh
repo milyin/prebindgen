@@ -3,10 +3,11 @@
 # Golden-diff check: regenerate every example binding that commits its
 # generated output, then fail if regeneration changed (or added) anything.
 #
-# The committed generated files are the strongest refactoring invariant this
-# repo has: an output-preserving generator change must leave them all
-# byte-identical. Run this before and after each refactoring step; pair it
-# with `cargo test --all --all-features` (codegen snapshots) and
+# The committed generated files pin deterministic output. A semantic-preserving
+# generator change may intentionally update them (for example, by qualifying a
+# Rust path); review that diff once, commit it, then this check proves a second
+# generation is byte-identical to the accepted goldens. Pair it with
+# `cargo test --all --all-features` (codegen snapshots) and
 # `examples/covertest-kotlin$ ./gradlew run` (JVM-runtime behavior).
 #
 # Usage:
@@ -70,7 +71,7 @@ if [[ -n "$drift" ]]; then
     git --no-pager diff --stat -- "${generated_paths[@]}" >&2
     exit 1
 fi
-echo "ok: in-repo generated output is byte-identical"
+echo "ok: in-repo generated output matches committed goldens"
 
 if [[ "${1:-}" == "--with-zenoh-flat-jni" ]]; then
     jni_dir="${2:-$repo_root/../zenoh-flat-jni}"
@@ -83,7 +84,7 @@ if [[ "${1:-}" == "--with-zenoh-flat-jni" ]]; then
         git -C "$jni_dir" --no-pager diff --stat -- src/generated_bindings.rs kotlin/generated >&2
         exit 1
     fi
-    echo "ok: zenoh-flat-jni generated output is byte-identical"
+    echo "ok: zenoh-flat-jni generated output matches committed goldens"
 fi
 
 echo "PASS - regen check clean"

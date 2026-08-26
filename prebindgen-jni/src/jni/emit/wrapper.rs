@@ -10,7 +10,7 @@ pub(crate) fn emit_jni_function_wrapper(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
     registry: &Registry,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> syn::ItemFn {
     emit_jni_function_wrapper_with_callee(ext, f, registry, None, emit)
 }
@@ -182,7 +182,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     f: &prebindgen_registry::flat::Function,
     registry: &Registry,
     callee: Option<syn::Expr>,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> syn::ItemFn {
     let original_ident = &f.name;
 
@@ -497,7 +497,7 @@ fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
 fn emit_input_param(
     param: &PlanParam,
     on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     // Constructor-expansion: this parameter's wire form is the fold plan's
     // flattened leaves. Decode each leaf with its own converter, run the
@@ -579,7 +579,7 @@ fn emit_plain_decode(
     arg_ident: &syn::Ident,
     arg_ty: &prebindgen_registry::flat::TypeRef,
     on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
     wire_ident: &syn::Ident,
 ) -> (Vec<TokenStream>, TokenStream) {
     use prebindgen_registry::flat::TypeKind;
@@ -662,7 +662,7 @@ pub(crate) fn emit_expanded_param(
     leaves: &[PlanLeaf],
     orig_param: &syn::Ident,
     on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     let mut wire_params: Vec<TokenStream> = Vec::new();
     let fold = plan.fold();
@@ -673,7 +673,7 @@ pub(crate) fn emit_expanded_param(
     for (leaf, classified) in fold.leaves.iter().zip(leaves) {
         let leaf_ty = &leaf.ty;
         // The ascription generated Rust writes for this leaf's local.
-        let leaf_ty_tokens = emit.spell(leaf_ty);
+        let leaf_ty_tokens = emit.emit_source_type(leaf_ty);
         let local = format_ident!("__exp_{}", leaf.name);
         wire_params.extend(classified.native.iter().map(|native| {
             let ident = &native.rust_ident;

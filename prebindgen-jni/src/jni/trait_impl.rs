@@ -128,89 +128,6 @@ impl Declarations {
     pub fn output_converter_name(&self, rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
         output_name(&rust.to_token_stream(), wire)
     }
-
-    fn emitted_source_type_names(
-        &self,
-        registry: &Registry,
-    ) -> std::collections::HashMap<String, syn::Path> {
-        let mut names = std::collections::HashMap::new();
-        let mut add = |key: &TypeKey| {
-            if let Some(short) = rust_short_name_opt(key) {
-                // Per-item origin when the type has an indexed
-                // `#[prebindgen]` item; else the default module (a declared
-                // type re-exported by the primary source, or a deliberately
-                // unmarked type like a convert!-only newtype).
-                // Parsed, not constructed: a short name is whatever the source
-                // wrote, and `Ident::new` PANICS on a raw one (`r#type`)
-                // rather than erroring. Pre-existing; found by the raw-name
-                // regression added for the sum encoder's twin of this bug.
-                let Ok(ident) = syn::parse_str::<syn::Ident>(&short) else {
-                    return;
-                };
-                let module = registry
-                    .origin_module(&ident)
-                    .unwrap_or_else(|| self.default_module(registry));
-                names.insert(short, module);
-            }
-        };
-        for key in self.types.keys() {
-            add(key);
-        }
-        // Rust-side-only boundary types are absent from the type table but
-        // still appear in emitted signatures (e.g. the `E` of a peeled
-        // `Result<T, E>`), so they need the same qualification.
-        for (key, _) in self.rust_side_only_types().collect::<Vec<_>>() {
-            add(&key);
-        }
-        // `convert!`-declared types likewise have no type-table entry but
-        // appear in emitted converter signatures.
-        for decl in &self.convert_decls {
-            add(decl.key());
-        }
-        names
-    }
-
-    /// Walk `item` and prefix every bare single-segment type reference
-    /// matching a [`Self::emitted_source_type_names`] name with that name's
-    /// origin module. Applied once per emitted item at write
-    /// time via [`Prebindgen::post_process_item`] so converter bodies,
-    /// type ascriptions, and casts all stay in sync without each emit
-    /// site having to remember to qualify.
-    fn qualify_item(&self, item: &mut syn::Item, registry: &Registry) {
-        let source_names = self.emitted_source_type_names(registry);
-        // Names reachable from an array LENGTH (`[u8; MAX]`, `[u8; Holder::N]`).
-        //
-        // Registry-wide, NOT the declared-surface `source_names`: a length's
-        // owner is a compile-time namespace, not a boundary type. Requiring it
-        // to be declared would force an otherwise-unused Kotlin class into
-        // existence just to make the generated Rust compile, and would be
-        // asymmetric with consts, which qualify whether or not JniGenBuilder declared
-        // them.
-        // EVERY named item the registry indexes. A length is an arbitrary const
-        // expression, so it can name a const, the type owning an associated
-        // const, or a `const fn` — and enumerating item KINDS here missed one
-        // of those three twice, so the enumeration lives in core
-        // (`named_item_idents`) where a new kind is added once.
-        //
-        // The NAME SET is independent of origin stamps and the VALUE falls back
-        // to the default module: an origin-less hand-built stream holds elements
-        // whose location carries no crate name, and those still need qualifying
-        // (core documents `crate` as their module).
-        let length_names: std::collections::HashMap<String, syn::Path> = registry
-            .named_item_idents()
-            .map(|ident| {
-                let module = registry
-                    .origin_module(ident)
-                    .unwrap_or_else(|| self.default_module(registry));
-                (ident.to_string(), module)
-            })
-            .collect();
-        let mut visitor = QualifyEmittedTypes {
-            source_names: &source_names,
-            length_names: &length_names,
-        };
-        syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
-    }
 }
 
 /// The single `signal_error` free function: the one error channel every
@@ -318,7 +235,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 pub(crate) fn build_handle_destructor_items(
     ext: &Declarations,
     registry: &Registry,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
@@ -335,7 +252,7 @@ pub(crate) fn build_handle_destructor_items(
         if ext.in_frag(&reading).is_none() && ext.out_frag(&reading).is_none() {
             continue;
         }
-        let ty = emit.spell(&reading);
+        let ty = emit.emit_source_type(&reading);
         let class_fqn = cfg
             .name_spec
             .as_ref()
@@ -354,9 +271,8 @@ pub(crate) fn build_handle_destructor_items(
         let ident = syn::Ident::new(&symbol, Span::call_site());
         // Bit 0 of the jlong is the Kotlin-side closed tag, so every handle
         // type must leave it free: `Box` pointers to `T` are `align_of::<T>()`
-        // aligned, hence the compile-time floor of 2. Spelled as an `if` +
-        // `panic!` (not `assert!`) so the type reference is real AST — the
-        // `qualify_item` pass does not descend into macro token streams.
+        // aligned, hence the compile-time floor of 2. `ty` is already the
+        // registry-owned final output fragment before it enters this macro.
         let item: syn::Item = syn::parse_quote!(
             const _: () = {
                 if ::core::mem::align_of::<#ty>() < 2 {
@@ -1363,7 +1279,7 @@ impl Prebindgen for Declarations {
     fn prerequisites(
         &self,
         registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         // `__JniErr` is the **framework** error type alias — always the
         // `JniBindingError` String-wrapper. Built-in converter bodies compose
@@ -1423,22 +1339,13 @@ impl Prebindgen for Declarations {
         items
     }
 
-    fn post_process_item(
-        &self,
-        item: &mut syn::Item,
-        registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
-    ) {
-        self.qualify_item(item, registry);
-    }
-
     // ── Item methods ─────────────────────────────────────────────────
 
     fn on_function(
         &self,
         f: &prebindgen_registry::flat::Function,
         registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         vec![syn::Item::Fn(emit_jni_function_wrapper(
             self, f, registry, emit,
@@ -1449,7 +1356,7 @@ impl Prebindgen for Declarations {
         &self,
         _s: &prebindgen_registry::flat::Struct,
         _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         // Struct converter bodies are emitted from retained registry plans;
         // no separate per-struct item is needed.
@@ -1460,7 +1367,7 @@ impl Prebindgen for Declarations {
         &self,
         _v: &prebindgen_registry::flat::Variant,
         _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -1469,7 +1376,7 @@ impl Prebindgen for Declarations {
         &self,
         _e: &prebindgen_registry::flat::Enum,
         _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -1485,7 +1392,7 @@ impl Prebindgen for Declarations {
         &self,
         c: &prebindgen_registry::flat::Constant,
         registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         reject_handle_const(self, c);
         let getter = const_getter_fn(c);

@@ -34,13 +34,11 @@ use super::{
 
 /// A type as the language accepted it, plus the exact syntax it came from.
 ///
-/// The retained slice is what generated Rust spells, through
-/// [`RustEmitter::spell`](crate::RustEmitter::spell). It is **not**
-/// where facts go to survive a lossy classification any more — `kind` keeps the
-/// lifetime, the wrapper and the argument it used to drop, and rebuilding the
-/// syntax from it proves so. Keeping the slice anyway is cheap, exact
-/// (nothing has to reconstruct token for token what the source already wrote),
-/// and it is what makes the proof possible at all.
+/// The retained slice preserves diagnostics and frontend round-trip tests.
+/// Executable source-type fragments are generated from `kind`; retained syntax
+/// is not reparsed or walked to produce them. `kind` therefore keeps the
+/// lifetime, wrapper and argument it used to drop, and rebuilding the syntax
+/// from it proves so.
 ///
 /// # The invariant
 ///
@@ -56,9 +54,9 @@ use super::{
 /// A collector does not need to depend on `prebindgen-registry` to create or
 /// compose a valid reading.
 ///
-/// This is separate from emission authority. Constructing a `TypeRef` exposes
-/// its model facts; rendering its captured spelling requires a pipeline-owned
-/// `RustEmitter` key.
+/// This is separate from final emission. Constructing a `TypeRef` exposes its
+/// model facts; final source output is reconstructed from those facts through
+/// a pipeline-owned `RustEmitter` key.
 ///
 /// The invariant is unconditional — no phase, no lifetime, no direction — so it
 /// holds for a **stored** value. That is the point: a `TypeRef` lives in
@@ -82,14 +80,9 @@ pub struct TypeRef {
     /// The accepted syntax this type is — the closed grammar, not an
     /// interpretation of it.
     pub(super) kind: TypeKind,
-    /// The type as generated Rust must spell it — the source's own tokens,
-    /// normalized to the flat namespace the generated crate can name (see
-    /// [`Flat::parse`](super::Flat::parse)) — plus the source they came
-    /// from.
-    ///
-    /// It says exactly what `kind` says — that is the invariant
-    /// [`TypeKind::to_syn`] checks — and it says it in the source's own tokens,
-    /// which is why generated Rust re-emits this rather than a reconstruction.
+    /// The accepted source syntax plus its location, retained for diagnostics,
+    /// identity normalization, and Flat-internal round-trip checks. Generated
+    /// Rust does not read this field; it reconstructs output from `kind`.
     // Keep this narrower than `pub(crate)`, and never add a public accessor.
     // `Origin<syn::Type>::declared_spelling` is public for build-script
     // declarations of that same Rust type; exposing this captured origin would
@@ -102,9 +95,8 @@ impl fmt::Display for TypeRef {
     /// The type as the source wrote it, **for a message**.
     ///
     /// Diagnostics are not emission: a panic naming an unsupported type is
-    /// decision code reporting why it decided, and it must not need the
-    /// [`RustEmitter`](crate::RustEmitter) capability to say so. So this is
-    /// ungated where [`RustEmitter::spell`](crate::RustEmitter::spell) is not.
+    /// decision code reporting why it decided, and it must not need the final
+    /// emission capability to say so.
     ///
     /// **The identity, not the spelling** — `TypeKey`, which is
     /// `canonical_type` rendered. Delegating to `spell()` would have handed the
@@ -130,6 +122,16 @@ impl TypeRef {
     /// let forged = TypeRef { kind: TypeKind::Unit, origin: todo!() };
     /// ```
     ///
+    /// The same visibility seal prevents using the declaration-only spelling API
+    /// on a captured reading:
+    ///
+    /// ```compile_fail
+    /// # use prebindgen_flat::flat::TypeRef;
+    /// # fn leak(reading: &TypeRef) {
+    /// let _ = reading.origin.declared_spelling();
+    /// # }
+    /// ```
+    ///
     /// The public composition constructors (`borrowed`, `optional`, `vector`,
     /// `scalar`) are intentional flat-model API: collectors can derive readings
     /// without reparsing Rust. They construct a matching kind and origin together,
@@ -139,16 +141,130 @@ impl TypeRef {
         &self.kind
     }
 
-    /// The tokens generated Rust must spell. **Spell off this**, never off
-    /// `kind` — re-deriving a spelling from the classification is how
-    /// `Box<Option<T>>` becomes an `E0308`.
-    ///
-    /// Tokens, not a `syn::Type`: a spelling is for spelling. What the type
-    /// *is* has an answer in [`kind`](Self::kind) and in the readings beside
-    /// it; the node itself never leaves the model.
+    /// Flat-internal source-token oracle for round-trip tests only.
+    #[cfg(test)]
     pub(crate) fn spell(&self) -> proc_macro2::TokenStream {
         use quote::ToTokens;
         super::spelling::qualify_for_emission(self.origin.as_syn()).to_token_stream()
+    }
+
+    pub(crate) fn emit_source_type(
+        &self,
+        modules: &std::collections::HashMap<String, syn::Path>,
+        default_module: &syn::Path,
+    ) -> proc_macro2::TokenStream {
+        fn module_for(
+            name: &str,
+            modules: &std::collections::HashMap<String, syn::Path>,
+            default_module: &syn::Path,
+        ) -> syn::Path {
+            modules
+                .get(name)
+                .cloned()
+                .unwrap_or_else(|| default_module.clone())
+        }
+
+        fn render(
+            ty: &TypeRef,
+            modules: &std::collections::HashMap<String, syn::Path>,
+            default_module: &syn::Path,
+        ) -> proc_macro2::TokenStream {
+            let child = |ty: &TypeRef| render(ty, modules, default_module);
+            match ty.kind() {
+                TypeKind::Named { id, args } => {
+                    let path = if let Some(ident) = id.ident() {
+                        let module = module_for(&id.name, modules, default_module);
+                        quote::quote!(#module::#ident)
+                    } else {
+                        id.name
+                            .parse::<proc_macro2::TokenStream>()
+                            .expect("a TypeId path accepted by Flat must remain renderable")
+                    };
+                    let has_args = !args.is_empty();
+                    let args = args.iter().map(|arg| match arg {
+                        GenericArg::Lifetime(lifetime) => quote::quote!(#lifetime),
+                        GenericArg::Type(ty) => child(ty),
+                    });
+                    if !has_args {
+                        path
+                    } else {
+                        quote::quote!(#path<#(#args),*>)
+                    }
+                }
+                TypeKind::Scalar(kind) => {
+                    let ident = syn::Ident::new(kind.as_str(), proc_macro2::Span::call_site());
+                    quote::quote!(#ident)
+                }
+                TypeKind::Str => quote::quote!(str),
+                TypeKind::String => quote::quote!(::std::string::String),
+                TypeKind::Optional(inner) => {
+                    let inner = child(inner);
+                    quote::quote!(::core::option::Option<#inner>)
+                }
+                TypeKind::Vec(inner) => {
+                    let inner = child(inner);
+                    quote::quote!(::std::vec::Vec<#inner>)
+                }
+                TypeKind::Slice(inner) => {
+                    let inner = child(inner);
+                    quote::quote!([#inner])
+                }
+                TypeKind::Boxed(inner) => {
+                    let inner = child(inner);
+                    quote::quote!(::std::boxed::Box<#inner>)
+                }
+                TypeKind::Uninit(inner) => {
+                    let inner = child(inner);
+                    quote::quote!(::std::mem::MaybeUninit<#inner>)
+                }
+                TypeKind::Cow { lifetime, inner } => {
+                    let inner = child(inner);
+                    quote::quote!(::std::borrow::Cow<#lifetime, #inner>)
+                }
+                TypeKind::Ref {
+                    lifetime,
+                    mutable,
+                    inner,
+                } => {
+                    let lifetime = lifetime
+                        .as_ref()
+                        .map(|lifetime| quote::quote!(#lifetime))
+                        .unwrap_or_default();
+                    let mutable = mutable.then(|| quote::quote!(mut)).unwrap_or_default();
+                    let inner = child(inner);
+                    quote::quote!(& #lifetime #mutable #inner)
+                }
+                TypeKind::Fallible { ok, err } => {
+                    let ok = child(ok);
+                    let err = child(err);
+                    quote::quote!(::core::result::Result<#ok, #err>)
+                }
+                TypeKind::Array { elem, extent } => {
+                    let elem = child(elem);
+                    let extent = if let Some(id) = extent.const_id() {
+                        let module = id
+                            .crate_name
+                            .as_deref()
+                            .and_then(|name| syn::parse_str(&name.replace('-', "_")).ok())
+                            .unwrap_or_else(|| module_for(&id.name, modules, default_module));
+                        let ident = syn::parse_str::<syn::Ident>(&id.name)
+                            .expect("a ConstId accepted by Flat must remain renderable");
+                        quote::quote!(#module::#ident)
+                    } else {
+                        let value = proc_macro2::Literal::usize_unsuffixed(extent.value);
+                        quote::quote!(#value)
+                    };
+                    quote::quote!([#elem; #extent])
+                }
+                TypeKind::Callback { args } => {
+                    let args = args.iter().map(child);
+                    quote::quote!(impl Fn(#(#args),*) + Send + Sync + 'static)
+                }
+                TypeKind::Unit => quote::quote!(()),
+            }
+        }
+
+        render(self, modules, default_module)
     }
 
     /// The type as `syn` — **the escape**. See [`Origin::as_syn`].
@@ -326,15 +442,15 @@ impl TypeRef {
     // what a crate wrote, and `classify_has_no_caller_outside_the_registry`
     // keeps it that way. These compose a type from parts already understood,
     // which needs no lowering at all: each builds `kind` **and** the matching
-    // `spell()` in one place, so the classification and the spelling
-    // cannot disagree — the invariant every consumer of a `TypeRef` relies on.
+    // reconstructed internal origin in one place, so the classification and
+    // diagnostic representation cannot disagree.
 
     /// A borrow of this type — `&T` from `T`.
     ///
     /// Keeps this type's location: the borrow exists *because of* this value,
     /// so a diagnostic about it should point where the value came from.
     pub fn borrowed(&self) -> TypeRef {
-        let inner = self.origin.spell();
+        let inner = self.kind.to_syn();
         TypeRef {
             kind: TypeKind::Ref {
                 lifetime: None,
@@ -348,7 +464,7 @@ impl TypeRef {
     /// An optional of this type — `Option<T>` from `T`. Location as
     /// [`Self::borrowed`].
     pub fn optional(&self) -> TypeRef {
-        let inner = self.origin.spell();
+        let inner = self.kind.to_syn();
         TypeRef {
             kind: TypeKind::Optional(Box::new(self.clone())),
             origin: self.origin.with(syn::parse_quote!(Option<#inner>)),
@@ -360,7 +476,7 @@ impl TypeRef {
     /// borrowed slice uses this model value as its identity; it never has to
     /// reconstruct or inspect the corresponding Rust syntax.
     pub fn vector(&self) -> TypeRef {
-        let inner = self.origin.spell();
+        let inner = self.kind.to_syn();
         TypeRef {
             kind: TypeKind::Vec(Box::new(self.clone())),
             origin: self.origin.with(syn::parse_quote!(Vec<#inner>)),
@@ -418,9 +534,8 @@ impl TypeRef {
     /// adds over its classification, if any — `Box<Option<T>>` → `Some("Box")`,
     /// `Option<T>` → `None`.
     ///
-    /// This exists because [`kind`](Self::kind) and [`RustEmitter::spell`](crate::RustEmitter::spell)
-    /// answer different questions, and only one of them is about the
-    /// destination:
+    /// This exists because the complete model structure and its destination
+    /// interpretation answer different questions:
     ///
     /// * `kind` decides what the **destination** sees — the surface type and the
     ///   wire. `Box<Option<String>>` and `Option<String>` are one optional
@@ -638,13 +753,12 @@ impl TypeRef {
 
     /// This type and every type reachable inside it, outermost first.
     ///
-    /// The nested positions are real [`TypeRef`]s carrying their own spelling and
+    /// The nested positions are real [`TypeRef`]s carrying their own model and
     /// origin, so a consumer that indexes types finds `Foo` from `Vec<Foo>` with
     /// the classification already made rather than a sub-path to re-read.
     ///
     /// A [`Named`](TypeKind::Named)'s generic arguments are **not** among them:
-    /// [`TypeId`] keeps a name and nothing else, so `MyBox<Foo>` reaches no `Foo`
-    /// here. The full spelling is [`RustEmitter::spell`](crate::RustEmitter::spell)'s answer for whoever needs it.
+    /// foreign generic arguments remain whatever the accepted model recorded.
     pub fn walk(&self) -> Vec<&TypeRef> {
         let mut out = Vec::new();
         self.collect_refs(&mut out);
@@ -715,8 +829,8 @@ impl TypeRef {
 /// One variant per accepted Rust **form**, not per destination concept. `str`
 /// and `String` are two forms and get two variants; `Box<T>` is a form of its
 /// own and does not disappear into `T`. Nothing here folds two spellings
-/// together, which is what makes [`RustEmitter::spell`](crate::RustEmitter::spell) recoverable from this —
-/// rebuilding the syntax from a kind is the round-trip that checks it.
+/// together. Rebuilding syntax from a kind is the Flat-internal round-trip that
+/// proves the model did not discard a required fact.
 ///
 /// # Why it is only syntax
 ///
@@ -832,11 +946,10 @@ impl TypeKind {
     ///
     /// # What it is for
     ///
-    /// **Not** for generating code: generated Rust spells
-    /// [`TypeRef::syntax`], the source's own tokens, and always will. This
-    /// exists so that claim can be *checked* — a kind that cannot reproduce the
-    /// syntax it was lowered from has dropped something, and the round-trip test
-    /// is what says so before a consumer has to discover it.
+    /// This typed form is only the Flat-internal round-trip oracle. Final code
+    /// generation uses the token-only model renderer; a kind that cannot
+    /// reproduce the syntax it was lowered from has dropped something, and the
+    /// round-trip test says so before a consumer has to discover it.
     ///
     /// Two forms reconstruct up to their own freedom rather than token for
     /// token, because the model keeps what was written and not how it was

@@ -2790,15 +2790,15 @@ fn the_declarator_and_the_accessor_s_receiver_must_agree() {
 ///
 /// #268 fixed the *access path* for a decomposed child. A field with no
 /// deconstructor needs its own converter, and converter selection dispatched by
-/// rebuilding a pattern from the spelling: `with_first_arg(Box<Option<T>>)`
+/// rebuilding a pattern from source syntax: `with_first_arg(Box<Option<T>>)`
 /// yielded `Box<_>`, which matched no handler, so the crossing got no converter
 /// at all and failed resolution by name (#270).
 ///
-/// Both spellings now resolve, and the converter takes the type the source
-/// actually wrote — declaring `Option<T>` for a `Box<Option<T>>` value would
-/// mismatch its own call site.
+/// Both model structures now resolve, and Flat emits the converter input from
+/// that structure. Declaring `Option<T>` for a modeled `Box<Option<T>>` value
+/// would mismatch its own call site.
 #[test]
-fn a_whole_value_crossing_ignores_how_rust_spells_it() {
+fn a_whole_value_crossing_uses_only_its_flat_structure() {
     let loc = myflat_loc();
     let build = |field_ty: syn::Type| -> String {
         let items = vec![
@@ -2863,15 +2863,15 @@ fn a_whole_value_crossing_ignores_how_rust_spells_it() {
     let boxed = build(syn::parse_quote!(Box<Option<ZStamp>>));
 
     let bc: String = boxed.split_whitespace().collect();
-    // The converter takes what the source wrote...
+    // Flat emits the complete modeled wrapper structure.
     assert!(
-        bc.contains("v:Box<Option<myflat::ZStamp>>"),
-        "the converter takes the spelled type:\n{boxed}"
+        bc.contains("v:::std::boxed::Box<::core::option::Option<myflat::ZStamp>>",),
+        "the converter takes the model-emitted type:\n{boxed}"
     );
     // ...and matches the canonical shape directly before destructuring.
     assert!(
         bc.contains("match*v"),
-        "the spelling is read as the canonical shape:\n{boxed}"
+        "the modeled wrapper is used as the canonical shape:\n{boxed}"
     );
     // The Kotlin surface is the wrapper's business only in Rust: both
     // spellings deliver the same nullable data class.

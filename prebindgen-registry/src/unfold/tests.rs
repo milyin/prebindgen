@@ -11,7 +11,7 @@ use prebindgen_flat::types_util::ident;
 
 use crate::{
     registry::Registry,
-    test_util::{scanned_with as reg_with, SpellForTest},
+    test_util::{scanned_with as reg_with, EmitSourceForTest},
 };
 
 /// A reading for a fixture type, lowered by the model.
@@ -108,7 +108,7 @@ fn accessor_optional_primitive() {
         .get(&ident("z_sample_timestamp"))
         .expect("plan");
     assert!(plan.by_ref, "inner was &ZTimestamp");
-    assert_eq!(plan.source.spell().to_string(), "ZTimestamp");
+    assert_eq!(plan.source.emit_source().to_string(), "crate :: ZTimestamp");
     assert!(
         matches!(&plan.shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)),
         "outer shape is Optional(Decompose)"
@@ -119,7 +119,7 @@ fn accessor_optional_primitive() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_timestamp_ntp64"
     );
-    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "i64");
+    assert_eq!(plan.leaves[0].out_ty.emit_source().to_string(), "i64");
     assert!(
         reg.output_types[&TypeKey::from_type(&syn::parse_quote!(i64))].root,
         "the leaf type must be a root"
@@ -167,14 +167,17 @@ fn accessor_plan_byref() {
         .get(&ident("z_sample_key_expr"))
         .expect("plan");
     assert!(plan.by_ref, "return was &ZKeyExpr");
-    assert_eq!(plan.source.spell().to_string(), "ZKeyExpr");
+    assert_eq!(plan.source.emit_source().to_string(), "crate :: ZKeyExpr");
     assert!(matches!(plan.shape, UnfoldShape::Base));
     assert_eq!(plan.leaves.len(), 2);
 
     // Identity leaf: out_ty `&ZKeyExpr`, empty path, emitted last.
     assert!(plan.leaves[0].identity);
     assert!(plan.leaves[0].path.is_empty());
-    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "& ZKeyExpr");
+    assert_eq!(
+        plan.leaves[0].out_ty.emit_source().to_string(),
+        "& crate :: ZKeyExpr"
+    );
     // Accessor leaf: out_ty `&str`, path `[z_keyexpr_as_str]`.
     assert!(!plan.leaves[1].identity);
     assert_eq!(plan.leaves[1].path.len(), 1);
@@ -182,7 +185,7 @@ fn accessor_plan_byref() {
         plan.leaves[1].path[0].ident().to_string(),
         "z_keyexpr_as_str"
     );
-    assert_eq!(plan.leaves[1].out_ty.spell().to_string(), "& str");
+    assert_eq!(plan.leaves[1].out_ty.emit_source().to_string(), "& str");
 
     // Leaf out_tys registered as required outputs so the resolver builds
     // their converters.
@@ -507,7 +510,7 @@ fn nested_accessor_flatten() {
         .get(&ident("z_reply_sample"))
         .expect("plan");
     assert!(plan.by_ref);
-    assert_eq!(plan.source.spell().to_string(), "ZSample");
+    assert_eq!(plan.source.emit_source().to_string(), "crate :: ZSample");
     assert!(matches!(&plan.shape, UnfoldShape::Optional((), _)));
 
     let path = |l: &UnfoldLeaf| {
@@ -525,7 +528,10 @@ fn nested_accessor_flatten() {
     assert_eq!(path(&plan.leaves[1]), "z_sample_key_expr.z_keyexpr_as_str");
     assert_eq!(path(&plan.leaves[2]), "z_sample_payload.z_zbytes_to_bytes");
     assert_eq!(path(&plan.leaves[3]), "z_sample_kind");
-    assert_eq!(plan.leaves[3].out_ty.spell().to_string(), "SampleKind");
+    assert_eq!(
+        plan.leaves[3].out_ty.emit_source().to_string(),
+        "crate :: SampleKind"
+    );
     assert_eq!(
         path(&plan.leaves[4]),
         "z_sample_timestamp.z_timestamp_ntp64"
@@ -646,7 +652,7 @@ fn reply_product_double_option_flatten() {
     .expect("apply");
     let plan = reg.unfold_plans.get(&ident("z_recv_reply")).expect("plan");
     assert!(!plan.by_ref, "owned ZReply return");
-    assert_eq!(plan.source.spell().to_string(), "ZReply");
+    assert_eq!(plan.source.emit_source().to_string(), "crate :: ZReply");
     assert!(matches!(&plan.shape, UnfoldShape::Base));
     assert!(matches!(plan.delivery, Delivery::Callback));
 
@@ -661,8 +667,8 @@ fn reply_product_double_option_flatten() {
     // Acc leaf keeping its full `Option<…>` return — not a nesting step.
     assert_eq!(path(&plan.leaves[0]), "z_reply_replier_zid");
     assert_eq!(
-        plan.leaves[0].out_ty.spell().to_string(),
-        "Option < ZZenohId >"
+        plan.leaves[0].out_ty.emit_source().to_string(),
+        ":: core :: option :: Option < crate :: ZZenohId >"
     );
     assert!(!plan.leaves[0].nullable && !plan.leaves[0].identity);
     assert_eq!(path(&plan.leaves[1]), "z_reply_is_ok");
@@ -772,8 +778,8 @@ fn iterable_whole_element_plan() {
         "whole-element: no decomposed leaves"
     );
     assert_eq!(
-        plan.element.as_ref().map(|t| t.spell().to_string()),
-        Some("ZZenohId".to_string())
+        plan.element.as_ref().map(|t| t.emit_source().to_string()),
+        Some("crate :: ZZenohId".to_string())
     );
     assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(ZZenohId))].root);
 }
@@ -824,12 +830,18 @@ fn iterable_decomposed_plan() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_zenoh_id_to_string"
     );
-    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "String");
+    assert_eq!(
+        plan.leaves[0].out_ty.emit_source().to_string(),
+        ":: std :: string :: String"
+    );
     // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
     // owns its elements (by_ref = false).
     assert!(plan.leaves[1].identity);
     assert!(plan.leaves[1].path.is_empty());
-    assert_eq!(plan.leaves[1].out_ty.spell().to_string(), "ZZenohId");
+    assert_eq!(
+        plan.leaves[1].out_ty.emit_source().to_string(),
+        "crate :: ZZenohId"
+    );
 }
 
 #[test]
@@ -868,8 +880,10 @@ fn convert_output_single_value() {
     assert!(matches!(&plan.shape, UnfoldShape::Optional((), _)));
     assert_eq!(plan.leaves.len(), 1);
     assert_eq!(
-        plan.convert_out_ty.as_ref().map(|t| t.spell().to_string()),
-        Some("Option < i64 >".to_string())
+        plan.convert_out_ty
+            .as_ref()
+            .map(|t| t.emit_source().to_string()),
+        Some(":: core :: option :: Option < i64 >".to_string())
     );
     // The shaped convert type is registered as a required output.
     assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(Option<i64>))].root);
@@ -1065,8 +1079,8 @@ fn option_vec_whole_element_plan() {
         "whole-element: no decomposed leaves"
     );
     assert_eq!(
-        plan.element.as_ref().map(|t| t.spell().to_string()),
-        Some("ZZenohId".to_string())
+        plan.element.as_ref().map(|t| t.emit_source().to_string()),
+        Some("crate :: ZZenohId".to_string())
     );
 }
 
@@ -1177,7 +1191,10 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
         .get(&TypeKey::from_type(&syn::parse_quote!(Option<Payload>)))
         .expect("optional callback-arg plan");
     assert!(!optional.by_ref);
-    assert_eq!(optional.source.spell().to_string(), "Payload");
+    assert_eq!(
+        optional.source.emit_source().to_string(),
+        "crate :: Payload"
+    );
     assert!(matches!(
         &optional.shape,
         UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)
@@ -1241,8 +1258,11 @@ fn convert_error_decomposes_result_e() {
         .expect("error plan for the fallible fn");
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 1);
-    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "String");
-    assert_eq!(plan.source.spell().to_string(), "ZError");
+    assert_eq!(
+        plan.leaves[0].out_ty.emit_source().to_string(),
+        ":: std :: string :: String"
+    );
+    assert_eq!(plan.source.emit_source().to_string(), "crate :: ZError");
     // The infallible fn gets no error plan.
     assert!(!reg.error_plans.contains_key(&ident("z_infallible")));
     // No output plans created (no ZKeyExpr return among the declared fns; the
@@ -1348,7 +1368,7 @@ fn callback_arg_plan_derived() {
         .get(&TypeKey::from_type(&syn::parse_quote!(ZSample)))
         .expect("callback-arg plan for ZSample");
     assert!(!plan.by_ref, "the trampoline owns the callback arg");
-    assert_eq!(plan.source.spell().to_string(), "ZSample");
+    assert_eq!(plan.source.emit_source().to_string(), "crate :: ZSample");
     assert!(matches!(plan.shape, UnfoldShape::Base));
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 3);
@@ -1358,12 +1378,18 @@ fn callback_arg_plan_derived() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_sample_key_expr"
     );
-    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "& ZKeyExpr");
+    assert_eq!(
+        plan.leaves[0].out_ty.emit_source().to_string(),
+        "& crate :: ZKeyExpr"
+    );
     assert_eq!(
         plan.leaves[1].path.last().unwrap().ident().to_string(),
         "z_keyexpr_as_str"
     );
-    assert_eq!(plan.leaves[2].out_ty.spell().to_string(), "SampleKind");
+    assert_eq!(
+        plan.leaves[2].out_ty.emit_source().to_string(),
+        "crate :: SampleKind"
+    );
     // Leaf out_tys registered so the resolver builds their converters.
     assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(&str))].root);
     assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(SampleKind))].root);
@@ -1426,7 +1452,7 @@ fn callback_arg_borrowed_decomposed() {
         .get(&TypeKey::from_type(&syn::parse_quote!(&ZSample)))
         .expect("callback-arg plan for &ZSample");
     assert!(plan.by_ref, "the callback only borrows the delivered value");
-    assert_eq!(plan.source.spell().to_string(), "ZSample");
+    assert_eq!(plan.source.emit_source().to_string(), "crate :: ZSample");
     assert!(matches!(plan.shape, UnfoldShape::Base));
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 3);
@@ -1435,7 +1461,10 @@ fn callback_arg_borrowed_decomposed() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_sample_key_expr"
     );
-    assert_eq!(plan.leaves[2].out_ty.spell().to_string(), "SampleKind");
+    assert_eq!(
+        plan.leaves[2].out_ty.emit_source().to_string(),
+        "crate :: SampleKind"
+    );
 }
 
 #[test]
@@ -1529,8 +1558,8 @@ fn leaf_vec_fold_synthesizes_whole_element_plans() {
     assert!(p.decon.is_none(), "whole-element fold carries no decon");
     assert!(p.leaves.is_empty(), "no decomposed leaves");
     assert_eq!(
-        p.element.as_ref().map(|t| t.spell().to_string()),
-        Some("String".to_string())
+        p.element.as_ref().map(|t| t.emit_source().to_string()),
+        Some(":: std :: string :: String".to_string())
     );
 
     // `Option<Vec<ZenohId>>` ⇒ Optional(Iterable(Base)).
@@ -1543,8 +1572,8 @@ fn leaf_vec_fold_synthesizes_whole_element_plans() {
             UnfoldShape::Optional((), inner)
                 if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))));
     assert_eq!(
-        p2.element.as_ref().map(|t| t.spell().to_string()),
-        Some("ZenohId".to_string())
+        p2.element.as_ref().map(|t| t.emit_source().to_string()),
+        Some("crate :: ZenohId".to_string())
     );
 
     // `impl Fn(&[String])` callback arg ⇒ Iterable fold keyed by `&[String]`.

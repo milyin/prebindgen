@@ -1,7 +1,7 @@
 //! Rust file emission for the resolved `Registry`.
 //!
 //! `write_rust` takes the conversions the adapter compiled, as a slice of
-//! [`RustFunction`] plans; renders them with the writer-owned [`crate::Emit`],
+//! [`RustFunction`] plans; renders them with the writer-owned [`crate::RustWriter`],
 //! adds every per-item `on_<kind>` output and every anonymous const, and hands
 //! the assembled file to `Destination::write`.
 //!
@@ -69,7 +69,7 @@ impl std::error::Error for WriteError {}
 ///
 /// Resolution may keep an adapter-specific semantic plan here instead of a
 /// rendered Rust body. The writer calls this only after planning and
-/// validation are complete, with the same [`crate::Emit`] capability used for
+/// validation are complete, with the same [`crate::RustWriter`] capability used for
 /// the rest of final Rust emission.
 pub trait RustFunction {
     /// Registry-owned semantic identity of this operation.
@@ -85,7 +85,7 @@ pub trait RustFunction {
     }
 
     /// Materialize the complete private converter function.
-    fn render(&self, emit: &crate::Emit) -> syn::ItemFn;
+    fn render(&self, emit: &crate::RustWriter) -> syn::ItemFn;
 }
 
 /// Emit a resolved registry whose private converters are rendered at this
@@ -114,7 +114,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     // Every callback below is handed a borrow; nothing else in the pipeline is.
     // See `prebindgen_flat::flat::emit` for what that buys and what it
     // deliberately does not.
-    let emit = crate::Emit::new();
+    let emit = crate::RustWriter::new(registry, ext.source_module());
     let mut items: Vec<syn::Item> = Vec::new();
 
     // 0. Adapter prerequisites — runtime-support items (helper structs,
@@ -219,12 +219,6 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     //    the const gate above cannot apply to them.
     for guard in flat.guards() {
         items.push(syn::Item::Const(emit.guard(guard)));
-    }
-
-    // 4. Cross-cutting post-process pass. Adapters use this to qualify
-    //    bare type references etc. — see Prebindgen::post_process_item.
-    for item in &mut items {
-        ext.post_process_item(item, registry, &emit);
     }
 
     validate_converter_calls(&mut items, &converter_names)?;

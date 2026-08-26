@@ -1373,7 +1373,7 @@ impl<R: Conversions> JCompile<'_, R> {
         }
         let direction = at.crossing.direction();
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let (render_source, target, operation, metadata, subs) = match source.kind() {
+        let (render_source, operation, metadata, subs) = match source.kind() {
             TypeKind::Named { id, .. }
                 if self
                     .decls
@@ -1381,7 +1381,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     .get(&source.key())
                     .is_some_and(|cfg| cfg.is_opaque()) =>
             {
-                let target = id.ident()?;
+                id.ident()?;
                 let operation = match direction {
                     Direction::Construct if at.crossing.mode() == Mode::Owned => {
                         crate::jni::chain::JHandleOperation::ConsumeInput
@@ -1393,7 +1393,6 @@ impl<R: Conversions> JCompile<'_, R> {
                 };
                 (
                     source.clone(),
-                    target,
                     operation,
                     self.decls.opaque_leaf_meta(source.key()),
                     Vec::new(),
@@ -1416,7 +1415,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 let TypeKind::Named { id, .. } = target_ref.unwrapped().kind() else {
                     return None;
                 };
-                let target = id.ident()?;
+                id.ident()?;
                 let operation = match direction {
                     Direction::Construct
                         if !*mutable
@@ -1444,13 +1443,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         ..projection
                     });
                 }
-                (
-                    render_source,
-                    target,
-                    operation,
-                    metadata,
-                    vec![target_ref.key()],
-                )
+                (render_source, operation, metadata, vec![target_ref.key()])
             }
             _ => return None,
         };
@@ -1460,7 +1453,6 @@ impl<R: Conversions> JCompile<'_, R> {
                 .expect("a static handle-codec identity is valid"),
             direction,
         );
-        let module = self.decls.fn_module(self.registry, &target);
         let rust =
             crate::jni::chain::JFunction::handle_codec(crate::jni::chain::JHandleCodecPlan {
                 operation_id: operation_id.clone(),
@@ -1474,8 +1466,6 @@ impl<R: Conversions> JCompile<'_, R> {
                     crate::jni::chain::JHandleOperation::BorrowInput
                 ))),
                 source: render_source,
-                module,
-                target,
                 operation,
             });
         Some(JFrag {
@@ -1863,8 +1853,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let TypeKind::Named { id, .. } = source.unwrapped().kind() else {
             return None;
         };
-        let source_ident = id.ident()?;
-        let source_module = self.decls.fn_module(self.registry, &source_ident);
+        id.ident()?;
         let intermediate_parts: Vec<syn::Type> = parts
             .iter()
             .map(|(_, frag)| frag.conv.destination.clone())
@@ -1901,10 +1890,7 @@ impl<R: Conversions> JCompile<'_, R> {
             chain: prebindgen_registry::chain::Product {
                 source: source.clone(),
                 direction,
-                source_policy: crate::jni::chain::JSource {
-                    wrappers,
-                    module: Some(source_module),
-                },
+                source_policy: crate::jni::chain::JSource { wrappers },
                 bridge: prebindgen_registry::chain::TupleProduct {
                     parts: intermediate_parts,
                 },
@@ -2005,8 +1991,8 @@ impl<R: Conversions> JCompile<'_, R> {
         let TypeKind::Named { id, .. } = source.unwrapped().kind() else {
             return None;
         };
-        let source_ident = id.ident()?;
-        let source_module = self.decls.fn_module(self.registry, &source_ident);
+        let source_name = id.name.clone();
+        id.ident()?;
         let direction = at.crossing.direction();
         let arm_types: Vec<syn::Type> = planned
             .iter()
@@ -2027,7 +2013,6 @@ impl<R: Conversions> JCompile<'_, R> {
             })
             .collect();
         let inactive = arm_types.iter().map(Self::inactive_intermediate).collect();
-        let source_name = source_ident.to_string();
         let invalid = quote!(<__JniErr as ::core::convert::From<String>>::from(format!(
             "{}: invalid tag {}",
             #source_name,
@@ -2065,10 +2050,7 @@ impl<R: Conversions> JCompile<'_, R> {
             chain: prebindgen_registry::chain::Choice {
                 source: source.clone(),
                 direction,
-                source_policy: crate::jni::chain::JSource {
-                    wrappers,
-                    module: Some(source_module),
-                },
+                source_policy: crate::jni::chain::JSource { wrappers },
                 bridge: prebindgen_registry::chain::TupleChoice {
                     tag: syn::parse_quote!(jni::sys::jint),
                     arms: arm_types,
@@ -2221,10 +2203,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 source: produced,
                 element: element.clone(),
                 direction,
-                source_policy: crate::jni::chain::JSource {
-                    wrappers,
-                    module: None,
-                },
+                source_policy: crate::jni::chain::JSource { wrappers },
                 bridge,
                 child,
             },
@@ -2290,8 +2269,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let TypeKind::Named { id, .. } = target.unwrapped().kind() else {
             return None;
         };
-        let source_ident = id.ident()?;
-        let module = self.decls.fn_module(self.registry, &source_ident);
+        id.ident()?;
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let operation = OperationId::converter(at.fragment_id());
         let rust = crate::jni::chain::JFunction::borrowed_optional_handle(
@@ -2299,7 +2277,6 @@ impl<R: Conversions> JCompile<'_, R> {
                 operation: operation.clone(),
                 reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
                 target: target.clone(),
-                module,
             },
         );
         let kotlin_name = self
@@ -2603,10 +2580,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 source: source.clone(),
                 direction,
                 source_policy: crate::jni::chain::JOptionalSource {
-                    ordinary: crate::jni::chain::JSource {
-                        wrappers,
-                        module: None,
-                    },
+                    ordinary: crate::jni::chain::JSource { wrappers },
                     borrowed_input,
                 },
                 bridge,

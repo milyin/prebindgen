@@ -215,7 +215,7 @@ fn build_jobject_property_plan(
 }
 
 impl JObjectStructInputPlan {
-    pub(crate) fn render(&self, emit: &prebindgen_registry::Emit) -> syn::Expr {
+    pub(crate) fn render(&self, emit: &prebindgen_registry::RustWriter) -> syn::Expr {
         let mut preludes = Vec::new();
         let mut inits = Vec::new();
         for field in &self.fields {
@@ -234,7 +234,7 @@ impl JObjectStructInputPlan {
 }
 
 impl JObjectStructFieldPlan {
-    fn render(&self, receiver: TokenStream, emit: &prebindgen_registry::Emit) -> TokenStream {
+    fn render(&self, receiver: TokenStream, emit: &prebindgen_registry::RustWriter) -> TokenStream {
         let name = &self.name;
         let property = &self.property;
         let error = &self.error;
@@ -463,7 +463,7 @@ pub(crate) fn build_jobject_sum_input_plan(
 }
 
 impl JObjectSumInputPlan {
-    pub(crate) fn render(&self, emit: &prebindgen_registry::Emit) -> syn::Expr {
+    pub(crate) fn render(&self, emit: &prebindgen_registry::RustWriter) -> syn::Expr {
         let source_module = &self.source_module;
         let enum_ident = &self.shape.name;
         let enum_name = &self.enum_name;
@@ -943,7 +943,7 @@ pub(crate) fn render_flat_input_decode(
     plan: &FlatInputPlan,
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (TokenStream, TokenStream) {
     let leaves: Vec<syn::Ident> = plan
         .leaves

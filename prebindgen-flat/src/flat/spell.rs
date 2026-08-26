@@ -1,20 +1,13 @@
-//! Spelling an element back as Rust: the one place the model turns into tokens.
+//! Generating Rust field groups from explicit Flat shape facts.
 //!
-//! The other half of **classify off `kind`, spell with `spell()`**. Every helper
-//! here reads an element's retained syntax and emits Rust; none of them decides
-//! what anything *means*. Keeping them out of [`element`](super::element) is
-//! what lets that module describe structure alone — a `Field` is a name, a
-//! position and a type, and whether Rust writes it `id: v` or `v` is answered
-//! here.
-//!
-//! Nothing outside generated Rust reads any of this: a destination language
-//! cannot tell `E::B` from `E::B()`, which is exactly why the delimiters are
-//! spelling rather than a modelled shape.
+//! No helper here reads an origin or retained `syn` node. The frontend records
+//! delimiter kind as [`FieldShape`], and final generation switches only on
+//! that model fact.
 
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use super::element::{Alternative, EnumValue, Field, Struct};
+use super::element::{Field, FieldShape};
 
 /// Spell a field group: `head`, `head(parts…)` or `head { parts… }`, following
 /// the delimiters the source wrote.
@@ -26,35 +19,11 @@ use super::element::{Alternative, EnumValue, Field, Struct};
 ///
 /// `head` is the type's or variant's path, and each part is an already-rendered
 /// [`Field::bind`].
-pub(crate) fn fields(shape: &syn::Fields, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
+pub(crate) fn fields(shape: FieldShape, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
     match shape {
-        syn::Fields::Unit => head,
-        syn::Fields::Unnamed(_) => quote!(#head(#(#parts),*)),
-        syn::Fields::Named(_) => quote!(#head { #(#parts),* }),
-    }
-}
-
-/// The three elements that carry their own field delimiters.
-///
-/// Crate-private so only the three model shapes can participate. Public rendering
-/// remains on the object-safe [`RustEmitter`](crate::RustEmitter) methods.
-pub(crate) trait Shaped {
-    fn shape(&self) -> &syn::Fields;
-}
-
-impl Shaped for Alternative {
-    fn shape(&self) -> &syn::Fields {
-        &self.origin.as_syn().fields
-    }
-}
-impl Shaped for EnumValue {
-    fn shape(&self) -> &syn::Fields {
-        &self.origin.as_syn().fields
-    }
-}
-impl Shaped for Struct {
-    fn shape(&self) -> &syn::Fields {
-        &self.origin.as_syn().fields
+        FieldShape::Unit => head,
+        FieldShape::Tuple => quote!(#head(#(#parts),*)),
+        FieldShape::Named => quote!(#head { #(#parts),* }),
     }
 }
 
@@ -64,9 +33,7 @@ impl Field {
     ///
     /// Ungated, and the reason is what it reads: [`name`](Self::name) and
     /// [`index`](Self::index), both model facts. No captured syntax is
-    /// involved, so this is not a door — unlike the `spell` methods above,
-    /// which read the delimiters the source wrote and are
-    /// [`RustEmitter` shape methods](crate::RustEmitter)'s to hand out.
+    /// involved.
     pub fn member(&self) -> syn::Member {
         match &self.name {
             Some(id) => syn::Member::Named(id.clone()),

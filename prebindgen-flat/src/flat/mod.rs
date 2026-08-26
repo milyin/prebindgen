@@ -35,7 +35,7 @@
 //!
 //! So the rule for every consumer is:
 //!
-//! > **Classify off `kind`, spell through the callback's [`RustEmitter`](crate::RustEmitter).**
+//! > **Analyze Flat facts; generate Rust from Flat facts. Never analyze retained Rust syntax.**
 //!
 //! The model enforces the classification half rather than asking: [`Origin`]'s
 //! syntax is private, and every direct route to it — `spell()`, `as_syn()` —
@@ -43,9 +43,11 @@
 //! variant outside this module is a classifier, and issue #211 says
 //! classification lives here.
 //!
-//! Rendering is an explicit collector boundary. Code whose job *is* producing
-//! Rust receives a collector-owned [`RustEmitter`](crate::RustEmitter) key; the
-//! registry exposes its key only in emission callbacks.
+//! Final generation is an explicit collector boundary. Code whose job *is*
+//! producing Rust receives a collector-owned [`RustEmitter`](crate::RustEmitter)
+//! key, whose operations reconstruct output from `TypeKind`, identities, and
+//! explicit shape facts. The registry exposes its narrower key only in emission
+//! callbacks; neither key returns retained source syntax.
 //!
 //! # What earns a variant
 //!
@@ -203,8 +205,8 @@ use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
     element::{
-        Alternative, Constant, Element, Enum, EnumValue, Extern, Field, Function, Guard, Param,
-        Struct, Type, Unsupported, Variant,
+        Alternative, Constant, Element, Enum, EnumValue, Extern, Field, FieldShape, Function,
+        Guard, Param, Struct, Type, Unsupported, Variant,
     },
     key::{TypeKey, TypeKeyParseError},
     origin::Origin,
@@ -1207,9 +1209,13 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
         // An unnamed const is a `Guard`, not a constant: nothing can name it, so
         // it is not part of the API, and several sources' guards coexist because
         // none of them has an address to collide on.
-        syn::Item::Const(c) if c.ident == "_" => Element::Guard(Guard {
-            origin: Origin::new(c, at),
-        }),
+        syn::Item::Const(c) if c.ident == "_" => {
+            let output = c.clone();
+            Element::Guard(Guard {
+                origin: Origin::new(c, at),
+                output,
+            })
+        }
         syn::Item::Const(c) => match lower_type(&c.ty, consts, &at) {
             Ok(ty) => Element::Constant(Constant {
                 name: c.ident.clone(),
@@ -1367,6 +1373,7 @@ fn lower_struct(
         reading: TypeRef::named(&s.ident),
         name: s.ident.clone(),
         fields,
+        shape: FieldShape::from_syn(&s.fields),
         origin: Origin::new(s.clone(), Rc::clone(at)),
     }))
 }
@@ -1425,6 +1432,7 @@ fn lower_variant(
             name: v.ident.clone(),
             index,
             fields,
+            shape: FieldShape::from_syn(&v.fields),
             origin: Origin::new(v.clone(), Rc::clone(at)),
         });
     }
@@ -1459,6 +1467,11 @@ fn lower_c_enum(e: &syn::ItemEnum, at: &Rc<SourceLocation>) -> Enum {
             name: v.ident.clone(),
             index,
             discriminant,
+            discriminant_output: v
+                .discriminant
+                .as_ref()
+                .map(|(_, expression)| quote::quote!(#expression)),
+            shape: FieldShape::from_syn(&v.fields),
             origin: Origin::new(v.clone(), Rc::clone(at)),
         });
     }

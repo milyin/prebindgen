@@ -2419,10 +2419,13 @@ fn option_composition_normalizes_fallible_stage_errors() {
         "input and output stages must both normalize their raw errors:\n{rust}"
     );
     assert!(
-        rc.contains("Result<Option<myflat::Percent>,__JniErr>"),
+        rc.contains("Result<::core::option::Option<myflat::Percent>,__JniErr>"),
         "{rust}"
     );
-    assert!(rc.contains("v:Option<myflat::Percent>"), "{rust}");
+    assert!(
+        rc.contains("v:::core::option::Option<myflat::Percent>"),
+        "{rust}"
+    );
 }
 
 /// Binding-local conversion fns via the ONE vocabulary —
@@ -2629,7 +2632,10 @@ fn convert_via_local_try_fn_is_fallible() {
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
     assert!(rc.contains("crate::conv::label_in("), "{rust}");
-    assert!(rc.contains("Result<myflat::Label,String>"), "{rust}");
+    assert!(
+        rc.contains("Result<myflat::Label,::std::string::String>"),
+        "{rust}"
+    );
 }
 
 /// I5: data-class members — the receiver re-enters Rust as `this`'s field

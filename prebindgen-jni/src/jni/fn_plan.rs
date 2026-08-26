@@ -174,7 +174,7 @@ impl ExpandedParamPlan {
 pub(crate) struct PlanLeaf {
     /// The leaf's **reading** — classification and spelling in one value, so
     /// the two cannot disagree and no consumer has to look the type up. Spell
-    /// with `emit.spell(reading)` in an emission callback.
+    /// with `emit.emit_source_type(reading)` in an emission callback.
     pub reading: TypeRef,
     /// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
     /// hard-keyword escaping) — shared by the wrapper signature and the
