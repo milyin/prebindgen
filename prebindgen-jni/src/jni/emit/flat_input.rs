@@ -219,7 +219,7 @@ impl JObjectStructInputPlan {
         let mut preludes = Vec::new();
         let mut inits = Vec::new();
         for field in &self.fields {
-            preludes.push(field.render(quote!(v)));
+            preludes.push(field.render(quote!(v), emit));
             let name = &field.name;
             inits.push(quote!(#name));
         }
@@ -234,7 +234,7 @@ impl JObjectStructInputPlan {
 }
 
 impl JObjectStructFieldPlan {
-    fn render(&self, receiver: TokenStream) -> TokenStream {
+    fn render(&self, receiver: TokenStream, emit: &prebindgen_registry::Emit) -> TokenStream {
         let name = &self.name;
         let property = &self.property;
         let error = &self.error;
@@ -253,7 +253,7 @@ impl JObjectStructFieldPlan {
                 descriptor,
                 pipeline,
             } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
                 quote! {
                     let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
                         .and_then(|val| val.l())
@@ -273,7 +273,7 @@ impl JObjectStructFieldPlan {
                 wrap_some,
                 pipeline,
             } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
                 if *optional {
                     let decoded = if *wrap_some {
                         quote!(::core::option::Option::Some(#decode))
@@ -310,7 +310,7 @@ impl JObjectStructFieldPlan {
                 optional,
                 pipeline,
             } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
                 if *optional {
                     quote! {
                         let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
@@ -343,7 +343,7 @@ impl JObjectStructFieldPlan {
                 accessor,
                 pipeline,
             } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
                 quote! {
                     let #raw: #wire = env.get_field(#receiver, #property, #descriptor)
                         .and_then(|val| val.#accessor())
@@ -356,7 +356,7 @@ impl JObjectStructFieldPlan {
                 descriptor,
                 pipeline,
             } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
                 quote! {
                     let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
                         .and_then(|val| val.l())
@@ -369,7 +369,7 @@ impl JObjectStructFieldPlan {
                 descriptor,
                 pipeline,
             } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name);
+                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
                 quote! {
                     let #raw: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
                         .and_then(|val| val.l())
@@ -474,7 +474,7 @@ impl JObjectSumInputPlan {
             let mut preludes = Vec::new();
             let mut inits = Vec::new();
             for field in &alternative.fields {
-                preludes.push(field.property.render(quote!(__obj)));
+                preludes.push(field.property.render(quote!(__obj), emit));
                 let bind = &field.property.name;
                 inits.push(field.shape.bind(&quote!(#bind)));
             }
@@ -560,8 +560,8 @@ impl FlatLeaf {
         &self.wire.kt_ty
     }
 
-    /// Per-field input converter ident (`None` for a synthetic gate or tag).
-    pub fn conv(&self) -> Option<&syn::Ident> {
+    /// Per-field input converter operation (`None` for a synthetic gate or tag).
+    pub fn conv(&self) -> Option<&prebindgen_registry::OperationId> {
         self.wire.conv()
     }
 
@@ -943,6 +943,7 @@ pub(crate) fn render_flat_input_decode(
     plan: &FlatInputPlan,
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
+    emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, TokenStream) {
     let leaves: Vec<syn::Ident> = plan
         .leaves
@@ -950,7 +951,7 @@ pub(crate) fn render_flat_input_decode(
         .map(|leaf| leaf.native_ident.clone())
         .collect();
     let intermediate = plan.chain.layout.expression(&leaves);
-    let converter = &plan.chain.ident;
+    let converter = emit.operation_ident("jni", &plan.chain.operation);
     let binding = plan.target.mutable_binding().then(|| quote!(mut));
     let prelude = quote! {
         let #binding #arg_ident = match #converter(&mut env, #intermediate) {

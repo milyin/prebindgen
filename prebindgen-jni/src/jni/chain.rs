@@ -2,7 +2,8 @@
 
 use prebindgen_registry::{
     chain::{self as shared, Chain as _},
-    flat::{TypeKey, TypeRef},
+    flat::TypeRef,
+    generation::OperationId,
     recipe::Mode,
     write::RustFunction,
     Emit,
@@ -16,7 +17,7 @@ pub(crate) struct JFunction(JBody);
 
 #[derive(Clone)]
 enum JBody {
-    Marker(syn::Ident),
+    Marker(OperationId),
     ValueCodec(Box<JValueCodecPlan>),
     HandleCodec(Box<JHandleCodecPlan>),
     CustomConversion(Box<JCustomConversionPlan>),
@@ -33,8 +34,8 @@ enum JBody {
 }
 
 impl JFunction {
-    pub(crate) fn marker(ident: syn::Ident) -> Self {
-        Self(JBody::Marker(ident))
+    pub(crate) fn marker(operation: OperationId) -> Self {
+        Self(JBody::Marker(operation))
     }
 
     pub(crate) fn handle_codec(plan: JHandleCodecPlan) -> Self {
@@ -200,25 +201,6 @@ impl JFunction {
 }
 
 impl RustFunction for JFunction {
-    fn ident(&self) -> &syn::Ident {
-        match &self.0 {
-            JBody::Marker(ident) => ident,
-            JBody::ValueCodec(plan) => &plan.ident,
-            JBody::HandleCodec(plan) => &plan.ident,
-            JBody::CustomConversion(plan) => &plan.ident,
-            JBody::Result(plan) => &plan.ident,
-            JBody::Transparent(plan) => &plan.ident,
-            JBody::BorrowedOptionalHandle(plan) => &plan.ident,
-            JBody::Product(plan) => &plan.ident,
-            JBody::Choice(plan) => &plan.ident,
-            JBody::Sequence(plan) => &plan.ident,
-            JBody::Optional(plan) => &plan.ident,
-            JBody::StructCodec(plan) => &plan.ident,
-            JBody::SumCodec(plan) => &plan.ident,
-            JBody::Invoke(plan) => plan.name(),
-        }
-    }
-
     fn should_emit(&self) -> bool {
         match &self.0 {
             JBody::Marker(_) => false,
@@ -248,7 +230,7 @@ impl RustFunction for JFunction {
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         match &self.0 {
-            JBody::Marker(ident) => planned_marker(ident),
+            JBody::Marker(operation) => planned_marker(&emit.operation_ident("jni", operation)),
             JBody::ValueCodec(plan) => plan.render(emit),
             JBody::HandleCodec(plan) => plan.render(emit),
             JBody::CustomConversion(plan) => plan.render(emit),
@@ -274,7 +256,7 @@ impl RustFunction for JFunction {
 /// the captured struct delimiter shape assembled.
 #[derive(Clone)]
 pub(crate) struct JStructCodecPlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) source: TypeRef,
     pub(crate) direction: Direction,
     pub(crate) body: JStructCodecBody,
@@ -291,7 +273,7 @@ pub(crate) enum JStructCodecBody {
 
 impl JStructCodecPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = emit.spell_ty(&self.source);
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
         let body = match &self.body {
@@ -299,7 +281,7 @@ impl JStructCodecPlan {
             JStructCodecBody::Output {
                 plan,
                 java_class_name,
-            } => crate::jni::emit::render_struct_output_body(plan, java_class_name),
+            } => crate::jni::emit::render_struct_output_body(plan, java_class_name, emit),
         };
         let allow = crate::jni::trait_impl::generated_converter_attr();
         match self.direction {
@@ -336,14 +318,14 @@ impl JStructCodecPlan {
 /// to the final writer-owned [`Emit`] pass.
 #[derive(Clone)]
 pub(crate) struct JSumCodecPlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) source: TypeRef,
     pub(crate) body: crate::jni::emit::JObjectSumInputPlan,
 }
 
 impl JSumCodecPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = emit.spell_ty(&self.source);
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
         let wire = annotate_jobject_with_lifetime(&wire, "v");
@@ -393,7 +375,7 @@ pub(crate) enum JCustomCall {
 /// either source type from the Flat model.
 #[derive(Clone)]
 pub(crate) struct JCustomConversionPlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) source: TypeRef,
     pub(crate) representation: JCustomType,
     pub(crate) direction: Direction,
@@ -403,7 +385,7 @@ pub(crate) struct JCustomConversionPlan {
 
 impl JCustomConversionPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = emit.spell_ty(&self.source);
         let representation = self.representation.spell(emit);
         let (input, output) = match self.direction {
@@ -526,7 +508,7 @@ impl JCustomConversionPlan {
 /// channel. The success value then continues through `success`'s converter.
 #[derive(Clone)]
 pub(crate) struct JResultPlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) success: JFunction,
     pub(crate) source: TypeRef,
@@ -536,7 +518,7 @@ pub(crate) struct JResultPlan {
 
 impl JResultPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = emit.spell_ty(&self.source);
         let ok = emit.spell_ty(&self.ok);
         let err = emit.spell_ty(&self.err);
@@ -562,7 +544,7 @@ impl JResultPlan {
 /// assembles the standard converter signature around the frozen child call.
 #[derive(Clone)]
 pub(crate) struct JTransparentPlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) inner: JFunction,
     pub(crate) source: TypeRef,
@@ -573,7 +555,7 @@ pub(crate) struct JTransparentPlan {
 
 impl JTransparentPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = emit.spell_ty(&self.source);
         let wire = &self.wire;
         let allow = crate::jni::trait_impl::generated_converter_attr();
@@ -585,7 +567,7 @@ impl JTransparentPlan {
                 } else {
                     quote!(v: &#wire_with_lifetime)
                 };
-                let child = self.child.invoke_with_env(quote!(env), quote!(v));
+                let child = self.child.invoke_with_env(quote!(env), quote!(v), emit);
                 let built =
                     super::trait_impl::build_through_erased_wrappers(&self.source, quote!(__inner))
                         .expect("transparent-wrapper planning accepted this input spelling");
@@ -606,7 +588,9 @@ impl JTransparentPlan {
                 let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
                 let read = super::trait_impl::read_through_erased_wrappers(&self.source, quote!(v))
                     .expect("transparent-wrapper planning accepted this output spelling");
-                let child = self.child.invoke_with_env(quote!(env), quote!(__inner));
+                let child = self
+                    .child
+                    .invoke_with_env(quote!(env), quote!(__inner), emit);
                 syn::parse_quote!(
                     #allow
                     pub(crate) unsafe fn #name<'a>(
@@ -661,10 +645,10 @@ pub(crate) enum JTextCarrier {
 }
 
 impl JTextCarrier {
-    fn identity(self) -> &'static str {
+    pub(crate) fn semantic_key(self) -> &'static str {
         match self {
-            Self::Owned => "owned_text",
-            Self::Borrowed => "borrowed_text",
+            Self::Owned => "owned",
+            Self::Borrowed => "borrowed",
         }
     }
 }
@@ -680,7 +664,7 @@ impl JTextCarrier {
 /// carrier is chosen inside final rendering.
 #[derive(Clone)]
 pub(crate) struct JValueCodecPlan {
-    ident: syn::Ident,
+    operation: OperationId,
     direction: Direction,
     source: TypeRef,
     source_kind: JValueSource,
@@ -690,14 +674,14 @@ pub(crate) struct JValueCodecPlan {
 
 impl JValueCodecPlan {
     pub(crate) fn new(
+        operation: OperationId,
         direction: Direction,
         source: TypeRef,
         wire: syn::Type,
         body: syn::Expr,
     ) -> Self {
-        let ident = planned_name(direction, &source, &wire);
         Self {
-            ident,
+            operation,
             direction,
             source,
             source_kind: JValueSource::Crossing,
@@ -709,15 +693,15 @@ impl JValueCodecPlan {
     /// A text codec whose concrete owned/borrowed carrier is selected only
     /// during final rendering.
     pub(crate) fn text(
+        operation: OperationId,
         direction: Direction,
         source: TypeRef,
         carrier: JTextCarrier,
         wire: syn::Type,
         body: syn::Expr,
     ) -> Self {
-        let ident = planned_name_for_key(direction, carrier.identity(), &wire);
         Self {
-            ident,
+            operation,
             direction,
             source,
             source_kind: JValueSource::Text(carrier),
@@ -727,13 +711,13 @@ impl JValueCodecPlan {
     }
 
     pub(crate) fn primitive_array(
+        operation: OperationId,
         direction: Direction,
         source: TypeRef,
         spec: crate::jni::prim_array::PrimArray,
     ) -> Self {
-        let ident = planned_name(direction, &source, &spec.wire);
         Self {
-            ident,
+            operation,
             direction,
             source,
             source_kind: JValueSource::Crossing,
@@ -743,16 +727,16 @@ impl JValueCodecPlan {
     }
 
     pub(crate) fn enum_input(
+        operation: OperationId,
         source: TypeRef,
         source_module: syn::Path,
         enum_name: syn::Ident,
         variants: Vec<(syn::Ident, i64)>,
     ) -> Self {
         let wire = syn::parse_quote!(jni::sys::jint);
-        let ident = planned_name(Direction::Construct, &source, &wire);
         let diagnostic_name = enum_name.to_string();
         Self {
-            ident,
+            operation,
             direction: Direction::Construct,
             source,
             source_kind: JValueSource::Crossing,
@@ -766,12 +750,8 @@ impl JValueCodecPlan {
         }
     }
 
-    pub(crate) fn name(&self) -> &syn::Ident {
-        &self.ident
-    }
-
     fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source: syn::Type = match self.source_kind {
             JValueSource::Crossing => emit.spell_ty(&self.source),
             JValueSource::Text(JTextCarrier::Owned) => syn::parse_quote!(String),
@@ -981,18 +961,18 @@ fn shared_ref(value: TokenStream) -> TokenStream {
 pub(crate) struct JChild {
     call: shared::Call,
     direction: Direction,
-    stages: Vec<syn::Ident>,
+    stages: Vec<OperationId>,
     value_use: JValueUse,
 }
 
 impl JChild {
     pub(crate) fn input(
-        converter: syn::Ident,
-        stages: Vec<syn::Ident>,
+        converter: OperationId,
+        stages: Vec<OperationId>,
         value_use: JValueUse,
     ) -> Self {
         Self {
-            call: shared::Call::new(converter, true, true),
+            call: shared::Call::operation(converter, true, true),
             direction: Direction::Construct,
             stages,
             value_use,
@@ -1000,12 +980,12 @@ impl JChild {
     }
 
     pub(crate) fn output(
-        converter: syn::Ident,
-        stages: Vec<syn::Ident>,
+        converter: OperationId,
+        stages: Vec<OperationId>,
         value_use: JValueUse,
     ) -> Self {
         Self {
-            call: shared::Call::new(converter, true, true),
+            call: shared::Call::operation(converter, true, true),
             direction: Direction::Deconstruct,
             stages,
             value_use,
@@ -1098,11 +1078,11 @@ impl JPipeline {
     /// that needs [`Emit`] to spell its element type. Keeping that case out of
     /// this API lets return, error, and callback delivery assemble their JNI
     /// protocol without gaining access to source Rust spelling.
-    pub(crate) fn invoke_output(&self, value: TokenStream) -> TokenStream {
+    pub(crate) fn invoke_output(&self, value: TokenStream, emit: &Emit) -> TokenStream {
         let JPipelineBody::Converter(child) = &self.body else {
             unreachable!("a Rust-to-JNI pipeline cannot contain an input Vec handle")
         };
-        let call = child.invoke_with_env(quote!(&mut env), value);
+        let call = child.invoke_with_env(quote!(&mut env), value, emit);
         if child.stages.is_empty() {
             call
         } else {
@@ -1119,17 +1099,18 @@ impl JPipeline {
         env: TokenStream,
         value: TokenStream,
         stage_base: &syn::Ident,
+        emit: &Emit,
     ) -> TokenStream {
         let JPipelineBody::Converter(child) = &self.body else {
             unreachable!("a whole-object field cannot use the transient Vec-handle site ABI")
         };
-        child.invoke_input_value_with_env(env, value, stage_base)
+        child.invoke_input_value_with_env(env, value, stage_base, emit)
     }
 
     /// Render the already-planned call graph around `value`.
     pub(crate) fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream {
         match &self.body {
-            JPipelineBody::Converter(_) => self.invoke_output(value),
+            JPipelineBody::Converter(_) => self.invoke_output(value, emit),
             JPipelineBody::VecHandle(plan) => {
                 let value = plan.invoke(value, emit);
                 quote!(::core::result::Result::<_, __JniErr>::Ok(#value))
@@ -1179,9 +1160,15 @@ impl JChild {
         env: TokenStream,
         value: TokenStream,
         stage_base: &syn::Ident,
+        emit: &Emit,
     ) -> TokenStream {
         assert_eq!(self.direction, Direction::Construct);
-        let converter = self.call.ident();
+        let converter = emit.operation_ident(
+            "jni",
+            self.call
+                .operation_id()
+                .expect("JNI child calls retain registry operation identity"),
+        );
         let value = match self.value_use {
             JValueUse::Direct => value,
             JValueUse::SharedRef => shared_ref(value),
@@ -1195,6 +1182,7 @@ impl JChild {
         let mut body = quote!(let #first_name = #first?;);
         let mut previous = first_name;
         for (index, stage) in self.stages.iter().enumerate() {
+            let stage = emit.operation_ident("jni", stage);
             let next = format_ident!("{}_s{}", stage_base, index + 1);
             body.extend(quote!(
                 let #next = #stage(#env, #previous)
@@ -1210,8 +1198,13 @@ impl JChild {
     /// Render this child in a context that supplies its own `JNIEnv` expression.
     /// Registry-composed converter bodies receive an `&mut JNIEnv` named
     /// `env`; exported wrappers own a mutable `JNIEnv` and pass `&mut env`.
-    fn invoke_with_env(&self, env: TokenStream, value: TokenStream) -> TokenStream {
-        let converter = self.call.ident();
+    fn invoke_with_env(&self, env: TokenStream, value: TokenStream, emit: &Emit) -> TokenStream {
+        let converter = emit.operation_ident(
+            "jni",
+            self.call
+                .operation_id()
+                .expect("JNI child calls retain registry operation identity"),
+        );
         match self.direction {
             Direction::Construct => {
                 let value = match self.value_use {
@@ -1226,6 +1219,7 @@ impl JChild {
                 let mut body = quote!(let __chain_s0 = #first?;);
                 let mut previous = format_ident!("__chain_s0");
                 for (index, stage) in self.stages.iter().enumerate() {
+                    let stage = emit.operation_ident("jni", stage);
                     let next = format_ident!("__chain_s{}", index + 1);
                     body.extend(quote!(
                         let #next = #stage(#env, #previous)
@@ -1249,6 +1243,7 @@ impl JChild {
                 let mut body = TokenStream::new();
                 let mut previous = value;
                 for (index, stage) in self.stages.iter().enumerate() {
+                    let stage = emit.operation_ident("jni", stage);
                     let next = format_ident!("__chain_s{index}");
                     body.extend(quote!(
                         let #next = #stage(#env, #previous)
@@ -1269,8 +1264,8 @@ impl shared::Child for JChild {
         &self.call
     }
 
-    fn invoke(&self, value: TokenStream) -> TokenStream {
-        self.invoke_with_env(quote!(env), value)
+    fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream {
+        self.invoke_with_env(quote!(env), value, emit)
     }
 }
 
@@ -1281,6 +1276,17 @@ pub(crate) enum JHandleOperation {
     BorrowInput,
     OwnOutput,
     CloneOutput,
+}
+
+impl JHandleOperation {
+    pub(crate) fn semantic_key(self) -> &'static str {
+        match self {
+            Self::ConsumeInput => "consume-input",
+            Self::BorrowInput => "borrow-input",
+            Self::OwnOutput => "own-output",
+            Self::CloneOutput => "clone-output",
+        }
+    }
 }
 
 /// One opaque `Box`-handle terminal, kept source-syntax-free until final
@@ -1300,7 +1306,7 @@ pub(crate) enum JHandleOperation {
 /// for every opaque handle type.
 #[derive(Clone)]
 pub(crate) struct JHandleCodecPlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation_id: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) source: TypeRef,
     pub(crate) module: syn::Path,
@@ -1310,7 +1316,7 @@ pub(crate) struct JHandleCodecPlan {
 
 impl JHandleCodecPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation_id);
         let mut source = emit.spell_ty(&self.source);
         let mut qualifier = QualifySource {
             module: &self.module,
@@ -1383,7 +1389,7 @@ impl JHandleCodecPlan {
 /// keeps the allocation alive for the native call.
 #[derive(Clone)]
 pub(crate) struct JBorrowedOptionalHandlePlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) target: TypeRef,
     pub(crate) module: syn::Path,
@@ -1391,7 +1397,7 @@ pub(crate) struct JBorrowedOptionalHandlePlan {
 
 impl JBorrowedOptionalHandlePlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let target = shared::Source::spell(
             &JSource {
                 wrappers: Vec::new(),
@@ -1423,7 +1429,7 @@ impl JBorrowedOptionalHandlePlan {
 /// One JNI Product converter assembled by the registry from child chains.
 #[derive(Clone)]
 pub(crate) struct JProductPlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) dependencies: Vec<JFunction>,
     pub(crate) mode: Mode,
@@ -1433,7 +1439,7 @@ pub(crate) struct JProductPlan {
 impl JProductPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;
         let intermediate = &rendered.intermediate;
         let body = &rendered.body;
@@ -1476,7 +1482,7 @@ impl JProductPlan {
 
 #[derive(Clone)]
 pub(crate) struct JChoicePlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) dependencies: Vec<JFunction>,
     pub(crate) mode: Mode,
@@ -1486,7 +1492,7 @@ pub(crate) struct JChoicePlan {
 impl JChoicePlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;
         let intermediate = annotate_jobject_with_lifetime(&rendered.intermediate, "a");
         let body = &rendered.body;
@@ -1625,7 +1631,7 @@ impl shared::SequenceBridge for JSequenceBridge {
 /// One late-rendered JniGen Sequence converter.
 #[derive(Clone)]
 pub(crate) struct JSequencePlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) dependencies: Vec<JFunction>,
     pub(crate) mode: Mode,
@@ -1635,7 +1641,7 @@ pub(crate) struct JSequencePlan {
 impl JSequencePlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;
         let intermediate = annotate_jobject_with_lifetime(&rendered.intermediate, "a");
         let body = &rendered.body;
@@ -1698,6 +1704,19 @@ pub(crate) enum JOptionalBridge {
         inner_wire: syn::Type,
         helper: syn::Ident,
     },
+}
+
+impl JOptionalBridge {
+    pub(crate) fn semantic_key(&self) -> &'static str {
+        match self {
+            Self::InputGated { .. } => "input-gated",
+            Self::InputNiche { .. } => "input-niche",
+            Self::InputBoxed { .. } => "input-boxed",
+            Self::OutputGated { .. } => "output-gated",
+            Self::OutputNiche { .. } => "output-niche",
+            Self::OutputBoxed { .. } => "output-boxed",
+        }
+    }
 }
 
 impl shared::OptionalBridge for JOptionalBridge {
@@ -1779,7 +1798,7 @@ impl shared::OptionalBridge for JOptionalBridge {
 /// One late-rendered JniGen Optional converter.
 #[derive(Clone)]
 pub(crate) struct JOptionalPlan {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     pub(crate) reachable: std::rc::Rc<std::cell::Cell<bool>>,
     pub(crate) dependencies: Vec<JFunction>,
     pub(crate) chain: shared::Optional<JOptionalSource, JOptionalBridge, JChild>,
@@ -1789,7 +1808,7 @@ pub(crate) struct JOptionalPlan {
 impl JOptionalPlan {
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
-        let name = &self.ident;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;
         let intermediate = &rendered.intermediate;
         let body = &rendered.body;
@@ -1838,89 +1857,9 @@ pub(crate) fn planned_marker(ident: &syn::Ident) -> syn::ItemFn {
     syn::parse_quote!(fn #ident() {})
 }
 
-/// Stable private name for a converter whose source spelling is deliberately
-/// unavailable until final rendering.
-pub(crate) fn planned_name(
-    direction: Direction,
-    source: &TypeRef,
-    intermediate: &syn::Type,
-) -> syn::Ident {
-    let key = source.key();
-    planned_name_for_key(direction, key.as_str(), intermediate)
-}
-
-/// Stable private name for an adapter operation identified by a model key.
-///
-/// Hashing treats `TypeKey` as opaque table identity. In particular, this does
-/// not obtain its normalized-source label, parse it, or branch on its text;
-/// #558 tracks removing that textual capability from `TypeKey` itself.
-pub(crate) fn model_operation_name(operation: &str, key: &TypeKey) -> syn::Ident {
-    use std::{
-        collections::hash_map::DefaultHasher,
-        hash::{Hash, Hasher},
-    };
-    let mut hash = DefaultHasher::new();
-    operation.hash(&mut hash);
-    key.hash(&mut hash);
-    format_ident!("{operation}_{:08x}", hash.finish() & 0xffff_ffff)
-}
-
-/// Stable private name that keeps a nominal model identity readable while the
-/// table key itself remains opaque.
-///
-/// TypeId is a Flat-model fact, not recovered Rust syntax. The key still
-/// supplies uniqueness for wrappers and generic instantiations that share the
-/// same nominal identity.
-pub(crate) fn named_model_operation_name(
-    operation: &str,
-    id: &prebindgen_registry::flat::TypeId,
-    key: &TypeKey,
-) -> syn::Ident {
-    let nominal = crate::jni::emit::sanitize_for_ident(&id.name);
-    model_operation_name(&format!("{operation}_{nominal}"), key)
-}
-
-/// Stable private name for a plan identified by an adapter semantic rather
-/// than by a source crossing. This accepts a semantic label, not Rust syntax.
-fn planned_name_for_key(
-    direction: Direction,
-    source_key: &str,
-    intermediate: &syn::Type,
-) -> syn::Ident {
-    let source_id = crate::jni::emit::sanitize_for_ident(source_key);
-    let wire_id = match intermediate {
-        syn::Type::Tuple(tuple) if !tuple.elems.is_empty() => {
-            format!("tuple{}", tuple.elems.len())
-        }
-        _ => crate::jni::emit::wire_short(intermediate),
-    };
-    let suffix = crate::jni::emit::hash_name_pair(source_key, intermediate) & 0xffff_ffff;
-    match direction {
-        Direction::Construct => format_ident!("{wire_id}_to_{source_id}_{suffix:08x}"),
-        Direction::Deconstruct => format_ident!("{source_id}_to_{wire_id}_{suffix:08x}"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use prebindgen_registry::flat::ScalarKind;
-
     use super::*;
-
-    #[test]
-    fn planned_tuple_names_are_bounded_by_arity() {
-        let tuple = vec!["jni::sys::jlong"; 64].join(",");
-        let intermediate: syn::Type =
-            syn::parse_str(&format!("({tuple},)")).expect("parse large tuple intermediate");
-        let name = planned_name(
-            Direction::Construct,
-            &TypeRef::scalar(ScalarKind::I64),
-            &intermediate,
-        )
-        .to_string();
-        assert!(name.starts_with("tuple64_to_i64_"), "{name}");
-        assert!(name.len() < 64, "{name}");
-    }
 
     /// The writer-facing carrier may retain semantic plans and marker
     /// identities, but never a pre-rendered Rust function. Otherwise a new
@@ -1941,7 +1880,15 @@ mod tests {
 
     #[test]
     fn compatibility_markers_never_emit() {
-        let marker = JFunction::marker(format_ident!("__jni_parts"));
+        let source =
+            prebindgen_registry::flat::TypeRef::scalar(prebindgen_registry::flat::ScalarKind::I64);
+        let crossing =
+            prebindgen_registry::recipe::Crossing::new(source.clone(), Direction::Construct);
+        let fragment = prebindgen_registry::FragmentId::new(
+            source.key(),
+            crossing.row(prebindgen_registry::recipe::RecipeName::new("test")),
+        );
+        let marker = JFunction::marker(OperationId::converter(fragment));
         assert!(!marker.should_emit());
     }
 

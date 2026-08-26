@@ -43,7 +43,8 @@ pub use prebindgen_jni_runtime::{
 pub(crate) use prebindgen_registry::{
     flat::Origin,
     types_util::{option_inner_type, vec_inner_type},
-    ConverterImpl, Direction, NicheSlot, Niches, Prebindgen, Registry, ScalarValue, Stage, TypeKey,
+    ArtifactId, ConverterImpl, Direction, NicheSlot, Niches, OperationId, Prebindgen, Registry,
+    ScalarValue, Stage, TypeKey,
 };
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
@@ -461,8 +462,8 @@ pub struct JniGen {
 }
 
 /// One JNI parameter as a signature writes it: name, Kotlin type, the Kotlin
-/// expression that fills it, the conversion it crosses through, where Kotlin
-/// finds the object to lock and whether that access can be null (both for a
+/// expression that fills it, where Kotlin finds the object to lock and
+/// whether that access can be null (both for a
 /// nested owned handle only), whether the conversion carries Rust-side stages,
 /// and the struct field it fills.
 #[cfg(test)]
@@ -470,7 +471,6 @@ pub(crate) type NamedWire = (
     String,
     String,
     String,
-    Option<String>,
     Option<String>,
     bool,
     bool,
@@ -571,7 +571,7 @@ impl JniGen {
         let rendered = fragment.rust.render(&prebindgen_registry::Emit::for_test());
         Ok((
             fragment.composed_only,
-            fragment.conv.converter_ident().to_string(),
+            rendered.sig.ident.to_string(),
             quote::quote!(#rendered).to_string(),
         ))
     }
@@ -581,8 +581,8 @@ impl JniGen {
     ///
     /// Test support: the composition is what the emitters read, and this is it
     /// in the form the three coordinated sites see — the JNI parameter name,
-    /// its Kotlin type, the Kotlin expression that fills it, the conversion it
-    /// crosses through, where the lock scaffold finds a nested handle and
+    /// its Kotlin type, the Kotlin expression that fills it, where the lock
+    /// scaffold finds a nested handle and
     /// whether that can be null, whether the conversion carries Rust-side
     /// stages, and the struct field it fills.
     pub(crate) fn named_wires_for_test(
@@ -601,7 +601,6 @@ impl JniGen {
                         )),
                         w.kt_ty.clone(),
                         w.access.render(param),
-                        w.conv().map(|c| c.to_string()),
                         w.handle_target
                             .as_ref()
                             .map(|t| crate::jni::compile::reached(param, t)),
@@ -865,10 +864,11 @@ impl JniGen {
         let fragment = self
             .generation_plan()
             .fragment(&key, Direction::Construct)?;
-        Some((
-            fragment.conv.converter_ident().to_string(),
-            fragment.rust.is_invoke(),
-        ))
+        let rendered = prebindgen_registry::write::RustFunction::render(
+            &fragment.rust,
+            &prebindgen_registry::Emit::for_test(),
+        );
+        Some((rendered.sig.ident.to_string(), fragment.rust.is_invoke()))
     }
 }
 

@@ -114,7 +114,7 @@ impl prebindgen_registry::chain::InvokePart for JInvokePart {
                 primitive,
             } => {
                 let enc = format_ident!("__cb{}_enc", index);
-                let call = pipeline.invoke_output(quote!(#value));
+                let call = pipeline.invoke_output(quote!(#value), emit);
                 if projection
                     .as_ref()
                     .is_some_and(|projection| projection.kind == ProjectionKind::Handle)
@@ -220,19 +220,15 @@ fn freeze_callback_delivery(
 /// A registry-composed callback retained until the final Rust writer runs.
 #[derive(Clone)]
 pub(crate) struct JInvokePlan {
-    name: syn::Ident,
+    operation: prebindgen_registry::OperationId,
     chain:
         prebindgen_registry::chain::Invoke<crate::jni::chain::JSource, JInvokeBridge, JInvokePart>,
 }
 
 impl JInvokePlan {
-    pub(crate) fn name(&self) -> &syn::Ident {
-        &self.name
-    }
-
     pub(crate) fn render(&self, emit: &prebindgen_registry::Emit) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
-        let name = &self.name;
+        let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;
         let body = &rendered.body;
         let gen_allow = crate::jni::trait_impl::generated_converter_attr();
@@ -366,6 +362,7 @@ impl prebindgen_registry::chain::InvokeBridge for JInvokeBridge {
 /// returned), so they are converted to `__JniErr` and logged via `tracing`.
 pub(crate) fn callback_input(
     ext: &Declarations,
+    operation: prebindgen_registry::OperationId,
     source: &prebindgen_registry::flat::TypeRef,
     args: &[prebindgen_registry::flat::TypeRef],
     registry: &impl Conversions,
@@ -521,10 +518,7 @@ pub(crate) fn callback_input(
         parts,
     };
     let intermediate: syn::Type = syn::parse_quote!(jni::objects::JObject);
-    let rust_plan = JInvokePlan {
-        name: crate::jni::chain::planned_name(Direction::Construct, source, &intermediate),
-        chain,
-    };
+    let rust_plan = JInvokePlan { operation, chain };
 
     // The wire type for an `impl Fn(args)` parameter is JObject (the erased
     // Kotlin lambda). The converter returns Box<dyn Fn(args) + Send + Sync>,

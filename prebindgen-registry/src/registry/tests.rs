@@ -229,16 +229,25 @@ fn scan_declared_collects_all_missing_kinds_in_one_error() {
 
 #[test]
 fn conversion_helpers_expose_converter_chain_contract() {
+    let source = prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I64);
+    let crossing = crate::recipe::Crossing::new(source.clone(), Direction::Construct);
+    let fragment = crate::FragmentId::new(
+        source.key(),
+        crossing.row(crate::recipe::RecipeName::new("test")),
+    );
+    let converter = crate::OperationId::converter(fragment.clone());
+    let stage_rust = crate::OperationId::stage(fragment.clone(), 0);
+    let stage_wire = crate::OperationId::stage(fragment, 1);
     let entry = crate::ConverterImpl {
         destination: syn::parse_quote!(jni::sys::jlong),
-        converter: syn::parse_quote!(__wire),
+        converter: converter.clone(),
         pre_stages: vec![
             crate::Stage {
-                converter: syn::parse_quote!(__stage_rust),
+                converter: stage_rust.clone(),
                 metadata: (),
             },
             crate::Stage {
-                converter: syn::parse_quote!(__stage_wire),
+                converter: stage_wire.clone(),
                 metadata: (),
             },
         ],
@@ -250,7 +259,7 @@ fn conversion_helpers_expose_converter_chain_contract() {
         metadata: (),
     };
 
-    assert_eq!(entry.converter_ident(), "__wire");
+    assert_eq!(entry.converter_id(), &converter);
     assert_eq!(
         TypeKey::from_type(entry.wire_type()),
         TypeKey::parse("jni::sys::jlong").expect("test type")
@@ -258,16 +267,16 @@ fn conversion_helpers_expose_converter_chain_contract() {
     assert_eq!(
         entry
             .output_stage_order()
-            .map(|(_, s)| s.converter.to_string())
+            .map(|(_, s)| s.converter.clone())
             .collect::<Vec<_>>(),
-        vec!["__stage_rust", "__stage_wire"]
+        vec![stage_rust.clone(), stage_wire.clone()]
     );
     assert_eq!(
         entry
             .input_stage_order()
-            .map(|(_, s)| s.converter.to_string())
+            .map(|(_, s)| s.converter.clone())
             .collect::<Vec<_>>(),
-        vec!["__stage_wire", "__stage_rust"]
+        vec![stage_wire, stage_rust]
     );
     assert_eq!(
         entry.subs.iter().map(TypeKey::as_str).collect::<Vec<_>>(),
@@ -290,7 +299,11 @@ fn conversion_carriers_cannot_store_complete_rust_syntax() {
         .0;
     assert!(!carriers.contains("syn::ItemFn"), "{carriers}");
     assert!(!carriers.contains("TokenStream"), "{carriers}");
-    assert_eq!(carriers.matches("pub converter: syn::Ident").count(), 2);
+    assert!(
+        !carriers.contains("pub converter: syn::Ident"),
+        "{carriers}"
+    );
+    assert_eq!(carriers.matches("pub converter: OperationId").count(), 2);
 
     let chain = include_str!("../chain.rs");
     assert!(!chain.contains("Call::complete"), "{chain}");
@@ -314,6 +327,25 @@ fn conversion_planning_cannot_obtain_emit() {
         .0;
     assert!(!convert_with.contains("Emit"), "{convert_with}");
     assert!(!convert_with.contains("spell_ty"), "{convert_with}");
+
+    let recipes = include_str!("../recipe/compile.rs");
+    let cx = recipes
+        .split_once("pub struct Cx")
+        .expect("recipe context")
+        .1
+        .split_once("/// One part")
+        .expect("end of recipe context")
+        .0;
+    assert!(!cx.contains("Emit"), "{cx}");
+    assert!(!cx.contains("fn emit"), "{cx}");
+    let compiler = recipes
+        .split_once("pub struct Compiler")
+        .expect("recipe compiler")
+        .1
+        .split_once("impl<'a, C: Compile>")
+        .expect("end of compiler fields")
+        .0;
+    assert!(!compiler.contains("Emit"), "{compiler}");
 }
 
 /// A name collision across two chained source streams fails registry
@@ -1481,9 +1513,16 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
     }
     impl AnyConverterExt {
         fn converter(_ty: &prebindgen_flat::flat::TypeRef) -> Option<ConverterImpl> {
+            let source =
+                prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I64);
+            let crossing = crate::recipe::Crossing::new(source.clone(), Direction::Construct);
+            let fragment = crate::FragmentId::new(
+                source.key(),
+                crossing.row(crate::recipe::RecipeName::new("test")),
+            );
             Some(ConverterImpl {
                 destination: syn::parse_quote!(()),
-                converter: syn::parse_quote!(__id),
+                converter: crate::OperationId::converter(fragment),
                 pre_stages: vec![],
                 subs: vec![],
                 niches: Niches::empty(),

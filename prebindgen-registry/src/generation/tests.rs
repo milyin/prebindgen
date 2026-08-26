@@ -64,6 +64,85 @@ fn yield_of(id: &FragmentId, mode: Mode, validity: Validity) -> Yield {
     }
 }
 
+#[test]
+fn operation_identity_is_owned_by_fragment_and_role() {
+    let model = model();
+    let input = fragment_id(&model, "Leaf", Direction::Construct);
+    let output = fragment_id(&model, "Leaf", Direction::Deconstruct);
+
+    let converter = OperationId::converter(input.clone());
+    let stage0 = OperationId::stage(input.clone(), 0);
+    let stage1 = OperationId::stage(input, 1);
+    let output_converter = OperationId::converter(output);
+
+    assert_ne!(converter, stage0);
+    assert_ne!(stage0, stage1);
+    assert_ne!(converter, output_converter);
+    assert!(matches!(converter.role(), OperationRole::Converter));
+    assert!(matches!(stage0.role(), OperationRole::Stage(0)));
+}
+
+#[test]
+fn sequence_operation_identity_is_shared_only_by_carrier_and_direction() {
+    let model = model();
+    let carrier = ty(&model, "Leaf");
+
+    let first = OperationId::sequence_converter(&carrier, Direction::Construct);
+    let same = OperationId::sequence_converter(&carrier, Direction::Construct);
+    let reverse = OperationId::sequence_converter(&carrier, Direction::Deconstruct);
+
+    assert_eq!(first, same);
+    assert_ne!(first, reverse);
+}
+
+#[test]
+fn composed_operation_identity_covers_shape_carrier_mode_and_representation() {
+    let model = model();
+    let carrier = ty(&model, "Pair");
+    let tuple = ArtifactId::new("test-product", "tuple").unwrap();
+    let object = ArtifactId::new("test-product", "object").unwrap();
+
+    let product =
+        OperationId::product_converter(&carrier, Mode::Owned, tuple.clone(), Direction::Construct);
+    let same =
+        OperationId::product_converter(&carrier, Mode::Owned, tuple.clone(), Direction::Construct);
+    let optional =
+        OperationId::optional_converter(&carrier, Mode::Owned, tuple.clone(), Direction::Construct);
+    let construct_for_borrow =
+        OperationId::product_converter(&carrier, Mode::Shared, tuple.clone(), Direction::Construct);
+    let deconstruct_owned = OperationId::product_converter(
+        &carrier,
+        Mode::Owned,
+        tuple.clone(),
+        Direction::Deconstruct,
+    );
+    let deconstruct_borrowed =
+        OperationId::product_converter(&carrier, Mode::Shared, tuple, Direction::Deconstruct);
+    let differently_represented =
+        OperationId::product_converter(&carrier, Mode::Owned, object, Direction::Construct);
+
+    assert_eq!(product, same);
+    assert_ne!(product, optional);
+    assert_eq!(product, construct_for_borrow);
+    assert_ne!(deconstruct_owned, deconstruct_borrowed);
+    assert_ne!(product, differently_represented);
+}
+
+#[test]
+fn model_artifact_identity_shares_only_the_same_adapter_contract() {
+    let model = model();
+    let carrier = ty(&model, "Leaf");
+    let borrow = ArtifactId::new("test-handle", "borrow").unwrap();
+    let consume = ArtifactId::new("test-handle", "consume").unwrap();
+
+    let first = OperationId::model_artifact(&carrier, borrow.clone(), Direction::Construct);
+    let same = OperationId::model_artifact(&carrier, borrow, Direction::Construct);
+    let different = OperationId::model_artifact(&carrier, consume, Direction::Construct);
+
+    assert_eq!(first, same);
+    assert_ne!(first, different);
+}
+
 fn atomic(model: &Flat, id: FragmentId, failure: Failure, mode: Mode) -> FragmentPlan<Fake> {
     FragmentPlan::new(
         id.clone(),

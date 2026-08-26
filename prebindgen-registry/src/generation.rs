@@ -29,6 +29,370 @@ pub struct FragmentId {
     recipe: RecipeKey,
 }
 
+/// Stable identity of one private operation retained by a recipe fragment.
+///
+/// This is model identity, not a rendered Rust identifier. The final writer
+/// allocates its private symbol through `Emit`; an adapter only supplies its
+/// target namespace while rendering.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct OperationId {
+    owner: OperationOwner,
+    role: OperationRole,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum OperationOwner {
+    Fragment(FragmentId),
+    Composed {
+        shape: ComposedShape,
+        carrier: TypeKey,
+        mode: Option<Mode>,
+        representation: Option<ArtifactId>,
+        direction: Direction,
+    },
+    ModelArtifact {
+        carrier: TypeKey,
+        artifact: ArtifactId,
+        direction: Direction,
+    },
+    Shared {
+        artifact: ArtifactId,
+        direction: Direction,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum ComposedShape {
+    Product,
+    Optional,
+    Sequence,
+    Choice,
+}
+
+/// Position of a private operation inside one fragment.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum OperationRole {
+    /// The fragment's wire-facing converter.
+    Converter,
+    /// One source-side conversion step, in declared chain order.
+    Stage(usize),
+}
+
+impl OperationId {
+    /// Identify the wire-facing converter of `fragment`.
+    pub fn converter(fragment: FragmentId) -> Self {
+        Self {
+            owner: OperationOwner::Fragment(fragment),
+            role: OperationRole::Converter,
+        }
+    }
+
+    /// Identify source-side stage `index` of `fragment`.
+    pub fn stage(fragment: FragmentId, index: usize) -> Self {
+        Self {
+            owner: OperationOwner::Fragment(fragment),
+            role: OperationRole::Stage(index),
+        }
+    }
+
+    /// Identify an adapter operation intentionally shared by several
+    /// fragments. `artifact` is semantic adapter vocabulary, not a Rust name.
+    pub fn shared(artifact: ArtifactId, direction: Direction) -> Self {
+        Self {
+            owner: OperationOwner::Shared {
+                artifact,
+                direction,
+            },
+            role: OperationRole::Converter,
+        }
+    }
+
+    /// Identify an adapter operation by the model carrier it produces or
+    /// consumes and by the adapter representation operation it performs.
+    /// Crossings that reach the same contract intentionally share one helper.
+    pub fn model_artifact(carrier: &TypeRef, artifact: ArtifactId, direction: Direction) -> Self {
+        Self {
+            owner: OperationOwner::ModelArtifact {
+                carrier: carrier.key(),
+                artifact,
+                direction,
+            },
+            role: OperationRole::Converter,
+        }
+    }
+
+    /// Identify a Product converter by its model carrier and adapter-declared
+    /// intermediate representation.
+    pub fn product_converter(
+        carrier: &TypeRef,
+        mode: Mode,
+        representation: ArtifactId,
+        direction: Direction,
+    ) -> Self {
+        Self::composed_converter(
+            ComposedShape::Product,
+            carrier,
+            Self::deconstruction_mode(mode, direction),
+            Some(representation),
+            direction,
+        )
+    }
+
+    /// Identify an Optional converter by its model carrier and
+    /// adapter-declared intermediate representation.
+    pub fn optional_converter(
+        carrier: &TypeRef,
+        mode: Mode,
+        representation: ArtifactId,
+        direction: Direction,
+    ) -> Self {
+        Self::composed_converter(
+            ComposedShape::Optional,
+            carrier,
+            Self::deconstruction_mode(mode, direction),
+            Some(representation),
+            direction,
+        )
+    }
+
+    /// Identify the Sequence converter for a model-selected intermediate
+    /// carrier. Owned collections and borrowed views that produce the same
+    /// carrier intentionally share this operation.
+    pub fn sequence_converter(carrier: &TypeRef, direction: Direction) -> Self {
+        Self::composed_converter(ComposedShape::Sequence, carrier, None, None, direction)
+    }
+
+    /// Identify a Choice converter by its model carrier and adapter-declared
+    /// intermediate representation.
+    pub fn choice_converter(
+        carrier: &TypeRef,
+        mode: Mode,
+        representation: ArtifactId,
+        direction: Direction,
+    ) -> Self {
+        Self::composed_converter(
+            ComposedShape::Choice,
+            carrier,
+            Self::deconstruction_mode(mode, direction),
+            Some(representation),
+            direction,
+        )
+    }
+
+    fn composed_converter(
+        shape: ComposedShape,
+        carrier: &TypeRef,
+        mode: Option<Mode>,
+        representation: Option<ArtifactId>,
+        direction: Direction,
+    ) -> Self {
+        Self {
+            owner: OperationOwner::Composed {
+                shape,
+                carrier: carrier.key(),
+                mode,
+                representation,
+                direction,
+            },
+            role: OperationRole::Converter,
+        }
+    }
+
+    fn deconstruction_mode(mode: Mode, direction: Direction) -> Option<Mode> {
+        match direction {
+            // A construct converter's result is already the model carrier;
+            // the asking site's later use of that value does not change this
+            // operation's signature or body.
+            Direction::Construct => None,
+            Direction::Deconstruct => Some(mode),
+        }
+    }
+
+    /// Fragment that owns this operation, or `None` for a contract-owned or
+    /// explicitly shared operation.
+    pub fn fragment(&self) -> Option<&FragmentId> {
+        match &self.owner {
+            OperationOwner::Fragment(fragment) => Some(fragment),
+            OperationOwner::Composed { .. } => None,
+            OperationOwner::ModelArtifact { .. } => None,
+            OperationOwner::Shared { .. } => None,
+        }
+    }
+
+    /// Conversion direction of this operation.
+    pub fn direction(&self) -> Direction {
+        match &self.owner {
+            OperationOwner::Fragment(fragment) => fragment.direction(),
+            OperationOwner::Composed { direction, .. } => *direction,
+            OperationOwner::ModelArtifact { direction, .. } => *direction,
+            OperationOwner::Shared { direction, .. } => *direction,
+        }
+    }
+
+    /// Operation position inside the fragment.
+    pub fn role(&self) -> &OperationRole {
+        &self.role
+    }
+
+    /// Stable writer-only fingerprint used to allocate a private Rust symbol.
+    ///
+    /// Keeping this implementation beside the model identity prevents an
+    /// adapter from reading or reinterpreting the `TypeKey` values contained
+    /// by a fragment. The fingerprint deliberately has no public accessor;
+    /// final emission exposes only the completed identifier through `Emit`.
+    pub(crate) fn stable_fingerprint(&self) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for byte in self.stable_key().bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        hash
+    }
+
+    /// Human-readable semantic owner used as the prefix of the final private
+    /// Rust symbol. This is deliberately available only inside the registry:
+    /// adapters retain the identity, while the writer decides how model
+    /// identity is presented in generated Rust.
+    pub(crate) fn semantic_label(&self) -> String {
+        match &self.owner {
+            OperationOwner::Fragment(fragment) => fragment.spelling().as_str().to_owned(),
+            OperationOwner::Composed {
+                shape,
+                carrier,
+                representation,
+                ..
+            } => match shape {
+                ComposedShape::Product | ComposedShape::Optional | ComposedShape::Choice => {
+                    match representation {
+                        Some(representation) => format!(
+                            "{}_{}_{}",
+                            carrier.as_str(),
+                            representation.kind(),
+                            representation.name()
+                        ),
+                        None => carrier.as_str().to_owned(),
+                    }
+                }
+                ComposedShape::Sequence => format!("sequence_{}", carrier.as_str()),
+            },
+            OperationOwner::ModelArtifact {
+                carrier, artifact, ..
+            } => format!(
+                "{}_{}_{}",
+                carrier.as_str(),
+                artifact.kind(),
+                artifact.name()
+            ),
+            OperationOwner::Shared { artifact, .. } => {
+                format!("{}_{}", artifact.kind(), artifact.name())
+            }
+        }
+    }
+
+    fn stable_key(&self) -> String {
+        let owner = match &self.owner {
+            OperationOwner::Fragment(fragment) => format!("fragment\0{}", fragment.stable_key()),
+            OperationOwner::Composed {
+                shape,
+                carrier,
+                mode,
+                representation,
+                direction,
+            } => {
+                let representation = representation
+                    .as_ref()
+                    .map(|representation| {
+                        format!("{}\0{}", representation.kind(), representation.name())
+                    })
+                    .unwrap_or_default();
+                format!(
+                    "composed\0{shape:?}\0{}\0{mode:?}\0{representation}\0{direction}",
+                    carrier.as_str(),
+                )
+            }
+            OperationOwner::ModelArtifact {
+                carrier,
+                artifact,
+                direction,
+            } => format!(
+                "model-artifact\0{}\0{}\0{}\0{direction}",
+                carrier.as_str(),
+                artifact.kind(),
+                artifact.name()
+            ),
+            OperationOwner::Shared {
+                artifact,
+                direction,
+            } => format!(
+                "shared\0{}\0{}\0{}",
+                artifact.kind(),
+                artifact.name(),
+                direction
+            ),
+        };
+        let role = match self.role {
+            OperationRole::Converter => "converter".to_string(),
+            OperationRole::Stage(index) => format!("stage\0{index}"),
+        };
+        format!("{owner}\0{role}")
+    }
+}
+
+impl fmt::Display for OperationId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.role {
+            OperationRole::Converter => match &self.owner {
+                OperationOwner::Fragment(fragment) => write!(f, "converter of {fragment}"),
+                OperationOwner::Composed {
+                    shape,
+                    carrier,
+                    mode,
+                    representation,
+                    direction,
+                } => write!(
+                    f,
+                    "{direction} {mode:?} {shape:?} converter for `{carrier}` via {representation:?}"
+                ),
+                OperationOwner::ModelArtifact {
+                    carrier,
+                    artifact,
+                    direction,
+                } => write!(f, "{direction} {artifact} converter for `{carrier}`"),
+                OperationOwner::Shared {
+                    artifact,
+                    direction,
+                } => {
+                    write!(f, "shared {direction} converter {artifact}")
+                }
+            },
+            OperationRole::Stage(index) => match &self.owner {
+                OperationOwner::Fragment(fragment) => write!(f, "stage {index} of {fragment}"),
+                OperationOwner::Composed {
+                    shape,
+                    carrier,
+                    mode,
+                    representation,
+                    direction,
+                } => write!(
+                    f,
+                    "{direction} {mode:?} {shape:?} stage {index} for `{carrier}` via {representation:?}"
+                ),
+                OperationOwner::ModelArtifact {
+                    carrier,
+                    artifact,
+                    direction,
+                } => write!(f, "{direction} {artifact} stage {index} for `{carrier}`"),
+                OperationOwner::Shared {
+                    artifact,
+                    direction,
+                } => {
+                    write!(f, "shared {direction} stage {index} {artifact}")
+                }
+            },
+        }
+    }
+}
+
 impl FragmentId {
     /// Identify the fragment for an exact source spelling and recipe row.
     pub fn new(spelling: TypeKey, recipe: RecipeKey) -> Self {

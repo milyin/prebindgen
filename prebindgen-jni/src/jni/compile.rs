@@ -701,7 +701,7 @@ impl Carrier for JFrag {
 
 impl JFrag {
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
-        let rust = crate::jni::chain::JFunction::marker(conv.converter_ident().clone());
+        let rust = crate::jni::chain::JFunction::marker(conv.converter_id().clone());
         Self::planned(at, conv, rust)
     }
 
@@ -751,7 +751,7 @@ impl JFrag {
         if !self.composed_only {
             if let Some(layout) = self.layout.clone().filter(JLayout::is_composed) {
                 return Some(ComposedChain {
-                    ident: self.conv.converter_ident().clone(),
+                    operation: self.conv.converter_id().clone(),
                     layout,
                     rust: self.rust.clone(),
                 });
@@ -1067,8 +1067,19 @@ impl<R: Conversions> JCompile<'_, R> {
             } else {
                 return None;
             };
+        let operation = text_carrier.map_or_else(
+            || OperationId::converter(at.fragment_id()),
+            |carrier| {
+                OperationId::shared(
+                    ArtifactId::new("jni-text-codec", carrier.semantic_key())
+                        .expect("static text-codec identity"),
+                    direction,
+                )
+            },
+        );
         let plan = if let Some(carrier) = text_carrier {
             crate::jni::chain::JValueCodecPlan::text(
+                operation.clone(),
                 direction,
                 source.clone(),
                 carrier,
@@ -1076,13 +1087,18 @@ impl<R: Conversions> JCompile<'_, R> {
                 body,
             )
         } else {
-            crate::jni::chain::JValueCodecPlan::new(direction, source.clone(), wire.clone(), body)
+            crate::jni::chain::JValueCodecPlan::new(
+                operation.clone(),
+                direction,
+                source.clone(),
+                wire.clone(),
+                body,
+            )
         };
-        let ident = plan.name().clone();
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            converter: ident.clone(),
+            converter: operation,
             destination: wire,
             niches,
             metadata,
@@ -1136,7 +1152,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 }
             }
         };
-        let ident = crate::jni::chain::planned_name(direction, source, &wire);
+        let operation = OperationId::converter(at.fragment_id());
         let niches = default_niches_for_wire(&wire);
         let kotlin_name = self
             .decls
@@ -1149,13 +1165,13 @@ impl<R: Conversions> JCompile<'_, R> {
             ConverterImpl {
                 subs: Vec::new(),
                 pre_stages: Vec::new(),
-                converter: ident.clone(),
+                converter: operation.clone(),
                 destination: wire,
                 niches,
                 metadata: self.decls.framework_meta(kotlin_name),
             },
             crate::jni::chain::JFunction::struct_codec(crate::jni::chain::JStructCodecPlan {
-                ident,
+                operation,
                 source: source.clone(),
                 direction,
                 body,
@@ -1183,7 +1199,7 @@ impl<R: Conversions> JCompile<'_, R> {
             return None;
         };
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
-        let ident = crate::jni::chain::planned_name(Direction::Construct, source, &wire);
+        let operation = OperationId::converter(at.fragment_id());
         let kotlin_name = cfg
             .name_spec
             .as_ref()
@@ -1193,13 +1209,13 @@ impl<R: Conversions> JCompile<'_, R> {
             ConverterImpl {
                 subs: Vec::new(),
                 pre_stages: Vec::new(),
-                converter: ident.clone(),
+                converter: operation.clone(),
                 destination: wire.clone(),
                 niches: default_niches_for_wire(&wire),
                 metadata: self.decls.framework_meta(kotlin_name),
             },
             crate::jni::chain::JFunction::sum_codec(crate::jni::chain::JSumCodecPlan {
-                ident,
+                operation,
                 source: source.clone(),
                 body: crate::jni::emit::build_jobject_sum_input_plan(
                     self.decls,
@@ -1238,14 +1254,17 @@ impl<R: Conversions> JCompile<'_, R> {
             .collect();
         let wire: syn::Type = syn::parse_quote!(jni::sys::jint);
         let direction = at.crossing.direction();
+        let operation = OperationId::converter(at.fragment_id());
         let plan = match direction {
             Direction::Construct => crate::jni::chain::JValueCodecPlan::enum_input(
+                operation.clone(),
                 source.clone(),
                 self.decls.fn_module(self.registry, &item.name),
                 item.name.clone(),
                 variants,
             ),
             Direction::Deconstruct => crate::jni::chain::JValueCodecPlan::new(
+                operation.clone(),
                 direction,
                 source.clone(),
                 wire.clone(),
@@ -1259,11 +1278,10 @@ impl<R: Conversions> JCompile<'_, R> {
             .map(|spec| KtType::cls(self.decls.fqn_of(spec)));
         let mut metadata = self.decls.framework_meta(kotlin_name);
         metadata.niche_sentinels = niche_sentinels;
-        let ident = plan.name().clone();
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            converter: ident.clone(),
+            converter: operation,
             destination: wire,
             niches,
             metadata,
@@ -1287,13 +1305,17 @@ impl<R: Conversions> JCompile<'_, R> {
             .decls
             .override_kotlin_name(&source.key(), Some(spec.kotlin.clone()));
         let metadata = self.decls.framework_meta(kotlin_name);
-        let plan =
-            crate::jni::chain::JValueCodecPlan::primitive_array(direction, source.clone(), spec);
-        let ident = plan.name().clone();
+        let operation = OperationId::converter(at.fragment_id());
+        let plan = crate::jni::chain::JValueCodecPlan::primitive_array(
+            operation.clone(),
+            direction,
+            source.clone(),
+            spec,
+        );
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            converter: ident.clone(),
+            converter: operation,
             destination: wire,
             niches,
             metadata,
@@ -1351,7 +1373,7 @@ impl<R: Conversions> JCompile<'_, R> {
         }
         let direction = at.crossing.direction();
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let (render_source, target, operation, ident, metadata, subs) = match source.kind() {
+        let (render_source, target, operation, metadata, subs) = match source.kind() {
             TypeKind::Named { id, .. }
                 if self
                     .decls
@@ -1369,18 +1391,10 @@ impl<R: Conversions> JCompile<'_, R> {
                     }
                     _ => return None,
                 };
-                let base = crate::jni::chain::planned_name(direction, source, &wire);
-                let ident = match operation {
-                    crate::jni::chain::JHandleOperation::ConsumeInput => {
-                        format_ident!("{base}_owned")
-                    }
-                    _ => base,
-                };
                 (
                     source.clone(),
                     target,
                     operation,
-                    ident,
                     self.decls.opaque_leaf_meta(source.key()),
                     Vec::new(),
                 )
@@ -1419,13 +1433,10 @@ impl<R: Conversions> JCompile<'_, R> {
                     }
                     _ => return None,
                 };
-                let (render_source, name_source) = match operation {
-                    crate::jni::chain::JHandleOperation::BorrowInput => {
-                        (target_ref.clone(), target_ref)
-                    }
-                    _ => (source.clone(), source),
+                let render_source = match operation {
+                    crate::jni::chain::JHandleOperation::BorrowInput => target_ref.clone(),
+                    _ => source.clone(),
                 };
-                let ident = crate::jni::chain::planned_name(direction, name_source, &wire);
                 let mut metadata = self.decls.opaque_leaf_meta(target_ref.key());
                 if matches!(operation, crate::jni::chain::JHandleOperation::BorrowInput) {
                     metadata.projection = metadata.projection.map(|projection| Projection {
@@ -1437,17 +1448,22 @@ impl<R: Conversions> JCompile<'_, R> {
                     render_source,
                     target,
                     operation,
-                    ident,
                     metadata,
                     vec![target_ref.key()],
                 )
             }
             _ => return None,
         };
+        let operation_id = OperationId::model_artifact(
+            &render_source,
+            ArtifactId::new("jni-handle-codec", operation.semantic_key())
+                .expect("a static handle-codec identity is valid"),
+            direction,
+        );
         let module = self.decls.fn_module(self.registry, &target);
         let rust =
             crate::jni::chain::JFunction::handle_codec(crate::jni::chain::JHandleCodecPlan {
-                ident: ident.clone(),
+                operation_id: operation_id.clone(),
                 // Borrowed-input terminals were unconditional functions before
                 // this late plan and remain so until every compatibility parent
                 // retains dependencies. Owned input and both output operations
@@ -1465,7 +1481,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination: wire,
-                converter: ident.clone(),
+                converter: operation_id,
                 pre_stages: Vec::new(),
                 niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
                 metadata,
@@ -1497,14 +1513,14 @@ impl<R: Conversions> JCompile<'_, R> {
         let source = at.crossing.spelled();
         let (ok, err) = source.fallible_parts()?;
         let success = self.decls.out_frag(ok)?;
-        let ident = crate::jni::chain::model_operation_name("result_peel", &source.key());
+        let operation = OperationId::stage(at.fragment_id(), 0);
         let mut pre_stages = vec![Stage {
-            converter: ident.clone(),
+            converter: operation.clone(),
             metadata: KotlinMeta::default(),
         }];
         pre_stages.extend(success.pre_stages.iter().cloned());
         let rust = crate::jni::chain::JFunction::result(crate::jni::chain::JResultPlan {
-            ident,
+            operation,
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             success: success.0.rust.clone(),
             source: source.clone(),
@@ -1573,28 +1589,19 @@ impl<R: Conversions> JCompile<'_, R> {
         // object/scalar wire. Do not add the ordinary site-level borrow again.
         let child = match direction {
             Direction::Construct => crate::jni::chain::JChild::input(
-                entry.converter_ident().clone(),
+                entry.converter_id().clone(),
                 stages,
                 crate::jni::chain::JValueUse::Direct,
             ),
             Direction::Deconstruct => crate::jni::chain::JChild::output(
-                entry.converter_ident().clone(),
+                entry.converter_id().clone(),
                 stages,
                 crate::jni::chain::JValueUse::Direct,
             ),
         };
-        let operation = match direction {
-            Direction::Construct => "transparent_input",
-            Direction::Deconstruct => "transparent_output",
-        };
-        let ident = match inner.unwrapped().kind() {
-            TypeKind::Named { id, .. } => {
-                crate::jni::chain::named_model_operation_name(operation, id, &source.key())
-            }
-            _ => crate::jni::chain::model_operation_name(operation, &source.key()),
-        };
+        let operation = OperationId::converter(at.fragment_id());
         let rust = crate::jni::chain::JFunction::transparent(crate::jni::chain::JTransparentPlan {
-            ident: ident.clone(),
+            operation: operation.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             inner: entry.0.rust.clone(),
             source: source.clone(),
@@ -1606,7 +1613,7 @@ impl<R: Conversions> JCompile<'_, R> {
             at,
             ConverterImpl {
                 destination: entry.destination.clone(),
-                converter: ident.clone(),
+                converter: operation,
                 pre_stages: Vec::new(),
                 niches: entry.niches.clone(),
                 metadata: entry.metadata.clone(),
@@ -1729,19 +1736,10 @@ impl<R: Conversions> JCompile<'_, R> {
                 }
             }
         }
-        let operation = match direction {
-            Direction::Construct => "conversion_into",
-            Direction::Deconstruct => "conversion_from",
-        };
-        let ident = match source.unwrapped().kind() {
-            TypeKind::Named { id, .. } => {
-                crate::jni::chain::named_model_operation_name(operation, id, &source.key())
-            }
-            _ => crate::jni::chain::model_operation_name(operation, &source.key()),
-        };
+        let operation = OperationId::stage(at.fragment_id(), 0);
         let plan = crate::jni::chain::JFunction::custom_conversion(
             crate::jni::chain::JCustomConversionPlan {
-                ident: ident.clone(),
+                operation: operation.clone(),
                 source: source.clone(),
                 representation,
                 direction,
@@ -1750,7 +1748,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
         );
         let mut pre_stages = vec![Stage {
-            converter: ident.clone(),
+            converter: operation,
             metadata: KotlinMeta::default(),
         }];
         pre_stages.extend(inner.pre_stages.iter().cloned());
@@ -1807,7 +1805,7 @@ impl<R: Conversions> JCompile<'_, R> {
         };
         match direction {
             Direction::Construct => crate::jni::chain::JChild::input(
-                frag.conv.converter_ident().clone(),
+                frag.conv.converter_id().clone(),
                 stages,
                 if matches!(frag.conv.destination, syn::Type::Ptr(_))
                     || frag.layout.as_ref().is_some_and(JLayout::is_composed)
@@ -1818,7 +1816,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 },
             ),
             Direction::Deconstruct => crate::jni::chain::JChild::output(
-                frag.conv.converter_ident().clone(),
+                frag.conv.converter_id().clone(),
                 stages,
                 match mode {
                     Mode::Owned => crate::jni::chain::JValueUse::Direct,
@@ -1872,8 +1870,13 @@ impl<R: Conversions> JCompile<'_, R> {
             .map(|(_, frag)| frag.conv.destination.clone())
             .collect();
         let intermediate: syn::Type = syn::parse_quote!((#(#intermediate_parts,)*));
-        let ident =
-            crate::jni::chain::planned_name(direction, at.crossing.spelled(), &intermediate);
+        let operation = OperationId::product_converter(
+            source,
+            at.crossing.mode(),
+            ArtifactId::new("jni-product-intermediate", "tuple")
+                .expect("a static Product representation identity is valid"),
+            direction,
+        );
         let dependencies = parts
             .iter()
             .map(|(_, fragment)| fragment.rust.clone())
@@ -1893,7 +1896,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let rust = crate::jni::chain::JFunction::product(crate::jni::chain::JProductPlan {
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             dependencies,
-            ident: ident.clone(),
+            operation: operation.clone(),
             mode: at.crossing.mode(),
             chain: prebindgen_registry::chain::Product {
                 source: source.clone(),
@@ -1911,7 +1914,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination: intermediate,
-                converter: ident.clone(),
+                converter: operation,
                 pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta::default(),
@@ -2047,9 +2050,15 @@ impl<R: Conversions> JCompile<'_, R> {
             .flat_map(|(_, arm)| arm.dependencies.iter().cloned())
             .collect();
         let layouts = planned.iter().map(|(_, arm)| arm.layout.clone()).collect();
-        let ident = crate::jni::chain::planned_name(direction, at.crossing.spelled(), &destination);
+        let operation = OperationId::choice_converter(
+            source,
+            at.crossing.mode(),
+            ArtifactId::new("jni-choice-intermediate", "tagged-tuple")
+                .expect("a static Choice representation identity is valid"),
+            direction,
+        );
         let rust = crate::jni::chain::JFunction::choice(crate::jni::chain::JChoicePlan {
-            ident: ident.clone(),
+            operation: operation.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             dependencies,
             mode: at.crossing.mode(),
@@ -2073,7 +2082,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination,
-                converter: ident.clone(),
+                converter: operation,
                 pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta::default(),
@@ -2164,7 +2173,7 @@ impl<R: Conversions> JCompile<'_, R> {
             // transient Vec handle. The Sequence row still owns the shape and
             // its surface metadata, but deliberately has no whole-list Rust
             // converter for those site-specific representations.
-            let mut marker = JFrag::new(at, self.parts_marker(vec![element.key()]));
+            let mut marker = JFrag::new(at, self.parts_marker(at, vec![element.key()]));
             marker.conv.destination = syn::parse_quote!(jni::objects::JObject);
             marker.conv.metadata = KotlinMeta {
                 kotlin_name,
@@ -2196,7 +2205,7 @@ impl<R: Conversions> JCompile<'_, R> {
         } else {
             source.clone()
         };
-        let ident = crate::jni::chain::planned_name(direction, &produced, &destination);
+        let operation = at.sequence_converter_for(&produced);
         let bridge = match direction {
             Direction::Construct => crate::jni::chain::JSequenceBridge::Input {
                 child: Box::new(child_wire),
@@ -2204,7 +2213,7 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Deconstruct => crate::jni::chain::JSequenceBridge::Output,
         };
         let rust = crate::jni::chain::JFunction::sequence(crate::jni::chain::JSequencePlan {
-            ident: ident.clone(),
+            operation: operation.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             dependencies: vec![inner.rust.clone()],
             mode: at.crossing.mode(),
@@ -2228,7 +2237,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination,
-                converter: ident.clone(),
+                converter: operation,
                 pre_stages: Vec::new(),
                 niches,
                 metadata: KotlinMeta {
@@ -2284,10 +2293,10 @@ impl<R: Conversions> JCompile<'_, R> {
         let source_ident = id.ident()?;
         let module = self.decls.fn_module(self.registry, &source_ident);
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let ident = crate::jni::chain::planned_name(Direction::Construct, source, &wire);
+        let operation = OperationId::converter(at.fragment_id());
         let rust = crate::jni::chain::JFunction::borrowed_optional_handle(
             crate::jni::chain::JBorrowedOptionalHandlePlan {
-                ident: ident.clone(),
+                operation: operation.clone(),
                 reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
                 target: target.clone(),
                 module,
@@ -2312,7 +2321,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination: wire,
-                converter: ident.clone(),
+                converter: operation,
                 pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta {
@@ -2415,7 +2424,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         (
                             crate::jni::chain::JOptionalBridge::InputGated { child: inner_wire },
                             crate::jni::chain::JChild::input(
-                                inner.conv.converter_ident().clone(),
+                                inner.conv.converter_id().clone(),
                                 stages,
                                 crate::jni::chain::JValueUse::SharedRef,
                             ),
@@ -2432,7 +2441,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         (
                             crate::jni::chain::JOptionalBridge::InputGated { child: inner_wire },
                             crate::jni::chain::JChild::input(
-                                inner.conv.converter_ident().clone(),
+                                inner.conv.converter_id().clone(),
                                 stages,
                                 crate::jni::chain::JValueUse::Direct,
                             ),
@@ -2449,7 +2458,7 @@ impl<R: Conversions> JCompile<'_, R> {
                                 absent: slot.matches,
                             },
                             crate::jni::chain::JChild::input(
-                                inner.conv.converter_ident().clone(),
+                                inner.conv.converter_id().clone(),
                                 stages,
                                 crate::jni::chain::JValueUse::Direct,
                             ),
@@ -2468,7 +2477,7 @@ impl<R: Conversions> JCompile<'_, R> {
                                 getter: format_ident!("{}", jni_unbox_getter(&inner_wire)),
                             },
                             crate::jni::chain::JChild::input(
-                                inner.conv.converter_ident().clone(),
+                                inner.conv.converter_id().clone(),
                                 stages,
                                 crate::jni::chain::JValueUse::SharedRef,
                             ),
@@ -2494,7 +2503,7 @@ impl<R: Conversions> JCompile<'_, R> {
                                 absent,
                             },
                             crate::jni::chain::JChild::output(
-                                inner.conv.converter_ident().clone(),
+                                inner.conv.converter_id().clone(),
                                 stages,
                                 crate::jni::chain::JValueUse::Direct,
                             ),
@@ -2511,7 +2520,7 @@ impl<R: Conversions> JCompile<'_, R> {
                                 absent: slot.value,
                             },
                             crate::jni::chain::JChild::output(
-                                inner.conv.converter_ident().clone(),
+                                inner.conv.converter_id().clone(),
                                 stages,
                                 crate::jni::chain::JValueUse::Direct,
                             ),
@@ -2526,7 +2535,7 @@ impl<R: Conversions> JCompile<'_, R> {
                         (
                             crate::jni::chain::JOptionalBridge::OutputBoxed { inner_wire, helper },
                             crate::jni::chain::JChild::output(
-                                inner.conv.converter_ident().clone(),
+                                inner.conv.converter_id().clone(),
                                 stages,
                                 crate::jni::chain::JValueUse::Direct,
                             ),
@@ -2578,13 +2587,16 @@ impl<R: Conversions> JCompile<'_, R> {
         } else {
             kotlin_name
         };
-        let ident = crate::jni::chain::planned_name(direction, source, &destination);
+        let representation = ArtifactId::new("jni-optional-intermediate", bridge.semantic_key())
+            .expect("an Optional bridge representation identity is valid");
+        let operation =
+            OperationId::optional_converter(source, at.crossing.mode(), representation, direction);
         let out_wires = (direction == Direction::Deconstruct
             && matches!(&layout, JLayout::Optional(_)))
         .then(|| inner.out_wires.clone())
         .flatten();
         let rust = crate::jni::chain::JFunction::optional(crate::jni::chain::JOptionalPlan {
-            ident: ident.clone(),
+            operation: operation.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             dependencies: vec![inner.rust.clone()],
             chain: prebindgen_registry::chain::Optional {
@@ -2605,7 +2617,7 @@ impl<R: Conversions> JCompile<'_, R> {
         Some(JFrag {
             conv: ConverterImpl {
                 destination,
-                converter: ident.clone(),
+                converter: operation,
                 pre_stages: Vec::new(),
                 niches,
                 metadata: KotlinMeta {
@@ -2810,7 +2822,10 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             ) {
                 let mut fragment = JFrag::new(
                     at,
-                    self.parts_marker(plan.leaves.iter().map(|leaf| leaf.out_ty.key()).collect()),
+                    self.parts_marker(
+                        at,
+                        plan.leaves.iter().map(|leaf| leaf.out_ty.key()).collect(),
+                    ),
                 );
                 fragment.composed_only = true;
                 return Ok(fragment);
@@ -2847,7 +2862,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 .spelled()
                 .optional_inner()
                 .expect("the Optional recipe has an element");
-            let mut marker = JFrag::new(at, self.parts_marker(vec![element.key()]));
+            let mut marker = JFrag::new(at, self.parts_marker(at, vec![element.key()]));
             marker.composed_only = true;
             marker
         } else {
@@ -3061,7 +3076,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let mut frag = self.planned_product(at, parts).unwrap_or_else(|| {
             let mut marker = JFrag::new(
                 at,
-                self.parts_marker(parts.iter().map(|(part, _)| part.ty.key()).collect()),
+                self.parts_marker(at, parts.iter().map(|(part, _)| part.ty.key()).collect()),
             );
             marker.composed_only = true;
             marker
@@ -3083,7 +3098,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     {
                         return Ok(planned);
                     }
-                    let mut legacy = JFrag::new(at, self.parts_marker(parts_subs(arms)));
+                    let mut legacy = JFrag::new(at, self.parts_marker(at, parts_subs(arms)));
                     legacy.wires = Some(wires);
                     legacy.composed_only = true;
                     Ok(legacy)
@@ -3119,9 +3134,13 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let TypeKind::Callback { args } = ty.unwrapped().kind() else {
             return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
-        let planned = self
-            .decls
-            .dispatch_fn_input(ty, args, self.registry, arg_fragments);
+        let planned = self.decls.dispatch_fn_input(
+            OperationId::converter(at.fragment_id()),
+            ty,
+            args,
+            self.registry,
+            arg_fragments,
+        );
         let (conv, rust) = planned.ok_or_else(|| refuse(at, "undeclared callback signature"))?;
         let mut fragment = JFrag::new(at, conv);
         fragment.rust = rust;
@@ -3469,7 +3488,7 @@ impl crate::jni::Declarations {
 /// Callable registry-composed shape and its ABI-leaf layout.
 #[derive(Clone)]
 pub(crate) struct ComposedChain {
-    pub(crate) ident: syn::Ident,
+    pub(crate) operation: OperationId,
     rust: crate::jni::chain::JFunction,
     pub(crate) layout: JLayout,
 }
@@ -3565,8 +3584,8 @@ impl std::ops::Deref for Conv {
 /// Facts a wire states about itself, which the emitters read off the recipe.
 impl Wire {
     /// The wire-facing function this value crosses through.
-    pub(crate) fn conv(&self) -> Option<&syn::Ident> {
-        self.entry.as_ref().map(ConverterImpl::converter_ident)
+    pub(crate) fn conv(&self) -> Option<&OperationId> {
+        self.entry.as_ref().map(ConverterImpl::converter_id)
     }
 
     /// Whether the conversion carries Rust-side stages beyond its wire-facing
@@ -3607,10 +3626,10 @@ impl<R: Conversions> JCompile<'_, R> {
     /// about how it is rebuilt, so there is no function to name. `subs` is
     /// still real — it is what the registry walks for reachability.
     /// `prebindgen-c` does the same for a union arm, and for the same reason.
-    fn parts_marker(&self, subs: Vec<TypeKey>) -> ConverterImpl<KotlinMeta> {
+    fn parts_marker(&self, at: At<'_>, subs: Vec<TypeKey>) -> ConverterImpl<KotlinMeta> {
         ConverterImpl {
             destination: syn::parse_quote!(()),
-            converter: format_ident!("__jni_parts"),
+            converter: OperationId::converter(at.fragment_id()),
             pre_stages: Vec::new(),
             niches: Niches::empty(),
             metadata: KotlinMeta::default(),
@@ -3642,13 +3661,13 @@ impl<R: Conversions> JCompile<'_, R> {
         let mut wires = Vec::new();
         for (part, frag) in parts {
             let Some(wire) = self.slot(part, frag) else {
-                return JFrag::new(at, self.parts_marker(Vec::new()));
+                return JFrag::new(at, self.parts_marker(at, Vec::new()));
             };
             wires.push(wire);
         }
         let mut frag = JFrag::new(
             at,
-            self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
+            self.parts_marker(at, parts.iter().map(|(p, _)| p.ty.key()).collect()),
         );
         frag.wires = Some(wires);
         frag.composed_only = true;
@@ -3753,7 +3772,7 @@ impl<R: Conversions> JCompile<'_, R> {
             .collect();
         let mut frag = JFrag::new(
             at,
-            self.parts_marker(parts.iter().map(|(p, _)| p.ty.key()).collect()),
+            self.parts_marker(at, parts.iter().map(|(p, _)| p.ty.key()).collect()),
         );
         frag.out_wires = Some(wires);
         frag.composed_only = true;
@@ -3790,7 +3809,7 @@ impl<R: Conversions> JCompile<'_, R> {
             .decls
             .struct_out_wires(self.registry, at.crossing.value())
         else {
-            return JFrag::new(at, self.parts_marker(Vec::new()));
+            return JFrag::new(at, self.parts_marker(at, Vec::new()));
         };
         let abis: Vec<OutAbi> = parts
             .iter()
@@ -3807,7 +3826,7 @@ impl<R: Conversions> JCompile<'_, R> {
             })
             .collect();
         if wires.len() != abis.len() {
-            return JFrag::new(at, self.parts_marker(Vec::new()));
+            return JFrag::new(at, self.parts_marker(at, Vec::new()));
         }
         for (wire, abi) in wires.iter_mut().zip(abis) {
             wire.abi = Some(abi);
@@ -3815,7 +3834,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let mut frag = self.planned_product(at, parts).unwrap_or_else(|| {
             let mut marker = JFrag::new(
                 at,
-                self.parts_marker(parts.iter().map(|(part, _)| part.ty.key()).collect()),
+                self.parts_marker(at, parts.iter().map(|(part, _)| part.ty.key()).collect()),
             );
             marker.composed_only = true;
             marker
@@ -3836,7 +3855,7 @@ impl<R: Conversions> JCompile<'_, R> {
     /// which is why the record list is asked for again rather than the Kotlin
     /// property being derived a second time here.
     fn out_value_form(&self, at: At<'_>, func: &Function, parts: Parts<'_, Self>) -> JFrag {
-        let declined = JFrag::new(at, self.parts_marker(Vec::new()));
+        let declined = JFrag::new(at, self.parts_marker(at, Vec::new()));
         let Some(names) = self
             .decls
             .value_form_names(self.registry, at.crossing.value())
@@ -3871,6 +3890,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let mut frag = JFrag::new(
             at,
             self.parts_marker(
+                at,
                 std::iter::once(TypeKey::from_ident(&func.name))
                     .chain(parts.iter().map(|(p, _)| p.ty.key()))
                     .collect(),
@@ -3921,7 +3941,7 @@ impl<R: Conversions> JCompile<'_, R> {
         for (wire, abi) in wires.iter_mut().zip(abis) {
             wire.abi = Some(abi);
         }
-        let mut frag = JFrag::new(at, self.parts_marker(parts_subs(arms)));
+        let mut frag = JFrag::new(at, self.parts_marker(at, parts_subs(arms)));
         frag.out_wires = Some(wires);
         frag.composed_only = true;
         Ok(frag)

@@ -321,6 +321,7 @@ pub(crate) fn build_vec_build_helper_items(
         let mut inits: Vec<TokenStream> = Vec::new();
         for l in h.plan.leaves.iter().filter(|l| !l.is_present_flag()) {
             let conv = l.conv().expect("non-present leaf has a converter");
+            let conv = emit.operation_ident("jni", conv);
             let wid = &l.native_ident;
             let fid = format_ident!("{}", l.wire.field().expect("non-present leaf has a field"));
             let tmp = format_ident!("__e_{}", fid);

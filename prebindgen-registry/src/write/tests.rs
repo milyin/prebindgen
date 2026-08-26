@@ -71,10 +71,6 @@ struct LatePlan {
 }
 
 impl RustFunction for LatePlan {
-    fn ident(&self) -> &syn::Ident {
-        &self.ident
-    }
-
     fn should_emit(&self) -> bool {
         self.reachable.get()
     }

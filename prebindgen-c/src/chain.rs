@@ -23,7 +23,9 @@ pub(crate) struct CCall(chain::Call);
 
 impl CCall {
     pub(crate) fn ident(&self) -> &syn::Ident {
-        self.0.ident()
+        self.0
+            .ident()
+            .expect("C compatibility calls are named during planning")
     }
 
     pub(crate) fn fallible(&self) -> bool {
@@ -40,7 +42,7 @@ impl chain::Child for CCall {
         &self.0
     }
 
-    fn invoke(&self, value: TokenStream) -> TokenStream {
+    fn invoke(&self, value: TokenStream, _emit: &prebindgen_registry::Emit) -> TokenStream {
         let ident = self.ident();
         quote!(#ident(#value))
     }
@@ -277,10 +279,6 @@ impl CFunction {
 }
 
 impl RustFunction for CFunction {
-    fn ident(&self) -> &syn::Ident {
-        self.call.ident()
-    }
-
     fn render(&self, emit: &Emit) -> syn::ItemFn {
         match &self.body {
             CBody::Custom(plan) => plan.render(emit),

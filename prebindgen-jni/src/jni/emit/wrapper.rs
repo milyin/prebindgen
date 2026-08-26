@@ -528,7 +528,7 @@ fn emit_input_param(
         // Kotlin call-site destructure read the same plan so the three
         // sites can't drift.
         RustParamOp::FlattenStruct(plan) => {
-            let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err);
+            let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err, emit);
             (wire_params, vec![decode], call_arg)
         }
 
@@ -540,7 +540,7 @@ fn emit_input_param(
         RustParamOp::OptionalPair(sp) => {
             let pid = &sp.present_ident;
             let vid = &sp.value_ident;
-            let converter = &sp.chain.ident;
+            let converter = emit.operation_ident("jni", &sp.chain.operation);
             let decode = quote! {
                 let #arg_ident = match #converter(&mut env, (#pid, #vid)) {
                     ::core::result::Result::Ok(__value) => __value,
@@ -685,7 +685,7 @@ pub(crate) fn emit_expanded_param(
             // An expansion leaf can itself be a data class. Reuse the
             // recursive rebuild operation used by an ordinary parameter.
             RustParamOp::FlattenStruct(flat) => {
-                let (decode, _) = render_flat_input_decode(flat, &local, on_err);
+                let (decode, _) = render_flat_input_decode(flat, &local, on_err, emit);
                 prelude.push(decode);
             }
             // Selector-dispatched Optional leaf: rebuild from its already
@@ -693,7 +693,7 @@ pub(crate) fn emit_expanded_param(
             RustParamOp::OptionalPair(sp) => {
                 let present_ident = &sp.present_ident;
                 let value_ident = &sp.value_ident;
-                let converter = &sp.chain.ident;
+                let converter = emit.operation_ident("jni", &sp.chain.operation);
                 prelude.push(quote!(
                     let #local: #leaf_ty_tokens = match #converter(
                         &mut env,

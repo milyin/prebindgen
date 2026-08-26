@@ -349,6 +349,25 @@ classification of a Rust type into a closed grammar — `Optional`, `Vec`, `Ref`
 re-parsing syntax for itself. `TypeKey` is that same type reduced to an
 identity a map can be keyed by.
 
+Recipe compilation may inspect those model facts and retain a `TypeRef`, but
+it has no capability to recover or emit the captured Rust syntax. In
+particular, `Cx` carries no `Emit`, converter calls retain registry-owned
+`OperationId` values rather than names derived from `TypeKey`, and language
+adapters must not parse or classify a key's diagnostic text. Only the final
+`write_rust` pass mints `Emit`; at that point resolution and glue planning are
+complete, and the renderer may spell retained types and allocate private Rust
+symbols while assembling the file. Needing source Rust syntax earlier means a
+fact is missing from the Flat model and must be added there.
+
+An operation is shared by its conversion contract, not by the recipe row that
+happened to request it. For composed converters that contract includes the
+shape, model carrier, ownership mode when deconstructing, direction, and the
+adapter-declared intermediate representation. Adapter terminals likewise name
+their semantic operation, such as borrowing or consuming an opaque handle.
+The final writer turns that identity into a readable private symbol: a bounded
+semantic stem followed by a stable hash. The hash disambiguates the name; it
+does not replace the model and adapter vocabulary useful to a reader.
+
 The generated code has to name Rust types. Where a source function's parameter
 is written `&Sample`, the converter for it has to produce a `&Sample`, because
 that is what the call takes and `Sample` would not compile there. What
@@ -394,10 +413,11 @@ third:
 | `mode()` | `Shared` | `Owned` | `Owned` |
 | `key().ty` | `Sample` | `Sample` | `Sample` |
 
-An adapter decides how to convert from `value()`, and writes `spelled()` into
-the generated code. `mode()` is the third answer, kept separate because the
-table checks it: a constructor taking `Sample` cannot be handed a part that
-only yields `Shared`.
+An adapter decides how to convert from the model facts of `value()`, retains
+`spelled()` in its semantic plan, and writes that spelling only when the final
+writer supplies `Emit`. `mode()` is the third answer, kept separate because
+the table checks it: a constructor taking `Sample` cannot be handed a part
+that only yields `Shared`.
 
 Note `Box<Sample>` — `value()` keeps the wrapper because a `Box` is not a
 borrow, while `key()` strips it, because `Sample`, `&Sample` and `Box<Sample>`

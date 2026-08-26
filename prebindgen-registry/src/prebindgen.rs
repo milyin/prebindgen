@@ -17,7 +17,7 @@
 
 use proc_macro2::TokenStream;
 
-use crate::{niches::Niches, registry::Registry};
+use crate::{generation::OperationId, niches::Niches, registry::Registry};
 
 /// A shared predicate over an item name, as used by
 /// `Prebindgen`'s ignore hooks (bulk ignores keyed on a naming
@@ -38,7 +38,7 @@ pub type NamePredicate = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
 pub struct Stage<M = ()> {
     /// Stable identity of this stage's separately retained executable
     /// artifact.
-    pub converter: syn::Ident,
+    pub converter: OperationId,
     /// Adapter-specific extras for this stage — the same type as the owning
     /// converter's ([`ConverterImpl::metadata`]). The core never
     /// inspects this; the adapter's emitter reads it to decide how the
@@ -52,10 +52,10 @@ pub struct Stage<M = ()> {
 /// of the registry sees, plus the identity of its separately retained
 /// executable artifact.
 ///
-/// Invariant: `converter` MUST be a deterministic function of the
-/// `(rust_type, destination)` pair so that callers of this converter — both
-/// other generated converters from the same adapter and any hand-written code
-/// that knows the convention — can compute or look up the name.
+/// `converter` is registry-owned semantic identity. Composed parents retain
+/// that identity directly; they never recompute it from a Rust type or wire
+/// type. The writer turns it into a private Rust symbol only through
+/// [`crate::Emit`] during final file assembly.
 #[derive(Clone)]
 pub struct ConverterImpl<M = ()> {
     /// Wire/destination type. Other converters that ask "what's the wire
@@ -70,7 +70,7 @@ pub struct ConverterImpl<M = ()> {
     /// For input direction this is the FIRST stage in execution order
     /// (it takes the wire); for output direction this is the LAST stage
     /// (it produces the wire).
-    pub converter: syn::Ident,
+    pub converter: OperationId,
     /// **Rust-side** stages that compose with [`Self::converter`] to form
     /// the full conversion chain. Default empty — a 1-stage converter
     /// is just `function`.
@@ -116,8 +116,8 @@ pub struct ConverterImpl<M = ()> {
 
 /// What an emitter asks of a conversion it holds.
 impl<M> ConverterImpl<M> {
-    /// Identifier of the wire-facing converter function.
-    pub fn converter_ident(&self) -> &syn::Ident {
+    /// Semantic identity of the wire-facing converter function.
+    pub fn converter_id(&self) -> &OperationId {
         &self.converter
     }
 
