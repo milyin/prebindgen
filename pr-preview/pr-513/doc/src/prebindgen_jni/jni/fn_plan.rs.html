@@ -174,7 +174,7 @@
 <a href=#174 id=174 data-nosnippet>174</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>PlanLeaf {
 <a href=#175 id=175 data-nosnippet>175</a>    <span class="doccomment">/// The leaf's **reading** — classification and spelling in one value, so
 <a href=#176 id=176 data-nosnippet>176</a>    /// the two cannot disagree and no consumer has to look the type up. Spell
-<a href=#177 id=177 data-nosnippet>177</a>    /// with `emit.spell(reading)` in an emission callback.
+<a href=#177 id=177 data-nosnippet>177</a>    /// with `emit.emit_source_type(reading)` in an emission callback.
 <a href=#178 id=178 data-nosnippet>178</a>    </span><span class="kw">pub </span>reading: TypeRef,
 <a href=#179 id=179 data-nosnippet>179</a>    <span class="doccomment">/// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
 <a href=#180 id=180 data-nosnippet>180</a>    /// hard-keyword escaping) — shared by the wrapper signature and the

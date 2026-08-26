@@ -18,7 +18,7 @@ kinds may mix — see <a href="enum.PathStep.html" title="enum prebindgen_regist
 </div><span id="structfield.out_ty" class="structfield section-header"><a href="#structfield.out_ty" class="anchor field">§</a><code>out_ty: <a class="struct" href="../flat/struct.TypeRef.html" title="struct prebindgen_registry::flat::TypeRef">TypeRef</a></code></span><div class="docblock"><p>The <strong>reading</strong> of the type whose resolved output converter encodes this
 leaf — a reference type for accessors (<code>&amp;str</code>, <code>&amp;F</code>), <code>&amp;Source</code> for the
 identity leaf (so the borrowed-opaque clone converter / projection is
-reused). Spell it with <code>emit.spell(&amp;out_ty)</code> in an emission callback.</p>
+reused). Spell it with <code>emit.emit_source_type(&amp;out_ty)</code> in an emission callback.</p>
 <p>A reading rather than a spelling because a consumer asking what this
 leaf’s type <em>means</em> had to hand the spelling back to the registry and
 hope for a cell — the round trip #263 removed from <code>api/core</code>, surviving

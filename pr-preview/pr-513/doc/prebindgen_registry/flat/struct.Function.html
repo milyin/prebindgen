@@ -15,11 +15,10 @@ today already normalizes one to the other on the spot.</p>
 needs to invent — a declared <code>const</code>’s accessor, whose type flows through
 the ordinary output-converter machinery and so has to arrive as a
 <code>Function</code> like any other.</p>
-<p>It lives here because building one means <strong>spelling</strong> <code>ret</code>, and #280
-says a <code>TypeRef</code> is the model’s to mint. An adapter that built this
-itself needed a spelling for a model element — which dragged the
-emission capability into validation and Kotlin rendering, both of which
-only wanted the resulting <code>Function</code>.</p>
+<p>It lives here because #280 says a <code>TypeRef</code> is the model’s to mint. Flat
+reconstructs the synthetic signature from <code>TypeKind</code>; no adapter needs
+source syntax or an emission capability during validation or Kotlin
+rendering.</p>
 <p>The body is <code>unimplemented!()</code> and is never emitted: only the signature
 is read.</p>
 </div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Function-1" class="impl"><a href="#impl-Function-1" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Function.html" title="struct prebindgen_registry::flat::Function">Function</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.docs" class="method"><h4 class="code-header">pub fn <a href="#method.docs" class="fn">docs</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</h4></section></summary><div class="docblock"><p>This item’s <code>///</code> documentation.</p>

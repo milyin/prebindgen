@@ -16,9 +16,7 @@ than used — the same way it carries its item’s location.</p>
 it has one, else by position.</p>
 <p>Ungated, and the reason is what it reads: <a href="struct.Field.html#structfield.name" title="field prebindgen_registry::flat::Field::name"><code>name</code></a> and
 <a href="struct.Field.html#structfield.index" title="field prebindgen_registry::flat::Field::index"><code>index</code></a>, both model facts. No captured syntax is
-involved, so this is not a door — unlike the <code>spell</code> methods above,
-which read the delimiters the source wrote and are
-<a href="crate::RustEmitter"><code>RustEmitter</code> shape methods</a>’s to hand out.</p>
+involved.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.bind" class="method"><h4 class="code-header">pub fn <a href="#method.bind" class="fn">bind</a>(&amp;self, bind: &amp;impl <a class="trait" href="https://docs.rs/quote/1.0.47/quote/to_tokens/trait.ToTokens.html" title="trait quote::to_tokens::ToTokens">ToTokens</a>) -&gt; <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a></h4></section></summary><div class="docblock"><p>The field bound to <code>bind</code>, shaped for whichever address it uses —
 <code>id: __f0</code> for a named field, <code>__f0</code> for a positional one. The part a
 spelled fields list is built from.</p>

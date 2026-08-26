@@ -276,13 +276,13 @@
 <a href=#276 id=276 data-nosnippet>276</a>/// push loop free of a per-element failure check.
 <a href=#277 id=277 data-nosnippet>277</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>build_vec_build_helper_items(
 <a href=#278 id=278 data-nosnippet>278</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#279 id=279 data-nosnippet>279</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#279 id=279 data-nosnippet>279</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#280 id=280 data-nosnippet>280</a>) -&gt; Vec&lt;syn::Item&gt; {
 <a href=#281 id=281 data-nosnippet>281</a>    <span class="kw">let </span><span class="kw-2">mut </span>named: Vec&lt;(String, syn::Item)&gt; = Vec::new();
 <a href=#282 id=282 data-nosnippet>282</a>    <span class="kw">for </span>h <span class="kw">in </span>collect_vec_build_helpers(ext) {
 <a href=#283 id=283 data-nosnippet>283</a>        <span class="comment">// Generated Rust spells `spell()`; the reading is what the plan
 <a href=#284 id=284 data-nosnippet>284</a>        // and the key are taken from.
-<a href=#285 id=285 data-nosnippet>285</a>        </span><span class="kw">let </span>elem = emit.spell(<span class="kw-2">&amp;</span>h.elem);
+<a href=#285 id=285 data-nosnippet>285</a>        </span><span class="kw">let </span>elem = emit.emit_source_type(<span class="kw-2">&amp;</span>h.elem);
 <a href=#286 id=286 data-nosnippet>286</a>        <span class="kw">let </span>new_sym = vec_helper_symbol(ext, <span class="kw-2">&amp;</span>h.base, <span class="string">"New"</span>);
 <a href=#287 id=287 data-nosnippet>287</a>        <span class="kw">let </span>push_sym = vec_helper_symbol(ext, <span class="kw-2">&amp;</span>h.base, <span class="string">"Push"</span>);
 <a href=#288 id=288 data-nosnippet>288</a>        <span class="kw">let </span>free_sym = vec_helper_symbol(ext, <span class="kw-2">&amp;</span>h.base, <span class="string">"Free"</span>);

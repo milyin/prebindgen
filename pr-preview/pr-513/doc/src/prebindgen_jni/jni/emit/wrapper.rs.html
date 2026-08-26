@@ -10,7 +10,7 @@
 <a href=#10 id=10 data-nosnippet>10</a>    ext: <span class="kw-2">&amp;</span>Declarations,
 <a href=#11 id=11 data-nosnippet>11</a>    f: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Function,
 <a href=#12 id=12 data-nosnippet>12</a>    registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#13 id=13 data-nosnippet>13</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#13 id=13 data-nosnippet>13</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#14 id=14 data-nosnippet>14</a>) -&gt; syn::ItemFn {
 <a href=#15 id=15 data-nosnippet>15</a>    emit_jni_function_wrapper_with_callee(ext, f, registry, <span class="prelude-val">None</span>, emit)
 <a href=#16 id=16 data-nosnippet>16</a>}
@@ -182,7 +182,7 @@
 <a href=#182 id=182 data-nosnippet>182</a>    f: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Function,
 <a href=#183 id=183 data-nosnippet>183</a>    registry: <span class="kw-2">&amp;</span>Registry,
 <a href=#184 id=184 data-nosnippet>184</a>    callee: <span class="prelude-ty">Option</span>&lt;syn::Expr&gt;,
-<a href=#185 id=185 data-nosnippet>185</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#185 id=185 data-nosnippet>185</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#186 id=186 data-nosnippet>186</a>) -&gt; syn::ItemFn {
 <a href=#187 id=187 data-nosnippet>187</a>    <span class="kw">let </span>original_ident = <span class="kw-2">&amp;</span>f.name;
 <a href=#188 id=188 data-nosnippet>188</a>
@@ -497,7 +497,7 @@
 <a href=#497 id=497 data-nosnippet>497</a></span><span class="kw">fn </span>emit_input_param(
 <a href=#498 id=498 data-nosnippet>498</a>    param: <span class="kw-2">&amp;</span>PlanParam,
 <a href=#499 id=499 data-nosnippet>499</a>    on_err: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#500 id=500 data-nosnippet>500</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#500 id=500 data-nosnippet>500</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#501 id=501 data-nosnippet>501</a>) -&gt; (Vec&lt;TokenStream&gt;, Vec&lt;TokenStream&gt;, TokenStream) {
 <a href=#502 id=502 data-nosnippet>502</a>    <span class="comment">// Constructor-expansion: this parameter's wire form is the fold plan's
 <a href=#503 id=503 data-nosnippet>503</a>    // flattened leaves. Decode each leaf with its own converter, run the
@@ -579,7 +579,7 @@
 <a href=#579 id=579 data-nosnippet>579</a>    arg_ident: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#580 id=580 data-nosnippet>580</a>    arg_ty: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
 <a href=#581 id=581 data-nosnippet>581</a>    on_err: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#582 id=582 data-nosnippet>582</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#582 id=582 data-nosnippet>582</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#583 id=583 data-nosnippet>583</a>    wire_ident: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#584 id=584 data-nosnippet>584</a>) -&gt; (Vec&lt;TokenStream&gt;, TokenStream) {
 <a href=#585 id=585 data-nosnippet>585</a>    <span class="kw">use </span>prebindgen_registry::flat::TypeKind;
@@ -662,7 +662,7 @@
 <a href=#662 id=662 data-nosnippet>662</a>    leaves: <span class="kw-2">&amp;</span>[PlanLeaf],
 <a href=#663 id=663 data-nosnippet>663</a>    orig_param: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#664 id=664 data-nosnippet>664</a>    on_err: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#665 id=665 data-nosnippet>665</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#665 id=665 data-nosnippet>665</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#666 id=666 data-nosnippet>666</a>) -&gt; (Vec&lt;TokenStream&gt;, Vec&lt;TokenStream&gt;, TokenStream) {
 <a href=#667 id=667 data-nosnippet>667</a>    <span class="kw">let </span><span class="kw-2">mut </span>wire_params: Vec&lt;TokenStream&gt; = Vec::new();
 <a href=#668 id=668 data-nosnippet>668</a>    <span class="kw">let </span>fold = plan.fold();
@@ -673,7 +673,7 @@
 <a href=#673 id=673 data-nosnippet>673</a>    <span class="kw">for </span>(leaf, classified) <span class="kw">in </span>fold.leaves.iter().zip(leaves) {
 <a href=#674 id=674 data-nosnippet>674</a>        <span class="kw">let </span>leaf_ty = <span class="kw-2">&amp;</span>leaf.ty;
 <a href=#675 id=675 data-nosnippet>675</a>        <span class="comment">// The ascription generated Rust writes for this leaf's local.
-<a href=#676 id=676 data-nosnippet>676</a>        </span><span class="kw">let </span>leaf_ty_tokens = emit.spell(leaf_ty);
+<a href=#676 id=676 data-nosnippet>676</a>        </span><span class="kw">let </span>leaf_ty_tokens = emit.emit_source_type(leaf_ty);
 <a href=#677 id=677 data-nosnippet>677</a>        <span class="kw">let </span>local = <span class="macro">format_ident!</span>(<span class="string">"__exp_{}"</span>, leaf.name);
 <a href=#678 id=678 data-nosnippet>678</a>        wire_params.extend(classified.native.iter().map(|native| {
 <a href=#679 id=679 data-nosnippet>679</a>            <span class="kw">let </span>ident = <span class="kw-2">&amp;</span>native.rust_ident;

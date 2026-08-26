@@ -53,7 +53,7 @@
 <a href=#53 id=53 data-nosnippet>53</a>    <span class="doccomment">/// The decomposed type as first encountered. A **reading**, so "compare via
 <a href=#54 id=54 data-nosnippet>54</a>    /// [`TypeKey`](crate::registry::TypeKey), not syntactically" is
 <a href=#55 id=55 data-nosnippet>55</a>    /// the type rather than an instruction: `source.key()` is the identity and
-<a href=#56 id=56 data-nosnippet>56</a>    /// `emit.spell(&amp;source)` is what an emission callback writes.
+<a href=#56 id=56 data-nosnippet>56</a>    /// `emit.emit_source_type(&amp;source)` is what an emission callback writes.
 <a href=#57 id=57 data-nosnippet>57</a>    </span><span class="kw">pub </span>source: prebindgen_flat::flat::TypeRef,
 <a href=#58 id=58 data-nosnippet>58</a>    <span class="doccomment">/// Flattened leaves in declared record order — names, types, paths,
 <a href=#59 id=59 data-nosnippet>59</a>    /// nullability all declaration-fixed.
@@ -319,7 +319,7 @@
 <a href=#319 id=319 data-nosnippet>319</a>    <span class="doccomment">/// The **reading** of the type whose resolved output converter encodes this
 <a href=#320 id=320 data-nosnippet>320</a>    /// leaf — a reference type for accessors (`&amp;str`, `&amp;F`), `&amp;Source` for the
 <a href=#321 id=321 data-nosnippet>321</a>    /// identity leaf (so the borrowed-opaque clone converter / projection is
-<a href=#322 id=322 data-nosnippet>322</a>    /// reused). Spell it with `emit.spell(&amp;out_ty)` in an emission callback.
+<a href=#322 id=322 data-nosnippet>322</a>    /// reused). Spell it with `emit.emit_source_type(&amp;out_ty)` in an emission callback.
 <a href=#323 id=323 data-nosnippet>323</a>    ///
 <a href=#324 id=324 data-nosnippet>324</a>    /// A reading rather than a spelling because a consumer asking what this
 <a href=#325 id=325 data-nosnippet>325</a>    /// leaf's type *means* had to hand the spelling back to the registry and

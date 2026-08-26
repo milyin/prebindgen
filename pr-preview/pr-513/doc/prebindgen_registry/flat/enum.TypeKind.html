@@ -37,8 +37,8 @@
 <p>One variant per accepted Rust <strong>form</strong>, not per destination concept. <code>str</code>
 and <code>String</code> are two forms and get two variants; <code>Box&lt;T&gt;</code> is a form of its
 own and does not disappear into <code>T</code>. Nothing here folds two spellings
-together, which is what makes <a href="crate::RustEmitter::spell"><code>RustEmitter::spell</code></a> recoverable from this —
-rebuilding the syntax from a kind is the round-trip that checks it.</p>
+together. Rebuilding syntax from a kind is the Flat-internal round-trip that
+proves the model did not discard a required fact.</p>
 <h2 id="why-it-is-only-syntax"><a class="doc-anchor" href="#why-it-is-only-syntax">§</a>Why it is only syntax</h2>
 <p>It was a <em>destination-neutral classification</em> once, and that leaked: <code>&amp;T</code>
 earned a layer while <code>Box&lt;T&gt;</code> was declared transparent, on no principle

@@ -17,7 +17,7 @@
 <a href=#17 id=17 data-nosnippet>17</a></span><span class="attr">#[derive(Clone)]
 <a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">pub struct </span>FoldPlan {
 <a href=#19 id=19 data-nosnippet>19</a>    <span class="doccomment">/// Owned type the core construct produces — what the underlying call needs
-<a href=#20 id=20 data-nosnippet>20</a>    /// (before any [`Self::shape`] wrapping). A **reading**: `emit.spell(&amp;target)` in an emission callback
+<a href=#20 id=20 data-nosnippet>20</a>    /// (before any [`Self::shape`] wrapping). A **reading**: `emit.emit_source_type(&amp;target)` in an emission callback
 <a href=#21 id=21 data-nosnippet>21</a>    /// for generated Rust, `target.key()` for a lookup.
 <a href=#22 id=22 data-nosnippet>22</a>    </span><span class="kw">pub </span>target: prebindgen_flat::flat::TypeRef,
 <a href=#23 id=23 data-nosnippet>23</a>    <span class="doccomment">/// True when the original parameter was `&amp;T` / `Option&lt;&amp;T&gt;`: the call
@@ -64,7 +64,7 @@
 <a href=#64 id=64 data-nosnippet>64</a>    <span class="doccomment">/// The **reading** of the type whose resolved input converter decodes this
 <a href=#65 id=65 data-nosnippet>65</a>    /// leaf. For a single constructor these are the raw constructor parameter
 <a href=#66 id=66 data-nosnippet>66</a>    /// types; for a combined one the selector (`i32`) and `Option`-wrapped
-<a href=#67 id=67 data-nosnippet>67</a>    /// variant inputs. Spell it with `emit.spell(&amp;ty)` in an emission callback.
+<a href=#67 id=67 data-nosnippet>67</a>    /// variant inputs. Spell it with `emit.emit_source_type(&amp;ty)` in an emission callback.
 <a href=#68 id=68 data-nosnippet>68</a>    ///
 <a href=#69 id=69 data-nosnippet>69</a>    /// A reading rather than a spelling for the reason `UnfoldLeaf::out_ty`
 <a href=#70 id=70 data-nosnippet>70</a>    /// gives: a consumer asking what this leaf's type MEANS had to hand the

@@ -30,7 +30,7 @@
 <a href=#30 id=30 data-nosnippet>30</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#31 id=31 data-nosnippet>31</a>        value: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#32 id=32 data-nosnippet>32</a>        index: usize,
-<a href=#33 id=33 data-nosnippet>33</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#33 id=33 data-nosnippet>33</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#34 id=34 data-nosnippet>34</a>    ) -&gt; prebindgen_registry::chain::RenderedInvokePart {
 <a href=#35 id=35 data-nosnippet>35</a>        <span class="macro">assert_eq!</span>(value, <span class="kw-2">&amp;</span>callback_argument_name(index));
 <a href=#36 id=36 data-nosnippet>36</a>        <span class="kw">let </span>fail = |msg: TokenStream| -&gt; TokenStream {
@@ -230,7 +230,7 @@
 <a href=#230 id=230 data-nosnippet>230</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.operation
 <a href=#231 id=231 data-nosnippet>231</a>    }
 <a href=#232 id=232 data-nosnippet>232</a>
-<a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit) -&gt; syn::ItemFn {
+<a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter) -&gt; syn::ItemFn {
 <a href=#234 id=234 data-nosnippet>234</a>        <span class="kw">let </span>rendered = <span class="self">self</span>.chain.render(emit);
 <a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">let </span>name = emit.operation_ident(<span class="string">"jni"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.operation);
 <a href=#236 id=236 data-nosnippet>236</a>        <span class="kw">let </span>source = <span class="kw-2">&amp;</span>rendered.source;
@@ -511,44 +511,43 @@
 <a href=#511 id=511 data-nosnippet>511</a>        arguments: args.to_vec(),
 <a href=#512 id=512 data-nosnippet>512</a>        source_policy: <span class="kw">crate</span>::jni::chain::JSource {
 <a href=#513 id=513 data-nosnippet>513</a>            wrappers: Vec::new(),
-<a href=#514 id=514 data-nosnippet>514</a>            module: <span class="prelude-val">None</span>,
-<a href=#515 id=515 data-nosnippet>515</a>        },
-<a href=#516 id=516 data-nosnippet>516</a>        bridge: JInvokeBridge {
-<a href=#517 id=517 data-nosnippet>517</a>            name: name_lit,
-<a href=#518 id=518 data-nosnippet>518</a>            descriptor: descr_lit,
-<a href=#519 id=519 data-nosnippet>519</a>            frame_capacity: frame_cap_lit,
-<a href=#520 id=520 data-nosnippet>520</a>            fold_setups,
-<a href=#521 id=521 data-nosnippet>521</a>        },
-<a href=#522 id=522 data-nosnippet>522</a>        parts,
-<a href=#523 id=523 data-nosnippet>523</a>    };
-<a href=#524 id=524 data-nosnippet>524</a>    <span class="kw">let </span>intermediate: syn::Type = <span class="macro">syn::parse_quote!</span>(jni::objects::JObject);
-<a href=#525 id=525 data-nosnippet>525</a>    <span class="kw">let </span>rust_plan = JInvokePlan { operation, chain };
-<a href=#526 id=526 data-nosnippet>526</a>
-<a href=#527 id=527 data-nosnippet>527</a>    <span class="comment">// The wire type for an `impl Fn(args)` parameter is JObject (the erased
-<a href=#528 id=528 data-nosnippet>528</a>    // Kotlin lambda). The converter returns Box&lt;dyn Fn(args) + Send + Sync&gt;,
-<a href=#529 id=529 data-nosnippet>529</a>    // which coerces to the source's impl-trait param type.
-<a href=#530 id=530 data-nosnippet>530</a>    </span><span class="prelude-val">Some</span>((intermediate, rust_plan))
-<a href=#531 id=531 data-nosnippet>531</a>}
-<a href=#532 id=532 data-nosnippet>532</a>
-<a href=#533 id=533 data-nosnippet>533</a><span class="doccomment">/// Hard-error guard for `Vec&lt;opaque-handle&gt;` element types. A handle's wire is
-<a href=#534 id=534 data-nosnippet>534</a>/// a `jlong` heap pointer and a `Vec&lt;that&gt;` would yield a collection of
-<a href=#535 id=535 data-nosnippet>535</a>/// closeable native handles the JVM must free one-by-one — unsupported. Detect
-<a href=#536 id=536 data-nosnippet>536</a>/// it by the element's folded [`Projection`] being a [`ProjectionKind::Handle`]
-<a href=#537 id=537 data-nosnippet>537</a>/// and panic with a fix hint, instead of the `Vec&lt;_&gt;` handler silently
-<a href=#538 id=538 data-nosnippet>538</a>/// `return None`-ing (which surfaces as an opaque "unresolved type" error).
-<a href=#539 id=539 data-nosnippet>539</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>reject_vec_of_handle(
-<a href=#540 id=540 data-nosnippet>540</a>    inner_projection: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Projection&gt;,
-<a href=#541 id=541 data-nosnippet>541</a>    elem: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
-<a href=#542 id=542 data-nosnippet>542</a>) {
-<a href=#543 id=543 data-nosnippet>543</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(p) = inner_projection {
-<a href=#544 id=544 data-nosnippet>544</a>        <span class="kw">if </span>p.kind == ProjectionKind::Handle {
-<a href=#545 id=545 data-nosnippet>545</a>            <span class="macro">panic!</span>(
-<a href=#546 id=546 data-nosnippet>546</a>                <span class="string">"JniGen: `Vec&lt;{}&gt;` is unsupported — its elements would be closeable native \
-<a href=#547 id=547 data-nosnippet>547</a>                 handles (jlong) the JVM must free individually. Expose a per-element \
-<a href=#548 id=548 data-nosnippet>548</a>                 accessor instead of returning a `Vec` of handles."</span>,
-<a href=#549 id=549 data-nosnippet>549</a>                elem,
-<a href=#550 id=550 data-nosnippet>550</a>            );
-<a href=#551 id=551 data-nosnippet>551</a>        }
-<a href=#552 id=552 data-nosnippet>552</a>    }
-<a href=#553 id=553 data-nosnippet>553</a>}
+<a href=#514 id=514 data-nosnippet>514</a>        },
+<a href=#515 id=515 data-nosnippet>515</a>        bridge: JInvokeBridge {
+<a href=#516 id=516 data-nosnippet>516</a>            name: name_lit,
+<a href=#517 id=517 data-nosnippet>517</a>            descriptor: descr_lit,
+<a href=#518 id=518 data-nosnippet>518</a>            frame_capacity: frame_cap_lit,
+<a href=#519 id=519 data-nosnippet>519</a>            fold_setups,
+<a href=#520 id=520 data-nosnippet>520</a>        },
+<a href=#521 id=521 data-nosnippet>521</a>        parts,
+<a href=#522 id=522 data-nosnippet>522</a>    };
+<a href=#523 id=523 data-nosnippet>523</a>    <span class="kw">let </span>intermediate: syn::Type = <span class="macro">syn::parse_quote!</span>(jni::objects::JObject);
+<a href=#524 id=524 data-nosnippet>524</a>    <span class="kw">let </span>rust_plan = JInvokePlan { operation, chain };
+<a href=#525 id=525 data-nosnippet>525</a>
+<a href=#526 id=526 data-nosnippet>526</a>    <span class="comment">// The wire type for an `impl Fn(args)` parameter is JObject (the erased
+<a href=#527 id=527 data-nosnippet>527</a>    // Kotlin lambda). The converter returns Box&lt;dyn Fn(args) + Send + Sync&gt;,
+<a href=#528 id=528 data-nosnippet>528</a>    // which coerces to the source's impl-trait param type.
+<a href=#529 id=529 data-nosnippet>529</a>    </span><span class="prelude-val">Some</span>((intermediate, rust_plan))
+<a href=#530 id=530 data-nosnippet>530</a>}
+<a href=#531 id=531 data-nosnippet>531</a>
+<a href=#532 id=532 data-nosnippet>532</a><span class="doccomment">/// Hard-error guard for `Vec&lt;opaque-handle&gt;` element types. A handle's wire is
+<a href=#533 id=533 data-nosnippet>533</a>/// a `jlong` heap pointer and a `Vec&lt;that&gt;` would yield a collection of
+<a href=#534 id=534 data-nosnippet>534</a>/// closeable native handles the JVM must free one-by-one — unsupported. Detect
+<a href=#535 id=535 data-nosnippet>535</a>/// it by the element's folded [`Projection`] being a [`ProjectionKind::Handle`]
+<a href=#536 id=536 data-nosnippet>536</a>/// and panic with a fix hint, instead of the `Vec&lt;_&gt;` handler silently
+<a href=#537 id=537 data-nosnippet>537</a>/// `return None`-ing (which surfaces as an opaque "unresolved type" error).
+<a href=#538 id=538 data-nosnippet>538</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>reject_vec_of_handle(
+<a href=#539 id=539 data-nosnippet>539</a>    inner_projection: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Projection&gt;,
+<a href=#540 id=540 data-nosnippet>540</a>    elem: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
+<a href=#541 id=541 data-nosnippet>541</a>) {
+<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(p) = inner_projection {
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="kw">if </span>p.kind == ProjectionKind::Handle {
+<a href=#544 id=544 data-nosnippet>544</a>            <span class="macro">panic!</span>(
+<a href=#545 id=545 data-nosnippet>545</a>                <span class="string">"JniGen: `Vec&lt;{}&gt;` is unsupported — its elements would be closeable native \
+<a href=#546 id=546 data-nosnippet>546</a>                 handles (jlong) the JVM must free individually. Expose a per-element \
+<a href=#547 id=547 data-nosnippet>547</a>                 accessor instead of returning a `Vec` of handles."</span>,
+<a href=#548 id=548 data-nosnippet>548</a>                elem,
+<a href=#549 id=549 data-nosnippet>549</a>            );
+<a href=#550 id=550 data-nosnippet>550</a>        }
+<a href=#551 id=551 data-nosnippet>551</a>    }
+<a href=#552 id=552 data-nosnippet>552</a>}
 </code></pre></div></section></main></body></html>
