@@ -1237,8 +1237,8 @@ impl Prebindgen for CbindgenBuilder {
         f: &prebindgen_registry::flat::Function,
         _registry: &Registry,
         emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        self.emit_function_wrapper(f, emit)
+    ) -> Vec<syn::Item> {
+        vec![syn::Item::Fn(self.emit_function_wrapper(f, emit))]
     }
 
     fn on_struct(
@@ -1246,10 +1246,10 @@ impl Prebindgen for CbindgenBuilder {
         _s: &prebindgen_registry::flat::Struct,
         _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
+    ) -> Vec<syn::Item> {
         // The `#[repr(C)]` mirror + converters come from prerequisites /
         // on_output_type; the original (non-FFI-safe) struct is dropped.
-        TokenStream::new()
+        Vec::new()
     }
 
     fn on_variant(
@@ -1257,8 +1257,8 @@ impl Prebindgen for CbindgenBuilder {
         _v: &prebindgen_registry::flat::Variant,
         _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
 
     fn on_enum(
@@ -1266,8 +1266,8 @@ impl Prebindgen for CbindgenBuilder {
         _e: &prebindgen_registry::flat::Enum,
         _registry: &Registry,
         _emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
 }
 

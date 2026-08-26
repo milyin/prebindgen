@@ -1,7 +1,7 @@
 //! `Prebindgen` — what a generator still hands the emitter.
 //!
 //! One method per `#[prebindgen]` item kind (`on_function`, `on_struct`,
-//! `on_enum`, `on_const`) returning the wrapper Rust tokens to emit, plus the
+//! `on_enum`, `on_const`) returning typed Rust items to emit, plus the
 //! items they depend on (`prerequisites`), a cross-cutting rewrite
 //! (`post_process_item`) and two invariant checks.
 //!
@@ -14,8 +14,6 @@
 //! converter. Its executable artifact is retained separately by the adapter's
 //! frozen generation plan; this shared registry carrier never stores rendered
 //! Rust syntax.
-
-use proc_macro2::TokenStream;
 
 use crate::{generation::OperationId, niches::Niches, registry::Registry};
 
@@ -284,7 +282,7 @@ pub trait Prebindgen {
         f: &prebindgen_flat::flat::Function,
         registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream;
+    ) -> Vec<syn::Item>;
 
     /// Per-struct emission. Typically empty for languages that get
     /// everything they need from auto-generated converters.
@@ -293,20 +291,20 @@ pub trait Prebindgen {
         s: &prebindgen_flat::flat::Struct,
         registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream;
+    ) -> Vec<syn::Item>;
 
     /// Per-sum emission — an `enum` whose alternatives carry payloads.
     ///
     /// Separate from [`Self::on_enum`] because the model separates them: the
     /// two are numbered differently and consumed as different constructs. An
-    /// adapter with nothing to say about one shape returns an empty stream, as
+    /// adapter with nothing to say about one shape returns an empty vector, as
     /// both in-tree adapters do for both.
     fn on_variant(
         &self,
         v: &prebindgen_flat::flat::Variant,
         registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream;
+    ) -> Vec<syn::Item>;
 
     /// Per-enum emission — the fieldless shape, a named set of integers.
     fn on_enum(
@@ -314,7 +312,7 @@ pub trait Prebindgen {
         e: &prebindgen_flat::flat::Enum,
         registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream;
+    ) -> Vec<syn::Item>;
 
     /// Per-const emission. Default: a named const re-emits as a path-alias
     /// when [`Self::source_module`] is available —
@@ -330,10 +328,10 @@ pub trait Prebindgen {
         c: &prebindgen_flat::flat::Constant,
         _registry: &Registry,
         emit: &crate::Emit,
-    ) -> TokenStream {
+    ) -> Vec<syn::Item> {
         match self.source_module() {
-            Some(m) => emit.const_alias(c, m),
-            None => emit.const_verbatim(c),
+            Some(m) => vec![syn::Item::Const(emit.const_alias(c, m))],
+            None => vec![syn::Item::Const(emit.const_verbatim(c))],
         }
     }
 }

@@ -53,17 +53,6 @@ use proc_macro2::TokenStream;
 
 use super::{Alternative, Element, EnumValue, Struct, Type, TypeRef};
 
-fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStream {
-    let attrs = &c.attrs;
-    let vis = &c.vis;
-    let ident = &c.ident;
-    let ty = &c.ty;
-    quote::quote! {
-        #(#attrs)*
-        #vis const #ident: #ty = #source_module::#ident;
-    }
-}
-
 /// Rendering operations supplied by a pipeline-owned callback key.
 ///
 /// All methods are renderings: they answer what the source wrote, never what
@@ -122,33 +111,36 @@ pub trait RustEmitter {
     }
 
     /// Re-emit a captured function verbatim.
-    fn verbatim_fn(&self, function: &super::Function) -> TokenStream {
-        function.origin.spell()
+    fn verbatim_fn(&self, function: &super::Function) -> syn::ItemFn {
+        function.origin.as_syn().clone()
     }
 
     /// Re-emit a captured struct verbatim.
-    fn verbatim_struct(&self, item: &Struct) -> TokenStream {
-        item.origin.spell()
+    fn verbatim_struct(&self, item: &Struct) -> syn::ItemStruct {
+        item.origin.as_syn().clone()
     }
 
     /// Re-emit a captured payload enum verbatim.
-    fn verbatim_variant(&self, item: &super::Variant) -> TokenStream {
-        item.origin.spell()
+    fn verbatim_variant(&self, item: &super::Variant) -> syn::ItemEnum {
+        item.origin.as_syn().clone()
     }
 
     /// Re-emit a captured fieldless enum verbatim.
-    fn verbatim_enum(&self, item: &super::Enum) -> TokenStream {
-        item.origin.spell()
+    fn verbatim_enum(&self, item: &super::Enum) -> syn::ItemEnum {
+        item.origin.as_syn().clone()
     }
 
     /// Re-emit a constant as an alias to its source module.
-    fn const_alias(&self, item: &super::Constant, source_module: &syn::Path) -> TokenStream {
-        const_path_alias(item.origin.as_syn(), source_module)
+    fn const_alias(&self, item: &super::Constant, source_module: &syn::Path) -> syn::ItemConst {
+        let mut alias = item.origin.as_syn().clone();
+        let ident = &alias.ident;
+        alias.expr = Box::new(syn::parse_quote!(#source_module::#ident));
+        alias
     }
 
     /// Re-emit a captured constant verbatim.
-    fn const_verbatim(&self, item: &super::Constant) -> TokenStream {
-        item.origin.spell()
+    fn const_verbatim(&self, item: &super::Constant) -> syn::ItemConst {
+        item.origin.as_syn().clone()
     }
 
     /// Re-emit an anonymous feature guard.

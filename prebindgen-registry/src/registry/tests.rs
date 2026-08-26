@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use prebindgen_flat::flat::Flat;
-use proc_macro2::TokenStream;
 use quote::ToTokens;
 
 use super::*;
@@ -101,32 +100,32 @@ impl Prebindgen for StubExt {
         _f: &prebindgen_flat::flat::Function,
         _registry: &Registry,
         _emit: &crate::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
     fn on_struct(
         &self,
         _s: &prebindgen_flat::flat::Struct,
         _registry: &Registry,
         _emit: &crate::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
     fn on_variant(
         &self,
         _v: &prebindgen_flat::flat::Variant,
         _registry: &Registry,
         _emit: &crate::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
     fn on_enum(
         &self,
         _e: &prebindgen_flat::flat::Enum,
         _registry: &Registry,
         _emit: &crate::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
 }
 
@@ -478,7 +477,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             f: &prebindgen_flat::flat::Function,
             r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
+        ) -> Vec<syn::Item> {
             self.0.on_function(f, r, _emit)
         }
         fn on_struct(
@@ -486,7 +485,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             s: &prebindgen_flat::flat::Struct,
             r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
+        ) -> Vec<syn::Item> {
             self.0.on_struct(s, r, _emit)
         }
         fn on_variant(
@@ -494,7 +493,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             v: &prebindgen_flat::flat::Variant,
             r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
+        ) -> Vec<syn::Item> {
             self.0.on_variant(v, r, _emit)
         }
         fn on_enum(
@@ -502,7 +501,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             e: &prebindgen_flat::flat::Enum,
             r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
+        ) -> Vec<syn::Item> {
             self.0.on_enum(e, r, _emit)
         }
     }
@@ -1536,7 +1535,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             f: &prebindgen_flat::flat::Function,
             r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
+        ) -> Vec<syn::Item> {
             self.0.on_function(f, r, _emit)
         }
         fn on_struct(
@@ -1544,7 +1543,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             st: &prebindgen_flat::flat::Struct,
             r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
+        ) -> Vec<syn::Item> {
             self.0.on_struct(st, r, _emit)
         }
         fn on_variant(
@@ -1552,7 +1551,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             v: &prebindgen_flat::flat::Variant,
             r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
+        ) -> Vec<syn::Item> {
             self.0.on_variant(v, r, _emit)
         }
         fn on_enum(
@@ -1560,7 +1559,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             e: &prebindgen_flat::flat::Enum,
             r: &Registry,
             _emit: &crate::Emit,
-        ) -> TokenStream {
+        ) -> Vec<syn::Item> {
             self.0.on_enum(e, r, _emit)
         }
     }

@@ -243,10 +243,10 @@ facts, not generated source Rust syntax.
 
 The writer then goes over the declared items in name order and calls the
 adapter back once per kind — `on_function`, `on_struct`, `on_enum`, `on_const`
-— handing over the model element and taking a `TokenStream`. It parses that as
-Rust items and keeps them all. Nothing else is checked: not that a function
-comes out, not that it is one item, not that it mentions the item declared.
-JniGen's constant hook returns two, a getter and an alias.
+— handing over the model element and taking typed `syn::Item`s. The writer
+keeps those items directly; no arbitrary token stream crosses the callback
+boundary and no generated source is reparsed there. A callback may return zero
+or several items: JniGen's constant hook returns two, a getter and an alias.
 
 **Finally the file.** The writer concatenates, in this order:
 

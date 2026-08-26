@@ -11,7 +11,7 @@ pub(crate) fn emit_jni_function_wrapper(
     f: &prebindgen_registry::flat::Function,
     registry: &Registry,
     emit: &prebindgen_registry::Emit,
-) -> TokenStream {
+) -> syn::ItemFn {
     emit_jni_function_wrapper_with_callee(ext, f, registry, None, emit)
 }
 
@@ -183,7 +183,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     registry: &Registry,
     callee: Option<syn::Expr>,
     emit: &prebindgen_registry::Emit,
-) -> TokenStream {
+) -> syn::ItemFn {
     let original_ident = &f.name;
 
     let mut wire_params: Vec<TokenStream> = Vec::new();
@@ -460,7 +460,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // `__domain_sink` (typed domain error) for a fallible fn — a capture is
     // passed for each. Declared after the wire params + builder so the order
     // matches the Kotlin `external fun`.
-    quote! {
+    syn::parse_quote! {
         #[no_mangle]
         #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
         pub unsafe extern "C" fn #wrapper_ident<'a>(
