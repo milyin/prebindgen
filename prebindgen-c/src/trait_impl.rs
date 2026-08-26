@@ -957,8 +957,9 @@ impl CbindgenBuilder {
     /// State this binding into `registry` — see `JniGenBuilder::declare_into`.
     ///
     /// Push, not pull: the build script calls this, and the registry never
-    /// calls back. cbindgen declares no consts (it has no const mechanism, so
-    /// every captured const re-emits verbatim) and no decompositions.
+    /// calls back. cbindgen declares no selective const surface (its
+    /// `on_const` policy generates a source-module alias for every captured
+    /// const) and no decompositions.
     /// Binding-local fns declared by `convert!(..).local(..)`.
     fn collect_local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         let mut result = Vec::new();
@@ -1144,8 +1145,8 @@ impl Prebindgen for CbindgenBuilder {
     /// where the registry used to print these itself. Moves into
     /// `CbindgenBuilder::generate` once that exists (prebindgen#251 phase E).
     ///
-    /// `consts: None` — cbindgen has no const declaration mechanism, so every
-    /// captured const is re-emitted verbatim and none is ever a skip.
+    /// `consts: None` — cbindgen has no selective const mechanism, so every
+    /// captured const reaches its source-alias policy and none is ever a skip.
     fn validate(&self, binding: &Building<'_>) -> Result<(), String> {
         let mut functions = self.declared_functions();
         functions.extend(self.helper_functions());
@@ -1268,6 +1269,18 @@ impl Prebindgen for CbindgenBuilder {
         _emit: &prebindgen_registry::Emit,
     ) -> Vec<syn::Item> {
         Vec::new()
+    }
+
+    fn on_const(
+        &self,
+        c: &prebindgen_registry::flat::Constant,
+        _registry: &Registry,
+        emit: &prebindgen_registry::Emit,
+    ) -> Vec<syn::Item> {
+        self.source_module
+            .as_ref()
+            .map(|module| vec![syn::Item::Const(emit.const_alias(c, module))])
+            .unwrap_or_default()
     }
 }
 

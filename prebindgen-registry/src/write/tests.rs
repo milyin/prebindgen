@@ -30,36 +30,51 @@ impl Prebindgen for IdentityExt {
         &self,
         f: &prebindgen_flat::flat::Function,
         _registry: &Registry,
-        emit: &crate::Emit,
+        _emit: &crate::Emit,
     ) -> Vec<syn::Item> {
-        vec![syn::Item::Fn(emit.verbatim_fn(f))]
+        let ident = &f.name;
+        vec![syn::parse_quote!(fn #ident() {})]
     }
 
     fn on_struct(
         &self,
         s: &prebindgen_flat::flat::Struct,
         _registry: &Registry,
-        emit: &crate::Emit,
+        _emit: &crate::Emit,
     ) -> Vec<syn::Item> {
-        vec![syn::Item::Struct(emit.verbatim_struct(s))]
+        let ident = &s.name;
+        vec![syn::parse_quote!(pub struct #ident;)]
     }
 
     fn on_variant(
         &self,
         v: &prebindgen_flat::flat::Variant,
         _registry: &Registry,
-        emit: &crate::Emit,
+        _emit: &crate::Emit,
     ) -> Vec<syn::Item> {
-        vec![syn::Item::Enum(emit.verbatim_variant(v))]
+        let ident = &v.name;
+        vec![syn::parse_quote!(pub enum #ident {})]
     }
 
     fn on_enum(
         &self,
         e: &prebindgen_flat::flat::Enum,
         _registry: &Registry,
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        let ident = &e.name;
+        vec![syn::parse_quote!(pub enum #ident {})]
+    }
+
+    fn on_const(
+        &self,
+        c: &prebindgen_flat::flat::Constant,
+        _registry: &Registry,
         emit: &crate::Emit,
     ) -> Vec<syn::Item> {
-        vec![syn::Item::Enum(emit.verbatim_enum(e))]
+        let ident = &c.name;
+        let ty = emit.spell(&c.ty);
+        vec![syn::parse_quote!(pub const #ident: #ty = 0;)]
     }
 }
 
@@ -135,7 +150,8 @@ impl Prebindgen for LateExt {
                 syn::parse_quote!(fn #ident() { #converter(); }),
             )]
         } else {
-            vec![syn::Item::Fn(emit.verbatim_fn(f))]
+            let ident = &f.name;
+            vec![syn::parse_quote!(fn #ident() {})]
         }
     }
 
@@ -143,27 +159,39 @@ impl Prebindgen for LateExt {
         &self,
         s: &prebindgen_flat::flat::Struct,
         _registry: &Registry,
-        emit: &crate::Emit,
+        _emit: &crate::Emit,
     ) -> Vec<syn::Item> {
-        vec![syn::Item::Struct(emit.verbatim_struct(s))]
+        let ident = &s.name;
+        vec![syn::parse_quote!(pub struct #ident;)]
     }
 
     fn on_variant(
         &self,
         v: &prebindgen_flat::flat::Variant,
         _registry: &Registry,
-        emit: &crate::Emit,
+        _emit: &crate::Emit,
     ) -> Vec<syn::Item> {
-        vec![syn::Item::Enum(emit.verbatim_variant(v))]
+        let ident = &v.name;
+        vec![syn::parse_quote!(pub enum #ident {})]
     }
 
     fn on_enum(
         &self,
         e: &prebindgen_flat::flat::Enum,
         _registry: &Registry,
-        emit: &crate::Emit,
+        _emit: &crate::Emit,
     ) -> Vec<syn::Item> {
-        vec![syn::Item::Enum(emit.verbatim_enum(e))]
+        let ident = &e.name;
+        vec![syn::parse_quote!(pub enum #ident {})]
+    }
+
+    fn on_const(
+        &self,
+        _c: &prebindgen_flat::flat::Constant,
+        _registry: &Registry,
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        Vec::new()
     }
 }
 
@@ -436,35 +464,43 @@ fn guards_emit_ungated_and_in_stream_order() {
     impl Prebindgen for ConstGatingExt {
         fn on_function(
             &self,
-            f: &prebindgen_flat::flat::Function,
+            _f: &prebindgen_flat::flat::Function,
             _r: &Registry,
             _emit: &crate::Emit,
         ) -> Vec<syn::Item> {
-            vec![syn::Item::Fn(_emit.verbatim_fn(f))]
+            Vec::new()
         }
         fn on_struct(
             &self,
-            s: &prebindgen_flat::flat::Struct,
+            _s: &prebindgen_flat::flat::Struct,
             _r: &Registry,
             _emit: &crate::Emit,
         ) -> Vec<syn::Item> {
-            vec![syn::Item::Struct(_emit.verbatim_struct(s))]
+            Vec::new()
         }
         fn on_variant(
             &self,
-            v: &prebindgen_flat::flat::Variant,
+            _v: &prebindgen_flat::flat::Variant,
             _r: &Registry,
             _emit: &crate::Emit,
         ) -> Vec<syn::Item> {
-            vec![syn::Item::Enum(_emit.verbatim_variant(v))]
+            Vec::new()
         }
         fn on_enum(
             &self,
-            e: &prebindgen_flat::flat::Enum,
+            _e: &prebindgen_flat::flat::Enum,
             _r: &Registry,
             _emit: &crate::Emit,
         ) -> Vec<syn::Item> {
-            vec![syn::Item::Enum(_emit.verbatim_enum(e))]
+            Vec::new()
+        }
+        fn on_const(
+            &self,
+            _c: &prebindgen_flat::flat::Constant,
+            _r: &Registry,
+            _emit: &crate::Emit,
+        ) -> Vec<syn::Item> {
+            Vec::new()
         }
     }
 

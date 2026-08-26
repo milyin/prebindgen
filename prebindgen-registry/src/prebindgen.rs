@@ -256,10 +256,9 @@ pub trait Prebindgen {
 
     /// Absolute path under which the source crate's items are reachable
     /// from the generated file (e.g. `zenoh_flat`), for adapters that
-    /// qualify emitted references against one. Drives the default
-    /// [`Self::on_const`]: with a source module available, a named const
-    /// re-emits as a path-alias to the source item instead of copying its
-    /// initializer tokens. Default: `None`.
+    /// qualify emitted references against one. An adapter may also use it in
+    /// its required [`Self::on_const`] policy to generate a path-alias to the
+    /// source item instead of copying initializer tokens. Default: `None`.
     fn source_module(&self) -> Option<&syn::Path> {
         None
     }
@@ -314,11 +313,11 @@ pub trait Prebindgen {
         emit: &crate::Emit,
     ) -> Vec<syn::Item>;
 
-    /// Per-const emission. Default: a named const re-emits as a path-alias
-    /// when [`Self::source_module`] is available —
-    /// initializer tokens are never copied, so a const whose initializer
-    /// references source-crate internals stays valid in the generated file.
-    /// An adapter without a source module passes the const through verbatim.
+    /// Per-const emission. There is deliberately no default: Flat models the
+    /// const's name, type and documentation, but not an arbitrary Rust
+    /// initializer expression. Each adapter must therefore state its value
+    /// policy explicitly, commonly by generating a path-alias to a source
+    /// module. Initializer tokens are never copied or parsed.
     ///
     /// A const reaching here is always named: prebindgen's own injected feature
     /// checks are [`Guard`](prebindgen_flat::flat::Guard)s, not consts, so this
@@ -326,12 +325,7 @@ pub trait Prebindgen {
     fn on_const(
         &self,
         c: &prebindgen_flat::flat::Constant,
-        _registry: &Registry,
+        registry: &Registry,
         emit: &crate::Emit,
-    ) -> Vec<syn::Item> {
-        match self.source_module() {
-            Some(m) => vec![syn::Item::Const(emit.const_alias(c, m))],
-            None => vec![syn::Item::Const(emit.const_verbatim(c))],
-        }
-    }
+    ) -> Vec<syn::Item>;
 }

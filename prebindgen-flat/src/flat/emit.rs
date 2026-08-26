@@ -51,17 +51,7 @@
 
 use proc_macro2::TokenStream;
 
-use super::{Alternative, Element, EnumValue, Struct, Type, TypeRef};
-
-/// Turn an opaque captured spelling into its final typed output item.
-///
-/// This is deliberately a rendering operation. Consumers cannot borrow the
-/// captured `syn` node and therefore cannot use it to classify or inspect the
-/// source; the parse happens only after the pipeline has entered the explicit
-/// `RustEmitter` boundary to assemble generated Rust.
-fn final_item<T: syn::parse::Parse>(tokens: TokenStream) -> T {
-    syn::parse2(tokens).expect("captured Rust item must parse at final emission")
-}
+use super::{Alternative, EnumValue, Struct, TypeRef};
 
 /// Rendering operations supplied by a pipeline-owned callback key.
 ///
@@ -110,47 +100,23 @@ pub trait RustEmitter {
         ty.stripped_syntax()
     }
 
-    /// Re-emit a captured item verbatim.
-    fn item(&self, element: &Element) -> syn::Item {
-        element.as_syn()
-    }
-
-    /// Re-emit a captured type declaration verbatim.
-    fn type_item(&self, ty: &Type) -> syn::Item {
-        ty.as_syn()
-    }
-
-    /// Re-emit a captured function verbatim.
-    fn verbatim_fn(&self, function: &super::Function) -> syn::ItemFn {
-        final_item(function.origin.spell())
-    }
-
-    /// Re-emit a captured struct verbatim.
-    fn verbatim_struct(&self, item: &Struct) -> syn::ItemStruct {
-        final_item(item.origin.spell())
-    }
-
-    /// Re-emit a captured payload enum verbatim.
-    fn verbatim_variant(&self, item: &super::Variant) -> syn::ItemEnum {
-        final_item(item.origin.spell())
-    }
-
-    /// Re-emit a captured fieldless enum verbatim.
-    fn verbatim_enum(&self, item: &super::Enum) -> syn::ItemEnum {
-        final_item(item.origin.spell())
-    }
-
     /// Re-emit a constant as an alias to its source module.
     fn const_alias(&self, item: &super::Constant, source_module: &syn::Path) -> syn::ItemConst {
-        let mut alias: syn::ItemConst = final_item(item.origin.spell());
-        let ident = &alias.ident;
-        alias.expr = Box::new(syn::parse_quote!(#source_module::#ident));
-        alias
-    }
-
-    /// Re-emit a captured constant verbatim.
-    fn const_verbatim(&self, item: &super::Constant) -> syn::ItemConst {
-        final_item(item.origin.spell())
+        let ident = &item.name;
+        let ty = self.spell(&item.ty);
+        let docs: Vec<syn::Attribute> = item
+            .docs()
+            .into_iter()
+            .flat_map(|docs| {
+                docs.lines()
+                    .map(|line| {
+                        let doc = format!(" {line}");
+                        syn::parse_quote!(#[doc = #doc])
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        syn::parse_quote!(#(#docs)* pub const #ident: #ty = #source_module::#ident;)
     }
 
     /// Re-emit an anonymous feature guard.

@@ -167,7 +167,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     // Consts: an adapter WITH a const declaration mechanism
     // (`declared_consts() == Some(set)`) emits declared consts only,
     // symmetric with functions; an adapter without one (`None`) gets every
-    // const passed through verbatim via the default `on_const`. Prebindgen's
+    // const through its own mandatory `on_const` policy. Prebindgen's
     // own injected feature guards are not consts at all — see the guards loop.
     let declared_consts = &declared.consts;
     body_items.extend(

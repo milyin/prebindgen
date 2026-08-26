@@ -29,8 +29,8 @@ pub struct Claimed {
     /// Types the binding emits, plus the ones that cross only through a plan.
     pub types: HashSet<TypeKey>,
     /// Consts the binding emits, or `None` when it has no const mechanism at
-    /// all — then every const is re-emitted verbatim, so none is ever skipped
-    /// and reporting one would be a lie.
+    /// all — then its adapter policy handles every const, so none is ever
+    /// skipped and reporting one would be a lie.
     pub consts: Option<HashSet<syn::Ident>>,
     pub ignored_functions: HashSet<syn::Ident>,
     pub ignored_types: HashSet<TypeKey>,

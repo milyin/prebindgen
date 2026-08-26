@@ -127,6 +127,14 @@ impl Prebindgen for StubExt {
     ) -> Vec<syn::Item> {
         Vec::new()
     }
+    fn on_const(
+        &self,
+        _c: &prebindgen_flat::flat::Constant,
+        _registry: &Registry,
+        _emit: &crate::Emit,
+    ) -> Vec<syn::Item> {
+        Vec::new()
+    }
 }
 
 // suppress unused warning on Niches — kept available for richer tests
@@ -503,6 +511,14 @@ fn resolve_surfaces_adapter_invariant_errors() {
             _emit: &crate::Emit,
         ) -> Vec<syn::Item> {
             self.0.on_enum(e, r, _emit)
+        }
+        fn on_const(
+            &self,
+            c: &prebindgen_flat::flat::Constant,
+            r: &Registry,
+            _emit: &crate::Emit,
+        ) -> Vec<syn::Item> {
+            self.0.on_const(c, r, _emit)
         }
     }
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
@@ -1561,6 +1577,14 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             _emit: &crate::Emit,
         ) -> Vec<syn::Item> {
             self.0.on_enum(e, r, _emit)
+        }
+        fn on_const(
+            &self,
+            c: &prebindgen_flat::flat::Constant,
+            r: &Registry,
+            _emit: &crate::Emit,
+        ) -> Vec<syn::Item> {
+            self.0.on_const(c, r, _emit)
         }
     }
 
