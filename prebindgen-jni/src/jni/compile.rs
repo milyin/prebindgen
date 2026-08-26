@@ -1140,6 +1140,54 @@ impl<R: Conversions> JCompile<'_, R> {
         ))
     }
 
+    /// Freeze the explicit whole-object decoder for a declared sealed sum.
+    /// Choice construction remains registry-composed for flattened sites; this
+    /// plan is only the one-`JObject` representation used by nested objects.
+    fn planned_sum_codec(&self, at: At<'_>) -> Option<JFrag> {
+        if at.crossing.direction() != Direction::Construct {
+            return None;
+        }
+        let source = at.crossing.spelled();
+        let TypeKind::Named { id, .. } = source.kind() else {
+            return None;
+        };
+        let name = id.ident()?;
+        let cfg = self.decls.types.get(&source.key())?;
+        cfg.sum()?;
+        let prebindgen_registry::flat::Type::Variant(sum) =
+            self.registry.flat().declared_type(&name)?
+        else {
+            return None;
+        };
+        let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
+        let ident = crate::jni::chain::planned_name(Direction::Construct, source, &wire);
+        let marker = crate::jni::chain::planned_marker(&ident);
+        let kotlin_name = cfg
+            .name_spec
+            .as_ref()
+            .map(|spec| KtType::cls(self.decls.fqn_of(spec)));
+        Some(JFrag::planned(
+            at,
+            ConverterImpl {
+                subs: Vec::new(),
+                pre_stages: Vec::new(),
+                function: marker,
+                destination: wire.clone(),
+                niches: default_niches_for_wire(&wire),
+                metadata: self.decls.framework_meta(kotlin_name),
+            },
+            crate::jni::chain::JFunction::sum_codec(crate::jni::chain::JSumCodecPlan {
+                ident,
+                source: source.clone(),
+                body: crate::jni::emit::build_jobject_sum_input_plan(
+                    self.decls,
+                    sum,
+                    self.registry,
+                )?,
+            }),
+        ))
+    }
+
     /// Freeze a declared fieldless enum as Flat variant/discriminant facts.
     /// The plan deliberately does not retain an enum path or a rendered Rust
     /// body: final emission supplies the source type and constructs the variant
@@ -2721,11 +2769,14 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(frag) = self.planned_struct_codec(at) {
             return Ok(frag);
         }
+        if let Some(frag) = self.planned_sum_codec(at) {
+            return Ok(frag);
+        }
         let emit = cx.emit();
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .decls
-                .input_terminal(ty, self.registry, emit)
+                .input_terminal(ty, emit)
                 .or_else(|| self.borrow(ty, true)),
             Direction::Deconstruct => self
                 .decls
@@ -2889,7 +2940,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let conv = match at.crossing.direction() {
             Direction::Construct => self
                 .decls
-                .input_terminal(ty, self.registry, emit)
+                .input_terminal(ty, emit)
                 .or_else(|| self.borrow(ty, true)),
             Direction::Deconstruct => self
                 .decls
@@ -3464,6 +3515,11 @@ impl Conv {
     #[cfg(test)]
     pub(crate) fn is_struct_codec_plan(&self) -> bool {
         self.0.rust.is_struct_codec()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_sum_codec_plan(&self) -> bool {
+        self.0.rust.is_sum_codec()
     }
 
     #[cfg(test)]

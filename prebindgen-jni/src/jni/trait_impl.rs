@@ -1635,7 +1635,6 @@ impl Declarations {
     pub(crate) fn input_terminal(
         &self,
         reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions,
         emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()`: the arms below that ask what
@@ -1645,7 +1644,6 @@ impl Declarations {
         // spelling for what generated Rust says. Neither needs a node.
         // Opaque handles and canonical custom conversions are retained before
         // this fallback.
-        let key = reading.key();
         if let Some((wire, body)) = (!matches!(
             reading.unwrapped().kind(),
             prebindgen_registry::flat::TypeKind::Scalar(_)
@@ -1671,41 +1669,6 @@ impl Declarations {
                 niches,
                 metadata,
             });
-        }
-        if let Some(name) = reading.key().ident() {
-            // A `sealed_class` sum reached as a whole `JObject` — a field of a
-            // data class, or any position where the parent is already an
-            // object. Its own converter, so the parent's generic field branch
-            // delegates exactly as it does for a nested data class. (The
-            // OUTPUT direction has no counterpart: a sum crosses Rust →
-            // Kotlin flattened, always.)
-            if self.types.get(&key).is_some_and(|c| c.sum().is_some()) {
-                if let Some(prebindgen_registry::flat::Type::Variant(v)) =
-                    registry.flat().declared_type(&name)
-                {
-                    let (wire, body) = sum_input_body(self, v, registry, emit)?;
-                    // The wire's own null niche, exactly as a data class gets
-                    // — that is what lets `Option<sum>` fold with JVM null as
-                    // `None` instead of needing a boxed wrapper.
-                    let niches = default_niches_for_wire(&wire);
-                    let kotlin_name = self
-                        .types
-                        .get(&key)
-                        .and_then(|c| c.name_spec.as_ref())
-                        .map(|s| KtType::cls(self.fqn_of(s)));
-                    return Some(ConverterImpl {
-                        subs: vec![],
-                        pre_stages: vec![],
-                        function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                        destination: wire,
-                        niches,
-                        metadata: self.framework_meta(kotlin_name),
-                    });
-                }
-            }
-            // Bare-ident enum: leave to the consuming crate to override
-            // (today's CongestionControl etc. fall here — caller's wrapper
-            // ext returns Some in its own input_terminal).
         }
         None
     }

@@ -1,4 +1,4 @@
-use prebindgen_registry::RegistryBuilder;
+use prebindgen_registry::{Conversions, RegistryBuilder};
 
 use super::*;
 
@@ -667,7 +667,7 @@ fn sum_is_its_own_type_kind() {
 /// * a **cell** says the type entered the pipeline;
 /// * a **root** says the binding demands its converter — cleared here, because
 ///   a sum crosses decomposed and has no whole-value output converter;
-/// * an **entry** says one resolved — present INPUT-side (`sum_input_body`
+/// * an **entry** says one resolved — present INPUT-side (a retained sum plan
 ///   decodes a whole `JObject`), absent OUTPUT-side, and that asymmetry is the
 ///   design, not an accident.
 ///
@@ -739,6 +739,14 @@ fn a_sums_registry_cells_are_registered_but_not_required() {
     assert!(
         reg.has_entry_for_test(Direction::Construct, &key) == Some(true),
         "the input direction has a whole-object decoder"
+    );
+    let reading = gen.registry.reading(&key).expect("Reading model type");
+    assert!(
+        gen.decls
+            .in_frag(&reading)
+            .expect("Reading whole-object input")
+            .is_sum_codec_plan(),
+        "the whole-object decoder must retain an unrendered sum plan"
     );
     assert!(
         reg.has_entry_for_test(Direction::Deconstruct, &key) == Some(false),
