@@ -222,11 +222,17 @@ fn tagged_union_as_data_struct_field() {
             unimplemented!()
         }
     );
+    let inspect: syn::ItemFn = syn::parse_quote!(
+        pub fn drawing_id(drawing: Drawing) -> u64 {
+            unimplemented!()
+        }
+    );
     let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(f), loc.clone()),
+        (syn::Item::Fn(inspect), loc.clone()),
     ]))
     .expect("index items");
 
@@ -239,6 +245,8 @@ fn tagged_union_as_data_struct_field() {
         .tagged_union(syn::parse_quote!(Shape))
         .data_struct(syn::parse_quote!(Drawing))
         .function(syn::parse_quote!(drawing_new))
+        .panic()
+        .function(syn::parse_quote!(drawing_id))
         .panic();
 
     let src = write(cbindgen, registry, "tagged_union_field");

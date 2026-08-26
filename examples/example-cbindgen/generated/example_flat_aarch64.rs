@@ -392,35 +392,6 @@ pub(crate) unsafe fn __cbg_in_Foo(v: foo_t) -> example_flat::Foo {
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_Grade(
-    v: ::core::mem::MaybeUninit<grade_t>,
-) -> ::core::result::Result<example_flat::Grade, ::std::string::String> {
-    const _: () = {
-        assert!(
-            ::core::mem::size_of:: < grade_t > () == ::core::mem::size_of:: <
-            ::core::ffi::c_int > (),
-            "`grade_t`: a #[repr(C)] enum must have the size of a C `int`"
-        );
-        assert!(
-            ::core::mem::align_of:: < grade_t > () == ::core::mem::align_of:: <
-            ::core::ffi::c_int > (),
-            "`grade_t`: a #[repr(C)] enum must have the alignment of a C `int`"
-        );
-    };
-    let __raw: ::core::ffi::c_int = ::core::ptr::read(
-        v.as_ptr() as *const ::core::ffi::c_int,
-    );
-    if __raw == grade_t::Low as ::core::ffi::c_int {
-        return ::core::result::Result::Ok(example_flat::Grade::Low);
-    }
-    if __raw == grade_t::High as ::core::ffi::c_int {
-        return ::core::result::Result::Ok(example_flat::Grade::High);
-    }
-    ::core::result::Result::Err(
-        ::std::format!("invalid discriminant {} for `grade_t`", __raw),
-    )
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_InsideFoo(
     v: ::core::mem::MaybeUninit<inside_foo_t>,
 ) -> ::core::result::Result<example_flat::InsideFoo, ::std::string::String> {
@@ -639,24 +610,6 @@ pub(crate) unsafe fn __cbg_in_Shape(
     })
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_String(
-    v: *const ::core::ffi::c_char,
-) -> ::core::result::Result<::std::string::String, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null pointer passed for String argument"),
-        );
-    }
-    match ::std::ffi::CStr::from_ptr(v).to_str() {
-        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s.to_owned()),
-        ::core::result::Result::Err(_) => {
-            ::core::result::Result::Err(
-                ::std::string::String::from("invalid UTF-8 in String argument"),
-            )
-        }
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_String_field(
     v: *const ::core::ffi::c_char,
 ) -> ::std::string::String {
@@ -714,8 +667,6 @@ pub(crate) unsafe fn __cbg_in_bool(v: ::core::mem::MaybeUninit<bool>) -> bool {
 pub(crate) fn __cbg_in_f64(v: f64) -> f64 {
     v
 }
-#[allow(non_snake_case, dead_code, unused_variables)]
-pub(crate) fn __cbg_in_str() {}
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_in_u64(v: u64) -> u64 {
     v
@@ -869,16 +820,10 @@ pub(crate) fn __cbg_out_i32(v: i32) -> i32 {
 pub(crate) fn __cbg_out_u64(v: u64) -> u64 {
     v
 }
-#[allow(non_snake_case, dead_code, unused_variables)]
-pub(crate) fn __cbg_out_unit(v: ()) {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __cbg_outmark_option_Grade() {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __cbg_outmark_option_f64() {}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) fn __cbg_result_Result___Calculator___Error__() {}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) fn __cbg_result_Result___f64___Error__() {}
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn calculator_absorb(

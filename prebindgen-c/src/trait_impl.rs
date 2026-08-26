@@ -1105,15 +1105,6 @@ impl CbindgenBuilder {
                 message: errors.to_string(),
             }
         })?);
-        // What the compilation produced, kept for emission and for lookup.
-        self.compiled_fns = self
-            .compiled
-            .borrow()
-            .fragments()
-            .into_iter()
-            .map(|f| f.function.clone())
-            .filter(|function| !function.is_deferred_invoke())
-            .collect();
         self.validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         Ok(Cbindgen {

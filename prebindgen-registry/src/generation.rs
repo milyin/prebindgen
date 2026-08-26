@@ -168,6 +168,12 @@ pub trait Representation {
     type Intermediate: Clone + Eq;
     /// One adapter-declared conversion between two graph values.
     type Step;
+    /// Frozen adapter artifact that renders this fragment's private converter.
+    ///
+    /// The registry owns its dependency-ordered placement but treats the
+    /// payload as opaque. [`FragmentPlan`] represents fragments without a
+    /// standalone converter explicitly.
+    type ConverterArtifact;
     /// Terminal conversion at an [`Atomic`](ShapePlan::Atomic) shape.
     type TerminalCodec;
     /// Packing or unpacking a fixed product.
@@ -555,6 +561,7 @@ pub struct FragmentPlan<R: Representation> {
     source: TypeRef,
     intermediate: R::Intermediate,
     converter: ConverterPlan<R>,
+    artifact: Option<R::ConverterArtifact>,
     yields: Yield,
 }
 
@@ -572,8 +579,15 @@ impl<R: Representation> FragmentPlan<R> {
             source,
             intermediate,
             converter,
+            artifact: None,
             yields,
         }
+    }
+
+    /// Attach the adapter's frozen private-converter artifact.
+    pub fn with_artifact(mut self, artifact: R::ConverterArtifact) -> Self {
+        self.artifact = Some(artifact);
+        self
     }
 
     /// Semantic fragment identity.
@@ -594,6 +608,11 @@ impl<R: Representation> FragmentPlan<R> {
     /// Registry-composed converter operation graph.
     pub fn converter(&self) -> &ConverterPlan<R> {
         &self.converter
+    }
+
+    /// Adapter-owned converter artifact in registry dependency order.
+    pub fn artifact(&self) -> Option<&R::ConverterArtifact> {
+        self.artifact.as_ref()
     }
 
     /// Source-value contract produced by this fragment.

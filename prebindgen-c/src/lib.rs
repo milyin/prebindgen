@@ -347,10 +347,11 @@ impl Cbindgen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        let converters: Vec<_> = self.gen.converter_functions().cloned().collect();
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.gen,
-            &self.gen.compiled_fns,
+            &converters,
             out_path,
         )?)
     }
@@ -445,15 +446,17 @@ pub struct CbindgenBuilder {
     /// argument sites, and callback artifacts.
     pub(crate) generation:
         Option<prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>>,
-    /// Every reached converter function plan this binding retained.
-    ///
-    /// Filled once by [`Self::build_with`] and handed to `write_rust` directly.
-    /// Every entry is a typed terminal or composed shape plan that the shared
-    /// writer renders only after resolution and validation.
-    /// The writer sorts and de-duplicates by function name, so the order here
-    /// decides which of two same-named functions wins and not where any of them
-    /// lands.
-    pub(crate) compiled_fns: Vec<chain::CFunction>,
+}
+
+impl CbindgenBuilder {
+    /// Frozen converter artifacts in registry-owned dependency order.
+    pub(crate) fn converter_functions(&self) -> impl Iterator<Item = &chain::CFunction> {
+        self.generation
+            .as_ref()
+            .expect("C generation plan is frozen after resolution")
+            .fragments()
+            .filter_map(|fragment| fragment.artifact())
+    }
 }
 
 /// A mangler over a single name component (Rust short name, base, or fn ident).

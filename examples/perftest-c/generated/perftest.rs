@@ -391,24 +391,6 @@ pub(crate) unsafe fn __cbg_in___str<'a>(
         }
     }
 }
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_bool(v: ::core::mem::MaybeUninit<bool>) -> bool {
-    ::core::ptr::read(v.as_ptr() as *const u8) != 0
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_f64(v: f64) -> f64 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_i32(v: i32) -> i32 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_i64(v: i64) -> i64 {
-    v
-}
-#[allow(non_snake_case, dead_code, unused_variables)]
-pub(crate) fn __cbg_in_str() {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __cbg_inmark_slice_Payload() {}
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -456,26 +438,12 @@ pub(crate) fn __cbg_out_chain_vec_Payload(
         __sequence_output
     }
 }
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_f64(v: f64) -> f64 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_i32(v: i32) -> i32 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_i64(v: i64) -> i64 {
-    v
-}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) unsafe fn __cbg_out_ref_Payload(
     v: &perftest_flat::Payload,
 ) -> *const payload_t {
     v as *const perftest_flat::Payload as *const payload_t
 }
-#[allow(non_snake_case, dead_code, unused_variables)]
-pub(crate) fn __cbg_out_unit(v: ()) {}
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_usize(v: usize) -> usize {
     v

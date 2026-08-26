@@ -669,6 +669,7 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "fn src_ty_of",
         "Complete(syn::ItemFn)",
         "CFunction::complete",
+        "compiled_fns",
     ] {
         assert!(
             !sources.contains(deleted),

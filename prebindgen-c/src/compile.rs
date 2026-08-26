@@ -299,6 +299,7 @@ pub(crate) enum CRepresentation {}
 impl Representation for CRepresentation {
     type Intermediate = TypeKey;
     type Step = CCall;
+    type ConverterArtifact = CFunction;
     type TerminalCodec = CCall;
     type ProductBridge = CCall;
     type OptionalBridge = CCall;
@@ -420,13 +421,18 @@ impl CFrag {
             self.value.failure(),
             Cleanup::None,
         );
-        FragmentPlan::new(
+        let plan = FragmentPlan::new(
             self.id.clone(),
             self.source.clone(),
             TypeKey::from_type(&self.destination),
             converter,
             self.yields.clone(),
-        )
+        );
+        if self.function.is_deferred_invoke() {
+            plan
+        } else {
+            plan.with_artifact(self.function.clone())
+        }
     }
 
     /// A multi-wire crossing whose exact ABI is carried by its frozen value.

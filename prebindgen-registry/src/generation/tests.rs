@@ -12,6 +12,7 @@ struct Fake;
 impl Representation for Fake {
     type Intermediate = &'static str;
     type Step = &'static str;
+    type ConverterArtifact = &'static str;
     type TerminalCodec = &'static str;
     type ProductBridge = &'static str;
     type OptionalBridge = &'static str;
@@ -168,7 +169,8 @@ fn freeze_prunes_unreached_fragments_and_orders_dependencies_first() {
             Cleanup::None,
         ),
         yield_of(&pair, Mode::Owned, Validity::SelfSufficient),
-    );
+    )
+    .with_artifact("pair converter");
     let site_plan = site(&model, &pair, None, 2);
     let site_id = site_plan.id().clone();
     let helper_id = ArtifactId::new("converter", "pair").unwrap();
@@ -177,18 +179,14 @@ fn freeze_prunes_unreached_fragments_and_orders_dependencies_first() {
     let mut builder = GenerationPlanBuilder::<Fake>::new();
     builder
         .fragment(pair_plan)
-        .fragment(atomic(
-            &model,
-            unused.clone(),
-            Failure::Infallible,
-            Mode::Owned,
-        ))
-        .fragment(atomic(
-            &model,
-            leaf.clone(),
-            Failure::Infallible,
-            Mode::Owned,
-        ))
+        .fragment(
+            atomic(&model, unused.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("unused converter"),
+        )
+        .fragment(
+            atomic(&model, leaf.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("leaf converter"),
+        )
         .site(site_plan)
         .artifact(artifact(
             "wrapper",
@@ -209,6 +207,11 @@ fn freeze_prunes_unreached_fragments_and_orders_dependencies_first() {
 
     let fragments: Vec<_> = plan.fragments().map(FragmentPlan::id).collect();
     assert_eq!(fragments, vec![&leaf, &pair]);
+    let converter_artifacts: Vec<_> = plan
+        .fragments()
+        .map(|fragment| *fragment.artifact().expect("reached converter artifact"))
+        .collect();
+    assert_eq!(converter_artifacts, ["leaf converter", "pair converter"]);
     assert!(plan.fragment(&unused).is_none());
     let artifacts: Vec<_> = plan.artifacts().map(ArtifactPlan::id).collect();
     assert_eq!(artifacts, vec![&helper_id, &wrapper_id]);
