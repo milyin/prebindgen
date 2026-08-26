@@ -6,7 +6,7 @@
 //! (a field has no line of its own), but the shape does not change with the
 //! level, so nothing has to copy a piece of provenance downward by hand.
 
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use prebindgen::SourceLocation;
 use quote::ToTokens;
@@ -52,14 +52,15 @@ use super::key::TypeKey;
 ///
 /// The crate-private `spell` operation produces tokens and nothing else, which is all
 /// generated Rust ever needed. The typed node is reachable only inside this crate,
-/// and the field itself is `pub(super)`. Derived `Debug` remains available for
-/// diagnostics; it is not a stable or structured syntax API.
+/// and the field itself is `pub(super)`. `Debug` deliberately prints only the
+/// location: formatting an origin must not become an ungated spelling or syntax-tree
+/// API.
 ///
 /// It was a public field returning a `syn` node to anyone who asked.
 /// Outside this crate, rendering requires an explicit
 /// [`RustEmitter`](crate::RustEmitter) implementation; no raw syntax accessor is
 /// public.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Origin<S> {
     /// The exact tokens this node was built from.
     ///
@@ -69,6 +70,14 @@ pub struct Origin<S> {
     pub(super) syntax: S,
     /// The captured item this node belongs to, shared with every sibling.
     pub location: Rc<SourceLocation>,
+}
+
+impl<S> fmt::Debug for Origin<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Origin")
+            .field("location", &self.location)
+            .finish_non_exhaustive()
+    }
 }
 
 impl<S> Origin<S> {
