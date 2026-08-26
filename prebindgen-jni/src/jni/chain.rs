@@ -201,8 +201,8 @@ impl JFunction {
 }
 
 impl RustFunction for JFunction {
-    fn operation_id(&self) -> Option<&OperationId> {
-        Some(match &self.0 {
+    fn operation_id(&self) -> &OperationId {
+        match &self.0 {
             JBody::Marker(operation) => operation,
             JBody::ValueCodec(plan) => &plan.operation,
             JBody::HandleCodec(plan) => &plan.operation_id,
@@ -217,7 +217,7 @@ impl RustFunction for JFunction {
             JBody::StructCodec(plan) => &plan.operation,
             JBody::SumCodec(plan) => &plan.operation,
             JBody::Invoke(plan) => plan.operation_id(),
-        })
+        }
     }
 
     fn should_emit(&self) -> bool {
@@ -1182,12 +1182,7 @@ impl JChild {
         emit: &Emit,
     ) -> TokenStream {
         assert_eq!(self.direction, Direction::Construct);
-        let converter = emit.operation_ident(
-            "jni",
-            self.call
-                .operation_id()
-                .expect("JNI child calls retain registry operation identity"),
-        );
+        let converter = emit.operation_ident("jni", self.call.operation_id());
         let value = match self.value_use {
             JValueUse::Direct => value,
             JValueUse::SharedRef => shared_ref(value),
@@ -1218,12 +1213,7 @@ impl JChild {
     /// Registry-composed converter bodies receive an `&mut JNIEnv` named
     /// `env`; exported wrappers own a mutable `JNIEnv` and pass `&mut env`.
     fn invoke_with_env(&self, env: TokenStream, value: TokenStream, emit: &Emit) -> TokenStream {
-        let converter = emit.operation_ident(
-            "jni",
-            self.call
-                .operation_id()
-                .expect("JNI child calls retain registry operation identity"),
-        );
+        let converter = emit.operation_ident("jni", self.call.operation_id());
         match self.direction {
             Direction::Construct => {
                 let value = match self.value_use {

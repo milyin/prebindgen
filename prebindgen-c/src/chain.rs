@@ -23,12 +23,7 @@ pub(crate) struct CCall(chain::Call);
 
 impl CCall {
     pub(crate) fn ident(&self, emit: &Emit) -> syn::Ident {
-        emit.operation_ident(
-            "c",
-            self.0
-                .operation_id()
-                .expect("every C converter call has registry operation identity"),
-        )
+        emit.operation_ident("c", self.0.operation_id())
     }
 
     pub(crate) fn fallible(&self) -> bool {
@@ -249,13 +244,7 @@ impl CFunction {
         &prebindgen_registry::OperationId,
         &prebindgen_registry::OperationId,
     ) {
-        (
-            &self.operation,
-            self.call
-                .0
-                .operation_id()
-                .expect("C converter calls are late-named operations"),
-        )
+        (&self.operation, self.call.0.operation_id())
     }
 
     #[cfg(test)]
@@ -330,8 +319,8 @@ impl CFunction {
 }
 
 impl RustFunction for CFunction {
-    fn operation_id(&self) -> Option<&prebindgen_registry::OperationId> {
-        Some(&self.operation)
+    fn operation_id(&self) -> &prebindgen_registry::OperationId {
+        &self.operation
     }
 
     fn render(&self, emit: &Emit) -> syn::ItemFn {

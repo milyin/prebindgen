@@ -66,7 +66,7 @@ impl Prebindgen for IdentityExt {
 
 #[derive(Clone)]
 struct LatePlan {
-    ident: syn::Ident,
+    operation: crate::generation::OperationId,
     reachable: Rc<Cell<bool>>,
 }
 
@@ -79,8 +79,8 @@ struct OperationPlan {
 }
 
 impl RustFunction for OperationPlan {
-    fn operation_id(&self) -> Option<&crate::generation::OperationId> {
-        Some(&self.operation)
+    fn operation_id(&self) -> &crate::generation::OperationId {
+        &self.operation
     }
 
     fn should_emit(&self) -> bool {
@@ -96,12 +96,16 @@ impl RustFunction for OperationPlan {
 }
 
 impl RustFunction for LatePlan {
+    fn operation_id(&self) -> &crate::generation::OperationId {
+        &self.operation
+    }
+
     fn should_emit(&self) -> bool {
         self.reachable.get()
     }
 
-    fn render(&self, _emit: &crate::Emit) -> syn::ItemFn {
-        let ident = &self.ident;
+    fn render(&self, emit: &crate::Emit) -> syn::ItemFn {
+        let ident = emit.operation_ident("test", &self.operation);
         syn::parse_quote!(
             fn #ident() {}
         )
@@ -112,6 +116,7 @@ struct LateExt {
     reachable: Rc<Cell<bool>>,
     activate: bool,
     call_converter: bool,
+    operation: crate::generation::OperationId,
 }
 
 impl Prebindgen for LateExt {
@@ -126,7 +131,8 @@ impl Prebindgen for LateExt {
         }
         if self.call_converter {
             let ident = &f.name;
-            quote::quote!(fn #ident() { late_converter(); })
+            let converter = emit.operation_ident("test", &self.operation);
+            quote::quote!(fn #ident() { #converter(); })
         } else {
             emit.verbatim_fn(f)
         }
@@ -173,13 +179,18 @@ fn per_item_planning_precedes_late_converter_filtering() {
             .scanned()
             .expect("scan");
     let reachable = Rc::new(Cell::new(false));
+    let operation = crate::generation::OperationId::shared(
+        crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
+        crate::recipe::Direction::Construct,
+    );
     let ext = LateExt {
         reachable: reachable.clone(),
         activate: true,
         call_converter: false,
+        operation: operation.clone(),
     };
     let plan = LatePlan {
-        ident: syn::parse_quote!(late_converter),
+        operation,
         reachable,
     };
     let dir = crate::test_util::unique_test_dir("write_late_plan");
@@ -188,8 +199,11 @@ fn per_item_planning_precedes_late_converter_filtering() {
     let path = write_rust(&registry, &ext, &[plan], dir.join("gen.rs")).expect("write_rust");
     let source = std::fs::read_to_string(path).expect("read generated file");
 
-    assert!(source.contains("fn late_converter()"), "{source}");
-    assert!(source.find("fn late_converter").unwrap() < source.find("fn a_fn").unwrap());
+    assert!(
+        source.contains("fn __test_in_convert_wire_to_test_late_converter_"),
+        "{source}"
+    );
+    assert!(source.find("fn __test_in_convert").unwrap() < source.find("fn a_fn").unwrap());
 }
 
 #[test]
@@ -205,13 +219,18 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
             .scanned()
             .expect("scan");
     let reachable = Rc::new(Cell::new(false));
+    let operation = crate::generation::OperationId::shared(
+        crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
+        crate::recipe::Direction::Construct,
+    );
     let ext = LateExt {
         reachable: reachable.clone(),
         activate: false,
         call_converter: true,
+        operation: operation.clone(),
     };
     let plan = LatePlan {
-        ident: syn::parse_quote!(late_converter),
+        operation: operation.clone(),
         reachable,
     };
     let dir = crate::test_util::unique_test_dir("write_missing_converter");
@@ -223,10 +242,10 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
 
     match err {
         WriteError::UnrenderedConverterCalls { calls } => {
-            assert_eq!(
-                calls,
-                vec![("a_fn".to_string(), "late_converter".to_string())]
-            );
+            let missing = crate::Emit::for_test()
+                .operation_ident("test", &operation)
+                .to_string();
+            assert_eq!(calls, vec![("a_fn".to_string(), missing)]);
         }
         other => panic!("unexpected writer error: {other}"),
     }
@@ -234,32 +253,6 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
         !path.exists(),
         "an invalid generated file must not reach the destination"
     );
-}
-
-#[test]
-fn dedup_and_sort() {
-    // Two crossings can compile the same conversion, and an adapter hands over
-    // whatever its compilation produced. One function per name reaches the
-    // file, in name order — a generated file that reordered between runs would
-    // show up as a diff in `examples/regen-check.sh`.
-    let handle: syn::ItemFn = syn::parse_quote!(
-        fn handle_to_u64_aaaa(v: i64) -> u64 {
-            v as u64
-        }
-    );
-    let sample: syn::ItemFn = syn::parse_quote!(
-        fn Ptr_to_Sample_bbbb(v: *const u8) -> Sample {
-            decode_sample(v)
-        }
-    );
-
-    let items = crate::write::dedup_by_name(vec![handle.clone(), sample.clone(), handle.clone()]);
-
-    assert_eq!(items.len(), 2, "the repeated conversion lands once");
-    // Sorted ASCII: "Ptr_to_Sample_bbbb" < "handle_to_u64_aaaa"
-    // (uppercase P < lowercase h).
-    assert_eq!(items[0].0.to_string(), "Ptr_to_Sample_bbbb");
-    assert_eq!(items[1].0.to_string(), "handle_to_u64_aaaa");
 }
 
 #[test]
@@ -383,7 +376,8 @@ fn write_rust_sorts_declared_items_by_ident() {
         .expect("clock drift")
         .as_nanos();
     let path = std::env::temp_dir().join(format!("prebindgen-write-rust-{unique}.rs"));
-    let written = write_rust(&reg, &IdentityExt, &[] as &[syn::ItemFn], &path).expect("write_rust");
+    let written =
+        write_rust(&reg, &IdentityExt, &[] as &[OperationPlan], &path).expect("write_rust");
     let content = std::fs::read_to_string(&written).expect("read generated file");
     let _ = std::fs::remove_file(&written);
 
@@ -503,7 +497,7 @@ fn guards_emit_ungated_and_in_stream_order() {
     let path = crate::write::write_rust(
         &registry,
         &ConstGatingExt,
-        &[] as &[syn::ItemFn],
+        &[] as &[OperationPlan],
         dir.join("gen.rs"),
     )
     .expect("write_rust");

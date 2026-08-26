@@ -11,11 +11,11 @@
 //!
 //! This module is `pub`, so **every `pub` item in it is public API of the
 //! crate**. [`RustFunction`] is the deliberately narrow late-rendering seam for
-//! out-of-crate adapters; a complete `syn::ItemFn` remains a valid plan for
-//! adapters migrating incrementally.
+//! out-of-crate adapters. Every plan carries registry-owned semantic identity;
+//! final Rust names are never used as planning identity.
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     path::{Path, PathBuf},
 };
 
@@ -89,13 +89,9 @@ impl std::error::Error for WriteError {}
 pub trait RustFunction {
     /// Registry-owned semantic identity of this operation.
     ///
-    /// Plans that return an identity are de-duplicated before rendering, so
-    /// sharing never depends on the Rust symbol selected by final emission.
-    /// `None` is the compatibility path for adapters that still retain a
-    /// preselected function name.
-    fn operation_id(&self) -> Option<&crate::generation::OperationId> {
-        None
-    }
+    /// Plans are de-duplicated before rendering, so sharing never depends on
+    /// the Rust symbol selected by final emission.
+    fn operation_id(&self) -> &crate::generation::OperationId;
 
     /// Whether this plan is reachable from the generated adapter surface.
     /// Validation-only plans may return false and remain available for diagnostics.
@@ -107,26 +103,15 @@ pub trait RustFunction {
     fn render(&self, emit: &crate::Emit) -> syn::ItemFn;
 }
 
-impl RustFunction for syn::ItemFn {
-    fn render(&self, _emit: &crate::Emit) -> syn::ItemFn {
-        self.clone()
-    }
-}
-
 /// Emit a resolved registry whose private converters are rendered at this
 /// final writing boundary.
 ///
 /// `conversions` is what the adapter's compilation produced. Registry-owned
 /// operations are de-duplicated by [`crate::generation::OperationId`] before
 /// rendering; if separate fragments retain separate reachability state, a
-/// reachable representative wins. Compatibility plans without semantic
-/// identity are still sorted and de-duplicated by their preselected function
-/// name after rendering. Handing the plans over directly is what frees an
+/// reachable representative wins. Handing the plans over directly is what frees an
 /// adapter to emit a conversion the converter table could not hold — several
 /// functions for one crossing, or one occupying more than a single wire value.
-///
-/// Already-rendered [`syn::ItemFn`] values implement [`RustFunction`], so
-/// adapters can migrate to semantic plans incrementally without a second API.
 ///
 /// `out_path` may be relative (resolved against `OUT_DIR` by prebindgen) or
 /// absolute. Returns the path actually written.
@@ -221,10 +206,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     let mut operation_positions: HashMap<crate::generation::OperationId, usize> = HashMap::new();
     let mut unique_conversions: Vec<&C> = Vec::new();
     for plan in conversions {
-        let Some(operation) = plan.operation_id() else {
-            unique_conversions.push(plan);
-            continue;
-        };
+        let operation = plan.operation_id();
         match operation_positions.get(operation).copied() {
             Some(position) if !unique_conversions[position].should_emit() && plan.should_emit() => {
                 unique_conversions[position] = plan;
@@ -244,13 +226,10 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
         .iter()
         .map(|(_, function)| function.sig.ident.to_string())
         .collect();
-    for (_, item_fn) in dedup_by_name(
-        conversions
-            .into_iter()
-            .filter_map(|(emit, function)| emit.then_some(function))
-            .collect(),
-    ) {
-        items.push(syn::Item::Fn(item_fn));
+    for (emit, item_fn) in conversions {
+        if emit {
+            items.push(syn::Item::Fn(item_fn));
+        }
     }
     items.extend(body_items);
 
@@ -373,14 +352,3 @@ impl syn::visit_mut::VisitMut for ConverterCallValidator<'_> {
 
 #[cfg(test)]
 mod tests;
-
-/// Sort by name and keep the first of each: one function per name reaches the
-/// file however many crossings produced it.
-fn dedup_by_name(functions: Vec<syn::ItemFn>) -> Vec<(syn::Ident, syn::ItemFn)> {
-    let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
-    for function in functions {
-        let name = function.sig.ident.clone();
-        by_name.entry(name.to_string()).or_insert((name, function));
-    }
-    by_name.into_values().collect()
-}
