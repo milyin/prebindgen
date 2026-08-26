@@ -174,8 +174,7 @@ fn custom_conversion_stays_unrendered_until_final_write() {
     assert_eq!(
         generated
             .gen
-            .compiled_fns
-            .iter()
+            .converter_functions()
             .filter(|function| function.is_custom())
             .count(),
         2,
@@ -252,12 +251,11 @@ fn output_terminals_stay_unrendered_until_final_write() {
     assert_eq!(
         generated
             .gen
-            .compiled_fns
-            .iter()
+            .converter_functions()
             .filter(|function| function.is_output_terminal())
             .count(),
-        7,
-        "every whole-value output operation must retain a semantic plan before final writing"
+        6,
+        "every reached whole-value output operation must retain a semantic plan before final writing; unit has no C value site"
     );
 }
 
@@ -302,12 +300,11 @@ fn input_terminals_stay_unrendered_until_final_write() {
     assert_eq!(
         generated
             .gen
-            .compiled_fns
-            .iter()
+            .converter_functions()
             .filter(|function| function.is_input_terminal())
             .count(),
-        7,
-        "every whole-value input operation must retain a semantic plan before final writing"
+        6,
+        "every reached whole-value input operation must retain a semantic plan before final writing; &str uses the slice plan without reaching an element terminal"
     );
 }
 
@@ -341,8 +338,7 @@ fn tagged_union_payloads_stay_unrendered_until_final_write() {
             .expect("resolve");
         generated
             .gen
-            .compiled_fns
-            .iter()
+            .converter_functions()
             .filter(|function| function.is_payload())
             .count()
     })
@@ -372,7 +368,7 @@ fn specialized_field_terminals_stay_unrendered_until_final_write() {
         .build_with(registry)
         .expect("resolve");
 
-    let functions = &generated.gen.compiled_fns;
+    let functions: Vec<_> = generated.gen.converter_functions().collect();
     assert_eq!(
         functions
             .iter()
@@ -432,8 +428,7 @@ fn borrow_terminals_stay_unrendered_until_final_write() {
         assert_eq!(
             generated
                 .gen
-                .compiled_fns
-                .iter()
+                .converter_functions()
                 .filter(|function| function.borrow_operation() == Some(&operation))
                 .count(),
             1,
@@ -465,8 +460,7 @@ fn slice_input_terminals_stay_unrendered_until_final_write() {
 
     let mut operations: Vec<(TypeKey, bool)> = generated
         .gen
-        .compiled_fns
-        .iter()
+        .converter_functions()
         .filter_map(|function| function.slice_input_operation())
         .map(|(element, reinterpret)| (element.key(), reinterpret))
         .collect();
@@ -507,20 +501,22 @@ fn multi_wire_markers_stay_typed_until_final_write() {
         .build_with(registry)
         .expect("resolve");
 
-    for operation in [
-        MarkerOperation::Optional,
-        MarkerOperation::Sequence,
-        MarkerOperation::Result,
-    ] {
+    for operation in [MarkerOperation::Optional, MarkerOperation::Sequence] {
         assert!(
             generated
                 .gen
-                .compiled_fns
-                .iter()
+                .converter_functions()
                 .any(|function| function.marker_operation() == Some(&operation)),
             "{operation:?} must retain its own semantic marker before final writing"
         );
     }
+    assert!(
+        !generated
+            .gen
+            .converter_functions()
+            .any(|function| function.marker_operation() == Some(&MarkerOperation::Result)),
+        "Result is split into return/error sites and its planning-only whole-value marker must be pruned"
+    );
 }
 
 /// An adapter with no declarations writes an empty (whitespace-only) file.
