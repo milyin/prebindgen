@@ -570,7 +570,7 @@
 <a href=#570 id=570 data-nosnippet>570</a>        fragment.rust.mark_reachable();
 <a href=#571 id=571 data-nosnippet>571</a>        <span class="kw">let </span>rendered = fragment
 <a href=#572 id=572 data-nosnippet>572</a>            .rust
-<a href=#573 id=573 data-nosnippet>573</a>            .render(<span class="kw-2">&amp;</span>prebindgen_registry::Emit::for_registry_test(
+<a href=#573 id=573 data-nosnippet>573</a>            .render(<span class="kw-2">&amp;</span>prebindgen_registry::RustWriter::for_registry_test(
 <a href=#574 id=574 data-nosnippet>574</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.registry,
 <a href=#575 id=575 data-nosnippet>575</a>            ));
 <a href=#576 id=576 data-nosnippet>576</a>        <span class="prelude-val">Ok</span>((
@@ -870,7 +870,7 @@
 <a href=#870 id=870 data-nosnippet>870</a>            .fragment(<span class="kw-2">&amp;</span>key, Direction::Construct)<span class="question-mark">?</span>;
 <a href=#871 id=871 data-nosnippet>871</a>        <span class="kw">let </span>rendered = prebindgen_registry::write::RustFunction::render(
 <a href=#872 id=872 data-nosnippet>872</a>            <span class="kw-2">&amp;</span>fragment.rust,
-<a href=#873 id=873 data-nosnippet>873</a>            <span class="kw-2">&amp;</span>prebindgen_registry::Emit::for_test(),
+<a href=#873 id=873 data-nosnippet>873</a>            <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter::for_test(),
 <a href=#874 id=874 data-nosnippet>874</a>        );
 <a href=#875 id=875 data-nosnippet>875</a>        <span class="prelude-val">Some</span>((rendered.sig.ident.to_string(), fragment.rust.is_invoke()))
 <a href=#876 id=876 data-nosnippet>876</a>    }

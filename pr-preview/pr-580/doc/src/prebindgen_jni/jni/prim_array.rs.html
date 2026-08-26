@@ -136,7 +136,7 @@
 <a href=#136 id=136 data-nosnippet>136</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>input_body(
 <a href=#137 id=137 data-nosnippet>137</a>    ty: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
 <a href=#138 id=138 data-nosnippet>138</a>    spec: <span class="kw-2">&amp;</span>PrimArray,
-<a href=#139 id=139 data-nosnippet>139</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#139 id=139 data-nosnippet>139</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#140 id=140 data-nosnippet>140</a>) -&gt; syn::Expr {
 <a href=#141 id=141 data-nosnippet>141</a>    <span class="kw">let </span>key = ty.key();
 <a href=#142 id=142 data-nosnippet>142</a>    <span class="comment">// The element spelled from the model's own `Array`, so the local's type

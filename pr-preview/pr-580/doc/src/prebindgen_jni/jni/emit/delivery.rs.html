@@ -38,7 +38,7 @@
 <a href=#38 id=38 data-nosnippet>38</a>    output: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::fn_plan::UnfoldOutputPlan,
 <a href=#39 id=39 data-nosnippet>39</a>    call_expr: <span class="kw-2">&amp;</span>TokenStream,
 <a href=#40 id=40 data-nosnippet>40</a>    on_err: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#41 id=41 data-nosnippet>41</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#41 id=41 data-nosnippet>41</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#42 id=42 data-nosnippet>42</a>) -&gt; TokenStream {
 <a href=#43 id=43 data-nosnippet>43</a>    <span class="kw">use </span>prebindgen_registry::unfold::UnfoldShape;
 <a href=#44 id=44 data-nosnippet>44</a>    <span class="kw">let </span>context = LiveDeliveryContext::new(ext, registry);
@@ -551,7 +551,7 @@
 <a href=#551 id=551 data-nosnippet>551</a><span class="doccomment">/// Facts the leaf renderer may consult after a delivery operation has been
 <a href=#552 id=552 data-nosnippet>552</a>/// selected. The live implementation serves ordinary wrapper rendering; an
 <a href=#553 id=553 data-nosnippet>553</a>/// Invoke plan freezes the same answers so callback planning does not retain a
-<a href=#554 id=554 data-nosnippet>554</a>/// registry or obtain [`prebindgen_registry::Emit`].
+<a href=#554 id=554 data-nosnippet>554</a>/// registry or obtain [`prebindgen_registry::RustWriter`].
 <a href=#555 id=555 data-nosnippet>555</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">trait </span>DeliveryContext {
 <a href=#556 id=556 data-nosnippet>556</a>    <span class="kw">fn </span>qualify(<span class="kw-2">&amp;</span><span class="self">self</span>, ident: <span class="kw-2">&amp;</span>syn::Ident) -&gt; syn::Path;
 <a href=#557 id=557 data-nosnippet>557</a>    <span class="kw">fn </span>leaf_is_prim(<span class="kw-2">&amp;</span><span class="self">self</span>, leaf: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire) -&gt; bool;
@@ -1101,7 +1101,7 @@
 <a href=#1101 id=1101 data-nosnippet>1101</a>    obj_idents: <span class="kw-2">&amp;</span>[syn::Ident],
 <a href=#1102 id=1102 data-nosnippet>1102</a>    value: <span class="kw-2">&amp;</span>TokenStream,
 <a href=#1103 id=1103 data-nosnippet>1103</a>    fail: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(TokenStream) -&gt; TokenStream,
-<a href=#1104 id=1104 data-nosnippet>1104</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#1104 id=1104 data-nosnippet>1104</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#1105 id=1105 data-nosnippet>1105</a>) -&gt; (TokenStream, Vec&lt;TokenStream&gt;, <span class="prelude-ty">Option</span>&lt;syn::Ident&gt;) {
 <a href=#1106 id=1106 data-nosnippet>1106</a>    <span class="kw">let </span>Delivered {
 <a href=#1107 id=1107 data-nosnippet>1107</a>        wires,

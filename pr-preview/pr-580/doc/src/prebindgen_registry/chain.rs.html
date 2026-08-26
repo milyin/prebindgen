@@ -11,7 +11,7 @@
 <a href=#11 id=11 data-nosnippet>11</a>    flat::{Alternative, TypeRef},
 <a href=#12 id=12 data-nosnippet>12</a>    generation::OperationId,
 <a href=#13 id=13 data-nosnippet>13</a>    recipe::{Direction, Mode},
-<a href=#14 id=14 data-nosnippet>14</a>    Emit,
+<a href=#14 id=14 data-nosnippet>14</a>    RustWriter,
 <a href=#15 id=15 data-nosnippet>15</a>};
 <a href=#16 id=16 data-nosnippet>16</a>
 <a href=#17 id=17 data-nosnippet>17</a><span class="doccomment">/// The callable contract of one generated converter.
@@ -54,7 +54,7 @@
 <a href=#54 id=54 data-nosnippet>54</a>/// source-side type as a [`TypeRef`] and adapter-owned wrapper policy as data.
 <a href=#55 id=55 data-nosnippet>55</a></span><span class="kw">pub trait </span>Source: Clone {
 <a href=#56 id=56 data-nosnippet>56</a>    <span class="doccomment">/// Spell the exact source type in its final generated context.
-<a href=#57 id=57 data-nosnippet>57</a>    </span><span class="kw">fn </span>spell(<span class="kw-2">&amp;</span><span class="self">self</span>, source: <span class="kw-2">&amp;</span>TypeRef, emit: <span class="kw-2">&amp;</span>Emit) -&gt; TokenStream;
+<a href=#57 id=57 data-nosnippet>57</a>    </span><span class="kw">fn </span>spell(<span class="kw-2">&amp;</span><span class="self">self</span>, source: <span class="kw-2">&amp;</span>TypeRef, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; TokenStream;
 <a href=#58 id=58 data-nosnippet>58</a>
 <a href=#59 id=59 data-nosnippet>59</a>    <span class="doccomment">/// Turn a canonical shape value into the exact source spelling.
 <a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, canonical: TokenStream) -&gt; TokenStream {
@@ -85,10 +85,10 @@
 <a href=#85 id=85 data-nosnippet>85</a>    </span><span class="kw">fn </span>call(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Call;
 <a href=#86 id=86 data-nosnippet>86</a>
 <a href=#87 id=87 data-nosnippet>87</a>    <span class="doccomment">/// Invoke this child chain for one intermediate/source value.
-<a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">fn </span>invoke(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream, emit: <span class="kw-2">&amp;</span>Emit) -&gt; TokenStream;
+<a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">fn </span>invoke(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; TokenStream;
 <a href=#89 id=89 data-nosnippet>89</a>}
 <a href=#90 id=90 data-nosnippet>90</a>
-<a href=#91 id=91 data-nosnippet>91</a><span class="kw">fn </span>child_value&lt;C: Child&gt;(child: <span class="kw-2">&amp;</span>C, value: TokenStream, emit: <span class="kw-2">&amp;</span>Emit) -&gt; TokenStream {
+<a href=#91 id=91 data-nosnippet>91</a><span class="kw">fn </span>child_value&lt;C: Child&gt;(child: <span class="kw-2">&amp;</span>C, value: TokenStream, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; TokenStream {
 <a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">let </span>call = child.invoke(value, emit);
 <a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">if </span>child.call().fallible() {
 <a href=#94 id=94 data-nosnippet>94</a>        <span class="macro">quote::quote!</span>(#call<span class="question-mark">?</span>)
@@ -308,13 +308,13 @@
 <a href=#308 id=308 data-nosnippet>308</a>    }
 <a href=#309 id=309 data-nosnippet>309</a>
 <a href=#310 id=310 data-nosnippet>310</a>    <span class="doccomment">/// Read one arm's Product intermediate from an inbound value.
-<a href=#311 id=311 data-nosnippet>311</a>    </span><span class="kw">fn </span>arm(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>Emit, value: TokenStream, index: usize) -&gt; TokenStream;
+<a href=#311 id=311 data-nosnippet>311</a>    </span><span class="kw">fn </span>arm(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>RustWriter, value: TokenStream, index: usize) -&gt; TokenStream;
 <a href=#312 id=312 data-nosnippet>312</a>
 <a href=#313 id=313 data-nosnippet>313</a>    <span class="doccomment">/// Construct the outbound Choice intermediate with `active` selected.
 <a href=#314 id=314 data-nosnippet>314</a>    ///
 <a href=#315 id=315 data-nosnippet>315</a>    /// Inactive arm storage is representation policy. Implementations must not
 <a href=#316 id=316 data-nosnippet>316</a>    /// manufacture source or child-intermediate values merely to fill it.
-<a href=#317 id=317 data-nosnippet>317</a>    </span><span class="kw">fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>Emit, active: usize, value: TokenStream) -&gt; TokenStream;
+<a href=#317 id=317 data-nosnippet>317</a>    </span><span class="kw">fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>RustWriter, active: usize, value: TokenStream) -&gt; TokenStream;
 <a href=#318 id=318 data-nosnippet>318</a>
 <a href=#319 id=319 data-nosnippet>319</a>    <span class="doccomment">/// Finish the whole outbound representation after its active arm is built.
 <a href=#320 id=320 data-nosnippet>320</a>    </span><span class="kw">fn </span>finish(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream) -&gt; TokenStream {
@@ -355,12 +355,12 @@
 <a href=#355 id=355 data-nosnippet>355</a>        <span class="macro">quote::quote!</span>((#value).<span class="number">0</span>)
 <a href=#356 id=356 data-nosnippet>356</a>    }
 <a href=#357 id=357 data-nosnippet>357</a>
-<a href=#358 id=358 data-nosnippet>358</a>    <span class="kw">fn </span>arm(<span class="kw-2">&amp;</span><span class="self">self</span>, _emit: <span class="kw-2">&amp;</span>Emit, value: TokenStream, index: usize) -&gt; TokenStream {
+<a href=#358 id=358 data-nosnippet>358</a>    <span class="kw">fn </span>arm(<span class="kw-2">&amp;</span><span class="self">self</span>, _emit: <span class="kw-2">&amp;</span>RustWriter, value: TokenStream, index: usize) -&gt; TokenStream {
 <a href=#359 id=359 data-nosnippet>359</a>        <span class="kw">let </span>index = syn::Index::from(index + <span class="number">1</span>);
 <a href=#360 id=360 data-nosnippet>360</a>        <span class="macro">quote::quote!</span>((#value).#index)
 <a href=#361 id=361 data-nosnippet>361</a>    }
 <a href=#362 id=362 data-nosnippet>362</a>
-<a href=#363 id=363 data-nosnippet>363</a>    <span class="kw">fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, _emit: <span class="kw-2">&amp;</span>Emit, active: usize, value: TokenStream) -&gt; TokenStream {
+<a href=#363 id=363 data-nosnippet>363</a>    <span class="kw">fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, _emit: <span class="kw-2">&amp;</span>RustWriter, active: usize, value: TokenStream) -&gt; TokenStream {
 <a href=#364 id=364 data-nosnippet>364</a>        <span class="kw">let </span>tag = <span class="kw-2">&amp;</span><span class="self">self</span>.tags[active];
 <a href=#365 id=365 data-nosnippet>365</a>        <span class="kw">let </span>arms = <span class="self">self</span>.inactive.iter().enumerate().map(|(index, inactive)| {
 <a href=#366 id=366 data-nosnippet>366</a>            <span class="kw">if </span>index == active {
@@ -422,7 +422,7 @@
 <a href=#422 id=422 data-nosnippet>422</a>/// hands the adapter the resulting local identifier.
 <a href=#423 id=423 data-nosnippet>423</a></span><span class="kw">pub trait </span>InvokePart: Clone {
 <a href=#424 id=424 data-nosnippet>424</a>    <span class="doccomment">/// Render target-side delivery for one already-bound source argument.
-<a href=#425 id=425 data-nosnippet>425</a>    </span><span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>syn::Ident, index: usize, emit: <span class="kw-2">&amp;</span>Emit) -&gt; RenderedInvokePart;
+<a href=#425 id=425 data-nosnippet>425</a>    </span><span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>syn::Ident, index: usize, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; RenderedInvokePart;
 <a href=#426 id=426 data-nosnippet>426</a>}
 <a href=#427 id=427 data-nosnippet>427</a>
 <a href=#428 id=428 data-nosnippet>428</a><span class="doccomment">/// Adapter-selected callable and invocation protocol for one [`Invoke`] shape.
@@ -505,7 +505,7 @@
 <a href=#505 id=505 data-nosnippet>505</a><span class="doccomment">/// A shape chain whose recursive source-value walk is owned by the registry.
 <a href=#506 id=506 data-nosnippet>506</a></span><span class="kw">pub trait </span>Chain {
 <a href=#507 id=507 data-nosnippet>507</a>    <span class="doccomment">/// Render the already-planned chain at the final emission boundary.
-<a href=#508 id=508 data-nosnippet>508</a>    </span><span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>Emit) -&gt; Rendered;
+<a href=#508 id=508 data-nosnippet>508</a>    </span><span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; Rendered;
 <a href=#509 id=509 data-nosnippet>509</a>}
 <a href=#510 id=510 data-nosnippet>510</a>
 <a href=#511 id=511 data-nosnippet>511</a><span class="kw">impl</span>&lt;S, B, C&gt; Chain <span class="kw">for </span>Product&lt;S, B, C&gt;
@@ -514,7 +514,7 @@
 <a href=#514 id=514 data-nosnippet>514</a>    B: ProductBridge,
 <a href=#515 id=515 data-nosnippet>515</a>    C: Child,
 <a href=#516 id=516 data-nosnippet>516</a>{
-<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>Emit) -&gt; Rendered {
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; Rendered {
 <a href=#518 id=518 data-nosnippet>518</a>        <span class="kw">let </span>source = <span class="self">self</span>.source_policy.spell(<span class="kw-2">&amp;</span><span class="self">self</span>.source, emit);
 <a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>intermediate = <span class="self">self</span>.bridge.intermediate();
 <a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">let </span>fallible = <span class="self">self</span>.parts.iter().any(|part| part.child.call().fallible());
@@ -579,7 +579,7 @@
 <a href=#579 id=579 data-nosnippet>579</a>    B: OptionalBridge,
 <a href=#580 id=580 data-nosnippet>580</a>    C: Child,
 <a href=#581 id=581 data-nosnippet>581</a>{
-<a href=#582 id=582 data-nosnippet>582</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>Emit) -&gt; Rendered {
+<a href=#582 id=582 data-nosnippet>582</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; Rendered {
 <a href=#583 id=583 data-nosnippet>583</a>        <span class="kw">let </span>source = <span class="self">self</span>.source_policy.spell(<span class="kw-2">&amp;</span><span class="self">self</span>.source, emit);
 <a href=#584 id=584 data-nosnippet>584</a>        <span class="kw">let </span>intermediate = <span class="self">self</span>.bridge.intermediate();
 <a href=#585 id=585 data-nosnippet>585</a>        <span class="kw">let </span>fallible = <span class="self">self</span>.child.call().fallible();
@@ -628,7 +628,7 @@
 <a href=#628 id=628 data-nosnippet>628</a>    B: SequenceBridge,
 <a href=#629 id=629 data-nosnippet>629</a>    C: Child,
 <a href=#630 id=630 data-nosnippet>630</a>{
-<a href=#631 id=631 data-nosnippet>631</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>Emit) -&gt; Rendered {
+<a href=#631 id=631 data-nosnippet>631</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; Rendered {
 <a href=#632 id=632 data-nosnippet>632</a>        <span class="kw">let </span>source = <span class="self">self</span>.source_policy.spell(<span class="kw-2">&amp;</span><span class="self">self</span>.source, emit);
 <a href=#633 id=633 data-nosnippet>633</a>        <span class="kw">let </span>element = <span class="self">self</span>.source_policy.spell(<span class="kw-2">&amp;</span><span class="self">self</span>.element, emit);
 <a href=#634 id=634 data-nosnippet>634</a>        <span class="kw">let </span>intermediate = <span class="self">self</span>.bridge.intermediate();
@@ -683,7 +683,7 @@
 <a href=#683 id=683 data-nosnippet>683</a>    P: ProductBridge,
 <a href=#684 id=684 data-nosnippet>684</a>    C: Child,
 <a href=#685 id=685 data-nosnippet>685</a>{
-<a href=#686 id=686 data-nosnippet>686</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>Emit) -&gt; Rendered {
+<a href=#686 id=686 data-nosnippet>686</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; Rendered {
 <a href=#687 id=687 data-nosnippet>687</a>        <span class="kw">let </span>source = <span class="self">self</span>.source_policy.spell(<span class="kw-2">&amp;</span><span class="self">self</span>.source, emit);
 <a href=#688 id=688 data-nosnippet>688</a>        <span class="kw">let </span>intermediate = <span class="self">self</span>.bridge.intermediate();
 <a href=#689 id=689 data-nosnippet>689</a>        <span class="kw">let </span>child_fallible = <span class="self">self
@@ -825,7 +825,7 @@
 <a href=#825 id=825 data-nosnippet>825</a>    B: InvokeBridge,
 <a href=#826 id=826 data-nosnippet>826</a>    P: InvokePart,
 <a href=#827 id=827 data-nosnippet>827</a>{
-<a href=#828 id=828 data-nosnippet>828</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>Emit) -&gt; Rendered {
+<a href=#828 id=828 data-nosnippet>828</a>    <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; Rendered {
 <a href=#829 id=829 data-nosnippet>829</a>        <span class="macro">assert_eq!</span>(
 <a href=#830 id=830 data-nosnippet>830</a>            <span class="self">self</span>.arguments.len(),
 <a href=#831 id=831 data-nosnippet>831</a>            <span class="self">self</span>.parts.len(),
@@ -917,7 +917,7 @@
 <a href=#917 id=917 data-nosnippet>917</a>    }
 <a href=#918 id=918 data-nosnippet>918</a>
 <a href=#919 id=919 data-nosnippet>919</a>    <span class="kw">impl </span>Source <span class="kw">for </span>TestSource {
-<a href=#920 id=920 data-nosnippet>920</a>        <span class="kw">fn </span>spell(<span class="kw-2">&amp;</span><span class="self">self</span>, source: <span class="kw-2">&amp;</span>TypeRef, emit: <span class="kw-2">&amp;</span>Emit) -&gt; TokenStream {
+<a href=#920 id=920 data-nosnippet>920</a>        <span class="kw">fn </span>spell(<span class="kw-2">&amp;</span><span class="self">self</span>, source: <span class="kw-2">&amp;</span>TypeRef, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; TokenStream {
 <a href=#921 id=921 data-nosnippet>921</a>            <span class="self">self</span>.spells.set(<span class="self">self</span>.spells.get() + <span class="number">1</span>);
 <a href=#922 id=922 data-nosnippet>922</a>            emit.emit_source_type(source)
 <a href=#923 id=923 data-nosnippet>923</a>        }
@@ -941,7 +941,7 @@
 <a href=#941 id=941 data-nosnippet>941</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
 <a href=#942 id=942 data-nosnippet>942</a>        </span>}
 <a href=#943 id=943 data-nosnippet>943</a>
-<a href=#944 id=944 data-nosnippet>944</a>        <span class="kw">fn </span>invoke(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream, emit: <span class="kw-2">&amp;</span>Emit) -&gt; TokenStream {
+<a href=#944 id=944 data-nosnippet>944</a>        <span class="kw">fn </span>invoke(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; TokenStream {
 <a href=#945 id=945 data-nosnippet>945</a>            <span class="kw">let </span>ident = emit.operation_ident(<span class="string">"test"</span>, <span class="self">self</span>.<span class="number">0</span>.operation_id());
 <a href=#946 id=946 data-nosnippet>946</a>            <span class="macro">quote!</span>(#ident(#value))
 <a href=#947 id=947 data-nosnippet>947</a>        }
@@ -986,7 +986,7 @@
 <a href=#986 id=986 data-nosnippet>986</a>        };
 <a href=#987 id=987 data-nosnippet>987</a>
 <a href=#988 id=988 data-nosnippet>988</a>        <span class="macro">assert_eq!</span>(spells.get(), <span class="number">0</span>, <span class="string">"planning must not spell the TypeRef"</span>);
-<a href=#989 id=989 data-nosnippet>989</a>        <span class="kw">let </span>rendered = plan.render(<span class="kw-2">&amp;</span>Emit::for_test());
+<a href=#989 id=989 data-nosnippet>989</a>        <span class="kw">let </span>rendered = plan.render(<span class="kw-2">&amp;</span>RustWriter::for_test());
 <a href=#990 id=990 data-nosnippet>990</a>        <span class="macro">assert_eq!</span>(spells.get(), <span class="number">1</span>);
 <a href=#991 id=991 data-nosnippet>991</a>        <span class="macro">assert_eq!</span>(
 <a href=#992 id=992 data-nosnippet>992</a>            rendered.source.to_string(),
@@ -1054,7 +1054,7 @@
 <a href=#1054 id=1054 data-nosnippet>1054</a>            };
 <a href=#1055 id=1055 data-nosnippet>1055</a>
 <a href=#1056 id=1056 data-nosnippet>1056</a>            <span class="macro">assert_eq!</span>(spells.get(), <span class="number">0</span>);
-<a href=#1057 id=1057 data-nosnippet>1057</a>            <span class="kw">let </span>rendered = plan.render(<span class="kw-2">&amp;</span>Emit::for_test());
+<a href=#1057 id=1057 data-nosnippet>1057</a>            <span class="kw">let </span>rendered = plan.render(<span class="kw-2">&amp;</span>RustWriter::for_test());
 <a href=#1058 id=1058 data-nosnippet>1058</a>            <span class="macro">assert_eq!</span>(spells.get(), <span class="number">2</span>);
 <a href=#1059 id=1059 data-nosnippet>1059</a>            <span class="kw">let </span>body = rendered.body.to_token_stream().to_string();
 <a href=#1060 id=1060 data-nosnippet>1060</a>            <span class="kw">match </span>direction {
@@ -1133,7 +1133,7 @@
 <a href=#1133 id=1133 data-nosnippet>1133</a>            <span class="kw">let </span>plan = choice_plan(direction, spells.clone());
 <a href=#1134 id=1134 data-nosnippet>1134</a>
 <a href=#1135 id=1135 data-nosnippet>1135</a>            <span class="macro">assert_eq!</span>(spells.get(), <span class="number">0</span>, <span class="string">"planning must not spell the TypeRef"</span>);
-<a href=#1136 id=1136 data-nosnippet>1136</a>            <span class="kw">let </span>rendered = plan.render(<span class="kw-2">&amp;</span>Emit::for_test());
+<a href=#1136 id=1136 data-nosnippet>1136</a>            <span class="kw">let </span>rendered = plan.render(<span class="kw-2">&amp;</span>RustWriter::for_test());
 <a href=#1137 id=1137 data-nosnippet>1137</a>            <span class="macro">assert_eq!</span>(spells.get(), <span class="number">2</span>);
 <a href=#1138 id=1138 data-nosnippet>1138</a>            <span class="kw">let </span>body = rendered.body.to_token_stream().to_string();
 <a href=#1139 id=1139 data-nosnippet>1139</a>            <span class="kw">match </span>direction {
@@ -1170,76 +1170,81 @@
 <a href=#1170 id=1170 data-nosnippet>1170</a>    </span><span class="kw">struct </span>TestInvokePart(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str);
 <a href=#1171 id=1171 data-nosnippet>1171</a>
 <a href=#1172 id=1172 data-nosnippet>1172</a>    <span class="kw">impl </span>InvokePart <span class="kw">for </span>TestInvokePart {
-<a href=#1173 id=1173 data-nosnippet>1173</a>        <span class="kw">fn </span>render(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>syn::Ident, _index: usize, _emit: <span class="kw-2">&amp;</span>Emit) -&gt; RenderedInvokePart {
-<a href=#1174 id=1174 data-nosnippet>1174</a>            <span class="kw">let </span>prepare = syn::Ident::new(
-<a href=#1175 id=1175 data-nosnippet>1175</a>                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"prepare_{}"</span>, <span class="self">self</span>.<span class="number">0</span>),
-<a href=#1176 id=1176 data-nosnippet>1176</a>                proc_macro2::Span::call_site(),
-<a href=#1177 id=1177 data-nosnippet>1177</a>            );
-<a href=#1178 id=1178 data-nosnippet>1178</a>            <span class="kw">let </span>cleanup = syn::Ident::new(
-<a href=#1179 id=1179 data-nosnippet>1179</a>                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"cleanup_{}"</span>, <span class="self">self</span>.<span class="number">0</span>),
-<a href=#1180 id=1180 data-nosnippet>1180</a>                proc_macro2::Span::call_site(),
-<a href=#1181 id=1181 data-nosnippet>1181</a>            );
-<a href=#1182 id=1182 data-nosnippet>1182</a>            RenderedInvokePart {
-<a href=#1183 id=1183 data-nosnippet>1183</a>                prepare: <span class="macro">quote!</span>(<span class="kw">let </span>#prepare = deliver(#value);),
-<a href=#1184 id=1184 data-nosnippet>1184</a>                arguments: <span class="macro">vec!</span>[<span class="macro">quote!</span>(#prepare)],
-<a href=#1185 id=1185 data-nosnippet>1185</a>                cleanup: <span class="macro">quote!</span>(#cleanup();),
-<a href=#1186 id=1186 data-nosnippet>1186</a>            }
-<a href=#1187 id=1187 data-nosnippet>1187</a>        }
-<a href=#1188 id=1188 data-nosnippet>1188</a>    }
-<a href=#1189 id=1189 data-nosnippet>1189</a>
-<a href=#1190 id=1190 data-nosnippet>1190</a>    <span class="attr">#[derive(Clone)]
-<a href=#1191 id=1191 data-nosnippet>1191</a>    </span><span class="kw">struct </span>TestInvoke;
-<a href=#1192 id=1192 data-nosnippet>1192</a>
-<a href=#1193 id=1193 data-nosnippet>1193</a>    <span class="kw">impl </span>InvokeBridge <span class="kw">for </span>TestInvoke {
-<a href=#1194 id=1194 data-nosnippet>1194</a>        <span class="kw">fn </span>intermediate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; syn::Type {
-<a href=#1195 id=1195 data-nosnippet>1195</a>            <span class="macro">syn::parse_quote!</span>(Callable)
-<a href=#1196 id=1196 data-nosnippet>1196</a>        }
+<a href=#1173 id=1173 data-nosnippet>1173</a>        <span class="kw">fn </span>render(
+<a href=#1174 id=1174 data-nosnippet>1174</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1175 id=1175 data-nosnippet>1175</a>            value: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#1176 id=1176 data-nosnippet>1176</a>            _index: usize,
+<a href=#1177 id=1177 data-nosnippet>1177</a>            _emit: <span class="kw-2">&amp;</span>RustWriter,
+<a href=#1178 id=1178 data-nosnippet>1178</a>        ) -&gt; RenderedInvokePart {
+<a href=#1179 id=1179 data-nosnippet>1179</a>            <span class="kw">let </span>prepare = syn::Ident::new(
+<a href=#1180 id=1180 data-nosnippet>1180</a>                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"prepare_{}"</span>, <span class="self">self</span>.<span class="number">0</span>),
+<a href=#1181 id=1181 data-nosnippet>1181</a>                proc_macro2::Span::call_site(),
+<a href=#1182 id=1182 data-nosnippet>1182</a>            );
+<a href=#1183 id=1183 data-nosnippet>1183</a>            <span class="kw">let </span>cleanup = syn::Ident::new(
+<a href=#1184 id=1184 data-nosnippet>1184</a>                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"cleanup_{}"</span>, <span class="self">self</span>.<span class="number">0</span>),
+<a href=#1185 id=1185 data-nosnippet>1185</a>                proc_macro2::Span::call_site(),
+<a href=#1186 id=1186 data-nosnippet>1186</a>            );
+<a href=#1187 id=1187 data-nosnippet>1187</a>            RenderedInvokePart {
+<a href=#1188 id=1188 data-nosnippet>1188</a>                prepare: <span class="macro">quote!</span>(<span class="kw">let </span>#prepare = deliver(#value);),
+<a href=#1189 id=1189 data-nosnippet>1189</a>                arguments: <span class="macro">vec!</span>[<span class="macro">quote!</span>(#prepare)],
+<a href=#1190 id=1190 data-nosnippet>1190</a>                cleanup: <span class="macro">quote!</span>(#cleanup();),
+<a href=#1191 id=1191 data-nosnippet>1191</a>            }
+<a href=#1192 id=1192 data-nosnippet>1192</a>        }
+<a href=#1193 id=1193 data-nosnippet>1193</a>    }
+<a href=#1194 id=1194 data-nosnippet>1194</a>
+<a href=#1195 id=1195 data-nosnippet>1195</a>    <span class="attr">#[derive(Clone)]
+<a href=#1196 id=1196 data-nosnippet>1196</a>    </span><span class="kw">struct </span>TestInvoke;
 <a href=#1197 id=1197 data-nosnippet>1197</a>
-<a href=#1198 id=1198 data-nosnippet>1198</a>        <span class="kw">fn </span>capture(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream, closure: TokenStream) -&gt; TokenStream {
-<a href=#1199 id=1199 data-nosnippet>1199</a>            <span class="macro">quote!</span>(capture(#value, #closure))
-<a href=#1200 id=1200 data-nosnippet>1200</a>        }
-<a href=#1201 id=1201 data-nosnippet>1201</a>
-<a href=#1202 id=1202 data-nosnippet>1202</a>        <span class="kw">fn </span>invoke(<span class="kw-2">&amp;</span><span class="self">self</span>, arguments: <span class="kw-2">&amp;</span>[TokenStream]) -&gt; TokenStream {
-<a href=#1203 id=1203 data-nosnippet>1203</a>            <span class="macro">quote!</span>(call(#(#arguments),<span class="kw-2">*</span>);)
-<a href=#1204 id=1204 data-nosnippet>1204</a>        }
-<a href=#1205 id=1205 data-nosnippet>1205</a>
-<a href=#1206 id=1206 data-nosnippet>1206</a>        <span class="kw">fn </span>fallible(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#1207 id=1207 data-nosnippet>1207</a>            <span class="bool-val">false
-<a href=#1208 id=1208 data-nosnippet>1208</a>        </span>}
-<a href=#1209 id=1209 data-nosnippet>1209</a>    }
+<a href=#1198 id=1198 data-nosnippet>1198</a>    <span class="kw">impl </span>InvokeBridge <span class="kw">for </span>TestInvoke {
+<a href=#1199 id=1199 data-nosnippet>1199</a>        <span class="kw">fn </span>intermediate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; syn::Type {
+<a href=#1200 id=1200 data-nosnippet>1200</a>            <span class="macro">syn::parse_quote!</span>(Callable)
+<a href=#1201 id=1201 data-nosnippet>1201</a>        }
+<a href=#1202 id=1202 data-nosnippet>1202</a>
+<a href=#1203 id=1203 data-nosnippet>1203</a>        <span class="kw">fn </span>capture(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream, closure: TokenStream) -&gt; TokenStream {
+<a href=#1204 id=1204 data-nosnippet>1204</a>            <span class="macro">quote!</span>(capture(#value, #closure))
+<a href=#1205 id=1205 data-nosnippet>1205</a>        }
+<a href=#1206 id=1206 data-nosnippet>1206</a>
+<a href=#1207 id=1207 data-nosnippet>1207</a>        <span class="kw">fn </span>invoke(<span class="kw-2">&amp;</span><span class="self">self</span>, arguments: <span class="kw-2">&amp;</span>[TokenStream]) -&gt; TokenStream {
+<a href=#1208 id=1208 data-nosnippet>1208</a>            <span class="macro">quote!</span>(call(#(#arguments),<span class="kw-2">*</span>);)
+<a href=#1209 id=1209 data-nosnippet>1209</a>        }
 <a href=#1210 id=1210 data-nosnippet>1210</a>
-<a href=#1211 id=1211 data-nosnippet>1211</a>    <span class="attr">#[test]
-<a href=#1212 id=1212 data-nosnippet>1212</a>    </span><span class="kw">fn </span>invoke_spells_only_at_render_and_owns_delivery_order() {
-<a href=#1213 id=1213 data-nosnippet>1213</a>        <span class="kw">let </span>spells = Rc::new(Cell::new(<span class="number">0</span>));
-<a href=#1214 id=1214 data-nosnippet>1214</a>        <span class="kw">let </span>plan = Invoke {
-<a href=#1215 id=1215 data-nosnippet>1215</a>            source: TypeRef::scalar(ScalarKind::I64),
-<a href=#1216 id=1216 data-nosnippet>1216</a>            arguments: <span class="macro">vec!</span>[
-<a href=#1217 id=1217 data-nosnippet>1217</a>                TypeRef::scalar(ScalarKind::I32),
-<a href=#1218 id=1218 data-nosnippet>1218</a>                TypeRef::scalar(ScalarKind::U64),
-<a href=#1219 id=1219 data-nosnippet>1219</a>            ],
-<a href=#1220 id=1220 data-nosnippet>1220</a>            source_policy: TestSource {
-<a href=#1221 id=1221 data-nosnippet>1221</a>                spells: spells.clone(),
-<a href=#1222 id=1222 data-nosnippet>1222</a>            },
-<a href=#1223 id=1223 data-nosnippet>1223</a>            bridge: TestInvoke,
-<a href=#1224 id=1224 data-nosnippet>1224</a>            parts: <span class="macro">vec!</span>[TestInvokePart(<span class="string">"a"</span>), TestInvokePart(<span class="string">"b"</span>)],
-<a href=#1225 id=1225 data-nosnippet>1225</a>        };
-<a href=#1226 id=1226 data-nosnippet>1226</a>
-<a href=#1227 id=1227 data-nosnippet>1227</a>        <span class="macro">assert_eq!</span>(spells.get(), <span class="number">0</span>, <span class="string">"planning must not spell callback types"</span>);
-<a href=#1228 id=1228 data-nosnippet>1228</a>        <span class="kw">let </span>rendered = plan.render(<span class="kw-2">&amp;</span>Emit::for_test());
-<a href=#1229 id=1229 data-nosnippet>1229</a>        <span class="macro">assert_eq!</span>(spells.get(), <span class="number">3</span>);
-<a href=#1230 id=1230 data-nosnippet>1230</a>        <span class="kw">let </span>body = rendered.body.to_token_stream().to_string();
-<a href=#1231 id=1231 data-nosnippet>1231</a>        <span class="kw">let </span>prepare_a = body.find(<span class="string">"prepare_a"</span>).unwrap();
-<a href=#1232 id=1232 data-nosnippet>1232</a>        <span class="kw">let </span>prepare_b = body.find(<span class="string">"prepare_b"</span>).unwrap();
-<a href=#1233 id=1233 data-nosnippet>1233</a>        <span class="kw">let </span>call = body.find(<span class="string">"call (prepare_a , prepare_b)"</span>).unwrap();
-<a href=#1234 id=1234 data-nosnippet>1234</a>        <span class="kw">let </span>cleanup_a = body.find(<span class="string">"cleanup_a"</span>).unwrap();
-<a href=#1235 id=1235 data-nosnippet>1235</a>        <span class="kw">let </span>cleanup_b = body.find(<span class="string">"cleanup_b"</span>).unwrap();
-<a href=#1236 id=1236 data-nosnippet>1236</a>        <span class="macro">assert!</span>(prepare_a &lt; prepare_b &amp;&amp; prepare_b &lt; call);
-<a href=#1237 id=1237 data-nosnippet>1237</a>        <span class="macro">assert!</span>(call &lt; cleanup_a &amp;&amp; cleanup_a &lt; cleanup_b);
-<a href=#1238 id=1238 data-nosnippet>1238</a>        <span class="macro">assert_eq!</span>(
-<a href=#1239 id=1239 data-nosnippet>1239</a>            rendered.intermediate.to_token_stream().to_string(),
-<a href=#1240 id=1240 data-nosnippet>1240</a>            <span class="string">"Callable"
-<a href=#1241 id=1241 data-nosnippet>1241</a>        </span>);
-<a href=#1242 id=1242 data-nosnippet>1242</a>        <span class="macro">assert!</span>(!rendered.fallible);
-<a href=#1243 id=1243 data-nosnippet>1243</a>    }
-<a href=#1244 id=1244 data-nosnippet>1244</a>}
+<a href=#1211 id=1211 data-nosnippet>1211</a>        <span class="kw">fn </span>fallible(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#1212 id=1212 data-nosnippet>1212</a>            <span class="bool-val">false
+<a href=#1213 id=1213 data-nosnippet>1213</a>        </span>}
+<a href=#1214 id=1214 data-nosnippet>1214</a>    }
+<a href=#1215 id=1215 data-nosnippet>1215</a>
+<a href=#1216 id=1216 data-nosnippet>1216</a>    <span class="attr">#[test]
+<a href=#1217 id=1217 data-nosnippet>1217</a>    </span><span class="kw">fn </span>invoke_spells_only_at_render_and_owns_delivery_order() {
+<a href=#1218 id=1218 data-nosnippet>1218</a>        <span class="kw">let </span>spells = Rc::new(Cell::new(<span class="number">0</span>));
+<a href=#1219 id=1219 data-nosnippet>1219</a>        <span class="kw">let </span>plan = Invoke {
+<a href=#1220 id=1220 data-nosnippet>1220</a>            source: TypeRef::scalar(ScalarKind::I64),
+<a href=#1221 id=1221 data-nosnippet>1221</a>            arguments: <span class="macro">vec!</span>[
+<a href=#1222 id=1222 data-nosnippet>1222</a>                TypeRef::scalar(ScalarKind::I32),
+<a href=#1223 id=1223 data-nosnippet>1223</a>                TypeRef::scalar(ScalarKind::U64),
+<a href=#1224 id=1224 data-nosnippet>1224</a>            ],
+<a href=#1225 id=1225 data-nosnippet>1225</a>            source_policy: TestSource {
+<a href=#1226 id=1226 data-nosnippet>1226</a>                spells: spells.clone(),
+<a href=#1227 id=1227 data-nosnippet>1227</a>            },
+<a href=#1228 id=1228 data-nosnippet>1228</a>            bridge: TestInvoke,
+<a href=#1229 id=1229 data-nosnippet>1229</a>            parts: <span class="macro">vec!</span>[TestInvokePart(<span class="string">"a"</span>), TestInvokePart(<span class="string">"b"</span>)],
+<a href=#1230 id=1230 data-nosnippet>1230</a>        };
+<a href=#1231 id=1231 data-nosnippet>1231</a>
+<a href=#1232 id=1232 data-nosnippet>1232</a>        <span class="macro">assert_eq!</span>(spells.get(), <span class="number">0</span>, <span class="string">"planning must not spell callback types"</span>);
+<a href=#1233 id=1233 data-nosnippet>1233</a>        <span class="kw">let </span>rendered = plan.render(<span class="kw-2">&amp;</span>RustWriter::for_test());
+<a href=#1234 id=1234 data-nosnippet>1234</a>        <span class="macro">assert_eq!</span>(spells.get(), <span class="number">3</span>);
+<a href=#1235 id=1235 data-nosnippet>1235</a>        <span class="kw">let </span>body = rendered.body.to_token_stream().to_string();
+<a href=#1236 id=1236 data-nosnippet>1236</a>        <span class="kw">let </span>prepare_a = body.find(<span class="string">"prepare_a"</span>).unwrap();
+<a href=#1237 id=1237 data-nosnippet>1237</a>        <span class="kw">let </span>prepare_b = body.find(<span class="string">"prepare_b"</span>).unwrap();
+<a href=#1238 id=1238 data-nosnippet>1238</a>        <span class="kw">let </span>call = body.find(<span class="string">"call (prepare_a , prepare_b)"</span>).unwrap();
+<a href=#1239 id=1239 data-nosnippet>1239</a>        <span class="kw">let </span>cleanup_a = body.find(<span class="string">"cleanup_a"</span>).unwrap();
+<a href=#1240 id=1240 data-nosnippet>1240</a>        <span class="kw">let </span>cleanup_b = body.find(<span class="string">"cleanup_b"</span>).unwrap();
+<a href=#1241 id=1241 data-nosnippet>1241</a>        <span class="macro">assert!</span>(prepare_a &lt; prepare_b &amp;&amp; prepare_b &lt; call);
+<a href=#1242 id=1242 data-nosnippet>1242</a>        <span class="macro">assert!</span>(call &lt; cleanup_a &amp;&amp; cleanup_a &lt; cleanup_b);
+<a href=#1243 id=1243 data-nosnippet>1243</a>        <span class="macro">assert_eq!</span>(
+<a href=#1244 id=1244 data-nosnippet>1244</a>            rendered.intermediate.to_token_stream().to_string(),
+<a href=#1245 id=1245 data-nosnippet>1245</a>            <span class="string">"Callable"
+<a href=#1246 id=1246 data-nosnippet>1246</a>        </span>);
+<a href=#1247 id=1247 data-nosnippet>1247</a>        <span class="macro">assert!</span>(!rendered.fallible);
+<a href=#1248 id=1248 data-nosnippet>1248</a>    }
+<a href=#1249 id=1249 data-nosnippet>1249</a>}
 </code></pre></div></section></main></body></html>

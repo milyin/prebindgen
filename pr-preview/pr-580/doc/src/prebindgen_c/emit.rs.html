@@ -506,7 +506,7 @@
 <a href=#506 id=506 data-nosnippet>506</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>emit_function_wrapper(
 <a href=#507 id=507 data-nosnippet>507</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#508 id=508 data-nosnippet>508</a>        f: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Function,
-<a href=#509 id=509 data-nosnippet>509</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#509 id=509 data-nosnippet>509</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#510 id=510 data-nosnippet>510</a>    ) -&gt; syn::ItemFn {
 <a href=#511 id=511 data-nosnippet>511</a>        <span class="kw">let </span>orig = <span class="kw-2">&amp;</span>f.name;
 <a href=#512 id=512 data-nosnippet>512</a>        <span class="kw">let </span>call_path = <span class="self">self</span>.src_fn(orig);
@@ -902,7 +902,7 @@
 <a href=#902 id=902 data-nosnippet>902</a>        orig: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#903 id=903 data-nosnippet>903</a>        f: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Function,
 <a href=#904 id=904 data-nosnippet>904</a>        route: <span class="kw-2">&amp;</span>ErrRoute&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#905 id=905 data-nosnippet>905</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#905 id=905 data-nosnippet>905</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#906 id=906 data-nosnippet>906</a>    ) -&gt; (Vec&lt;TokenStream&gt;, Vec&lt;TokenStream&gt;, Vec&lt;TokenStream&gt;) {
 <a href=#907 id=907 data-nosnippet>907</a>        <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
 <a href=#908 id=908 data-nosnippet>908</a>        <span class="kw">let </span><span class="kw-2">mut </span>decodes: Vec&lt;TokenStream&gt; = <span class="self">self</span>.alias_preflight(f, route).into_iter().collect();

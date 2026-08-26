@@ -169,7 +169,7 @@
 <a href=#169 id=169 data-nosnippet>169</a>        val: TokenStream,
 <a href=#170 id=170 data-nosnippet>170</a>        targets: <span class="kw-2">&amp;</span>[TokenStream],
 <a href=#171 id=171 data-nosnippet>171</a>        route: <span class="kw-2">&amp;</span>ErrRoute&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#172 id=172 data-nosnippet>172</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#172 id=172 data-nosnippet>172</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#173 id=173 data-nosnippet>173</a>    ) -&gt; TokenStream {
 <a href=#174 id=174 data-nosnippet>174</a>        <span class="kw">match </span><span class="self">self </span>{
 <a href=#175 id=175 data-nosnippet>175</a>            <span class="self">Self</span>::Direct { converter, .. } =&gt; {

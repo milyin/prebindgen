@@ -11,7 +11,7 @@ executable artifact.</p>
 <p><code>converter</code> is registry-owned semantic identity. Composed parents retain
 that identity directly; they never recompute it from a Rust type or wire
 type. The writer turns it into a private Rust symbol only through
-<a href="../struct.Emit.html" title="struct prebindgen_registry::Emit"><code>crate::Emit</code></a> during final file assembly.</p>
+<a href="../struct.RustWriter.html" title="struct prebindgen_registry::RustWriter"><code>crate::RustWriter</code></a> during final file assembly.</p>
 </div></details><h2 id="fields" class="fields section-header">Fields<a href="#fields" class="anchor">§</a></h2><span id="structfield.destination" class="structfield section-header"><a href="#structfield.destination" class="anchor field">§</a><code>destination: <a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a></code></span><div class="docblock"><p>Wire/destination type. Other converters that ask “what’s the wire
 form of this rust type?” read this. The actual function may return
 a wrapped form (e.g. an adapter’s own <code>Result</code>-like envelope) — that

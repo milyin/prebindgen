@@ -81,7 +81,7 @@
 <a href=#81 id=81 data-nosnippet>81</a>        env: <span class="kw-2">&amp;</span>TokenStream,
 <a href=#82 id=82 data-nosnippet>82</a>        value: <span class="kw-2">&amp;</span>TokenStream,
 <a href=#83 id=83 data-nosnippet>83</a>        base: <span class="kw-2">&amp;</span>str,
-<a href=#84 id=84 data-nosnippet>84</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#84 id=84 data-nosnippet>84</a>        emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#85 id=85 data-nosnippet>85</a>    ) -&gt; TokenStream {
 <a href=#86 id=86 data-nosnippet>86</a>        <span class="kw">let </span>function = emit.operation_ident(<span class="string">"jni"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.function);
 <a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">if </span><span class="self">self</span>.stages.is_empty() {
