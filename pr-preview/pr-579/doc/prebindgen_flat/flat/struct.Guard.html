@@ -6,7 +6,7 @@ address, so nothing can declare it, reference it, or emit it as an alias —
 which is what puts it outside the flat API rather than in it, and that holds
 however the item arrived: synthesized, hand-fed to <a href="struct.FlatBuilder.html" title="struct prebindgen_flat::flat::FlatBuilder"><code>FlatBuilder</code></a>, or written
 as <code>#[prebindgen] const _: () = ..</code> in a source crate.</p>
-<p><strong>Today’s producer</strong> is <a href="prebindgen::Source"><code>Source</code></a>’s cfg filter, which
+<p><strong>Today’s producer</strong> is <a href="../../prebindgen/api/source/struct.Source.html" title="struct prebindgen::api::source::Source"><code>Source</code></a>’s cfg filter, which
 synthesizes <code>const _: () = { konst::assertc_eq!(..) }</code> to assert that a source
 crate’s <code>FEATURES</code> match what the build script asked for. Nothing <em>marked</em>
 that one — it is prebindgen’s own item riding the same stream — but it is not
