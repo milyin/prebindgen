@@ -3,7 +3,7 @@
 //! Flat owns the model-driven generation protocol. A collecting pipeline owns
 //! the concrete key that implements it.
 //! `prebindgen-registry`, for example, hands its unconstructable
-//! `prebindgen_registry::Emit` only to Rust-emission callbacks.
+//! `prebindgen_registry::Emit` inside the `RustWriter` handed to final callbacks.
 //!
 //! This direction preserves the crate pipeline:
 //!

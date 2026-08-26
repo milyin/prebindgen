@@ -81,7 +81,7 @@ impl ConvChain {
         env: &TokenStream,
         value: &TokenStream,
         base: &str,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> TokenStream {
         let function = emit.operation_ident("jni", &self.function);
         if self.stages.is_empty() {

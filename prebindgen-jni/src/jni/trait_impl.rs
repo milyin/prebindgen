@@ -235,7 +235,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 pub(crate) fn build_handle_destructor_items(
     ext: &Declarations,
     registry: &Registry,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
@@ -1279,7 +1279,7 @@ impl Prebindgen for Declarations {
     fn prerequisites(
         &self,
         registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         // `__JniErr` is the **framework** error type alias — always the
         // `JniBindingError` String-wrapper. Built-in converter bodies compose
@@ -1345,7 +1345,7 @@ impl Prebindgen for Declarations {
         &self,
         f: &prebindgen_registry::flat::Function,
         registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         vec![syn::Item::Fn(emit_jni_function_wrapper(
             self, f, registry, emit,
@@ -1356,7 +1356,7 @@ impl Prebindgen for Declarations {
         &self,
         _s: &prebindgen_registry::flat::Struct,
         _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         // Struct converter bodies are emitted from retained registry plans;
         // no separate per-struct item is needed.
@@ -1367,7 +1367,7 @@ impl Prebindgen for Declarations {
         &self,
         _v: &prebindgen_registry::flat::Variant,
         _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -1376,7 +1376,7 @@ impl Prebindgen for Declarations {
         &self,
         _e: &prebindgen_registry::flat::Enum,
         _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -1392,7 +1392,7 @@ impl Prebindgen for Declarations {
         &self,
         c: &prebindgen_registry::flat::Constant,
         registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         reject_handle_const(self, c);
         let getter = const_getter_fn(c);

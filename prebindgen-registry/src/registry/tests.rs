@@ -99,7 +99,7 @@ impl Prebindgen for StubExt {
         &self,
         _f: &prebindgen_flat::flat::Function,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -107,7 +107,7 @@ impl Prebindgen for StubExt {
         &self,
         _s: &prebindgen_flat::flat::Struct,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -115,7 +115,7 @@ impl Prebindgen for StubExt {
         &self,
         _v: &prebindgen_flat::flat::Variant,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -123,7 +123,7 @@ impl Prebindgen for StubExt {
         &self,
         _e: &prebindgen_flat::flat::Enum,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -131,7 +131,7 @@ impl Prebindgen for StubExt {
         &self,
         _c: &prebindgen_flat::flat::Constant,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -484,7 +484,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             f: &prebindgen_flat::flat::Function,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_function(f, r, _emit)
         }
@@ -492,7 +492,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             s: &prebindgen_flat::flat::Struct,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_struct(s, r, _emit)
         }
@@ -500,7 +500,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             v: &prebindgen_flat::flat::Variant,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_variant(v, r, _emit)
         }
@@ -508,7 +508,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             e: &prebindgen_flat::flat::Enum,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_enum(e, r, _emit)
         }
@@ -516,7 +516,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             c: &prebindgen_flat::flat::Constant,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_const(c, r, _emit)
         }
@@ -1550,7 +1550,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             f: &prebindgen_flat::flat::Function,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_function(f, r, _emit)
         }
@@ -1558,7 +1558,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             st: &prebindgen_flat::flat::Struct,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_struct(st, r, _emit)
         }
@@ -1566,7 +1566,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             v: &prebindgen_flat::flat::Variant,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_variant(v, r, _emit)
         }
@@ -1574,7 +1574,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             e: &prebindgen_flat::flat::Enum,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_enum(e, r, _emit)
         }
@@ -1582,7 +1582,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             c: &prebindgen_flat::flat::Constant,
             r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             self.0.on_const(c, r, _emit)
         }

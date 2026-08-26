@@ -169,7 +169,7 @@ impl CValue {
         val: TokenStream,
         targets: &[TokenStream],
         route: &ErrRoute<'_>,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> TokenStream {
         match self {
             Self::Direct { converter, .. } => {

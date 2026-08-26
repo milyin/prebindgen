@@ -6,7 +6,7 @@ use prebindgen_registry::{
     generation::OperationId,
     recipe::Mode,
     write::RustFunction,
-    Emit,
+    RustWriter,
 };
 
 use super::*;
@@ -247,7 +247,7 @@ impl RustFunction for JFunction {
         }
     }
 
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         match &self.0 {
             JBody::Marker(operation) => planned_marker(&emit.operation_ident("jni", operation)),
             JBody::ValueCodec(plan) => plan.render(emit),
@@ -291,7 +291,7 @@ pub(crate) enum JStructCodecBody {
 }
 
 impl JStructCodecPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
         let source = emit.emit_source_type(&self.source);
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
@@ -343,7 +343,7 @@ pub(crate) struct JSumCodecPlan {
 }
 
 impl JSumCodecPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
         let source = emit.emit_source_type(&self.source);
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
@@ -369,7 +369,7 @@ pub(crate) enum JCustomType {
 }
 
 impl JCustomType {
-    fn spell(&self, emit: &Emit) -> TokenStream {
+    fn spell(&self, emit: &RustWriter) -> TokenStream {
         match self {
             Self::Model(reading) => emit.emit_source_type(reading),
             Self::Declared(ty) => quote::quote!(#ty),
@@ -403,7 +403,7 @@ pub(crate) struct JCustomConversionPlan {
 }
 
 impl JCustomConversionPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
         let source = emit.emit_source_type(&self.source);
         let representation = self.representation.spell(emit);
@@ -538,7 +538,7 @@ pub(crate) struct JResultPlan {
 }
 
 impl JResultPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
         let source = emit.emit_source_type(&self.source);
         let ok = emit.emit_source_type(&self.ok);
@@ -574,7 +574,7 @@ pub(crate) struct JTransparentPlan {
 }
 
 impl JTransparentPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
         let source = emit.emit_source_type(&self.source);
         let wire = &self.wire;
@@ -770,7 +770,7 @@ impl JValueCodecPlan {
         }
     }
 
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
         let source = match self.source_kind {
             JValueSource::Crossing => emit.emit_source_type(&self.source),
@@ -852,7 +852,7 @@ pub(crate) struct JSource {
 }
 
 impl shared::Source for JSource {
-    fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream {
+    fn spell(&self, source: &TypeRef, emit: &RustWriter) -> TokenStream {
         emit.emit_source_type(source)
     }
 
@@ -901,7 +901,7 @@ pub(crate) struct JOptionalSource {
 }
 
 impl shared::Source for JOptionalSource {
-    fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream {
+    fn spell(&self, source: &TypeRef, emit: &RustWriter) -> TokenStream {
         if let Some(target) = &self.borrowed_input {
             let target = emit.emit_source_type(target);
             quote::quote!(::core::option::Option<#target>)
@@ -1052,7 +1052,11 @@ impl JPipeline {
     /// their `Result` contract; the transient Vec-handle ABI is a direct
     /// borrow or move and should not acquire an unreachable error branch just
     /// because it now shares the ordinary decode scaffold.
-    pub(crate) fn invoke_infallible(&self, value: TokenStream, emit: &Emit) -> Option<TokenStream> {
+    pub(crate) fn invoke_infallible(
+        &self,
+        value: TokenStream,
+        emit: &RustWriter,
+    ) -> Option<TokenStream> {
         match &self.body {
             JPipelineBody::VecHandle(plan) => Some(plan.invoke(value, emit)),
             JPipelineBody::Converter(_) => None,
@@ -1066,7 +1070,7 @@ impl JPipeline {
     /// that needs [`Emit`] to spell its element type. Keeping that case out of
     /// this API lets return, error, and callback delivery assemble their JNI
     /// protocol without gaining access to source Rust spelling.
-    pub(crate) fn invoke_output(&self, value: TokenStream, emit: &Emit) -> TokenStream {
+    pub(crate) fn invoke_output(&self, value: TokenStream, emit: &RustWriter) -> TokenStream {
         let JPipelineBody::Converter(child) = &self.body else {
             unreachable!("a Rust-to-JNI pipeline cannot contain an input Vec handle")
         };
@@ -1087,7 +1091,7 @@ impl JPipeline {
         env: TokenStream,
         value: TokenStream,
         stage_base: &syn::Ident,
-        emit: &Emit,
+        emit: &RustWriter,
     ) -> TokenStream {
         let JPipelineBody::Converter(child) = &self.body else {
             unreachable!("a whole-object field cannot use the transient Vec-handle site ABI")
@@ -1096,7 +1100,7 @@ impl JPipeline {
     }
 
     /// Render the already-planned call graph around `value`.
-    pub(crate) fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream {
+    pub(crate) fn invoke(&self, value: TokenStream, emit: &RustWriter) -> TokenStream {
         match &self.body {
             JPipelineBody::Converter(_) => self.invoke_output(value, emit),
             JPipelineBody::VecHandle(plan) => {
@@ -1108,7 +1112,7 @@ impl JPipeline {
 }
 
 impl JVecHandleInput {
-    fn invoke(&self, handle: TokenStream, emit: &Emit) -> TokenStream {
+    fn invoke(&self, handle: TokenStream, emit: &RustWriter) -> TokenStream {
         let elem = emit.emit_source_type(&self.elem);
         if self.by_ref {
             return quote!(unsafe {
@@ -1148,7 +1152,7 @@ impl JChild {
         env: TokenStream,
         value: TokenStream,
         stage_base: &syn::Ident,
-        emit: &Emit,
+        emit: &RustWriter,
     ) -> TokenStream {
         assert_eq!(self.direction, Direction::Construct);
         let converter = emit.operation_ident("jni", self.call.operation_id());
@@ -1181,7 +1185,12 @@ impl JChild {
     /// Render this child in a context that supplies its own `JNIEnv` expression.
     /// Registry-composed converter bodies receive an `&mut JNIEnv` named
     /// `env`; exported wrappers own a mutable `JNIEnv` and pass `&mut env`.
-    fn invoke_with_env(&self, env: TokenStream, value: TokenStream, emit: &Emit) -> TokenStream {
+    fn invoke_with_env(
+        &self,
+        env: TokenStream,
+        value: TokenStream,
+        emit: &RustWriter,
+    ) -> TokenStream {
         let converter = emit.operation_ident("jni", self.call.operation_id());
         match self.direction {
             Direction::Construct => {
@@ -1242,7 +1251,7 @@ impl shared::Child for JChild {
         &self.call
     }
 
-    fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream {
+    fn invoke(&self, value: TokenStream, emit: &RustWriter) -> TokenStream {
         self.invoke_with_env(quote!(env), value, emit)
     }
 }
@@ -1291,7 +1300,7 @@ pub(crate) struct JHandleCodecPlan {
 }
 
 impl JHandleCodecPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation_id);
         let source = emit.emit_source_type(&self.source);
         let allow = crate::jni::trait_impl::generated_converter_attr();
@@ -1366,7 +1375,7 @@ pub(crate) struct JBorrowedOptionalHandlePlan {
 }
 
 impl JBorrowedOptionalHandlePlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
         let target = shared::Source::spell(
             &JSource {
@@ -1406,7 +1415,7 @@ pub(crate) struct JProductPlan {
 }
 
 impl JProductPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
         let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;
@@ -1459,7 +1468,7 @@ pub(crate) struct JChoicePlan {
 }
 
 impl JChoicePlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
         let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;
@@ -1608,7 +1617,7 @@ pub(crate) struct JSequencePlan {
 }
 
 impl JSequencePlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
         let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;
@@ -1775,7 +1784,7 @@ pub(crate) struct JOptionalPlan {
 }
 
 impl JOptionalPlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
         let name = emit.operation_ident("jni", &self.operation);
         let source = &rendered.source;

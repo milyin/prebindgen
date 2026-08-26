@@ -890,7 +890,7 @@ impl CbindgenBuilder {
     fn prereq_enums(
         &self,
         registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
@@ -1177,7 +1177,7 @@ impl Prebindgen for CbindgenBuilder {
     fn prerequisites(
         &self,
         registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         // C-string data memory (string returns + `String` fields of data structs)
         // is malloc'd raw and freed by the single universal `free_memory_function`.
@@ -1229,7 +1229,7 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         f: &prebindgen_registry::flat::Function,
         _registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         vec![syn::Item::Fn(self.emit_function_wrapper(f, emit))]
     }
@@ -1238,7 +1238,7 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         _s: &prebindgen_registry::flat::Struct,
         _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         // The `#[repr(C)]` mirror + converters come from prerequisites /
         // on_output_type; the original (non-FFI-safe) struct is dropped.
@@ -1249,7 +1249,7 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         _v: &prebindgen_registry::flat::Variant,
         _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -1258,7 +1258,7 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         _e: &prebindgen_registry::flat::Enum,
         _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -1267,7 +1267,7 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         c: &prebindgen_registry::flat::Constant,
         _registry: &Registry,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
         self.source_module
             .as_ref()

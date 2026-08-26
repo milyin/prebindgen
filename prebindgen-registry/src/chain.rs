@@ -11,7 +11,7 @@ use crate::{
     flat::{Alternative, TypeRef},
     generation::OperationId,
     recipe::{Direction, Mode},
-    Emit,
+    RustWriter,
 };
 
 /// The callable contract of one generated converter.
@@ -54,7 +54,7 @@ impl Call {
 /// source-side type as a [`TypeRef`] and adapter-owned wrapper policy as data.
 pub trait Source: Clone {
     /// Spell the exact source type in its final generated context.
-    fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream;
+    fn spell(&self, source: &TypeRef, emit: &RustWriter) -> TokenStream;
 
     /// Turn a canonical shape value into the exact source spelling.
     fn build(&self, canonical: TokenStream) -> TokenStream {
@@ -85,10 +85,10 @@ pub trait Child: Clone {
     fn call(&self) -> &Call;
 
     /// Invoke this child chain for one intermediate/source value.
-    fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream;
+    fn invoke(&self, value: TokenStream, emit: &RustWriter) -> TokenStream;
 }
 
-fn child_value<C: Child>(child: &C, value: TokenStream, emit: &Emit) -> TokenStream {
+fn child_value<C: Child>(child: &C, value: TokenStream, emit: &RustWriter) -> TokenStream {
     let call = child.invoke(value, emit);
     if child.call().fallible() {
         quote::quote!(#call?)
@@ -308,13 +308,13 @@ pub trait ChoiceBridge: Clone {
     }
 
     /// Read one arm's Product intermediate from an inbound value.
-    fn arm(&self, emit: &Emit, value: TokenStream, index: usize) -> TokenStream;
+    fn arm(&self, emit: &RustWriter, value: TokenStream, index: usize) -> TokenStream;
 
     /// Construct the outbound Choice intermediate with `active` selected.
     ///
     /// Inactive arm storage is representation policy. Implementations must not
     /// manufacture source or child-intermediate values merely to fill it.
-    fn build(&self, emit: &Emit, active: usize, value: TokenStream) -> TokenStream;
+    fn build(&self, emit: &RustWriter, active: usize, value: TokenStream) -> TokenStream;
 
     /// Finish the whole outbound representation after its active arm is built.
     fn finish(&self, value: TokenStream) -> TokenStream {
@@ -355,12 +355,12 @@ impl ChoiceBridge for TupleChoice {
         quote::quote!((#value).0)
     }
 
-    fn arm(&self, _emit: &Emit, value: TokenStream, index: usize) -> TokenStream {
+    fn arm(&self, _emit: &RustWriter, value: TokenStream, index: usize) -> TokenStream {
         let index = syn::Index::from(index + 1);
         quote::quote!((#value).#index)
     }
 
-    fn build(&self, _emit: &Emit, active: usize, value: TokenStream) -> TokenStream {
+    fn build(&self, _emit: &RustWriter, active: usize, value: TokenStream) -> TokenStream {
         let tag = &self.tags[active];
         let arms = self.inactive.iter().enumerate().map(|(index, inactive)| {
             if index == active {
@@ -422,7 +422,7 @@ pub struct RenderedInvokePart {
 /// hands the adapter the resulting local identifier.
 pub trait InvokePart: Clone {
     /// Render target-side delivery for one already-bound source argument.
-    fn render(&self, value: &syn::Ident, index: usize, emit: &Emit) -> RenderedInvokePart;
+    fn render(&self, value: &syn::Ident, index: usize, emit: &RustWriter) -> RenderedInvokePart;
 }
 
 /// Adapter-selected callable and invocation protocol for one [`Invoke`] shape.
@@ -505,7 +505,7 @@ pub struct Rendered {
 /// A shape chain whose recursive source-value walk is owned by the registry.
 pub trait Chain {
     /// Render the already-planned chain at the final emission boundary.
-    fn render(&self, emit: &Emit) -> Rendered;
+    fn render(&self, emit: &RustWriter) -> Rendered;
 }
 
 impl<S, B, C> Chain for Product<S, B, C>
@@ -514,7 +514,7 @@ where
     B: ProductBridge,
     C: Child,
 {
-    fn render(&self, emit: &Emit) -> Rendered {
+    fn render(&self, emit: &RustWriter) -> Rendered {
         let source = self.source_policy.spell(&self.source, emit);
         let intermediate = self.bridge.intermediate();
         let fallible = self.parts.iter().any(|part| part.child.call().fallible());
@@ -579,7 +579,7 @@ where
     B: OptionalBridge,
     C: Child,
 {
-    fn render(&self, emit: &Emit) -> Rendered {
+    fn render(&self, emit: &RustWriter) -> Rendered {
         let source = self.source_policy.spell(&self.source, emit);
         let intermediate = self.bridge.intermediate();
         let fallible = self.child.call().fallible();
@@ -628,7 +628,7 @@ where
     B: SequenceBridge,
     C: Child,
 {
-    fn render(&self, emit: &Emit) -> Rendered {
+    fn render(&self, emit: &RustWriter) -> Rendered {
         let source = self.source_policy.spell(&self.source, emit);
         let element = self.source_policy.spell(&self.element, emit);
         let intermediate = self.bridge.intermediate();
@@ -683,7 +683,7 @@ where
     P: ProductBridge,
     C: Child,
 {
-    fn render(&self, emit: &Emit) -> Rendered {
+    fn render(&self, emit: &RustWriter) -> Rendered {
         let source = self.source_policy.spell(&self.source, emit);
         let intermediate = self.bridge.intermediate();
         let child_fallible = self
@@ -825,7 +825,7 @@ where
     B: InvokeBridge,
     P: InvokePart,
 {
-    fn render(&self, emit: &Emit) -> Rendered {
+    fn render(&self, emit: &RustWriter) -> Rendered {
         assert_eq!(
             self.arguments.len(),
             self.parts.len(),
@@ -917,7 +917,7 @@ mod tests {
     }
 
     impl Source for TestSource {
-        fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream {
+        fn spell(&self, source: &TypeRef, emit: &RustWriter) -> TokenStream {
             self.spells.set(self.spells.get() + 1);
             emit.emit_source_type(source)
         }
@@ -941,7 +941,7 @@ mod tests {
             &self.0
         }
 
-        fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream {
+        fn invoke(&self, value: TokenStream, emit: &RustWriter) -> TokenStream {
             let ident = emit.operation_ident("test", self.0.operation_id());
             quote!(#ident(#value))
         }
@@ -986,7 +986,7 @@ mod tests {
         };
 
         assert_eq!(spells.get(), 0, "planning must not spell the TypeRef");
-        let rendered = plan.render(&Emit::for_test());
+        let rendered = plan.render(&RustWriter::for_test());
         assert_eq!(spells.get(), 1);
         assert_eq!(
             rendered.source.to_string(),
@@ -1054,7 +1054,7 @@ mod tests {
             };
 
             assert_eq!(spells.get(), 0);
-            let rendered = plan.render(&Emit::for_test());
+            let rendered = plan.render(&RustWriter::for_test());
             assert_eq!(spells.get(), 2);
             let body = rendered.body.to_token_stream().to_string();
             match direction {
@@ -1133,7 +1133,7 @@ mod tests {
             let plan = choice_plan(direction, spells.clone());
 
             assert_eq!(spells.get(), 0, "planning must not spell the TypeRef");
-            let rendered = plan.render(&Emit::for_test());
+            let rendered = plan.render(&RustWriter::for_test());
             assert_eq!(spells.get(), 2);
             let body = rendered.body.to_token_stream().to_string();
             match direction {
@@ -1170,7 +1170,12 @@ mod tests {
     struct TestInvokePart(&'static str);
 
     impl InvokePart for TestInvokePart {
-        fn render(&self, value: &syn::Ident, _index: usize, _emit: &Emit) -> RenderedInvokePart {
+        fn render(
+            &self,
+            value: &syn::Ident,
+            _index: usize,
+            _emit: &RustWriter,
+        ) -> RenderedInvokePart {
             let prepare = syn::Ident::new(
                 &format!("prepare_{}", self.0),
                 proc_macro2::Span::call_site(),
@@ -1225,7 +1230,7 @@ mod tests {
         };
 
         assert_eq!(spells.get(), 0, "planning must not spell callback types");
-        let rendered = plan.render(&Emit::for_test());
+        let rendered = plan.render(&RustWriter::for_test());
         assert_eq!(spells.get(), 3);
         let body = rendered.body.to_token_stream().to_string();
         let prepare_a = body.find("prepare_a").unwrap();

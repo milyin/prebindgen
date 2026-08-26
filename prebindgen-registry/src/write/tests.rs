@@ -30,7 +30,7 @@ impl Prebindgen for IdentityExt {
         &self,
         f: &prebindgen_flat::flat::Function,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         let ident = &f.name;
         vec![syn::parse_quote!(fn #ident() {})]
@@ -40,7 +40,7 @@ impl Prebindgen for IdentityExt {
         &self,
         s: &prebindgen_flat::flat::Struct,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         let ident = &s.name;
         vec![syn::parse_quote!(pub struct #ident;)]
@@ -50,7 +50,7 @@ impl Prebindgen for IdentityExt {
         &self,
         v: &prebindgen_flat::flat::Variant,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         let ident = &v.name;
         vec![syn::parse_quote!(pub enum #ident {})]
@@ -60,7 +60,7 @@ impl Prebindgen for IdentityExt {
         &self,
         e: &prebindgen_flat::flat::Enum,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         let ident = &e.name;
         vec![syn::parse_quote!(pub enum #ident {})]
@@ -70,7 +70,7 @@ impl Prebindgen for IdentityExt {
         &self,
         c: &prebindgen_flat::flat::Constant,
         _registry: &Registry,
-        emit: &crate::Emit,
+        emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         let ident = &c.name;
         let ty = emit.emit_source_type(&c.ty);
@@ -101,7 +101,7 @@ impl RustFunction for OperationPlan {
         self.reachable
     }
 
-    fn render(&self, emit: &crate::Emit) -> syn::ItemFn {
+    fn render(&self, emit: &crate::RustWriter) -> syn::ItemFn {
         self.renders.set(self.renders.get() + 1);
         self.rendered_reachable.set(self.reachable);
         let ident = emit.operation_ident("test", &self.operation);
@@ -118,7 +118,7 @@ impl RustFunction for LatePlan {
         self.reachable.get()
     }
 
-    fn render(&self, emit: &crate::Emit) -> syn::ItemFn {
+    fn render(&self, emit: &crate::RustWriter) -> syn::ItemFn {
         let ident = emit.operation_ident("test", &self.operation);
         syn::parse_quote!(
             fn #ident() {}
@@ -138,7 +138,7 @@ impl Prebindgen for LateExt {
         &self,
         f: &prebindgen_flat::flat::Function,
         _registry: &Registry,
-        emit: &crate::Emit,
+        emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         if self.activate {
             self.reachable.set(true);
@@ -159,7 +159,7 @@ impl Prebindgen for LateExt {
         &self,
         s: &prebindgen_flat::flat::Struct,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         let ident = &s.name;
         vec![syn::parse_quote!(pub struct #ident;)]
@@ -169,7 +169,7 @@ impl Prebindgen for LateExt {
         &self,
         v: &prebindgen_flat::flat::Variant,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         let ident = &v.name;
         vec![syn::parse_quote!(pub enum #ident {})]
@@ -179,7 +179,7 @@ impl Prebindgen for LateExt {
         &self,
         e: &prebindgen_flat::flat::Enum,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         let ident = &e.name;
         vec![syn::parse_quote!(pub enum #ident {})]
@@ -189,7 +189,7 @@ impl Prebindgen for LateExt {
         &self,
         _c: &prebindgen_flat::flat::Constant,
         _registry: &Registry,
-        _emit: &crate::Emit,
+        _emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -271,7 +271,7 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
 
     match err {
         WriteError::UnrenderedConverterCalls { calls } => {
-            let missing = crate::Emit::for_test()
+            let missing = crate::RustWriter::for_test()
                 .operation_ident("test", &operation)
                 .to_string();
             assert_eq!(calls, vec![("a_fn".to_string(), missing)]);
@@ -466,7 +466,7 @@ fn guards_emit_ungated_and_in_stream_order() {
             &self,
             _f: &prebindgen_flat::flat::Function,
             _r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             Vec::new()
         }
@@ -474,7 +474,7 @@ fn guards_emit_ungated_and_in_stream_order() {
             &self,
             _s: &prebindgen_flat::flat::Struct,
             _r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             Vec::new()
         }
@@ -482,7 +482,7 @@ fn guards_emit_ungated_and_in_stream_order() {
             &self,
             _v: &prebindgen_flat::flat::Variant,
             _r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             Vec::new()
         }
@@ -490,7 +490,7 @@ fn guards_emit_ungated_and_in_stream_order() {
             &self,
             _e: &prebindgen_flat::flat::Enum,
             _r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             Vec::new()
         }
@@ -498,7 +498,7 @@ fn guards_emit_ungated_and_in_stream_order() {
             &self,
             _c: &prebindgen_flat::flat::Constant,
             _r: &Registry,
-            _emit: &crate::Emit,
+            _emit: &crate::RustWriter,
         ) -> Vec<syn::Item> {
             Vec::new()
         }

@@ -1,12 +1,11 @@
-//! The registry-owned key for final, model-driven Rust generation.
+//! Final, model-driven Rust generation.
 
 use std::collections::HashMap;
 
-/// The capability handed to Rust-emission callbacks.
+/// The zero-sized capability proving final Rust emission has begun.
 ///
-/// The flat crate owns the rendering protocol because it owns the syntax. The
-/// registry owns this concrete key and its private constructor, so ordinary
-/// registry users receive an `Emit` only during final `write_rust` callbacks.
+/// Flat owns the generate-only protocol; the registry owns this concrete key and
+/// its private constructor. `RustWriter` holds it only during final file assembly.
 ///
 /// ```compile_fail
 /// use prebindgen_registry::Emit;
@@ -25,7 +24,7 @@ use std::collections::HashMap;
 /// use prebindgen_registry::flat::emit::RustEmitter;
 /// ```
 ///
-/// An adapter receives only generate-only operations, not retained spelling:
+/// Even code which can name the token cannot recover retained spelling:
 ///
 /// ```compile_fail
 /// # use prebindgen_registry::{Emit, flat::TypeRef};
@@ -34,19 +33,40 @@ use std::collections::HashMap;
 /// let _ = emit.spell(ty);
 /// # }
 /// ```
+///
+/// The stateful writer facade exposes no spelling escape either:
+///
+/// ```compile_fail
+/// # use prebindgen_registry::{RustWriter, flat::TypeRef};
+/// # fn leak(writer: &RustWriter, ty: &TypeRef) {
+/// let _ = writer.spell(ty);
+/// # }
+/// ```
 #[derive(Debug)]
-pub struct Emit {
-    flat: FlatEmitKey,
+pub struct Emit(());
+
+impl prebindgen_flat::RustEmitter for Emit {}
+
+/// Writer-owned context for final Rust emission.
+///
+/// Unlike [`Emit`], this is deliberately stateful: qualifying a modeled
+/// nominal type requires the frozen registry mapping from Flat names to source
+/// modules. Keeping that state here preserves the distinction between the
+/// phase token and the writer which consumes model facts.
+#[derive(Debug)]
+pub struct RustWriter {
+    emit: Emit,
     source_modules: HashMap<String, syn::Path>,
     default_module: syn::Path,
 }
 
-#[derive(Debug)]
-struct FlatEmitKey;
-
-impl prebindgen_flat::RustEmitter for FlatEmitKey {}
-
 impl Emit {
+    fn new() -> Self {
+        Self(())
+    }
+}
+
+impl RustWriter {
     pub(crate) fn new(registry: &crate::Registry, source_module: Option<&syn::Path>) -> Self {
         let default_module = source_module
             .cloned()
@@ -62,26 +82,26 @@ impl Emit {
             })
             .collect();
         Self {
-            flat: FlatEmitKey,
+            emit: Emit::new(),
             source_modules,
             default_module,
         }
     }
 
-    /// Construct an emission key for an out-of-crate adapter test.
+    /// Construct a final writer for an out-of-crate adapter test.
     ///
-    /// This is absent from normal builds. Production code receives the key
+    /// This is absent from normal builds. Production code receives the writer
     /// only in an emission callback.
     #[cfg(any(test, feature = "testing"))]
     pub fn for_test() -> Self {
         Self {
-            flat: FlatEmitKey,
+            emit: Emit::new(),
             source_modules: HashMap::new(),
             default_module: syn::parse_quote!(crate),
         }
     }
 
-    /// Construct the production emission capability for a test that renders a
+    /// Construct the production writer context for a test that renders a
     /// frozen plan directly instead of going through `write_rust`.
     #[cfg(any(test, feature = "testing"))]
     pub fn for_registry_test(registry: &crate::Registry) -> Self {
@@ -98,7 +118,7 @@ impl Emit {
         ty: &prebindgen_flat::flat::TypeRef,
     ) -> proc_macro2::TokenStream {
         prebindgen_flat::RustEmitter::emit_source_type(
-            &self.flat,
+            &self.emit,
             ty,
             &self.source_modules,
             &self.default_module,
@@ -130,7 +150,7 @@ impl Emit {
 
     /// Copy the proc-macro's anonymous feature guard into the final file.
     pub(crate) fn guard(&self, guard: &prebindgen_flat::flat::Guard) -> syn::ItemConst {
-        prebindgen_flat::RustEmitter::guard(&self.flat, guard)
+        prebindgen_flat::RustEmitter::guard(&self.emit, guard)
     }
 
     /// Emit a fieldless enum's modeled discriminant spelling.
@@ -138,7 +158,7 @@ impl Emit {
         &self,
         value: &prebindgen_flat::flat::EnumValue,
     ) -> Option<proc_macro2::TokenStream> {
-        prebindgen_flat::RustEmitter::discriminant(&self.flat, value)
+        prebindgen_flat::RustEmitter::discriminant(&self.emit, value)
     }
 
     /// Generate a struct constructor or pattern with its modeled delimiter shape.
@@ -148,7 +168,7 @@ impl Emit {
         head: proc_macro2::TokenStream,
         parts: &[proc_macro2::TokenStream],
     ) -> proc_macro2::TokenStream {
-        prebindgen_flat::RustEmitter::shape_struct(&self.flat, item, head, parts)
+        prebindgen_flat::RustEmitter::shape_struct(&self.emit, item, head, parts)
     }
 
     /// Generate an enum-alternative constructor or pattern with its modeled shape.
@@ -158,7 +178,7 @@ impl Emit {
         head: proc_macro2::TokenStream,
         parts: &[proc_macro2::TokenStream],
     ) -> proc_macro2::TokenStream {
-        prebindgen_flat::RustEmitter::shape_alternative(&self.flat, item, head, parts)
+        prebindgen_flat::RustEmitter::shape_alternative(&self.emit, item, head, parts)
     }
 
     /// Allocate the final private Rust symbol for a registry-owned operation.
@@ -223,8 +243,13 @@ fn ident_component(label: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ident_component, Emit};
+    use super::{ident_component, Emit, RustWriter};
     use crate::{ArtifactId, Direction, OperationId};
+
+    #[test]
+    fn emit_remains_only_a_zero_sized_phase_token() {
+        assert_eq!(std::mem::size_of::<Emit>(), 0);
+    }
 
     #[test]
     fn operation_symbols_are_stable_and_writer_scoped() {
@@ -232,7 +257,7 @@ mod tests {
             ArtifactId::new("test-codec", "owned").unwrap(),
             Direction::Construct,
         );
-        let emit = Emit::for_test();
+        let emit = RustWriter::for_test();
 
         let first = emit.operation_ident("test", &operation);
         let second = emit.operation_ident("test", &operation);

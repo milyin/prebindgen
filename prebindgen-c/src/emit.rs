@@ -506,7 +506,7 @@ impl CbindgenBuilder {
     pub(super) fn emit_function_wrapper(
         &self,
         f: &prebindgen_registry::flat::Function,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> syn::ItemFn {
         let orig = &f.name;
         let call_path = self.src_fn(orig);
@@ -902,7 +902,7 @@ impl CbindgenBuilder {
         orig: &syn::Ident,
         f: &prebindgen_registry::flat::Function,
         route: &ErrRoute<'_>,
-        emit: &prebindgen_registry::Emit,
+        emit: &prebindgen_registry::RustWriter,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
         let mut params = Vec::new();
         let mut decodes: Vec<TokenStream> = self.alias_preflight(f, route).into_iter().collect();

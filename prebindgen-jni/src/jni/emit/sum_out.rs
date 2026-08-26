@@ -144,7 +144,7 @@ pub(crate) fn encode_sum_group(
     obj_idents: &[syn::Ident],
     matched: TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (TokenStream, Vec<TokenStream>) {
     // Which sum this is comes from the selector leaf, not from the plan's
     // source: the plan's source is the *containing* value when the sum is a
@@ -291,7 +291,7 @@ fn encode_group_leaf(
     prim: bool,
     bind: &syn::Ident,
     fail: &dyn Fn(TokenStream) -> TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> TokenStream {
     let frozen_pipeline = match &leaf.abi {
         Some(crate::jni::compile::OutAbi::Value(value)) => &value.pipeline,

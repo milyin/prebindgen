@@ -88,11 +88,11 @@ The boundary is therefore split into protocol and key:
   methods emit source types from `TypeKind`/identities, constructors from
   `FieldShape`, and private output fragments recorded by Flat. It has no method
   returning a captured spelling or typed source AST.
-- `prebindgen-registry::Emit` is the concrete registry key. Its constructor
-  is registry-private; `write_rust` and `RegistryBuilder::convert_with`
-  hand references to it only to emission callbacks.
-- `Emit` exposes a deliberately narrow forwarding surface such as
-  `emit_source_type`; it does not implement or dereference to `RustEmitter`.
+- `prebindgen-registry::Emit` is the concrete, zero-sized registry key. Its
+  constructor is registry-private and it carries no qualification or model state.
+- `prebindgen-registry::RustWriter` owns the frozen source-module map and the
+  private `Emit` token. Emission callbacks receive `&RustWriter`; its narrow
+  surface generates inert fragments and never returns a captured or typed AST.
 
 This preserves the dependency and mental model:
 
@@ -108,12 +108,12 @@ gaining access to retained source syntax.
 The registry's default path is compiler-checked. `prebindgen-registry` does
 not re-export `RustEmitter` through its `flat` model path, so an adapter that
 depends only on the registry cannot name the protocol or construct
-`prebindgen-registry::Emit`; it can render only after receiving `&Emit` in
+`prebindgen-registry::Emit`; it can render only after receiving `&RustWriter` in
 an emission callback. A compile-fail doctest pins both restrictions.
 
 An adapter could add a direct `prebindgen-flat` dependency and implement the
 public protocol, but that only reproduces the same generate-only operations.
-Workspace adapters still use registry `Emit`, keeping qualification and final
+Workspace adapters use registry `RustWriter`, keeping qualification and final
 symbol policy centralized.
 
 The accidental direct doors introduced by the split are closed:

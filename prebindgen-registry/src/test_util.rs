@@ -127,7 +127,7 @@ pub(crate) trait EmitSourceForTest {
 
 impl EmitSourceForTest for prebindgen_flat::flat::TypeRef {
     fn emit_source(&self) -> proc_macro2::TokenStream {
-        crate::Emit::for_test().emit_source_type(self)
+        crate::RustWriter::for_test().emit_source_type(self)
     }
 }
 

@@ -12,7 +12,7 @@ use prebindgen_registry::{
     generation::{ArtifactId, GenerationPlan, SiteId},
     recipe::Mode,
     write::RustFunction,
-    Emit,
+    RustWriter,
 };
 
 use super::*;
@@ -22,7 +22,7 @@ use super::*;
 pub(crate) struct CCall(chain::Call);
 
 impl CCall {
-    pub(crate) fn ident(&self, emit: &Emit) -> syn::Ident {
+    pub(crate) fn ident(&self, emit: &RustWriter) -> syn::Ident {
         emit.operation_ident("c", self.0.operation_id())
     }
 
@@ -40,7 +40,7 @@ impl chain::Child for CCall {
         &self.0
     }
 
-    fn invoke(&self, value: TokenStream, emit: &prebindgen_registry::Emit) -> TokenStream {
+    fn invoke(&self, value: TokenStream, emit: &prebindgen_registry::RustWriter) -> TokenStream {
         let ident = self.ident(emit);
         quote!(#ident(#value))
     }
@@ -323,7 +323,7 @@ impl RustFunction for CFunction {
         &self.operation
     }
 
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("c", &self.operation);
         match &self.body {
             CBody::Custom(plan) => plan.render(emit, &name),
@@ -423,7 +423,7 @@ pub(crate) struct BorrowPlan {
 }
 
 impl BorrowPlan {
-    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter, name: &syn::Ident) -> syn::ItemFn {
         let source_inner = emit.emit_source_type(&self.source_inner);
         let wire = &self.wire;
         let null_message = &self.null_message;
@@ -514,7 +514,7 @@ pub(crate) struct PayloadPlan {
 }
 
 impl PayloadPlan {
-    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter, name: &syn::Ident) -> syn::ItemFn {
         let source = emit.emit_source_type(&self.source);
         let source_inner = emit.emit_source_type(&self.source_inner);
         let wire = &self.wire;
@@ -656,7 +656,7 @@ pub(crate) struct InputTerminalPlan {
 }
 
 impl InputTerminalPlan {
-    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter, name: &syn::Ident) -> syn::ItemFn {
         let source = emit.emit_source_type(&self.source);
         let wire = &self.wire;
         match &self.operation {
@@ -821,7 +821,7 @@ pub(crate) struct OutputTerminalPlan {
 }
 
 impl OutputTerminalPlan {
-    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter, name: &syn::Ident) -> syn::ItemFn {
         let source = emit.emit_source_type(&self.source);
         let wire = &self.wire;
         match &self.operation {
@@ -957,7 +957,7 @@ impl CustomPlan {
         self.valid.is_some() || self.operation.fallible()
     }
 
-    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter, name: &syn::Ident) -> syn::ItemFn {
         let source = emit.emit_source_type(&self.source);
         let wire = &self.wire;
         let conversion = self.operation.expression(self.direction, &source, wire);
@@ -1124,7 +1124,7 @@ impl CallbackArtifact {
             .collect()
     }
 
-    pub(crate) fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+    pub(crate) fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
         let c_struct = &self.c_struct;
         let arg_wires: Vec<syn::Type> = self
             .arguments
@@ -1157,7 +1157,7 @@ pub(crate) enum CArtifact {
 }
 
 impl CArtifact {
-    pub(crate) fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+    pub(crate) fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
         match self {
             Self::Callback(callback) => callback.render(emit),
             Self::OpaqueHandle(handle) => handle.render(emit),
@@ -1175,7 +1175,7 @@ impl CArtifact {
 pub(crate) fn render_artifacts(
     generation: &GenerationPlan<crate::compile::CRepresentation>,
     kind: &str,
-    emit: &Emit,
+    emit: &RustWriter,
 ) -> Vec<syn::Item> {
     generation
         .artifacts()
@@ -1192,7 +1192,7 @@ pub(crate) struct OpaqueHandleArtifact {
 }
 
 impl OpaqueHandleArtifact {
-    fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+    fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
         let source = emit.emit_source_type(&self.source);
         let c_struct = &self.c_struct;
         let drop_ident = &self.drop_ident;
@@ -1240,7 +1240,7 @@ pub(crate) struct ValueOpaqueArtifact {
 }
 
 impl ValueOpaqueArtifact {
-    fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+    fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
         let source = emit.emit_source_type(&self.source);
         let opaque = &self.opaque;
         let mut items = Vec::new();
@@ -1368,7 +1368,7 @@ impl PayloadCleanup {
         }
     }
 
-    fn render(&self, emit: &Emit, slot: TokenStream) -> TokenStream {
+    fn render(&self, emit: &RustWriter, slot: TokenStream) -> TokenStream {
         match self {
             Self::AllocatedString => quote!(
                 free(#slot as *mut ::core::ffi::c_void);
@@ -1414,7 +1414,7 @@ pub(crate) struct TaggedUnionArtifact {
 }
 
 impl TaggedUnionArtifact {
-    fn render(&self, emit: &Emit) -> Vec<syn::Item> {
+    fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
         let c_name = &self.c_name;
         let variants = self.arms.iter().map(|arm| {
             let alternative = &arm.alternative;
@@ -1519,7 +1519,12 @@ pub(crate) struct InvokePart {
 }
 
 impl chain::InvokePart for InvokePart {
-    fn render(&self, value: &syn::Ident, index: usize, emit: &Emit) -> chain::RenderedInvokePart {
+    fn render(
+        &self,
+        value: &syn::Ident,
+        index: usize,
+        emit: &RustWriter,
+    ) -> chain::RenderedInvokePart {
         assert_eq!(value, &invoke_argument_name(index));
         assert_eq!(value, &self.source);
 
@@ -1689,7 +1694,7 @@ pub(crate) struct InvokePlan {
 }
 
 impl InvokePlan {
-    fn render(&self, emit: &Emit) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let plan = chain::Invoke {
             source: self.source.clone(),
             arguments: self.arguments.clone(),
@@ -1727,7 +1732,7 @@ pub(crate) struct ProductField {
 struct CSource;
 
 impl chain::Source for CSource {
-    fn spell(&self, source: &TypeRef, emit: &Emit) -> TokenStream {
+    fn spell(&self, source: &TypeRef, emit: &RustWriter) -> TokenStream {
         emit.emit_source_type(source)
     }
 }
@@ -1764,7 +1769,7 @@ pub(crate) struct ProductPlan {
 }
 
 impl ProductPlan {
-    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter, name: &syn::Ident) -> syn::ItemFn {
         let chain = chain::Product {
             source: self.source.clone(),
             direction: self.direction,
@@ -1873,7 +1878,7 @@ pub(crate) struct OptionalPlan {
 }
 
 impl OptionalPlan {
-    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter, name: &syn::Ident) -> syn::ItemFn {
         let chain = chain::Optional {
             source: self.source.clone(),
             direction: Direction::Construct,
@@ -1961,7 +1966,7 @@ pub(crate) struct SequencePlan {
 }
 
 impl SequencePlan {
-    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter, name: &syn::Ident) -> syn::ItemFn {
         let composed = chain::Sequence {
             source: self.source.clone(),
             element: self.element.clone(),
@@ -2033,7 +2038,7 @@ impl chain::ChoiceBridge for CChoiceBridge {
         quote!(unsafe { (#value).assume_init() })
     }
 
-    fn arm(&self, emit: &Emit, value: TokenStream, index: usize) -> TokenStream {
+    fn arm(&self, emit: &RustWriter, value: TokenStream, index: usize) -> TokenStream {
         let wire = &self.wire;
         let alternative = &self.alternatives[index];
         let variant = &alternative.name;
@@ -2058,7 +2063,7 @@ impl chain::ChoiceBridge for CChoiceBridge {
         })
     }
 
-    fn build(&self, emit: &Emit, active: usize, value: TokenStream) -> TokenStream {
+    fn build(&self, emit: &RustWriter, active: usize, value: TokenStream) -> TokenStream {
         let wire = &self.wire;
         let alternative = &self.alternatives[active];
         let variant = &alternative.name;
@@ -2108,7 +2113,7 @@ pub(crate) struct ChoicePlan {
 }
 
 impl ChoicePlan {
-    fn render(&self, emit: &Emit, name: &syn::Ident) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter, name: &syn::Ident) -> syn::ItemFn {
         let composed = chain::Choice {
             source: self.source.clone(),
             direction: self.direction,

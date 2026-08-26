@@ -111,7 +111,7 @@ fn encode_plan(
     prefix: &str,
     depth: usize,
     env_expr: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (TokenStream, Vec<EncSlot>) {
     let mut preludes = TokenStream::new();
     let mut slots: Vec<EncSlot> = Vec::new();
@@ -138,7 +138,7 @@ fn encode_field(
     base: &str,
     depth: usize,
     env_expr: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (TokenStream, Vec<EncSlot>) {
     let mut preludes = TokenStream::new();
     let mut slots: Vec<EncSlot> = Vec::new();
@@ -527,7 +527,7 @@ fn encode_field(
 pub(crate) fn render_struct_output_body(
     plan: &StructPlan,
     java_class_name: &str,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> syn::Expr {
     // Recursively flatten the whole object graph into leaf wires, then build it
     // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI

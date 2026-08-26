@@ -136,7 +136,7 @@ pub(crate) fn output_body(spec: &PrimArray) -> syn::Expr {
 pub(crate) fn input_body(
     ty: &prebindgen_registry::flat::TypeRef,
     spec: &PrimArray,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> syn::Expr {
     let key = ty.key();
     // The element spelled from the model's own `Array`, so the local's type
