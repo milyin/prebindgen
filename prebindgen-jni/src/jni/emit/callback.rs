@@ -226,6 +226,10 @@ pub(crate) struct JInvokePlan {
 }
 
 impl JInvokePlan {
+    pub(crate) fn operation_id(&self) -> &prebindgen_registry::OperationId {
+        &self.operation
+    }
+
     pub(crate) fn render(&self, emit: &prebindgen_registry::Emit) -> syn::ItemFn {
         let rendered = self.chain.render(emit);
         let name = emit.operation_ident("jni", &self.operation);

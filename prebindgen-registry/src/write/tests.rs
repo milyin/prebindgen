@@ -70,6 +70,31 @@ struct LatePlan {
     reachable: Rc<Cell<bool>>,
 }
 
+#[derive(Clone)]
+struct OperationPlan {
+    operation: crate::generation::OperationId,
+    reachable: bool,
+    renders: Rc<Cell<usize>>,
+    rendered_reachable: Rc<Cell<bool>>,
+}
+
+impl RustFunction for OperationPlan {
+    fn operation_id(&self) -> Option<&crate::generation::OperationId> {
+        Some(&self.operation)
+    }
+
+    fn should_emit(&self) -> bool {
+        self.reachable
+    }
+
+    fn render(&self, emit: &crate::Emit) -> syn::ItemFn {
+        self.renders.set(self.renders.get() + 1);
+        self.rendered_reachable.set(self.reachable);
+        let ident = emit.operation_ident("test", &self.operation);
+        syn::parse_quote!(fn #ident() {})
+    }
+}
+
 impl RustFunction for LatePlan {
     fn should_emit(&self) -> bool {
         self.reachable.get()
@@ -235,6 +260,58 @@ fn dedup_and_sort() {
     // (uppercase P < lowercase h).
     assert_eq!(items[0].0.to_string(), "Ptr_to_Sample_bbbb");
     assert_eq!(items[1].0.to_string(), "handle_to_u64_aaaa");
+}
+
+#[test]
+fn registry_operations_are_deduplicated_before_rendering() {
+    let item: syn::ItemFn = syn::parse_quote!(
+        fn a_fn() {}
+    );
+    let ident: syn::Ident = syn::parse_quote!(a_fn);
+    let registry =
+        crate::test_util::reg_from_items(vec![(syn::Item::Fn(item), SourceLocation::default())])
+            .expect("index")
+            .export(&ident)
+            .scanned()
+            .expect("scan");
+    let operation = crate::generation::OperationId::shared(
+        crate::generation::ArtifactId::new("test", "shared-converter").expect("identity"),
+        crate::recipe::Direction::Construct,
+    );
+    let renders = Rc::new(Cell::new(0));
+    let rendered_reachable = Rc::new(Cell::new(false));
+    let dormant = OperationPlan {
+        operation: operation.clone(),
+        reachable: false,
+        renders: renders.clone(),
+        rendered_reachable: rendered_reachable.clone(),
+    };
+    let reachable = OperationPlan {
+        operation,
+        reachable: true,
+        renders: renders.clone(),
+        rendered_reachable: rendered_reachable.clone(),
+    };
+    let dir = crate::test_util::unique_test_dir("write_operation_dedup");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    write_rust(
+        &registry,
+        &IdentityExt,
+        &[dormant, reachable],
+        dir.join("gen.rs"),
+    )
+    .expect("write Rust");
+
+    assert_eq!(
+        renders.get(),
+        1,
+        "a shared registry operation must be rendered exactly once"
+    );
+    assert!(
+        rendered_reachable.get(),
+        "a reachable representative must replace an earlier dormant twin"
+    );
 }
 
 #[test]
