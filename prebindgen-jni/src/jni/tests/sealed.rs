@@ -1136,15 +1136,17 @@ fn sum_from_parts_stays_the_property_typed_convenience() {
 #[test]
 fn sum_return_emits_one_match_with_wire_defaults() {
     let (rust, _) = sum_returns("jnigen_sum_match");
-    let at = rust.find("fn Reading_to_tuple").expect("Choice converter");
-    let body = &rust[at..(at + 5000).min(rust.len())];
+    let choice = generated_function(&rust, &["v : myflat :: Reading"], &["match v"]);
+    let choice_name = choice.sig.ident.to_string();
+    let body = choice.block.to_token_stream().to_string();
+    let compact: String = body.split_whitespace().collect();
     assert!(
         body.contains("match v"),
         "one match over the value:\n{body}"
     );
     assert!(
-        body.contains("myflat::Reading::Missing =>")
-            && body.contains("myflat::Reading::Range { low"),
+        compact.contains("myflat::Reading::Missing=>")
+            && compact.contains("myflat::Reading::Range{low:"),
         "arms bind each variant's payload by pattern:\n{body}"
     );
     assert!(
@@ -1157,7 +1159,7 @@ fn sum_return_emits_one_match_with_wire_defaults() {
         .expect("extern");
     let wrapper = &rust[wrapper_at..];
     assert!(
-        wrapper.contains("Reading_to_tuple"),
+        wrapper.contains(&choice_name),
         "the wrapper delegates to the Choice converter:\n{wrapper}"
     );
 }
@@ -1180,7 +1182,7 @@ fn borrowed_sum_return_matches_through_the_reference() {
         // The exact borrowed Choice crossing is frozen during planning, so the
         // wrapper delegates rather than rebuilding the match locally.
         assert!(
-            body.contains("Reading_to_tuple"),
+            body.contains("__jni_out_convert_"),
             "{extern_fn}: delegates to the borrowed Choice chain:\n{body}"
         );
         assert!(
@@ -2892,7 +2894,7 @@ fn borrowed_sequences_keep_their_registry_plan_or_specialized_shape() {
         )
         .expect("plan");
     assert!(
-        specialized && ident == "__jni_parts",
+        specialized && ident.starts_with("__jni_out_convert_"),
         "the flattened callback fold needs only its Sequence shape: {ident}\n{rendered}"
     );
 
@@ -2905,10 +2907,10 @@ fn borrowed_sequences_keep_their_registry_plan_or_specialized_shape() {
     let compact: String = borrowed_rendered.split_whitespace().collect();
     assert!(
         !specialized
-            && borrowed_ident.starts_with("JObject_to_Vec_String_")
+            && borrowed_ident.starts_with("__jni_in_convert_")
             && compact.contains("Result<Vec<String>,__JniErr>")
             && compact.contains("letmut__sequence_values")
-            && compact.contains("JString_to_owned_text"),
+            && compact.contains("__jni_in_convert_"),
         "the borrowed input must retain the executable registry Sequence plan: {borrowed_ident}\n{borrowed_rendered}"
     );
 
@@ -2949,7 +2951,7 @@ fn borrowed_sequences_keep_their_registry_plan_or_specialized_shape() {
 ///
 /// Product, Sequence and Optional have no legacy JNI representation for the
 /// refused input spellings, so resolution names the unsupported type. Choice
-/// does have one: its refused crossings must retain `__jni_parts`, while an
+/// does have one: its refused crossings must retain a non-emitting marker, while an
 /// owned `Box<Reading>` renders the chain converter.
 #[test]
 fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
@@ -2963,7 +2965,7 @@ fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
     .expect("an owned Box output composes");
     let output_compact: String = output.split_whitespace().collect();
     assert!(
-        output_compact.contains("fnBox_Option_String_to_JString"),
+        output_compact.contains("fn__jni_out_convert_"),
         "the output uses the composed Optional converter:\n{output}"
     );
     assert!(
@@ -2991,7 +2993,7 @@ fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
     .expect("an owned Box input composes");
     let input_compact: String = input.split_whitespace().collect();
     assert!(
-        input_compact.contains("fnJString_to_Box_Option_String"),
+        input_compact.contains("fn__jni_in_convert_"),
         "the input uses the composed Optional converter:\n{input}"
     );
     assert!(
@@ -3016,7 +3018,7 @@ fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
             .expect("an owned Box Product composes");
     assert!(
         !legacy
-            && ident.starts_with("tuple1_to_Box_Sample_")
+            && ident.starts_with("__jni_in_convert_")
             && rendered
                 .replace(' ', "")
                 .contains("Box::new(myflat::Sample{"),
@@ -3028,7 +3030,7 @@ fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
     )
     .expect("a Cow Product keeps its compatibility fragment");
     assert!(
-        legacy && ident == "__jni_parts",
+        legacy && ident.starts_with("__jni_in_convert_"),
         "the Cow Product must retain the legacy parts fragment, got {ident}"
     );
 
@@ -3037,7 +3039,7 @@ fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
             .expect("an owned Box Sequence composes");
     assert!(
         !legacy
-            && ident.starts_with("JObject_to_Box_Vec_String_")
+            && ident.starts_with("__jni_in_convert_")
             && rendered
                 .replace(' ', "")
                 .contains("Box::new({let__sequence_list="),
@@ -3059,7 +3061,7 @@ fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
     let rendered_compact: String = rendered.split_whitespace().collect();
     assert!(!legacy, "the owned Choice must select its composed plan");
     assert!(
-        ident.starts_with("Box_Reading_to_tuple3_") && rendered_compact.contains("match*v{"),
+        ident.starts_with("__jni_out_convert_") && rendered_compact.contains("match*v{"),
         "the owned Choice renders its wrapper-aware converter: {ident}\n{rendered}"
     );
 
@@ -3078,7 +3080,7 @@ fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
         let (legacy, ident, _) = choice_wrapper_plan(ty, direction)
             .unwrap_or_else(|error| panic!("the {label} Choice keeps its fallback: {error}"));
         assert!(
-            legacy && ident == "__jni_parts",
+            legacy && ident.starts_with("__jni_"),
             "the {label} Choice must retain the legacy parts fragment, got {ident}"
         );
     }

@@ -1152,7 +1152,7 @@ pub(crate) fn encode_plan_leaves(
                 .chain(encoded.iter().cloned())
                 .collect();
             let pattern = chain.layout.pattern(&pattern_values);
-            let converter = chain.ident;
+            let converter = emit.operation_ident("jni", &chain.operation);
             let on_chain_error = fail(quote!(__chain_error.to_string()));
             let mut stmts = quote! {
                 let #pattern = match #converter(&mut env, #value) {

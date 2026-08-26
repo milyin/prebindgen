@@ -1006,11 +1006,8 @@ impl Compile for Recorder {
     type Plan = String;
     type Error = String;
 
-    fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
-        // A fragment is generated Rust, so a hook is an emission callback and
-        // can spell a model type without naming the flat protocol itself.
-        let spelled = cx.emit().spell(at.crossing.spelled()).to_string();
-        self.hook(at, "atomic", spelled)
+    fn atomic(&mut self, _cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+        self.hook(at, "atomic", "model".to_owned())
     }
 
     fn optional(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
@@ -1151,8 +1148,8 @@ fn a_constructors_parameters_are_the_parts() {
     assert_eq!(
         adapter.calls,
         vec![
-            "atomic u32 construct: u32",
-            "atomic u64 construct: u64",
+            "atomic u32 construct: model",
+            "atomic u64 construct: model",
             "construct Sample construct: sample_new(key=arg0/owned, payload=arg1/owned)",
         ]
     );
@@ -1305,9 +1302,9 @@ fn one_row_answering_three_spellings_still_builds_three_fragments() {
     assert_eq!(
         adapter.calls,
         vec![
-            "atomic Sample deconstruct: Sample",
-            "atomic Sample deconstruct: & Sample",
-            "atomic Sample deconstruct: Box < Sample >",
+            "atomic Sample deconstruct: model",
+            "atomic Sample deconstruct: model",
+            "atomic Sample deconstruct: model",
         ]
     );
 }
@@ -2443,7 +2440,7 @@ fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
         compiled
             .fragment(&key, Direction::Deconstruct)
             .map(|n| n.text.clone()),
-        Some("atomic Sample deconstruct: Sample".to_string()),
+        Some("atomic Sample deconstruct: model".to_string()),
     );
     // … and a caller holding a recipe still reaches that recipe.
     assert!(compiled

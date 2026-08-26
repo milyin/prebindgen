@@ -345,13 +345,13 @@ fn unsized_str_retains_semantic_text_codec_plans() {
         "both output crossings must retain the semantic borrowed-text plan"
     );
     assert_eq!(
-        input.converter_ident(),
-        string_input.converter_ident(),
+        input.converter_id(),
+        string_input.converter_id(),
         "bare str input and String must share the owned-text decoder"
     );
     assert_eq!(
-        bare_output.converter_ident(),
-        ref_output.converter_ident(),
+        bare_output.converter_id(),
+        ref_output.converter_id(),
         "rank-0 str and rank-1 &str must share one normalized converter"
     );
 }
@@ -470,9 +470,9 @@ fn cow_byte_slices_retain_a_late_value_codec() {
     );
     assert!(
         output
-            .converter_ident()
-            .to_string()
-            .contains("Cow_static_u8"),
+            .converter_id()
+            .fragment()
+            .is_some_and(|fragment| fragment.spelling() == &reading.key()),
         "the late codec identity must preserve the crossing's lifetime"
     );
 }
@@ -524,14 +524,14 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
         "{rust}"
     );
     assert!(
-        rc.contains("Some({let__chain_s0=jlong_to_u64_")
-            && rc.contains("let__chain_s1=conversion_into_"),
+        rc.contains("Some({let__chain_s0=__jni_in_convert_")
+            && rc.contains("let__chain_s1=__jni_in_stage_0_"),
         "Option input must compose the raw u64 decoder with the Duration stage:\n{rust}"
     );
     assert!(
         rc.contains("Some(__value)=>{{let__chain_s0=")
-            && rc.contains("conversion_from_")
-            && rc.contains("u64_to_jlong_"),
+            && rc.contains("__jni_out_stage_0_")
+            && rc.contains("__jni_out_convert_"),
         "Option output must compose the Duration stage with the raw u64 encoder:\n{rust}"
     );
     assert!(!rc.contains("Optionbox:"), "{rust}");
@@ -751,24 +751,23 @@ fn flattened_field_composes_bounded_conversion_stages() {
         kc.contains("if(delay==-1L)nullelsedelay.toULong()"),
         "the raw builder adapter must restore the optional niche:\n{kotlin}"
     );
-    assert!(rc.contains("jlong_to_u64"), "{rust}");
-    assert!(rc.contains("conversion_into_"), "{rust}");
+    assert!(rc.contains("__jni_in_stage_0_"), "{rust}");
     assert!(
-        rc.contains("jlong_to_Option_Duration") && rc.contains("env,&__delay_raw)?"),
+        rc.contains("__jni_in_convert_") && rc.contains("env,&__delay_raw)?"),
         "whole-JObject input must invoke the complete optional Duration converter:\n{rust}"
     );
     assert!(
-        rc.contains("let___delay:jni::sys::jlong=Option_Duration_to_jlong")
+        rc.contains("let___delay:jni::sys::jlong=__jni_out_convert_")
             && rc.contains("\"(J)Lio/test/jni/Timed;\""),
         "whole-struct output must pass the niche as primitive jlong:\n{rust}"
     );
     assert!(!rc.contains("let___delay:jni::objects::JObject"), "{rust}");
     assert!(
-        rc.contains("tuple1_to_Timed_") && rc.contains("(&mutenv,(value_delay,))"),
+        rc.contains("__jni_in_convert_") && rc.contains("(&mutenv,(value_delay,))"),
         "the wrapper must delegate Product reconstruction to its registry chain:\n{rust}"
     );
     assert!(
-        rc.contains("Timed_to_tuple1_") && rc.contains("let(__chain_wire0,)=match"),
+        rc.contains("let(__chain_wire0,)=match__jni_out_convert_"),
         "output delivery must delegate Product deconstruction to the same chain:\n{rust}"
     );
 }
@@ -1242,9 +1241,9 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     assert!(rc.contains("ms_value:jni::sys::jlong"), "{rust}");
     assert!(rc.contains("count_value:jni::sys::jint"), "{rust}");
     assert!(rc.contains("mode:jni::sys::jint"), "{rust}");
-    assert!(rc.contains("letms=matchtuple2_to_Option_i64_"), "{rust}");
-    assert!(rc.contains("letcount=matchtuple2_to_Option_i32_"), "{rust}");
-    assert!(rc.contains("letmode=matchjint_to_Option_Mode_"), "{rust}");
+    assert!(rc.contains("letms=match__jni_in_convert_"), "{rust}");
+    assert!(rc.contains("letcount=match__jni_in_convert_"), "{rust}");
+    assert!(rc.contains("letmode=match__jni_in_convert_"), "{rust}");
     assert!(rc.contains("if(v).0==0u8"), "{rust}");
     // The live path feeds the three rebuilt `Option`s straight to the source
     // call — no boxed `JObject` param anywhere in the wrapper.
@@ -1421,7 +1420,7 @@ fn option_scalar_struct_field_flattens() {
     assert!(rc.contains("o_ttl_present:jni::sys::jboolean"), "{rust}");
     assert!(rc.contains("o_ttl_value:jni::sys::jlong"), "{rust}");
     assert!(
-        rc.contains("tuple3_to_Opts_")
+        rc.contains("__jni_in_convert_")
             && rc.contains("(o_id,(o_ttl_present,o_ttl_value),(o_flag_present,o_flag_value))"),
         "{rust}"
     );
@@ -1549,7 +1548,7 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     assert!(kc.contains("jMode:Int"), "{kotlin}");
     assert!(kc.contains("j.inner.id"), "{kotlin}");
     assert!(
-        rc.contains("tuple4_to_Job_")
+        rc.contains("__jni_in_convert_")
             && rc.contains("((j_inner_id,),j_level,(j_ttl_present,j_ttl_value),j_mode)"),
         "{rust}"
     );
@@ -1691,15 +1690,18 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     assert!(kc.contains("hPresent:Boolean"), "{kotlin}");
     assert!(kc.contains("hObject:io.test.jni.ObjectChild?"), "{kotlin}");
     assert!(kc.contains("h?.object_"), "{kotlin}");
-    assert!(rc.contains("JObject_to_ObjectChild"), "{rust}");
     assert!(
-        rc.contains("_to_Option_Hybrid_") && rc.contains("(&mutenv,(h_present,((h_flat_id,),"),
+        rc.contains("Result<myflat::ObjectChild,__JniErr>"),
+        "{rust}"
+    );
+    assert!(
+        rc.contains("__jni_in_convert_") && rc.contains("(&mutenv,(h_present,((h_flat_id,),"),
         "the wrapper must pass the gate and nested Product tuple to one Optional chain:\n{rust}"
     );
     assert!(
         rc.contains("if(v).0==0u8")
             && rc.contains("::core::option::Option::Some(")
-            && rc.contains("_to_Hybrid_"),
+            && rc.contains("__jni_in_convert_"),
         "the Optional chain must guard and delegate its present child to the Product chain:\n{rust}"
     );
     assert!(
@@ -1851,42 +1853,31 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     assert!(kc.contains("e.token.markConsumed()"), "{kotlin}");
     assert!(kc.contains("e.spare?.markConsumed()"), "{kotlin}");
     assert!(
-        rc.contains("lete=matchtuple2_to_Envelope_") && rc.contains("e_token,e_spare"),
+        rc.contains("lete=match__jni_in_convert_") && rc.contains("e_token,e_spare"),
         "the wrapper must hand the two handle wires to one Product chain:\n{rust}"
     );
-    let token_converter_suffix = rc
-        .split("token:jlong_to_Token_")
-        .nth(1)
-        .and_then(|tail| tail.split_once("(env,&((v).0))?"))
-        .map(|(suffix, _)| suffix)
-        .expect("the Product chain must call Token's converter");
+    let token_converter = generated_function(
+        &rust,
+        &["jni :: sys :: jlong", "myflat :: Token"],
+        &["Box :: from_raw", "* v == 0", "* v & 1"],
+    );
+    let token_converter_name = token_converter.sig.ident.to_string();
     assert!(
-        token_converter_suffix.ends_with("_owned"),
+        rc.contains(&format!("token:{token_converter_name}(env,&((v).0))?")),
         "the Product chain must consume Token through its owned converter:\n{rust}"
     );
     assert!(
-        rc.contains("spare:jlong_to_Option_Token_") && rc.contains("env,&((v).1))?"),
+        rc.contains("spare:__jni_in_convert_") && rc.contains("env,&((v).1))?"),
         "the registry chain must own the optional field conversion:\n{rust}"
     );
-    let file = syn::parse_file(&rust).expect("generated Rust parses");
-    let optional_helper = file
-        .items
-        .iter()
-        .filter_map(|item| match item {
-            syn::Item::Fn(function) => Some(function),
-            _ => None,
-        })
-        .find(|function| {
-            function
-                .sig
-                .ident
-                .to_string()
-                .starts_with("jlong_to_Option_Token_")
-        })
-        .expect("the reached Optional plan must be emitted");
+    let optional_helper = generated_function(
+        &rust,
+        &["jni :: sys :: jlong", "Option < myflat :: Token >"],
+        &["Option :: Some"],
+    );
     let optional_body = quote::ToTokens::to_token_stream(&optional_helper.block).to_string();
     assert!(
-        optional_body.contains("jlong_to_Token_") && optional_body.contains("_owned"),
+        optional_body.contains(&token_converter_name),
         "the Optional plan must delegate its present arm to the owned child plan:\n{rust}"
     );
     assert!(
@@ -1947,18 +1938,11 @@ fn owned_handle_sites_reuse_the_frozen_pipeline() {
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let file = syn::parse_file(&rust).expect("generated Rust parses");
 
-    let helper = file
-        .items
-        .iter()
-        .filter_map(|item| match item {
-            syn::Item::Fn(function) => Some(function),
-            _ => None,
-        })
-        .find(|function| {
-            let name = function.sig.ident.to_string();
-            name.starts_with("jlong_to_Token_") && name.ends_with("_owned")
-        })
-        .expect("the reached owned-handle plan must be emitted");
+    let helper = generated_function(
+        &rust,
+        &["jni :: sys :: jlong", "myflat :: Token"],
+        &["Box :: from_raw", "* v == 0", "* v & 1"],
+    );
     let helper_name = helper.sig.ident.to_string();
     let helper_body = quote::ToTokens::to_token_stream(&helper.block).to_string();
     assert!(
@@ -2038,28 +2022,13 @@ fn whole_object_handle_field_calls_its_reached_owned_plan() {
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let file = syn::parse_file(&rust).expect("generated Rust parses");
 
-    let functions = file.items.iter().filter_map(|item| match item {
-        syn::Item::Fn(function) => Some(function),
-        _ => None,
-    });
-    let helper = functions
-        .clone()
-        .find(|function| {
-            let name = function.sig.ident.to_string();
-            name.starts_with("jlong_to_Token_") && name.ends_with("_owned")
-        })
-        .expect("the reached owned-handle plan must be emitted");
+    let helper = generated_function(
+        &rust,
+        &["jni :: sys :: jlong", "myflat :: Token"],
+        &["Box :: from_raw", "* v == 0", "* v & 1"],
+    );
     let helper_name = helper.sig.ident.to_string();
-    let decoder = functions
-        .clone()
-        .find(|function| {
-            function
-                .sig
-                .ident
-                .to_string()
-                .starts_with("JObject_to_Container_")
-        })
-        .expect("Container whole-object decoder");
+    let decoder = generated_function(&rust, &["JObject", "myflat :: Container"], &["get_field"]);
     let decoder_body = quote::ToTokens::to_token_stream(&decoder.block).to_string();
     assert_eq!(
         decoder_body.matches(&helper_name).count(),
@@ -2418,8 +2387,11 @@ fn option_composition_normalizes_fallible_stage_errors() {
         rc.matches("__e.to_string()").count() >= 2,
         "input and output stages must both normalize their raw errors:\n{rust}"
     );
-    assert!(rc.contains("JObject_to_Option_Percent"), "{rust}");
-    assert!(rc.contains("Option_Percent_to_JObject"), "{rust}");
+    assert!(
+        rc.contains("Result<Option<myflat::Percent>,__JniErr>"),
+        "{rust}"
+    );
+    assert!(rc.contains("v:Option<myflat::Percent>"), "{rust}");
 }
 
 /// Binding-local conversion fns via the ONE vocabulary —
@@ -2475,14 +2447,14 @@ fn convert_via_local_fns() {
     assert!(rc.contains("crate::conv::label_in("), "{rust}");
     assert!(rc.contains("crate::conv::label_out("), "{rust}");
     assert!(
-        rc.contains("let__chain_s0=JString_to_owned_text_")
-            && rc.contains("let__chain_s1=conversion_into_")
+        rc.contains("let__chain_s0=__jni_in_convert_")
+            && rc.contains("let__chain_s1=__jni_in_stage_0_")
             && rc.contains("Result::<_,__JniErr>::Ok(__chain_s1)"),
         "the ordinary input must invoke its frozen terminal-then-stage pipeline:\n{rust}"
     );
     assert!(
-        rc.contains("let__chain_s0=conversion_from_")
-            && rc.contains("owned_text_to_JString_")
+        rc.contains("let__chain_s0=__jni_out_stage_0_")
+            && rc.contains("__jni_out_convert_")
             && rc.contains("env,__chain_s0)"),
         "the ordinary output must invoke its frozen stage-then-terminal pipeline:\n{rust}"
     );
@@ -2534,16 +2506,16 @@ fn multi_stage_pipeline_preserves_registry_order() {
     let rc: String = rust.split_whitespace().collect();
 
     assert!(
-        rc.contains("let__chain_s0=JString_to_owned_text_")
-            && rc.contains("let__chain_s1=conversion_into_")
-            && rc.contains("let__chain_s2=conversion_into_")
+        rc.contains("let__chain_s0=__jni_in_convert_")
+            && rc.contains("let__chain_s1=__jni_in_stage_0_")
+            && rc.contains("let__chain_s2=__jni_in_stage_0_")
             && rc.contains("Result::<_,__JniErr>::Ok(__chain_s2)"),
         "construct must run terminal, inner stage, then outer stage:\n{rust}"
     );
     assert!(
-        rc.contains("let__chain_s0=conversion_from_")
-            && rc.contains("let__chain_s1=conversion_from_")
-            && rc.contains("owned_text_to_JString_")
+        rc.contains("let__chain_s0=__jni_out_stage_0_")
+            && rc.contains("let__chain_s1=__jni_out_stage_0_")
+            && rc.contains("__jni_out_convert_")
             && rc.contains("env,__chain_s1)"),
         "deconstruct must run outer stage, inner stage, then terminal:\n{rust}"
     );
@@ -2909,7 +2881,7 @@ fn an_optional_handle_field_mints_through_the_factory() {
         .expect("Bag states a composition");
     assert_eq!(
         bag.iter()
-            .map(|(name, kt_ty, access, _, target, nullable, ..)| format!(
+            .map(|(name, kt_ty, access, target, nullable, ..)| format!(
                 "{name}: {kt_ty} = {access} @ {target:?} null={nullable}"
             ))
             .collect::<Vec<_>>(),

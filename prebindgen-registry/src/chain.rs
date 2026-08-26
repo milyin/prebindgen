@@ -9,14 +9,24 @@ use proc_macro2::TokenStream;
 
 use crate::{
     flat::{Alternative, TypeRef},
+    generation::OperationId,
     recipe::{Direction, Mode},
     Emit,
 };
 
+/// Semantic target of one generated converter call.
+#[derive(Clone)]
+pub enum CallTarget {
+    /// Adapter-authored name retained by a compatibility plan.
+    Named(syn::Ident),
+    /// Registry-owned operation whose Rust name is chosen only at rendering.
+    Operation(OperationId),
+}
+
 /// The callable contract of one generated converter.
 #[derive(Clone)]
 pub struct Call {
-    ident: syn::Ident,
+    target: CallTarget,
     fallible: bool,
     unsafe_: bool,
 }
@@ -25,15 +35,35 @@ impl Call {
     /// Record a callable contract without retaining its rendered signature.
     pub fn new(ident: syn::Ident, fallible: bool, unsafe_: bool) -> Self {
         Self {
-            ident,
+            target: CallTarget::Named(ident),
+            fallible,
+            unsafe_,
+        }
+    }
+
+    /// Record a registry-owned operation without choosing a Rust name.
+    pub fn operation(operation: OperationId, fallible: bool, unsafe_: bool) -> Self {
+        Self {
+            target: CallTarget::Operation(operation),
             fallible,
             unsafe_,
         }
     }
 
     /// Generated function identifier.
-    pub fn ident(&self) -> &syn::Ident {
-        &self.ident
+    pub fn ident(&self) -> Option<&syn::Ident> {
+        match &self.target {
+            CallTarget::Named(ident) => Some(ident),
+            CallTarget::Operation(_) => None,
+        }
+    }
+
+    /// Registry operation targeted by this call, if it is late-named.
+    pub fn operation_id(&self) -> Option<&OperationId> {
+        match &self.target {
+            CallTarget::Named(_) => None,
+            CallTarget::Operation(operation) => Some(operation),
+        }
     }
 
     /// Whether invoking the converter produces a `Result`.
@@ -84,7 +114,7 @@ pub trait Child: Clone {
     fn call(&self) -> &Call;
 
     /// Invoke this child chain for one intermediate/source value.
-    fn invoke(&self, value: TokenStream) -> TokenStream;
+    fn invoke(&self, value: TokenStream, emit: &Emit) -> TokenStream;
 }
 
 impl Child for Call {
@@ -92,14 +122,16 @@ impl Child for Call {
         self
     }
 
-    fn invoke(&self, value: TokenStream) -> TokenStream {
-        let ident = self.ident();
+    fn invoke(&self, value: TokenStream, _emit: &Emit) -> TokenStream {
+        let ident = self
+            .ident()
+            .expect("a registry operation needs an adapter renderer");
         quote::quote!(#ident(#value))
     }
 }
 
-fn child_value<C: Child>(child: &C, value: TokenStream) -> TokenStream {
-    let call = child.invoke(value);
+fn child_value<C: Child>(child: &C, value: TokenStream, emit: &Emit) -> TokenStream {
+    let call = child.invoke(value, emit);
     if child.call().fallible() {
         quote::quote!(#call?)
     } else {
@@ -538,7 +570,7 @@ where
                     .map(|(index, part)| {
                         let name = part.name.clone();
                         let value = self.bridge.part(quote::quote!(v), index, &name);
-                        let value = child_value(&part.child, value);
+                        let value = child_value(&part.child, value, emit);
                         (name, value)
                     })
                     .collect();
@@ -560,7 +592,7 @@ where
                             Mode::Shared => quote::quote!(&(#field)),
                             Mode::Exclusive => quote::quote!(&mut (#field)),
                         };
-                        let child = child_value(&part.child, field);
+                        let child = child_value(&part.child, field, emit);
                         let child = if part.hold_uninit {
                             quote::quote!(::core::mem::MaybeUninit::new(#child))
                         } else {
@@ -597,7 +629,7 @@ where
             Direction::Construct => {
                 let absent = self.bridge.is_absent();
                 let present = self.bridge.present(quote::quote!(v));
-                let child = child_value(&self.child, quote::quote!(__present));
+                let child = child_value(&self.child, quote::quote!(__present), emit);
                 let canonical = quote::quote!({
                     if #absent {
                         ::core::option::Option::None
@@ -612,7 +644,7 @@ where
             Direction::Deconstruct => {
                 let value = self.source_policy.read(quote::quote!(v));
                 let absent = self.bridge.build_absent();
-                let child = child_value(&self.child, quote::quote!(__value));
+                let child = child_value(&self.child, quote::quote!(__value), emit);
                 let present = self.bridge.build_present(child);
                 syn::parse2(quote::quote!({
                     match #value {
@@ -646,7 +678,7 @@ where
             Direction::Construct => {
                 let begin = self.bridge.begin(quote::quote!(v));
                 let next = self.bridge.next();
-                let child = child_value(&self.child, quote::quote!(__sequence_part));
+                let child = child_value(&self.child, quote::quote!(__sequence_part), emit);
                 let canonical = quote::quote!({
                     #begin
                     let mut __sequence_values: ::std::vec::Vec<#element> =
@@ -662,7 +694,7 @@ where
             Direction::Deconstruct => {
                 let value = self.source_policy.read(quote::quote!(v));
                 let begin = self.bridge.begin_output(quote::quote!(__sequence_source));
-                let child = child_value(&self.child, quote::quote!(__sequence_element));
+                let child = child_value(&self.child, quote::quote!(__sequence_element), emit);
                 let push = self.bridge.push(quote::quote!(__sequence_part));
                 let finish = self.bridge.finish();
                 syn::parse2(quote::quote!({
@@ -721,7 +753,7 @@ where
                                 }
                             };
                             let value = arm.bridge.part(quote::quote!(__arm), part_index, &name);
-                            child_value(&part.child, value)
+                            child_value(&part.child, value, emit)
                         })
                         .collect();
                     let shaped: Vec<_> = arm
@@ -795,7 +827,7 @@ where
                                 Mode::Shared => quote::quote!(&*#binding),
                                 Mode::Exclusive => quote::quote!(&mut *#binding),
                             };
-                            let value = child_value(&part.child, value);
+                            let value = child_value(&part.child, value, emit);
                             let value = if part.hold_uninit {
                                 quote::quote!(::core::mem::MaybeUninit::new(#value))
                             } else {

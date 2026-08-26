@@ -64,6 +64,37 @@ fn yield_of(id: &FragmentId, mode: Mode, validity: Validity) -> Yield {
     }
 }
 
+#[test]
+fn operation_identity_is_owned_by_fragment_and_role() {
+    let model = model();
+    let input = fragment_id(&model, "Leaf", Direction::Construct);
+    let output = fragment_id(&model, "Leaf", Direction::Deconstruct);
+
+    let converter = OperationId::converter(input.clone());
+    let stage0 = OperationId::stage(input.clone(), 0);
+    let stage1 = OperationId::stage(input, 1);
+    let output_converter = OperationId::converter(output);
+
+    assert_ne!(converter, stage0);
+    assert_ne!(stage0, stage1);
+    assert_ne!(converter, output_converter);
+    assert!(matches!(converter.role(), OperationRole::Converter));
+    assert!(matches!(stage0.role(), OperationRole::Stage(0)));
+}
+
+#[test]
+fn sequence_operation_identity_is_shared_only_by_carrier_and_direction() {
+    let model = model();
+    let carrier = ty(&model, "Leaf");
+
+    let first = OperationId::sequence_converter(&carrier, Direction::Construct);
+    let same = OperationId::sequence_converter(&carrier, Direction::Construct);
+    let reverse = OperationId::sequence_converter(&carrier, Direction::Deconstruct);
+
+    assert_eq!(first, same);
+    assert_ne!(first, reverse);
+}
+
 fn atomic(model: &Flat, id: FragmentId, failure: Failure, mode: Mode) -> FragmentPlan<Fake> {
     FragmentPlan::new(
         id.clone(),

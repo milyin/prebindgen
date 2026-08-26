@@ -35,7 +35,7 @@ use super::{
 };
 use crate::{
     flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef},
-    Emit, FragmentId,
+    FragmentId,
 };
 
 /// What a fragment produces, which is the only thing the registry reads out of
@@ -93,8 +93,20 @@ pub struct At<'a> {
     pub recipe: &'a RecipeKey,
 }
 
-/// What every hook receives: a read-only view of the model and the table, and
-/// the capability to emit Rust.
+impl At<'_> {
+    /// Stable registry identity of the fragment being compiled.
+    pub fn fragment_id(&self) -> FragmentId {
+        FragmentId::new(self.crossing.spelled().key(), self.recipe.clone())
+    }
+
+    /// Sequence-converter identity for a model carrier deliberately shared by
+    /// owned collections and borrowed views.
+    pub fn sequence_converter_for(&self, carrier: &TypeRef) -> crate::OperationId {
+        crate::OperationId::sequence_converter(carrier, self.crossing.direction())
+    }
+}
+
+/// What every hook receives: a read-only view of the model and the table.
 ///
 /// A hook asks the registry nothing and records nothing in it. What it produces
 /// is its fragment, and what the registry reads of that is
@@ -102,18 +114,9 @@ pub struct At<'a> {
 pub struct Cx<'a> {
     model: &'a Flat,
     recipes: &'a Recipes,
-    emit: &'a Emit,
 }
 
 impl Cx<'_> {
-    /// The Rust-emission capability.
-    ///
-    /// A fragment is generated Rust, so compiling one is an emission callback
-    /// and is handed the key exactly as `Prebindgen`'s `on_*` methods are.
-    pub fn emit(&self) -> &Emit {
-        self.emit
-    }
-
     /// The model every structural fact is read off.
     pub fn model(&self) -> &Flat {
         self.model
@@ -442,7 +445,6 @@ pub struct Compiler<'a, C: Compile> {
     recipes: &'a Recipes,
     bindings: &'a Bindings,
     compiled: Compiled<C::Fragment>,
-    emit: Emit,
 }
 
 impl<'a, C: Compile> Compiler<'a, C> {
@@ -463,7 +465,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
             recipes,
             bindings,
             compiled,
-            emit: Emit::new(),
         }
     }
 
@@ -547,7 +548,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let mut cx = Cx {
             model: self.model,
             recipes: self.recipes,
-            emit: &self.emit,
         };
         adapter
             .plan(&mut cx, &bound, &root)
@@ -894,7 +894,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let mut cx = Cx {
             model: self.model,
             recipes: self.recipes,
-            emit: &self.emit,
         };
         match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
@@ -914,7 +913,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let mut cx = Cx {
             model: self.model,
             recipes: self.recipes,
-            emit: &self.emit,
         };
         adapter
             .choice(&mut cx, at, &paired)
@@ -927,7 +925,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
         Cx {
             model: self.model,
             recipes: self.recipes,
-            emit: &self.emit,
         }
     }
 

@@ -111,6 +111,7 @@ fn encode_plan(
     prefix: &str,
     depth: usize,
     env_expr: &TokenStream,
+    emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, Vec<EncSlot>) {
     let mut preludes = TokenStream::new();
     let mut slots: Vec<EncSlot> = Vec::new();
@@ -119,7 +120,7 @@ fn encode_plan(
         let fname = &f.fname;
         let base = format!("{}_{}", prefix, fname);
         let value = quote! { #access.#fname };
-        let (pre, sl) = encode_field(&f.kind, &value, &base, depth, env_expr);
+        let (pre, sl) = encode_field(&f.kind, &value, &base, depth, env_expr, emit);
         preludes.extend(pre);
         slots.extend(sl);
     }
@@ -137,6 +138,7 @@ fn encode_field(
     base: &str,
     depth: usize,
     env_expr: &TokenStream,
+    emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, Vec<EncSlot>) {
     let mut preludes = TokenStream::new();
     let mut slots: Vec<EncSlot> = Vec::new();
@@ -145,7 +147,8 @@ fn encode_field(
         // The leaf's COMPLETE chain, not just its wire-facing converter: a
         // `convert!`-declared type (`Duration`) reaches the wire through its
         // rust-side stages first (`Duration → u64 → jlong`).
-        let conv_value = |conv: &ConvChain| -> TokenStream { conv.call(env_expr, value, base) };
+        let conv_value =
+            |conv: &ConvChain| -> TokenStream { conv.call(env_expr, value, base, emit) };
         match kind {
             // Projection leaf (opaque handle → jlong, `ULong` → jlong).
             PlanFieldKind::Projection { conv, proj, .. } => {
@@ -244,14 +247,14 @@ fn encode_field(
             } => {
                 if !*optional {
                     let (child_pre, child_slots) =
-                        encode_plan(child, value, base, depth + 1, env_expr);
+                        encode_plan(child, value, base, depth + 1, env_expr, emit);
                     preludes.extend(child_pre);
                     slots.extend(child_slots);
                 } else {
                     let cbind = format_ident!("__c{}", depth);
                     let child_access = quote! { #cbind };
                     let (child_pre, child_slots) =
-                        encode_plan(child, &child_access, base, depth + 1, env_expr);
+                        encode_plan(child, &child_access, base, depth + 1, env_expr, emit);
                     let flag_id = format_ident!("__{}_present", base);
                     let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
                         .map(|i| format_ident!("__{}_o{}", base, i))
@@ -331,7 +334,8 @@ fn encode_field(
                     for (f, bind) in v.fields.iter().zip(&binds) {
                         let fbase = format!("{base}_{}", f.slot);
                         let bind_expr = quote!(#bind);
-                        let (p, s) = encode_field(&f.kind, &bind_expr, &fbase, depth + 1, env_expr);
+                        let (p, s) =
+                            encode_field(&f.kind, &bind_expr, &fbase, depth + 1, env_expr, emit);
                         vpre.extend(p);
                         vslots.extend(s);
                     }
@@ -520,13 +524,17 @@ fn encode_field(
 /// class are all frozen before this point. This function only turns that plan
 /// into the final converter body; it performs no registry or declaration
 /// lookup and cannot rediscover source-type facts.
-pub(crate) fn render_struct_output_body(plan: &StructPlan, java_class_name: &str) -> syn::Expr {
+pub(crate) fn render_struct_output_body(
+    plan: &StructPlan,
+    java_class_name: &str,
+    emit: &prebindgen_registry::Emit,
+) -> syn::Expr {
     // Recursively flatten the whole object graph into leaf wires, then build it
     // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI
     // crossing. The Kotlin `fromParts` factory (recursively flattened the same
     // way in `render_data_class_source`) reassembles the graph in bytecode.
     let access = quote!(v);
-    let (preludes, slots) = encode_plan(plan, &access, "", 0, &quote!(env));
+    let (preludes, slots) = encode_plan(plan, &access, "", 0, &quote!(env), emit);
 
     let mut sig = String::from("(");
     let mut args: Vec<TokenStream> = Vec::new();

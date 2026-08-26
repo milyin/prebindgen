@@ -444,8 +444,8 @@ fn rust_side_only_input_type() {
     // The wrapper folds the ctor Rust-side.
     assert!(rc.contains("myflat::z_opts_new("), "{rust}");
     assert!(
-        rc.contains("let__chain_s0=JString_to_owned_text_")
-            && rc.contains("let__chain_s1=conversion_into_"),
+        rc.contains("let__chain_s0=__jni_in_convert_")
+            && rc.contains("let__chain_s1=__jni_in_stage_0_"),
         "the expansion leaf must invoke its frozen terminal-then-stage pipeline:\n{rust}"
     );
 
@@ -2074,13 +2074,16 @@ fn optional_selector_dispatch_end_to_end() {
     // selector surface because the identity arm does not use it. The native ABI
     // must nevertheless stay allocation-free: Kotlin sends presence + raw
     // primitive, and the registry Optional chain gates the scalar conversion.
-    assert_eq!(rc.matches("fntuple2_to_Option_u16_").count(), 1, "{rust}");
+    assert_eq!(
+        rc.matches("Result<Option<u16>,__JniErr>").count(),
+        1,
+        "{rust}"
+    );
     assert!(
         rc.contains("encoding_0_0_present:jni::sys::jboolean"),
         "{rust}"
     );
     assert!(rc.contains("encoding_0_0_value:jni::sys::jint"), "{rust}");
-    assert!(!rc.contains("JObject_to_Option_u16"), "{rust}");
     assert!(!rc.contains("intValue"), "{rust}");
 
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
@@ -2374,7 +2377,7 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
         )
         .expect("Option<Mid> parts row");
     assert!(
-        composed_only && ident == "__jni_parts",
+        composed_only && ident.starts_with("__jni_out_convert_"),
         "the unsupported whole-value shape must remain a non-rendering parts row"
     );
 }
@@ -2530,9 +2533,9 @@ fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
         .expect("read Rust");
     let rc: String = rust.split_whitespace().collect();
     assert!(
-        rc.contains("reading:tuple5_to_Reading_")
-            && rc.contains("fallback:tuple2_to_Option_Reading_")
-            && rc.contains("::core::option::Option::Some(tuple5_to_Reading_"),
+        rc.contains("reading:__jni_in_convert_")
+            && rc.contains("fallback:__jni_in_convert_")
+            && rc.contains("::core::option::Option::Some(__jni_in_convert_"),
         "Product and Optional parents must delegate the sum walk to the Choice converter:\n{rust}"
     );
     assert!(

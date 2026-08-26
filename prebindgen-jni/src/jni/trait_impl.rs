@@ -1121,12 +1121,20 @@ pub(crate) fn flat_unit_enum<'r>(
 impl Declarations {
     pub(crate) fn dispatch_fn_input(
         &self,
+        operation: OperationId,
         source: &prebindgen_registry::flat::TypeRef,
         args: &[prebindgen_registry::flat::TypeRef],
         registry: &impl Conversions,
         arg_fragments: &[&crate::jni::compile::JFrag],
     ) -> Option<(ConverterImpl<KotlinMeta>, crate::jni::chain::JFunction)> {
-        let (wire, plan) = callback_input(self, source, args, registry, arg_fragments)?;
+        let (wire, plan) = callback_input(
+            self,
+            operation.clone(),
+            source,
+            args,
+            registry,
+            arg_fragments,
+        )?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
         // (`Any`) — same as the unfold builder / error-sink params. The typed
@@ -1135,7 +1143,7 @@ impl Declarations {
         let conv = ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            converter: plan.name().clone(),
+            converter: operation,
             destination: wire,
             niches,
             metadata: self.framework_meta(Some(KtType::any())),

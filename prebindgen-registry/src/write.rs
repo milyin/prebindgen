@@ -87,11 +87,6 @@ impl std::error::Error for WriteError {}
 /// validation are complete, with the same [`crate::Emit`] capability used for
 /// the rest of final Rust emission.
 pub trait RustFunction {
-    /// The private function name this plan renders. Naming the plan before
-    /// rendering lets the writer validate reachability without granting source
-    /// spelling capability to planning.
-    fn ident(&self) -> &syn::Ident;
-
     /// Whether this plan is reachable from the generated adapter surface.
     /// Validation-only plans may return false and remain available for diagnostics.
     fn should_emit(&self) -> bool {
@@ -103,10 +98,6 @@ pub trait RustFunction {
 }
 
 impl RustFunction for syn::ItemFn {
-    fn ident(&self) -> &syn::Ident {
-        &self.sig.ident
-    }
-
     fn render(&self, _emit: &crate::Emit) -> syn::ItemFn {
         self.clone()
     }
@@ -143,11 +134,6 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
     // deliberately does not.
     let emit = crate::Emit::new();
     let mut items: Vec<syn::Item> = Vec::new();
-
-    let converter_names: BTreeSet<String> = conversions
-        .iter()
-        .map(|plan| plan.ident().to_string())
-        .collect();
 
     // 0. Adapter prerequisites — runtime-support items (helper structs,
     //    type aliases) the converter bodies depend on. Emitted first so
@@ -219,12 +205,20 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
 
     // Render converters only after per-item planning has marked the late plans
     // reachable, while still placing them before adapter output in the file.
-    let conversions = conversions
+    let conversions: Vec<_> = conversions
         .iter()
-        .filter(|plan| plan.should_emit())
-        .map(|plan| plan.render(&emit))
+        .map(|plan| (plan.should_emit(), plan.render(&emit)))
         .collect();
-    for (_, item_fn) in dedup_by_name(conversions) {
+    let converter_names: BTreeSet<String> = conversions
+        .iter()
+        .map(|(_, function)| function.sig.ident.to_string())
+        .collect();
+    for (_, item_fn) in dedup_by_name(
+        conversions
+            .into_iter()
+            .filter_map(|(emit, function)| emit.then_some(function))
+            .collect(),
+    ) {
         items.push(syn::Item::Fn(item_fn));
     }
     items.extend(body_items);

@@ -6,8 +6,7 @@ use std::ops::Deref;
 ///
 /// The flat crate owns the rendering protocol because it owns the syntax. The
 /// registry owns this concrete key and its private constructor, so ordinary
-/// registry users can receive an `Emit` only in `Prebindgen` and
-/// `RegistryBuilder::convert_with` callbacks.
+/// registry users receive an `Emit` only during final `write_rust` callbacks.
 ///
 /// ```compile_fail
 /// use prebindgen_registry::Emit;
@@ -41,6 +40,31 @@ impl Emit {
     pub fn for_test() -> Self {
         Self::new()
     }
+
+    /// Allocate the final private Rust symbol for a registry-owned operation.
+    ///
+    /// `namespace` is adapter vocabulary (for example `"jni"`), not a Rust
+    /// type spelling. This method lives on the emission capability so neither
+    /// the registry plan nor a language adapter can turn model identity into a
+    /// Rust identifier before final file assembly.
+    pub fn operation_ident(
+        &self,
+        namespace: &str,
+        operation: &crate::generation::OperationId,
+    ) -> syn::Ident {
+        let direction = match operation.direction() {
+            crate::recipe::Direction::Construct => "in",
+            crate::recipe::Direction::Deconstruct => "out",
+        };
+        let role = match operation.role() {
+            crate::generation::OperationRole::Converter => "convert".to_string(),
+            crate::generation::OperationRole::Stage(index) => format!("stage_{index}"),
+        };
+        quote::format_ident!(
+            "__{namespace}_{direction}_{role}_{:016x}",
+            operation.stable_fingerprint()
+        )
+    }
 }
 
 impl prebindgen_flat::RustEmitter for Emit {}
@@ -52,5 +76,27 @@ impl Deref for Emit {
 
     fn deref(&self) -> &Self::Target {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{ArtifactId, Direction, OperationId};
+
+    use super::Emit;
+
+    #[test]
+    fn operation_symbols_are_stable_and_writer_scoped() {
+        let operation = OperationId::shared(
+            ArtifactId::new("test-codec", "owned").unwrap(),
+            Direction::Construct,
+        );
+        let emit = Emit::for_test();
+
+        let first = emit.operation_ident("test", &operation);
+        let second = emit.operation_ident("test", &operation);
+
+        assert_eq!(first, second);
+        assert!(first.to_string().starts_with("__test_in_convert_"));
     }
 }

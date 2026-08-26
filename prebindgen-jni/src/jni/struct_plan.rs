@@ -48,7 +48,7 @@ pub(crate) enum LeafForm {
 /// followed by the wire-facing converter (`u64 → jlong`).
 ///
 /// A leaf must carry the whole chain, not just
-/// [`converter_ident`](prebindgen_registry::ConverterImpl::converter_ident):
+/// [`converter_id`](prebindgen_registry::ConverterImpl::converter_id):
 /// calling only the wire-facing function would hand it the *semantic* value
 /// (a `Duration`) where it expects the *representation* (a `u64`), which does
 /// not compile. Structural wrappers (`Option<_>`, `Vec<_>`) already compose
@@ -57,9 +57,9 @@ pub(crate) enum LeafForm {
 pub(crate) struct ConvChain {
     /// Rust-side stages in output execution order — each consumes the
     /// previous one's result, the first consumes the Rust value.
-    pub stages: Vec<syn::Ident>,
+    pub stages: Vec<prebindgen_registry::OperationId>,
     /// The wire-facing converter, applied last.
-    pub function: syn::Ident,
+    pub function: prebindgen_registry::OperationId,
 }
 
 impl ConvChain {
@@ -70,20 +70,27 @@ impl ConvChain {
                 .output_stage_order()
                 .map(|(_, stage)| stage.converter.clone())
                 .collect(),
-            function: entry.converter_ident().clone(),
+            function: entry.converter_id().clone(),
         }
     }
 
     /// The expression converting `value` (a Rust value expression) to this
     /// leaf's wire form, propagating any stage error with `?`.
-    pub(crate) fn call(&self, env: &TokenStream, value: &TokenStream, base: &str) -> TokenStream {
-        let function = &self.function;
+    pub(crate) fn call(
+        &self,
+        env: &TokenStream,
+        value: &TokenStream,
+        base: &str,
+        emit: &prebindgen_registry::Emit,
+    ) -> TokenStream {
+        let function = emit.operation_ident("jni", &self.function);
         if self.stages.is_empty() {
             return quote! { #function(#env, #value.clone())? };
         }
         let mut body = TokenStream::new();
         let mut previous = quote!(#value.clone());
         for (order, stage) in self.stages.iter().enumerate() {
+            let stage = emit.operation_ident("jni", stage);
             let next = format_ident!("__{}_s{}", base, order);
             body.extend(quote! {
                 let #next = #stage(#env, #previous)

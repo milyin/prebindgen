@@ -15,6 +15,34 @@ fn myflat_loc() -> prebindgen::SourceLocation {
     }
 }
 
+/// Locate one generated Rust function by semantic evidence in its signature
+/// and body. Private converter symbols are deliberately chosen only during
+/// final rendering, so tests must not reverse-engineer meaning from them.
+fn generated_function(
+    rust: &str,
+    signature_needles: &[&str],
+    body_needles: &[&str],
+) -> syn::ItemFn {
+    let file = syn::parse_file(rust).expect("generated Rust parses");
+    file.items
+        .into_iter()
+        .filter_map(|item| match item {
+            syn::Item::Fn(function) => Some(function),
+            _ => None,
+        })
+        .find(|function| {
+            let signature = function.sig.to_token_stream().to_string();
+            let body = function.block.to_token_stream().to_string();
+            signature_needles.iter().all(|needle| signature.contains(needle))
+                && body_needles.iter().all(|needle| body.contains(needle))
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "generated function not found; signature={signature_needles:?}, body={body_needles:?}\n{rust}"
+            )
+        })
+}
+
 mod aliasing;
 mod callbacks;
 mod config;

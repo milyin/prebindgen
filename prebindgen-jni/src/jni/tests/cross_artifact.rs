@@ -536,7 +536,7 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
     let compact: String = rust.split_whitespace().collect();
     assert!(
         compact.contains("Box::new(move|__cb_arg0:&myflat::Payload|")
-            && compact.contains(")=matchPayload_to_")
+            && compact.contains(")=match__jni_out_convert_")
             && compact.contains("(&mutenv,__cb_arg0,")
             && !compact.contains("__cb_arg0.id")
             && !compact.contains("__cb_arg0.name"),
