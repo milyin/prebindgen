@@ -827,12 +827,9 @@ impl JniGenBuilder {
             .flat_map(|f| {
                 std::iter::once(f.rust.clone())
                     .chain(f.rust_stages.iter().cloned())
-                    .chain(
-                        f.conv
-                            .pre_stages
-                            .iter()
-                            .map(|s| crate::jni::chain::JFunction::retained(s.function.clone())),
-                    )
+                    .chain(f.conv.pre_stages.iter().map(|s| {
+                        crate::jni::chain::JFunction::marker(s.function.sig.ident.clone())
+                    }))
             })
             .collect();
         let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry);

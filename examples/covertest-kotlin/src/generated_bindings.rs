@@ -11041,8 +11041,6 @@ pub(crate) unsafe fn WrappedFields_to_JObject_f14f08c1<'a>(
         __obj
     })
 }
-#[allow(dead_code)]
-fn __jni_parts() {}
 #[allow(
     non_snake_case,
     unused_mut,
