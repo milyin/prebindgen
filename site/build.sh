@@ -30,3 +30,5 @@ rm -rf "$out"
 mkdir -p "$out"
 cp site/index.html "$out/index.html"
 cp -r target/doc "$out/doc"
+# cargo's own build lock, not part of the site.
+rm -f "$out/doc/.lock"
