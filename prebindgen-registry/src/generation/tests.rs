@@ -95,6 +95,54 @@ fn sequence_operation_identity_is_shared_only_by_carrier_and_direction() {
     assert_ne!(first, reverse);
 }
 
+#[test]
+fn composed_operation_identity_covers_shape_carrier_mode_and_representation() {
+    let model = model();
+    let carrier = ty(&model, "Pair");
+    let tuple = ArtifactId::new("test-product", "tuple").unwrap();
+    let object = ArtifactId::new("test-product", "object").unwrap();
+
+    let product =
+        OperationId::product_converter(&carrier, Mode::Owned, tuple.clone(), Direction::Construct);
+    let same =
+        OperationId::product_converter(&carrier, Mode::Owned, tuple.clone(), Direction::Construct);
+    let optional =
+        OperationId::optional_converter(&carrier, Mode::Owned, tuple.clone(), Direction::Construct);
+    let construct_for_borrow =
+        OperationId::product_converter(&carrier, Mode::Shared, tuple.clone(), Direction::Construct);
+    let deconstruct_owned = OperationId::product_converter(
+        &carrier,
+        Mode::Owned,
+        tuple.clone(),
+        Direction::Deconstruct,
+    );
+    let deconstruct_borrowed =
+        OperationId::product_converter(&carrier, Mode::Shared, tuple, Direction::Deconstruct);
+    let differently_represented =
+        OperationId::product_converter(&carrier, Mode::Owned, object, Direction::Construct);
+
+    assert_eq!(product, same);
+    assert_ne!(product, optional);
+    assert_eq!(product, construct_for_borrow);
+    assert_ne!(deconstruct_owned, deconstruct_borrowed);
+    assert_ne!(product, differently_represented);
+}
+
+#[test]
+fn model_artifact_identity_shares_only_the_same_adapter_contract() {
+    let model = model();
+    let carrier = ty(&model, "Leaf");
+    let borrow = ArtifactId::new("test-handle", "borrow").unwrap();
+    let consume = ArtifactId::new("test-handle", "consume").unwrap();
+
+    let first = OperationId::model_artifact(&carrier, borrow.clone(), Direction::Construct);
+    let same = OperationId::model_artifact(&carrier, borrow, Direction::Construct);
+    let different = OperationId::model_artifact(&carrier, consume, Direction::Construct);
+
+    assert_eq!(first, same);
+    assert_ne!(first, different);
+}
+
 fn atomic(model: &Flat, id: FragmentId, failure: Failure, mode: Mode) -> FragmentPlan<Fake> {
     FragmentPlan::new(
         id.clone(),

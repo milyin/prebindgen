@@ -359,6 +359,15 @@ complete, and the renderer may spell retained types and allocate private Rust
 symbols while assembling the file. Needing source Rust syntax earlier means a
 fact is missing from the Flat model and must be added there.
 
+An operation is shared by its conversion contract, not by the recipe row that
+happened to request it. For composed converters that contract includes the
+shape, model carrier, ownership mode when deconstructing, direction, and the
+adapter-declared intermediate representation. Adapter terminals likewise name
+their semantic operation, such as borrowing or consuming an opaque handle.
+The final writer turns that identity into a readable private symbol: a bounded
+semantic stem followed by a stable hash. The hash disambiguates the name; it
+does not replace the model and adapter vocabulary useful to a reader.
+
 The generated code has to name Rust types. Where a source function's parameter
 is written `&Sample`, the converter for it has to produce a `&Sample`, because
 that is what the call takes and `Sample` would not compile there. What

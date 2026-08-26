@@ -233,7 +233,7 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadVec
             return;
         }
     };
-    let __e_label = match __jni_in_convert_wire_to_Option_Box_String_f126b423383d3dae(
+    let __e_label = match __jni_in_convert_wire_to_Option_Box_String_jni_optional_intermediate_input_niche_87b03b4201168b29(
         &mut env,
         &e_label,
     ) {
@@ -342,7 +342,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d<
     clippy::eq_op
 )]
 #[inline(always)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary16_76052a0370bc40b8<
+pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary16_jni_product_intermediate_tuple_e8ffc41ce78124d4<
     'env,
     'a,
 >(
@@ -371,31 +371,14 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary16_76052a0370bc40b8<
     ),
 ) -> ::core::result::Result<perftest_flat::ObjectBoundary16, __JniErr> {
     ::core::result::Result::Ok(perftest_flat::ObjectBoundary16 {
-        left: __jni_in_convert_wire_to_ObjectBoundary8_610f056a507fbb82(env, (v).0)?,
-        right: __jni_in_convert_wire_to_ObjectBoundary8_610f056a507fbb82(env, (v).1)?,
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-#[inline(always)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary2_7d8fc573cbc748ce<'env, 'a>(
-    env: &mut jni::JNIEnv<'env>,
-    v: ((jni::sys::jlong,), (jni::sys::jlong,)),
-) -> ::core::result::Result<perftest_flat::ObjectBoundary2, __JniErr> {
-    ::core::result::Result::Ok(perftest_flat::ObjectBoundary2 {
-        left: __jni_in_convert_wire_to_ObjectBoundaryLeaf_be1c52d332355372(env, (v).0)?,
-        right: __jni_in_convert_wire_to_ObjectBoundaryLeaf_be1c52d332355372(env, (v).1)?,
+        left: __jni_in_convert_wire_to_ObjectBoundary8_jni_product_intermediate_tuple_4e665030ef655cf9(
+            env,
+            (v).0,
+        )?,
+        right: __jni_in_convert_wire_to_ObjectBoundary8_jni_product_intermediate_tuple_4e665030ef655cf9(
+            env,
+            (v).1,
+        )?,
     })
 }
 #[allow(
@@ -440,6 +423,38 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb<'
             left,
             right,
         }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary2_jni_product_intermediate_tuple_37d2083cec1ab44b<
+    'env,
+    'a,
+>(
+    env: &mut jni::JNIEnv<'env>,
+    v: ((jni::sys::jlong,), (jni::sys::jlong,)),
+) -> ::core::result::Result<perftest_flat::ObjectBoundary2, __JniErr> {
+    ::core::result::Result::Ok(perftest_flat::ObjectBoundary2 {
+        left: __jni_in_convert_wire_to_ObjectBoundaryLeaf_jni_product_intermediate_tuple_1a6620ad58b014cf(
+            env,
+            (v).0,
+        )?,
+        right: __jni_in_convert_wire_to_ObjectBoundaryLeaf_jni_product_intermediate_tuple_1a6620ad58b014cf(
+            env,
+            (v).1,
+        )?,
     })
 }
 #[allow(
@@ -503,7 +518,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21<
     clippy::eq_op
 )]
 #[inline(always)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary32_b748febb1c1ced34<
+pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary32_jni_product_intermediate_tuple_fa270ebfc88aa9e2<
     'env,
     'a,
 >(
@@ -556,34 +571,14 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary32_b748febb1c1ced34<
     ),
 ) -> ::core::result::Result<perftest_flat::ObjectBoundary32, __JniErr> {
     ::core::result::Result::Ok(perftest_flat::ObjectBoundary32 {
-        left: __jni_in_convert_wire_to_ObjectBoundary16_76052a0370bc40b8(env, (v).0)?,
-        right: __jni_in_convert_wire_to_ObjectBoundary16_76052a0370bc40b8(env, (v).1)?,
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-#[inline(always)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary4_ea4f1c0add25b75a<'env, 'a>(
-    env: &mut jni::JNIEnv<'env>,
-    v: (
-        ((jni::sys::jlong,), (jni::sys::jlong,)),
-        ((jni::sys::jlong,), (jni::sys::jlong,)),
-    ),
-) -> ::core::result::Result<perftest_flat::ObjectBoundary4, __JniErr> {
-    ::core::result::Result::Ok(perftest_flat::ObjectBoundary4 {
-        left: __jni_in_convert_wire_to_ObjectBoundary2_7d8fc573cbc748ce(env, (v).0)?,
-        right: __jni_in_convert_wire_to_ObjectBoundary2_7d8fc573cbc748ce(env, (v).1)?,
+        left: __jni_in_convert_wire_to_ObjectBoundary16_jni_product_intermediate_tuple_e8ffc41ce78124d4(
+            env,
+            (v).0,
+        )?,
+        right: __jni_in_convert_wire_to_ObjectBoundary16_jni_product_intermediate_tuple_e8ffc41ce78124d4(
+            env,
+            (v).1,
+        )?,
     })
 }
 #[allow(
@@ -628,6 +623,41 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f<'
             left,
             right,
         }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary4_jni_product_intermediate_tuple_e940f3772c7beded<
+    'env,
+    'a,
+>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (
+        ((jni::sys::jlong,), (jni::sys::jlong,)),
+        ((jni::sys::jlong,), (jni::sys::jlong,)),
+    ),
+) -> ::core::result::Result<perftest_flat::ObjectBoundary4, __JniErr> {
+    ::core::result::Result::Ok(perftest_flat::ObjectBoundary4 {
+        left: __jni_in_convert_wire_to_ObjectBoundary2_jni_product_intermediate_tuple_37d2083cec1ab44b(
+            env,
+            (v).0,
+        )?,
+        right: __jni_in_convert_wire_to_ObjectBoundary2_jni_product_intermediate_tuple_37d2083cec1ab44b(
+            env,
+            (v).1,
+        )?,
     })
 }
 #[allow(
@@ -690,8 +720,55 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary64Object_3c7cf869ff4
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary64_9d95f2f133e7e0ab<
+    'env,
+    'v,
+>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary64, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/perftest/ObjectBoundary32;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary64.left: {}", e)))?;
+        let left = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+            env,
+            &__left_raw,
+        )?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/perftest/ObjectBoundary32;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary64.right: {}", e)))?;
+        let right = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+            env,
+            &__right_raw,
+        )?;
+        perftest_flat::ObjectBoundary64 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 #[inline(always)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary64_156e6453247e086c<
+pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary64_jni_product_intermediate_tuple_0a10a5cc1f8d19f9<
     'env,
     'a,
 >(
@@ -792,87 +869,14 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary64_156e6453247e086c<
     ),
 ) -> ::core::result::Result<perftest_flat::ObjectBoundary64, __JniErr> {
     ::core::result::Result::Ok(perftest_flat::ObjectBoundary64 {
-        left: __jni_in_convert_wire_to_ObjectBoundary32_b748febb1c1ced34(env, (v).0)?,
-        right: __jni_in_convert_wire_to_ObjectBoundary32_b748febb1c1ced34(env, (v).1)?,
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary64_9d95f2f133e7e0ab<
-    'env,
-    'v,
->(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<perftest_flat::ObjectBoundary64, __JniErr> {
-    Ok({
-        let __left_raw: jni::objects::JObject = env
-            .get_field(v, "left", "Lio/prebindgen/perftest/ObjectBoundary32;")
-            .and_then(|val| val.l())
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("ObjectBoundary64.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+        left: __jni_in_convert_wire_to_ObjectBoundary32_jni_product_intermediate_tuple_fa270ebfc88aa9e2(
             env,
-            &__left_raw,
-        )?;
-        let __right_raw: jni::objects::JObject = env
-            .get_field(v, "right", "Lio/prebindgen/perftest/ObjectBoundary32;")
-            .and_then(|val| val.l())
-            .map_err(|e| <__JniErr as ::core::convert::From<
-                String,
-            >>::from(format!("ObjectBoundary64.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+            (v).0,
+        )?,
+        right: __jni_in_convert_wire_to_ObjectBoundary32_jni_product_intermediate_tuple_fa270ebfc88aa9e2(
             env,
-            &__right_raw,
-        )?;
-        perftest_flat::ObjectBoundary64 {
-            left,
-            right,
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-#[inline(always)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary8_610f056a507fbb82<'env, 'a>(
-    env: &mut jni::JNIEnv<'env>,
-    v: (
-        (
-            ((jni::sys::jlong,), (jni::sys::jlong,)),
-            ((jni::sys::jlong,), (jni::sys::jlong,)),
-        ),
-        (
-            ((jni::sys::jlong,), (jni::sys::jlong,)),
-            ((jni::sys::jlong,), (jni::sys::jlong,)),
-        ),
-    ),
-) -> ::core::result::Result<perftest_flat::ObjectBoundary8, __JniErr> {
-    ::core::result::Result::Ok(perftest_flat::ObjectBoundary8 {
-        left: __jni_in_convert_wire_to_ObjectBoundary4_ea4f1c0add25b75a(env, (v).0)?,
-        right: __jni_in_convert_wire_to_ObjectBoundary4_ea4f1c0add25b75a(env, (v).1)?,
+            (v).1,
+        )?,
     })
 }
 #[allow(
@@ -932,6 +936,47 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267<'
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+#[inline(always)]
+pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary8_jni_product_intermediate_tuple_4e665030ef655cf9<
+    'env,
+    'a,
+>(
+    env: &mut jni::JNIEnv<'env>,
+    v: (
+        (
+            ((jni::sys::jlong,), (jni::sys::jlong,)),
+            ((jni::sys::jlong,), (jni::sys::jlong,)),
+        ),
+        (
+            ((jni::sys::jlong,), (jni::sys::jlong,)),
+            ((jni::sys::jlong,), (jni::sys::jlong,)),
+        ),
+    ),
+) -> ::core::result::Result<perftest_flat::ObjectBoundary8, __JniErr> {
+    ::core::result::Result::Ok(perftest_flat::ObjectBoundary8 {
+        left: __jni_in_convert_wire_to_ObjectBoundary4_jni_product_intermediate_tuple_e940f3772c7beded(
+            env,
+            (v).0,
+        )?,
+        right: __jni_in_convert_wire_to_ObjectBoundary4_jni_product_intermediate_tuple_e940f3772c7beded(
+            env,
+            (v).1,
+        )?,
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837<
     'env,
     'v,
@@ -966,7 +1011,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab83
     clippy::eq_op
 )]
 #[inline(always)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundaryLeaf_be1c52d332355372<
+pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundaryLeaf_jni_product_intermediate_tuple_1a6620ad58b014cf<
     'env,
     'a,
 >(
@@ -990,7 +1035,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundaryLeaf_be1c52d33235537
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Box_String_73f6c5c86559c6bb<
+pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Box_String_jni_optional_intermediate_input_niche_87b03b4201168b29<
     'env,
     'v,
 >(
@@ -1021,38 +1066,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Box_String_73f6c5c86559c6bb
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Box_String_f126b423383d3dae<
+pub(crate) unsafe fn __jni_in_convert_wire_to_PayloadHandler_jni_handle_codec_borrow_input_f89cfeecbb4e240b<
     'env,
     'v,
 >(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JString<'v>,
-) -> ::core::result::Result<Option<Box<String>>, __JniErr> {
-    ::core::result::Result::Ok({
-        if v.is_null() {
-            ::core::option::Option::None
-        } else {
-            let __present = v;
-            ::core::option::Option::Some(
-                __jni_in_convert_wire_to_Box_String_7bf3c88ef26eb8e6(env, __present)?,
-            )
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_PayloadHandler_e4895c11bbbc838b<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::PayloadHandler>, __JniErr> {
@@ -1078,7 +1095,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_PayloadHandler_e4895c11bbbc838b<'e
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_in_convert_wire_to_PayloadVecHandler_d8e79b31bcd89bc1<
+pub(crate) unsafe fn __jni_in_convert_wire_to_PayloadVecHandler_jni_handle_codec_borrow_input_1b365539726eca03<
     'env,
     'v,
 >(
@@ -1147,7 +1164,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_7e701167233e784f<'env, 'v>
                 String,
             >>::from(format!("Payload.label: {}", e)))?;
         let __label_raw: jni::objects::JString = __label_jobj.into();
-        let label = __jni_in_convert_wire_to_Option_Box_String_73f6c5c86559c6bb(
+        let label = __jni_in_convert_wire_to_Option_Box_String_jni_optional_intermediate_input_niche_87b03b4201168b29(
             env,
             &__label_raw,
         )?;
@@ -1174,7 +1191,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_7e701167233e784f<'env, 'v>
     clippy::eq_op
 )]
 #[inline(always)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_b513edb620dfdfc0<'env, 'a>(
+pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_jni_product_intermediate_tuple_f379fad611b26734<
+    'env,
+    'a,
+>(
     env: &mut jni::JNIEnv<'env>,
     v: (
         jni::sys::jlong,
@@ -1189,7 +1209,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_b513edb620dfdfc0<'env, 'a>
         seq: __jni_in_convert_wire_to_i32_83b133e23cc76fc5(env, &((v).1))?,
         value: __jni_in_convert_wire_to_f64_b312e1b95182cdfd(env, &((v).2))?,
         flag: __jni_in_convert_wire_to_bool_1be2f6c32f925207(env, &((v).3))?,
-        label: __jni_in_convert_wire_to_Option_Box_String_f126b423383d3dae(
+        label: __jni_in_convert_wire_to_Option_Box_String_jni_optional_intermediate_input_niche_87b03b4201168b29(
             env,
             &((v).4),
         )?,
@@ -1208,42 +1228,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_b513edb620dfdfc0<'env, 'a>
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_c3df77514bd5cc7a<'env, 'a>(
-    env: &mut jni::JNIEnv<'env>,
-    v: (
-        jni::sys::jlong,
-        jni::sys::jint,
-        jni::sys::jdouble,
-        jni::sys::jboolean,
-        jni::objects::JString<'a>,
-    ),
-) -> ::core::result::Result<perftest_flat::Payload, __JniErr> {
-    ::core::result::Result::Ok(perftest_flat::Payload {
-        id: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &((v).0))?,
-        seq: __jni_in_convert_wire_to_i32_83b133e23cc76fc5(env, &((v).1))?,
-        value: __jni_in_convert_wire_to_f64_b312e1b95182cdfd(env, &((v).2))?,
-        flag: __jni_in_convert_wire_to_bool_1be2f6c32f925207(env, &((v).3))?,
-        label: __jni_in_convert_wire_to_Option_Box_String_f126b423383d3dae(
-            env,
-            &((v).4),
-        )?,
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_Storage_99421593897c9a39<'env, 'v>(
+pub(crate) unsafe fn __jni_in_convert_wire_to_Storage_jni_handle_codec_borrow_input_697104a332693566<
+    'env,
+    'v,
+>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::Storage>, __JniErr> {
@@ -1269,7 +1257,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Storage_99421593897c9a39<'env, 'v>
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_in_convert_wire_to_TokenGc_036ac1505a9349d1<'env, 'v>(
+pub(crate) unsafe fn __jni_in_convert_wire_to_TokenGc_jni_handle_codec_borrow_input_7a9be906e3827840<
+    'env,
+    'v,
+>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::TokenGc>, __JniErr> {
@@ -1295,7 +1286,10 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_TokenGc_036ac1505a9349d1<'env, 'v>
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_in_convert_wire_to_Token_86597e11b848ad69<'env, 'v>(
+pub(crate) unsafe fn __jni_in_convert_wire_to_Token_jni_handle_codec_borrow_input_52a62575119c2292<
+    'env,
+    'v,
+>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::Token>, __JniErr> {
@@ -1524,7 +1518,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Payload_Send_Sync_static_d
                                 __chain_wire2,
                                 __chain_wire3,
                                 __chain_wire4,
-                            ) = match __jni_out_convert_Payload_to_wire_f6bf146be8fa557d(
+                            ) = match __jni_out_convert_Payload_jni_product_intermediate_tuple_to_wire_c5a1c01cf2cbf49b(
                                 &mut env,
                                 __cb_elem,
                             ) {
@@ -1686,7 +1680,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Payload_Send_Sync_static_e
                         __chain_wire2,
                         __chain_wire3,
                         __chain_wire4,
-                    ) = match __jni_out_convert_Payload_to_wire_f6bf146be8fa557d(
+                    ) = match __jni_out_convert_Payload_jni_product_intermediate_tuple_to_wire_c5a1c01cf2cbf49b(
                         &mut env,
                         __cb_arg0,
                     ) {
@@ -1747,32 +1741,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Payload_Send_Sync_static_e
                 .map_err(|e| tracing::error!("{} callback error: {e}", "Fn(& Payload)"));
         })
     })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_in_convert_wire_to_mut_Storage_7a864418559ab41b<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::sys::jlong,
-) -> ::core::result::Result<OwnedObject<perftest_flat::Storage>, __JniErr> {
-    if *v == 0 || (*v & 1) == 1 {
-        return ::core::result::Result::Err(
-            <__JniErr as ::core::convert::From<
-                String,
-            >>::from("Operation on a closed native handle.".to_string()),
-        );
-    }
-    Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Storage) })
 }
 #[allow(
     non_snake_case,
@@ -3200,7 +3168,9 @@ pub(crate) unsafe fn __jni_out_convert_ObjectBoundaryLeaf_to_wire_5fe53ac5e29e73
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_out_convert_Option_Box_String_to_wire_363bc88e65ad7eb6<'a>(
+pub(crate) unsafe fn __jni_out_convert_Option_Box_String_jni_optional_intermediate_output_niche_to_wire_57342b1f497b4507<
+    'a,
+>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Box<String>>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
@@ -3226,33 +3196,9 @@ pub(crate) unsafe fn __jni_out_convert_Option_Box_String_to_wire_363bc88e65ad7eb
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_out_convert_Option_Box_String_to_wire_a1cfa72d162a26fb<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: Option<Box<String>>,
-) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    ::core::result::Result::Ok({
-        match v {
-            ::core::option::Option::Some(__value) => {
-                __jni_out_convert_Box_String_to_wire_445d29257759cad9(env, __value)?
-            }
-            ::core::option::Option::None => jni::objects::JObject::null().into(),
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_out_convert_Option_Payload_to_wire_1d19d5111e218745<'a>(
+pub(crate) unsafe fn __jni_out_convert_Option_Payload_jni_optional_intermediate_output_gated_to_wire_730d90b5c47c15bd<
+    'a,
+>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Payload>,
 ) -> ::core::result::Result<
@@ -3271,7 +3217,13 @@ pub(crate) unsafe fn __jni_out_convert_Option_Payload_to_wire_1d19d5111e218745<'
     ::core::result::Result::Ok({
         match v {
             ::core::option::Option::Some(__value) => {
-                (1u8, __jni_out_convert_Payload_to_wire_a1896992c7215def(env, __value)?)
+                (
+                    1u8,
+                    __jni_out_convert_Payload_jni_product_intermediate_tuple_to_wire_eec5c9986df64b1f(
+                        env,
+                        __value,
+                    )?,
+                )
             }
             ::core::option::Option::None => {
                 (
@@ -3301,7 +3253,9 @@ pub(crate) unsafe fn __jni_out_convert_Option_Payload_to_wire_1d19d5111e218745<'
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_out_convert_PayloadHandler_to_wire_579ebacb02daa37a<'a>(
+pub(crate) unsafe fn __jni_out_convert_PayloadHandler_jni_handle_codec_own_output_to_wire_43900b235bf7afc4<
+    'a,
+>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::PayloadHandler,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
@@ -3320,11 +3274,93 @@ pub(crate) unsafe fn __jni_out_convert_PayloadHandler_to_wire_579ebacb02daa37a<'
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_out_convert_PayloadVecHandler_to_wire_d076f22715a17f92<'a>(
+pub(crate) unsafe fn __jni_out_convert_PayloadVecHandler_jni_handle_codec_own_output_to_wire_43a858e44952716c<
+    'a,
+>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::PayloadVecHandler,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn __jni_out_convert_Payload_jni_product_intermediate_tuple_to_wire_c5a1c01cf2cbf49b<
+    'a,
+>(
+    env: &mut jni::JNIEnv<'a>,
+    v: &perftest_flat::Payload,
+) -> ::core::result::Result<
+    (
+        jni::sys::jlong,
+        jni::sys::jint,
+        jni::sys::jdouble,
+        jni::sys::jboolean,
+        jni::objects::JString<'a>,
+    ),
+    __JniErr,
+> {
+    ::core::result::Result::Ok((
+        __jni_out_convert_i64_to_wire_15d458bf28dc9c80(env, (*&(v.id)).clone())?,
+        __jni_out_convert_i32_to_wire_67173b19ae5a9348(env, (*&(v.seq)).clone())?,
+        __jni_out_convert_f64_to_wire_61461de12ea6bc04(env, (*&(v.value)).clone())?,
+        __jni_out_convert_bool_to_wire_3ee62077915d5228(env, (*&(v.flag)).clone())?,
+        __jni_out_convert_Option_Box_String_jni_optional_intermediate_output_niche_to_wire_57342b1f497b4507(
+            env,
+            (*&(v.label)).clone(),
+        )?,
+    ))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+#[inline(always)]
+pub(crate) unsafe fn __jni_out_convert_Payload_jni_product_intermediate_tuple_to_wire_eec5c9986df64b1f<
+    'a,
+>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Payload,
+) -> ::core::result::Result<
+    (
+        jni::sys::jlong,
+        jni::sys::jint,
+        jni::sys::jdouble,
+        jni::sys::jboolean,
+        jni::objects::JString<'a>,
+    ),
+    __JniErr,
+> {
+    ::core::result::Result::Ok((
+        __jni_out_convert_i64_to_wire_15d458bf28dc9c80(env, v.id)?,
+        __jni_out_convert_i32_to_wire_67173b19ae5a9348(env, v.seq)?,
+        __jni_out_convert_f64_to_wire_61461de12ea6bc04(env, v.value)?,
+        __jni_out_convert_bool_to_wire_3ee62077915d5228(env, v.flag)?,
+        __jni_out_convert_Option_Box_String_jni_optional_intermediate_output_niche_to_wire_57342b1f497b4507(
+            env,
+            v.label,
+        )?,
+    ))
 }
 #[allow(
     non_snake_case,
@@ -3360,7 +3396,7 @@ pub(crate) unsafe fn __jni_out_convert_Payload_to_wire_69366211464f4172<'a>(
             env,
             v.flag.clone(),
         )?;
-        let ___label: jni::objects::JObject = __jni_out_convert_Option_Box_String_to_wire_363bc88e65ad7eb6(
+        let ___label: jni::objects::JObject = __jni_out_convert_Option_Box_String_jni_optional_intermediate_output_niche_to_wire_57342b1f497b4507(
                 env,
                 v.label.clone(),
             )?
@@ -3398,80 +3434,9 @@ pub(crate) unsafe fn __jni_out_convert_Payload_to_wire_69366211464f4172<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-#[inline(always)]
-pub(crate) unsafe fn __jni_out_convert_Payload_to_wire_a1896992c7215def<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Payload,
-) -> ::core::result::Result<
-    (
-        jni::sys::jlong,
-        jni::sys::jint,
-        jni::sys::jdouble,
-        jni::sys::jboolean,
-        jni::objects::JString<'a>,
-    ),
-    __JniErr,
-> {
-    ::core::result::Result::Ok((
-        __jni_out_convert_i64_to_wire_15d458bf28dc9c80(env, v.id)?,
-        __jni_out_convert_i32_to_wire_67173b19ae5a9348(env, v.seq)?,
-        __jni_out_convert_f64_to_wire_61461de12ea6bc04(env, v.value)?,
-        __jni_out_convert_bool_to_wire_3ee62077915d5228(env, v.flag)?,
-        __jni_out_convert_Option_Box_String_to_wire_a1cfa72d162a26fb(env, v.label)?,
-    ))
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-#[inline(always)]
-pub(crate) unsafe fn __jni_out_convert_Payload_to_wire_f6bf146be8fa557d<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: &perftest_flat::Payload,
-) -> ::core::result::Result<
-    (
-        jni::sys::jlong,
-        jni::sys::jint,
-        jni::sys::jdouble,
-        jni::sys::jboolean,
-        jni::objects::JString<'a>,
-    ),
-    __JniErr,
-> {
-    ::core::result::Result::Ok((
-        __jni_out_convert_i64_to_wire_15d458bf28dc9c80(env, (*&(v.id)).clone())?,
-        __jni_out_convert_i32_to_wire_67173b19ae5a9348(env, (*&(v.seq)).clone())?,
-        __jni_out_convert_f64_to_wire_61461de12ea6bc04(env, (*&(v.value)).clone())?,
-        __jni_out_convert_bool_to_wire_3ee62077915d5228(env, (*&(v.flag)).clone())?,
-        __jni_out_convert_Option_Box_String_to_wire_a1cfa72d162a26fb(
-            env,
-            (*&(v.label)).clone(),
-        )?,
-    ))
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_out_convert_Storage_to_wire_9bfc5b6575cba75a<'a>(
+pub(crate) unsafe fn __jni_out_convert_Storage_jni_handle_codec_own_output_to_wire_056c9dbddefcfc91<
+    'a,
+>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Storage,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
@@ -3490,7 +3455,9 @@ pub(crate) unsafe fn __jni_out_convert_Storage_to_wire_9bfc5b6575cba75a<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_out_convert_TokenGc_to_wire_894668ed6ace655e<'a>(
+pub(crate) unsafe fn __jni_out_convert_TokenGc_jni_handle_codec_own_output_to_wire_57de0a29947b0f2f<
+    'a,
+>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::TokenGc,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
@@ -3509,7 +3476,9 @@ pub(crate) unsafe fn __jni_out_convert_TokenGc_to_wire_894668ed6ace655e<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_out_convert_Token_to_wire_3fcb24c9f0b3430e<'a>(
+pub(crate) unsafe fn __jni_out_convert_Token_jni_handle_codec_own_output_to_wire_b192d32dc3b323dd<
+    'a,
+>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Token,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
@@ -3685,7 +3654,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_largeFlatInputSum
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let value = match __jni_in_convert_wire_to_ObjectBoundary64_156e6453247e086c(
+    let value = match __jni_in_convert_wire_to_ObjectBoundary64_jni_product_intermediate_tuple_0a10a5cc1f8d19f9(
         &mut env,
         (
             (
@@ -3982,7 +3951,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadHandlerNew
         }
     };
     let __out = perftest_flat::payload_handler_new(f);
-    match __jni_out_convert_PayloadHandler_to_wire_579ebacb02daa37a(&mut env, __out) {
+    match __jni_out_convert_PayloadHandler_jni_handle_codec_own_output_to_wire_43900b235bf7afc4(
+        &mut env,
+        __out,
+    ) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4027,7 +3999,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadVecHandler
         }
     };
     let __out = perftest_flat::payload_vec_handler_new(f);
-    match __jni_out_convert_PayloadVecHandler_to_wire_d076f22715a17f92(&mut env, __out) {
+    match __jni_out_convert_PayloadVecHandler_jni_handle_codec_own_output_to_wire_43a858e44952716c(
+        &mut env,
+        __out,
+    ) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4055,7 +4030,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallback<'
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match __jni_in_convert_wire_to_Storage_99421593897c9a39(&mut env, &s) {
+    let s = match __jni_in_convert_wire_to_Storage_jni_handle_codec_borrow_input_697104a332693566(
+        &mut env,
+        &s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4069,7 +4047,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallback<'
             return ();
         }
     };
-    let handler = match __jni_in_convert_wire_to_PayloadHandler_e4895c11bbbc838b(
+    let handler = match __jni_in_convert_wire_to_PayloadHandler_jni_handle_codec_borrow_input_f89cfeecbb4e240b(
         &mut env,
         &handler,
     ) {
@@ -4115,7 +4093,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallbackVe
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match __jni_in_convert_wire_to_Storage_99421593897c9a39(&mut env, &s) {
+    let s = match __jni_in_convert_wire_to_Storage_jni_handle_codec_borrow_input_697104a332693566(
+        &mut env,
+        &s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4129,7 +4110,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallbackVe
             return ();
         }
     };
-    let handler = match __jni_in_convert_wire_to_PayloadVecHandler_d8e79b31bcd89bc1(
+    let handler = match __jni_in_convert_wire_to_PayloadVecHandler_jni_handle_codec_borrow_input_1b365539726eca03(
         &mut env,
         &handler,
     ) {
@@ -4175,7 +4156,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGet<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match __jni_in_convert_wire_to_Storage_99421593897c9a39(&mut env, &s) {
+    let s = match __jni_in_convert_wire_to_Storage_jni_handle_codec_borrow_input_697104a332693566(
+        &mut env,
+        &s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4197,7 +4181,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGet<'a>(
     let (
         __chain_present,
         (__chain_wire0, __chain_wire1, __chain_wire2, __chain_wire3, __chain_wire4),
-    ) = match __jni_out_convert_Option_Payload_to_wire_1d19d5111e218745(
+    ) = match __jni_out_convert_Option_Payload_jni_optional_intermediate_output_gated_to_wire_730d90b5c47c15bd(
         &mut env,
         __out,
     ) {
@@ -4281,7 +4265,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGetVec<'a>
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let s = match __jni_in_convert_wire_to_Storage_99421593897c9a39(&mut env, &s) {
+    let s = match __jni_in_convert_wire_to_Storage_jni_handle_codec_borrow_input_697104a332693566(
+        &mut env,
+        &s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4310,7 +4297,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGetVec<'a>
                     __chain_wire2,
                     __chain_wire3,
                     __chain_wire4,
-                ) = match __jni_out_convert_Payload_to_wire_a1896992c7215def(
+                ) = match __jni_out_convert_Payload_jni_product_intermediate_tuple_to_wire_eec5c9986df64b1f(
                     &mut env,
                     __elem,
                 ) {
@@ -4396,7 +4383,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageNew<'a>(
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::storage_new();
-    match __jni_out_convert_Storage_to_wire_9bfc5b6575cba75a(&mut env, __out) {
+    match __jni_out_convert_Storage_jni_handle_codec_own_output_to_wire_056c9dbddefcfc91(
+        &mut env,
+        __out,
+    ) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4428,7 +4418,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let mut s = match __jni_in_convert_wire_to_mut_Storage_7a864418559ab41b(
+    let mut s = match __jni_in_convert_wire_to_Storage_jni_handle_codec_borrow_input_697104a332693566(
         &mut env,
         &s,
     ) {
@@ -4445,7 +4435,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
             return ();
         }
     };
-    let payload = match __jni_in_convert_wire_to_Payload_b513edb620dfdfc0(
+    let payload = match __jni_in_convert_wire_to_Payload_jni_product_intermediate_tuple_f379fad611b26734(
         &mut env,
         (payload_id, payload_seq, payload_value, payload_flag, payload_label),
     ) {
@@ -4495,7 +4485,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let mut s = match __jni_in_convert_wire_to_mut_Storage_7a864418559ab41b(
+    let mut s = match __jni_in_convert_wire_to_Storage_jni_handle_codec_borrow_input_697104a332693566(
         &mut env,
         &s,
     ) {
@@ -4512,7 +4502,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
             return ();
         }
     };
-    let payload = match __jni_in_convert_wire_to_Payload_c3df77514bd5cc7a(
+    let payload = match __jni_in_convert_wire_to_Payload_jni_product_intermediate_tuple_f379fad611b26734(
         &mut env,
         (payload_id, payload_seq, payload_value, payload_flag, payload_label),
     ) {
@@ -4558,7 +4548,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutSlice<'
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let mut s = match __jni_in_convert_wire_to_mut_Storage_7a864418559ab41b(
+    let mut s = match __jni_in_convert_wire_to_Storage_jni_handle_codec_borrow_input_697104a332693566(
         &mut env,
         &s,
     ) {
@@ -4621,7 +4611,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenGcNew<'a>(
         }
     };
     let __out = perftest_flat::token_gc_new(value);
-    match __jni_out_convert_TokenGc_to_wire_894668ed6ace655e(&mut env, __out) {
+    match __jni_out_convert_TokenGc_jni_handle_codec_own_output_to_wire_57de0a29947b0f2f(
+        &mut env,
+        __out,
+    ) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4648,7 +4641,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenGcValue<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let t = match __jni_in_convert_wire_to_TokenGc_036ac1505a9349d1(&mut env, &t) {
+    let t = match __jni_in_convert_wire_to_TokenGc_jni_handle_codec_borrow_input_7a9be906e3827840(
+        &mut env,
+        &t,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4705,7 +4701,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenNew<'a>(
         }
     };
     let __out = perftest_flat::token_new(value);
-    match __jni_out_convert_Token_to_wire_3fcb24c9f0b3430e(&mut env, __out) {
+    match __jni_out_convert_Token_jni_handle_codec_own_output_to_wire_b192d32dc3b323dd(
+        &mut env,
+        __out,
+    ) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -4732,7 +4731,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenValue<'a>(
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let t = match __jni_in_convert_wire_to_Token_86597e11b848ad69(&mut env, &t) {
+    let t = match __jni_in_convert_wire_to_Token_jni_handle_codec_borrow_input_52a62575119c2292(
+        &mut env,
+        &t,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(

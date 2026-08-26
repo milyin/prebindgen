@@ -28,6 +28,14 @@ fn opaque_handles_retain_late_plans_for_all_ownership_operations() {
                     value
                 }
             ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn exclusively_borrowed_handle(value: &mut Token) {
+                    let _ = value;
+                }
+            ),
             loc,
         ),
     ]))
@@ -38,7 +46,8 @@ fn opaque_handles_retain_late_plans_for_all_ownership_operations() {
             crate::package!()
                 .class(crate::ptr_class!(Token))
                 .fun(prebindgen_registry::fun!(owned_handle))
-                .fun(prebindgen_registry::fun!(borrowed_handle)),
+                .fun(prebindgen_registry::fun!(borrowed_handle))
+                .fun(prebindgen_registry::fun!(exclusively_borrowed_handle)),
         )
         .build_with(registry)
         .expect("resolve handle fixture");
@@ -62,6 +71,28 @@ fn opaque_handles_retain_late_plans_for_all_ownership_operations() {
             "the handle output must retain an unrendered handle codec: {ty:?}"
         );
     }
+
+    let shared = generation
+        .registry
+        .reading_of(&syn::parse_quote!(&Token))
+        .expect("shared handle reading");
+    let exclusive = generation
+        .registry
+        .reading_of(&syn::parse_quote!(&mut Token))
+        .expect("exclusive handle reading");
+    assert_eq!(
+        generation
+            .decls
+            .in_frag(&shared)
+            .expect("shared input")
+            .converter_id(),
+        generation
+            .decls
+            .in_frag(&exclusive)
+            .expect("exclusive input")
+            .converter_id(),
+        "both borrow crossings must retain one semantic handle operation"
+    );
 }
 
 #[test]
@@ -1863,11 +1894,11 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     );
     let token_converter_name = token_converter.sig.ident.to_string();
     assert!(
-        rc.contains(&format!("token:{token_converter_name}(env,&((v).0))?")),
+        rc.contains(&format!("token:{token_converter_name}(")) && rc.contains("env,&((v).0)"),
         "the Product chain must consume Token through its owned converter:\n{rust}"
     );
     assert!(
-        rc.contains("spare:__jni_in_convert_") && rc.contains("env,&((v).1))?"),
+        rc.contains("spare:__jni_in_convert_") && rc.contains("env,&((v).1)"),
         "the registry chain must own the optional field conversion:\n{rust}"
     );
     let optional_helper = generated_function(

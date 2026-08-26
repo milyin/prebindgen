@@ -1372,7 +1372,6 @@ impl<R: Conversions> JCompile<'_, R> {
             return None;
         }
         let direction = at.crossing.direction();
-        let operation_id = OperationId::converter(at.fragment_id());
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let (render_source, target, operation, metadata, subs) = match source.kind() {
             TypeKind::Named { id, .. }
@@ -1455,6 +1454,12 @@ impl<R: Conversions> JCompile<'_, R> {
             }
             _ => return None,
         };
+        let operation_id = OperationId::model_artifact(
+            &render_source,
+            ArtifactId::new("jni-handle-codec", operation.semantic_key())
+                .expect("a static handle-codec identity is valid"),
+            direction,
+        );
         let module = self.decls.fn_module(self.registry, &target);
         let rust =
             crate::jni::chain::JFunction::handle_codec(crate::jni::chain::JHandleCodecPlan {
@@ -1865,7 +1870,13 @@ impl<R: Conversions> JCompile<'_, R> {
             .map(|(_, frag)| frag.conv.destination.clone())
             .collect();
         let intermediate: syn::Type = syn::parse_quote!((#(#intermediate_parts,)*));
-        let operation = OperationId::converter(at.fragment_id());
+        let operation = OperationId::product_converter(
+            source,
+            at.crossing.mode(),
+            ArtifactId::new("jni-product-intermediate", "tuple")
+                .expect("a static Product representation identity is valid"),
+            direction,
+        );
         let dependencies = parts
             .iter()
             .map(|(_, fragment)| fragment.rust.clone())
@@ -2039,7 +2050,13 @@ impl<R: Conversions> JCompile<'_, R> {
             .flat_map(|(_, arm)| arm.dependencies.iter().cloned())
             .collect();
         let layouts = planned.iter().map(|(_, arm)| arm.layout.clone()).collect();
-        let operation = OperationId::converter(at.fragment_id());
+        let operation = OperationId::choice_converter(
+            source,
+            at.crossing.mode(),
+            ArtifactId::new("jni-choice-intermediate", "tagged-tuple")
+                .expect("a static Choice representation identity is valid"),
+            direction,
+        );
         let rust = crate::jni::chain::JFunction::choice(crate::jni::chain::JChoicePlan {
             operation: operation.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
@@ -2570,7 +2587,10 @@ impl<R: Conversions> JCompile<'_, R> {
         } else {
             kotlin_name
         };
-        let operation = OperationId::converter(at.fragment_id());
+        let representation = ArtifactId::new("jni-optional-intermediate", bridge.semantic_key())
+            .expect("an Optional bridge representation identity is valid");
+        let operation =
+            OperationId::optional_converter(source, at.crossing.mode(), representation, direction);
         let out_wires = (direction == Direction::Deconstruct
             && matches!(&layout, JLayout::Optional(_)))
         .then(|| inner.out_wires.clone())

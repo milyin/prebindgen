@@ -46,6 +46,13 @@ enum OperationOwner {
     Composed {
         shape: ComposedShape,
         carrier: TypeKey,
+        mode: Option<Mode>,
+        representation: Option<ArtifactId>,
+        direction: Direction,
+    },
+    ModelArtifact {
+        carrier: TypeKey,
+        artifact: ArtifactId,
         direction: Direction,
     },
     Shared {
@@ -56,7 +63,10 @@ enum OperationOwner {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum ComposedShape {
+    Product,
+    Optional,
     Sequence,
+    Choice,
 }
 
 /// Position of a private operation inside one fragment.
@@ -97,26 +107,114 @@ impl OperationId {
         }
     }
 
-    /// Identify the Sequence converter for a model-selected intermediate
-    /// carrier. Owned collections and borrowed views that produce the same
-    /// carrier intentionally share this operation.
-    pub fn sequence_converter(carrier: &TypeRef, direction: Direction) -> Self {
+    /// Identify an adapter operation by the model carrier it produces or
+    /// consumes and by the adapter representation operation it performs.
+    /// Crossings that reach the same contract intentionally share one helper.
+    pub fn model_artifact(carrier: &TypeRef, artifact: ArtifactId, direction: Direction) -> Self {
         Self {
-            owner: OperationOwner::Composed {
-                shape: ComposedShape::Sequence,
+            owner: OperationOwner::ModelArtifact {
                 carrier: carrier.key(),
+                artifact,
                 direction,
             },
             role: OperationRole::Converter,
         }
     }
 
-    /// Fragment that owns this operation, or `None` for an explicitly shared
-    /// adapter operation.
+    /// Identify a Product converter by its model carrier and adapter-declared
+    /// intermediate representation.
+    pub fn product_converter(
+        carrier: &TypeRef,
+        mode: Mode,
+        representation: ArtifactId,
+        direction: Direction,
+    ) -> Self {
+        Self::composed_converter(
+            ComposedShape::Product,
+            carrier,
+            Self::deconstruction_mode(mode, direction),
+            Some(representation),
+            direction,
+        )
+    }
+
+    /// Identify an Optional converter by its model carrier and
+    /// adapter-declared intermediate representation.
+    pub fn optional_converter(
+        carrier: &TypeRef,
+        mode: Mode,
+        representation: ArtifactId,
+        direction: Direction,
+    ) -> Self {
+        Self::composed_converter(
+            ComposedShape::Optional,
+            carrier,
+            Self::deconstruction_mode(mode, direction),
+            Some(representation),
+            direction,
+        )
+    }
+
+    /// Identify the Sequence converter for a model-selected intermediate
+    /// carrier. Owned collections and borrowed views that produce the same
+    /// carrier intentionally share this operation.
+    pub fn sequence_converter(carrier: &TypeRef, direction: Direction) -> Self {
+        Self::composed_converter(ComposedShape::Sequence, carrier, None, None, direction)
+    }
+
+    /// Identify a Choice converter by its model carrier and adapter-declared
+    /// intermediate representation.
+    pub fn choice_converter(
+        carrier: &TypeRef,
+        mode: Mode,
+        representation: ArtifactId,
+        direction: Direction,
+    ) -> Self {
+        Self::composed_converter(
+            ComposedShape::Choice,
+            carrier,
+            Self::deconstruction_mode(mode, direction),
+            Some(representation),
+            direction,
+        )
+    }
+
+    fn composed_converter(
+        shape: ComposedShape,
+        carrier: &TypeRef,
+        mode: Option<Mode>,
+        representation: Option<ArtifactId>,
+        direction: Direction,
+    ) -> Self {
+        Self {
+            owner: OperationOwner::Composed {
+                shape,
+                carrier: carrier.key(),
+                mode,
+                representation,
+                direction,
+            },
+            role: OperationRole::Converter,
+        }
+    }
+
+    fn deconstruction_mode(mode: Mode, direction: Direction) -> Option<Mode> {
+        match direction {
+            // A construct converter's result is already the model carrier;
+            // the asking site's later use of that value does not change this
+            // operation's signature or body.
+            Direction::Construct => None,
+            Direction::Deconstruct => Some(mode),
+        }
+    }
+
+    /// Fragment that owns this operation, or `None` for a contract-owned or
+    /// explicitly shared operation.
     pub fn fragment(&self) -> Option<&FragmentId> {
         match &self.owner {
             OperationOwner::Fragment(fragment) => Some(fragment),
             OperationOwner::Composed { .. } => None,
+            OperationOwner::ModelArtifact { .. } => None,
             OperationOwner::Shared { .. } => None,
         }
     }
@@ -126,6 +224,7 @@ impl OperationId {
         match &self.owner {
             OperationOwner::Fragment(fragment) => fragment.direction(),
             OperationOwner::Composed { direction, .. } => *direction,
+            OperationOwner::ModelArtifact { direction, .. } => *direction,
             OperationOwner::Shared { direction, .. } => *direction,
         }
     }
@@ -158,10 +257,32 @@ impl OperationId {
         match &self.owner {
             OperationOwner::Fragment(fragment) => fragment.spelling().as_str().to_owned(),
             OperationOwner::Composed {
-                shape: ComposedShape::Sequence,
+                shape,
                 carrier,
+                representation,
                 ..
-            } => format!("sequence_{}", carrier.as_str()),
+            } => match shape {
+                ComposedShape::Product | ComposedShape::Optional | ComposedShape::Choice => {
+                    match representation {
+                        Some(representation) => format!(
+                            "{}_{}_{}",
+                            carrier.as_str(),
+                            representation.kind(),
+                            representation.name()
+                        ),
+                        None => carrier.as_str().to_owned(),
+                    }
+                }
+                ComposedShape::Sequence => format!("sequence_{}", carrier.as_str()),
+            },
+            OperationOwner::ModelArtifact {
+                carrier, artifact, ..
+            } => format!(
+                "{}_{}_{}",
+                carrier.as_str(),
+                artifact.kind(),
+                artifact.name()
+            ),
             OperationOwner::Shared { artifact, .. } => {
                 format!("{}_{}", artifact.kind(), artifact.name())
             }
@@ -174,8 +295,31 @@ impl OperationId {
             OperationOwner::Composed {
                 shape,
                 carrier,
+                mode,
+                representation,
                 direction,
-            } => format!("composed\0{shape:?}\0{}\0{direction}", carrier.as_str()),
+            } => {
+                let representation = representation
+                    .as_ref()
+                    .map(|representation| {
+                        format!("{}\0{}", representation.kind(), representation.name())
+                    })
+                    .unwrap_or_default();
+                format!(
+                    "composed\0{shape:?}\0{}\0{mode:?}\0{representation}\0{direction}",
+                    carrier.as_str(),
+                )
+            }
+            OperationOwner::ModelArtifact {
+                carrier,
+                artifact,
+                direction,
+            } => format!(
+                "model-artifact\0{}\0{}\0{}\0{direction}",
+                carrier.as_str(),
+                artifact.kind(),
+                artifact.name()
+            ),
             OperationOwner::Shared {
                 artifact,
                 direction,
@@ -202,8 +346,18 @@ impl fmt::Display for OperationId {
                 OperationOwner::Composed {
                     shape,
                     carrier,
+                    mode,
+                    representation,
                     direction,
-                } => write!(f, "{direction} {shape:?} converter for `{carrier}`"),
+                } => write!(
+                    f,
+                    "{direction} {mode:?} {shape:?} converter for `{carrier}` via {representation:?}"
+                ),
+                OperationOwner::ModelArtifact {
+                    carrier,
+                    artifact,
+                    direction,
+                } => write!(f, "{direction} {artifact} converter for `{carrier}`"),
                 OperationOwner::Shared {
                     artifact,
                     direction,
@@ -216,8 +370,18 @@ impl fmt::Display for OperationId {
                 OperationOwner::Composed {
                     shape,
                     carrier,
+                    mode,
+                    representation,
                     direction,
-                } => write!(f, "{direction} {shape:?} stage {index} for `{carrier}`"),
+                } => write!(
+                    f,
+                    "{direction} {mode:?} {shape:?} stage {index} for `{carrier}` via {representation:?}"
+                ),
+                OperationOwner::ModelArtifact {
+                    carrier,
+                    artifact,
+                    direction,
+                } => write!(f, "{direction} {artifact} stage {index} for `{carrier}`"),
                 OperationOwner::Shared {
                     artifact,
                     direction,

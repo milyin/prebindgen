@@ -1278,6 +1278,17 @@ pub(crate) enum JHandleOperation {
     CloneOutput,
 }
 
+impl JHandleOperation {
+    pub(crate) fn semantic_key(self) -> &'static str {
+        match self {
+            Self::ConsumeInput => "consume-input",
+            Self::BorrowInput => "borrow-input",
+            Self::OwnOutput => "own-output",
+            Self::CloneOutput => "clone-output",
+        }
+    }
+}
+
 /// One opaque `Box`-handle terminal, kept source-syntax-free until final
 /// emission.
 ///
@@ -1693,6 +1704,19 @@ pub(crate) enum JOptionalBridge {
         inner_wire: syn::Type,
         helper: syn::Ident,
     },
+}
+
+impl JOptionalBridge {
+    pub(crate) fn semantic_key(&self) -> &'static str {
+        match self {
+            Self::InputGated { .. } => "input-gated",
+            Self::InputNiche { .. } => "input-niche",
+            Self::InputBoxed { .. } => "input-boxed",
+            Self::OutputGated { .. } => "output-gated",
+            Self::OutputNiche { .. } => "output-niche",
+            Self::OutputBoxed { .. } => "output-boxed",
+        }
+    }
 }
 
 impl shared::OptionalBridge for JOptionalBridge {
