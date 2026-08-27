@@ -1,321 +1,315 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `prebindgen-registry/src/prebindgen.rs`."><title>prebindgen.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_registry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0 (88d9e12ae 2026-08-18)" data-channel="1.98.0" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">prebindgen_registry/</div>prebindgen.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! `Prebindgen` — what a generator still hands the emitter.
 <a href=#2 id=2 data-nosnippet>2</a>//!
-<a href=#3 id=3 data-nosnippet>3</a>//! One method per `#[prebindgen]` item kind (`on_function`, `on_struct`,
-<a href=#4 id=4 data-nosnippet>4</a>//! `on_enum`, `on_const`) returning typed Rust items to emit, plus the
-<a href=#5 id=5 data-nosnippet>5</a>//! items they depend on (`prerequisites`) and two invariant checks.
-<a href=#6 id=6 data-nosnippet>6</a>//!
-<a href=#7 id=7 data-nosnippet>7</a>//! **Conversion is not here.** A generator builds those itself, one per
-<a href=#8 id=8 data-nosnippet>8</a>//! crossing, inside `RegistryBuilder::convert_with` — so there is no
-<a href=#9 id=9 data-nosnippet>9</a>//! `on_input_type`, no deferral, and no fixed-point loop retrying until it
-<a href=#10 id=10 data-nosnippet>10</a>//! converges.
-<a href=#11 id=11 data-nosnippet>11</a>//!
-<a href=#12 id=12 data-nosnippet>12</a>//! [`ConverterImpl::converter`] is the stable identity of the wire-facing
-<a href=#13 id=13 data-nosnippet>13</a>//! converter. Its executable artifact is retained separately by the adapter's
-<a href=#14 id=14 data-nosnippet>14</a>//! frozen generation plan; this shared registry carrier never stores rendered
-<a href=#15 id=15 data-nosnippet>15</a>//! Rust syntax.
-<a href=#16 id=16 data-nosnippet>16</a>
-<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">use crate</span>::{generation::OperationId, niches::Niches, registry::Registry};
+<a href=#3 id=3 data-nosnippet>3</a>//! One method per `#[prebindgen]` item kind an adapter still emits per item
+<a href=#4 id=4 data-nosnippet>4</a>//! (`on_struct`, `on_variant`, `on_enum`, `on_const`) returning typed Rust
+<a href=#5 id=5 data-nosnippet>5</a>//! items to emit, plus the items they depend on (`prerequisites`) and two
+<a href=#6 id=6 data-nosnippet>6</a>//! invariant checks. An exported wrapper is not among them: it is an artifact
+<a href=#7 id=7 data-nosnippet>7</a>//! of the adapter's frozen assembly.
+<a href=#8 id=8 data-nosnippet>8</a>//!
+<a href=#9 id=9 data-nosnippet>9</a>//! **Conversion is not here.** A generator builds those itself, one per
+<a href=#10 id=10 data-nosnippet>10</a>//! crossing, inside `RegistryBuilder::convert_with` — so there is no
+<a href=#11 id=11 data-nosnippet>11</a>//! `on_input_type`, no deferral, and no fixed-point loop retrying until it
+<a href=#12 id=12 data-nosnippet>12</a>//! converges.
+<a href=#13 id=13 data-nosnippet>13</a>//!
+<a href=#14 id=14 data-nosnippet>14</a>//! [`ConverterImpl::converter`] is the stable identity of the wire-facing
+<a href=#15 id=15 data-nosnippet>15</a>//! converter. Its executable artifact is retained separately by the adapter's
+<a href=#16 id=16 data-nosnippet>16</a>//! frozen generation plan; this shared registry carrier never stores rendered
+<a href=#17 id=17 data-nosnippet>17</a>//! Rust syntax.
 <a href=#18 id=18 data-nosnippet>18</a>
-<a href=#19 id=19 data-nosnippet>19</a><span class="doccomment">/// A shared predicate over an item name, as used by
-<a href=#20 id=20 data-nosnippet>20</a>/// `Prebindgen`'s ignore hooks (bulk ignores keyed on a naming
-<a href=#21 id=21 data-nosnippet>21</a>/// family rather than an exact ident).
-<a href=#22 id=22 data-nosnippet>22</a></span><span class="kw">pub type </span>NamePredicate = std::sync::Arc&lt;<span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>str) -&gt; bool + Send + Sync&gt;;
-<a href=#23 id=23 data-nosnippet>23</a>
-<a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
-<a href=#25 id=25 data-nosnippet>25</a>/// a value-inspecting step that sits between the rust value the
-<a href=#26 id=26 data-nosnippet>26</a>/// `#[prebindgen]` fn yields/receives and the wire-facing
-<a href=#27 id=27 data-nosnippet>27</a>/// [`ConverterImpl::converter`].
-<a href=#28 id=28 data-nosnippet>28</a>///
-<a href=#29 id=29 data-nosnippet>29</a>/// Each stage is a fallible `In → Result&lt;Out, Err&gt;` function. The core
-<a href=#30 id=30 data-nosnippet>30</a>/// pipeline only ever orders [`Self::converter`]; how a
-<a href=#31 id=31 data-nosnippet>31</a>/// stage's `Err` arm is surfaced to the foreign side — throw an exception,
-<a href=#32 id=32 data-nosnippet>32</a>/// return an error code, set `errno`, … — is entirely up to the
-<a href=#33 id=33 data-nosnippet>33</a>/// destination-language adapter and is described by [`Self::metadata`].
-<a href=#34 id=34 data-nosnippet>34</a></span><span class="attr">#[derive(Clone)]
-<a href=#35 id=35 data-nosnippet>35</a></span><span class="kw">pub struct </span>Stage&lt;M = ()&gt; {
-<a href=#36 id=36 data-nosnippet>36</a>    <span class="doccomment">/// Stable identity of this stage's separately retained executable
-<a href=#37 id=37 data-nosnippet>37</a>    /// artifact.
-<a href=#38 id=38 data-nosnippet>38</a>    </span><span class="kw">pub </span>converter: OperationId,
-<a href=#39 id=39 data-nosnippet>39</a>    <span class="doccomment">/// Adapter-specific extras for this stage — the same type as the owning
-<a href=#40 id=40 data-nosnippet>40</a>    /// converter's ([`ConverterImpl::metadata`]). The core never
-<a href=#41 id=41 data-nosnippet>41</a>    /// inspects this; the adapter's emitter reads it to decide how the
-<a href=#42 id=42 data-nosnippet>42</a>    /// stage's `Err` arm is surfaced (e.g. a JNI adapter stores the JVM
-<a href=#43 id=43 data-nosnippet>43</a>    /// exception class and `throw_*` fn to call here; a C adapter might
-<a href=#44 id=44 data-nosnippet>44</a>    /// store the error-code sentinel). Defaults to `()`.
-<a href=#45 id=45 data-nosnippet>45</a>    </span><span class="kw">pub </span>metadata: M,
-<a href=#46 id=46 data-nosnippet>46</a>}
-<a href=#47 id=47 data-nosnippet>47</a>
-<a href=#48 id=48 data-nosnippet>48</a><span class="doccomment">/// Result of resolving one converter — the wire (destination) type the rest
-<a href=#49 id=49 data-nosnippet>49</a>/// of the registry sees, plus the identity of its separately retained
-<a href=#50 id=50 data-nosnippet>50</a>/// executable artifact.
-<a href=#51 id=51 data-nosnippet>51</a>///
-<a href=#52 id=52 data-nosnippet>52</a>/// `converter` is registry-owned semantic identity. Composed parents retain
-<a href=#53 id=53 data-nosnippet>53</a>/// that identity directly; they never recompute it from a Rust type or wire
-<a href=#54 id=54 data-nosnippet>54</a>/// type. The writer turns it into a private Rust symbol only through
-<a href=#55 id=55 data-nosnippet>55</a>/// [`crate::RustWriter`] during final file assembly.
-<a href=#56 id=56 data-nosnippet>56</a></span><span class="attr">#[derive(Clone)]
-<a href=#57 id=57 data-nosnippet>57</a></span><span class="kw">pub struct </span>ConverterImpl&lt;M = ()&gt; {
-<a href=#58 id=58 data-nosnippet>58</a>    <span class="doccomment">/// Wire/destination type. Other converters that ask "what's the wire
-<a href=#59 id=59 data-nosnippet>59</a>    /// form of this rust type?" read this. The actual function may return
-<a href=#60 id=60 data-nosnippet>60</a>    /// a wrapped form (e.g. an adapter's own `Result`-like envelope) — that
-<a href=#61 id=61 data-nosnippet>61</a>    /// is the adapter's internal calling convention; `destination` is the
-<a href=#62 id=62 data-nosnippet>62</a>    /// value the wire carries on success.
-<a href=#63 id=63 data-nosnippet>63</a>    </span><span class="kw">pub </span>destination: syn::Type,
-<a href=#64 id=64 data-nosnippet>64</a>    <span class="doccomment">/// Stable identity of the **wire-facing** stage. The adapter's frozen
-<a href=#65 id=65 data-nosnippet>65</a>    /// generation plan owns its parameter list, return type, body, and other
-<a href=#66 id=66 data-nosnippet>66</a>    /// Rust emission policy.
-<a href=#67 id=67 data-nosnippet>67</a>    /// For input direction this is the FIRST stage in execution order
-<a href=#68 id=68 data-nosnippet>68</a>    /// (it takes the wire); for output direction this is the LAST stage
-<a href=#69 id=69 data-nosnippet>69</a>    /// (it produces the wire).
-<a href=#70 id=70 data-nosnippet>70</a>    </span><span class="kw">pub </span>converter: OperationId,
-<a href=#71 id=71 data-nosnippet>71</a>    <span class="doccomment">/// **Rust-side** stages that compose with [`Self::converter`] to form
-<a href=#72 id=72 data-nosnippet>72</a>    /// the full conversion chain. Default empty — a 1-stage converter
-<a href=#73 id=73 data-nosnippet>73</a>    /// is just `function`.
-<a href=#74 id=74 data-nosnippet>74</a>    ///
-<a href=#75 id=75 data-nosnippet>75</a>    /// Order is rust-side-first → function-side-last. Concretely:
-<a href=#76 id=76 data-nosnippet>76</a>    /// * **Input** (wire → rust): chain runs `wire → function →
-<a href=#77 id=77 data-nosnippet>77</a>    ///   pre_stages[0] → pre_stages[1] → … → pre_stages[N-1] → rust`.
-<a href=#78 id=78 data-nosnippet>78</a>    /// * **Output** (rust → wire): chain runs `rust → pre_stages[N-1] →
-<a href=#79 id=79 data-nosnippet>79</a>    ///   … → pre_stages[1] → pre_stages[0] → function → wire`.
-<a href=#80 id=80 data-nosnippet>80</a>    ///
-<a href=#81 id=81 data-nosnippet>81</a>    /// Each stage is fallible; how its `Err` arm is surfaced is adapter
-<a href=#82 id=82 data-nosnippet>82</a>    /// specific and carried in [`Stage::metadata`].
-<a href=#83 id=83 data-nosnippet>83</a>    </span><span class="kw">pub </span>pre_stages: Vec&lt;Stage&lt;M&gt;&gt;,
-<a href=#84 id=84 data-nosnippet>84</a>    <span class="doccomment">/// Bit-patterns the wire type can represent but this converter never
-<a href=#85 id=85 data-nosnippet>85</a>    /// produces (output) and rejects (input). Wrapper handlers like
-<a href=#86 id=86 data-nosnippet>86</a>    /// `Option&lt;_&gt;` consume one slot for their own discriminant and
-<a href=#87 id=87 data-nosnippet>87</a>    /// re-export the rest — see [`Niches`] for the cascade model.
-<a href=#88 id=88 data-nosnippet>88</a>    /// Default is empty (no niche optimisation).
-<a href=#89 id=89 data-nosnippet>89</a>    </span><span class="kw">pub </span>niches: Niches,
-<a href=#90 id=90 data-nosnippet>90</a>    <span class="doccomment">/// Adapter-specific extras carried alongside the converter. Filled by
-<a href=#91 id=91 data-nosnippet>91</a>    /// the same handler that produces `destination` / `function` / `niches`,
-<a href=#92 id=92 data-nosnippet>92</a>    /// and read by the adapter's language-side emitters off the fragment this
-<a href=#93 id=93 data-nosnippet>93</a>    /// conversion belongs to. Set this where you build the converter, not in a
-<a href=#94 id=94 data-nosnippet>94</a>    /// side channel.
-<a href=#95 id=95 data-nosnippet>95</a>    </span><span class="kw">pub </span>metadata: M,
-<a href=#96 id=96 data-nosnippet>96</a>    <span class="doccomment">/// Inner crossings this converter composed from — the ones the adapter
-<a href=#97 id=97 data-nosnippet>97</a>    /// looked up to build a wrapper (`Option&lt;X&gt;` → `[X]`, `Result&lt;T,E&gt;` →
-<a href=#98 id=98 data-nosnippet>98</a>    /// `[T, E]`, `&amp;T` → `[&amp;T]`). Empty for a terminal converter (scalar, opaque
-<a href=#99 id=99 data-nosnippet>99</a>    /// handle, string) and for a callback's own converter (callback args are
-<a href=#100 id=100 data-nosnippet>100</a>    /// cross-direction — their required-ness flows through the registry's
-<a href=#101 id=101 data-nosnippet>101</a>    /// type-graph edges, not here).
-<a href=#102 id=102 data-nosnippet>102</a>    ///
-<a href=#103 id=103 data-nosnippet>103</a>    /// This is what an adapter reports back as an
-<a href=#104 id=104 data-nosnippet>104</a>    /// [`Answer`](crate::Answer), and what `propagate_required` walks to mark
-<a href=#105 id=105 data-nosnippet>105</a>    /// reachable crossings required.
-<a href=#106 id=106 data-nosnippet>106</a>    ///
-<a href=#107 id=107 data-nosnippet>107</a>    /// **Identities, not spellings.** They are looked up and walked, never
-<a href=#108 id=108 data-nosnippet>108</a>    /// emitted. An adapter that composed the inner type keys it
-<a href=#109 id=109 data-nosnippet>109</a>    /// (`TypeKey::from_type`); one that read it off the model asks the reading
-<a href=#110 id=110 data-nosnippet>110</a>    /// (`TypeRef::key`), and names no escape to do it.
-<a href=#111 id=111 data-nosnippet>111</a>    </span><span class="kw">pub </span>subs: Vec&lt;<span class="kw">crate</span>::registry::TypeKey&gt;,
-<a href=#112 id=112 data-nosnippet>112</a>}
-<a href=#113 id=113 data-nosnippet>113</a>
-<a href=#114 id=114 data-nosnippet>114</a><span class="doccomment">/// What an emitter asks of a conversion it holds.
-<a href=#115 id=115 data-nosnippet>115</a></span><span class="kw">impl</span>&lt;M&gt; ConverterImpl&lt;M&gt; {
-<a href=#116 id=116 data-nosnippet>116</a>    <span class="doccomment">/// Semantic identity of the wire-facing converter function.
-<a href=#117 id=117 data-nosnippet>117</a>    </span><span class="kw">pub fn </span>converter_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>OperationId {
-<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.converter
-<a href=#119 id=119 data-nosnippet>119</a>    }
-<a href=#120 id=120 data-nosnippet>120</a>
-<a href=#121 id=121 data-nosnippet>121</a>    <span class="doccomment">/// Wire type this conversion carries on success.
-<a href=#122 id=122 data-nosnippet>122</a>    </span><span class="kw">pub fn </span>wire_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>syn::Type {
-<a href=#123 id=123 data-nosnippet>123</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.destination
-<a href=#124 id=124 data-nosnippet>124</a>    }
-<a href=#125 id=125 data-nosnippet>125</a>
-<a href=#126 id=126 data-nosnippet>126</a>    <span class="doccomment">/// Rust-side stages in input execution order, after the wire-facing
-<a href=#127 id=127 data-nosnippet>127</a>    /// converter has decoded the wire value.
-<a href=#128 id=128 data-nosnippet>128</a>    </span><span class="kw">pub fn </span>input_stage_order(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (usize, <span class="kw-2">&amp;</span>Stage&lt;M&gt;)&gt; {
-<a href=#129 id=129 data-nosnippet>129</a>        <span class="self">self</span>.pre_stages.iter().enumerate().rev()
-<a href=#130 id=130 data-nosnippet>130</a>    }
-<a href=#131 id=131 data-nosnippet>131</a>
-<a href=#132 id=132 data-nosnippet>132</a>    <span class="doccomment">/// Rust-side stages in output execution order, before the wire-facing
-<a href=#133 id=133 data-nosnippet>133</a>    /// converter encodes the final wire value.
-<a href=#134 id=134 data-nosnippet>134</a>    </span><span class="kw">pub fn </span>output_stage_order(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (usize, <span class="kw-2">&amp;</span>Stage&lt;M&gt;)&gt; {
-<a href=#135 id=135 data-nosnippet>135</a>        <span class="self">self</span>.pre_stages.iter().enumerate()
-<a href=#136 id=136 data-nosnippet>136</a>    }
-<a href=#137 id=137 data-nosnippet>137</a>}
-<a href=#138 id=138 data-nosnippet>138</a>
-<a href=#139 id=139 data-nosnippet>139</a><span class="doccomment">/// The single extension point of the pipeline: implement this trait once per
-<a href=#140 id=140 data-nosnippet>140</a>/// **destination language** (C/cbindgen, JNI/Kotlin, Swift, Python, …) to teach
-<a href=#141 id=141 data-nosnippet>141</a>/// the language-agnostic [`Registry`] how that language represents Rust types
-<a href=#142 id=142 data-nosnippet>142</a>/// on the wire and what wrapper code to emit.
-<a href=#143 id=143 data-nosnippet>143</a>///
-<a href=#144 id=144 data-nosnippet>144</a>/// The trait has no language-specific concepts of its own, and — since the
-<a href=#145 id=145 data-nosnippet>145</a>/// registry stopped asking it questions — one job left: **per-item emission**.
-<a href=#146 id=146 data-nosnippet>146</a>/// The file emitter calls `on_function` / `on_struct` / `on_enum` / `on_const`
-<a href=#147 id=147 data-nosnippet>147</a>/// to produce the per-item wrapper code, plus `prerequisites` and the two
-<a href=#148 id=148 data-nosnippet>148</a>/// `validate` hooks for adapter invariants.
-<a href=#149 id=149 data-nosnippet>149</a>///
-<a href=#150 id=150 data-nosnippet>150</a>/// What used to be here and is not any more: which items to build, how
-<a href=#151 id=151 data-nosnippet>151</a>/// composites decompose, and the wire form of each type. A generator states the
-<a href=#152 id=152 data-nosnippet>152</a>/// first two into the builder (`RegistryBuilder::export`,
-<a href=#153 id=153 data-nosnippet>153</a>/// `RegistryBuilder::decompose`) and answers the third inside
-<a href=#154 id=154 data-nosnippet>154</a>/// `RegistryBuilder::convert_with` — so nothing in core calls back to ask. Moving emission out too is what would delete this
-<a href=#155 id=155 data-nosnippet>155</a>/// trait entirely (prebindgen#251 phase E).
-<a href=#156 id=156 data-nosnippet>156</a>///
-<a href=#157 id=157 data-nosnippet>157</a>/// Anything language-specific the rest of the pipeline must carry — a JNI
-<a href=#158 id=158 data-nosnippet>158</a>/// adapter's Kotlin class names and exception info, a C adapter's header names,
-<a href=#159 id=159 data-nosnippet>159</a>/// etc. — rides in [`ConverterImpl::metadata`], and is read back by the
-<a href=#160 id=160 data-nosnippet>160</a>/// adapter's own emitter off the fragment that conversion belongs to. The
-<a href=#161 id=161 data-nosnippet>161</a>/// registry neither stores it nor names its type.
-<a href=#162 id=162 data-nosnippet>162</a>///
-<a href=#163 id=163 data-nosnippet>163</a>/// # The rule an adapter must obey
-<a href=#164 id=164 data-nosnippet>164</a>///
-<a href=#165 id=165 data-nosnippet>165</a>/// "Analyze the Flat model; generate Rust only" tells an adapter where every
-<a href=#166 id=166 data-nosnippet>166</a>/// decision comes from. Final source-type output is an inert fragment produced
-<a href=#167 id=167 data-nosnippet>167</a>/// by [`RustWriter`](crate::RustWriter), never a typed view of retained syntax. It is silent
-<a href=#168 id=168 data-nosnippet>168</a>/// on the question adapters actually face — what the **destination language**
-<a href=#169 id=169 data-nosnippet>169</a>/// ends up seeing.
-<a href=#170 id=170 data-nosnippet>170</a>/// That one has its own answer:
-<a href=#171 id=171 data-nosnippet>171</a>///
-<a href=#172 id=172 data-nosnippet>172</a>/// &gt; **Same `kind` ⇒ same destination-language type.** The *wire* is the
-<a href=#173 id=173 data-nosnippet>173</a>/// &gt; generator's to choose, and may differ per spelling.
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">use crate</span>::{generation::OperationId, niches::Niches, registry::Registry};
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a><span class="doccomment">/// A shared predicate over an item name, as used by
+<a href=#22 id=22 data-nosnippet>22</a>/// `Prebindgen`'s ignore hooks (bulk ignores keyed on a naming
+<a href=#23 id=23 data-nosnippet>23</a>/// family rather than an exact ident).
+<a href=#24 id=24 data-nosnippet>24</a></span><span class="kw">pub type </span>NamePredicate = std::sync::Arc&lt;<span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>str) -&gt; bool + Send + Sync&gt;;
+<a href=#25 id=25 data-nosnippet>25</a>
+<a href=#26 id=26 data-nosnippet>26</a><span class="doccomment">/// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
+<a href=#27 id=27 data-nosnippet>27</a>/// a value-inspecting step that sits between the rust value the
+<a href=#28 id=28 data-nosnippet>28</a>/// `#[prebindgen]` fn yields/receives and the wire-facing
+<a href=#29 id=29 data-nosnippet>29</a>/// [`ConverterImpl::converter`].
+<a href=#30 id=30 data-nosnippet>30</a>///
+<a href=#31 id=31 data-nosnippet>31</a>/// Each stage is a fallible `In → Result&lt;Out, Err&gt;` function. The core
+<a href=#32 id=32 data-nosnippet>32</a>/// pipeline only ever orders [`Self::converter`]; how a
+<a href=#33 id=33 data-nosnippet>33</a>/// stage's `Err` arm is surfaced to the foreign side — throw an exception,
+<a href=#34 id=34 data-nosnippet>34</a>/// return an error code, set `errno`, … — is entirely up to the
+<a href=#35 id=35 data-nosnippet>35</a>/// destination-language adapter and is described by [`Self::metadata`].
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="attr">#[derive(Clone)]
+<a href=#37 id=37 data-nosnippet>37</a></span><span class="kw">pub struct </span>Stage&lt;M = ()&gt; {
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="doccomment">/// Stable identity of this stage's separately retained executable
+<a href=#39 id=39 data-nosnippet>39</a>    /// artifact.
+<a href=#40 id=40 data-nosnippet>40</a>    </span><span class="kw">pub </span>converter: OperationId,
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="doccomment">/// Adapter-specific extras for this stage — the same type as the owning
+<a href=#42 id=42 data-nosnippet>42</a>    /// converter's ([`ConverterImpl::metadata`]). The core never
+<a href=#43 id=43 data-nosnippet>43</a>    /// inspects this; the adapter's emitter reads it to decide how the
+<a href=#44 id=44 data-nosnippet>44</a>    /// stage's `Err` arm is surfaced (e.g. a JNI adapter stores the JVM
+<a href=#45 id=45 data-nosnippet>45</a>    /// exception class and `throw_*` fn to call here; a C adapter might
+<a href=#46 id=46 data-nosnippet>46</a>    /// store the error-code sentinel). Defaults to `()`.
+<a href=#47 id=47 data-nosnippet>47</a>    </span><span class="kw">pub </span>metadata: M,
+<a href=#48 id=48 data-nosnippet>48</a>}
+<a href=#49 id=49 data-nosnippet>49</a>
+<a href=#50 id=50 data-nosnippet>50</a><span class="doccomment">/// Result of resolving one converter — the wire (destination) type the rest
+<a href=#51 id=51 data-nosnippet>51</a>/// of the registry sees, plus the identity of its separately retained
+<a href=#52 id=52 data-nosnippet>52</a>/// executable artifact.
+<a href=#53 id=53 data-nosnippet>53</a>///
+<a href=#54 id=54 data-nosnippet>54</a>/// `converter` is registry-owned semantic identity. Composed parents retain
+<a href=#55 id=55 data-nosnippet>55</a>/// that identity directly; they never recompute it from a Rust type or wire
+<a href=#56 id=56 data-nosnippet>56</a>/// type. The writer turns it into a private Rust symbol only through
+<a href=#57 id=57 data-nosnippet>57</a>/// [`crate::RustWriter`] during final file assembly.
+<a href=#58 id=58 data-nosnippet>58</a></span><span class="attr">#[derive(Clone)]
+<a href=#59 id=59 data-nosnippet>59</a></span><span class="kw">pub struct </span>ConverterImpl&lt;M = ()&gt; {
+<a href=#60 id=60 data-nosnippet>60</a>    <span class="doccomment">/// Wire/destination type. Other converters that ask "what's the wire
+<a href=#61 id=61 data-nosnippet>61</a>    /// form of this rust type?" read this. The actual function may return
+<a href=#62 id=62 data-nosnippet>62</a>    /// a wrapped form (e.g. an adapter's own `Result`-like envelope) — that
+<a href=#63 id=63 data-nosnippet>63</a>    /// is the adapter's internal calling convention; `destination` is the
+<a href=#64 id=64 data-nosnippet>64</a>    /// value the wire carries on success.
+<a href=#65 id=65 data-nosnippet>65</a>    </span><span class="kw">pub </span>destination: syn::Type,
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="doccomment">/// Stable identity of the **wire-facing** stage. The adapter's frozen
+<a href=#67 id=67 data-nosnippet>67</a>    /// generation plan owns its parameter list, return type, body, and other
+<a href=#68 id=68 data-nosnippet>68</a>    /// Rust emission policy.
+<a href=#69 id=69 data-nosnippet>69</a>    /// For input direction this is the FIRST stage in execution order
+<a href=#70 id=70 data-nosnippet>70</a>    /// (it takes the wire); for output direction this is the LAST stage
+<a href=#71 id=71 data-nosnippet>71</a>    /// (it produces the wire).
+<a href=#72 id=72 data-nosnippet>72</a>    </span><span class="kw">pub </span>converter: OperationId,
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="doccomment">/// **Rust-side** stages that compose with [`Self::converter`] to form
+<a href=#74 id=74 data-nosnippet>74</a>    /// the full conversion chain. Default empty — a 1-stage converter
+<a href=#75 id=75 data-nosnippet>75</a>    /// is just `function`.
+<a href=#76 id=76 data-nosnippet>76</a>    ///
+<a href=#77 id=77 data-nosnippet>77</a>    /// Order is rust-side-first → function-side-last. Concretely:
+<a href=#78 id=78 data-nosnippet>78</a>    /// * **Input** (wire → rust): chain runs `wire → function →
+<a href=#79 id=79 data-nosnippet>79</a>    ///   pre_stages[0] → pre_stages[1] → … → pre_stages[N-1] → rust`.
+<a href=#80 id=80 data-nosnippet>80</a>    /// * **Output** (rust → wire): chain runs `rust → pre_stages[N-1] →
+<a href=#81 id=81 data-nosnippet>81</a>    ///   … → pre_stages[1] → pre_stages[0] → function → wire`.
+<a href=#82 id=82 data-nosnippet>82</a>    ///
+<a href=#83 id=83 data-nosnippet>83</a>    /// Each stage is fallible; how its `Err` arm is surfaced is adapter
+<a href=#84 id=84 data-nosnippet>84</a>    /// specific and carried in [`Stage::metadata`].
+<a href=#85 id=85 data-nosnippet>85</a>    </span><span class="kw">pub </span>pre_stages: Vec&lt;Stage&lt;M&gt;&gt;,
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="doccomment">/// Bit-patterns the wire type can represent but this converter never
+<a href=#87 id=87 data-nosnippet>87</a>    /// produces (output) and rejects (input). Wrapper handlers like
+<a href=#88 id=88 data-nosnippet>88</a>    /// `Option&lt;_&gt;` consume one slot for their own discriminant and
+<a href=#89 id=89 data-nosnippet>89</a>    /// re-export the rest — see [`Niches`] for the cascade model.
+<a href=#90 id=90 data-nosnippet>90</a>    /// Default is empty (no niche optimisation).
+<a href=#91 id=91 data-nosnippet>91</a>    </span><span class="kw">pub </span>niches: Niches,
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="doccomment">/// Adapter-specific extras carried alongside the converter. Filled by
+<a href=#93 id=93 data-nosnippet>93</a>    /// the same handler that produces `destination` / `function` / `niches`,
+<a href=#94 id=94 data-nosnippet>94</a>    /// and read by the adapter's language-side emitters off the fragment this
+<a href=#95 id=95 data-nosnippet>95</a>    /// conversion belongs to. Set this where you build the converter, not in a
+<a href=#96 id=96 data-nosnippet>96</a>    /// side channel.
+<a href=#97 id=97 data-nosnippet>97</a>    </span><span class="kw">pub </span>metadata: M,
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="doccomment">/// Inner crossings this converter composed from — the ones the adapter
+<a href=#99 id=99 data-nosnippet>99</a>    /// looked up to build a wrapper (`Option&lt;X&gt;` → `[X]`, `Result&lt;T,E&gt;` →
+<a href=#100 id=100 data-nosnippet>100</a>    /// `[T, E]`, `&amp;T` → `[&amp;T]`). Empty for a terminal converter (scalar, opaque
+<a href=#101 id=101 data-nosnippet>101</a>    /// handle, string) and for a callback's own converter (callback args are
+<a href=#102 id=102 data-nosnippet>102</a>    /// cross-direction — their required-ness flows through the registry's
+<a href=#103 id=103 data-nosnippet>103</a>    /// type-graph edges, not here).
+<a href=#104 id=104 data-nosnippet>104</a>    ///
+<a href=#105 id=105 data-nosnippet>105</a>    /// This is what an adapter reports back as an
+<a href=#106 id=106 data-nosnippet>106</a>    /// [`Answer`](crate::Answer), and what `propagate_required` walks to mark
+<a href=#107 id=107 data-nosnippet>107</a>    /// reachable crossings required.
+<a href=#108 id=108 data-nosnippet>108</a>    ///
+<a href=#109 id=109 data-nosnippet>109</a>    /// **Identities, not spellings.** They are looked up and walked, never
+<a href=#110 id=110 data-nosnippet>110</a>    /// emitted. An adapter that composed the inner type keys it
+<a href=#111 id=111 data-nosnippet>111</a>    /// (`TypeKey::from_type`); one that read it off the model asks the reading
+<a href=#112 id=112 data-nosnippet>112</a>    /// (`TypeRef::key`), and names no escape to do it.
+<a href=#113 id=113 data-nosnippet>113</a>    </span><span class="kw">pub </span>subs: Vec&lt;<span class="kw">crate</span>::registry::TypeKey&gt;,
+<a href=#114 id=114 data-nosnippet>114</a>}
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a><span class="doccomment">/// What an emitter asks of a conversion it holds.
+<a href=#117 id=117 data-nosnippet>117</a></span><span class="kw">impl</span>&lt;M&gt; ConverterImpl&lt;M&gt; {
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="doccomment">/// Semantic identity of the wire-facing converter function.
+<a href=#119 id=119 data-nosnippet>119</a>    </span><span class="kw">pub fn </span>converter_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>OperationId {
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.converter
+<a href=#121 id=121 data-nosnippet>121</a>    }
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="doccomment">/// Wire type this conversion carries on success.
+<a href=#124 id=124 data-nosnippet>124</a>    </span><span class="kw">pub fn </span>wire_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>syn::Type {
+<a href=#125 id=125 data-nosnippet>125</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.destination
+<a href=#126 id=126 data-nosnippet>126</a>    }
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="doccomment">/// Rust-side stages in input execution order, after the wire-facing
+<a href=#129 id=129 data-nosnippet>129</a>    /// converter has decoded the wire value.
+<a href=#130 id=130 data-nosnippet>130</a>    </span><span class="kw">pub fn </span>input_stage_order(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (usize, <span class="kw-2">&amp;</span>Stage&lt;M&gt;)&gt; {
+<a href=#131 id=131 data-nosnippet>131</a>        <span class="self">self</span>.pre_stages.iter().enumerate().rev()
+<a href=#132 id=132 data-nosnippet>132</a>    }
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a>    <span class="doccomment">/// Rust-side stages in output execution order, before the wire-facing
+<a href=#135 id=135 data-nosnippet>135</a>    /// converter encodes the final wire value.
+<a href=#136 id=136 data-nosnippet>136</a>    </span><span class="kw">pub fn </span>output_stage_order(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (usize, <span class="kw-2">&amp;</span>Stage&lt;M&gt;)&gt; {
+<a href=#137 id=137 data-nosnippet>137</a>        <span class="self">self</span>.pre_stages.iter().enumerate()
+<a href=#138 id=138 data-nosnippet>138</a>    }
+<a href=#139 id=139 data-nosnippet>139</a>}
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a><span class="doccomment">/// The single extension point of the pipeline: implement this trait once per
+<a href=#142 id=142 data-nosnippet>142</a>/// **destination language** (C/cbindgen, JNI/Kotlin, Swift, Python, …) to teach
+<a href=#143 id=143 data-nosnippet>143</a>/// the language-agnostic [`Registry`] how that language represents Rust types
+<a href=#144 id=144 data-nosnippet>144</a>/// on the wire and what wrapper code to emit.
+<a href=#145 id=145 data-nosnippet>145</a>///
+<a href=#146 id=146 data-nosnippet>146</a>/// The trait has no language-specific concepts of its own, and — since the
+<a href=#147 id=147 data-nosnippet>147</a>/// registry stopped asking it questions — one job left: **per-item emission**.
+<a href=#148 id=148 data-nosnippet>148</a>/// The file emitter calls `on_struct` / `on_variant` / `on_enum` / `on_const`
+<a href=#149 id=149 data-nosnippet>149</a>/// to produce the per-item output, plus `prerequisites` and the two
+<a href=#150 id=150 data-nosnippet>150</a>/// `validate` hooks for adapter invariants. An exported wrapper is not among
+<a href=#151 id=151 data-nosnippet>151</a>/// them: it is an artifact of the adapter's frozen assembly.
+<a href=#152 id=152 data-nosnippet>152</a>///
+<a href=#153 id=153 data-nosnippet>153</a>/// What used to be here and is not any more: which items to build, how
+<a href=#154 id=154 data-nosnippet>154</a>/// composites decompose, and the wire form of each type. A generator states the
+<a href=#155 id=155 data-nosnippet>155</a>/// first two into the builder (`RegistryBuilder::export`,
+<a href=#156 id=156 data-nosnippet>156</a>/// `RegistryBuilder::decompose`) and answers the third inside
+<a href=#157 id=157 data-nosnippet>157</a>/// `RegistryBuilder::convert_with` — so nothing in core calls back to ask. Moving emission out too is what would delete this
+<a href=#158 id=158 data-nosnippet>158</a>/// trait entirely (prebindgen#251 phase E).
+<a href=#159 id=159 data-nosnippet>159</a>///
+<a href=#160 id=160 data-nosnippet>160</a>/// Anything language-specific the rest of the pipeline must carry — a JNI
+<a href=#161 id=161 data-nosnippet>161</a>/// adapter's Kotlin class names and exception info, a C adapter's header names,
+<a href=#162 id=162 data-nosnippet>162</a>/// etc. — rides in [`ConverterImpl::metadata`], and is read back by the
+<a href=#163 id=163 data-nosnippet>163</a>/// adapter's own emitter off the fragment that conversion belongs to. The
+<a href=#164 id=164 data-nosnippet>164</a>/// registry neither stores it nor names its type.
+<a href=#165 id=165 data-nosnippet>165</a>///
+<a href=#166 id=166 data-nosnippet>166</a>/// # The rule an adapter must obey
+<a href=#167 id=167 data-nosnippet>167</a>///
+<a href=#168 id=168 data-nosnippet>168</a>/// "Analyze the Flat model; generate Rust only" tells an adapter where every
+<a href=#169 id=169 data-nosnippet>169</a>/// decision comes from. Final source-type output is an inert fragment produced
+<a href=#170 id=170 data-nosnippet>170</a>/// by [`RustWriter`](crate::RustWriter), never a typed view of retained syntax. It is silent
+<a href=#171 id=171 data-nosnippet>171</a>/// on the question adapters actually face — what the **destination language**
+<a href=#172 id=172 data-nosnippet>172</a>/// ends up seeing.
+<a href=#173 id=173 data-nosnippet>173</a>/// That one has its own answer:
 <a href=#174 id=174 data-nosnippet>174</a>///
-<a href=#175 id=175 data-nosnippet>175</a>/// The weaker-sounding half is the important one. It is tempting to write "same
-<a href=#176 id=176 data-nosnippet>176</a>/// `kind` ⇒ same wire", and that is **false** — prebindgen's own adapters
-<a href=#177 id=177 data-nosnippet>177</a>/// violate it deliberately:
-<a href=#178 id=178 data-nosnippet>178</a>///
-<a href=#179 id=179 data-nosnippet>179</a>/// | Rust | `kind` | Kotlin type | wire |
-<a href=#180 id=180 data-nosnippet>180</a>/// |---|---|---|---|
-<a href=#181 id=181 data-nosnippet>181</a>/// | `&amp;[Payload]` | `Ref(Slice)` | `List&lt;Payload&gt;` | `Long` — a handle to a Rust-side `Vec` |
-<a href=#182 id=182 data-nosnippet>182</a>/// | `Vec&lt;Box&lt;Payload&gt;&gt;` | `Vec(Boxed)` | `List&lt;Payload&gt;` | `JObject` — a Java `List&lt;Payload&gt;` |
-<a href=#183 id=183 data-nosnippet>183</a>///
-<a href=#184 id=184 data-nosnippet>184</a>/// Two wires, one surface. Choosing a wire is exactly the generator's job, and
-<a href=#185 id=185 data-nosnippet>185</a>/// the destination-language wrapper absorbs the difference; a caller cannot
-<a href=#186 id=186 data-nosnippet>186</a>/// tell. What a caller *can* tell — and what
-<a href=#187 id=187 data-nosnippet>187</a>/// [`unwrapped`](crate::flat::TypeRef::unwrapped) exists to prevent — is the
-<a href=#188 id=188 data-nosnippet>188</a>/// **type** changing because the source spelled a `Box`.
-<a href=#189 id=189 data-nosnippet>189</a>///
-<a href=#190 id=190 data-nosnippet>190</a>/// The rule scopes to **converted** positions: those where a converter stands
-<a href=#191 id=191 data-nosnippet>191</a>/// between the Rust value and the destination and is therefore free to bridge.
-<a href=#192 id=192 data-nosnippet>192</a>/// It cannot apply to a **layout mirror**, where the destination type is
-<a href=#193 id=193 data-nosnippet>193</a>/// reinterpreted from the source struct's bytes and is a *layout* fact rather
-<a href=#194 id=194 data-nosnippet>194</a>/// than a surface choice — there `Box&lt;T&gt;` (a pointer) genuinely is a different
-<a href=#195 id=195 data-nosnippet>195</a>/// destination type from `T` (inline), the spelling is load-bearing by
-<a href=#196 id=196 data-nosnippet>196</a>/// construction, and no erasure can apply. The C adapter's `repr_c_struct` is
-<a href=#197 id=197 data-nosnippet>197</a>/// the one such position in-tree, and its own documentation carries that half.
-<a href=#198 id=198 data-nosnippet>198</a>///
-<a href=#199 id=199 data-nosnippet>199</a>/// Reusing a mirror's spelling test in a converted position is how the rule
-<a href=#200 id=200 data-nosnippet>200</a>/// gets broken (prebindgen#230, #292).
-<a href=#201 id=201 data-nosnippet>201</a></span><span class="kw">pub trait </span>Prebindgen {
-<a href=#202 id=202 data-nosnippet>202</a>    <span class="doccomment">/// Rust items the adapter's emitted converters depend on (helper
-<a href=#203 id=203 data-nosnippet>203</a>    /// structs, type aliases, runtime-support code). Emitted at the top
-<a href=#204 id=204 data-nosnippet>204</a>    /// of the destination file, before all auto-generated converters.
-<a href=#205 id=205 data-nosnippet>205</a>    ///
-<a href=#206 id=206 data-nosnippet>206</a>    /// Default: none. Wrapper adapters that compose a base adapter should
-<a href=#207 id=207 data-nosnippet>207</a>    /// forward to or extend the base's `prerequisites()`. The resolved
-<a href=#208 id=208 data-nosnippet>208</a>    /// `registry` is supplied so prerequisites can be gated on what the
-<a href=#209 id=209 data-nosnippet>209</a>    /// (feature-aware) scan actually contains — e.g. emitting a
-<a href=#210 id=210 data-nosnippet>210</a>    /// per-opaque-handle item only for handles a scanned `#[prebindgen]`
-<a href=#211 id=211 data-nosnippet>211</a>    /// fn references.
-<a href=#212 id=212 data-nosnippet>212</a>    </span><span class="kw">fn </span>prerequisites(<span class="kw-2">&amp;</span><span class="self">self</span>, _registry: <span class="kw-2">&amp;</span>Registry, _emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter) -&gt; Vec&lt;syn::Item&gt; {
-<a href=#213 id=213 data-nosnippet>213</a>        Vec::new()
-<a href=#214 id=214 data-nosnippet>214</a>    }
-<a href=#215 id=215 data-nosnippet>215</a>
-<a href=#216 id=216 data-nosnippet>216</a>    <span class="comment">// ── Declaration queries ────────────────────────────────────────
-<a href=#217 id=217 data-nosnippet>217</a>
-<a href=#218 id=218 data-nosnippet>218</a>    </span><span class="doccomment">/// Adapter-invariant checks that need registry **signatures** — the
-<a href=#219 id=219 data-nosnippet>219</a>    /// earliest they can run (decl objects are built before any source is
-<a href=#220 id=220 data-nosnippet>220</a>    /// read). Called by `RegistryBuilder::validate_with` right after the declaration
-<a href=#221 id=221 data-nosnippet>221</a>    /// scan (so a missing fn has already hard-errored; validate sees only
-<a href=#222 id=222 data-nosnippet>222</a>    /// indexed items) and before plan application. An `Err` aborts the
-<a href=#223 id=223 data-nosnippet>223</a>    /// resolve as `ScanError::AdapterInvariant` with the message verbatim
-<a href=#224 id=224 data-nosnippet>224</a>    /// — e.g. jnigen rejects a `.fun()` member whose target has no
-<a href=#225 id=225 data-nosnippet>225</a>    /// receiver parameter of the class type.
-<a href=#226 id=226 data-nosnippet>226</a>    ///
-<a href=#227 id=227 data-nosnippet>227</a>    /// Default: no checks.
-<a href=#228 id=228 data-nosnippet>228</a>    </span><span class="kw">fn </span>validate(<span class="kw-2">&amp;</span><span class="self">self</span>, _binding: <span class="kw-2">&amp;</span><span class="kw">crate</span>::registry::Building&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-<a href=#229 id=229 data-nosnippet>229</a>        <span class="prelude-val">Ok</span>(())
-<a href=#230 id=230 data-nosnippet>230</a>    }
-<a href=#231 id=231 data-nosnippet>231</a>
-<a href=#232 id=232 data-nosnippet>232</a>    <span class="doccomment">/// Post-**resolve** validation boundary — the counterpart of
-<a href=#233 id=233 data-nosnippet>233</a>    /// [`Self::validate`] that sees the fully resolved registry (converters,
-<a href=#234 id=234 data-nosnippet>234</a>    /// plans, metadata). Every artifact writer calls it before writing
-<a href=#235 id=235 data-nosnippet>235</a>    /// anything, so an invalid binding fails cleanly — with every problem
-<a href=#236 id=236 data-nosnippet>236</a>    /// reported at once — instead of panicking midway after a sibling
-<a href=#237 id=237 data-nosnippet>237</a>    /// artifact already reached disk. Deterministic over `(self, registry)`;
-<a href=#238 id=238 data-nosnippet>238</a>    /// it runs once per write call, which keeps artifact writes
-<a href=#239 id=239 data-nosnippet>239</a>    /// order-independent.
-<a href=#240 id=240 data-nosnippet>240</a>    ///
-<a href=#241 id=241 data-nosnippet>241</a>    /// Default: no checks.
-<a href=#242 id=242 data-nosnippet>242</a>    </span><span class="kw">fn </span>validate_resolved(<span class="kw-2">&amp;</span><span class="self">self</span>, _registry: <span class="kw-2">&amp;</span>Registry) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-<a href=#243 id=243 data-nosnippet>243</a>        <span class="prelude-val">Ok</span>(())
-<a href=#244 id=244 data-nosnippet>244</a>    }
-<a href=#245 id=245 data-nosnippet>245</a>
-<a href=#246 id=246 data-nosnippet>246</a>    <span class="doccomment">/// Absolute path under which the source crate's items are reachable
-<a href=#247 id=247 data-nosnippet>247</a>    /// from the generated file (e.g. `zenoh_flat`), for adapters that
-<a href=#248 id=248 data-nosnippet>248</a>    /// qualify emitted references against one. An adapter may also use it in
-<a href=#249 id=249 data-nosnippet>249</a>    /// its required [`Self::on_const`] policy to generate a path-alias to the
-<a href=#250 id=250 data-nosnippet>250</a>    /// source item instead of copying initializer tokens. Default: `None`.
-<a href=#251 id=251 data-nosnippet>251</a>    </span><span class="kw">fn </span>source_module(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>syn::Path&gt; {
-<a href=#252 id=252 data-nosnippet>252</a>        <span class="prelude-val">None
-<a href=#253 id=253 data-nosnippet>253</a>    </span>}
-<a href=#254 id=254 data-nosnippet>254</a>
-<a href=#255 id=255 data-nosnippet>255</a>    <span class="comment">// ── Item methods ───────────────────────────────────────────────
-<a href=#256 id=256 data-nosnippet>256</a>    //
-<a href=#257 id=257 data-nosnippet>257</a>    // Each takes the **element**, not the `syn` item it was parsed from.
-<a href=#258 id=258 data-nosnippet>258</a>    //
-<a href=#259 id=259 data-nosnippet>259</a>    // The element is the model's own node: its types are `TypeRef`s, already
-<a href=#260 id=260 data-nosnippet>260</a>    // classified. An adapter handed one therefore cannot ask what a type means
-<a href=#261 id=261 data-nosnippet>261</a>    // and be told "no reading" — the question a `&amp;syn::ItemFn` forced it to ask
-<a href=#262 id=262 data-nosnippet>262</a>    // the registry, and which answered wrongly for a type that never entered
-<a href=#263 id=263 data-nosnippet>263</a>    // the pipeline (#275). Final Rust source types are generated by `RustWriter` from
-<a href=#264 id=264 data-nosnippet>264</a>    // those model facts; retained type syntax is unavailable here.
-<a href=#265 id=265 data-nosnippet>265</a>
-<a href=#266 id=266 data-nosnippet>266</a>    </span><span class="doccomment">/// Wrap a `#[prebindgen]` fn into the destination-language wrapper
-<a href=#267 id=267 data-nosnippet>267</a>    /// (e.g. JNI `extern "C"` fn).
-<a href=#268 id=268 data-nosnippet>268</a>    </span><span class="kw">fn </span>on_function(
-<a href=#269 id=269 data-nosnippet>269</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#270 id=270 data-nosnippet>270</a>        f: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Function,
-<a href=#271 id=271 data-nosnippet>271</a>        registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#272 id=272 data-nosnippet>272</a>        emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
-<a href=#273 id=273 data-nosnippet>273</a>    ) -&gt; Vec&lt;syn::Item&gt;;
-<a href=#274 id=274 data-nosnippet>274</a>
-<a href=#275 id=275 data-nosnippet>275</a>    <span class="doccomment">/// Per-struct emission. Typically empty for languages that get
-<a href=#276 id=276 data-nosnippet>276</a>    /// everything they need from auto-generated converters.
-<a href=#277 id=277 data-nosnippet>277</a>    </span><span class="kw">fn </span>on_struct(
-<a href=#278 id=278 data-nosnippet>278</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#279 id=279 data-nosnippet>279</a>        s: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Struct,
-<a href=#280 id=280 data-nosnippet>280</a>        registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#281 id=281 data-nosnippet>281</a>        emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
-<a href=#282 id=282 data-nosnippet>282</a>    ) -&gt; Vec&lt;syn::Item&gt;;
-<a href=#283 id=283 data-nosnippet>283</a>
-<a href=#284 id=284 data-nosnippet>284</a>    <span class="doccomment">/// Per-sum emission — an `enum` whose alternatives carry payloads.
-<a href=#285 id=285 data-nosnippet>285</a>    ///
-<a href=#286 id=286 data-nosnippet>286</a>    /// Separate from [`Self::on_enum`] because the model separates them: the
-<a href=#287 id=287 data-nosnippet>287</a>    /// two are numbered differently and consumed as different constructs. An
-<a href=#288 id=288 data-nosnippet>288</a>    /// adapter with nothing to say about one shape returns an empty vector, as
-<a href=#289 id=289 data-nosnippet>289</a>    /// both in-tree adapters do for both.
-<a href=#290 id=290 data-nosnippet>290</a>    </span><span class="kw">fn </span>on_variant(
-<a href=#291 id=291 data-nosnippet>291</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#292 id=292 data-nosnippet>292</a>        v: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Variant,
-<a href=#293 id=293 data-nosnippet>293</a>        registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#294 id=294 data-nosnippet>294</a>        emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
-<a href=#295 id=295 data-nosnippet>295</a>    ) -&gt; Vec&lt;syn::Item&gt;;
-<a href=#296 id=296 data-nosnippet>296</a>
-<a href=#297 id=297 data-nosnippet>297</a>    <span class="doccomment">/// Per-enum emission — the fieldless shape, a named set of integers.
-<a href=#298 id=298 data-nosnippet>298</a>    </span><span class="kw">fn </span>on_enum(
-<a href=#299 id=299 data-nosnippet>299</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#300 id=300 data-nosnippet>300</a>        e: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Enum,
-<a href=#301 id=301 data-nosnippet>301</a>        registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#302 id=302 data-nosnippet>302</a>        emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
-<a href=#303 id=303 data-nosnippet>303</a>    ) -&gt; Vec&lt;syn::Item&gt;;
-<a href=#304 id=304 data-nosnippet>304</a>
-<a href=#305 id=305 data-nosnippet>305</a>    <span class="doccomment">/// Per-const emission. There is deliberately no default: Flat models the
-<a href=#306 id=306 data-nosnippet>306</a>    /// const's name, type and documentation, but not an arbitrary Rust
-<a href=#307 id=307 data-nosnippet>307</a>    /// initializer expression. Each adapter must therefore state its value
-<a href=#308 id=308 data-nosnippet>308</a>    /// policy explicitly, commonly by generating a path-alias to a source
-<a href=#309 id=309 data-nosnippet>309</a>    /// module. Initializer tokens are never copied or parsed.
-<a href=#310 id=310 data-nosnippet>310</a>    ///
-<a href=#311 id=311 data-nosnippet>311</a>    /// A const reaching here is always named: prebindgen's own injected feature
-<a href=#312 id=312 data-nosnippet>312</a>    /// checks are [`Guard`](prebindgen_flat::flat::Guard)s, not consts, so this
-<a href=#313 id=313 data-nosnippet>313</a>    /// never has to recognise one.
-<a href=#314 id=314 data-nosnippet>314</a>    </span><span class="kw">fn </span>on_const(
-<a href=#315 id=315 data-nosnippet>315</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#316 id=316 data-nosnippet>316</a>        c: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Constant,
-<a href=#317 id=317 data-nosnippet>317</a>        registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#318 id=318 data-nosnippet>318</a>        emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
-<a href=#319 id=319 data-nosnippet>319</a>    ) -&gt; Vec&lt;syn::Item&gt;;
-<a href=#320 id=320 data-nosnippet>320</a>}
+<a href=#175 id=175 data-nosnippet>175</a>/// &gt; **Same `kind` ⇒ same destination-language type.** The *wire* is the
+<a href=#176 id=176 data-nosnippet>176</a>/// &gt; generator's to choose, and may differ per spelling.
+<a href=#177 id=177 data-nosnippet>177</a>///
+<a href=#178 id=178 data-nosnippet>178</a>/// The weaker-sounding half is the important one. It is tempting to write "same
+<a href=#179 id=179 data-nosnippet>179</a>/// `kind` ⇒ same wire", and that is **false** — prebindgen's own adapters
+<a href=#180 id=180 data-nosnippet>180</a>/// violate it deliberately:
+<a href=#181 id=181 data-nosnippet>181</a>///
+<a href=#182 id=182 data-nosnippet>182</a>/// | Rust | `kind` | Kotlin type | wire |
+<a href=#183 id=183 data-nosnippet>183</a>/// |---|---|---|---|
+<a href=#184 id=184 data-nosnippet>184</a>/// | `&amp;[Payload]` | `Ref(Slice)` | `List&lt;Payload&gt;` | `Long` — a handle to a Rust-side `Vec` |
+<a href=#185 id=185 data-nosnippet>185</a>/// | `Vec&lt;Box&lt;Payload&gt;&gt;` | `Vec(Boxed)` | `List&lt;Payload&gt;` | `JObject` — a Java `List&lt;Payload&gt;` |
+<a href=#186 id=186 data-nosnippet>186</a>///
+<a href=#187 id=187 data-nosnippet>187</a>/// Two wires, one surface. Choosing a wire is exactly the generator's job, and
+<a href=#188 id=188 data-nosnippet>188</a>/// the destination-language wrapper absorbs the difference; a caller cannot
+<a href=#189 id=189 data-nosnippet>189</a>/// tell. What a caller *can* tell — and what
+<a href=#190 id=190 data-nosnippet>190</a>/// [`unwrapped`](crate::flat::TypeRef::unwrapped) exists to prevent — is the
+<a href=#191 id=191 data-nosnippet>191</a>/// **type** changing because the source spelled a `Box`.
+<a href=#192 id=192 data-nosnippet>192</a>///
+<a href=#193 id=193 data-nosnippet>193</a>/// The rule scopes to **converted** positions: those where a converter stands
+<a href=#194 id=194 data-nosnippet>194</a>/// between the Rust value and the destination and is therefore free to bridge.
+<a href=#195 id=195 data-nosnippet>195</a>/// It cannot apply to a **layout mirror**, where the destination type is
+<a href=#196 id=196 data-nosnippet>196</a>/// reinterpreted from the source struct's bytes and is a *layout* fact rather
+<a href=#197 id=197 data-nosnippet>197</a>/// than a surface choice — there `Box&lt;T&gt;` (a pointer) genuinely is a different
+<a href=#198 id=198 data-nosnippet>198</a>/// destination type from `T` (inline), the spelling is load-bearing by
+<a href=#199 id=199 data-nosnippet>199</a>/// construction, and no erasure can apply. The C adapter's `repr_c_struct` is
+<a href=#200 id=200 data-nosnippet>200</a>/// the one such position in-tree, and its own documentation carries that half.
+<a href=#201 id=201 data-nosnippet>201</a>///
+<a href=#202 id=202 data-nosnippet>202</a>/// Reusing a mirror's spelling test in a converted position is how the rule
+<a href=#203 id=203 data-nosnippet>203</a>/// gets broken (prebindgen#230, #292).
+<a href=#204 id=204 data-nosnippet>204</a></span><span class="kw">pub trait </span>Prebindgen {
+<a href=#205 id=205 data-nosnippet>205</a>    <span class="doccomment">/// Rust items the adapter's emitted converters depend on (helper
+<a href=#206 id=206 data-nosnippet>206</a>    /// structs, type aliases, runtime-support code). Emitted at the top
+<a href=#207 id=207 data-nosnippet>207</a>    /// of the destination file, before all auto-generated converters.
+<a href=#208 id=208 data-nosnippet>208</a>    ///
+<a href=#209 id=209 data-nosnippet>209</a>    /// Default: none. Wrapper adapters that compose a base adapter should
+<a href=#210 id=210 data-nosnippet>210</a>    /// forward to or extend the base's `prerequisites()`. The resolved
+<a href=#211 id=211 data-nosnippet>211</a>    /// `registry` is supplied so prerequisites can be gated on what the
+<a href=#212 id=212 data-nosnippet>212</a>    /// (feature-aware) scan actually contains — e.g. emitting a
+<a href=#213 id=213 data-nosnippet>213</a>    /// per-opaque-handle item only for handles a scanned `#[prebindgen]`
+<a href=#214 id=214 data-nosnippet>214</a>    /// fn references.
+<a href=#215 id=215 data-nosnippet>215</a>    </span><span class="kw">fn </span>prerequisites(<span class="kw-2">&amp;</span><span class="self">self</span>, _registry: <span class="kw-2">&amp;</span>Registry, _emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter) -&gt; Vec&lt;syn::Item&gt; {
+<a href=#216 id=216 data-nosnippet>216</a>        Vec::new()
+<a href=#217 id=217 data-nosnippet>217</a>    }
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a>    <span class="comment">// ── Declaration queries ────────────────────────────────────────
+<a href=#220 id=220 data-nosnippet>220</a>
+<a href=#221 id=221 data-nosnippet>221</a>    </span><span class="doccomment">/// Adapter-invariant checks that need registry **signatures** — the
+<a href=#222 id=222 data-nosnippet>222</a>    /// earliest they can run (decl objects are built before any source is
+<a href=#223 id=223 data-nosnippet>223</a>    /// read). Called by `RegistryBuilder::validate_with` right after the declaration
+<a href=#224 id=224 data-nosnippet>224</a>    /// scan (so a missing fn has already hard-errored; validate sees only
+<a href=#225 id=225 data-nosnippet>225</a>    /// indexed items) and before plan application. An `Err` aborts the
+<a href=#226 id=226 data-nosnippet>226</a>    /// resolve as `ScanError::AdapterInvariant` with the message verbatim
+<a href=#227 id=227 data-nosnippet>227</a>    /// — e.g. jnigen rejects a `.fun()` member whose target has no
+<a href=#228 id=228 data-nosnippet>228</a>    /// receiver parameter of the class type.
+<a href=#229 id=229 data-nosnippet>229</a>    ///
+<a href=#230 id=230 data-nosnippet>230</a>    /// Default: no checks.
+<a href=#231 id=231 data-nosnippet>231</a>    </span><span class="kw">fn </span>validate(<span class="kw-2">&amp;</span><span class="self">self</span>, _binding: <span class="kw-2">&amp;</span><span class="kw">crate</span>::registry::Building&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+<a href=#232 id=232 data-nosnippet>232</a>        <span class="prelude-val">Ok</span>(())
+<a href=#233 id=233 data-nosnippet>233</a>    }
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="doccomment">/// Post-**resolve** validation boundary — the counterpart of
+<a href=#236 id=236 data-nosnippet>236</a>    /// [`Self::validate`] that sees the fully resolved registry (converters,
+<a href=#237 id=237 data-nosnippet>237</a>    /// plans, metadata). Every artifact writer calls it before writing
+<a href=#238 id=238 data-nosnippet>238</a>    /// anything, so an invalid binding fails cleanly — with every problem
+<a href=#239 id=239 data-nosnippet>239</a>    /// reported at once — instead of panicking midway after a sibling
+<a href=#240 id=240 data-nosnippet>240</a>    /// artifact already reached disk. Deterministic over `(self, registry)`;
+<a href=#241 id=241 data-nosnippet>241</a>    /// it runs once per write call, which keeps artifact writes
+<a href=#242 id=242 data-nosnippet>242</a>    /// order-independent.
+<a href=#243 id=243 data-nosnippet>243</a>    ///
+<a href=#244 id=244 data-nosnippet>244</a>    /// Default: no checks.
+<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="kw">fn </span>validate_resolved(<span class="kw-2">&amp;</span><span class="self">self</span>, _registry: <span class="kw-2">&amp;</span>Registry) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+<a href=#246 id=246 data-nosnippet>246</a>        <span class="prelude-val">Ok</span>(())
+<a href=#247 id=247 data-nosnippet>247</a>    }
+<a href=#248 id=248 data-nosnippet>248</a>
+<a href=#249 id=249 data-nosnippet>249</a>    <span class="doccomment">/// Absolute path under which the source crate's items are reachable
+<a href=#250 id=250 data-nosnippet>250</a>    /// from the generated file (e.g. `zenoh_flat`), for adapters that
+<a href=#251 id=251 data-nosnippet>251</a>    /// qualify emitted references against one. An adapter may also use it in
+<a href=#252 id=252 data-nosnippet>252</a>    /// its required [`Self::on_const`] policy to generate a path-alias to the
+<a href=#253 id=253 data-nosnippet>253</a>    /// source item instead of copying initializer tokens. Default: `None`.
+<a href=#254 id=254 data-nosnippet>254</a>    </span><span class="kw">fn </span>source_module(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>syn::Path&gt; {
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="prelude-val">None
+<a href=#256 id=256 data-nosnippet>256</a>    </span>}
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a>    <span class="comment">// ── Item methods ───────────────────────────────────────────────
+<a href=#259 id=259 data-nosnippet>259</a>    //
+<a href=#260 id=260 data-nosnippet>260</a>    // Each takes the **element**, not the `syn` item it was parsed from.
+<a href=#261 id=261 data-nosnippet>261</a>    //
+<a href=#262 id=262 data-nosnippet>262</a>    // The element is the model's own node: its types are `TypeRef`s, already
+<a href=#263 id=263 data-nosnippet>263</a>    // classified. An adapter handed one therefore cannot ask what a type means
+<a href=#264 id=264 data-nosnippet>264</a>    // and be told "no reading" — the question a `&amp;syn::ItemFn` forced it to ask
+<a href=#265 id=265 data-nosnippet>265</a>    // the registry, and which answered wrongly for a type that never entered
+<a href=#266 id=266 data-nosnippet>266</a>    // the pipeline (#275). Final Rust source types are generated by `RustWriter` from
+<a href=#267 id=267 data-nosnippet>267</a>    // those model facts; retained type syntax is unavailable here.
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a>    </span><span class="doccomment">/// Per-struct emission. Typically empty for languages that get
+<a href=#270 id=270 data-nosnippet>270</a>    /// everything they need from auto-generated converters.
+<a href=#271 id=271 data-nosnippet>271</a>    </span><span class="kw">fn </span>on_struct(
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#273 id=273 data-nosnippet>273</a>        s: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Struct,
+<a href=#274 id=274 data-nosnippet>274</a>        registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#275 id=275 data-nosnippet>275</a>        emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
+<a href=#276 id=276 data-nosnippet>276</a>    ) -&gt; Vec&lt;syn::Item&gt;;
+<a href=#277 id=277 data-nosnippet>277</a>
+<a href=#278 id=278 data-nosnippet>278</a>    <span class="doccomment">/// Per-sum emission — an `enum` whose alternatives carry payloads.
+<a href=#279 id=279 data-nosnippet>279</a>    ///
+<a href=#280 id=280 data-nosnippet>280</a>    /// Separate from [`Self::on_enum`] because the model separates them: the
+<a href=#281 id=281 data-nosnippet>281</a>    /// two are numbered differently and consumed as different constructs. An
+<a href=#282 id=282 data-nosnippet>282</a>    /// adapter with nothing to say about one shape returns an empty vector, as
+<a href=#283 id=283 data-nosnippet>283</a>    /// both in-tree adapters do for both.
+<a href=#284 id=284 data-nosnippet>284</a>    </span><span class="kw">fn </span>on_variant(
+<a href=#285 id=285 data-nosnippet>285</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#286 id=286 data-nosnippet>286</a>        v: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Variant,
+<a href=#287 id=287 data-nosnippet>287</a>        registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#288 id=288 data-nosnippet>288</a>        emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
+<a href=#289 id=289 data-nosnippet>289</a>    ) -&gt; Vec&lt;syn::Item&gt;;
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a>    <span class="doccomment">/// Per-enum emission — the fieldless shape, a named set of integers.
+<a href=#292 id=292 data-nosnippet>292</a>    </span><span class="kw">fn </span>on_enum(
+<a href=#293 id=293 data-nosnippet>293</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#294 id=294 data-nosnippet>294</a>        e: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Enum,
+<a href=#295 id=295 data-nosnippet>295</a>        registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#296 id=296 data-nosnippet>296</a>        emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
+<a href=#297 id=297 data-nosnippet>297</a>    ) -&gt; Vec&lt;syn::Item&gt;;
+<a href=#298 id=298 data-nosnippet>298</a>
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="doccomment">/// Per-const emission. There is deliberately no default: Flat models the
+<a href=#300 id=300 data-nosnippet>300</a>    /// const's name, type and documentation, but not an arbitrary Rust
+<a href=#301 id=301 data-nosnippet>301</a>    /// initializer expression. Each adapter must therefore state its value
+<a href=#302 id=302 data-nosnippet>302</a>    /// policy explicitly, commonly by generating a path-alias to a source
+<a href=#303 id=303 data-nosnippet>303</a>    /// module. Initializer tokens are never copied or parsed.
+<a href=#304 id=304 data-nosnippet>304</a>    ///
+<a href=#305 id=305 data-nosnippet>305</a>    /// A const reaching here is always named: prebindgen's own injected feature
+<a href=#306 id=306 data-nosnippet>306</a>    /// checks are [`Guard`](prebindgen_flat::flat::Guard)s, not consts, so this
+<a href=#307 id=307 data-nosnippet>307</a>    /// never has to recognise one.
+<a href=#308 id=308 data-nosnippet>308</a>    </span><span class="kw">fn </span>on_const(
+<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#310 id=310 data-nosnippet>310</a>        c: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Constant,
+<a href=#311 id=311 data-nosnippet>311</a>        registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#312 id=312 data-nosnippet>312</a>        emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
+<a href=#313 id=313 data-nosnippet>313</a>    ) -&gt; Vec&lt;syn::Item&gt;;
+<a href=#314 id=314 data-nosnippet>314</a>}
 </code></pre></div></section></main></body></html>
