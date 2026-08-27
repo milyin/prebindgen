@@ -24,6 +24,18 @@ pub(crate) enum CFinalArtifact {
     Wrapper(Box<CWrapper>),
     /// One captured constant, re-stated as an alias to its source.
     Const(Box<CConst>),
+    /// The memory helpers the generated layer hands `char*` and array blocks
+    /// to C through.
+    Memory(Box<CMemory>),
+    /// One `#[repr(C)]` mirror of a declared data struct.
+    DataStruct(Box<CDataStruct>),
+    /// One `#[repr(C)]` mirror of a declared fieldless enum.
+    Enum(Box<CEnum>),
+    /// One reserved representation value a generated sum-type ABI uses.
+    DomainConstant(Box<CDomainConstant>),
+    /// One artifact the registry generation plan already holds: an opaque
+    /// handle, a value-opaque, a tagged union, or a callback.
+    Planned(Box<CPlanned>),
 }
 
 impl RustArtifact for CFinalArtifact {
@@ -32,6 +44,11 @@ impl RustArtifact for CFinalArtifact {
             Self::Converter(converter) => converter.key(),
             Self::Wrapper(wrapper) => wrapper.key(),
             Self::Const(constant) => constant.key(),
+            Self::Memory(memory) => memory.key(),
+            Self::DataStruct(item) => item.key(),
+            Self::Enum(item) => item.key(),
+            Self::DomainConstant(item) => item.key(),
+            Self::Planned(item) => item.key(),
         }
     }
 
@@ -40,6 +57,11 @@ impl RustArtifact for CFinalArtifact {
             Self::Converter(converter) => converter.render(emit),
             Self::Wrapper(wrapper) => wrapper.render(emit),
             Self::Const(constant) => constant.render(emit),
+            Self::Memory(memory) => memory.render(emit),
+            Self::DataStruct(item) => item.render(emit),
+            Self::Enum(item) => item.render(emit),
+            Self::DomainConstant(item) => item.render(emit),
+            Self::Planned(item) => item.render(emit),
         }
     }
 }
@@ -583,5 +605,353 @@ impl RustArtifact for CConst {
             .as_ref()
             .map(|module| vec![syn::Item::Const(emit.const_alias(&self.constant, module))])
             .unwrap_or_default()
+    }
+}
+
+/// An adapter-scoped artifact identity, for the artifacts this module names
+/// itself rather than reading off the generation plan.
+fn artifact_id(kind: &str, name: impl Into<String>) -> ArtifactKey {
+    ArtifactKey::Artifact(
+        prebindgen_registry::generation::ArtifactId::new(kind, name)
+            .expect("a C artifact name is non-empty"),
+    )
+}
+
+/// One artifact the registry generation plan already holds.
+///
+/// Handles, value-opaques, tagged unions and callbacks are planned into the
+/// generation plan while their sites are compiled. This is the same artifact,
+/// placed in the file: the payload is the plan's, and rendering it is a lookup
+/// in a frozen plan.
+pub(crate) struct CPlanned {
+    generation: Rc<GenerationPlan<crate::compile::CRepresentation>>,
+    id: prebindgen_registry::generation::ArtifactId,
+}
+
+impl CPlanned {
+    /// Every planned artifact of one kind, in the plan's own order.
+    pub(crate) fn of_kind(
+        generation: &Rc<GenerationPlan<crate::compile::CRepresentation>>,
+        kind: &str,
+    ) -> Vec<Self> {
+        generation
+            .artifacts()
+            .filter(|artifact| artifact.id().kind() == kind)
+            .map(|artifact| Self {
+                generation: Rc::clone(generation),
+                id: artifact.id().clone(),
+            })
+            .collect()
+    }
+}
+
+impl RustArtifact for CPlanned {
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Artifact(self.id.clone())
+    }
+
+    fn render(&self, emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
+        self.generation
+            .artifact(&self.id)
+            .unwrap_or_else(|| panic!("the C generation plan lost artifact {}", self.id))
+            .payload()
+            .render(emit)
+    }
+}
+
+/// The memory helpers: the C allocator the generated layer calls, the raw
+/// C-string block builder, the universal freer C calls back, and — when a
+/// `Vec<T>` return hands out a block — the array builder.
+///
+/// Planned only when the layer actually hands memory to C, which is also when
+/// a declared `.free_memory_function` becomes required.
+pub(crate) struct CMemory {
+    /// The declared freer's exported symbol.
+    free_ident: syn::Ident,
+    /// Whether a `Vec<T>` return hands out an array block.
+    arrays: bool,
+}
+
+impl CMemory {
+    /// Plan the memory helpers, if this binding hands memory to C at all.
+    pub(crate) fn new(decls: &CbindgenBuilder, registry: &Registry) -> Option<Self> {
+        let arrays = decls.produces_array(registry);
+        if !(decls.needs_free(registry) || arrays) {
+            return None;
+        }
+        let Some(free_fn) = &decls.free_fn else {
+            panic!(
+                "Cbindgen: the generated layer hands `char*` string memory to C \
+                 (a `String` return or a `String` data-struct field) but no \
+                 memory-freeing function is declared — add \
+                 `.free_memory_function(\"z_free\")`"
+            )
+        };
+        Some(Self {
+            free_ident: format_ident!("{}", free_fn),
+            arrays,
+        })
+    }
+}
+
+impl RustArtifact for CMemory {
+    fn key(&self) -> ArtifactKey {
+        artifact_id("c-runtime", "memory")
+    }
+
+    fn render(&self, _emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
+        let free_ident = &self.free_ident;
+        // C allocator (linked from the C runtime; no crate dependency).
+        let mut items: Vec<syn::Item> = vec![
+            syn::parse_quote!(
+                extern "C" {
+                    fn malloc(size: usize) -> *mut ::core::ffi::c_void;
+                    fn free(ptr: *mut ::core::ffi::c_void);
+                }
+            ),
+            // Raw, destructor-free C-string block. `CString::new` drops interior
+            // NULs so the terminator marks the true end for C consumers.
+            syn::parse_quote!(
+                #[allow(non_snake_case, dead_code)]
+                pub(crate) fn __cbg_alloc_cstr(
+                    s: ::std::string::String,
+                ) -> *mut ::core::ffi::c_char {
+                    let c = ::std::ffi::CString::new(s).unwrap_or_default();
+                    let bytes = c.as_bytes_with_nul();
+                    unsafe {
+                        let p = malloc(bytes.len()) as *mut u8;
+                        if p.is_null() {
+                            return ::core::ptr::null_mut();
+                        }
+                        ::core::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len());
+                        p as *mut ::core::ffi::c_char
+                    }
+                }
+            ),
+            // Universal raw memory freer: type-agnostic C `free`, no length, no
+            // destructor (NULL-safe via C `free`).
+            syn::parse_quote!(
+                #[no_mangle]
+                #[allow(non_snake_case, unused_variables)]
+                pub unsafe extern "C" fn #free_ident(p: *mut ::core::ffi::c_void) {
+                    free(p);
+                }
+            ),
+        ];
+        if self.arrays {
+            // Array builder: copy a `Vec<W>` into a C-`malloc`'d block of `W`
+            // and return `(ptr, len)` (empty ⇒ `(NULL, 0)`). The block is freed
+            // C-side via the `z_free_array` macro (per-element drop + the
+            // universal freer).
+            items.push(syn::parse_quote!(
+                #[allow(non_snake_case, dead_code)]
+                pub(crate) unsafe fn __cbg_alloc_array<W>(
+                    v: ::std::vec::Vec<W>,
+                ) -> (*mut W, usize) {
+                    let n = v.len();
+                    if n == 0 {
+                        return (::core::ptr::null_mut(), 0);
+                    }
+                    let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
+                    if p.is_null() {
+                        return (::core::ptr::null_mut(), 0);
+                    }
+                    for (i, e) in v.into_iter().enumerate() {
+                        ::core::ptr::write(p.add(i), e);
+                    }
+                    (p, n)
+                }
+            ));
+        }
+        items
+    }
+}
+
+/// One declared data struct's `#[repr(C)]` mirror.
+///
+/// The mirror is a layout fact: each field is stated in its wire form, which
+/// is decided while planning, when the binding's declarations and the model
+/// are both available.
+pub(crate) struct CDataStruct {
+    /// The C-facing struct name.
+    c_struct: syn::Ident,
+    /// Field name and wire type, in source order.
+    fields: Vec<(syn::Ident, syn::Type)>,
+}
+
+impl CDataStruct {
+    /// Plan the mirrors of every declared data struct that crosses.
+    pub(crate) fn all(decls: &CbindgenBuilder, registry: &Registry) -> Vec<Self> {
+        let mut mirrors = Vec::new();
+        for (key, _cfg) in sorted_by_key(&decls.data) {
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if decls.in_frag(&reading).is_none() && decls.out_frag(&reading).is_none() {
+                continue;
+            }
+            let Some(fields) = decls.struct_fields(registry, &reading.key()) else {
+                continue;
+            };
+            mirrors.push(Self {
+                c_struct: decls.c_type_ident(&reading.key()),
+                fields: fields
+                    .iter()
+                    .map(|(name, ty)| {
+                        let wire = decls.data_field_wire(ty).unwrap_or_else(|| {
+                            panic!(
+                                "Cbindgen: field `{}` of data struct `{}` has unsupported type `{}`",
+                                name,
+                                type_short(&reading.key()),
+                                ty
+                            )
+                        });
+                        (name.clone(), wire)
+                    })
+                    .collect(),
+            });
+        }
+        mirrors
+    }
+}
+
+impl RustArtifact for CDataStruct {
+    fn key(&self) -> ArtifactKey {
+        artifact_id("c-data-struct", self.c_struct.to_string())
+    }
+
+    fn render(&self, _emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
+        let c_struct = &self.c_struct;
+        let fields = self
+            .fields
+            .iter()
+            .map(|(name, wire)| quote!(pub #name: #wire));
+        vec![syn::parse_quote!(
+            #[repr(C)]
+            #[allow(non_camel_case_types)]
+            pub struct #c_struct {
+                #(#fields,)*
+            }
+        )]
+    }
+}
+
+/// One declared fieldless enum's `#[repr(C)]` mirror.
+///
+/// Each discriminant is re-stated **as written** — `= 0x07` stays `0x07` —
+/// which is what keeps every value C already accepted: a `const` or
+/// `cfg`-driven expression, and anything the source's own `repr` admits.
+/// Resolving each to a number would narrow that to what `i64` and a literal
+/// can express, for no gain, since cbindgen re-reads this as Rust source.
+///
+/// That is why the model's own values are retained here and spelled by the
+/// writer, rather than the mirror being spelled while planning.
+pub(crate) struct CEnum {
+    /// The C-facing enum name.
+    c_name: syn::Ident,
+    /// The source enum's values, in declaration order.
+    values: Vec<prebindgen_registry::flat::EnumValue>,
+}
+
+impl CEnum {
+    /// Plan the mirrors of every declared fieldless enum that crosses.
+    pub(crate) fn all(decls: &CbindgenBuilder, registry: &Registry) -> Vec<Self> {
+        let mut mirrors = Vec::new();
+        for (key, _cfg) in sorted_by_key(&decls.enums) {
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if decls.in_frag(&reading).is_none() && decls.out_frag(&reading).is_none() {
+                continue;
+            }
+            let Some(item) = unit_enum(registry, &reading.key()) else {
+                continue;
+            };
+            mirrors.push(Self {
+                c_name: decls.c_type_ident(&reading.key()),
+                values: item.values.clone(),
+            });
+        }
+        mirrors
+    }
+}
+
+impl RustArtifact for CEnum {
+    fn key(&self) -> ArtifactKey {
+        artifact_id("c-enum", self.c_name.to_string())
+    }
+
+    fn render(&self, emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
+        let c_name = &self.c_name;
+        let variants = self.values.iter().map(|value| {
+            let id = &value.name;
+            match emit.discriminant(value) {
+                Some(expr) => quote!(#id = #expr),
+                None => quote!(#id),
+            }
+        });
+        vec![syn::parse_quote!(
+            #[repr(C)]
+            #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+            #[allow(non_camel_case_types)]
+            pub enum #c_name {
+                #(#variants),*
+            }
+        )]
+    }
+}
+
+/// One reserved representation value a generated sum-type ABI uses.
+pub(crate) struct CDomainConstant {
+    /// The exported constant name.
+    name: syn::Ident,
+    /// The scalar type the value is stated in.
+    ty: syn::Type,
+    /// The value itself.
+    value: syn::Expr,
+    /// Documentation, which differs between a niche slot and the `None` of
+    /// the first optional layer.
+    doc: &'static str,
+}
+
+impl RustArtifact for CDomainConstant {
+    fn key(&self) -> ArtifactKey {
+        artifact_id("c-domain-constant", self.name.to_string())
+    }
+
+    fn render(&self, _emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
+        let (name, ty, value, doc) = (&self.name, &self.ty, &self.value, self.doc);
+        vec![syn::parse_quote!(
+            #[doc = #doc]
+            pub const #name: #ty = #value;
+        )]
+    }
+}
+
+impl CDomainConstant {
+    /// Plan every reserved value the declared conversions need.
+    pub(crate) fn all(decls: &CbindgenBuilder, registry: &Registry) -> Vec<Self> {
+        decls.domain_constants(registry)
+    }
+
+    /// Build one, named by its base and slot index.
+    pub(crate) fn niche(base: &str, index: usize, ty: syn::Type, value: syn::Expr) -> Self {
+        Self {
+            name: format_ident!("{}_NICHE_{}", base, index),
+            ty,
+            value,
+            doc: "Reserved representation value used by generated sum-type ABIs.",
+        }
+    }
+
+    /// Build the `None` of the first optional layer, which shares the first
+    /// niche's value.
+    pub(crate) fn none(base: &str, ty: syn::Type, value: syn::Expr) -> Self {
+        Self {
+            name: format_ident!("{}_NONE", base),
+            ty,
+            value,
+            doc: "Representation of None for the first optional layer.",
+        }
     }
 }

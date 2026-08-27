@@ -455,14 +455,34 @@ fn a_planned_wrapper_holds_no_declaration_object() {
     );
 }
 
+/// A planned artifact — an opaque handle, a value-opaque, a tagged union, a
+/// callback — reaches the file through a lookup in the frozen plan and the
+/// writer, and through nothing else.
 #[test]
-fn callback_renderer_accepts_only_the_frozen_plan() {
-    let renderer: fn(
-        &prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>,
-        &str,
-        &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> = crate::chain::render_artifacts;
-    let _ = renderer;
+fn planned_artifacts_reach_the_file_through_the_frozen_plan() {
+    let source = include_str!("../assembly.rs");
+    let file = syn::parse_file(source).expect("C assembly parses");
+    let fields = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Struct(item) if item.ident == "CPlanned" => {
+                Some(item.fields.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("the planned-artifact placement");
+    let fields: String = fields.split_whitespace().collect();
+    for forbidden in ["CbindgenBuilder", "Registry,", "Compiled", "RefCell"] {
+        assert!(
+            !fields.contains(forbidden),
+            "a placed artifact retains {forbidden}, so rendering could resume planning"
+        );
+    }
+    assert!(
+        fields.contains("Rc<GenerationPlan") && fields.contains("ArtifactId"),
+        "a placed artifact is a frozen plan and the identity to look up in it"
+    );
 }
 
 #[test]

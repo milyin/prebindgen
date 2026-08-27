@@ -471,7 +471,7 @@ impl CbindgenBuilder {
             .artifacts()
             .filter_map(|artifact| match artifact {
                 assembly::CFinalArtifact::Converter(converter) => Some(&**converter),
-                assembly::CFinalArtifact::Wrapper(_) | assembly::CFinalArtifact::Const(_) => None,
+                _ => None,
             })
     }
 }
