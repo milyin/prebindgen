@@ -488,7 +488,7 @@ impl PlanError {
         let at = self.location_suffix();
         match self {
             PlanError::Unresolved { ty } => format!(
-                "JniGen::on_function: input type `{}` for `{}` is unresolved{at}",
+                "JniGen extern: input type `{}` for `{}` is unresolved{at}",
                 ty.key(),
                 fn_ident,
             ),
@@ -498,7 +498,7 @@ impl PlanError {
                 param,
             ),
             PlanError::UnresolvedOutput { ty } => format!(
-                "JniGen::on_function: return type `{}` of `{}` has no registered output \
+                "JniGen extern: return type `{}` of `{}` has no registered output \
                  converter — register one via `Declarations::output_wrapper(pat, |…| Some((ty, exc, body)))` \
                  (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
                   to bind a domain exception){at}",
@@ -506,16 +506,16 @@ impl PlanError {
                 fn_ident,
             ),
             PlanError::UnknownOutputType { ty } => format!(
-                "JniGen::on_function: return type `{}` of `{}` is not registered — the \
+                "JniGen extern: return type `{}` of `{}` is not registered — the \
                  resolver never saw this type, so no converter can be selected for it. \
                  Declare the type (or the function that produces it) before binding `{}`",
                 ty, fn_ident, fn_ident,
             ),
             PlanError::UnflattenableDataClass(error) => {
-                format!("JniGen::on_function `{fn_ident}`: {}", error.message())
+                format!("JniGen extern `{fn_ident}`: {}", error.message())
             }
             PlanError::JvmParameterLimit { slots } => format!(
-                "JniGen::on_function `{fn_ident}`: flattened JNI signature uses {slots} JVM parameter slots (maximum 255, including the JNINative receiver); reduce the data-class shape or declare an intentional `data_class!(T).jobject_input()` boundary"
+                "JniGen extern `{fn_ident}`: flattened JNI signature uses {slots} JVM parameter slots (maximum 255, including the JNINative receiver); reduce the data-class shape or declare an intentional `data_class!(T).jobject_input()` boundary"
             ),
         }
     }
@@ -575,7 +575,7 @@ pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Resu
     }
 
     // Declared consts: their synthetic nullary getters run through the same
-    // plan machinery (`Declarations::on_const`).
+    // plan machinery, and reach the file as constant artifacts.
     if let Some(declared_consts) = ext.declared_consts() {
         let mut consts: Vec<&prebindgen_registry::flat::Constant> =
             registry.flat().constants().collect();

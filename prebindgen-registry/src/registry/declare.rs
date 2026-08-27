@@ -116,9 +116,11 @@ impl RegistryBuilder {
     /// A const this binding exports.
     ///
     /// Separate from [`Self::export`] only because *having a const mechanism at
-    /// all* is itself a fact: a binding that never calls this applies its
-    /// `on_const` policy to every captured const, while one that calls it emits
-    /// exactly what it names. See [`Self::declares_consts`].
+    /// all* is itself a fact, and the unclaimed-item report reads it: a binding
+    /// that never calls this claims no const, so none is reported as skipped,
+    /// while one that calls it claims exactly what it names. Which consts reach
+    /// the file is the adapter's own business — its constant artifacts decide
+    /// that. See [`Self::declares_consts`].
     pub fn export_const(mut self, name: &syn::Ident) -> Self {
         self.registry
             .declared
@@ -129,8 +131,8 @@ impl RegistryBuilder {
     }
 
     /// Declare that this binding has a const mechanism, even if it exports no
-    /// consts. Without it every captured const reaches the adapter's mandatory
-    /// `on_const` policy.
+    /// consts — which is what makes an unexported const a deliberate omission
+    /// rather than an unclaimed item.
     pub fn declares_consts(mut self) -> Self {
         self.registry
             .declared
