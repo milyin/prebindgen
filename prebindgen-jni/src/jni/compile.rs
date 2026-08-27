@@ -1731,10 +1731,14 @@ impl<R: Conversions> JCompile<'_, R> {
             // normalization covers constructors, not scalars — so this compares
             // two spellings. It is exact anyway, from both sides: the domain's
             // spelling is derived from its kind, and a path-qualified scalar
-            // never reaches here, because a marked item lives in one flat
-            // namespace of bare names and such a representation fails to
-            // resolve first. Pinned by
-            // `a_qualified_scalar_representation_never_reaches_the_domain_check`.
+            // reaches here by neither route it could take. A `fun!`
+            // representation names a captured source function, and the flat
+            // model refuses that function outright, because marked items live
+            // in one flat namespace of bare names. A `from!` / `into!`
+            // representation names a type directly, and its qualified key
+            // resolves to nothing — the route
+            // `a_qualified_scalar_representation_never_reaches_the_domain_check`
+            // takes.
             let domain_key = TypeKey::from_type(&domain.ty());
             if domain_key != representation_key {
                 let direction = match direction {
