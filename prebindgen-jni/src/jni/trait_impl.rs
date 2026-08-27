@@ -209,29 +209,6 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
     )
 }
 
-/// One `#[no_mangle] extern "C"` destructor per opaque handle — the Rust
-/// counterpart to the `public fun free() = free {
-/// freePtr<suffix>(it) }` / `private external fun freePtr<suffix>` pair
-/// emitted by [`render_typed_handle_source`] — so the framework owns *both*
-/// halves of the destructor for every typed-handle class. Each body is the
-/// uniform `drop(Box::from_raw(ptr as *mut T))`; the inner `T`'s own `Drop`
-/// runs (e.g. `Publisher` network-undeclare) with no special casing.
-///
-/// The symbol follows the documented scheme
-/// `Java_<package_underscores>_<class_short>_<mangled-freePtr>`,
-/// where `class_short` is the last segment of the typed-handle FQN
-/// (`TypeConfig::kotlin_name`) and the `freePtr` name passes through
-/// the package/class-aware method hook — exact symmetry with the Kotlin
-/// `external fun <mangled-freePtr>` declaration in
-/// [`render_typed_handle_source`]. `ext.types` is a `HashMap`, so the
-/// artifacts are sorted by symbol to keep generated output deterministic.
-///
-/// Planning is gated on the resolved `registry`: a destructor is only planned
-/// for an opaque handle whose type a scanned `#[prebindgen]` fn actually
-/// references (as input or output). This mirrors converter emission and keeps
-/// feature-gated handles (e.g. `zenoh-ext`-only types whose declare/undeclare
-/// fns are `#[cfg]`'d out of the scan) from producing destructors that
-/// reference types not in scope.
 /// The items every extern body reaches by bare name: the framework error
 /// alias, the `OwnedObject` carrier borrowed-handle plans return, and the two
 /// error-channel functions.
@@ -292,6 +269,29 @@ pub(crate) fn plan_constant_expressions(
         .collect()
 }
 
+/// One `#[no_mangle] extern "C"` destructor per opaque handle — the Rust
+/// counterpart to the `public fun free() = free {
+/// freePtr<suffix>(it) }` / `private external fun freePtr<suffix>` pair
+/// emitted by [`render_typed_handle_source`] — so the framework owns *both*
+/// halves of the destructor for every typed-handle class. Each body is the
+/// uniform `drop(Box::from_raw(ptr as *mut T))`; the inner `T`'s own `Drop`
+/// runs (e.g. `Publisher` network-undeclare) with no special casing.
+///
+/// The symbol follows the documented scheme
+/// `Java_<package_underscores>_<class_short>_<mangled-freePtr>`,
+/// where `class_short` is the last segment of the typed-handle FQN
+/// (`TypeConfig::kotlin_name`) and the `freePtr` name passes through
+/// the package/class-aware method hook — exact symmetry with the Kotlin
+/// `external fun <mangled-freePtr>` declaration in
+/// [`render_typed_handle_source`]. `ext.types` is a `HashMap`, so the
+/// artifacts are sorted by symbol to keep generated output deterministic.
+///
+/// Planning is gated on the resolved `registry`: a destructor is only planned
+/// for an opaque handle whose type a scanned `#[prebindgen]` fn actually
+/// references (as input or output). This mirrors converter emission and keeps
+/// feature-gated handles (e.g. `zenoh-ext`-only types whose declare/undeclare
+/// fns are `#[cfg]`'d out of the scan) from producing destructors that
+/// reference types not in scope.
 pub(crate) fn plan_handle_destructors(
     ext: &Declarations,
     registry: &Registry,

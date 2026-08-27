@@ -138,10 +138,15 @@ impl RustArtifact for LateOrCaller {
 /// A converter plan that is dormant when the assembly is frozen and reachable
 /// by the time the file is written is emitted.
 ///
-/// This is not hypothetical: JniGen shares one reachability cell between every
-/// clone of a plan, and marks a plan reachable when a parent that calls it is
-/// compiled. The writer asks each artifact whether it is reachable while it
-/// renders, which is what makes that legal.
+/// What this pins is that reachability is read when the file is written and
+/// not snapshotted while the assembly is frozen. It does not pin *when* during
+/// writing: nothing marks an artifact reachable while another renders, so
+/// reading every artifact's reachability just before the render loop would
+/// satisfy this too.
+///
+/// The property is not hypothetical. JniGen shares one reachability cell
+/// between every clone of a plan and sets it when a parent that calls the plan
+/// is compiled, which can happen after the plan has been added to the builder.
 #[test]
 fn an_artifact_reached_after_freezing_is_emitted() {
     let registry = late_test_registry();
@@ -266,6 +271,14 @@ fn registry_operations_are_deduplicated_before_rendering() {
         rendered_reachable: rendered_reachable.clone(),
     };
     let reachable = OperationPlan {
+        operation: operation.clone(),
+        reachable: true,
+        renders: renders.clone(),
+        rendered_reachable: rendered_reachable.clone(),
+    };
+    // One registry operation reached from a second site: legal, and the
+    // exemption the duplicate-identity guard states.
+    let reached_again = OperationPlan {
         operation,
         reachable: true,
         renders: renders.clone(),
@@ -277,7 +290,7 @@ fn registry_operations_are_deduplicated_before_rendering() {
     write_rust(
         &registry,
         &IdentityExt,
-        &assembly_of([dormant, reachable]),
+        &assembly_of([dormant, reachable, reached_again]),
         dir.join("gen.rs"),
     )
     .expect("write Rust");
@@ -285,7 +298,8 @@ fn registry_operations_are_deduplicated_before_rendering() {
     assert_eq!(
         renders.get(),
         1,
-        "a shared registry operation must be rendered exactly once"
+        "a shared registry operation must be rendered exactly once, however \
+         many sites reached it"
     );
     assert!(
         rendered_reachable.get(),

@@ -278,9 +278,9 @@ pub(crate) fn plan_vec_build_helpers(ext: &Declarations) -> Vec<crate::jni::gene
     // Planned while the generation plan is being frozen, which is before that
     // plan is installed on the declarations — so the helpers come from the
     // planning store rather than through `collect_vec_build_helpers`, which
-    // every post-freeze reader uses.
-    let mut helpers: Vec<_> = ext.vec_build_plans.borrow().values().cloned().collect();
-    helpers.sort_by(|a, b| a.elem.key().as_str().cmp(b.elem.key().as_str()));
+    // every post-freeze reader uses. Order comes from the exported symbols
+    // below, so the store's own order does not matter here.
+    let helpers: Vec<_> = ext.vec_build_plans.borrow().values().cloned().collect();
     let mut planned: Vec<crate::jni::generation::JVecBuild> = helpers
         .into_iter()
         .map(|helpers| {

@@ -233,7 +233,12 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
     fn reachable(&self) -> bool {
         match self {
             Self::Converter(converter) => converter.should_emit(),
-            _ => true,
+            Self::Wrapper(_)
+            | Self::Const(_)
+            | Self::Prelude
+            | Self::HandleDestructor(_)
+            | Self::VecBuild(_)
+            | Self::ConstantExpr(_) => true,
         }
     }
 
