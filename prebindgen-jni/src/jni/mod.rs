@@ -966,16 +966,33 @@ impl JniGen {
             // wrote it (`maybe_long`), and a keyword-colliding name keeps a
             // trailing underscore on one side only. The property here is which
             // leaves, in which order — so the comparison drops the spelling.
+            // Two comparisons, because a leaf has two properties that must
+            // agree and one that need not. Its *name* is spelled for two
+            // audiences — the decomposition names it as Kotlin will see it
+            // (`maybeLong`), the encode as Rust wrote it (`maybe_long`), and a
+            // keyword-colliding name keeps a trailing underscore on one side —
+            // so the comparison drops the spelling. Its *nesting* is structure:
+            // the decomposition joins an inlined class's path with the reserved
+            // `__` separator, and the encode counts the same inlining as depth.
             let plain = |name: &str| name.replace('_', "").to_lowercase();
             let decomposed: Vec<String> = wires.iter().map(|wire| plain(&wire.name)).collect();
-            let encoded: Vec<String> = crate::jni::emit::encode_leaf_names(&plan, &emit)
+            let decomposed_depth: Vec<usize> = wires
                 .iter()
-                .map(|name| plain(name))
+                .map(|wire| wire.name.matches("__").count())
                 .collect();
+            let leaves = crate::jni::emit::encode_leaves(&plan, &emit);
+            let encoded: Vec<String> = leaves.iter().map(|(name, _)| plain(name)).collect();
+            let encoded_depth: Vec<usize> = leaves.iter().map(|(_, depth)| *depth).collect();
             assert_eq!(
                 encoded, decomposed,
                 "`{}`: the whole-object encode and the registry-facing \
                  decomposition name different leaves",
+                item.name
+            );
+            assert_eq!(
+                encoded_depth, decomposed_depth,
+                "`{}`: the whole-object encode and the registry-facing \
+                 decomposition flatten nesting differently",
                 item.name
             );
         }

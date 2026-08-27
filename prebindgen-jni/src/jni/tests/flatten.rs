@@ -2383,6 +2383,90 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
     );
 }
 
+/// A nested `data_class` inlines its leaves into its parent's `fromParts`, and
+/// the two derivations of that flattening must agree on the leaves *and* on
+/// how deep each one is.
+///
+/// `assert_leaf_derivations_agree` runs on every binding a test writes, and
+/// before this fixture existed every struct it compared was flat — so the
+/// property it was written for, how a nested path flattens and in what order,
+/// was never reached. This is the binding that reaches it.
+#[test]
+fn the_two_derivations_agree_on_a_nested_data_class() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Stamp {
+                    pub secs: i64,
+                    pub nanos: i32,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Entry {
+                    pub stamp: Stamp,
+                    pub weight: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Page {
+                    pub head: Entry,
+                    pub count: i32,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn page_count(p: Page) -> i32 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Stamp))
+                .class(crate::data_class!(Entry))
+                .class(crate::data_class!(Page))
+                .fun(prebindgen_registry::fun!(page_count)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    // Two levels of inlining, so the comparison sees depth 0, 1 and 2.
+    let page: syn::Ident = syn::parse_quote!(Page);
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry(), &page)
+        .expect("a nested data class decomposes");
+    let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "head__stamp__secs",
+            "head__stamp__nanos",
+            "head__weight",
+            "count"
+        ],
+        "the decomposition inlines both levels"
+    );
+
+    // Writing the binding is what runs `assert_leaf_derivations_agree` over it.
+    let dir = unique_test_dir("jnigen_nested_agreement");
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+}
+
 /// The whole-object encode covers a shape the registry-facing decomposition
 /// refuses, and that divergence is deliberate.
 ///
