@@ -4233,8 +4233,10 @@ impl Declarations {
                 // optional nested class becomes a `present` flag plus a
                 // defaulted group, and a sum field a tag plus one group per
                 // variant. Delivering those to a foreign builder is a feature
-                // this decomposition does not have, so the two are not two
-                // implementations of one thing. See #596 step 5, and #602.
+                // this decomposition does not have: the encode is a superset
+                // rather than a second implementation. Where both apply they
+                // name the same leaves, which `assert_leaf_derivations_agree`
+                // checks. See #596 step 5, and #602.
                 crate::jni::classify::TypeKind::DataStruct {
                     st: _,
                     cfg: Some(_),

@@ -118,6 +118,28 @@ pub(crate) fn synth_value_struct_leaves(
 /// mean teaching that decomposition the gated shapes — which would also change
 /// what a foreign builder can be delivered, a feature rather than a
 /// refactoring. #596 step 5 records that decision; #602 proposes the feature.
+///
+/// Where both derivations do apply, they must name the same leaves in the same
+/// order: `JniGen::assert_leaf_derivations_agree` checks that on every binding
+/// a test writes, since that agreement is what #602 would rest on.
+/// The leaf names this encode emits, flattened — the `fromParts` argument
+/// list, in order.
+///
+/// Test support: the registry-facing decomposition of the same struct must
+/// agree with this wherever it exists, and #603 recorded that agreement as
+/// measured rather than checked. `JniGen::write_rust` checks it now.
+#[cfg(test)]
+pub(crate) fn encode_leaf_names(
+    plan: &StructPlan,
+    emit: &prebindgen_registry::RustWriter,
+) -> Vec<String> {
+    let (_, slots) = encode_plan(plan, &quote!(v), "", 0, &quote!(env), emit);
+    slots
+        .iter()
+        .map(|slot| slot.ident.to_string().trim_start_matches('_').to_string())
+        .collect()
+}
+
 fn encode_plan(
     plan: &StructPlan,
     access: &TokenStream,
