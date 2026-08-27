@@ -555,10 +555,6 @@ impl prebindgen_registry::unfold::DecomposedLeaf for OutWire {
     fn source(&self) -> &TypeRef {
         &self.out_ty
     }
-
-    fn is_field_read(&self) -> bool {
-        OutWire::is_field_read(self)
-    }
 }
 
 impl OutWire {
@@ -624,19 +620,6 @@ impl OutWire {
     /// no reach describes — the selector, or a payload its arm's pattern binds.
     pub(crate) fn reach(&self) -> &[prebindgen_registry::unfold::PathStep] {
         &self.reach
-    }
-
-    /// Whether this value is **read off** a place rather than produced by a
-    /// call — so it is cloned out of the value that holds it.
-    ///
-    /// The last step being a field read is the whole question, and it is what
-    /// `LeafSource::Reach` meant: a value form's field leaf reads a field off
-    /// what the accessor returned, and an accessor leaf ends at the call.
-    pub(crate) fn is_field_read(&self) -> bool {
-        matches!(
-            self.reach.last(),
-            Some(prebindgen_registry::unfold::PathStep::Field { .. })
-        )
     }
 
     /// Whether this value is the synthesized selector.

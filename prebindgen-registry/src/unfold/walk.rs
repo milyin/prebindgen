@@ -36,7 +36,13 @@ pub trait DecomposedLeaf {
     fn source(&self) -> &TypeRef;
 
     /// Whether the last step reaching it is a field read rather than a call.
-    fn is_field_read(&self) -> bool;
+    ///
+    /// Derived from [`Self::reach`], so no implementation can disagree with
+    /// its own path — and the answer decides whether the reached place is
+    /// cloned, which is an ownership decision rather than a spelling.
+    fn is_field_read(&self) -> bool {
+        matches!(self.reach().last(), Some(PathStep::Field { .. }))
+    }
 }
 
 /// Compose one [`PathStep`] onto the reference expression reached so far.
@@ -183,7 +189,7 @@ pub fn reach_leaf_flat<L: DecomposedLeaf>(
     let own_path = leaf.reach();
     assert!(
         !own_path.iter().rev().skip(1).any(PathStep::is_optional),
-        "jnigen unfold: leaf `{}` reaches through an optional step but is \
+        "unfold: leaf `{}` reaches through an optional step but is \
          delivered as a single return value, which has no `None` arm — this \
          shape needs callback delivery",
         leaf.name(),

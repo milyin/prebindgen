@@ -1,7 +1,10 @@
 //! Output-expansion delivery: unfold plans and leaf encoding.
 
 use prebindgen_registry::{
-    unfold::{bind_hoists, fold_steps, project_leading_fields, steps_are_movable, PathStep},
+    unfold::{
+        bind_hoists, fold_steps, project_leading_fields, steps_are_movable, DecomposedLeaf,
+        PathStep,
+    },
     Conversions,
 };
 
