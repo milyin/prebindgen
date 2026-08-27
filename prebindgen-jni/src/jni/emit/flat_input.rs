@@ -117,6 +117,85 @@ impl prebindgen_registry::chain::OptionalBridge for JNullableProperty {
     }
 }
 
+/// The sealed interface a whole-object sum crosses as: one JVM object whose
+/// class names the live alternative.
+///
+/// Selection is a run of `instanceof` tests, in declaration order, which this
+/// reads once into a tag the composed `Choice` matches on. Absence of a match
+/// and a null reference are distinct failures, and both keep the message they
+/// had.
+#[derive(Clone)]
+struct JSumBridge {
+    /// One JVM class per alternative, in declaration order.
+    classes: Vec<String>,
+    /// The sum's Kotlin name, for the two failure messages.
+    enum_name: String,
+}
+
+impl prebindgen_registry::chain::ChoiceBridge for JSumBridge {
+    fn intermediate(&self) -> syn::Type {
+        syn::parse_quote!(jni::objects::JObject)
+    }
+
+    fn tag(&self, value: TokenStream) -> TokenStream {
+        let enum_name = &self.enum_name;
+        let null = format!("{enum_name}: null value where a variant was required");
+        let tests = self.classes.iter().enumerate().map(|(index, class)| {
+            let index = index as i32;
+            let error = format!("{enum_name}: instanceof {class}: {{}}");
+            quote! {
+                if env.is_instance_of(#value, #class)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                        format!(#error, e)
+                    ))?
+                {
+                    return ::core::result::Result::Ok(#index);
+                }
+            }
+        });
+        quote!({
+            if #value.is_null() {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<String>>::from(#null.to_string()),
+                );
+            }
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                #(#tests)*
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        })
+    }
+
+    fn arm(
+        &self,
+        _emit: &prebindgen_registry::RustWriter,
+        value: TokenStream,
+        _index: usize,
+    ) -> TokenStream {
+        // Every alternative's payload is read off the same object; which
+        // properties belong to it is the arm's own bridge.
+        value
+    }
+
+    fn build(
+        &self,
+        _emit: &prebindgen_registry::RustWriter,
+        _active: usize,
+        _value: TokenStream,
+    ) -> TokenStream {
+        unreachable!("a whole-object sum is decoded, never encoded, through this bridge")
+    }
+
+    fn invalid_tag(&self, _tag: TokenStream) -> TokenStream {
+        let message = format!(
+            "{}: value is not one of its declared variants",
+            self.enum_name
+        );
+        quote!(<__JniErr as ::core::convert::From<String>>::from(#message.to_string()))
+    }
+}
+
 /// The source struct a whole-object decode builds, spelled through the shape
 /// the model holds.
 ///
@@ -681,7 +760,6 @@ impl JObjectStructFieldPlan {
 #[derive(Clone)]
 pub(crate) struct JObjectSumInputPlan {
     shape: flat::Variant,
-    source_module: syn::Path,
     enum_name: String,
     alternatives: Vec<JObjectSumAlternativePlan>,
 }
@@ -690,13 +768,9 @@ pub(crate) struct JObjectSumInputPlan {
 struct JObjectSumAlternativePlan {
     shape: flat::Alternative,
     jvm_class: String,
-    fields: Vec<JObjectSumFieldPlan>,
-}
-
-#[derive(Clone)]
-struct JObjectSumFieldPlan {
-    shape: flat::Field,
-    property: JObjectStructFieldPlan,
+    /// One property per payload field, in declaration order — the same plan a
+    /// struct's field carries, since a payload is read exactly as a field is.
+    fields: Vec<JObjectStructFieldPlan>,
 }
 
 impl JObjectSumInputPlan {
@@ -708,7 +782,7 @@ impl JObjectSumInputPlan {
             .iter()
             .flat_map(|alternative| &alternative.fields)
         {
-            field.property.kind.calls(out);
+            field.kind.calls(out);
         }
     }
 }
@@ -733,10 +807,9 @@ pub(crate) fn build_jobject_sum_input_plan(
             let property = crate::jni::struct_plan::sum_field_prop_name(&field.member());
             let bind = format_ident!("__p_{}", property);
             let error = format!("{enum_name}.{kotlin_name}.{property}: {{}}");
-            fields.push(JObjectSumFieldPlan {
-                shape: field.clone(),
-                property: build_jobject_property_plan(ext, &field.ty, bind, property, error, true)?,
-            });
+            fields.push(build_jobject_property_plan(
+                ext, &field.ty, bind, property, error, true,
+            )?);
         }
         alternatives.push(JObjectSumAlternativePlan {
             shape: alt.clone(),
@@ -744,78 +817,62 @@ pub(crate) fn build_jobject_sum_input_plan(
             fields,
         });
     }
+    let _ = registry;
     Some(JObjectSumInputPlan {
         shape: v.clone(),
-        source_module: ext.fn_module(registry, &v.name),
         enum_name,
         alternatives,
     })
 }
 
 impl JObjectSumInputPlan {
+    /// The decode, composed by the registry: it reads the tag, selects the
+    /// arm, reads that arm's payload properties through the same bridge the
+    /// struct decode uses, and constructs the alternative.
     pub(crate) fn render(&self, emit: &prebindgen_registry::RustWriter) -> syn::Expr {
-        let source_module = &self.source_module;
-        let enum_ident = &self.shape.name;
-        let enum_name = &self.enum_name;
-        let mut arms = Vec::new();
-        for alternative in &self.alternatives {
-            let vident = &alternative.shape.name;
-            let jvm_class = &alternative.jvm_class;
-            let mut preludes = Vec::new();
-            let mut inits = Vec::new();
-            for field in &alternative.fields {
-                // The sum still walks its payload itself — step 4 of #596 is
-                // what composes this as a `Choice`. It reads and converts each
-                // property through the same two halves the struct's composed
-                // `Product` uses.
-                let (read, value) = field.property.read(quote!(__obj));
-                let bind = &field.property.name;
-                let convert =
-                    prebindgen_registry::chain::Child::invoke(&field.property.child(), value, emit);
-                let convert = if prebindgen_registry::chain::Child::call(&field.property.child())
-                    .fallible()
-                {
-                    quote!(#convert?)
-                } else {
-                    convert
-                };
-                preludes.push(quote! {
-                    #read
-                    let #bind = #convert;
-                });
-                inits.push(field.shape.bind(&quote!(#bind)));
-            }
-            let ctor = emit.shape_alternative(
-                &alternative.shape,
-                quote!(#source_module::#enum_ident::#vident),
-                &inits,
-            );
-            arms.push(quote! {
-                if env.is_instance_of(__obj, #jvm_class)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
-                        format!(concat!(#enum_name, ": instanceof ", #jvm_class, ": {}"), e)))?
-                {
-                    #(#preludes)*
-                    return ::core::result::Result::Ok(#ctor);
-                }
-            });
-        }
-        let no_match = format!("{enum_name}: value is not one of its declared variants");
-        let null_msg = format!("{enum_name}: null value where a variant was required");
-        syn::parse_quote!({
-            let __obj = v;
-            (|| -> ::core::result::Result<#source_module::#enum_ident, __JniErr> {
-                if __obj.is_null() {
-                    return ::core::result::Result::Err(
-                        <__JniErr as ::core::convert::From<String>>::from(#null_msg.to_string()),
-                    );
-                }
-                #(#arms)*
-                ::core::result::Result::Err(
-                    <__JniErr as ::core::convert::From<String>>::from(#no_match.to_string()),
+        let choice = prebindgen_registry::chain::Choice {
+            source: self.shape.type_ref().clone(),
+            direction: prebindgen_registry::recipe::Direction::Construct,
+            source_policy: crate::jni::chain::JSource {
+                wrappers: Vec::new(),
+            },
+            bridge: JSumBridge {
+                classes: self
+                    .alternatives
+                    .iter()
+                    .map(|alternative| alternative.jvm_class.clone())
+                    .collect(),
+                enum_name: self.enum_name.clone(),
+            },
+            arms: self
+                .alternatives
+                .iter()
+                .enumerate()
+                .map(
+                    |(index, alternative)| prebindgen_registry::chain::ChoiceArm {
+                        alternative: alternative.shape.clone(),
+                        tag: {
+                            let index = index as i32;
+                            syn::parse_quote!(#index)
+                        },
+                        bridge: JObjectBridge {
+                            properties: alternative.fields.to_vec(),
+                        },
+                        parts: alternative
+                            .fields
+                            .iter()
+                            .map(|field| prebindgen_registry::chain::ChoicePart {
+                                child: field.child(),
+                                mode: prebindgen_registry::recipe::Mode::Owned,
+                                hold_uninit: false,
+                            })
+                            .collect(),
+                    },
                 )
-            })()?
-        })
+                .collect(),
+        };
+        let body = prebindgen_registry::chain::Chain::render(&choice, emit).body;
+        syn::parse_quote!(#body)
     }
 }
 
