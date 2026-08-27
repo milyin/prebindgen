@@ -120,13 +120,18 @@ fn child_value<C: Child>(child: &C, value: TokenStream, emit: &RustWriter) -> To
 ///
 /// A bridge whose read is a projection — a tuple index, a field access —
 /// answers with [`Self::expression`]. One whose read is not an expression at
-/// all answers with [`Self::statements`] or [`Self::fallible`]: reading a
-/// property off a JVM object binds two locals and can fail, and a bridge that
-/// had only an expression to return could not say either.
+/// all answers with [`Self::fallible`]: reading a property off a JVM object
+/// binds two locals and can fail, neither of which a bridge that could only
+/// return an expression can say.
 ///
 /// The composer runs the preludes in part order, before the source value is
 /// constructed, and a fallible read makes the whole composed conversion
 /// fallible even when no child converter can fail.
+///
+/// Whether a read can fail is kept as its own fact rather than read off "has a
+/// prelude". The two coincide across today's two constructors, but a fallible
+/// read that needs no statements — an expression carrying its own `?` — would
+/// be silently demoted to infallible by the shorter rule.
 pub struct PartRead {
     prelude: TokenStream,
     value: TokenStream,
@@ -138,15 +143,6 @@ impl PartRead {
     pub fn expression(value: TokenStream) -> Self {
         Self {
             prelude: TokenStream::new(),
-            value,
-            fallible: false,
-        }
-    }
-
-    /// A part reached by running `prelude` first, which cannot fail.
-    pub fn statements(prelude: TokenStream, value: TokenStream) -> Self {
-        Self {
-            prelude,
             value,
             fallible: false,
         }
@@ -1126,30 +1122,6 @@ mod tests {
         }
     }
 
-    /// A bridge whose part read binds a local and cannot fail — the middle
-    /// constructor, whose behaviour is not implied by its neighbours.
-    #[derive(Clone)]
-    struct TestBoundParts;
-
-    impl ProductBridge for TestBoundParts {
-        fn intermediate(&self) -> syn::Type {
-            syn::parse_quote!(TestObject)
-        }
-
-        fn part(&self, value: TokenStream, index: usize, _name: &syn::Ident) -> PartRead {
-            let local = format_ident!("__bound{index}");
-            let position = syn::Index::from(index);
-            PartRead::statements(
-                quote::quote!(let #local = (#value).#position;),
-                quote::quote!(#local),
-            )
-        }
-
-        fn build(&self, _parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
-            unreachable!("this fixture only constructs")
-        }
-    }
-
     /// A bridge may read its part with statements that can fail, and the
     /// composer runs them before it constructs the source value.
     ///
@@ -1200,41 +1172,6 @@ mod tests {
         assert!(
             body.contains("__read0") && body.contains("__read1"),
             "each part is read into its own local:\n{body}"
-        );
-    }
-
-    /// A prelude that cannot fail leaves the conversion infallible.
-    ///
-    /// This is the whole difference between `PartRead::statements` and
-    /// `PartRead::fallible`, and the only place it is visible: both emit their
-    /// prelude, and only one makes the caller handle an error.
-    #[test]
-    fn an_infallible_prelude_leaves_the_chain_infallible() {
-        let plan = Product {
-            source: TypeRef::scalar(ScalarKind::I64),
-            direction: Direction::Construct,
-            source_policy: TestSource {
-                spells: Rc::new(Cell::new(0)),
-            },
-            bridge: TestBoundParts,
-            parts: vec![ProductPart {
-                name: format_ident!("only"),
-                child: TestChild::new("only", false, false),
-                mode: Mode::Owned,
-                hold_uninit: false,
-            }],
-        };
-
-        let rendered = plan.render(&RustWriter::for_test());
-        let body = rendered.body.to_token_stream().to_string();
-
-        assert!(
-            body.contains("let __bound0"),
-            "the prelude is emitted:\n{body}"
-        );
-        assert!(
-            !rendered.fallible,
-            "a prelude that cannot fail leaves the conversion infallible:\n{body}"
         );
     }
 
