@@ -66,6 +66,25 @@ pub trait Source: Clone {
         source
     }
 
+    /// Construct the source value from its converted parts.
+    ///
+    /// The default is a named-field literal, which is what a Product's parts
+    /// are addressed by. A policy whose source has another shape — a tuple
+    /// struct, a unit struct — overrides it: the model element that says which
+    /// is the adapter's to hold, and [`RustWriter::shape_struct`] is what
+    /// spells it.
+    fn construct(
+        &self,
+        head: TokenStream,
+        parts: &[(syn::Ident, TokenStream)],
+        emit: &RustWriter,
+    ) -> TokenStream {
+        let _ = emit;
+        let names = parts.iter().map(|(name, _)| name);
+        let values = parts.iter().map(|(_, value)| value);
+        quote::quote!(#head { #(#names: #values),* })
+    }
+
     /// Read one named Product field from the exact source spelling.
     ///
     /// The default keeps the common unwrapped access free of redundant
@@ -597,9 +616,9 @@ where
                         (name, value)
                     })
                     .collect();
-                let names = fields.iter().map(|(name, _)| name);
-                let values = fields.iter().map(|(_, value)| value);
-                let canonical = quote::quote!(#canonical_source { #(#names: #values),* });
+                let canonical = self
+                    .source_policy
+                    .construct(canonical_source, &fields, emit);
                 let built = self.source_policy.build(canonical);
                 // A bridge that reads its parts by expression alone keeps the
                 // bare constructor it always emitted; only a bridge with a
