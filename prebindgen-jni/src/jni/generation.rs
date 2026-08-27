@@ -39,6 +39,51 @@ pub(crate) enum JFinalArtifact {
     Converter(Box<crate::jni::chain::JFunction>),
     /// The exported JNI extern for one declared `#[prebindgen]` function.
     Wrapper(Box<crate::jni::emit::JWrapper>),
+    /// One declared constant: an alias to the source item, plus the nullary
+    /// extern its Kotlin `val` is initialized from.
+    Const(Box<JConst>),
+}
+
+/// One declared `#[prebindgen]` constant, exported to Kotlin as an eagerly
+/// initialized top-level `val`.
+///
+/// The generated file re-states the constant as a path-alias to its
+/// source-of-truth — initializer tokens are never copied, since they may name
+/// source-crate internals — and exports a nullary getter extern, which is how
+/// the constant's type crosses through the ordinary output-converter
+/// machinery.
+pub(crate) struct JConst {
+    /// The constant as the model holds it.
+    constant: prebindgen_registry::flat::Constant,
+    /// Module the source constant is reached through.
+    source_module: syn::Path,
+    /// The getter extern, planned like any other.
+    getter: crate::jni::emit::JWrapper,
+}
+
+impl JConst {
+    /// Plan the alias and getter for one declared constant.
+    pub(crate) fn new(
+        decls: &Declarations,
+        registry: &Registry,
+        constant: &prebindgen_registry::flat::Constant,
+    ) -> Self {
+        crate::jni::reject_handle_const(decls, constant);
+        let ident = &constant.name;
+        let source_module = decls.fn_module(registry, ident);
+        let callee: syn::Expr = syn::parse_quote!(#source_module::#ident);
+        let getter = crate::jni::emit::JWrapper::new(
+            decls,
+            registry,
+            &crate::jni::const_getter_fn(constant),
+            Some(callee),
+        );
+        Self {
+            constant: constant.clone(),
+            source_module,
+            getter,
+        }
+    }
 }
 
 impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
@@ -49,13 +94,20 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
                 prebindgen_registry::generation::ArtifactId::new("jni-wrapper", wrapper.symbol())
                     .expect("an exported symbol is a non-empty artifact name"),
             ),
+            Self::Const(constant) => prebindgen_registry::write::ArtifactKey::Artifact(
+                prebindgen_registry::generation::ArtifactId::new(
+                    "jni-const",
+                    constant.constant.name.to_string(),
+                )
+                .expect("a constant name is a non-empty artifact name"),
+            ),
         }
     }
 
     fn reachable(&self) -> bool {
         match self {
             Self::Converter(converter) => converter.should_emit(),
-            Self::Wrapper(_) => true,
+            Self::Wrapper(_) | Self::Const(_) => true,
         }
     }
 
@@ -63,6 +115,10 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
         match self {
             Self::Converter(converter) => vec![syn::Item::Fn(converter.render_fn(emit))],
             Self::Wrapper(wrapper) => vec![syn::Item::Fn(wrapper.render_fn(emit))],
+            Self::Const(constant) => vec![
+                syn::Item::Const(emit.const_alias(&constant.constant, &constant.source_module)),
+                syn::Item::Fn(constant.getter.render_fn(emit)),
+            ],
         }
     }
 }
@@ -136,6 +192,21 @@ impl JniGenerationPlan {
             .iter()
             .map(|function| crate::jni::emit::JWrapper::new(decls, registry, function, None))
             .collect();
+        // Declared constants, in source order. Undeclared ones are not
+        // exported: this binding has a constant declaration mechanism, so it
+        // emits exactly what the packages named.
+        let declared_consts = decls.declared_consts().unwrap_or_default();
+        let mut constants: Vec<_> = registry
+            .flat()
+            .constants()
+            .filter(|constant| declared_consts.contains(&constant.name))
+            .cloned()
+            .collect();
+        constants.sort_by_key(|constant| constant.name.to_string());
+        let constants: Vec<_> = constants
+            .iter()
+            .map(|constant| JConst::new(decls, registry, constant))
+            .collect();
 
         let conversions = std::mem::take(&mut *decls.compiled.borrow_mut());
         let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
@@ -149,6 +220,9 @@ impl JniGenerationPlan {
         }
         for wrapper in wrappers {
             assembly.artifact(JFinalArtifact::Wrapper(Box::new(wrapper)));
+        }
+        for constant in constants {
+            assembly.artifact(JFinalArtifact::Const(Box::new(constant)));
         }
         let assembly = assembly.build();
         Self {

@@ -22,6 +22,8 @@ pub(crate) enum CFinalArtifact {
     Converter(Box<crate::chain::CFunction>),
     /// The exported wrapper for one declared `#[prebindgen]` function.
     Wrapper(Box<CWrapper>),
+    /// One captured constant, re-stated as an alias to its source.
+    Const(Box<CConst>),
 }
 
 impl RustArtifact for CFinalArtifact {
@@ -29,6 +31,7 @@ impl RustArtifact for CFinalArtifact {
         match self {
             Self::Converter(converter) => converter.key(),
             Self::Wrapper(wrapper) => wrapper.key(),
+            Self::Const(constant) => constant.key(),
         }
     }
 
@@ -36,6 +39,7 @@ impl RustArtifact for CFinalArtifact {
         match self {
             Self::Converter(converter) => converter.render(emit),
             Self::Wrapper(wrapper) => wrapper.render(emit),
+            Self::Const(constant) => constant.render(emit),
         }
     }
 }
@@ -532,5 +536,52 @@ impl RustArtifact for CWrapper {
 
     fn render(&self, emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
         vec![syn::Item::Fn(self.render_fn(emit))]
+    }
+}
+
+/// One captured `#[prebindgen]` constant, re-stated in the generated file as
+/// an alias to the source item.
+///
+/// The initializer is never copied: it may name source-crate internals, and
+/// an alias keeps a constant with a non-portable initializer valid here.
+/// cbindgen cannot evaluate a path initializer, so an aliased constant does
+/// not surface as a `#define` in the C header.
+pub(crate) struct CConst {
+    /// The constant as the model holds it.
+    constant: prebindgen_registry::flat::Constant,
+    /// Module the source constant is reached through. `None` when the binding
+    /// declared no source module, which emits nothing.
+    source_module: Option<syn::Path>,
+}
+
+impl CConst {
+    /// Plan the alias for one captured constant.
+    pub(crate) fn new(
+        decls: &CbindgenBuilder,
+        constant: &prebindgen_registry::flat::Constant,
+    ) -> Self {
+        Self {
+            constant: constant.clone(),
+            source_module: decls.source_module.clone(),
+        }
+    }
+}
+
+impl RustArtifact for CConst {
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Artifact(
+            prebindgen_registry::generation::ArtifactId::new(
+                "c-const",
+                self.constant.name.to_string(),
+            )
+            .expect("a constant name is a non-empty artifact name"),
+        )
+    }
+
+    fn render(&self, emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
+        self.source_module
+            .as_ref()
+            .map(|module| vec![syn::Item::Const(emit.const_alias(&self.constant, module))])
+            .unwrap_or_default()
     }
 }

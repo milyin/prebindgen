@@ -30,48 +30,7 @@ impl IdentityExt {
     }
 }
 
-impl Prebindgen for IdentityExt {
-    fn on_struct(
-        &self,
-        s: &prebindgen_flat::flat::Struct,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &s.name;
-        vec![syn::parse_quote!(pub struct #ident;)]
-    }
-
-    fn on_variant(
-        &self,
-        v: &prebindgen_flat::flat::Variant,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &v.name;
-        vec![syn::parse_quote!(pub enum #ident {})]
-    }
-
-    fn on_enum(
-        &self,
-        e: &prebindgen_flat::flat::Enum,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &e.name;
-        vec![syn::parse_quote!(pub enum #ident {})]
-    }
-
-    fn on_const(
-        &self,
-        c: &prebindgen_flat::flat::Constant,
-        _registry: &Registry,
-        emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &c.name;
-        let ty = emit.emit_source_type(&c.ty);
-        vec![syn::parse_quote!(pub const #ident: #ty = 0;)]
-    }
-}
+impl Prebindgen for IdentityExt {}
 
 #[derive(Clone)]
 struct LatePlan {
@@ -129,61 +88,24 @@ struct LateExt {
 }
 
 impl Prebindgen for LateExt {
-    /// Emits `a_fn` for the declared struct — a per-item emission that runs
-    /// while the file is assembled, and (when `call_converter`) calls the
-    /// late converter plan.
-    fn on_struct(
-        &self,
-        s: &prebindgen_flat::flat::Struct,
-        _registry: &Registry,
-        emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
+    /// Emits `a_fn`, and (when `call_converter`) calls the late converter
+    /// plan from it. Prerequisites are the adapter's remaining output
+    /// produced while the file is written, so this is where a caller that
+    /// races the assembly's reachability filtering can still come from.
+    fn prerequisites(&self, _registry: &Registry, emit: &crate::RustWriter) -> Vec<syn::Item> {
         if self.activate {
             self.reachable.set(true);
         }
-        let ident = &s.name;
         if self.call_converter {
             let converter = emit.operation_ident("test", &self.operation);
             vec![syn::Item::Fn(
                 syn::parse_quote!(fn a_fn() { #converter(); }),
             )]
         } else {
-            vec![
-                syn::parse_quote!(pub struct #ident;),
-                syn::parse_quote!(
-                    fn a_fn() {}
-                ),
-            ]
+            vec![syn::parse_quote!(
+                fn a_fn() {}
+            )]
         }
-    }
-
-    fn on_variant(
-        &self,
-        v: &prebindgen_flat::flat::Variant,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &v.name;
-        vec![syn::parse_quote!(pub enum #ident {})]
-    }
-
-    fn on_enum(
-        &self,
-        e: &prebindgen_flat::flat::Enum,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &e.name;
-        vec![syn::parse_quote!(pub enum #ident {})]
-    }
-
-    fn on_const(
-        &self,
-        _c: &prebindgen_flat::flat::Constant,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
     }
 }
 
@@ -228,7 +150,11 @@ fn per_item_planning_precedes_late_converter_filtering() {
         source.contains("fn __test_in_convert_wire_to_test_late_converter_"),
         "{source}"
     );
-    assert!(source.find("fn __test_in_convert").unwrap() < source.find("fn a_fn").unwrap());
+    // Prerequisites are written before the assembly, so the caller precedes
+    // the converter it activated. What the test pins is that the activation
+    // was seen at all: a plan marked reachable while the file is assembled
+    // survives the filter.
+    assert!(source.find("fn a_fn").unwrap() < source.find("fn __test_in_convert").unwrap());
 }
 
 #[test]
@@ -335,9 +261,10 @@ fn registry_operations_are_deduplicated_before_rendering() {
 }
 
 #[test]
-fn write_rust_sorts_declared_items_by_ident() {
-    // Fed in a deliberately un-sorted order: the assertion below is that
-    // emission sorts by name, and the model preserves stream order.
+fn declared_items_reach_the_file_only_as_artifacts() {
+    // Fed in a deliberately un-sorted order, as the sorting this replaced was
+    // fed: every kind is declared, and none of them may reach the file from
+    // the writer's own walk, because there is no such walk left.
     let loc = SourceLocation::default();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
@@ -413,33 +340,32 @@ fn write_rust_sorts_declared_items_by_ident() {
     let content = std::fs::read_to_string(&written).expect("read generated file");
     let _ = std::fs::remove_file(&written);
 
-    assert!(
-        content.find("pub const A_CONST").unwrap() < content.find("pub const B_CONST").unwrap()
-    );
-    assert!(content.find("pub enum AEnum").unwrap() < content.find("pub enum BEnum").unwrap());
-    assert!(
-        content.find("pub struct AStruct").unwrap() < content.find("pub struct BStruct").unwrap()
-    );
-    // Functions are not part of the writer's item walk any more: an exported
-    // wrapper is an artifact of the adapter's assembly, and this assembly is
-    // empty.
-    assert!(!content.contains("fn a_fn"), "{content}");
+    for declared in [
+        "fn a_fn", "fn b_fn", "AStruct", "BStruct", "AEnum", "BEnum", "A_CONST", "B_CONST",
+    ] {
+        assert!(
+            !content.contains(declared),
+            "`{declared}` reached the file from an empty assembly:\n{content}"
+        );
+    }
 }
 
+/// What an adapter still hands the writer is typed Rust items, and the writer
+/// never turns tokens back into items itself.
 #[test]
-fn per_item_emission_carries_typed_items_without_reparsing() {
+fn adapter_emission_carries_typed_items_without_reparsing() {
     let contract = include_str!("../prebindgen.rs");
-    let item_methods = contract
-        .split_once("// ── Item methods")
-        .expect("item methods")
-        .1;
-    assert_eq!(item_methods.matches("-> Vec<syn::Item>").count(), 4);
+    assert_eq!(
+        contract.matches("-> Vec<syn::Item>").count(),
+        1,
+        "`prerequisites` is the one method that still returns items to the writer"
+    );
 
     let writer = include_str!("../write.rs");
     for removed in ["parse_items_from_tokens", "BadTokens", "syn::parse2"] {
         assert!(
             !writer.contains(removed),
-            "typed per-item emission must not restore `{removed}`"
+            "typed emission must not restore `{removed}`"
         );
     }
 }
@@ -468,40 +394,7 @@ fn guards_emit_ungated_and_in_stream_order() {
         }
     }
 
-    impl Prebindgen for ConstGatingExt {
-        fn on_struct(
-            &self,
-            _s: &prebindgen_flat::flat::Struct,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
-        fn on_variant(
-            &self,
-            _v: &prebindgen_flat::flat::Variant,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
-        fn on_enum(
-            &self,
-            _e: &prebindgen_flat::flat::Enum,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
-        fn on_const(
-            &self,
-            _c: &prebindgen_flat::flat::Constant,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
-    }
+    impl Prebindgen for ConstGatingExt {}
 
     let loc = SourceLocation::default();
     // Two distinguishable guards, straddling the named const, so the assertion
