@@ -3463,67 +3463,83 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Hold_5a6747f2776b0f97<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<perftest_flat::Hold, __JniErr> {
     Ok({
-        let __obj = v;
-        (|| -> ::core::result::Result<perftest_flat::Hold, __JniErr> {
-            if __obj.is_null() {
+        let __tag = {
+            if v.is_null() {
                 return ::core::result::Result::Err(
                     <__JniErr as ::core::convert::From<
                         String,
                     >>::from("Hold: null value where a variant was required".to_string()),
                 );
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Hold$Indefinite")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Hold", ": instanceof ",
-                        "io/prebindgen/covertest/model/Hold$Indefinite", ": {}"), e
-                    ),
-                ))?
-            {
-                return ::core::result::Result::Ok(perftest_flat::Hold::Indefinite);
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Hold$For")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Hold", ": instanceof ",
-                        "io/prebindgen/covertest/model/Hold$For", ": {}"), e
-                    ),
-                ))?
-            {
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Hold$Indefinite")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Hold: instanceof io/prebindgen/covertest/model/Hold$Indefinite: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(0i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Hold$For")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Hold: instanceof io/prebindgen/covertest/model/Hold$For: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(1i32);
+                }
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        };
+        match __tag {
+            0i32 => perftest_flat::Hold::Indefinite,
+            1i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_raw: jni::sys::jlong = env
-                    .get_field(__obj, "v0", "J")
+                    .get_field(__arm, "v0", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Hold.For.v0: {}", e)))? as _;
-                let __p_v0 = {
-                    let __chain_s0 = __jni_in_convert_wire_to_u64_8507143745dc33b9(
-                        env,
-                        &__p_v0_raw,
-                    )?;
-                    let __chain_s1 = __jni_in_stage_0_wire_to_Duration_814bb872b19d3627(
+                perftest_flat::Hold::For(
+                    {
+                        let __chain_s0 = __jni_in_convert_wire_to_u64_8507143745dc33b9(
                             env,
-                            __chain_s0,
-                        )
-                        .map_err(|__e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(__e.to_string()))?;
-                    ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
-                }?;
-                return ::core::result::Result::Ok(perftest_flat::Hold::For(__p_v0));
+                            &__p_v0_raw,
+                        )?;
+                        let __chain_s1 = __jni_in_stage_0_wire_to_Duration_814bb872b19d3627(
+                                env,
+                                __chain_s0,
+                            )
+                            .map_err(|__e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(__e.to_string()))?;
+                        ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
+                    }?,
+                )
             }
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from("Hold: value is not one of its declared variants".to_string()),
-            )
-        })()?
+            _ => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Hold: value is not one of its declared variants".to_string(),
+                    ),
+                );
+            }
+        }
     })
 }
 #[allow(
@@ -4120,9 +4136,8 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Lookup_2fa8248a2de561a5<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<perftest_flat::Lookup, __JniErr> {
     Ok({
-        let __obj = v;
-        (|| -> ::core::result::Result<perftest_flat::Lookup, __JniErr> {
-            if __obj.is_null() {
+        let __tag = {
+            if v.is_null() {
                 return ::core::result::Result::Err(
                     <__JniErr as ::core::convert::From<
                         String,
@@ -4131,33 +4146,58 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Lookup_2fa8248a2de561a5<'env, 'v>(
                     ),
                 );
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Lookup$Absent")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Lookup", ": instanceof ",
-                        "io/prebindgen/covertest/model/Lookup$Absent", ": {}"), e
-                    ),
-                ))?
-            {
-                return ::core::result::Result::Ok(perftest_flat::Lookup::Absent);
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Lookup$Found")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Lookup", ": instanceof ",
-                        "io/prebindgen/covertest/model/Lookup$Found", ": {}"), e
-                    ),
-                ))?
-            {
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Lookup$Absent")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Lookup: instanceof io/prebindgen/covertest/model/Lookup$Absent: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(0i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Lookup$Found")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Lookup: instanceof io/prebindgen/covertest/model/Lookup$Found: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(1i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Lookup$Failed")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Lookup: instanceof io/prebindgen/covertest/model/Lookup$Failed: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(2i32);
+                }
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        };
+        match __tag {
+            0i32 => perftest_flat::Lookup::Absent,
+            1i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_obj: jni::objects::JObject = env
                     .get_field(
-                        __obj,
+                        __arm,
                         "v0",
                         "Lio/prebindgen/covertest/analytics/Summary;",
                     )
@@ -4174,42 +4214,40 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Lookup_2fa8248a2de561a5<'env, 'v>(
                             String,
                         >>::from(format!("Lookup.Found.v0: {}", e)))?
                 };
-                let __p_v0 = __jni_in_convert_wire_to_Summary_jni_handle_codec_consume_input_a6c328c6a2331e58(
-                    env,
-                    &__p_v0_raw,
-                )?;
-                return ::core::result::Result::Ok(perftest_flat::Lookup::Found(__p_v0));
+                perftest_flat::Lookup::Found(
+                    __jni_in_convert_wire_to_Summary_jni_handle_codec_consume_input_a6c328c6a2331e58(
+                        env,
+                        &__p_v0_raw,
+                    )?,
+                )
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Lookup$Failed")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Lookup", ": instanceof ",
-                        "io/prebindgen/covertest/model/Lookup$Failed", ": {}"), e
-                    ),
-                ))?
-            {
+            2i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_obj: jni::objects::JObject = env
-                    .get_field(__obj, "v0", "Ljava/lang/String;")
+                    .get_field(__arm, "v0", "Ljava/lang/String;")
                     .and_then(|val| val.l())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Lookup.Failed.v0: {}", e)))?;
                 let __p_v0_raw: jni::objects::JString = __p_v0_obj.into();
-                let __p_v0 = __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
-                    env,
-                    &__p_v0_raw,
-                )?;
-                return ::core::result::Result::Ok(perftest_flat::Lookup::Failed(__p_v0));
+                perftest_flat::Lookup::Failed(
+                    __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
+                        env,
+                        &__p_v0_raw,
+                    )?,
+                )
             }
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from("Lookup: value is not one of its declared variants".to_string()),
-            )
-        })()?
+            _ => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Lookup: value is not one of its declared variants".to_string(),
+                    ),
+                );
+            }
+        }
     })
 }
 #[allow(
@@ -4338,9 +4376,8 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Marker_93f2fabe59a4f80d<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<perftest_flat::Marker, __JniErr> {
     Ok({
-        let __obj = v;
-        (|| -> ::core::result::Result<perftest_flat::Marker, __JniErr> {
-            if __obj.is_null() {
+        let __tag = {
+            if v.is_null() {
                 return ::core::result::Result::Err(
                     <__JniErr as ::core::convert::From<
                         String,
@@ -4349,37 +4386,49 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Marker_93f2fabe59a4f80d<'env, 'v>(
                     ),
                 );
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Marker$None_")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Marker", ": instanceof ",
-                        "io/prebindgen/covertest/model/Marker$None_", ": {}"), e
-                    ),
-                ))?
-            {
-                return ::core::result::Result::Ok(perftest_flat::Marker::None_);
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Marker$Ranked")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Marker", ": instanceof ",
-                        "io/prebindgen/covertest/model/Marker$Ranked", ": {}"), e
-                    ),
-                ))?
-            {
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Marker$None_")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Marker: instanceof io/prebindgen/covertest/model/Marker$None_: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(0i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Marker$Ranked")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Marker: instanceof io/prebindgen/covertest/model/Marker$Ranked: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(1i32);
+                }
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        };
+        match __tag {
+            0i32 => perftest_flat::Marker::None_,
+            1i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_obj: jni::objects::JObject = env
-                    .get_field(__obj, "v0", "Lio/prebindgen/covertest/model/Priority;")
+                    .get_field(__arm, "v0", "Lio/prebindgen/covertest/model/Priority;")
                     .and_then(|val| val.l())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Marker.Ranked.v0: {}", e)))?;
-                let __p_v0 = {
+                perftest_flat::Marker::Ranked({
                     let v = __p_v0_obj;
                     {
                         if v.is_null() {
@@ -4399,15 +4448,18 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Marker_93f2fabe59a4f80d<'env, 'v>(
                             )
                         }
                     }
-                };
-                return ::core::result::Result::Ok(perftest_flat::Marker::Ranked(__p_v0));
+                })
             }
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from("Marker: value is not one of its declared variants".to_string()),
-            )
-        })()?
+            _ => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Marker: value is not one of its declared variants".to_string(),
+                    ),
+                );
+            }
+        }
     })
 }
 #[allow(
@@ -9582,9 +9634,8 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Reading_a358e65c0c39d007<'env, 'v>
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<perftest_flat::Reading, __JniErr> {
     Ok({
-        let __obj = v;
-        (|| -> ::core::result::Result<perftest_flat::Reading, __JniErr> {
-            if __obj.is_null() {
+        let __tag = {
+            if v.is_null() {
                 return ::core::result::Result::Err(
                     <__JniErr as ::core::convert::From<
                         String,
@@ -9593,102 +9644,129 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Reading_a358e65c0c39d007<'env, 'v>
                     ),
                 );
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Missing")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Missing", ": {}"), e
-                    ),
-                ))?
-            {
-                return ::core::result::Result::Ok(perftest_flat::Reading::Missing);
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Exact")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Exact", ": {}"), e
-                    ),
-                ))?
-            {
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Missing")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Missing: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(0i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Exact")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Exact: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(1i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Range")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Range: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(2i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Tagged")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Tagged: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(3i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Companion")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Companion: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(4i32);
+                }
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        };
+        match __tag {
+            0i32 => perftest_flat::Reading::Missing,
+            1i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_raw: jni::sys::jlong = env
-                    .get_field(__obj, "v0", "J")
+                    .get_field(__arm, "v0", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Exact.v0: {}", e)))? as _;
-                let __p_v0 = __jni_in_convert_wire_to_i64_da07d745d9e26f71(
-                    env,
-                    &__p_v0_raw,
-                )?;
-                return ::core::result::Result::Ok(perftest_flat::Reading::Exact(__p_v0));
+                perftest_flat::Reading::Exact(
+                    __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__p_v0_raw)?,
+                )
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Range")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Range", ": {}"), e
-                    ),
-                ))?
-            {
+            2i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_low_raw: jni::sys::jlong = env
-                    .get_field(__obj, "low", "J")
+                    .get_field(__arm, "low", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Range.low: {}", e)))? as _;
-                let __p_low = __jni_in_convert_wire_to_i64_da07d745d9e26f71(
-                    env,
-                    &__p_low_raw,
-                )?;
                 let __p_high_raw: jni::sys::jlong = env
-                    .get_field(__obj, "high", "J")
+                    .get_field(__arm, "high", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Range.high: {}", e)))? as _;
-                let __p_high = __jni_in_convert_wire_to_i64_da07d745d9e26f71(
-                    env,
-                    &__p_high_raw,
-                )?;
-                return ::core::result::Result::Ok(perftest_flat::Reading::Range {
-                    low: __p_low,
-                    high: __p_high,
-                });
+                perftest_flat::Reading::Range {
+                    low: __jni_in_convert_wire_to_i64_da07d745d9e26f71(
+                        env,
+                        &__p_low_raw,
+                    )?,
+                    high: __jni_in_convert_wire_to_i64_da07d745d9e26f71(
+                        env,
+                        &__p_high_raw,
+                    )?,
+                }
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Tagged")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Tagged", ": {}"), e
-                    ),
-                ))?
-            {
+            3i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_obj: jni::objects::JObject = env
-                    .get_field(__obj, "v0", "Ljava/lang/String;")
+                    .get_field(__arm, "v0", "Ljava/lang/String;")
                     .and_then(|val| val.l())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Tagged.v0: {}", e)))?;
                 let __p_v0_raw: jni::objects::JString = __p_v0_obj.into();
-                let __p_v0 = __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
-                    env,
-                    &__p_v0_raw,
-                )?;
                 let __p_v1_obj: jni::objects::JObject = env
-                    .get_field(__obj, "v1", "Lio/prebindgen/covertest/model/Priority;")
+                    .get_field(__arm, "v1", "Lio/prebindgen/covertest/model/Priority;")
                     .and_then(|val| val.l())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
@@ -9699,47 +9777,37 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Reading_a358e65c0c39d007<'env, 'v>
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Tagged.v1: {}", e)))?;
-                let __p_v1 = __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
-                    env,
-                    &__p_v1_raw,
-                )?;
-                return ::core::result::Result::Ok(
-                    perftest_flat::Reading::Labeled(__p_v0, __p_v1),
-                );
+                perftest_flat::Reading::Labeled(
+                    __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
+                        env,
+                        &__p_v0_raw,
+                    )?,
+                    __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(env, &__p_v1_raw)?,
+                )
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Companion")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Companion", ": {}"), e
-                    ),
-                ))?
-            {
+            4i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_raw: jni::sys::jlong = env
-                    .get_field(__obj, "v0", "J")
+                    .get_field(__arm, "v0", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Companion.v0: {}", e)))? as _;
-                let __p_v0 = __jni_in_convert_wire_to_i64_da07d745d9e26f71(
-                    env,
-                    &__p_v0_raw,
-                )?;
-                return ::core::result::Result::Ok(
-                    perftest_flat::Reading::Companion(__p_v0),
+                perftest_flat::Reading::Companion(
+                    __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__p_v0_raw)?,
+                )
+            }
+            _ => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Reading: value is not one of its declared variants".to_string(),
+                    ),
                 );
             }
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    "Reading: value is not one of its declared variants".to_string(),
-                ),
-            )
-        })()?
+        }
     })
 }
 #[allow(
