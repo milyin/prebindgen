@@ -905,52 +905,45 @@ impl CbindgenBuilder {
         // dependency order, then one exported wrapper per declared function,
         // named in source order so the file's layout does not depend on how
         // the declarations were written.
-        let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
-        // The file opens with what the converter and wrapper bodies call: the
-        // memory helpers, then the type-level artifacts in the order C needs
-        // to read them, then the reserved sum-type values.
-        if let Some(memory) = crate::assembly::CMemory::new(&self, &registry) {
-            assembly.artifact(crate::assembly::CFinalArtifact::Memory(Box::new(memory)));
-        }
         let planned = |kind: &str| {
             crate::assembly::CPlanned::of_kind(&generation, kind)
                 .into_iter()
                 .map(|artifact| crate::assembly::CFinalArtifact::Planned(Box::new(artifact)))
                 .collect::<Vec<_>>()
         };
-        for artifact in planned("c-opaque-handle") {
-            assembly.artifact(artifact);
-        }
-        for mirror in crate::assembly::CDataStruct::all(&self, &registry) {
-            assembly.artifact(crate::assembly::CFinalArtifact::DataStruct(Box::new(
-                mirror,
-            )));
-        }
-        for artifact in planned("c-value-opaque") {
-            assembly.artifact(artifact);
-        }
-        for mirror in crate::assembly::CEnum::all(&self, &registry) {
-            assembly.artifact(crate::assembly::CFinalArtifact::Enum(Box::new(mirror)));
-        }
-        for artifact in planned("c-tagged-union") {
-            assembly.artifact(artifact);
-        }
-        for artifact in planned("c-callback") {
-            assembly.artifact(artifact);
-        }
-        for constant in crate::assembly::CDomainConstant::all(&self, &registry) {
-            assembly.artifact(crate::assembly::CFinalArtifact::DomainConstant(Box::new(
-                constant,
-            )));
-        }
-        for converter in generation
-            .fragments()
-            .filter_map(|fragment| fragment.artifact())
-        {
-            assembly.artifact(crate::assembly::CFinalArtifact::Converter(Box::new(
-                converter.clone(),
-            )));
-        }
+        // The type-level artifacts, in the order C needs to read them, then
+        // the reserved sum-type values. The runtime helpers they call are
+        // planned below, once these have said what they call.
+        let mut artifacts: Vec<crate::assembly::CFinalArtifact> = Vec::new();
+        artifacts.extend(planned("c-opaque-handle"));
+        artifacts.extend(
+            crate::assembly::CDataStruct::all(&self, &registry)
+                .into_iter()
+                .map(|mirror| crate::assembly::CFinalArtifact::DataStruct(Box::new(mirror))),
+        );
+        artifacts.extend(planned("c-value-opaque"));
+        artifacts.extend(
+            crate::assembly::CEnum::all(&self, &registry)
+                .into_iter()
+                .map(|mirror| crate::assembly::CFinalArtifact::Enum(Box::new(mirror))),
+        );
+        artifacts.extend(planned("c-tagged-union"));
+        artifacts.extend(planned("c-callback"));
+        artifacts.extend(
+            crate::assembly::CDomainConstant::all(&self, &registry)
+                .into_iter()
+                .map(|constant| {
+                    crate::assembly::CFinalArtifact::DomainConstant(Box::new(constant))
+                }),
+        );
+        artifacts.extend(
+            generation
+                .fragments()
+                .filter_map(|fragment| fragment.artifact())
+                .map(|converter| {
+                    crate::assembly::CFinalArtifact::Converter(Box::new(converter.clone()))
+                }),
+        );
         let declared = self.declared_functions();
         let mut wrapped: Vec<_> = registry
             .flat()
@@ -958,20 +951,45 @@ impl CbindgenBuilder {
             .filter(|function| declared.contains(&function.name))
             .collect();
         wrapped.sort_by_key(|function| function.name.to_string());
-        for function in wrapped {
-            assembly.artifact(crate::assembly::CFinalArtifact::Wrapper(Box::new(
-                crate::assembly::CWrapper::new(&self, &generation, function),
-            )));
-        }
+        artifacts.extend(wrapped.into_iter().map(|function| {
+            crate::assembly::CFinalArtifact::Wrapper(Box::new(crate::assembly::CWrapper::new(
+                &self,
+                &generation,
+                function,
+            )))
+        }));
         // Constants: this binding has no constant declaration mechanism, so
         // every captured one is aliased. Named in source order, as the
         // wrappers are.
-        let mut constants: Vec<_> = registry.flat().constants().collect();
-        constants.sort_by_key(|constant| constant.name.to_string());
-        for constant in constants {
-            assembly.artifact(crate::assembly::CFinalArtifact::Const(Box::new(
-                crate::assembly::CConst::new(&self, constant),
+        let mut sorted_constants: Vec<_> = registry.flat().constants().collect();
+        sorted_constants.sort_by_key(|constant| constant.name.to_string());
+        artifacts.extend(sorted_constants.into_iter().map(|constant| {
+            crate::assembly::CFinalArtifact::Const(Box::new(crate::assembly::CConst::new(
+                &self, constant,
+            )))
+        }));
+
+        // The runtime helpers exist because something calls them, so the
+        // planned artifacts are what decide it. Asking them is what makes the
+        // answer exact: a `Vec` delivered to a callback needs the array
+        // builder just as a `Vec` return does, which a gate over return types
+        // alone missed (#437).
+        let calls: std::collections::HashSet<_> = artifacts
+            .iter()
+            .flat_map(prebindgen_registry::write::RustArtifact::calls)
+            .collect();
+        let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
+        let arrays = calls.contains(&crate::assembly::array_builder_key());
+        if arrays || calls.contains(&crate::assembly::memory_key()) {
+            assembly.artifact(crate::assembly::CFinalArtifact::Memory(Box::new(
+                crate::assembly::CMemory::new(&self),
             )));
+        }
+        if arrays {
+            assembly.artifact(crate::assembly::CFinalArtifact::ArrayBuilder);
+        }
+        for artifact in artifacts {
+            assembly.artifact(artifact);
         }
         self.assembly = Some(assembly.build());
         self.generation = Some(generation);

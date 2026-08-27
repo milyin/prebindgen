@@ -331,7 +331,13 @@ impl RustArtifact for CFunction {
     fn calls(&self) -> Vec<ArtifactKey> {
         let mut calls = Vec::new();
         match &self.body {
-            // A terminal converts the value itself and calls no one.
+            // A terminal converts the value itself, except the two that hand
+            // C a `char*` block: those allocate it through the memory helpers.
+            CBody::OutputTerminal(OutputTerminalPlan {
+                operation:
+                    OutputTerminalOperation::String | OutputTerminalOperation::OpaqueError { .. },
+                ..
+            }) => calls.push(crate::assembly::memory_key()),
             CBody::Custom(_)
             | CBody::InputTerminal(_)
             | CBody::OutputTerminal(_)
@@ -1221,9 +1227,18 @@ impl CArtifact {
                     argument.value.calls(&mut calls);
                 }
             }
-            // A handle is a pointer, a tagged union is a layout, and a
-            // value-opaque is reinterpreted: none of them converts anything.
-            Self::OpaqueHandle(_) | Self::TaggedUnion(_) | Self::ValueOpaque(_) => {}
+            // A tagged union's typed destructor frees what its live arm owns,
+            // which reaches a nested union's destructor and the memory helpers.
+            Self::TaggedUnion(union) => {
+                for field in union.arms.iter().flat_map(|arm| &arm.fields) {
+                    if let Some(cleanup) = &field.cleanup {
+                        cleanup.calls(&mut calls);
+                    }
+                }
+            }
+            // A handle is a pointer and a value-opaque is reinterpreted:
+            // neither converts nor frees anything of its own.
+            Self::OpaqueHandle(_) | Self::ValueOpaque(_) => {}
         }
         calls
     }
@@ -1419,6 +1434,23 @@ impl PayloadCleanup {
                 }
             }
             Self::AllocatedString | Self::BoxedPointer { .. } => {}
+        }
+    }
+
+    /// The artifacts this cleanup calls: a nested union's own destructor, and
+    /// the memory helpers whose freer releases a `char*` block.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match self {
+            Self::NestedUnion { artifact, .. } => out.push(
+                prebindgen_registry::write::ArtifactKey::Artifact(artifact.clone()),
+            ),
+            Self::AllocatedString => out.push(crate::assembly::memory_key()),
+            Self::Fields(fields) => {
+                for (_, cleanup) in fields {
+                    cleanup.calls(out);
+                }
+            }
+            Self::BoxedPointer { .. } => {}
         }
     }
 

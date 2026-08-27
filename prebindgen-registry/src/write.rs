@@ -242,8 +242,9 @@ impl<A: RustArtifact> FromIterator<A> for Assembly<A> {
     }
 }
 
-/// Check that every call a rendered artifact makes to another artifact's
-/// converter is declared as one of its [`RustArtifact::calls`] edges.
+/// Check an assembly's edges against what its artifacts render: every call to
+/// another artifact's item is declared by [`RustArtifact::calls`], and every
+/// identity [`RustArtifact::provides`] claims is one the artifact defines.
 ///
 /// Test support, like [`RustWriter::for_test`](crate::RustWriter::for_test).
 /// Emission proves the file complete from the edges alone, which is only worth
@@ -265,44 +266,72 @@ pub fn assert_edges_cover_rendered_calls<A: RustArtifact>(
     emit: &crate::RustWriter,
     namespace: &str,
 ) {
-    let ident_of = |key: &ArtifactKey| match key {
-        ArtifactKey::Operation(operation) => {
-            Some(emit.operation_ident(namespace, operation).to_string())
-        }
-        // An exported symbol is called by the destination language, never by
-        // another artifact's body.
-        ArtifactKey::Artifact(_) => None,
-    };
-    let mut converters: HashMap<String, ArtifactKey> = HashMap::new();
-    for artifact in assembly.artifacts() {
-        for key in artifact.provides() {
-            if let Some(ident) = ident_of(&key) {
-                converters.insert(ident, key);
+    // What every artifact actually renders, which is the ground truth both
+    // halves are checked against: a call resolves to an artifact by the name
+    // that artifact defines, whether the identity is an operation or an
+    // adapter-scoped artifact. A runtime helper is called by name like any
+    // converter.
+    let rendered: Vec<(ArtifactKey, BTreeSet<String>, BTreeSet<String>)> = assembly
+        .artifacts()
+        .map(|artifact| {
+            let mut called = CalledIdents(BTreeSet::new());
+            let mut defined = BTreeSet::new();
+            for mut item in artifact.render(emit) {
+                if let syn::Item::Fn(function) = &item {
+                    defined.insert(function.sig.ident.to_string());
+                }
+                syn::visit_mut::VisitMut::visit_item_mut(&mut called, &mut item);
             }
+            (artifact.key(), defined, called.0)
+        })
+        .collect();
+    let mut definer: HashMap<&str, &ArtifactKey> = HashMap::new();
+    for (key, defined, _) in &rendered {
+        for name in defined {
+            definer.insert(name.as_str(), key);
+        }
+    }
+    let mut provider: HashMap<ArtifactKey, usize> = HashMap::new();
+    for (position, artifact) in assembly.artifacts().enumerate() {
+        for key in artifact.provides() {
+            provider.insert(key, position);
         }
     }
 
-    for artifact in assembly.artifacts().filter(|artifact| artifact.reachable()) {
-        let mut allowed: BTreeSet<String> = artifact
-            .provides()
-            .iter()
-            .chain(artifact.calls().iter())
-            .filter_map(ident_of)
-            .collect();
-        // A recursive shape's converter calls itself.
-        allowed.extend(ident_of(&artifact.key()));
-        let mut called = CalledIdents(BTreeSet::new());
-        for mut item in artifact.render(emit) {
-            syn::visit_mut::VisitMut::visit_item_mut(&mut called, &mut item);
+    for (artifact, (key, defined, called)) in assembly.artifacts().zip(&rendered) {
+        // Every identity claimed must be one this artifact actually defines,
+        // or claiming it would grant reachability to an item no one renders.
+        for claimed in artifact.provides() {
+            if let ArtifactKey::Operation(operation) = &claimed {
+                let ident = emit.operation_ident(namespace, operation).to_string();
+                assert!(
+                    defined.contains(&ident),
+                    "{key} claims to provide {claimed}, but renders no `{ident}`"
+                );
+            }
         }
-        for ident in called.0 {
-            if allowed.contains(&ident) {
+        if !artifact.reachable() {
+            continue;
+        }
+        let mut allowed: BTreeSet<&str> = defined.iter().map(String::as_str).collect();
+        for callee in artifact.calls() {
+            // Resolved the way emission resolves it: through whichever
+            // artifact answers for that identity, which is not always the one
+            // whose own key it is.
+            allowed.extend(
+                provider
+                    .get(&callee)
+                    .into_iter()
+                    .flat_map(|position| rendered[*position].1.iter().map(String::as_str)),
+            );
+        }
+        for name in called {
+            if allowed.contains(name.as_str()) {
                 continue;
             }
-            if let Some(callee) = converters.get(&ident) {
+            if let Some(callee) = definer.get(name.as_str()) {
                 panic!(
-                    "{} calls {callee} as `{ident}`, which it does not declare as a dependency",
-                    artifact.key()
+                    "{key} calls {callee} as `{name}`, which it does not declare as a dependency"
                 );
             }
         }

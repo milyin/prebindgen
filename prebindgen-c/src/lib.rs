@@ -486,6 +486,7 @@ impl CbindgenBuilder {
                 | assembly::CFinalArtifact::DataStruct(_)
                 | assembly::CFinalArtifact::Enum(_)
                 | assembly::CFinalArtifact::DomainConstant(_)
+                | assembly::CFinalArtifact::ArrayBuilder
                 | assembly::CFinalArtifact::Planned(_) => None,
             })
     }

@@ -69,9 +69,13 @@ impl CValue {
     /// The converters this value's decode or encode calls.
     pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
         match self {
-            Self::Direct { converter, .. }
-            | Self::OwnedSequence { converter, .. }
-            | Self::BorrowedSequence { converter, .. } => out.push(converter.artifact_key()),
+            Self::Direct { converter, .. } => out.push(converter.artifact_key()),
+            // A sequence hands C a malloc'd block, which the array builder
+            // among the memory helpers allocates.
+            Self::OwnedSequence { converter, .. } | Self::BorrowedSequence { converter, .. } => {
+                out.push(converter.artifact_key());
+                out.push(crate::assembly::array_builder_key());
+            }
             Self::Optional { inner, .. } => inner.calls(out),
             // A borrowed input is reinterpreted, not converted.
             Self::BorrowedInput { .. } => {}

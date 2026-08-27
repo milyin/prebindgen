@@ -33,6 +33,12 @@ pub(crate) struct JniGenerationPlan {
     assembly: prebindgen_registry::write::Assembly<JFinalArtifact>,
 }
 
+/// The prelude's identity, which every extern depends on: its body routes
+/// failure through the error-channel functions the prelude renders.
+pub(crate) fn prelude_key() -> prebindgen_registry::write::ArtifactKey {
+    jni_artifact("jni-runtime", "prelude")
+}
+
 /// An adapter-scoped artifact identity.
 fn jni_artifact(kind: &str, name: impl Into<String>) -> prebindgen_registry::write::ArtifactKey {
     prebindgen_registry::write::ArtifactKey::Artifact(
@@ -238,7 +244,7 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
                     .expect("an exported symbol is a non-empty artifact name"),
             ),
             Self::Const(constant) => jni_artifact("jni-const", constant.constant.name.to_string()),
-            Self::Prelude => jni_artifact("jni-runtime", "prelude"),
+            Self::Prelude => prelude_key(),
             Self::HandleDestructor(destructor) => {
                 jni_artifact("jni-handle-destructor", destructor.symbol())
             }
@@ -257,6 +263,14 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
             | Self::VecBuild(_)
             | Self::ConstantExpr(_) => true,
         }
+    }
+
+    fn provides(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        // Each JNI artifact renders its own items and no one else's: unlike
+        // the C callback, nothing here stands in for an identity whose own
+        // artifact was never planned. Stated rather than inherited, so that an
+        // artifact which does needs a deliberate change here.
+        vec![self.key()]
     }
 
     fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {

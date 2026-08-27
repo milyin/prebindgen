@@ -61,9 +61,11 @@ impl JWrapper {
         &self.plan.native_symbol
     }
 
-    /// The converters this extern's body calls, which are its plan's.
+    /// What this extern's body calls: the converters its plan names, and the
+    /// prelude, whose error-channel functions every failure path routes
+    /// through.
     pub(crate) fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
-        let mut calls = Vec::new();
+        let mut calls = vec![crate::jni::generation::prelude_key()];
         self.plan.calls(&mut calls);
         calls
     }

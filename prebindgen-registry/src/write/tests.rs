@@ -125,6 +125,13 @@ enum LateOrCaller {
 }
 
 impl RustArtifact for LateOrCaller {
+    fn provides(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Converter(plan) => plan.provides(),
+            Self::Caller(plan) => plan.provides(),
+        }
+    }
+
     fn calls(&self) -> Vec<ArtifactKey> {
         match self {
             Self::Converter(plan) => plan.calls(),

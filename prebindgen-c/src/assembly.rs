@@ -27,6 +27,8 @@ pub(crate) enum CFinalArtifact {
     /// The memory helpers the generated layer hands `char*` and array blocks
     /// to C through.
     Memory(Box<CMemory>),
+    /// The array builder, which copies a `Vec<T>` into a C block.
+    ArrayBuilder,
     /// One `#[repr(C)]` mirror of a declared data struct.
     DataStruct(Box<CDataStruct>),
     /// One `#[repr(C)]` mirror of a declared fieldless enum.
@@ -45,6 +47,7 @@ impl RustArtifact for CFinalArtifact {
             Self::Wrapper(wrapper) => wrapper.key(),
             Self::Const(constant) => constant.key(),
             Self::Memory(memory) => memory.key(),
+            Self::ArrayBuilder => array_builder_key(),
             Self::DataStruct(item) => item.key(),
             Self::Enum(item) => item.key(),
             Self::DomainConstant(item) => item.key(),
@@ -65,6 +68,8 @@ impl RustArtifact for CFinalArtifact {
             Self::Wrapper(wrapper) => wrapper.calls(),
             Self::Const(constant) => constant.calls(),
             Self::Memory(memory) => memory.calls(),
+            // The block it fills is malloc'd, and freed by the universal freer.
+            Self::ArrayBuilder => vec![memory_key()],
             Self::DataStruct(item) => item.calls(),
             Self::Enum(item) => item.calls(),
             Self::DomainConstant(item) => item.calls(),
@@ -78,6 +83,7 @@ impl RustArtifact for CFinalArtifact {
             Self::Wrapper(wrapper) => wrapper.render(emit),
             Self::Const(constant) => constant.render(emit),
             Self::Memory(memory) => memory.render(emit),
+            Self::ArrayBuilder => CMemory::render_array_builder(),
             Self::DataStruct(item) => item.render(emit),
             Self::Enum(item) => item.render(emit),
             Self::DomainConstant(item) => item.render(emit),
@@ -665,6 +671,18 @@ impl RustArtifact for CConst {
     }
 }
 
+/// The memory helpers' identity, which every artifact that hands `char*`
+/// memory to C — or frees any block — depends on.
+pub(crate) fn memory_key() -> ArtifactKey {
+    artifact_id("c-runtime", "memory")
+}
+
+/// The array builder's identity, which every artifact that hands C a block of
+/// converted elements depends on.
+pub(crate) fn array_builder_key() -> ArtifactKey {
+    artifact_id("c-runtime", "array-builder")
+}
+
 /// An adapter-scoped artifact identity, for the artifacts this module names
 /// itself rather than reading off the generation plan.
 fn artifact_id(kind: &str, name: impl Into<String>) -> ArtifactKey {
@@ -745,29 +763,50 @@ impl RustArtifact for CPlanned {
 pub(crate) struct CMemory {
     /// The declared freer's exported symbol.
     free_ident: syn::Ident,
-    /// Whether a `Vec<T>` return hands out an array block.
-    arrays: bool,
 }
 
 impl CMemory {
-    /// Plan the memory helpers, if this binding hands memory to C at all.
-    pub(crate) fn new(decls: &CbindgenBuilder, registry: &Registry) -> Option<Self> {
-        let arrays = decls.produces_array(registry);
-        if !(decls.needs_free(registry) || arrays) {
-            return None;
-        }
+    /// Plan the memory helpers for a binding that hands memory to C.
+    ///
+    /// Whether it does is not asked here: the artifacts that allocate say so
+    /// through their own dependencies, and the caller plans this when one of
+    /// them names it.
+    pub(crate) fn new(decls: &CbindgenBuilder) -> Self {
         let Some(free_fn) = &decls.free_fn else {
             panic!(
-                "Cbindgen: the generated layer hands `char*` string memory to C \
-                 (a `String` return or a `String` data-struct field) but no \
-                 memory-freeing function is declared — add \
+                "Cbindgen: the generated layer hands C memory it must free — a \
+                 `char*` block (a `String` return or a `String` data-struct \
+                 field) or an array block (a `Vec` returned or delivered to a \
+                 callback) — but no memory-freeing function is declared: add \
                  `.free_memory_function(\"z_free\")`"
             )
         };
-        Some(Self {
+        Self {
             free_ident: format_ident!("{}", free_fn),
-            arrays,
-        })
+        }
+    }
+
+    /// Copy a `Vec<W>` into a C-`malloc`'d block of `W` and return
+    /// `(ptr, len)` (empty ⇒ `(NULL, 0)`). The block is freed C-side via the
+    /// `z_free_array` macro (per-element drop + the universal freer).
+    fn render_array_builder() -> Vec<syn::Item> {
+        vec![syn::parse_quote!(
+            #[allow(non_snake_case, dead_code)]
+            pub(crate) unsafe fn __cbg_alloc_array<W>(v: ::std::vec::Vec<W>) -> (*mut W, usize) {
+                let n = v.len();
+                if n == 0 {
+                    return (::core::ptr::null_mut(), 0);
+                }
+                let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
+                if p.is_null() {
+                    return (::core::ptr::null_mut(), 0);
+                }
+                for (i, e) in v.into_iter().enumerate() {
+                    ::core::ptr::write(p.add(i), e);
+                }
+                (p, n)
+            }
+        )]
     }
 }
 
@@ -777,13 +816,13 @@ impl RustArtifact for CMemory {
     }
 
     fn key(&self) -> ArtifactKey {
-        artifact_id("c-runtime", "memory")
+        memory_key()
     }
 
     fn render(&self, _emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
         let free_ident = &self.free_ident;
         // C allocator (linked from the C runtime; no crate dependency).
-        let mut items: Vec<syn::Item> = vec![
+        let items: Vec<syn::Item> = vec![
             syn::parse_quote!(
                 extern "C" {
                     fn malloc(size: usize) -> *mut ::core::ffi::c_void;
@@ -819,31 +858,6 @@ impl RustArtifact for CMemory {
                 }
             ),
         ];
-        if self.arrays {
-            // Array builder: copy a `Vec<W>` into a C-`malloc`'d block of `W`
-            // and return `(ptr, len)` (empty ⇒ `(NULL, 0)`). The block is freed
-            // C-side via the `z_free_array` macro (per-element drop + the
-            // universal freer).
-            items.push(syn::parse_quote!(
-                #[allow(non_snake_case, dead_code)]
-                pub(crate) unsafe fn __cbg_alloc_array<W>(
-                    v: ::std::vec::Vec<W>,
-                ) -> (*mut W, usize) {
-                    let n = v.len();
-                    if n == 0 {
-                        return (::core::ptr::null_mut(), 0);
-                    }
-                    let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
-                    if p.is_null() {
-                        return (::core::ptr::null_mut(), 0);
-                    }
-                    for (i, e) in v.into_iter().enumerate() {
-                        ::core::ptr::write(p.add(i), e);
-                    }
-                    (p, n)
-                }
-            ));
-        }
         items
     }
 }
