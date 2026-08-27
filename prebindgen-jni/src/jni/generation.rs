@@ -161,6 +161,23 @@ impl JVecBuild {
         &self.free_symbol
     }
 
+    /// The converters `Push` calls, one per leaf of the element it builds.
+    pub(crate) fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        self.helpers
+            .plan
+            .leaves
+            .iter()
+            .filter(|leaf| !leaf.is_present_flag())
+            .map(|leaf| {
+                prebindgen_registry::write::ArtifactKey::Operation(
+                    leaf.conv()
+                        .expect("a non-present leaf has a converter")
+                        .clone(),
+                )
+            })
+            .collect()
+    }
+
     /// The first of the three symbols, which orders the trios in the file.
     pub(crate) fn sort_key(&self) -> &str {
         [&self.free_symbol, &self.new_symbol, &self.push_symbol]
@@ -239,6 +256,17 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
             | Self::HandleDestructor(_)
             | Self::VecBuild(_)
             | Self::ConstantExpr(_) => true,
+        }
+    }
+
+    fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        match self {
+            Self::Converter(converter) => converter.calls(),
+            Self::Wrapper(wrapper) | Self::ConstantExpr(wrapper) => wrapper.calls(),
+            Self::Const(constant) => constant.getter.calls(),
+            Self::VecBuild(helpers) => helpers.calls(),
+            // The prelude is self-contained, and a destructor drops a box.
+            Self::Prelude | Self::HandleDestructor(_) => Vec::new(),
         }
     }
 

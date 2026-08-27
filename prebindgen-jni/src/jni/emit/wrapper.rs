@@ -60,6 +60,13 @@ impl JWrapper {
     pub(crate) fn symbol(&self) -> &str {
         &self.plan.native_symbol
     }
+
+    /// The converters this extern's body calls, which are its plan's.
+    pub(crate) fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        let mut calls = Vec::new();
+        self.plan.calls(&mut calls);
+        calls
+    }
 }
 
 /// The synthetic nullary getter signature a declared const is emitted

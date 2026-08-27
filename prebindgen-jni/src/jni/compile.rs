@@ -523,6 +523,15 @@ pub(crate) struct OutValueAbi {
 }
 
 impl OutAbi {
+    /// The converters encoding through this ABI calls. A tag is assigned, not
+    /// converted.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match self {
+            Self::Tag => {}
+            Self::Value(value) => value.pipeline.calls(out),
+        }
+    }
+
     pub(crate) fn activate(&self) {
         if let Self::Value(value) = self {
             value.dependency.mark_reachable();
@@ -531,6 +540,13 @@ impl OutAbi {
 }
 
 impl OutWire {
+    /// The converters encoding this leaf calls.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        if let Some(abi) = &self.abi {
+            abi.calls(out);
+        }
+    }
+
     /// One leaf of an expansion plan, in the recipe's vocabulary.
     ///
     /// The shim that lets the sum emitters speak recipes before every plan is one:

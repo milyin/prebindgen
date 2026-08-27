@@ -66,6 +66,18 @@ pub(crate) enum CValue {
 }
 
 impl CValue {
+    /// The converters this value's decode or encode calls.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match self {
+            Self::Direct { converter, .. }
+            | Self::OwnedSequence { converter, .. }
+            | Self::BorrowedSequence { converter, .. } => out.push(converter.artifact_key()),
+            Self::Optional { inner, .. } => inner.calls(out),
+            // A borrowed input is reinterpreted, not converted.
+            Self::BorrowedInput { .. } => {}
+        }
+    }
+
     pub(crate) fn direct(&self) -> Option<(&syn::Type, &CCall)> {
         match self {
             Self::Direct {

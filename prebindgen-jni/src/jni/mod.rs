@@ -897,6 +897,19 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        // Every binding a test writes also checks that the assembly's
+        // dependency edges name every call its artifacts render — the
+        // completeness the emission-time check reasons from.
+        #[cfg(test)]
+        prebindgen_registry::write::assert_edges_cover_rendered_calls(
+            self.decls
+                .generation
+                .as_ref()
+                .expect("resolved JniGen has no frozen generation plan")
+                .assembly(),
+            &prebindgen_registry::RustWriter::for_registry_test(&self.registry),
+            "jni",
+        );
         Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.decls,

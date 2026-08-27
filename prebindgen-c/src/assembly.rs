@@ -52,6 +52,26 @@ impl RustArtifact for CFinalArtifact {
         }
     }
 
+    fn provides(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Planned(item) => item.provides(),
+            _ => vec![self.key()],
+        }
+    }
+
+    fn calls(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Converter(converter) => converter.calls(),
+            Self::Wrapper(wrapper) => wrapper.calls(),
+            Self::Const(constant) => constant.calls(),
+            Self::Memory(memory) => memory.calls(),
+            Self::DataStruct(item) => item.calls(),
+            Self::Enum(item) => item.calls(),
+            Self::DomainConstant(item) => item.calls(),
+            Self::Planned(item) => item.calls(),
+        }
+    }
+
     fn render(&self, emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
         match self {
             Self::Converter(converter) => converter.render(emit),
@@ -118,6 +138,20 @@ impl CWrapper {
                 .map(|param| decls.alias_slot_of(&param.ty))
                 .collect(),
         }
+    }
+
+    /// One boundary site of this wrapper's own function, when the function has
+    /// one in that role. A void return and an infallible function have no
+    /// return or error site.
+    fn site_if_planned(
+        &self,
+        role: prebindgen_registry::recipe::Role,
+    ) -> Option<&prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation>> {
+        let id = prebindgen_registry::generation::SiteId::new(prebindgen_registry::recipe::Site {
+            owner: self.function.name.clone(),
+            role,
+        });
+        self.generation.site(&id)
     }
 
     /// One boundary site of this wrapper's own function.
@@ -549,6 +583,25 @@ impl CWrapper {
 }
 
 impl RustArtifact for CWrapper {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        // One site per parameter, plus the return and the error channel when
+        // the function has them — the same sites the body decodes and encodes
+        // through.
+        let mut calls = Vec::new();
+        let roles = (0..self.function.params.len())
+            .map(|index| prebindgen_registry::recipe::Role::Param { index })
+            .chain([
+                prebindgen_registry::recipe::Role::Return,
+                prebindgen_registry::recipe::Role::Error,
+            ]);
+        for role in roles {
+            if let Some(site) = self.site_if_planned(role) {
+                site.abi().payload().calls(&mut calls);
+            }
+        }
+        calls
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Artifact(
             prebindgen_registry::generation::ArtifactId::new("c-wrapper", self.symbol.to_string())
@@ -590,6 +643,10 @@ impl CConst {
 }
 
 impl RustArtifact for CConst {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Artifact(
             prebindgen_registry::generation::ArtifactId::new(
@@ -645,7 +702,27 @@ impl CPlanned {
     }
 }
 
+impl CPlanned {
+    /// The plan's own artifact description.
+    fn payload(&self) -> &crate::chain::CArtifact {
+        self.generation
+            .artifact(&self.id)
+            .unwrap_or_else(|| panic!("the C generation plan lost artifact {}", self.id))
+            .payload()
+    }
+}
+
 impl RustArtifact for CPlanned {
+    fn provides(&self) -> Vec<ArtifactKey> {
+        let mut provided = vec![self.key()];
+        provided.extend(self.payload().provides());
+        provided
+    }
+
+    fn calls(&self) -> Vec<ArtifactKey> {
+        self.payload().calls()
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Artifact(self.id.clone())
     }
@@ -695,6 +772,10 @@ impl CMemory {
 }
 
 impl RustArtifact for CMemory {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         artifact_id("c-runtime", "memory")
     }
@@ -816,6 +897,10 @@ impl CDataStruct {
 }
 
 impl RustArtifact for CDataStruct {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         artifact_id("c-data-struct", self.c_struct.to_string())
     }
@@ -877,6 +962,10 @@ impl CEnum {
 }
 
 impl RustArtifact for CEnum {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         artifact_id("c-enum", self.c_name.to_string())
     }
@@ -915,6 +1004,10 @@ pub(crate) struct CDomainConstant {
 }
 
 impl RustArtifact for CDomainConstant {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         artifact_id("c-domain-constant", self.name.to_string())
     }

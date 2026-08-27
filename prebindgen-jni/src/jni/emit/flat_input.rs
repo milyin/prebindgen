@@ -23,6 +23,15 @@ pub(crate) struct JObjectStructInputPlan {
     fields: Vec<JObjectStructFieldPlan>,
 }
 
+impl JObjectStructInputPlan {
+    /// Every converter the decoder calls, one per property.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for field in &self.fields {
+            field.kind.calls(out);
+        }
+    }
+}
+
 #[derive(Clone)]
 struct JObjectStructFieldPlan {
     name: syn::Ident,
@@ -30,6 +39,20 @@ struct JObjectStructFieldPlan {
     error: String,
     sum_payload: bool,
     kind: JObjectStructFieldKind,
+}
+
+impl JObjectStructFieldKind {
+    /// The pipeline this property decodes through.
+    fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match self {
+            Self::Handle { pipeline, .. }
+            | Self::Unsigned64 { pipeline, .. }
+            | Self::Enum { pipeline, .. }
+            | Self::Primitive { pipeline, .. }
+            | Self::IntoObject { pipeline, .. }
+            | Self::Object { pipeline, .. } => pipeline.calls(out),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -421,6 +444,20 @@ struct JObjectSumAlternativePlan {
 struct JObjectSumFieldPlan {
     shape: flat::Field,
     property: JObjectStructFieldPlan,
+}
+
+impl JObjectSumInputPlan {
+    /// Every converter the decoder calls, one per property of every
+    /// alternative.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for field in self
+            .alternatives
+            .iter()
+            .flat_map(|alternative| &alternative.fields)
+        {
+            field.property.kind.calls(out);
+        }
+    }
 }
 
 pub(crate) fn build_jobject_sum_input_plan(

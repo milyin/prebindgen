@@ -583,6 +583,19 @@ pub(crate) struct FrozenDelivery {
 }
 
 impl FrozenDelivery {
+    /// Every converter encoding these leaves calls: each leaf's own pipeline,
+    /// and the composed converter when the delivery has one.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for wire in &self.wires {
+            wire.calls(out);
+        }
+        if let Some(chain) = &self.chain {
+            out.push(prebindgen_registry::write::ArtifactKey::Operation(
+                chain.operation.clone(),
+            ));
+        }
+    }
+
     pub(crate) fn new(
         ext: &Declarations,
         registry: &impl Conversions,

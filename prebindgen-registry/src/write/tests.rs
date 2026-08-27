@@ -47,6 +47,10 @@ struct OperationPlan {
 }
 
 impl RustArtifact for OperationPlan {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Operation(self.operation.clone())
     }
@@ -64,6 +68,10 @@ impl RustArtifact for OperationPlan {
 }
 
 impl RustArtifact for LatePlan {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Operation(self.operation.clone())
     }
@@ -90,6 +98,10 @@ struct CallerPlan {
 }
 
 impl RustArtifact for CallerPlan {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        vec![ArtifactKey::Operation(self.operation.clone())]
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Artifact(
             crate::generation::ArtifactId::new("test", "caller").expect("identity"),
@@ -113,6 +125,13 @@ enum LateOrCaller {
 }
 
 impl RustArtifact for LateOrCaller {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Converter(plan) => plan.calls(),
+            Self::Caller(plan) => plan.calls(),
+        }
+    }
+
     fn key(&self) -> ArtifactKey {
         match self {
             Self::Converter(plan) => plan.key(),
@@ -176,6 +195,8 @@ fn an_artifact_reached_after_freezing_is_emitted() {
 
 #[test]
 fn a_call_to_a_filtered_converter_is_a_writer_error() {
+    // The identities are semantic, not Rust symbols: the check runs before
+    // anything is rendered, so no name has been allocated yet.
     let registry = late_test_registry();
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
@@ -199,11 +220,17 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
         .expect_err("a call to a filtered private converter must fail in the writer");
 
     match err {
-        WriteError::UnrenderedConverterCalls { calls } => {
-            let missing = crate::RustWriter::for_test()
-                .operation_ident("test", &operation)
-                .to_string();
-            assert_eq!(calls, vec![("a_fn".to_string(), missing)]);
+        WriteError::UnreachedDependency { edges } => {
+            assert_eq!(
+                edges,
+                vec![(
+                    ArtifactKey::Artifact(
+                        crate::generation::ArtifactId::new("test", "caller").expect("identity")
+                    )
+                    .to_string(),
+                    ArtifactKey::Operation(operation).to_string(),
+                )]
+            );
         }
     }
     assert!(
