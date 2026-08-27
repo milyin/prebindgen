@@ -1727,9 +1727,14 @@ impl<R: Conversions> JCompile<'_, R> {
             }
         };
         if let Some(domain) = decl.domain() {
-            // The domain's own spelling is derived from its kind, so this
-            // compares two canonical names: a domain cannot miss its
-            // representation by being written unusually.
+            // A `TypeKey` is not reduced to a canonical spelling — the model's
+            // normalization covers constructors, not scalars — so this compares
+            // two spellings. It is exact anyway, from both sides: the domain's
+            // spelling is derived from its kind, and a path-qualified scalar
+            // never reaches here, because a marked item lives in one flat
+            // namespace of bare names and such a representation fails to
+            // resolve first. Pinned by
+            // `a_qualified_scalar_representation_never_reaches_the_domain_check`.
             let domain_key = TypeKey::from_type(&domain.ty());
             if domain_key != representation_key {
                 let direction = match direction {

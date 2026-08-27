@@ -2037,3 +2037,23 @@ fn a_raw_identifier_survives_typeid() {
     };
     assert!(qualified.ident().is_none());
 }
+
+/// `ScalarKind` is the closed set of the scalars a source may write, and it
+/// answers for a written type however that type is spelled — so a caller
+/// asking "is this an FFI-safe scalar primitive" needs no name table of its
+/// own.
+#[test]
+fn a_scalar_kind_is_recovered_from_any_spelling_of_its_type() {
+    use crate::flat::ScalarKind;
+
+    assert_eq!(
+        ScalarKind::from_type(&syn::parse_quote!(usize)),
+        Some(ScalarKind::Usize)
+    );
+    assert_eq!(
+        ScalarKind::from_type(&syn::parse_quote!(::core::primitive::usize)),
+        Some(ScalarKind::Usize)
+    );
+    assert_eq!(ScalarKind::from_type(&syn::parse_quote!(String)), None);
+    assert_eq!(ScalarKind::from_type(&syn::parse_quote!(&u8)), None);
+}

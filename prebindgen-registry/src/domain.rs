@@ -5,75 +5,70 @@ use std::ops::{Bound, RangeBounds};
 use proc_macro2::TokenStream;
 use quote::quote;
 
-/// The scalar a [`RepresentationDomain`] is declared over.
-///
-/// This is the identity every domain question is decided on — whether a bounds
-/// check needs a NaN test, which candidate values a niche is picked from, and
-/// whether a domain and a conversion's representation are the same type. Its
-/// spelling is derived from it and never the other way round, so a domain
-/// written `::core::primitive::u64` and one written `u64` are one kind.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum DomainKind {
-    I8,
-    I16,
-    I32,
-    I64,
-    I128,
-    U8,
-    U16,
-    U32,
-    U64,
-    U128,
-    F32,
-    F64,
+/// The scalars a [`RepresentationDomain`] can be declared over: the variants,
+/// their spellings and the reduction from a written type all come from this one
+/// list, so a kind cannot be added to the set without answering for both.
+macro_rules! domain_kinds {
+    ($(($variant:ident, $name:literal)),* $(,)?) => {
+        /// The scalar a [`RepresentationDomain`] is declared over.
+        ///
+        /// This is the identity every domain question is decided on — whether a
+        /// bounds check needs a NaN test, which candidate values a niche is
+        /// picked from, and whether a domain and a conversion's representation
+        /// are the same type. Its spelling is derived from it and never the
+        /// other way round, so a domain written `::core::primitive::u64` and one
+        /// written `u64` are one kind.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        pub enum DomainKind {
+            $(
+                #[doc = concat!("The `", $name, "` scalar.")]
+                $variant
+            ),*
+        }
+
+        impl DomainKind {
+            /// The one canonical Rust spelling of this scalar.
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $name),*
+                }
+            }
+
+            /// The kind a written scalar type names, off its last path segment,
+            /// so every spelling of one scalar answers alike. `None` for a type
+            /// no domain can be declared over — `bool`, `isize` and `usize`
+            /// among them.
+            pub fn from_type(ty: &syn::Type) -> Option<Self> {
+                let ident = prebindgen_flat::types_util::path_tail_ident(ty)?;
+                $(if ident == $name {
+                    return Some(Self::$variant);
+                })*
+                None
+            }
+        }
+    };
 }
 
-impl DomainKind {
-    /// The one canonical Rust spelling of this scalar.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::I8 => "i8",
-            Self::I16 => "i16",
-            Self::I32 => "i32",
-            Self::I64 => "i64",
-            Self::I128 => "i128",
-            Self::U8 => "u8",
-            Self::U16 => "u16",
-            Self::U32 => "u32",
-            Self::U64 => "u64",
-            Self::U128 => "u128",
-            Self::F32 => "f32",
-            Self::F64 => "f64",
-        }
-    }
+domain_kinds!(
+    (I8, "i8"),
+    (I16, "i16"),
+    (I32, "i32"),
+    (I64, "i64"),
+    (I128, "i128"),
+    (U8, "u8"),
+    (U16, "u16"),
+    (U32, "u32"),
+    (U64, "u64"),
+    (U128, "u128"),
+    (F32, "f32"),
+    (F64, "f64"),
+);
 
+impl DomainKind {
     /// The scalar's Rust type, built from [`Self::as_str`].
     pub fn ty(self) -> syn::Type {
         let ident = syn::Ident::new(self.as_str(), proc_macro2::Span::call_site());
         syn::parse_quote!(#ident)
-    }
-
-    /// The kind a written scalar type names, off its last path segment, so
-    /// every spelling of one scalar answers alike. `None` for a type no domain
-    /// can be declared over — `bool`, `isize` and `usize` among them.
-    pub fn from_type(ty: &syn::Type) -> Option<Self> {
-        let ident = prebindgen_flat::types_util::path_tail_ident(ty)?.to_string();
-        [
-            Self::I8,
-            Self::I16,
-            Self::I32,
-            Self::I64,
-            Self::I128,
-            Self::U8,
-            Self::U16,
-            Self::U32,
-            Self::U64,
-            Self::U128,
-            Self::F32,
-            Self::F64,
-        ]
-        .into_iter()
-        .find(|kind| kind.as_str() == ident)
     }
 
     fn is_float(self) -> bool {
