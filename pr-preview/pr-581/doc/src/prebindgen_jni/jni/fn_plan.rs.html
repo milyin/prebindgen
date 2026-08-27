@@ -488,7 +488,7 @@
 <a href=#488 id=488 data-nosnippet>488</a>        <span class="kw">let </span>at = <span class="self">self</span>.location_suffix();
 <a href=#489 id=489 data-nosnippet>489</a>        <span class="kw">match </span><span class="self">self </span>{
 <a href=#490 id=490 data-nosnippet>490</a>            PlanError::Unresolved { ty } =&gt; <span class="macro">format!</span>(
-<a href=#491 id=491 data-nosnippet>491</a>                <span class="string">"JniGen::on_function: input type `{}` for `{}` is unresolved{at}"</span>,
+<a href=#491 id=491 data-nosnippet>491</a>                <span class="string">"JniGen extern: input type `{}` for `{}` is unresolved{at}"</span>,
 <a href=#492 id=492 data-nosnippet>492</a>                ty.key(),
 <a href=#493 id=493 data-nosnippet>493</a>                fn_ident,
 <a href=#494 id=494 data-nosnippet>494</a>            ),
@@ -498,7 +498,7 @@
 <a href=#498 id=498 data-nosnippet>498</a>                param,
 <a href=#499 id=499 data-nosnippet>499</a>            ),
 <a href=#500 id=500 data-nosnippet>500</a>            PlanError::UnresolvedOutput { ty } =&gt; <span class="macro">format!</span>(
-<a href=#501 id=501 data-nosnippet>501</a>                <span class="string">"JniGen::on_function: return type `{}` of `{}` has no registered output \
+<a href=#501 id=501 data-nosnippet>501</a>                <span class="string">"JniGen extern: return type `{}` of `{}` has no registered output \
 <a href=#502 id=502 data-nosnippet>502</a>                 converter — register one via `Declarations::output_wrapper(pat, |…| Some((ty, exc, body)))` \
 <a href=#503 id=503 data-nosnippet>503</a>                 (exc = `None` for non-throwing, `Some(parse_quote!(&lt;full path&gt;))` \
 <a href=#504 id=504 data-nosnippet>504</a>                  to bind a domain exception){at}"</span>,
@@ -506,16 +506,16 @@
 <a href=#506 id=506 data-nosnippet>506</a>                fn_ident,
 <a href=#507 id=507 data-nosnippet>507</a>            ),
 <a href=#508 id=508 data-nosnippet>508</a>            PlanError::UnknownOutputType { ty } =&gt; <span class="macro">format!</span>(
-<a href=#509 id=509 data-nosnippet>509</a>                <span class="string">"JniGen::on_function: return type `{}` of `{}` is not registered — the \
+<a href=#509 id=509 data-nosnippet>509</a>                <span class="string">"JniGen extern: return type `{}` of `{}` is not registered — the \
 <a href=#510 id=510 data-nosnippet>510</a>                 resolver never saw this type, so no converter can be selected for it. \
 <a href=#511 id=511 data-nosnippet>511</a>                 Declare the type (or the function that produces it) before binding `{}`"</span>,
 <a href=#512 id=512 data-nosnippet>512</a>                ty, fn_ident, fn_ident,
 <a href=#513 id=513 data-nosnippet>513</a>            ),
 <a href=#514 id=514 data-nosnippet>514</a>            PlanError::UnflattenableDataClass(error) =&gt; {
-<a href=#515 id=515 data-nosnippet>515</a>                <span class="macro">format!</span>(<span class="string">"JniGen::on_function `{fn_ident}`: {}"</span>, error.message())
+<a href=#515 id=515 data-nosnippet>515</a>                <span class="macro">format!</span>(<span class="string">"JniGen extern `{fn_ident}`: {}"</span>, error.message())
 <a href=#516 id=516 data-nosnippet>516</a>            }
 <a href=#517 id=517 data-nosnippet>517</a>            PlanError::JvmParameterLimit { slots } =&gt; <span class="macro">format!</span>(
-<a href=#518 id=518 data-nosnippet>518</a>                <span class="string">"JniGen::on_function `{fn_ident}`: flattened JNI signature uses {slots} JVM parameter slots (maximum 255, including the JNINative receiver); reduce the data-class shape or declare an intentional `data_class!(T).jobject_input()` boundary"
+<a href=#518 id=518 data-nosnippet>518</a>                <span class="string">"JniGen extern `{fn_ident}`: flattened JNI signature uses {slots} JVM parameter slots (maximum 255, including the JNINative receiver); reduce the data-class shape or declare an intentional `data_class!(T).jobject_input()` boundary"
 <a href=#519 id=519 data-nosnippet>519</a>            </span>),
 <a href=#520 id=520 data-nosnippet>520</a>        }
 <a href=#521 id=521 data-nosnippet>521</a>    }
@@ -575,7 +575,7 @@
 <a href=#575 id=575 data-nosnippet>575</a>    }
 <a href=#576 id=576 data-nosnippet>576</a>
 <a href=#577 id=577 data-nosnippet>577</a>    <span class="comment">// Declared consts: their synthetic nullary getters run through the same
-<a href=#578 id=578 data-nosnippet>578</a>    // plan machinery (`Declarations::on_const`).
+<a href=#578 id=578 data-nosnippet>578</a>    // plan machinery, and reach the file as constant artifacts.
 <a href=#579 id=579 data-nosnippet>579</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(declared_consts) = ext.declared_consts() {
 <a href=#580 id=580 data-nosnippet>580</a>        <span class="kw">let </span><span class="kw-2">mut </span>consts: Vec&lt;<span class="kw-2">&amp;</span>prebindgen_registry::flat::Constant&gt; =
 <a href=#581 id=581 data-nosnippet>581</a>            registry.flat().constants().collect();
