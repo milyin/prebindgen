@@ -242,154 +242,183 @@
 <a href=#242 id=242 data-nosnippet>242</a>    }
 <a href=#243 id=243 data-nosnippet>243</a>}
 <a href=#244 id=244 data-nosnippet>244</a>
-<a href=#245 id=245 data-nosnippet>245</a><span class="doccomment">/// Check that every call a rendered artifact makes to another artifact's
-<a href=#246 id=246 data-nosnippet>246</a>/// converter is declared as one of its [`RustArtifact::calls`] edges.
-<a href=#247 id=247 data-nosnippet>247</a>///
-<a href=#248 id=248 data-nosnippet>248</a>/// Test support, like [`RustWriter::for_test`](crate::RustWriter::for_test).
-<a href=#249 id=249 data-nosnippet>249</a>/// Emission proves the file complete from the edges alone, which is only worth
-<a href=#250 id=250 data-nosnippet>250</a>/// anything if the edges name every call — and the one place the calls
-<a href=#251 id=251 data-nosnippet>251</a>/// themselves are visible is the rendered output. So the adapters' own test
-<a href=#252 id=252 data-nosnippet>252</a>/// suites run this over the bindings they build: production reasons from the
-<a href=#253 id=253 data-nosnippet>253</a>/// edges, and this checks the edges against what rendering actually emits.
-<a href=#254 id=254 data-nosnippet>254</a>///
-<a href=#255 id=255 data-nosnippet>255</a>/// `namespace` is the adapter's operation namespace, the one it passes to
-<a href=#256 id=256 data-nosnippet>256</a>/// [`RustWriter::operation_ident`](crate::RustWriter::operation_ident).
-<a href=#257 id=257 data-nosnippet>257</a>///
-<a href=#258 id=258 data-nosnippet>258</a>/// # Panics
-<a href=#259 id=259 data-nosnippet>259</a>///
-<a href=#260 id=260 data-nosnippet>260</a>/// Naming the caller, the callee and the undeclared call, if a rendered body
-<a href=#261 id=261 data-nosnippet>261</a>/// calls a converter its artifact did not declare.
-<a href=#262 id=262 data-nosnippet>262</a></span><span class="attr">#[cfg(any(test, feature = <span class="string">"testing"</span>))]
-<a href=#263 id=263 data-nosnippet>263</a></span><span class="kw">pub fn </span>assert_edges_cover_rendered_calls&lt;A: RustArtifact&gt;(
-<a href=#264 id=264 data-nosnippet>264</a>    assembly: <span class="kw-2">&amp;</span>Assembly&lt;A&gt;,
-<a href=#265 id=265 data-nosnippet>265</a>    emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
-<a href=#266 id=266 data-nosnippet>266</a>    namespace: <span class="kw-2">&amp;</span>str,
-<a href=#267 id=267 data-nosnippet>267</a>) {
-<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">let </span>ident_of = |key: <span class="kw-2">&amp;</span>ArtifactKey| <span class="kw">match </span>key {
-<a href=#269 id=269 data-nosnippet>269</a>        ArtifactKey::Operation(operation) =&gt; {
-<a href=#270 id=270 data-nosnippet>270</a>            <span class="prelude-val">Some</span>(emit.operation_ident(namespace, operation).to_string())
-<a href=#271 id=271 data-nosnippet>271</a>        }
-<a href=#272 id=272 data-nosnippet>272</a>        <span class="comment">// An exported symbol is called by the destination language, never by
-<a href=#273 id=273 data-nosnippet>273</a>        // another artifact's body.
-<a href=#274 id=274 data-nosnippet>274</a>        </span>ArtifactKey::Artifact(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-<a href=#275 id=275 data-nosnippet>275</a>    };
-<a href=#276 id=276 data-nosnippet>276</a>    <span class="kw">let </span><span class="kw-2">mut </span>converters: HashMap&lt;String, ArtifactKey&gt; = HashMap::new();
-<a href=#277 id=277 data-nosnippet>277</a>    <span class="kw">for </span>artifact <span class="kw">in </span>assembly.artifacts() {
-<a href=#278 id=278 data-nosnippet>278</a>        <span class="kw">for </span>key <span class="kw">in </span>artifact.provides() {
-<a href=#279 id=279 data-nosnippet>279</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(ident) = ident_of(<span class="kw-2">&amp;</span>key) {
-<a href=#280 id=280 data-nosnippet>280</a>                converters.insert(ident, key);
-<a href=#281 id=281 data-nosnippet>281</a>            }
-<a href=#282 id=282 data-nosnippet>282</a>        }
-<a href=#283 id=283 data-nosnippet>283</a>    }
-<a href=#284 id=284 data-nosnippet>284</a>
-<a href=#285 id=285 data-nosnippet>285</a>    <span class="kw">for </span>artifact <span class="kw">in </span>assembly.artifacts().filter(|artifact| artifact.reachable()) {
-<a href=#286 id=286 data-nosnippet>286</a>        <span class="kw">let </span><span class="kw-2">mut </span>allowed: BTreeSet&lt;String&gt; = artifact
-<a href=#287 id=287 data-nosnippet>287</a>            .provides()
-<a href=#288 id=288 data-nosnippet>288</a>            .iter()
-<a href=#289 id=289 data-nosnippet>289</a>            .chain(artifact.calls().iter())
-<a href=#290 id=290 data-nosnippet>290</a>            .filter_map(ident_of)
-<a href=#291 id=291 data-nosnippet>291</a>            .collect();
-<a href=#292 id=292 data-nosnippet>292</a>        <span class="comment">// A recursive shape's converter calls itself.
-<a href=#293 id=293 data-nosnippet>293</a>        </span>allowed.extend(ident_of(<span class="kw-2">&amp;</span>artifact.key()));
-<a href=#294 id=294 data-nosnippet>294</a>        <span class="kw">let </span><span class="kw-2">mut </span>called = CalledIdents(BTreeSet::new());
-<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">for </span><span class="kw-2">mut </span>item <span class="kw">in </span>artifact.render(emit) {
-<a href=#296 id=296 data-nosnippet>296</a>            syn::visit_mut::VisitMut::visit_item_mut(<span class="kw-2">&amp;mut </span>called, <span class="kw-2">&amp;mut </span>item);
-<a href=#297 id=297 data-nosnippet>297</a>        }
-<a href=#298 id=298 data-nosnippet>298</a>        <span class="kw">for </span>ident <span class="kw">in </span>called.<span class="number">0 </span>{
-<a href=#299 id=299 data-nosnippet>299</a>            <span class="kw">if </span>allowed.contains(<span class="kw-2">&amp;</span>ident) {
-<a href=#300 id=300 data-nosnippet>300</a>                <span class="kw">continue</span>;
-<a href=#301 id=301 data-nosnippet>301</a>            }
-<a href=#302 id=302 data-nosnippet>302</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(callee) = converters.get(<span class="kw-2">&amp;</span>ident) {
-<a href=#303 id=303 data-nosnippet>303</a>                <span class="macro">panic!</span>(
-<a href=#304 id=304 data-nosnippet>304</a>                    <span class="string">"{} calls {callee} as `{ident}`, which it does not declare as a dependency"</span>,
-<a href=#305 id=305 data-nosnippet>305</a>                    artifact.key()
-<a href=#306 id=306 data-nosnippet>306</a>                );
-<a href=#307 id=307 data-nosnippet>307</a>            }
-<a href=#308 id=308 data-nosnippet>308</a>        }
-<a href=#309 id=309 data-nosnippet>309</a>    }
-<a href=#310 id=310 data-nosnippet>310</a>}
-<a href=#311 id=311 data-nosnippet>311</a>
-<a href=#312 id=312 data-nosnippet>312</a><span class="doccomment">/// Every function name called in the visited items.
-<a href=#313 id=313 data-nosnippet>313</a></span><span class="attr">#[cfg(any(test, feature = <span class="string">"testing"</span>))]
-<a href=#314 id=314 data-nosnippet>314</a></span><span class="kw">struct </span>CalledIdents(BTreeSet&lt;String&gt;);
-<a href=#315 id=315 data-nosnippet>315</a>
-<a href=#316 id=316 data-nosnippet>316</a><span class="attr">#[cfg(any(test, feature = <span class="string">"testing"</span>))]
-<a href=#317 id=317 data-nosnippet>317</a></span><span class="kw">impl </span>syn::visit_mut::VisitMut <span class="kw">for </span>CalledIdents {
-<a href=#318 id=318 data-nosnippet>318</a>    <span class="kw">fn </span>visit_expr_call_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, call: <span class="kw-2">&amp;mut </span>syn::ExprCall) {
-<a href=#319 id=319 data-nosnippet>319</a>        <span class="kw">if let </span>syn::Expr::Path(path) = call.func.as_ref() {
-<a href=#320 id=320 data-nosnippet>320</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(segment) = path.path.segments.last() {
-<a href=#321 id=321 data-nosnippet>321</a>                <span class="self">self</span>.<span class="number">0</span>.insert(segment.ident.to_string());
-<a href=#322 id=322 data-nosnippet>322</a>            }
-<a href=#323 id=323 data-nosnippet>323</a>        }
-<a href=#324 id=324 data-nosnippet>324</a>        syn::visit_mut::visit_expr_call_mut(<span class="self">self</span>, call);
-<a href=#325 id=325 data-nosnippet>325</a>    }
-<a href=#326 id=326 data-nosnippet>326</a>}
-<a href=#327 id=327 data-nosnippet>327</a>
-<a href=#328 id=328 data-nosnippet>328</a><span class="doccomment">/// Emit a resolved registry, assembling the generated Rust file from a frozen
-<a href=#329 id=329 data-nosnippet>329</a>/// [`Assembly`].
-<a href=#330 id=330 data-nosnippet>330</a>///
-<a href=#331 id=331 data-nosnippet>331</a>/// The assembly is what the adapter's compilation produced: one final artifact
-<a href=#332 id=332 data-nosnippet>332</a>/// per item the file will contain, already deduplicated and in registry-owned
-<a href=#333 id=333 data-nosnippet>333</a>/// dependency order. Handing artifacts over instead of a converter table is
-<a href=#334 id=334 data-nosnippet>334</a>/// what frees an adapter to emit a conversion the table could not hold —
-<a href=#335 id=335 data-nosnippet>335</a>/// several functions for one crossing, or one occupying more than a single
-<a href=#336 id=336 data-nosnippet>336</a>/// wire value.
-<a href=#337 id=337 data-nosnippet>337</a>///
-<a href=#338 id=338 data-nosnippet>338</a>/// `out_path` may be relative (resolved against `OUT_DIR` by prebindgen) or
-<a href=#339 id=339 data-nosnippet>339</a>/// absolute. Returns the path actually written.
-<a href=#340 id=340 data-nosnippet>340</a></span><span class="kw">pub fn </span>write_rust&lt;P: AsRef&lt;Path&gt;, E: Prebindgen, A: RustArtifact&gt;(
-<a href=#341 id=341 data-nosnippet>341</a>    registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#342 id=342 data-nosnippet>342</a>    ext: <span class="kw-2">&amp;</span>E,
-<a href=#343 id=343 data-nosnippet>343</a>    assembly: <span class="kw-2">&amp;</span>Assembly&lt;A&gt;,
-<a href=#344 id=344 data-nosnippet>344</a>    out_path: P,
-<a href=#345 id=345 data-nosnippet>345</a>) -&gt; <span class="prelude-ty">Result</span>&lt;PathBuf, WriteError&gt; {
-<a href=#346 id=346 data-nosnippet>346</a>    <span class="comment">// Validation already ran ONCE in the generator's `build` — a built generator
-<a href=#347 id=347 data-nosnippet>347</a>    // (the only source of a resolved registry) is valid by construction, so
-<a href=#348 id=348 data-nosnippet>348</a>    // this writer does no binding resolution. It does validate the assembled
-<a href=#349 id=349 data-nosnippet>349</a>    // private call graph before handing the file to the destination.
-<a href=#350 id=350 data-nosnippet>350</a>    // The capability, minted here and nowhere else in this function's reach.
-<a href=#351 id=351 data-nosnippet>351</a>    // Every artifact below is handed a borrow; nothing else in the pipeline is.
-<a href=#352 id=352 data-nosnippet>352</a>    // See `prebindgen_flat::flat::emit` for what that buys and what it
-<a href=#353 id=353 data-nosnippet>353</a>    // deliberately does not.
-<a href=#354 id=354 data-nosnippet>354</a>    </span><span class="kw">let </span>emit = <span class="kw">crate</span>::RustWriter::new(registry, ext.source_module());
-<a href=#355 id=355 data-nosnippet>355</a>    <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;syn::Item&gt; = Vec::new();
+<a href=#245 id=245 data-nosnippet>245</a><span class="doccomment">/// Check an assembly's edges against what its artifacts render: every call to
+<a href=#246 id=246 data-nosnippet>246</a>/// another artifact's item is declared by [`RustArtifact::calls`], and every
+<a href=#247 id=247 data-nosnippet>247</a>/// identity [`RustArtifact::provides`] claims is one the artifact defines.
+<a href=#248 id=248 data-nosnippet>248</a>///
+<a href=#249 id=249 data-nosnippet>249</a>/// Test support, like [`RustWriter::for_test`](crate::RustWriter::for_test).
+<a href=#250 id=250 data-nosnippet>250</a>/// Emission proves the file complete from the edges alone, which is only worth
+<a href=#251 id=251 data-nosnippet>251</a>/// anything if the edges name every call — and the one place the calls
+<a href=#252 id=252 data-nosnippet>252</a>/// themselves are visible is the rendered output. So the adapters' own test
+<a href=#253 id=253 data-nosnippet>253</a>/// suites run this over the bindings they build: production reasons from the
+<a href=#254 id=254 data-nosnippet>254</a>/// edges, and this checks the edges against what rendering actually emits.
+<a href=#255 id=255 data-nosnippet>255</a>///
+<a href=#256 id=256 data-nosnippet>256</a>/// `namespace` is the adapter's operation namespace, the one it passes to
+<a href=#257 id=257 data-nosnippet>257</a>/// [`RustWriter::operation_ident`](crate::RustWriter::operation_ident).
+<a href=#258 id=258 data-nosnippet>258</a>///
+<a href=#259 id=259 data-nosnippet>259</a>/// # Panics
+<a href=#260 id=260 data-nosnippet>260</a>///
+<a href=#261 id=261 data-nosnippet>261</a>/// Naming the caller, the callee and the undeclared call, if a rendered body
+<a href=#262 id=262 data-nosnippet>262</a>/// calls a converter its artifact did not declare.
+<a href=#263 id=263 data-nosnippet>263</a></span><span class="attr">#[cfg(any(test, feature = <span class="string">"testing"</span>))]
+<a href=#264 id=264 data-nosnippet>264</a></span><span class="kw">pub fn </span>assert_edges_cover_rendered_calls&lt;A: RustArtifact&gt;(
+<a href=#265 id=265 data-nosnippet>265</a>    assembly: <span class="kw-2">&amp;</span>Assembly&lt;A&gt;,
+<a href=#266 id=266 data-nosnippet>266</a>    emit: <span class="kw-2">&amp;</span><span class="kw">crate</span>::RustWriter,
+<a href=#267 id=267 data-nosnippet>267</a>    namespace: <span class="kw-2">&amp;</span>str,
+<a href=#268 id=268 data-nosnippet>268</a>) {
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="comment">// What every artifact actually renders, which is the ground truth both
+<a href=#270 id=270 data-nosnippet>270</a>    // halves are checked against: a call resolves to an artifact by the name
+<a href=#271 id=271 data-nosnippet>271</a>    // that artifact defines, whether the identity is an operation or an
+<a href=#272 id=272 data-nosnippet>272</a>    // adapter-scoped artifact. A runtime helper is called by name like any
+<a href=#273 id=273 data-nosnippet>273</a>    // converter.
+<a href=#274 id=274 data-nosnippet>274</a>    </span><span class="kw">let </span>rendered: Vec&lt;(ArtifactKey, BTreeSet&lt;String&gt;, BTreeSet&lt;String&gt;)&gt; = assembly
+<a href=#275 id=275 data-nosnippet>275</a>        .artifacts()
+<a href=#276 id=276 data-nosnippet>276</a>        .map(|artifact| {
+<a href=#277 id=277 data-nosnippet>277</a>            <span class="kw">let </span><span class="kw-2">mut </span>called = CalledIdents(BTreeSet::new());
+<a href=#278 id=278 data-nosnippet>278</a>            <span class="kw">let </span><span class="kw-2">mut </span>defined = BTreeSet::new();
+<a href=#279 id=279 data-nosnippet>279</a>            <span class="kw">for </span><span class="kw-2">mut </span>item <span class="kw">in </span>artifact.render(emit) {
+<a href=#280 id=280 data-nosnippet>280</a>                <span class="kw">if let </span>syn::Item::Fn(function) = <span class="kw-2">&amp;</span>item {
+<a href=#281 id=281 data-nosnippet>281</a>                    defined.insert(function.sig.ident.to_string());
+<a href=#282 id=282 data-nosnippet>282</a>                }
+<a href=#283 id=283 data-nosnippet>283</a>                syn::visit_mut::VisitMut::visit_item_mut(<span class="kw-2">&amp;mut </span>called, <span class="kw-2">&amp;mut </span>item);
+<a href=#284 id=284 data-nosnippet>284</a>            }
+<a href=#285 id=285 data-nosnippet>285</a>            (artifact.key(), defined, called.<span class="number">0</span>)
+<a href=#286 id=286 data-nosnippet>286</a>        })
+<a href=#287 id=287 data-nosnippet>287</a>        .collect();
+<a href=#288 id=288 data-nosnippet>288</a>    <span class="kw">let </span><span class="kw-2">mut </span>definer: HashMap&lt;<span class="kw-2">&amp;</span>str, <span class="kw-2">&amp;</span>ArtifactKey&gt; = HashMap::new();
+<a href=#289 id=289 data-nosnippet>289</a>    <span class="kw">for </span>(key, defined, <span class="kw">_</span>) <span class="kw">in </span><span class="kw-2">&amp;</span>rendered {
+<a href=#290 id=290 data-nosnippet>290</a>        <span class="kw">for </span>name <span class="kw">in </span>defined {
+<a href=#291 id=291 data-nosnippet>291</a>            definer.insert(name.as_str(), key);
+<a href=#292 id=292 data-nosnippet>292</a>        }
+<a href=#293 id=293 data-nosnippet>293</a>    }
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">let </span><span class="kw-2">mut </span>provider: HashMap&lt;ArtifactKey, usize&gt; = HashMap::new();
+<a href=#295 id=295 data-nosnippet>295</a>    <span class="kw">for </span>(position, artifact) <span class="kw">in </span>assembly.artifacts().enumerate() {
+<a href=#296 id=296 data-nosnippet>296</a>        <span class="kw">for </span>key <span class="kw">in </span>artifact.provides() {
+<a href=#297 id=297 data-nosnippet>297</a>            provider.insert(key, position);
+<a href=#298 id=298 data-nosnippet>298</a>        }
+<a href=#299 id=299 data-nosnippet>299</a>    }
+<a href=#300 id=300 data-nosnippet>300</a>
+<a href=#301 id=301 data-nosnippet>301</a>    <span class="kw">for </span>(artifact, (key, defined, called)) <span class="kw">in </span>assembly.artifacts().zip(<span class="kw-2">&amp;</span>rendered) {
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="comment">// Every identity claimed must be one this artifact actually defines,
+<a href=#303 id=303 data-nosnippet>303</a>        // or claiming it would grant reachability to an item no one renders.
+<a href=#304 id=304 data-nosnippet>304</a>        </span><span class="kw">for </span>claimed <span class="kw">in </span>artifact.provides() {
+<a href=#305 id=305 data-nosnippet>305</a>            <span class="kw">if let </span>ArtifactKey::Operation(operation) = <span class="kw-2">&amp;</span>claimed {
+<a href=#306 id=306 data-nosnippet>306</a>                <span class="kw">let </span>ident = emit.operation_ident(namespace, operation).to_string();
+<a href=#307 id=307 data-nosnippet>307</a>                <span class="macro">assert!</span>(
+<a href=#308 id=308 data-nosnippet>308</a>                    defined.contains(<span class="kw-2">&amp;</span>ident),
+<a href=#309 id=309 data-nosnippet>309</a>                    <span class="string">"{key} claims to provide {claimed}, but renders no `{ident}`"
+<a href=#310 id=310 data-nosnippet>310</a>                </span>);
+<a href=#311 id=311 data-nosnippet>311</a>            }
+<a href=#312 id=312 data-nosnippet>312</a>        }
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="kw">if </span>!artifact.reachable() {
+<a href=#314 id=314 data-nosnippet>314</a>            <span class="kw">continue</span>;
+<a href=#315 id=315 data-nosnippet>315</a>        }
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="kw">let </span><span class="kw-2">mut </span>allowed: BTreeSet&lt;<span class="kw-2">&amp;</span>str&gt; = defined.iter().map(String::as_str).collect();
+<a href=#317 id=317 data-nosnippet>317</a>        <span class="kw">for </span>callee <span class="kw">in </span>artifact.calls() {
+<a href=#318 id=318 data-nosnippet>318</a>            <span class="comment">// Resolved the way emission resolves it: through whichever
+<a href=#319 id=319 data-nosnippet>319</a>            // artifact answers for that identity, which is not always the one
+<a href=#320 id=320 data-nosnippet>320</a>            // whose own key it is.
+<a href=#321 id=321 data-nosnippet>321</a>            </span>allowed.extend(
+<a href=#322 id=322 data-nosnippet>322</a>                provider
+<a href=#323 id=323 data-nosnippet>323</a>                    .get(<span class="kw-2">&amp;</span>callee)
+<a href=#324 id=324 data-nosnippet>324</a>                    .into_iter()
+<a href=#325 id=325 data-nosnippet>325</a>                    .flat_map(|position| rendered[<span class="kw-2">*</span>position].<span class="number">1</span>.iter().map(String::as_str)),
+<a href=#326 id=326 data-nosnippet>326</a>            );
+<a href=#327 id=327 data-nosnippet>327</a>        }
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw">for </span>name <span class="kw">in </span>called {
+<a href=#329 id=329 data-nosnippet>329</a>            <span class="kw">if </span>allowed.contains(name.as_str()) {
+<a href=#330 id=330 data-nosnippet>330</a>                <span class="kw">continue</span>;
+<a href=#331 id=331 data-nosnippet>331</a>            }
+<a href=#332 id=332 data-nosnippet>332</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(callee) = definer.get(name.as_str()) {
+<a href=#333 id=333 data-nosnippet>333</a>                <span class="macro">panic!</span>(
+<a href=#334 id=334 data-nosnippet>334</a>                    <span class="string">"{key} calls {callee} as `{name}`, which it does not declare as a dependency"
+<a href=#335 id=335 data-nosnippet>335</a>                </span>);
+<a href=#336 id=336 data-nosnippet>336</a>            }
+<a href=#337 id=337 data-nosnippet>337</a>        }
+<a href=#338 id=338 data-nosnippet>338</a>    }
+<a href=#339 id=339 data-nosnippet>339</a>}
+<a href=#340 id=340 data-nosnippet>340</a>
+<a href=#341 id=341 data-nosnippet>341</a><span class="doccomment">/// Every function name called in the visited items.
+<a href=#342 id=342 data-nosnippet>342</a></span><span class="attr">#[cfg(any(test, feature = <span class="string">"testing"</span>))]
+<a href=#343 id=343 data-nosnippet>343</a></span><span class="kw">struct </span>CalledIdents(BTreeSet&lt;String&gt;);
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a><span class="attr">#[cfg(any(test, feature = <span class="string">"testing"</span>))]
+<a href=#346 id=346 data-nosnippet>346</a></span><span class="kw">impl </span>syn::visit_mut::VisitMut <span class="kw">for </span>CalledIdents {
+<a href=#347 id=347 data-nosnippet>347</a>    <span class="kw">fn </span>visit_expr_call_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, call: <span class="kw-2">&amp;mut </span>syn::ExprCall) {
+<a href=#348 id=348 data-nosnippet>348</a>        <span class="kw">if let </span>syn::Expr::Path(path) = call.func.as_ref() {
+<a href=#349 id=349 data-nosnippet>349</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(segment) = path.path.segments.last() {
+<a href=#350 id=350 data-nosnippet>350</a>                <span class="self">self</span>.<span class="number">0</span>.insert(segment.ident.to_string());
+<a href=#351 id=351 data-nosnippet>351</a>            }
+<a href=#352 id=352 data-nosnippet>352</a>        }
+<a href=#353 id=353 data-nosnippet>353</a>        syn::visit_mut::visit_expr_call_mut(<span class="self">self</span>, call);
+<a href=#354 id=354 data-nosnippet>354</a>    }
+<a href=#355 id=355 data-nosnippet>355</a>}
 <a href=#356 id=356 data-nosnippet>356</a>
-<a href=#357 id=357 data-nosnippet>357</a>    <span class="comment">// Dependency completeness, proven from the artifacts' own edges before
-<a href=#358 id=358 data-nosnippet>358</a>    // anything is rendered: whatever a reachable artifact calls must itself
-<a href=#359 id=359 data-nosnippet>359</a>    // reach the file.
-<a href=#360 id=360 data-nosnippet>360</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>unreached: BTreeSet&lt;(String, String)&gt; = BTreeSet::new();
-<a href=#361 id=361 data-nosnippet>361</a>    <span class="kw">for </span>artifact <span class="kw">in </span>assembly.artifacts().filter(|artifact| artifact.reachable()) {
-<a href=#362 id=362 data-nosnippet>362</a>        <span class="kw">for </span>callee <span class="kw">in </span>artifact.calls() {
-<a href=#363 id=363 data-nosnippet>363</a>            <span class="kw">if </span>!assembly.reaches(<span class="kw-2">&amp;</span>callee) {
-<a href=#364 id=364 data-nosnippet>364</a>                unreached.insert((artifact.key().to_string(), callee.to_string()));
-<a href=#365 id=365 data-nosnippet>365</a>            }
-<a href=#366 id=366 data-nosnippet>366</a>        }
-<a href=#367 id=367 data-nosnippet>367</a>    }
-<a href=#368 id=368 data-nosnippet>368</a>    <span class="kw">if </span>!unreached.is_empty() {
-<a href=#369 id=369 data-nosnippet>369</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(WriteError::UnreachedDependency {
-<a href=#370 id=370 data-nosnippet>370</a>            edges: unreached.into_iter().collect(),
-<a href=#371 id=371 data-nosnippet>371</a>        });
-<a href=#372 id=372 data-nosnippet>372</a>    }
-<a href=#373 id=373 data-nosnippet>373</a>
-<a href=#374 id=374 data-nosnippet>374</a>    <span class="comment">// Only what reaches the file renders. An unreachable artifact used to be
-<a href=#375 id=375 data-nosnippet>375</a>    // rendered anyway, for its function names alone, so that a caller of one
-<a href=#376 id=376 data-nosnippet>376</a>    // could be named; the edges above answer that question without it.
-<a href=#377 id=377 data-nosnippet>377</a>    </span><span class="kw">for </span>artifact <span class="kw">in </span>assembly.artifacts().filter(|artifact| artifact.reachable()) {
-<a href=#378 id=378 data-nosnippet>378</a>        items.extend(artifact.render(<span class="kw-2">&amp;</span>emit));
-<a href=#379 id=379 data-nosnippet>379</a>    }
-<a href=#380 id=380 data-nosnippet>380</a>
-<a href=#381 id=381 data-nosnippet>381</a>    <span class="comment">// 2. Anonymous consts, verbatim. Last, and in stream order. These are
-<a href=#382 id=382 data-nosnippet>382</a>    //    prebindgen's own injected feature checks, identical for every
-<a href=#383 id=383 data-nosnippet>383</a>    //    adapter and named by none, so they are written here rather than
-<a href=#384 id=384 data-nosnippet>384</a>    //    planned as an artifact of one adapter's assembly.
-<a href=#385 id=385 data-nosnippet>385</a>    </span><span class="kw">for </span>guard <span class="kw">in </span>registry.flat().guards() {
-<a href=#386 id=386 data-nosnippet>386</a>        items.push(syn::Item::Const(emit.guard(guard)));
-<a href=#387 id=387 data-nosnippet>387</a>    }
-<a href=#388 id=388 data-nosnippet>388</a>
-<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">let </span>dest: Destination = items.into_iter().collect();
-<a href=#390 id=390 data-nosnippet>390</a>    <span class="prelude-val">Ok</span>(dest.write(out_path))
-<a href=#391 id=391 data-nosnippet>391</a>}
-<a href=#392 id=392 data-nosnippet>392</a>
-<a href=#393 id=393 data-nosnippet>393</a><span class="attr">#[cfg(test)]
-<a href=#394 id=394 data-nosnippet>394</a></span><span class="kw">mod </span>tests;
+<a href=#357 id=357 data-nosnippet>357</a><span class="doccomment">/// Emit a resolved registry, assembling the generated Rust file from a frozen
+<a href=#358 id=358 data-nosnippet>358</a>/// [`Assembly`].
+<a href=#359 id=359 data-nosnippet>359</a>///
+<a href=#360 id=360 data-nosnippet>360</a>/// The assembly is what the adapter's compilation produced: one final artifact
+<a href=#361 id=361 data-nosnippet>361</a>/// per item the file will contain, already deduplicated and in registry-owned
+<a href=#362 id=362 data-nosnippet>362</a>/// dependency order. Handing artifacts over instead of a converter table is
+<a href=#363 id=363 data-nosnippet>363</a>/// what frees an adapter to emit a conversion the table could not hold —
+<a href=#364 id=364 data-nosnippet>364</a>/// several functions for one crossing, or one occupying more than a single
+<a href=#365 id=365 data-nosnippet>365</a>/// wire value.
+<a href=#366 id=366 data-nosnippet>366</a>///
+<a href=#367 id=367 data-nosnippet>367</a>/// `out_path` may be relative (resolved against `OUT_DIR` by prebindgen) or
+<a href=#368 id=368 data-nosnippet>368</a>/// absolute. Returns the path actually written.
+<a href=#369 id=369 data-nosnippet>369</a></span><span class="kw">pub fn </span>write_rust&lt;P: AsRef&lt;Path&gt;, E: Prebindgen, A: RustArtifact&gt;(
+<a href=#370 id=370 data-nosnippet>370</a>    registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#371 id=371 data-nosnippet>371</a>    ext: <span class="kw-2">&amp;</span>E,
+<a href=#372 id=372 data-nosnippet>372</a>    assembly: <span class="kw-2">&amp;</span>Assembly&lt;A&gt;,
+<a href=#373 id=373 data-nosnippet>373</a>    out_path: P,
+<a href=#374 id=374 data-nosnippet>374</a>) -&gt; <span class="prelude-ty">Result</span>&lt;PathBuf, WriteError&gt; {
+<a href=#375 id=375 data-nosnippet>375</a>    <span class="comment">// Validation already ran ONCE in the generator's `build` — a built generator
+<a href=#376 id=376 data-nosnippet>376</a>    // (the only source of a resolved registry) is valid by construction, so
+<a href=#377 id=377 data-nosnippet>377</a>    // this writer does no binding resolution. It does validate the assembled
+<a href=#378 id=378 data-nosnippet>378</a>    // private call graph before handing the file to the destination.
+<a href=#379 id=379 data-nosnippet>379</a>    // The capability, minted here and nowhere else in this function's reach.
+<a href=#380 id=380 data-nosnippet>380</a>    // Every artifact below is handed a borrow; nothing else in the pipeline is.
+<a href=#381 id=381 data-nosnippet>381</a>    // See `prebindgen_flat::flat::emit` for what that buys and what it
+<a href=#382 id=382 data-nosnippet>382</a>    // deliberately does not.
+<a href=#383 id=383 data-nosnippet>383</a>    </span><span class="kw">let </span>emit = <span class="kw">crate</span>::RustWriter::new(registry, ext.source_module());
+<a href=#384 id=384 data-nosnippet>384</a>    <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;syn::Item&gt; = Vec::new();
+<a href=#385 id=385 data-nosnippet>385</a>
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="comment">// Dependency completeness, proven from the artifacts' own edges before
+<a href=#387 id=387 data-nosnippet>387</a>    // anything is rendered: whatever a reachable artifact calls must itself
+<a href=#388 id=388 data-nosnippet>388</a>    // reach the file.
+<a href=#389 id=389 data-nosnippet>389</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>unreached: BTreeSet&lt;(String, String)&gt; = BTreeSet::new();
+<a href=#390 id=390 data-nosnippet>390</a>    <span class="kw">for </span>artifact <span class="kw">in </span>assembly.artifacts().filter(|artifact| artifact.reachable()) {
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">for </span>callee <span class="kw">in </span>artifact.calls() {
+<a href=#392 id=392 data-nosnippet>392</a>            <span class="kw">if </span>!assembly.reaches(<span class="kw-2">&amp;</span>callee) {
+<a href=#393 id=393 data-nosnippet>393</a>                unreached.insert((artifact.key().to_string(), callee.to_string()));
+<a href=#394 id=394 data-nosnippet>394</a>            }
+<a href=#395 id=395 data-nosnippet>395</a>        }
+<a href=#396 id=396 data-nosnippet>396</a>    }
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">if </span>!unreached.is_empty() {
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(WriteError::UnreachedDependency {
+<a href=#399 id=399 data-nosnippet>399</a>            edges: unreached.into_iter().collect(),
+<a href=#400 id=400 data-nosnippet>400</a>        });
+<a href=#401 id=401 data-nosnippet>401</a>    }
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a>    <span class="comment">// Only what reaches the file renders. An unreachable artifact used to be
+<a href=#404 id=404 data-nosnippet>404</a>    // rendered anyway, for its function names alone, so that a caller of one
+<a href=#405 id=405 data-nosnippet>405</a>    // could be named; the edges above answer that question without it.
+<a href=#406 id=406 data-nosnippet>406</a>    </span><span class="kw">for </span>artifact <span class="kw">in </span>assembly.artifacts().filter(|artifact| artifact.reachable()) {
+<a href=#407 id=407 data-nosnippet>407</a>        items.extend(artifact.render(<span class="kw-2">&amp;</span>emit));
+<a href=#408 id=408 data-nosnippet>408</a>    }
+<a href=#409 id=409 data-nosnippet>409</a>
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="comment">// 2. Anonymous consts, verbatim. Last, and in stream order. These are
+<a href=#411 id=411 data-nosnippet>411</a>    //    prebindgen's own injected feature checks, identical for every
+<a href=#412 id=412 data-nosnippet>412</a>    //    adapter and named by none, so they are written here rather than
+<a href=#413 id=413 data-nosnippet>413</a>    //    planned as an artifact of one adapter's assembly.
+<a href=#414 id=414 data-nosnippet>414</a>    </span><span class="kw">for </span>guard <span class="kw">in </span>registry.flat().guards() {
+<a href=#415 id=415 data-nosnippet>415</a>        items.push(syn::Item::Const(emit.guard(guard)));
+<a href=#416 id=416 data-nosnippet>416</a>    }
+<a href=#417 id=417 data-nosnippet>417</a>
+<a href=#418 id=418 data-nosnippet>418</a>    <span class="kw">let </span>dest: Destination = items.into_iter().collect();
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="prelude-val">Ok</span>(dest.write(out_path))
+<a href=#420 id=420 data-nosnippet>420</a>}
+<a href=#421 id=421 data-nosnippet>421</a>
+<a href=#422 id=422 data-nosnippet>422</a><span class="attr">#[cfg(test)]
+<a href=#423 id=423 data-nosnippet>423</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
