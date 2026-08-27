@@ -154,9 +154,22 @@ impl<A: RustArtifact> AssemblyBuilder<A> {
     /// an unreachable one already held under the same identity, which is what
     /// lets an adapter add a dormant artifact before the parent that reaches
     /// it has been planned.
+    ///
+    /// Two *reachable* artifacts sharing one identity are a planning error,
+    /// not a choice to make: keeping either would drop an item the file needs,
+    /// and the reader would meet it as a missing name in the generated crate
+    /// rather than as a diagnostic here. Converters are exempt — one
+    /// registry operation is legitimately reached from several sites, and
+    /// de-duplicating those is what this method is for.
     pub fn artifact(&mut self, artifact: A) -> &mut Self {
         match self.positions.get(&artifact.key()).copied() {
             Some(position) => {
+                if let ArtifactKey::Artifact(id) = artifact.key() {
+                    assert!(
+                        !(self.artifacts[position].reachable() && artifact.reachable()),
+                        "two reachable artifacts share the identity {id}"
+                    );
+                }
                 if !self.artifacts[position].reachable() && artifact.reachable() {
                     self.artifacts[position] = artifact;
                 }
@@ -215,13 +228,6 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, A: RustArtifact>(
     // deliberately does not.
     let emit = crate::RustWriter::new(registry, ext.source_module());
     let mut items: Vec<syn::Item> = Vec::new();
-
-    // 1. Adapter prerequisites — runtime-support items (helper structs,
-    //    type aliases) the converter bodies depend on. Emitted first so
-    //    everything below can reference them. The last thing an adapter
-    //    still produces while the file is written; #581 step 4 plans these
-    //    as artifacts too.
-    items.extend(ext.prerequisites(registry, &emit));
 
     // Every artifact renders, including the ones the adapter surface does not
     // reach: an unreachable artifact still contributes its function names, so

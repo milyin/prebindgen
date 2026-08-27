@@ -200,20 +200,6 @@ impl<M> ConverterImpl<M> {
 /// Reusing a mirror's spelling test in a converted position is how the rule
 /// gets broken (prebindgen#230, #292).
 pub trait Prebindgen {
-    /// Rust items the adapter's emitted converters depend on (helper
-    /// structs, type aliases, runtime-support code). Emitted at the top
-    /// of the destination file, before all auto-generated converters.
-    ///
-    /// Default: none. Wrapper adapters that compose a base adapter should
-    /// forward to or extend the base's `prerequisites()`. The resolved
-    /// `registry` is supplied so prerequisites can be gated on what the
-    /// (feature-aware) scan actually contains — e.g. emitting a
-    /// per-opaque-handle item only for handles a scanned `#[prebindgen]`
-    /// fn references.
-    fn prerequisites(&self, _registry: &Registry, _emit: &crate::RustWriter) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
     // ── Declaration queries ────────────────────────────────────────
 
     /// Adapter-invariant checks that need registry **signatures** — the

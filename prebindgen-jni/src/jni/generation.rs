@@ -33,6 +33,14 @@ pub(crate) struct JniGenerationPlan {
     assembly: prebindgen_registry::write::Assembly<JFinalArtifact>,
 }
 
+/// An adapter-scoped artifact identity.
+fn jni_artifact(kind: &str, name: impl Into<String>) -> prebindgen_registry::write::ArtifactKey {
+    prebindgen_registry::write::ArtifactKey::Artifact(
+        prebindgen_registry::generation::ArtifactId::new(kind, name)
+            .expect("a JNI artifact name is non-empty"),
+    )
+}
+
 /// One final artifact of the generated Rust file.
 pub(crate) enum JFinalArtifact {
     /// A private converter, carrying one value across the boundary.
@@ -42,6 +50,124 @@ pub(crate) enum JFinalArtifact {
     /// One declared constant: an alias to the source item, plus the nullary
     /// extern its Kotlin `val` is initialized from.
     Const(Box<JConst>),
+    /// The error-channel prelude every extern body calls into.
+    Prelude,
+    /// One opaque handle's typed destructor.
+    HandleDestructor(Box<JHandleDestructor>),
+    /// One element type's `…VecNew/Push/Free` trio.
+    VecBuild(Box<JVecBuild>),
+    /// One binding-defined constant expression's nullary getter extern.
+    ConstantExpr(Box<crate::jni::emit::JWrapper>),
+}
+
+/// One opaque handle's typed destructor, and the alignment assertion the
+/// handle encoding rests on.
+///
+/// The source type is retained as a reading and spelled by the writer, since
+/// only the writer knows how to qualify it in the generated file.
+pub(crate) struct JHandleDestructor {
+    /// The handle's source type.
+    reading: prebindgen_registry::flat::TypeRef,
+    /// The exported `freePtr` symbol, which is also this artifact's identity.
+    symbol: String,
+}
+
+impl JHandleDestructor {
+    /// Retain one planned destructor.
+    pub(crate) fn new(reading: prebindgen_registry::flat::TypeRef, symbol: String) -> Self {
+        Self { reading, symbol }
+    }
+
+    /// The exported symbol, which orders the destructors in the file.
+    pub(crate) fn symbol(&self) -> &str {
+        &self.symbol
+    }
+
+    fn render(&self, emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
+        let ty = emit.emit_source_type(&self.reading);
+        let ident = syn::Ident::new(&self.symbol, Span::call_site());
+        vec![
+            syn::parse_quote!(
+                #[no_mangle]
+                #[allow(non_snake_case, unused_variables)]
+                pub(crate) unsafe extern "C" fn #ident(
+                    _env: jni::JNIEnv,
+                    _class: jni::objects::JClass,
+                    ptr: jni::sys::jlong,
+                ) {
+                    if ptr != 0 && (ptr & 1) == 0 {
+                        drop(Box::from_raw(ptr as *mut #ty));
+                    }
+                }
+            ),
+            // Bit 0 of the jlong is the Kotlin-side closed tag, so every handle
+            // type must leave it free: `Box` pointers to `T` are
+            // `align_of::<T>()` aligned, hence the compile-time floor of 2.
+            // Written after the destructor, where the symbol sort that
+            // preceded this artifact put it; an anonymous const asserts from
+            // wherever it stands.
+            syn::parse_quote!(
+                const _: () = {
+                    if ::core::mem::align_of::<#ty>() < 2 {
+                        panic!(
+                            "opaque handle types must have alignment >= 2 (bit 0 is the closed tag)"
+                        );
+                    }
+                };
+            ),
+        ]
+    }
+}
+
+/// One element type's `…VecNew/Push/Free` trio: the frozen flatten plan the
+/// push leaves come from, and the three exported symbols.
+pub(crate) struct JVecBuild {
+    helpers: Rc<VecBuildHelpers>,
+    new_symbol: String,
+    push_symbol: String,
+    free_symbol: String,
+}
+
+impl JVecBuild {
+    /// Retain one planned trio.
+    pub(crate) fn new(
+        helpers: Rc<VecBuildHelpers>,
+        new_symbol: String,
+        push_symbol: String,
+        free_symbol: String,
+    ) -> Self {
+        Self {
+            helpers,
+            new_symbol,
+            push_symbol,
+            free_symbol,
+        }
+    }
+
+    /// The frozen element flatten plan.
+    pub(crate) fn helpers(&self) -> &VecBuildHelpers {
+        &self.helpers
+    }
+
+    pub(crate) fn new_symbol(&self) -> &str {
+        &self.new_symbol
+    }
+
+    pub(crate) fn push_symbol(&self) -> &str {
+        &self.push_symbol
+    }
+
+    pub(crate) fn free_symbol(&self) -> &str {
+        &self.free_symbol
+    }
+
+    /// The first of the three symbols, which orders the trios in the file.
+    pub(crate) fn sort_key(&self) -> &str {
+        [&self.free_symbol, &self.new_symbol, &self.push_symbol]
+            .into_iter()
+            .min()
+            .expect("three symbols")
+    }
 }
 
 /// One declared `#[prebindgen]` constant, exported to Kotlin as an eagerly
@@ -94,20 +220,20 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
                 prebindgen_registry::generation::ArtifactId::new("jni-wrapper", wrapper.symbol())
                     .expect("an exported symbol is a non-empty artifact name"),
             ),
-            Self::Const(constant) => prebindgen_registry::write::ArtifactKey::Artifact(
-                prebindgen_registry::generation::ArtifactId::new(
-                    "jni-const",
-                    constant.constant.name.to_string(),
-                )
-                .expect("a constant name is a non-empty artifact name"),
-            ),
+            Self::Const(constant) => jni_artifact("jni-const", constant.constant.name.to_string()),
+            Self::Prelude => jni_artifact("jni-runtime", "prelude"),
+            Self::HandleDestructor(destructor) => {
+                jni_artifact("jni-handle-destructor", destructor.symbol())
+            }
+            Self::VecBuild(helpers) => jni_artifact("jni-vec-build", helpers.sort_key()),
+            Self::ConstantExpr(getter) => jni_artifact("jni-constant-expr", getter.symbol()),
         }
     }
 
     fn reachable(&self) -> bool {
         match self {
             Self::Converter(converter) => converter.should_emit(),
-            Self::Wrapper(_) | Self::Const(_) => true,
+            _ => true,
         }
     }
 
@@ -119,6 +245,10 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
                 syn::Item::Const(emit.const_alias(&constant.constant, &constant.source_module)),
                 syn::Item::Fn(constant.getter.render_fn(emit)),
             ],
+            Self::Prelude => crate::jni::trait_impl::render_prelude(),
+            Self::HandleDestructor(destructor) => destructor.render(emit),
+            Self::VecBuild(helpers) => crate::jni::emit::render_vec_build_helpers(helpers, emit),
+            Self::ConstantExpr(getter) => vec![syn::Item::Fn(getter.render_fn(emit))],
         }
     }
 }
@@ -208,8 +338,26 @@ impl JniGenerationPlan {
             .map(|constant| JConst::new(decls, registry, constant))
             .collect();
 
+        // What the extern bodies call by bare name, then the handle
+        // destructors, the Vec-building helpers and the constant-expression
+        // getters — the file opens with these, as it did when they were
+        // prerequisites.
+        let destructors = crate::jni::trait_impl::plan_handle_destructors(decls, registry);
+        let vec_builds = crate::jni::emit::plan_vec_build_helpers(decls);
+        let constant_exprs = crate::jni::trait_impl::plan_constant_expressions(decls, registry);
+
         let conversions = std::mem::take(&mut *decls.compiled.borrow_mut());
         let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
+        assembly.artifact(JFinalArtifact::Prelude);
+        for destructor in destructors {
+            assembly.artifact(JFinalArtifact::HandleDestructor(Box::new(destructor)));
+        }
+        for helpers in vec_builds {
+            assembly.artifact(JFinalArtifact::VecBuild(Box::new(helpers)));
+        }
+        for getter in constant_exprs {
+            assembly.artifact(JFinalArtifact::ConstantExpr(Box::new(getter)));
+        }
         for converter in conversions
             .fragments()
             .into_iter()
