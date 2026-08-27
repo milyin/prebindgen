@@ -31,16 +31,6 @@ impl IdentityExt {
 }
 
 impl Prebindgen for IdentityExt {
-    fn on_function(
-        &self,
-        f: &prebindgen_flat::flat::Function,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &f.name;
-        vec![syn::parse_quote!(fn #ident() {})]
-    }
-
     fn on_struct(
         &self,
         s: &prebindgen_flat::flat::Struct,
@@ -139,35 +129,32 @@ struct LateExt {
 }
 
 impl Prebindgen for LateExt {
-    fn on_function(
+    /// Emits `a_fn` for the declared struct — a per-item emission that runs
+    /// while the file is assembled, and (when `call_converter`) calls the
+    /// late converter plan.
+    fn on_struct(
         &self,
-        f: &prebindgen_flat::flat::Function,
+        s: &prebindgen_flat::flat::Struct,
         _registry: &Registry,
         emit: &crate::RustWriter,
     ) -> Vec<syn::Item> {
         if self.activate {
             self.reachable.set(true);
         }
+        let ident = &s.name;
         if self.call_converter {
-            let ident = &f.name;
             let converter = emit.operation_ident("test", &self.operation);
             vec![syn::Item::Fn(
-                syn::parse_quote!(fn #ident() { #converter(); }),
+                syn::parse_quote!(fn a_fn() { #converter(); }),
             )]
         } else {
-            let ident = &f.name;
-            vec![syn::parse_quote!(fn #ident() {})]
+            vec![
+                syn::parse_quote!(pub struct #ident;),
+                syn::parse_quote!(
+                    fn a_fn() {}
+                ),
+            ]
         }
-    }
-
-    fn on_struct(
-        &self,
-        s: &prebindgen_flat::flat::Struct,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &s.name;
-        vec![syn::parse_quote!(pub struct #ident;)]
     }
 
     fn on_variant(
@@ -202,16 +189,19 @@ impl Prebindgen for LateExt {
 
 #[test]
 fn per_item_planning_precedes_late_converter_filtering() {
-    let item: syn::ItemFn = syn::parse_quote!(
-        fn a_fn() {}
+    let item: syn::ItemStruct = syn::parse_quote!(
+        pub struct AStruct;
     );
-    let ident: syn::Ident = syn::parse_quote!(a_fn);
-    let registry =
-        crate::test_util::reg_from_items(vec![(syn::Item::Fn(item), SourceLocation::default())])
-            .expect("index")
-            .export(&ident)
-            .scanned()
-            .expect("scan");
+    let registry = crate::test_util::reg_from_items(vec![(
+        syn::Item::Struct(item),
+        SourceLocation::default(),
+    )])
+    .expect("index")
+    .export_type(crate::test_util::declared_origin(syn::parse_quote!(
+        AStruct
+    )))
+    .scanned()
+    .expect("scan");
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
@@ -243,16 +233,19 @@ fn per_item_planning_precedes_late_converter_filtering() {
 
 #[test]
 fn a_call_to_a_filtered_converter_is_a_writer_error() {
-    let item: syn::ItemFn = syn::parse_quote!(
-        fn a_fn() {}
+    let item: syn::ItemStruct = syn::parse_quote!(
+        pub struct AStruct;
     );
-    let ident: syn::Ident = syn::parse_quote!(a_fn);
-    let registry =
-        crate::test_util::reg_from_items(vec![(syn::Item::Fn(item), SourceLocation::default())])
-            .expect("index")
-            .export(&ident)
-            .scanned()
-            .expect("scan");
+    let registry = crate::test_util::reg_from_items(vec![(
+        syn::Item::Struct(item),
+        SourceLocation::default(),
+    )])
+    .expect("index")
+    .export_type(crate::test_util::declared_origin(syn::parse_quote!(
+        AStruct
+    )))
+    .scanned()
+    .expect("scan");
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
@@ -427,7 +420,10 @@ fn write_rust_sorts_declared_items_by_ident() {
     assert!(
         content.find("pub struct AStruct").unwrap() < content.find("pub struct BStruct").unwrap()
     );
-    assert!(content.find("fn a_fn").unwrap() < content.find("fn b_fn").unwrap());
+    // Functions are not part of the writer's item walk any more: an exported
+    // wrapper is an artifact of the adapter's assembly, and this assembly is
+    // empty.
+    assert!(!content.contains("fn a_fn"), "{content}");
 }
 
 #[test]
@@ -437,7 +433,7 @@ fn per_item_emission_carries_typed_items_without_reparsing() {
         .split_once("// ── Item methods")
         .expect("item methods")
         .1;
-    assert_eq!(item_methods.matches("-> Vec<syn::Item>").count(), 5);
+    assert_eq!(item_methods.matches("-> Vec<syn::Item>").count(), 4);
 
     let writer = include_str!("../write.rs");
     for removed in ["parse_items_from_tokens", "BadTokens", "syn::parse2"] {
@@ -473,14 +469,6 @@ fn guards_emit_ungated_and_in_stream_order() {
     }
 
     impl Prebindgen for ConstGatingExt {
-        fn on_function(
-            &self,
-            _f: &prebindgen_flat::flat::Function,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
         fn on_struct(
             &self,
             _s: &prebindgen_flat::flat::Struct,

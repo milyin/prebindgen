@@ -1252,17 +1252,6 @@ impl Prebindgen for CbindgenBuilder {
 
     // ── Item emission ──────────────────────────────────────────────────
 
-    fn on_function(
-        &self,
-        _f: &prebindgen_registry::flat::Function,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        // Wrappers are frozen artifacts of the assembly, planned when the
-        // generation plan is. The method goes when JniGen's wrappers follow.
-        Vec::new()
-    }
-
     fn on_struct(
         &self,
         _s: &prebindgen_registry::flat::Struct,

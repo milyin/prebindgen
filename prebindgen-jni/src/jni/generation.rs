@@ -28,9 +28,43 @@ pub(crate) struct JniGenerationPlan {
     sums: HashMap<TypeKey, Rc<crate::jni::kotlin_emit::SealedClassPlan>>,
     vec_builds: HashMap<TypeKey, Rc<VecBuildHelpers>>,
     /// Every final artifact of the generated Rust file, frozen in the order it
-    /// is written. Derived from [`Self::conversions`] once the last fragment is
-    /// compiled, and the only thing `write_rust` reads converters from.
-    assembly: prebindgen_registry::write::Assembly<crate::jni::chain::JFunction>,
+    /// is written. Built once the last fragment is compiled, and the only
+    /// thing `write_rust` reads the file's converters and externs from.
+    assembly: prebindgen_registry::write::Assembly<JFinalArtifact>,
+}
+
+/// One final artifact of the generated Rust file.
+pub(crate) enum JFinalArtifact {
+    /// A private converter, carrying one value across the boundary.
+    Converter(Box<crate::jni::chain::JFunction>),
+    /// The exported JNI extern for one declared `#[prebindgen]` function.
+    Wrapper(Box<crate::jni::emit::JWrapper>),
+}
+
+impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
+    fn key(&self) -> prebindgen_registry::write::ArtifactKey {
+        match self {
+            Self::Converter(converter) => converter.key(),
+            Self::Wrapper(wrapper) => prebindgen_registry::write::ArtifactKey::Artifact(
+                prebindgen_registry::generation::ArtifactId::new("jni-wrapper", wrapper.symbol())
+                    .expect("an exported symbol is a non-empty artifact name"),
+            ),
+        }
+    }
+
+    fn reachable(&self) -> bool {
+        match self {
+            Self::Converter(converter) => converter.should_emit(),
+            Self::Wrapper(_) => true,
+        }
+    }
+
+    fn render(&self, emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
+        match self {
+            Self::Converter(converter) => vec![syn::Item::Fn(converter.render_fn(emit))],
+            Self::Wrapper(wrapper) => vec![syn::Item::Fn(wrapper.render_fn(emit))],
+        }
+    }
 }
 
 impl JniGenerationPlan {
@@ -86,13 +120,37 @@ impl JniGenerationPlan {
             let _ = decls.sealed_class_plan(registry, item);
         }
 
+        // Externs are planned before the mutable planning store is drained,
+        // since planning one reads the function plan it exports. They are
+        // named in source order, so the file's layout does not depend on how
+        // the declarations were written.
+        let declared = decls.declared_functions();
+        let mut exported: Vec<_> = registry
+            .flat()
+            .functions()
+            .filter(|function| declared.contains(&function.name))
+            .cloned()
+            .collect();
+        exported.sort_by_key(|function| function.name.to_string());
+        let wrappers: Vec<_> = exported
+            .iter()
+            .map(|function| crate::jni::emit::JWrapper::new(decls, registry, function, None))
+            .collect();
+
         let conversions = std::mem::take(&mut *decls.compiled.borrow_mut());
-        let assembly = conversions
+        let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
+        for converter in conversions
             .fragments()
             .into_iter()
             .filter(|fragment| !fragment.composed_only)
             .flat_map(crate::jni::compile::JFrag::converter_artifacts)
-            .collect();
+        {
+            assembly.artifact(JFinalArtifact::Converter(Box::new(converter)));
+        }
+        for wrapper in wrappers {
+            assembly.artifact(JFinalArtifact::Wrapper(Box::new(wrapper)));
+        }
+        let assembly = assembly.build();
         Self {
             conversions,
             assembly,
@@ -128,9 +186,7 @@ impl JniGenerationPlan {
     }
 
     /// The frozen assembly the generated Rust file is written from.
-    pub(crate) fn assembly(
-        &self,
-    ) -> &prebindgen_registry::write::Assembly<crate::jni::chain::JFunction> {
+    pub(crate) fn assembly(&self) -> &prebindgen_registry::write::Assembly<JFinalArtifact> {
         &self.assembly
     }
 

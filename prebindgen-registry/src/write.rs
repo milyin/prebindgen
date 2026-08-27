@@ -227,17 +227,12 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, A: RustArtifact>(
     // 2. Per-item Rust output from the adapter — only for items the adapter
     //    explicitly declared. Undeclared items were already announced
     //    via `cargo:warning=` by the generator's own unclaimed-item report.
+    //    Functions are not here: an exported wrapper is an artifact of the
+    //    assembly above, planned when the adapter's generation plan was.
     let declared = registry.declared();
-    let declared_fns = &declared.functions;
     let declared_types = &declared.types;
     let flat = registry.flat();
     let mut body_items: Vec<syn::Item> = Vec::new();
-    body_items.extend(
-        sorted_by_name(flat.functions().map(|f| (&f.name, f)))
-            .into_iter()
-            .filter(|(ident, _)| declared_fns.contains(*ident))
-            .flat_map(|(_, item)| ext.on_function(item, registry, &emit)),
-    );
     body_items.extend(
         sorted_by_name(flat.types().filter_map(|t| match t {
             prebindgen_flat::flat::Type::Struct(s) => Some((&s.name, s)),

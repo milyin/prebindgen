@@ -32,8 +32,6 @@ use super::*;
 /// [`UnfoldShape::Base`]: prebindgen_registry::unfold::UnfoldShape::Base
 /// [`UnfoldShape::Optional`]: prebindgen_registry::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
-    ext: &Declarations,
-    registry: &Registry,
     plan: &prebindgen_registry::unfold::UnfoldPlan,
     output: &crate::jni::fn_plan::UnfoldOutputPlan,
     call_expr: &TokenStream,
@@ -41,7 +39,7 @@ pub(crate) fn emit_unfold_delivery(
     emit: &prebindgen_registry::RustWriter,
 ) -> TokenStream {
     use prebindgen_registry::unfold::UnfoldShape;
-    let context = LiveDeliveryContext::new(ext, registry);
+    let context = &output.delivery;
 
     let n = plan.leaves.len();
 
@@ -66,7 +64,7 @@ pub(crate) fn emit_unfold_delivery(
     let encode_leaves = |value: &TokenStream, optional: bool| {
         let mut delivered = Delivered::planned(plan, output.wires.clone(), output.chain.clone());
         delivered.optional = optional;
-        encode_plan_leaves(&context, delivered, &obj_idents, value, &fail, emit)
+        encode_plan_leaves(context, delivered, &obj_idents, value, &fail, emit)
     };
 
     // Cached-interface call statics for the builder / folder `run`.
@@ -560,52 +558,6 @@ pub(crate) trait DeliveryContext {
         &self,
         leaf: &crate::jni::compile::OutWire,
     ) -> (syn::Path, &prebindgen_registry::flat::Variant);
-}
-
-pub(crate) struct LiveDeliveryContext<'a, R> {
-    ext: &'a Declarations,
-    registry: &'a R,
-}
-
-impl<'a, R> LiveDeliveryContext<'a, R> {
-    pub(crate) fn new(ext: &'a Declarations, registry: &'a R) -> Self {
-        Self { ext, registry }
-    }
-}
-
-impl<R: Conversions> DeliveryContext for LiveDeliveryContext<'_, R> {
-    fn qualify(&self, ident: &syn::Ident) -> syn::Path {
-        self.ext.fn_module(self.registry, ident)
-    }
-
-    fn leaf_is_prim(&self, leaf: &crate::jni::compile::OutWire) -> bool {
-        leaf_is_prim(self.ext, leaf)
-    }
-
-    fn leaf_wire(&self, leaf: &crate::jni::compile::OutWire) -> syn::Type {
-        leaf_wire(self.ext, leaf)
-    }
-
-    fn sum(
-        &self,
-        leaf: &crate::jni::compile::OutWire,
-    ) -> (syn::Path, &prebindgen_registry::flat::Variant) {
-        let prebindgen_registry::flat::TypeKind::Named { id, .. } = leaf.out_ty.unwrapped().kind()
-        else {
-            panic!("jnigen sum unfold: selector type is not named")
-        };
-        let ident = id
-            .ident()
-            .unwrap_or_else(|| panic!("jnigen sum unfold: selector type is not an identifier"));
-        let module = self.ext.fn_module(self.registry, &ident);
-        let source = syn::parse_quote!(#module::#ident);
-        let Some(prebindgen_registry::flat::Type::Variant(sum)) =
-            self.registry.flat().declared_type(&ident)
-        else {
-            panic!("jnigen sum unfold: no indexed sum `{ident}`")
-        };
-        (source, sum)
-    }
 }
 
 #[derive(Clone)]
@@ -1736,57 +1688,6 @@ pub(crate) fn encode_plan_leaves(
     (stmts, arg_exprs, None)
 }
 
-/// True when a plan leaf crosses the typed `run` as a **raw primitive**
-/// `jvalue`: non-nullable, no projection (not a handle), and a
-/// primitive JNI wire. Must agree with the descriptor chunk
-/// [`crate::jni::iface`] derives for the same leaf — a
-/// nullable primitive boxes (object chunk), object wires pass as objects.
-pub(crate) fn leaf_is_prim(ext: &Declarations, leaf: &crate::jni::compile::OutWire) -> bool {
-    // The synthesized sum selector is a `jint` by definition — it is assigned,
-    // never converted, so it has no output entry to read a wire from and must
-    // not be made to depend on one resolving.
-    //
-    // Unless it is NULLABLE: the sum sits under a conditional value form, and
-    // the absent case needs a representation the tag's own variants do not
-    // provide. A raw `jint` has none — zero is a real variant — so the selector
-    // boxes like any other nullable leaf and JVM null means "no value here".
-    if leaf.is_tag() {
-        return !leaf.nullable;
-    }
-    if leaf.nullable {
-        return false;
-    }
-    if let Some(crate::jni::compile::OutAbi::Value(value)) = &leaf.abi {
-        let proj_ok = match &value.projection {
-            None => true,
-            Some(p) => matches!(p.kind, ProjectionKind::Handle | ProjectionKind::Unsigned64),
-        };
-        return proj_ok && matches!(jni_field_access(value.pipeline.wire()), Some((_, _, false)));
-    }
-    leaf_ty_is_prim(ext, &leaf.out_ty)
-}
-
-/// Final JNI wire for one outgoing leaf. Every Rust delivery site retains this
-/// in its frozen ABI. The `None` branch serves only structural interface
-/// derivation, which describes raw recipe leaves before a concrete site is
-/// frozen and never emits their conversion.
-pub(crate) fn leaf_wire(ext: &Declarations, leaf: &crate::jni::compile::OutWire) -> syn::Type {
-    match &leaf.abi {
-        Some(crate::jni::compile::OutAbi::Tag) => syn::parse_quote!(jni::sys::jint),
-        Some(crate::jni::compile::OutAbi::Value(value)) => value.pipeline.wire().clone(),
-        None => ext
-            .out_frag(&leaf.out_ty)
-            .unwrap_or_else(|| {
-                panic!(
-                    "jnigen output leaf `{}` has no registered output converter",
-                    leaf.out_ty.key()
-                )
-            })
-            .destination
-            .clone(),
-    }
-}
-
 fn frozen_leaf_wire(leaf: &crate::jni::compile::OutWire) -> syn::Type {
     match &leaf.abi {
         Some(crate::jni::compile::OutAbi::Tag) => syn::parse_quote!(jni::sys::jint),
@@ -1795,6 +1696,17 @@ fn frozen_leaf_wire(leaf: &crate::jni::compile::OutWire) -> syn::Type {
     }
 }
 
+/// True when a plan leaf crosses the typed `run` as a **raw primitive**
+/// `jvalue`: non-nullable, no projection (not a handle), and a
+/// primitive JNI wire. Must agree with the descriptor chunk
+/// [`crate::jni::iface`] derives for the same leaf — a
+/// nullable primitive boxes (object chunk), object wires pass as objects.
+///
+/// The synthesized sum selector is a `jint` by definition — it is assigned,
+/// never converted — unless it is NULLABLE: the sum then sits under a
+/// conditional value form, and the absent case needs a representation the
+/// tag's own variants do not provide. A raw `jint` has none (zero is a real
+/// variant), so the selector boxes like any other nullable leaf.
 fn frozen_leaf_is_prim(leaf: &crate::jni::compile::OutWire) -> bool {
     if leaf.is_tag() {
         return !leaf.nullable;

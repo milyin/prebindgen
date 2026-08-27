@@ -60,6 +60,9 @@ pub(crate) struct ErrorOutputPlan {
     pub unfold: prebindgen_registry::unfold::UnfoldPlan,
     pub wires: Vec<crate::jni::compile::OutWire>,
     pub chain: Option<crate::jni::compile::ComposedChain>,
+    /// Origin qualification and sum shape for these leaves, frozen with them,
+    /// so rendering the `Err` arm asks the registry nothing.
+    pub delivery: crate::jni::emit::FrozenDelivery,
 }
 
 impl std::ops::Deref for ErrorOutputPlan {
@@ -316,6 +319,9 @@ pub(crate) struct UnfoldOutputPlan {
     /// builder/folder singletons. `None` for a whole-element fold, which has
     /// no deconstructor declaration.
     pub decon: Option<std::rc::Rc<prebindgen_registry::unfold::DeconSpec>>,
+    /// Origin qualification and sum shape for these leaves, frozen with them,
+    /// so rendering the delivery asks the registry nothing.
+    pub delivery: crate::jni::emit::FrozenDelivery,
     /// Kotlin type variable of the wrapper: `None` for a fixed builder,
     /// `"A"` for an `Iterable` fold (bare or `Optional`-wrapped), `"R"`
     /// otherwise.
@@ -354,6 +360,10 @@ pub(crate) struct ValueOutputPlan {
     /// Primitive sentinels consumed by nested Optional enum layers,
     /// outside-in. Every one collapses to Kotlin `null` on output.
     pub enum_niches: Vec<String>,
+    /// Origin qualification for the accessor calls a `Return`-delivery
+    /// convert reaches its single leaf through, frozen with the plan. `None`
+    /// unless [`Self::is_convert`].
+    pub convert_delivery: Option<crate::jni::emit::FrozenDelivery>,
 }
 
 /// The pure classification core of `classify_return` — no import
@@ -943,10 +953,13 @@ fn build_error_output(
     } else {
         None
     };
+    let delivery =
+        crate::jni::emit::FrozenDelivery::new(ext, registry, &unfold, wires.clone(), chain.clone());
     Ok(ErrorOutputPlan {
         unfold,
         wires,
         chain,
+        delivery,
     })
 }
 
@@ -1052,9 +1065,17 @@ fn build_output(
             };
             (wires, chain, None)
         };
+        let delivery = crate::jni::emit::FrozenDelivery::new(
+            ext,
+            registry,
+            plan,
+            wires.clone(),
+            chain.clone(),
+        );
         return Ok(FnOutputPlan::Unfold(Box::new(UnfoldOutputPlan {
             wires,
             chain,
+            delivery,
             element_pipeline,
             iterable_fold,
             optional,
@@ -1127,6 +1148,23 @@ fn build_output(
         enum_niches,
         ..
     } = plan;
+    // The convert shortcut reaches the plan's single leaf itself rather than
+    // through the leaf encoder, and qualifies the accessor calls on that reach
+    // — so those origins are frozen here, with the leaf they belong to.
+    let convert_delivery = is_convert.then(|| {
+        let unfold = unfold_plan.expect("a convert is a Return delivery, which carries its plan");
+        crate::jni::emit::FrozenDelivery::new(
+            ext,
+            registry,
+            unfold,
+            unfold
+                .leaves
+                .iter()
+                .map(crate::jni::compile::OutWire::from_leaf)
+                .collect(),
+            None,
+        )
+    });
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
         is_convert,
         pipeline,
@@ -1134,6 +1172,7 @@ fn build_output(
         is_enum,
         is_option_enum,
         enum_niches,
+        convert_delivery,
     })))
 }
 
