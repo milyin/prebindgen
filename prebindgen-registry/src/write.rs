@@ -160,13 +160,13 @@ impl<A: RustArtifact> Assembly<A> {
         self.artifacts.iter()
     }
 
-    /// Whether an artifact answering for this identity reaches the file.
-    ///
-    /// Reachability is read here rather than when the assembly was frozen: an
-    /// adapter may reach an artifact after adding it, and the file is what
-    /// settles the answer.
     /// The rendering capability frozen with this assembly.
-    pub fn writer(&self) -> &crate::RustWriter {
+    ///
+    /// Crate-private on purpose. `RustWriter` is minted at file assembly and
+    /// handed to each artifact as it renders; handing it out here would let
+    /// any holder of an assembly spell Rust source types outside that
+    /// boundary — Kotlin emission holds one for the generator's whole life.
+    pub(crate) fn writer(&self) -> &crate::RustWriter {
         &self.emit
     }
 
@@ -175,6 +175,11 @@ impl<A: RustArtifact> Assembly<A> {
         self.guards.iter()
     }
 
+    /// Whether an artifact answering for this identity reaches the file.
+    ///
+    /// Reachability is read here rather than when the assembly was frozen: an
+    /// adapter may reach an artifact after adding it, and the file is what
+    /// settles the answer.
     pub fn reaches(&self, key: &ArtifactKey) -> bool {
         self.provided
             .get(key)
@@ -271,18 +276,20 @@ impl<A: RustArtifact> AssemblyBuilder<A> {
 /// edges, and this checks the edges against what rendering actually emits.
 ///
 /// `namespace` is the adapter's operation namespace, the one it passes to
-/// [`RustWriter::operation_ident`](crate::RustWriter::operation_ident).
+/// [`RustWriter::operation_ident`](crate::RustWriter::operation_ident). The
+/// writer itself comes from the assembly, so the names this computes are the
+/// ones its emission will emit.
 ///
 /// # Panics
 ///
 /// Naming the caller, the callee and the undeclared call, if a rendered body
 /// calls a converter its artifact did not declare.
 #[cfg(any(test, feature = "testing"))]
-pub fn assert_edges_cover_rendered_calls<A: RustArtifact>(
-    assembly: &Assembly<A>,
-    emit: &crate::RustWriter,
-    namespace: &str,
-) {
+pub fn assert_edges_cover_rendered_calls<A: RustArtifact>(assembly: &Assembly<A>, namespace: &str) {
+    // The assembly's own writer, so the names checked here are the names its
+    // emission will emit. A separately supplied one could differ and the check
+    // would still pass, having examined different names.
+    let emit = assembly.writer();
     // What every artifact actually renders, which is the ground truth both
     // halves are checked against: a call resolves to an artifact by the name
     // that artifact defines, whether the identity is an operation or an

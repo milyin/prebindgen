@@ -297,7 +297,7 @@ fn honest_edges_pass_the_evidence_check() {
         }),
     ]);
 
-    assert_edges_cover_rendered_calls(&assembly, &crate::RustWriter::for_test(), "test");
+    assert_edges_cover_rendered_calls(&assembly, "test");
 }
 
 /// Claiming an identity the artifact does not render would satisfy
@@ -318,7 +318,7 @@ fn a_claimed_identity_must_be_rendered() {
         over_claims: true,
     })]);
 
-    assert_edges_cover_rendered_calls(&assembly, &crate::RustWriter::for_test(), "test");
+    assert_edges_cover_rendered_calls(&assembly, "test");
 }
 
 /// Two reachable artifacts under one identity are a planning error. A

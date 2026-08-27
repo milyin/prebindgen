@@ -351,11 +351,7 @@ impl Cbindgen {
         // dependency edges name every call its artifacts render — the
         // completeness the emission-time check reasons from.
         #[cfg(test)]
-        prebindgen_registry::write::assert_edges_cover_rendered_calls(
-            self.gen.assembly(),
-            self.gen.assembly().writer(),
-            "c",
-        );
+        prebindgen_registry::write::assert_edges_cover_rendered_calls(self.gen.assembly(), "c");
         Ok(prebindgen_registry::write::write_rust(
             self.gen.assembly(),
             out_path,
