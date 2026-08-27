@@ -617,18 +617,26 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Annotated_152537b2916e97e3<'env, '
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Annotated.priority: {}", e)))?;
-        let priority = if __priority_jobj.is_null() {
-            ::core::option::Option::None
-        } else {
-            let __priority_raw: jni::sys::jint = env
-                .call_method(&__priority_jobj, "getValue", "()I", &[])
-                .and_then(|val| val.i())
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Annotated.priority: {}", e)))?;
-            ::core::option::Option::Some(
-                __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(env, &__priority_raw)?,
-            )
+        let priority = {
+            let v = __priority_jobj;
+            {
+                if v.is_null() {
+                    ::core::option::Option::None
+                } else {
+                    let __present = env
+                        .call_method(&v, "getValue", "()I", &[])
+                        .and_then(|val| val.i())
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Annotated.priority: {}", e)))?;
+                    ::core::option::Option::Some(
+                        __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
+                            env,
+                            &__present,
+                        )?,
+                    )
+                }
+            }
         };
         perftest_flat::Annotated {
             payload,
@@ -714,19 +722,24 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_DurationBoundary_3fd44c1cbdf7cf69<
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("DurationBoundary.delay: {}", e)))?;
-        let delay = if __delay_jobj.is_null() {
-            ::core::option::Option::None
-        } else {
-            let __delay_raw: jni::sys::jlong = env
-                .call_method(&__delay_jobj, "unbox-impl", "()J", &[])
-                .and_then(|val| val.j())
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("DurationBoundary.delay: {}", e)))?;
-            __jni_in_convert_wire_to_Option_Duration_jni_optional_intermediate_input_niche_104bdfd3431d40b9(
-                env,
-                &__delay_raw,
-            )?
+        let delay = {
+            let v = __delay_jobj;
+            {
+                if v.is_null() {
+                    ::core::option::Option::None
+                } else {
+                    let __present = env
+                        .call_method(&v, "unbox-impl", "()J", &[])
+                        .and_then(|val| val.j())
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("DurationBoundary.delay: {}", e)))?;
+                    __jni_in_convert_wire_to_Option_Duration_jni_optional_intermediate_input_niche_104bdfd3431d40b9(
+                        env,
+                        &__present,
+                    )?
+                }
+            }
         };
         perftest_flat::DurationBoundary {
             required,
@@ -1471,18 +1484,23 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Unsigned_802dffd3a2dd4ecb<'env, 'v
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Unsigned.maybeLong: {}", e)))?;
-        let maybe_long = if __maybe_long_jobj.is_null() {
-            ::core::option::Option::None
-        } else {
-            let __maybe_long_raw: jni::sys::jlong = env
-                .call_method(&__maybe_long_jobj, "unbox-impl", "()J", &[])
-                .and_then(|val| val.j())
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Unsigned.maybeLong: {}", e)))?;
-            ::core::option::Option::Some(
-                __jni_in_convert_wire_to_u64_8507143745dc33b9(env, &__maybe_long_raw)?,
-            )
+        let maybe_long = {
+            let v = __maybe_long_jobj;
+            {
+                if v.is_null() {
+                    ::core::option::Option::None
+                } else {
+                    let __present = env
+                        .call_method(&v, "unbox-impl", "()J", &[])
+                        .and_then(|val| val.j())
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Unsigned.maybeLong: {}", e)))?;
+                    ::core::option::Option::Some(
+                        __jni_in_convert_wire_to_u64_8507143745dc33b9(env, &__present)?,
+                    )
+                }
+            }
         };
         perftest_flat::Unsigned {
             byte,
@@ -4404,21 +4422,26 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Marker_93f2fabe59a4f80d<'env, 'v>(
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Marker.Ranked.v0: {}", e)))?;
-                let __p_v0 = if __p_v0_obj.is_null() {
-                    ::core::option::Option::None
-                } else {
-                    let __p_v0_raw: jni::sys::jint = env
-                        .call_method(&__p_v0_obj, "getValue", "()I", &[])
-                        .and_then(|val| val.i())
-                        .map_err(|e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(format!("Marker.Ranked.v0: {}", e)))?;
-                    ::core::option::Option::Some(
-                        __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
-                            env,
-                            &__p_v0_raw,
-                        )?,
-                    )
+                let __p_v0 = {
+                    let v = __p_v0_obj;
+                    {
+                        if v.is_null() {
+                            ::core::option::Option::None
+                        } else {
+                            let __present = env
+                                .call_method(&v, "getValue", "()I", &[])
+                                .and_then(|val| val.i())
+                                .map_err(|e| <__JniErr as ::core::convert::From<
+                                    String,
+                                >>::from(format!("Marker.Ranked.v0: {}", e)))?;
+                            ::core::option::Option::Some(
+                                __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
+                                    env,
+                                    &__present,
+                                )?,
+                            )
+                        }
+                    }
                 };
                 return ::core::result::Result::Ok(perftest_flat::Marker::Ranked(__p_v0));
             }

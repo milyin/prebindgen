@@ -1180,6 +1180,17 @@ impl JPipeline {
     /// `env` is already the borrowed `JNIEnv` rather than an owned wrapper
     /// parameter. Whole-object property plans use this to retain child chains
     /// without retaining their generated Rust expressions.
+    /// The child converter this pipeline invokes.
+    ///
+    /// A whole-object property is decoded by one child; the transient
+    /// Vec-handle site ABI is a parameter-only shape and never reaches here.
+    pub(crate) fn converter_child(&self) -> &JChild {
+        let JPipelineBody::Converter(child) = &self.body else {
+            unreachable!("a whole-object property cannot use the transient Vec-handle site ABI")
+        };
+        child
+    }
+
     pub(crate) fn invoke_converter(
         &self,
         env: TokenStream,

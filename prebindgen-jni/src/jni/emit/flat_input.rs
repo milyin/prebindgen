@@ -51,8 +51,117 @@ impl JObjectStructFieldKind {
             | Self::Primitive { pipeline, .. }
             | Self::IntoObject { pipeline, .. }
             | Self::Object { pipeline, .. } => pipeline.calls(out),
+            Self::Nullable(plan) => plan.chain.child.calls(out),
         }
     }
+}
+
+/// The null-reference `Optional` layer a nullable whole-object property
+/// crosses as.
+///
+/// A `ULong?` property arrives as a boxed `kotlin.ULong` and a nullable enum
+/// class as its own class: absence is a null reference, and the value is one
+/// unboxing call away. The registry composes the layer; this supplies the two
+/// answers only JniGen can give — how to test absence, and how to unbox.
+#[derive(Clone)]
+struct JNullableProperty {
+    /// JVM method that unboxes the property, its signature, and the `JValue`
+    /// accessor for the result.
+    method: &'static str,
+    signature: &'static str,
+    accessor: syn::Ident,
+    /// Per-property error text.
+    error: String,
+    /// Whether the child already yields the optional, because its own wire
+    /// carries a niche encoding of absence. Then a non-null reference is not
+    /// yet a value: the child still has to read its sentinel.
+    flattens: bool,
+}
+
+impl prebindgen_registry::chain::OptionalBridge for JNullableProperty {
+    fn intermediate(&self) -> syn::Type {
+        syn::parse_quote!(jni::objects::JObject)
+    }
+
+    fn is_absent(&self) -> TokenStream {
+        quote!(v.is_null())
+    }
+
+    fn present(&self, value: TokenStream) -> TokenStream {
+        let (method, signature, accessor, error) =
+            (self.method, self.signature, &self.accessor, &self.error);
+        // The accessor already yields the wire type, so the composer's own
+        // binding needs no annotation of its own.
+        quote!(
+            env.call_method(&#value, #method, #signature, &[])
+                .and_then(|val| val.#accessor())
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                    format!(#error, e)
+                ))?
+        )
+    }
+
+    fn source_present(&self, child: TokenStream) -> TokenStream {
+        if self.flattens {
+            child
+        } else {
+            quote!(::core::option::Option::Some(#child))
+        }
+    }
+
+    fn build_absent(&self) -> TokenStream {
+        unreachable!("a whole-object property is decoded, never encoded")
+    }
+
+    fn build_present(&self, _child: TokenStream) -> TokenStream {
+        unreachable!("a whole-object property is decoded, never encoded")
+    }
+}
+
+/// One nullable property: the reference fetched off the JVM object, and the
+/// registry-composed `Optional` that turns it into the source value.
+#[derive(Clone)]
+struct JNullablePlan {
+    descriptor: String,
+    chain: Box<
+        prebindgen_registry::chain::Optional<
+            crate::jni::chain::JSource,
+            JNullableProperty,
+            crate::jni::chain::JChild,
+        >,
+    >,
+}
+
+/// Compose one nullable property's `Optional` layer over its child converter.
+#[allow(clippy::too_many_arguments)]
+fn nullable_property(
+    reading: &TypeRef,
+    pipeline: crate::jni::chain::JPipeline,
+    descriptor: String,
+    method: &'static str,
+    signature: &'static str,
+    accessor: syn::Ident,
+    error: String,
+    flattens: bool,
+) -> JObjectStructFieldKind {
+    JObjectStructFieldKind::Nullable(Box::new(JNullablePlan {
+        descriptor,
+        chain: Box::new(prebindgen_registry::chain::Optional {
+            source: reading.clone(),
+            direction: prebindgen_registry::recipe::Direction::Construct,
+            source_policy: crate::jni::chain::JSource {
+                wrappers: Vec::new(),
+            },
+            bridge: JNullableProperty {
+                method,
+                signature,
+                accessor,
+                error,
+                flattens,
+            },
+            child: pipeline.converter_child().clone(),
+        }),
+    }))
 }
 
 #[derive(Clone)]
@@ -62,15 +171,16 @@ enum JObjectStructFieldKind {
         pipeline: crate::jni::chain::JPipeline,
     },
     Unsigned64 {
-        optional: bool,
-        wrap_some: bool,
         pipeline: crate::jni::chain::JPipeline,
     },
     Enum {
         descriptor: String,
-        optional: bool,
         pipeline: crate::jni::chain::JPipeline,
     },
+    /// A property whose absence is a null reference: either shape above, when
+    /// the source reads optional. Its `Optional` layer is composed by the
+    /// registry rather than walked here.
+    Nullable(Box<JNullablePlan>),
     Primitive {
         wire: syn::Type,
         descriptor: String,
@@ -148,18 +258,30 @@ fn build_jobject_property_plan(
                 projection.strategy,
                 FoldStrategy::Optional(NullableKind::Niche, _)
             );
-        let pipeline = if optional && !niche {
-            ext.in_frag(inner)?.pipeline(
-                prebindgen_registry::recipe::Direction::Construct,
-                prebindgen_registry::recipe::Mode::Owned,
+        if optional {
+            // A niche-encoded child reads its own absence out of the unboxed
+            // value, so the null reference is only the first of two tests and
+            // the child's answer is the whole answer.
+            let pipeline = if niche {
+                whole
+            } else {
+                ext.in_frag(inner)?.pipeline(
+                    prebindgen_registry::recipe::Direction::Construct,
+                    prebindgen_registry::recipe::Mode::Owned,
+                )
+            };
+            nullable_property(
+                reading,
+                pipeline,
+                "Lkotlin/ULong;".to_string(),
+                "unbox-impl",
+                "()J",
+                format_ident!("j"),
+                error.clone(),
+                niche,
             )
         } else {
-            whole
-        };
-        JObjectStructFieldKind::Unsigned64 {
-            optional,
-            wrap_some: optional && !niche,
-            pipeline,
+            JObjectStructFieldKind::Unsigned64 { pipeline: whole }
         }
     } else if ext.is_kotlin_enum_reading(inner) {
         let fqn = match inner.unwrapped().kind() {
@@ -167,18 +289,27 @@ fn build_jobject_property_plan(
             _ => None,
         }
         .and_then(|ident| ext.kotlin_fqn(&TypeKey::from_ident(&ident)))?;
-        let pipeline = if optional {
-            ext.in_frag(inner)?.pipeline(
+        let descriptor = format!("L{};", fqn.replace('.', "/"));
+        if optional {
+            let pipeline = ext.in_frag(inner)?.pipeline(
                 prebindgen_registry::recipe::Direction::Construct,
                 prebindgen_registry::recipe::Mode::Owned,
+            );
+            nullable_property(
+                reading,
+                pipeline,
+                descriptor,
+                "getValue",
+                "()I",
+                format_ident!("i"),
+                error.clone(),
+                false,
             )
         } else {
-            whole
-        };
-        JObjectStructFieldKind::Enum {
-            descriptor: format!("L{};", fqn.replace('.', "/")),
-            optional,
-            pipeline,
+            JObjectStructFieldKind::Enum {
+                descriptor,
+                pipeline: whole,
+            }
         }
     } else {
         match jni_field_access(&wire) {
@@ -291,73 +422,46 @@ impl JObjectStructFieldPlan {
                     let #name = #decode;
                 }
             }
-            JObjectStructFieldKind::Unsigned64 {
-                optional,
-                wrap_some,
-                pipeline,
-            } => {
+            JObjectStructFieldKind::Unsigned64 { pipeline } => {
                 let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
-                if *optional {
-                    let decoded = if *wrap_some {
-                        quote!(::core::option::Option::Some(#decode))
-                    } else {
-                        quote!(#decode)
-                    };
-                    quote! {
-                        let #object: jni::objects::JObject = env
-                            .get_field(#receiver, #property, "Lkotlin/ULong;")
-                            .and_then(|val| val.l())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                        let #name = if #object.is_null() {
-                            ::core::option::Option::None
-                        } else {
-                            let #raw: jni::sys::jlong = env
-                                .call_method(&#object, "unbox-impl", "()J", &[])
-                                .and_then(|val| val.j())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                            #decoded
-                        };
-                    }
-                } else {
-                    quote! {
-                        let #raw: jni::sys::jlong = env
-                            .get_field(#receiver, #property, "J")
-                            .and_then(|val| val.j())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                        let #name = #decode;
-                    }
+                quote! {
+                    let #raw: jni::sys::jlong = env
+                        .get_field(#receiver, #property, "J")
+                        .and_then(|val| val.j())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                    let #name = #decode;
                 }
             }
             JObjectStructFieldKind::Enum {
                 descriptor,
-                optional,
                 pipeline,
             } => {
                 let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
-                if *optional {
-                    quote! {
-                        let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
-                            .and_then(|val| val.l())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                        let #name = if #object.is_null() {
-                            ::core::option::Option::None
-                        } else {
-                            let #raw: jni::sys::jint = env.call_method(&#object, "getValue", "()I", &[])
-                                .and_then(|val| val.i())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                            ::core::option::Option::Some(#decode)
-                        };
-                    }
-                } else {
-                    quote! {
-                        let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
-                            .and_then(|val| val.l())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                        let #raw: jni::sys::jint = env.call_method(&#object, "getValue", "()I", &[])
-                            .and_then(|val| val.i())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                        let #name = #decode;
-                    }
+                quote! {
+                    let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
+                        .and_then(|val| val.l())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                    let #raw: jni::sys::jint = env.call_method(&#object, "getValue", "()I", &[])
+                        .and_then(|val| val.i())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                    let #name = #decode;
+                }
+            }
+            // A nullable property: the reference is fetched here, and what it
+            // means — absent, or a value one unboxing call away — is decided
+            // by the registry-composed `Optional` layer.
+            JObjectStructFieldKind::Nullable(plan) => {
+                let descriptor = &plan.descriptor;
+                let optional =
+                    prebindgen_registry::chain::Chain::render(plan.chain.as_ref(), emit).body;
+                quote! {
+                    let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
+                        .and_then(|val| val.l())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                    let #name = {
+                        let v = #object;
+                        #optional
+                    };
                 }
             }
             JObjectStructFieldKind::Primitive {
