@@ -3773,6 +3773,9 @@ impl<R: Conversions> JCompile<'_, R> {
             is_enum: enums.is_enum,
             is_option_enum: enums.is_option_enum,
             enum_niches: option_enum_niches(self.decls, declared, Direction::Deconstruct),
+            // Filled by the function plan, which is where the unfold plan a
+            // convert reaches its leaf through is known.
+            convert_delivery: None,
         }
     }
 

@@ -95,14 +95,6 @@ impl StubExt {
 }
 
 impl Prebindgen for StubExt {
-    fn on_function(
-        &self,
-        _f: &prebindgen_flat::flat::Function,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
     fn on_struct(
         &self,
         _s: &prebindgen_flat::flat::Struct,
@@ -481,14 +473,6 @@ fn resolve_surfaces_adapter_invariant_errors() {
     impl Prebindgen for FailingExt {
         fn validate(&self, _binding: &Building<'_>) -> Result<(), String> {
             Err("member fun `f` has no receiver".to_string())
-        }
-        fn on_function(
-            &self,
-            f: &prebindgen_flat::flat::Function,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_function(f, r, _emit)
         }
         fn on_struct(
             &self,
@@ -1548,14 +1532,6 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         }
     }
     impl Prebindgen for AnyConverterExt {
-        fn on_function(
-            &self,
-            f: &prebindgen_flat::flat::Function,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_function(f, r, _emit)
-        }
         fn on_struct(
             &self,
             st: &prebindgen_flat::flat::Struct,

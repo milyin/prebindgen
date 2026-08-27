@@ -1332,25 +1332,13 @@ impl Prebindgen for Declarations {
                 )*
                 #expr
             });
-            let wrapper =
-                emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
-            items.push(syn::Item::Fn(wrapper));
+            let wrapper = crate::jni::emit::JWrapper::new(self, registry, &getter, Some(callee));
+            items.push(syn::Item::Fn(wrapper.render_fn(emit)));
         }
         items
     }
 
     // ── Item methods ─────────────────────────────────────────────────
-
-    fn on_function(
-        &self,
-        f: &prebindgen_registry::flat::Function,
-        registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        vec![syn::Item::Fn(emit_jni_function_wrapper(
-            self, f, registry, emit,
-        ))]
-    }
 
     fn on_struct(
         &self,
@@ -1399,10 +1387,12 @@ impl Prebindgen for Declarations {
         let const_ident = &c.name;
         let source_module = self.fn_module(registry, const_ident);
         let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
-        let wrapper =
-            emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
+        let wrapper = crate::jni::emit::JWrapper::new(self, registry, &getter, Some(callee));
         let alias = emit.const_alias(c, &source_module);
-        vec![syn::Item::Const(alias), syn::Item::Fn(wrapper)]
+        vec![
+            syn::Item::Const(alias),
+            syn::Item::Fn(wrapper.render_fn(emit)),
+        ]
     }
 }
 
