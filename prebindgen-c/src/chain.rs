@@ -1833,8 +1833,10 @@ impl chain::ProductBridge for CProductBridge {
         self.wire.clone()
     }
 
-    fn part(&self, value: TokenStream, _index: usize, name: &syn::Ident) -> TokenStream {
-        quote!(#value.#name)
+    fn part(&self, value: TokenStream, _index: usize, name: &syn::Ident) -> chain::PartRead {
+        // A C mirror's field is reached by naming it, and reaching it cannot
+        // fail: the struct is already in scope, by value.
+        chain::PartRead::expression(quote!(#value.#name))
     }
 
     fn build(&self, parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
