@@ -590,7 +590,7 @@ fn r_is_bool(t: &TypeRef) -> bool {
 /// A scalar's Rust type, built from its **kind**.
 ///
 /// A scalar's spelling is its name — `ScalarKind::as_str` is the closed set the
-/// source can have written — so this needs no captured syntax and no `Emit`.
+/// source can have written — so this needs no captured syntax and no writer.
 /// Three wire policies asked `spelled()` for exactly this behind an
 /// `r_is_scalar` guard, which was a source spelling standing in for an
 /// identity that could answer.

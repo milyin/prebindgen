@@ -379,10 +379,10 @@ identity a map can be keyed by.
 
 Recipe compilation may inspect those model facts and retain a `TypeRef`, but
 it has no capability to recover or emit the captured Rust syntax. In
-particular, `Cx` carries neither `RustWriter` nor `Emit`, converter calls retain registry-owned
+particular, `Cx` carries no `RustWriter`, converter calls retain registry-owned
 `OperationId` values rather than names derived from `TypeKey`, and language
 adapters must not parse or classify a key's diagnostic text. Only the final
-`write_rust` pass constructs `RustWriter`, which privately owns the zero-sized `Emit` token; at that point resolution and glue planning are
+`write_rust` pass constructs `RustWriter`; at that point resolution and glue planning are
 complete, and the renderer may generate source-type token fragments and
 allocate private Rust symbols while assembling the file. Even there, the
 adapter cannot recover a typed source AST. Needing to inspect source Rust

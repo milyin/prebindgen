@@ -87,7 +87,7 @@ pub struct TypeRef {
     // `Origin<syn::Type>::declared_spelling` is public for build-script
     // declarations of that same Rust type; exposing this captured origin would
     // accidentally make that declaration-only spelling route available to
-    // adapters without an `Emit` capability.
+    // adapters without the final rendering capability.
     pub(super) origin: Origin<syn::Type>,
 }
 
@@ -268,7 +268,7 @@ impl TypeRef {
     }
 
     /// The type as `syn` — **the escape**. See [`Origin::as_syn`].
-    // Test-only as of C7: `Emit` hands out a spelling, never the node, so the
+    // Test-only as of C7: the writer hands out a spelling, never the node, so the
     // round-trip checks (`syntax_is_recoverable_from_kind`) are the last
     // callers. That is the correct end state — the check that a kind can
     // reproduce its own syntax needs both halves.

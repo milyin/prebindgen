@@ -620,7 +620,7 @@ impl CbindgenBuilder {
     /// Freeze source-dependent C declaration families as registry artifacts.
     ///
     /// Planning retains source TypeRefs and target-owned wire syntax. Only the
-    /// final artifact renderer may ask Emit to spell a source type.
+    /// final artifact renderer may ask the writer to spell a source type.
     fn type_artifact_plans(
         &self,
         registry: &Registry,

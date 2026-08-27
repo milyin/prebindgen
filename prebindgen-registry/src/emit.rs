@@ -2,39 +2,45 @@
 
 use std::collections::HashMap;
 
-/// The zero-sized capability proving final Rust emission has begun.
+/// The private receiver for the flat rendering protocol.
 ///
-/// Flat owns the generate-only protocol; the registry owns this concrete key and
-/// its private constructor. `RustWriter` holds it only during final file assembly.
+/// [`RustWriter`] is the capability; this exists only because
+/// [`prebindgen_flat::RustEmitter`]'s operations are trait methods and
+/// something has to be their `Self`. It is unnamed in any public API, so an
+/// adapter reaches those operations only through the writer's own methods,
+/// which supply the frozen module state a caller must not choose.
+struct Renderer;
+
+impl prebindgen_flat::RustEmitter for Renderer {}
+
+/// The capability proving final Rust emission has begun.
 ///
-/// ```compile_fail
-/// use prebindgen_registry::Emit;
-/// let emit = Emit::new();
-/// ```
+/// Flat owns the generate-only protocol; the registry owns this facade and its
+/// private constructor. Emission callbacks receive `&RustWriter` during final
+/// file assembly and at no other point, which is what keeps planning code from
+/// rendering.
 ///
-/// ```compile_fail
-/// use prebindgen_registry::Emit;
-/// let emit = Emit(());
+/// Deliberately stateful: qualifying a modeled nominal type requires the frozen
+/// registry mapping from Flat names to source modules, so a renderer cannot be
+/// pointed at a module map of its own choosing.
+///
+/// An adapter cannot construct one; the constructor is registry-private:
+///
+/// ```compile_fail,E0624
+/// # use prebindgen_registry::{Registry, RustWriter};
+/// # fn leak(registry: &Registry) -> RustWriter {
+/// RustWriter::new(registry, None)
+/// # }
 /// ```
 ///
 /// A registry-only adapter cannot name the flat rendering protocol through
-/// the registry's model re-export:
+/// the registry's model re-export, so it cannot supply its own receiver:
 ///
 /// ```compile_fail
 /// use prebindgen_registry::flat::emit::RustEmitter;
 /// ```
 ///
-/// Even code which can name the token cannot recover retained spelling:
-///
-/// ```compile_fail
-/// # use prebindgen_registry::{Emit, flat::TypeRef};
-/// use prebindgen_flat::RustEmitter;
-/// # fn leak(emit: &Emit, ty: &TypeRef) {
-/// let _ = emit.spell(ty);
-/// # }
-/// ```
-///
-/// The stateful writer facade exposes no spelling escape either:
+/// The writer facade exposes no spelling escape:
 ///
 /// ```compile_fail
 /// # use prebindgen_registry::{RustWriter, flat::TypeRef};
@@ -43,27 +49,9 @@ use std::collections::HashMap;
 /// # }
 /// ```
 #[derive(Debug)]
-pub struct Emit(());
-
-impl prebindgen_flat::RustEmitter for Emit {}
-
-/// Writer-owned context for final Rust emission.
-///
-/// Unlike [`Emit`], this is deliberately stateful: qualifying a modeled
-/// nominal type requires the frozen registry mapping from Flat names to source
-/// modules. Keeping that state here preserves the distinction between the
-/// phase token and the writer which consumes model facts.
-#[derive(Debug)]
 pub struct RustWriter {
-    emit: Emit,
     source_modules: HashMap<String, syn::Path>,
     default_module: syn::Path,
-}
-
-impl Emit {
-    fn new() -> Self {
-        Self(())
-    }
 }
 
 impl RustWriter {
@@ -82,7 +70,6 @@ impl RustWriter {
             })
             .collect();
         Self {
-            emit: Emit::new(),
             source_modules,
             default_module,
         }
@@ -95,7 +82,6 @@ impl RustWriter {
     #[cfg(any(test, feature = "testing"))]
     pub fn for_test() -> Self {
         Self {
-            emit: Emit::new(),
             source_modules: HashMap::new(),
             default_module: syn::parse_quote!(crate),
         }
@@ -118,7 +104,7 @@ impl RustWriter {
         ty: &prebindgen_flat::flat::TypeRef,
     ) -> proc_macro2::TokenStream {
         prebindgen_flat::RustEmitter::emit_source_type(
-            &self.emit,
+            &Renderer,
             ty,
             &self.source_modules,
             &self.default_module,
@@ -150,7 +136,7 @@ impl RustWriter {
 
     /// Copy the proc-macro's anonymous feature guard into the final file.
     pub(crate) fn guard(&self, guard: &prebindgen_flat::flat::Guard) -> syn::ItemConst {
-        prebindgen_flat::RustEmitter::guard(&self.emit, guard)
+        prebindgen_flat::RustEmitter::guard(&Renderer, guard)
     }
 
     /// Emit a fieldless enum's modeled discriminant spelling.
@@ -158,7 +144,7 @@ impl RustWriter {
         &self,
         value: &prebindgen_flat::flat::EnumValue,
     ) -> Option<proc_macro2::TokenStream> {
-        prebindgen_flat::RustEmitter::discriminant(&self.emit, value)
+        prebindgen_flat::RustEmitter::discriminant(&Renderer, value)
     }
 
     /// Generate a struct constructor or pattern with its modeled delimiter shape.
@@ -168,7 +154,7 @@ impl RustWriter {
         head: proc_macro2::TokenStream,
         parts: &[proc_macro2::TokenStream],
     ) -> proc_macro2::TokenStream {
-        prebindgen_flat::RustEmitter::shape_struct(&self.emit, item, head, parts)
+        prebindgen_flat::RustEmitter::shape_struct(&Renderer, item, head, parts)
     }
 
     /// Generate an enum-alternative constructor or pattern with its modeled shape.
@@ -178,7 +164,7 @@ impl RustWriter {
         head: proc_macro2::TokenStream,
         parts: &[proc_macro2::TokenStream],
     ) -> proc_macro2::TokenStream {
-        prebindgen_flat::RustEmitter::shape_alternative(&self.emit, item, head, parts)
+        prebindgen_flat::RustEmitter::shape_alternative(&Renderer, item, head, parts)
     }
 
     /// Allocate the final private Rust symbol for a registry-owned operation.
@@ -243,13 +229,8 @@ fn ident_component(label: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ident_component, Emit, RustWriter};
+    use super::{ident_component, RustWriter};
     use crate::{ArtifactId, Direction, OperationId};
-
-    #[test]
-    fn emit_remains_only_a_zero_sized_phase_token() {
-        assert_eq!(std::mem::size_of::<Emit>(), 0);
-    }
 
     #[test]
     fn operation_symbols_are_stable_and_writer_scoped() {
@@ -257,10 +238,10 @@ mod tests {
             ArtifactId::new("test-codec", "owned").unwrap(),
             Direction::Construct,
         );
-        let emit = RustWriter::for_test();
+        let writer = RustWriter::for_test();
 
-        let first = emit.operation_ident("test", &operation);
-        let second = emit.operation_ident("test", &operation);
+        let first = writer.operation_ident("test", &operation);
+        let second = writer.operation_ident("test", &operation);
 
         assert_eq!(first, second);
         assert!(first
