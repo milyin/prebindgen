@@ -94,40 +94,7 @@ impl StubExt {
     }
 }
 
-impl Prebindgen for StubExt {
-    fn on_struct(
-        &self,
-        _s: &prebindgen_flat::flat::Struct,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-    fn on_variant(
-        &self,
-        _v: &prebindgen_flat::flat::Variant,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-    fn on_enum(
-        &self,
-        _e: &prebindgen_flat::flat::Enum,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-    fn on_const(
-        &self,
-        _c: &prebindgen_flat::flat::Constant,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-}
+impl Prebindgen for StubExt {}
 
 // suppress unused warning on Niches — kept available for richer tests
 #[allow(dead_code)]
@@ -473,38 +440,6 @@ fn resolve_surfaces_adapter_invariant_errors() {
     impl Prebindgen for FailingExt {
         fn validate(&self, _binding: &Building<'_>) -> Result<(), String> {
             Err("member fun `f` has no receiver".to_string())
-        }
-        fn on_struct(
-            &self,
-            s: &prebindgen_flat::flat::Struct,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_struct(s, r, _emit)
-        }
-        fn on_variant(
-            &self,
-            v: &prebindgen_flat::flat::Variant,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_variant(v, r, _emit)
-        }
-        fn on_enum(
-            &self,
-            e: &prebindgen_flat::flat::Enum,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_enum(e, r, _emit)
-        }
-        fn on_const(
-            &self,
-            c: &prebindgen_flat::flat::Constant,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_const(c, r, _emit)
         }
     }
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
@@ -1531,40 +1466,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             })
         }
     }
-    impl Prebindgen for AnyConverterExt {
-        fn on_struct(
-            &self,
-            st: &prebindgen_flat::flat::Struct,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_struct(st, r, _emit)
-        }
-        fn on_variant(
-            &self,
-            v: &prebindgen_flat::flat::Variant,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_variant(v, r, _emit)
-        }
-        fn on_enum(
-            &self,
-            e: &prebindgen_flat::flat::Enum,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_enum(e, r, _emit)
-        }
-        fn on_const(
-            &self,
-            c: &prebindgen_flat::flat::Constant,
-            r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            self.0.on_const(c, r, _emit)
-        }
-    }
+    impl Prebindgen for AnyConverterExt {}
 
     // `Option<u64>` appears nowhere in the captured stream.
     let reg: RegistryBuilder =

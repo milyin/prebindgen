@@ -1339,61 +1339,6 @@ impl Prebindgen for Declarations {
     }
 
     // ── Item methods ─────────────────────────────────────────────────
-
-    fn on_struct(
-        &self,
-        _s: &prebindgen_registry::flat::Struct,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        // Struct converter bodies are emitted from retained registry plans;
-        // no separate per-struct item is needed.
-        Vec::new()
-    }
-
-    fn on_variant(
-        &self,
-        _v: &prebindgen_registry::flat::Variant,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
-    fn on_enum(
-        &self,
-        _e: &prebindgen_registry::flat::Enum,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
-    /// Declared consts only reach here (undeclared ones are gated out before
-    /// emission): re-emit the const as a path-alias
-    /// to its source-of-truth (initializer tokens are never copied — they
-    /// may reference source-crate internals) AND emit its nullary JNI getter
-    /// extern. The getter reuses the whole function-wrapper pipeline (so the
-    /// const's type flows through the ordinary output-converter machinery);
-    /// only the callee expression differs — a path to the const, not a call.
-    fn on_const(
-        &self,
-        c: &prebindgen_registry::flat::Constant,
-        registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        reject_handle_const(self, c);
-        let getter = const_getter_fn(c);
-        let const_ident = &c.name;
-        let source_module = self.fn_module(registry, const_ident);
-        let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
-        let wrapper = crate::jni::emit::JWrapper::new(self, registry, &getter, Some(callee));
-        let alias = emit.const_alias(c, &source_module);
-        vec![
-            syn::Item::Const(alias),
-            syn::Item::Fn(wrapper.render_fn(emit)),
-        ]
-    }
 }
 
 /// The declaration surface, stated once.

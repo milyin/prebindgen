@@ -1102,6 +1102,16 @@ impl CbindgenBuilder {
                 crate::assembly::CWrapper::new(&self, &generation, function),
             )));
         }
+        // Constants: this binding has no constant declaration mechanism, so
+        // every captured one is aliased. Named in source order, as the
+        // wrappers are.
+        let mut constants: Vec<_> = registry.flat().constants().collect();
+        constants.sort_by_key(|constant| constant.name.to_string());
+        for constant in constants {
+            assembly.artifact(crate::assembly::CFinalArtifact::Const(Box::new(
+                crate::assembly::CConst::new(&self, constant),
+            )));
+        }
         self.assembly = Some(assembly.build());
         self.generation = Some(generation);
         self.validate_resolved(&registry)
@@ -1251,47 +1261,6 @@ impl Prebindgen for CbindgenBuilder {
     }
 
     // ── Item emission ──────────────────────────────────────────────────
-
-    fn on_struct(
-        &self,
-        _s: &prebindgen_registry::flat::Struct,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        // The `#[repr(C)]` mirror + converters come from prerequisites /
-        // on_output_type; the original (non-FFI-safe) struct is dropped.
-        Vec::new()
-    }
-
-    fn on_variant(
-        &self,
-        _v: &prebindgen_registry::flat::Variant,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
-    fn on_enum(
-        &self,
-        _e: &prebindgen_registry::flat::Enum,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
-    fn on_const(
-        &self,
-        c: &prebindgen_registry::flat::Constant,
-        _registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        self.source_module
-            .as_ref()
-            .map(|module| vec![syn::Item::Const(emit.const_alias(c, module))])
-            .unwrap_or_default()
-    }
 }
 
 /// Output-direction terminal categories: the shapes that cross whole, reached

@@ -1,9 +1,10 @@
 //! Rust file emission for the resolved `Registry`.
 //!
-//! `write_rust` takes the [`Assembly`] the adapter compiled — the frozen graph
+//! `write_rust` takes the [`Assembly`] the adapter compiled — the frozen set
 //! of final artifacts the file is made of; renders each with the writer-owned
-//! [`crate::RustWriter`], adds every per-item `on_<kind>` output and every
-//! anonymous const, and hands the assembled file to `Destination::write`.
+//! [`crate::RustWriter`], surrounds them with the adapter's prerequisites and
+//! prebindgen's own anonymous feature-check consts, and hands the assembled
+//! file to `Destination::write`.
 //!
 //! The artifacts arrive from the adapter rather than being collected from the
 //! registry, which is what lets one crossing contribute more than one function
@@ -19,11 +20,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    destination::Destination,
-    prebindgen::Prebindgen,
-    registry::{Registry, TypeKey},
-};
+use crate::{destination::Destination, prebindgen::Prebindgen, registry::Registry};
 
 /// Errors surfaced by the file-emission phase.
 ///
@@ -213,70 +210,18 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, A: RustArtifact>(
     // this writer does no binding resolution. It does validate the assembled
     // private call graph before handing the file to the destination.
     // The capability, minted here and nowhere else in this function's reach.
-    // Every callback below is handed a borrow; nothing else in the pipeline is.
+    // Every artifact below is handed a borrow; nothing else in the pipeline is.
     // See `prebindgen_flat::flat::emit` for what that buys and what it
     // deliberately does not.
     let emit = crate::RustWriter::new(registry, ext.source_module());
     let mut items: Vec<syn::Item> = Vec::new();
 
-    // 0. Adapter prerequisites — runtime-support items (helper structs,
+    // 1. Adapter prerequisites — runtime-support items (helper structs,
     //    type aliases) the converter bodies depend on. Emitted first so
-    //    everything below can reference them.
+    //    everything below can reference them. The last thing an adapter
+    //    still produces while the file is written; #581 step 4 plans these
+    //    as artifacts too.
     items.extend(ext.prerequisites(registry, &emit));
-
-    // 2. Per-item Rust output from the adapter — only for items the adapter
-    //    explicitly declared. Undeclared items were already announced
-    //    via `cargo:warning=` by the generator's own unclaimed-item report.
-    //    Functions are not here: an exported wrapper is an artifact of the
-    //    assembly above, planned when the adapter's generation plan was.
-    let declared = registry.declared();
-    let declared_types = &declared.types;
-    let flat = registry.flat();
-    let mut body_items: Vec<syn::Item> = Vec::new();
-    body_items.extend(
-        sorted_by_name(flat.types().filter_map(|t| match t {
-            prebindgen_flat::flat::Type::Struct(s) => Some((&s.name, s)),
-            _ => None,
-        }))
-        .into_iter()
-        .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
-        .flat_map(|(_, item)| ext.on_struct(item, registry, &emit)),
-    );
-    // Both enum shapes emit through `on_enum` and sort together: they were one
-    // map here before they were two elements. They still SORT together — the
-    // emission order is one sequence — but they dispatch to their own methods
-    // now, because handing an adapter a `Type` it has to re-match is worse than
-    // handing it the element the model already decided on.
-    body_items.extend(
-        sorted_by_name(flat.types().filter_map(|t| match t {
-            prebindgen_flat::flat::Type::Variant(v) => Some((&v.name, t)),
-            prebindgen_flat::flat::Type::Enum(e) => Some((&e.name, t)),
-            _ => None,
-        }))
-        .into_iter()
-        .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
-        .flat_map(|(_, t)| match t {
-            prebindgen_flat::flat::Type::Variant(v) => ext.on_variant(v, registry, &emit),
-            prebindgen_flat::flat::Type::Enum(e) => ext.on_enum(e, registry, &emit),
-            _ => unreachable!("filtered to the two enum shapes above"),
-        }),
-    );
-    // Consts: an adapter WITH a const declaration mechanism
-    // (`declared_consts() == Some(set)`) emits declared consts only,
-    // symmetric with functions; an adapter without one (`None`) gets every
-    // const through its own mandatory `on_const` policy. Prebindgen's
-    // own injected feature guards are not consts at all — see the guards loop.
-    let declared_consts = &declared.consts;
-    body_items.extend(
-        sorted_by_name(flat.constants().map(|c| (&c.name, c)))
-            .into_iter()
-            .filter(|(ident, _)| {
-                declared_consts
-                    .as_ref()
-                    .is_none_or(|set| set.contains(*ident))
-            })
-            .flat_map(|(_, item)| ext.on_const(item, registry, &emit)),
-    );
 
     // Every artifact renders, including the ones the adapter surface does not
     // reach: an unreachable artifact still contributes its function names, so
@@ -298,32 +243,18 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, A: RustArtifact>(
             items.extend(artifact_items);
         }
     }
-    items.extend(body_items);
 
-    // 3. Anonymous consts, verbatim. Last, and in stream order. Ungated on
-    //    purpose: with no name there is nothing for an adapter to declare, so
-    //    the const gate above cannot apply to them.
-    for guard in flat.guards() {
+    // 2. Anonymous consts, verbatim. Last, and in stream order. These are
+    //    prebindgen's own injected feature checks, identical for every
+    //    adapter and named by none, so they are written here rather than
+    //    planned as an artifact of one adapter's assembly.
+    for guard in registry.flat().guards() {
         items.push(syn::Item::Const(emit.guard(guard)));
     }
 
     validate_converter_calls(&mut items, &converter_names)?;
     let dest: Destination = items.into_iter().collect();
     Ok(dest.write(out_path))
-}
-
-/// Name-sorted, because emission order is part of the generated file and the
-/// model is in source order. Was `sorted_items_by_ident` over the registry's
-/// maps; same ordering, read from the one index.
-fn sorted_by_name<'a, T>(
-    items: impl Iterator<Item = (&'a syn::Ident, &'a T)>,
-) -> Vec<(&'a syn::Ident, &'a T)>
-where
-    T: 'a,
-{
-    let mut items: Vec<(&syn::Ident, &T)> = items.collect();
-    items.sort_by_key(|(left, _)| left.to_string());
-    items
 }
 
 /// Refuse a generated file whose rendered functions still call a private
