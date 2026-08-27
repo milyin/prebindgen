@@ -25,6 +25,16 @@ enum JInvokePart {
     },
 }
 
+impl JInvokePart {
+    /// The converters this argument crosses through.
+    fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match self {
+            Self::Fold { delivery, .. } | Self::Decomposed { delivery, .. } => delivery.calls(out),
+            Self::Whole { pipeline, .. } => pipeline.calls(out),
+        }
+    }
+}
+
 impl prebindgen_registry::chain::InvokePart for JInvokePart {
     fn render(
         &self,
@@ -228,6 +238,14 @@ pub(crate) struct JInvokePlan {
 impl JInvokePlan {
     pub(crate) fn operation_id(&self) -> &prebindgen_registry::OperationId {
         &self.operation
+    }
+
+    /// The converters this callback's Invoke helper calls, argument by
+    /// argument.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for part in &self.chain.parts {
+            part.calls(out);
+        }
     }
 
     pub(crate) fn render(&self, emit: &prebindgen_registry::RustWriter) -> syn::ItemFn {

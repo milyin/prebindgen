@@ -518,91 +518,10 @@ impl CbindgenBuilder {
     }
 }
 
-/// Per-section [`CbindgenBuilder::prerequisites`] emitters. Each returns the runtime-
-/// support items for one concern; the trait method concatenates them in order,
-/// so the emitted preamble is identical to the former single function.
+/// Declaration queries the planned artifacts read. Each answers one concern
+/// of the runtime support the file opens with; the artifacts that carry those
+/// items are in [`crate::assembly`].
 impl CbindgenBuilder {
-    /// C allocator extern + raw C-string allocator + the universal memory freer.
-    /// Emitted when the layer hands `char*`/array memory to C. Panics if such
-    /// memory is produced but no `.free_memory_function` is declared.
-    fn prereq_alloc_free(&self, registry: &Registry, produces_array: bool) -> Vec<syn::Item> {
-        let mut items: Vec<syn::Item> = Vec::new();
-        if !(self.needs_free(registry) || produces_array) {
-            return items;
-        }
-        let free_ident = match &self.free_fn {
-            Some(name) => format_ident!("{}", name),
-            None => panic!(
-                "Cbindgen: the generated layer hands `char*` string memory to C \
-                 (a `String` return or a `String` data-struct field) but no \
-                 memory-freeing function is declared — add \
-                 `.free_memory_function(\"z_free\")`"
-            ),
-        };
-        // C allocator (linked from the C runtime; no crate dependency).
-        items.push(syn::parse_quote!(
-            extern "C" {
-                fn malloc(size: usize) -> *mut ::core::ffi::c_void;
-                fn free(ptr: *mut ::core::ffi::c_void);
-            }
-        ));
-        // Raw, destructor-free C-string block. `CString::new` drops interior
-        // NULs so the terminator marks the true end for C consumers.
-        items.push(syn::parse_quote!(
-            #[allow(non_snake_case, dead_code)]
-            pub(crate) fn __cbg_alloc_cstr(s: ::std::string::String) -> *mut ::core::ffi::c_char {
-                let c = ::std::ffi::CString::new(s).unwrap_or_default();
-                let bytes = c.as_bytes_with_nul();
-                unsafe {
-                    let p = malloc(bytes.len()) as *mut u8;
-                    if p.is_null() {
-                        return ::core::ptr::null_mut();
-                    }
-                    ::core::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len());
-                    p as *mut ::core::ffi::c_char
-                }
-            }
-        ));
-        // Universal raw memory freer: type-agnostic C `free`, no length, no
-        // destructor (NULL-safe via C `free`).
-        items.push(syn::parse_quote!(
-            #[no_mangle]
-            #[allow(non_snake_case, unused_variables)]
-            pub unsafe extern "C" fn #free_ident(p: *mut ::core::ffi::c_void) {
-                free(p);
-            }
-        ));
-        items
-    }
-
-    /// Array builder: copy a `Vec<W>` into a C-`malloc`'d block of `W` and
-    /// return `(ptr, len)` (empty ⇒ `(NULL, 0)`). The block is freed C-side
-    /// via the `z_free_array` macro (per-element drop + the universal freer).
-    fn prereq_array_builder(&self, produces_array: bool) -> Vec<syn::Item> {
-        let mut items: Vec<syn::Item> = Vec::new();
-        if !produces_array {
-            return items;
-        }
-        items.push(syn::parse_quote!(
-            #[allow(non_snake_case, dead_code)]
-            pub(crate) unsafe fn __cbg_alloc_array<W>(v: ::std::vec::Vec<W>) -> (*mut W, usize) {
-                let n = v.len();
-                if n == 0 {
-                    return (::core::ptr::null_mut(), 0);
-                }
-                let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
-                if p.is_null() {
-                    return (::core::ptr::null_mut(), 0);
-                }
-                for (i, e) in v.into_iter().enumerate() {
-                    ::core::ptr::write(p.add(i), e);
-                }
-                (p, n)
-            }
-        ));
-        items
-    }
-
     /// Converter fragments consumed by one type-level final artifact.
     fn artifact_fragment_inputs(
         &self,
@@ -831,101 +750,6 @@ impl CbindgenBuilder {
         Ok(artifacts)
     }
 
-    /// Data structs: `#[repr(C)]` mirror only. Heap (`String`) fields are
-    /// `char*` raw blocks the C user releases individually via the
-    /// `free_memory_function` — no per-struct destructor.
-    fn prereq_data_structs(&self, registry: &Registry) -> Vec<syn::Item> {
-        let mut items: Vec<syn::Item> = Vec::new();
-        for (key, _cfg) in sorted_by_key(&self.data) {
-            let Some(reading) = registry.reading(key) else {
-                continue;
-            };
-            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
-                continue;
-            }
-            let Some(fields) = self.struct_fields(registry, &reading.key()) else {
-                continue;
-            };
-            let c_struct = self.c_type_ident(&reading.key());
-            let mut field_defs: Vec<TokenStream> = Vec::new();
-            for (fname, fty) in &fields {
-                let wire = self.data_field_wire(fty).unwrap_or_else(|| {
-                    panic!(
-                        "Cbindgen: field `{}` of data struct `{}` has unsupported type `{}`",
-                        fname,
-                        type_short(&reading.key()),
-                        fty
-                    )
-                });
-                field_defs.push(quote!(pub #fname: #wire));
-            }
-            items.push(syn::parse_quote!(
-                #[repr(C)]
-                #[allow(non_camel_case_types)]
-                pub struct #c_struct {
-                    #(#field_defs,)*
-                }
-            ));
-        }
-        items
-    }
-
-    /// Enums: `#[repr(C)]` mirror — variant idents with each discriminant
-    /// **re-emitted verbatim**, exactly as the source wrote it.
-    ///
-    /// Deliberately NOT routed through the shared
-    /// [`enum_discriminant_values`](prebindgen_registry::types_util::enum_discriminant_values).
-    /// That helper resolves each variant to a concrete `i64`, which is what an
-    /// adapter needs when it must *know the number* — JniGenBuilder's `jint` decode
-    /// and the Kotlin `value(N)` constants. This mirror needs no number: it is
-    /// Rust source that cbindgen re-reads, so passing the expression through
-    /// keeps every discriminant C already accepted — a `const` or `cfg`-driven
-    /// expression, and any value the source's own `repr` admits, including
-    /// ones outside `i64`. Resolving here would narrow that domain to what
-    /// `i64` and a literal can express, for no gain.
-    ///
-    /// The two adapters therefore agree on the *rule* (Rust's own assignment
-    /// order, which the shared helper encodes) while differing on what they
-    /// need from it — a number versus a spelling.
-    fn prereq_enums(
-        &self,
-        registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        let mut items: Vec<syn::Item> = Vec::new();
-        for (key, _cfg) in sorted_by_key(&self.enums) {
-            let Some(reading) = registry.reading(key) else {
-                continue;
-            };
-            if self.in_frag(&reading).is_none() && self.out_frag(&reading).is_none() {
-                continue;
-            }
-            let Some(e) = unit_enum(registry, &reading.key()) else {
-                continue;
-            };
-            let cname = self.c_type_ident(&reading.key());
-            // The C mirror re-states the discriminant **as written** — `= 0x07`
-            // stays `0x07` — which is the one consumer `EnumValue`'s retained
-            // syntax exists for, and the model's own docs name it.
-            let variants = e.values.iter().map(|v| {
-                let id = &v.name;
-                match emit.discriminant(v) {
-                    Some(expr) => quote!(#id = #expr),
-                    None => quote!(#id),
-                }
-            });
-            items.push(syn::parse_quote!(
-                #[repr(C)]
-                #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-                #[allow(non_camel_case_types)]
-                pub enum #cname {
-                    #(#variants),*
-                }
-            ));
-        }
-        items
-    }
-
     /// The wire of one payload field, or a generation error naming the
     /// offending variant field and the supported set.
     fn payload_wire_of(&self, key: &TypeKey, variant: &syn::Ident, field: &Field) -> syn::Type {
@@ -949,9 +773,8 @@ impl CbindgenBuilder {
     /// State this binding into `registry` — see `JniGenBuilder::declare_into`.
     ///
     /// Push, not pull: the build script calls this, and the registry never
-    /// calls back. cbindgen declares no selective const surface (its
-    /// `on_const` policy generates a source-module alias for every captured
-    /// const) and no decompositions.
+    /// calls back. cbindgen declares no selective const surface — it plans a
+    /// source-module alias for every captured const — and no decompositions.
     /// Binding-local fns declared by `convert!(..).local(..)`.
     fn collect_local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         let mut result = Vec::new();
@@ -1072,11 +895,103 @@ impl CbindgenBuilder {
         for artifact in artifacts {
             generation.artifact(artifact);
         }
-        self.generation = Some(generation.build().map_err(|errors| {
+        let generation = std::rc::Rc::new(generation.build().map_err(|errors| {
             prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors.to_string(),
             }
         })?);
+        // The file's artifacts: every private converter in the plan's own
+        // dependency order, then one exported wrapper per declared function,
+        // named in source order so the file's layout does not depend on how
+        // the declarations were written.
+        let planned = |kind: &str| {
+            crate::assembly::CPlanned::of_kind(&generation, kind)
+                .into_iter()
+                .map(|artifact| crate::assembly::CFinalArtifact::Planned(Box::new(artifact)))
+                .collect::<Vec<_>>()
+        };
+        // The type-level artifacts, in the order C needs to read them, then
+        // the reserved sum-type values. The runtime helpers they call are
+        // planned below, once these have said what they call.
+        let mut artifacts: Vec<crate::assembly::CFinalArtifact> = Vec::new();
+        artifacts.extend(planned("c-opaque-handle"));
+        artifacts.extend(
+            crate::assembly::CDataStruct::all(&self, &registry)
+                .into_iter()
+                .map(|mirror| crate::assembly::CFinalArtifact::DataStruct(Box::new(mirror))),
+        );
+        artifacts.extend(planned("c-value-opaque"));
+        artifacts.extend(
+            crate::assembly::CEnum::all(&self, &registry)
+                .into_iter()
+                .map(|mirror| crate::assembly::CFinalArtifact::Enum(Box::new(mirror))),
+        );
+        artifacts.extend(planned("c-tagged-union"));
+        artifacts.extend(planned("c-callback"));
+        artifacts.extend(
+            crate::assembly::CDomainConstant::all(&self, &registry)
+                .into_iter()
+                .map(|constant| {
+                    crate::assembly::CFinalArtifact::DomainConstant(Box::new(constant))
+                }),
+        );
+        artifacts.extend(
+            generation
+                .fragments()
+                .filter_map(|fragment| fragment.artifact())
+                .map(|converter| {
+                    crate::assembly::CFinalArtifact::Converter(Box::new(converter.clone()))
+                }),
+        );
+        let declared = self.declared_functions();
+        let mut wrapped: Vec<_> = registry
+            .flat()
+            .functions()
+            .filter(|function| declared.contains(&function.name))
+            .collect();
+        wrapped.sort_by_key(|function| function.name.to_string());
+        artifacts.extend(wrapped.into_iter().map(|function| {
+            crate::assembly::CFinalArtifact::Wrapper(Box::new(crate::assembly::CWrapper::new(
+                &self,
+                &generation,
+                function,
+            )))
+        }));
+        // Constants: this binding has no constant declaration mechanism, so
+        // every captured one is aliased. Named in source order, as the
+        // wrappers are.
+        let mut sorted_constants: Vec<_> = registry.flat().constants().collect();
+        sorted_constants.sort_by_key(|constant| constant.name.to_string());
+        artifacts.extend(sorted_constants.into_iter().map(|constant| {
+            crate::assembly::CFinalArtifact::Const(Box::new(crate::assembly::CConst::new(
+                &self, constant,
+            )))
+        }));
+
+        // The runtime helpers exist because something calls them, so the
+        // planned artifacts are what decide it. Asking them is what makes the
+        // answer exact: a `Vec` delivered to a callback needs the array
+        // builder just as a `Vec` return does, which a gate over return types
+        // alone missed (#437).
+        let calls: std::collections::HashSet<_> = artifacts
+            .iter()
+            .flat_map(prebindgen_registry::write::RustArtifact::calls)
+            .collect();
+        let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
+        let arrays = calls.contains(&crate::assembly::array_builder_key());
+        if arrays || calls.contains(&crate::assembly::memory_key()) {
+            assembly.artifact(crate::assembly::CFinalArtifact::Memory(Box::new(
+                crate::assembly::CMemory::new(&self),
+            )));
+        }
+        if arrays {
+            assembly.artifact(crate::assembly::CFinalArtifact::ArrayBuilder);
+        }
+        for artifact in artifacts {
+            assembly.artifact(artifact);
+        }
+        self.assembly = Some(assembly.build(&registry, self.source_module.as_ref()));
+        self.generation = Some(generation);
         self.validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         Ok(Cbindgen {
@@ -1159,121 +1074,12 @@ impl Prebindgen for CbindgenBuilder {
         Ok(())
     }
 
-    // Consts have no declaration mechanism here (`declared_consts` stays
-    // `None`), so every indexed const re-emits through the default
-    // `on_const` — a path-alias against this source module, keeping consts
-    // with non-portable initializers valid in the generated file. (cbindgen
-    // cannot evaluate a path initializer, so aliased consts don't surface
-    // as `#define`s in the C header.)
-    fn source_module(&self) -> Option<&syn::Path> {
-        self.source_module.as_ref()
-    }
-
     // ── Structural type resolution ──────────────────────────────────────
     // The adapter peels `ty` itself: a rank-0 terminal category, else a
     // wrapper shape (`Option<_>`, `&`/`&mut`/`&[_]`/`&str`). See `in_wrappers`
     // / `out_wrappers`.
 
-    fn prerequisites(
-        &self,
-        registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        // C-string data memory (string returns + `String` fields of data structs)
-        // is malloc'd raw and freed by the single universal `free_memory_function`.
-        // Array returns (`Vec<T>`) also hand out a malloc'd block freed via the
-        // same function (per element through the `z_free_array` macro), so the
-        // allocator/freer prelude is needed for them too. Each section's emitter
-        // lives in the `impl CbindgenBuilder` block above; order is significant.
-        let produces_array = self.produces_array(registry);
-        let mut items: Vec<syn::Item> = Vec::new();
-        items.extend(self.prereq_alloc_free(registry, produces_array));
-        items.extend(self.prereq_array_builder(produces_array));
-        items.extend(crate::chain::render_artifacts(
-            self.generation
-                .as_ref()
-                .expect("C generation plan was not frozen"),
-            "c-opaque-handle",
-            emit,
-        ));
-        items.extend(self.prereq_data_structs(registry));
-        items.extend(crate::chain::render_artifacts(
-            self.generation
-                .as_ref()
-                .expect("C generation plan was not frozen"),
-            "c-value-opaque",
-            emit,
-        ));
-        items.extend(self.prereq_enums(registry, emit));
-        items.extend(crate::chain::render_artifacts(
-            self.generation
-                .as_ref()
-                .expect("C generation plan was not frozen"),
-            "c-tagged-union",
-            emit,
-        ));
-        items.extend(crate::chain::render_artifacts(
-            self.generation
-                .as_ref()
-                .expect("C generation plan was not frozen"),
-            "c-callback",
-            emit,
-        ));
-        items.extend(self.prereq_domain_constants(registry));
-        items
-    }
-
     // ── Item emission ──────────────────────────────────────────────────
-
-    fn on_function(
-        &self,
-        f: &prebindgen_registry::flat::Function,
-        _registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        vec![syn::Item::Fn(self.emit_function_wrapper(f, emit))]
-    }
-
-    fn on_struct(
-        &self,
-        _s: &prebindgen_registry::flat::Struct,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        // The `#[repr(C)]` mirror + converters come from prerequisites /
-        // on_output_type; the original (non-FFI-safe) struct is dropped.
-        Vec::new()
-    }
-
-    fn on_variant(
-        &self,
-        _v: &prebindgen_registry::flat::Variant,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
-    fn on_enum(
-        &self,
-        _e: &prebindgen_registry::flat::Enum,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
-    fn on_const(
-        &self,
-        c: &prebindgen_registry::flat::Constant,
-        _registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        self.source_module
-            .as_ref()
-            .map(|module| vec![syn::Item::Const(emit.const_alias(c, module))])
-            .unwrap_or_default()
-    }
 }
 
 /// Output-direction terminal categories: the shapes that cross whole, reached

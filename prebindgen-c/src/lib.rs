@@ -347,11 +347,13 @@ impl Cbindgen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
-        let converters: Vec<_> = self.gen.converter_functions().cloned().collect();
+        // Every binding a test writes also checks that the assembly's
+        // dependency edges name every call its artifacts render — the
+        // completeness the emission-time check reasons from.
+        #[cfg(test)]
+        prebindgen_registry::write::assert_edges_cover_rendered_calls(self.gen.assembly(), "c");
         Ok(prebindgen_registry::write::write_rust(
-            &self.registry,
-            &self.gen,
-            &converters,
+            self.gen.assembly(),
             out_path,
         )?)
     }
@@ -444,18 +446,43 @@ pub struct CbindgenBuilder {
     >,
     /// Immutable registry-owned C generation plan for ordinary sites, callback
     /// argument sites, and callback artifacts.
-    pub(crate) generation:
-        Option<prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>>,
+    pub(crate) generation: Option<
+        std::rc::Rc<
+            prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>,
+        >,
+    >,
+    /// Every final artifact of the generated Rust file, frozen in the order it
+    /// is written. Filled from [`Self::generation`] once resolution is
+    /// complete, and the only thing `write_rust` reads converters from.
+    pub(crate) assembly: Option<prebindgen_registry::write::Assembly<assembly::CFinalArtifact>>,
 }
 
 impl CbindgenBuilder {
-    /// Frozen converter artifacts in registry-owned dependency order.
-    pub(crate) fn converter_functions(&self) -> impl Iterator<Item = &chain::CFunction> {
-        self.generation
+    /// The frozen assembly the generated Rust file is written from.
+    pub(crate) fn assembly(
+        &self,
+    ) -> &prebindgen_registry::write::Assembly<assembly::CFinalArtifact> {
+        self.assembly
             .as_ref()
-            .expect("C generation plan is frozen after resolution")
-            .fragments()
-            .filter_map(|fragment| fragment.artifact())
+            .expect("C assembly is frozen after resolution")
+    }
+
+    /// Frozen converter artifacts in registry-owned dependency order.
+    #[cfg(test)]
+    pub(crate) fn converter_functions(&self) -> impl Iterator<Item = &chain::CFunction> {
+        self.assembly()
+            .artifacts()
+            .filter_map(|artifact| match artifact {
+                assembly::CFinalArtifact::Converter(converter) => Some(&**converter),
+                assembly::CFinalArtifact::Wrapper(_)
+                | assembly::CFinalArtifact::Const(_)
+                | assembly::CFinalArtifact::Memory(_)
+                | assembly::CFinalArtifact::DataStruct(_)
+                | assembly::CFinalArtifact::Enum(_)
+                | assembly::CFinalArtifact::DomainConstant(_)
+                | assembly::CFinalArtifact::ArrayBuilder
+                | assembly::CFinalArtifact::Planned(_) => None,
+            })
     }
 }
 
@@ -464,6 +491,7 @@ type Mangle1 = Box<dyn Fn(&str) -> String>;
 /// A mangler over a callback's argument bases.
 type MangleN = Box<dyn Fn(&[String]) -> String>;
 
+mod assembly;
 mod builder;
 mod chain;
 mod compile;

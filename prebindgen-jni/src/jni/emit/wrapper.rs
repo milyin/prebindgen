@@ -6,19 +6,75 @@ use prebindgen_registry::{types_util::result_ok_type, Conversions};
 use super::*;
 use crate::jni::trait_impl::read_through_erased_wrappers;
 
-pub(crate) fn emit_jni_function_wrapper(
-    ext: &Declarations,
-    f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
-    emit: &prebindgen_registry::RustWriter,
-) -> syn::ItemFn {
-    emit_jni_function_wrapper_with_callee(ext, f, registry, None, emit)
+/// What the extern calls once its inputs are decoded.
+pub(crate) enum JCallee {
+    /// The `#[prebindgen]` function itself, under the module it comes from.
+    Source(syn::Path),
+    /// A binding-defined expression — a path to a constant, or a constant
+    /// expression declared with `constant_expr!`.
+    Expr(Box<syn::Expr>),
+}
+
+/// One exported JNI extern, planned while the registry is available and
+/// rendered at the final writing boundary.
+///
+/// Everything the extern needs is here: the frozen function plan, the model
+/// element it exports, and what it calls. Nothing is looked up in a live
+/// registry while the file is assembled.
+pub(crate) struct JWrapper {
+    /// This function's frozen JNI plan — symbol, inputs, output delivery,
+    /// error channels.
+    plan: std::rc::Rc<crate::jni::fn_plan::JniFunctionPlan>,
+    /// The `#[prebindgen]` function, or the synthetic nullary getter a
+    /// declared constant is exported through.
+    function: prebindgen_registry::flat::Function,
+    /// What the extern's body calls.
+    callee: JCallee,
+}
+
+impl JWrapper {
+    /// Plan the extern for one function or constant getter.
+    pub(crate) fn new(
+        ext: &Declarations,
+        registry: &Registry,
+        f: &prebindgen_registry::flat::Function,
+        callee: Option<syn::Expr>,
+    ) -> Self {
+        // Backstop only — `validate_resolved` reports every plan failure
+        // before any writer runs, so this panic is unreachable through the
+        // write paths.
+        let plan = ext
+            .fn_plan(registry, f)
+            .unwrap_or_else(|e| panic!("{}", e.message(&f.name)));
+        Self {
+            plan,
+            function: f.clone(),
+            callee: match callee {
+                Some(expr) => JCallee::Expr(Box::new(expr)),
+                None => JCallee::Source(ext.fn_module(registry, &f.name)),
+            },
+        }
+    }
+
+    /// The `JNINative` extern symbol this wrapper exports.
+    pub(crate) fn symbol(&self) -> &str {
+        &self.plan.native_symbol
+    }
+
+    /// What this extern's body calls: the converters its plan names, and the
+    /// prelude, whose error-channel functions every failure path routes
+    /// through.
+    pub(crate) fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        let mut calls = vec![crate::jni::generation::prelude_key()];
+        self.plan.calls(&mut calls);
+        calls
+    }
 }
 
 /// The synthetic nullary getter signature a declared const is emitted
 /// through: `pub fn const_get_<ident_lower>() -> <const ty>`. Both sides —
-/// the Rust extern ([`Declarations::on_const`] via
-/// [`emit_jni_function_wrapper_with_callee`]) and the Kotlin `val`
+/// the Rust extern (the constant artifact's getter, a [`JWrapper`] whose
+/// callee is a path to the const) and the Kotlin `val`
 /// initializer (`render_const_val`) — derive the extern symbol from this one
 /// ident, so they stay in sync by construction. The body is never used.
 pub(crate) fn const_getter_fn(
@@ -174,216 +230,220 @@ pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: 
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:
 /// `None` = the ordinary `<origin module>::<fn ident>(args)` call; `Some(e)`
 /// splices `e` verbatim as the value the output phase converts. Used by the
-/// const getter emission (`Declarations::on_const`), whose synthetic nullary `f`
+/// const getter emission (the constant artifact's), whose synthetic nullary `f`
 /// carries the signature while the value comes from
 /// `<origin module>::<CONST_IDENT>` — a path, not a call.
-pub(crate) fn emit_jni_function_wrapper_with_callee(
-    ext: &Declarations,
-    f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
-    callee: Option<syn::Expr>,
-    emit: &prebindgen_registry::RustWriter,
-) -> syn::ItemFn {
-    let original_ident = &f.name;
+impl JWrapper {
+    /// Assemble this wrapper's `#[no_mangle] extern "C"` JNI function.
+    pub(crate) fn render_fn(&self, emit: &prebindgen_registry::RustWriter) -> syn::ItemFn {
+        let f = &self.function;
+        let original_ident = &f.name;
 
-    let mut wire_params: Vec<TokenStream> = Vec::new();
-    // Each entry is a per-input decode statement. Fallible decodes are
-    // `match`-arms that, on `Err`, call `signal_error(&mut env,
-    // &__error_sink, &__e)` (invoking the caller's Kotlin sink instead of
-    // throwing a JVM exception) and `return <sentinel>;`.
-    let mut prelude: Vec<TokenStream> = Vec::new();
-    let mut call_args: Vec<TokenStream> = Vec::new();
+        let mut wire_params: Vec<TokenStream> = Vec::new();
+        // Each entry is a per-input decode statement. Fallible decodes are
+        // `match`-arms that, on `Err`, call `signal_error(&mut env,
+        // &__error_sink, &__e)` (invoking the caller's Kotlin sink instead of
+        // throwing a JVM exception) and `return <sentinel>;`.
+        let mut prelude: Vec<TokenStream> = Vec::new();
+        let mut call_args: Vec<TokenStream> = Vec::new();
 
-    // The lowered plan classifies both sides ONCE — the same classification
-    // the Kotlin wrapper and `external fun` renderers consume; this site
-    // renders the Rust decode/encode for each kind. The output is classified
-    // first (inside `build`) so the per-input `match`-arms can splice the
-    // function's sentinel into their early-`return` path.
-    // Backstop only — `validate_resolved` reports every plan failure before
-    // any writer runs, so this panic is unreachable through the write paths.
-    let plan = ext
-        .fn_plan(registry, f)
-        .unwrap_or_else(|e| panic!("{}", e.message(original_ident)));
-    let wrapper_ident = syn::Ident::new(&plan.native_symbol, Span::call_site());
-    // Output (data) expansion: when output expansion was declared for this
-    // function, the return value is decomposed by the deconstructor. Two
-    // deliveries:
-    //   * `Callback` (`deconstruct_output`, `FnOutputPlan::Unfold`): the
-    //     leaves are delivered to a foreign builder/fold lambda — the
-    //     wrapper's wire return is the lambda's `JObject` result (no
-    //     `output_entry`; see `emit_unfold_delivery`).
-    //   * `Return` (`convert_output`, `is_convert`): the single decomposed
-    //     value is **returned** directly through its ordinary output
-    //     converter — the wrapper behaves exactly like a normal function
-    //     whose return type is `convert_out_ty`.
-    let unfold_plan = plan.unfold.as_ref();
-    // Error-position expansion: when the fn returns `Result<T, E>` and an error
-    // plan is declared, the **`?`** is applied here — the extern peels the
-    // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
-    // typed DOMAIN handler), and the success path uses `T`'s converter (not the
-    // `Result<T, E>` rank-2 wrapper).
-    let error_plan = plan.error.as_ref();
-    let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
-    let wire_ty = plan.output.wire_ty();
-    let wire_return = annotate_jobject_with_lifetime(&wire_ty, "a").to_token_stream();
-    let on_err = sentinel_for_wire(&wire_ty);
+        // The lowered plan classifies both sides ONCE — the same classification
+        // the Kotlin wrapper and `external fun` renderers consume; this site
+        // renders the Rust decode/encode for each kind. The output is classified
+        // first (inside `build`) so the per-input `match`-arms can splice the
+        // function's sentinel into their early-`return` path.
+        let plan = &self.plan;
+        let wrapper_ident = syn::Ident::new(&plan.native_symbol, Span::call_site());
+        // Output (data) expansion: when output expansion was declared for this
+        // function, the return value is decomposed by the deconstructor. Two
+        // deliveries:
+        //   * `Callback` (`deconstruct_output`, `FnOutputPlan::Unfold`): the
+        //     leaves are delivered to a foreign builder/fold lambda — the
+        //     wrapper's wire return is the lambda's `JObject` result (no
+        //     `output_entry`; see `emit_unfold_delivery`).
+        //   * `Return` (`convert_output`, `is_convert`): the single decomposed
+        //     value is **returned** directly through its ordinary output
+        //     converter — the wrapper behaves exactly like a normal function
+        //     whose return type is `convert_out_ty`.
+        let unfold_plan = plan.unfold.as_ref();
+        // Error-position expansion: when the fn returns `Result<T, E>` and an error
+        // plan is declared, the **`?`** is applied here — the extern peels the
+        // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
+        // typed DOMAIN handler), and the success path uses `T`'s converter (not the
+        // `Result<T, E>` rank-2 wrapper).
+        let error_plan = plan.error.as_ref();
+        let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
+        let wire_ty = plan.output.wire_ty();
+        let wire_return = annotate_jobject_with_lifetime(&wire_ty, "a").to_token_stream();
+        let on_err = sentinel_for_wire(&wire_ty);
 
-    for param in &plan.params {
-        let (wp, pre, call_arg) = emit_input_param(param, &on_err, emit);
-        wire_params.extend(wp);
-        prelude.extend(pre);
-        call_args.push(call_arg);
-    }
-
-    let raw_call = match &callee {
-        Some(e) => quote!(#e),
-        None => {
-            let call_module = ext.fn_module(registry, original_ident);
-            quote!(#call_module::#original_ident(#(#call_args),*))
+        for param in &plan.params {
+            let (wp, pre, call_arg) = emit_input_param(param, &on_err, emit);
+            wire_params.extend(wp);
+            prelude.extend(pre);
+            call_args.push(call_arg);
         }
-    };
-    // For `convert_output` (Return), the value the output converter sees is the
-    // **deconstructed** single value (the converter's accessor applied to the
-    // raw return, lifted through the shape) — not the raw return. Build that
-    // block so the normal output phase converts it. `Decompose` ⇒ `acc(raw)`;
-    // `Optional` ⇒ `raw.map(|inner| acc(inner))`.
-    let call_expr: TokenStream = if is_convert {
-        use prebindgen_registry::unfold::UnfoldShape;
-        let uplan = unfold_plan.expect("is_convert ⇒ plan");
-        let leaf = &uplan.leaves[0];
-        let by_ref = uplan.by_ref;
-        // One derivation, shared with the multi-leaf encoder — the value forms
-        // are bound by the same [`bind_hoists`] and the leaf reached by the
-        // same [`reach_leaf_flat`]. Deriving either a second time here is what
-        // let the two drift apart: this shortcut used to compose its reach
-        // straight off the raw value, which for a value form declared with
-        // `.fields_self_into(..)` emitted `f(&v)` against a by-value receiver.
-        let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
-        // `None` when the reach is the IDENTITY of `base` and no value form had
-        // to be bound — the leaf IS the value, so there is nothing to compose.
-        // Reported separately from the composed form because the two want
-        // different code: wrapping identity in a block emits `{ __cvsrc }`
-        // (`unused_braces`), and mapping it over an `Option` emits
-        // `.map(|__inner| __inner)` (`clippy::map_identity`). Generated code
-        // runs through the consumer's own lints, where both are denials.
-        let compose = |base: TokenStream, base_is_ref: bool| -> Option<TokenStream> {
-            let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
-            let stmts = &hoisted.stmts;
-            let reached = match hoisted.rebase(&leaf.path) {
-                Some((local, rest, consuming)) => reach_leaf_flat(
-                    &qualify,
-                    &crate::jni::compile::OutWire::from_leaf(leaf),
-                    &rest,
-                    quote!(#local),
-                    false,
-                    consuming,
-                ),
-                None => reach_leaf_flat(
-                    &qualify,
-                    &crate::jni::compile::OutWire::from_leaf(leaf),
-                    &leaf.path,
-                    base.clone(),
-                    base_is_ref,
-                    false,
-                ),
+
+        let raw_call = match &self.callee {
+            JCallee::Expr(e) => quote!(#e),
+            JCallee::Source(call_module) => quote!(#call_module::#original_ident(#(#call_args),*)),
+        };
+        // For `convert_output` (Return), the value the output converter sees is the
+        // **deconstructed** single value (the converter's accessor applied to the
+        // raw return, lifted through the shape) — not the raw return. Build that
+        // block so the normal output phase converts it. `Decompose` ⇒ `acc(raw)`;
+        // `Optional` ⇒ `raw.map(|inner| acc(inner))`.
+        let call_expr: TokenStream = if is_convert {
+            use prebindgen_registry::unfold::UnfoldShape;
+            let uplan = unfold_plan.expect("is_convert ⇒ plan");
+            let leaf = &uplan.leaves[0];
+            let by_ref = uplan.by_ref;
+            // One derivation, shared with the multi-leaf encoder — the value forms
+            // are bound by the same [`bind_hoists`] and the leaf reached by the
+            // same [`reach_leaf_flat`]. Deriving either a second time here is what
+            // let the two drift apart: this shortcut used to compose its reach
+            // straight off the raw value, which for a value form declared with
+            // `.fields_self_into(..)` emitted `f(&v)` against a by-value receiver.
+            // Origins were frozen with the leaf this reach walks, so the shortcut
+            // qualifies its accessor calls without asking the registry.
+            let delivery = match &plan.output {
+                FnOutputPlan::Value(value) => value
+                    .convert_delivery
+                    .as_ref()
+                    .expect("a convert output carries its frozen origins"),
+                FnOutputPlan::Unfold(_) => unreachable!("a convert has a value output plan"),
             };
-            if stmts.is_empty() && reached.to_string() == base.to_string() {
-                return None;
+            let qualify = |id: &syn::Ident| -> syn::Path {
+                crate::jni::emit::DeliveryContext::qualify(delivery, id)
+            };
+            // `None` when the reach is the IDENTITY of `base` and no value form had
+            // to be bound — the leaf IS the value, so there is nothing to compose.
+            // Reported separately from the composed form because the two want
+            // different code: wrapping identity in a block emits `{ __cvsrc }`
+            // (`unused_braces`), and mapping it over an `Option` emits
+            // `.map(|__inner| __inner)` (`clippy::map_identity`). Generated code
+            // runs through the consumer's own lints, where both are denials.
+            let compose = |base: TokenStream, base_is_ref: bool| -> Option<TokenStream> {
+                let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
+                let stmts = &hoisted.stmts;
+                let reached = match hoisted.rebase(&leaf.path) {
+                    Some((local, rest, consuming)) => reach_leaf_flat(
+                        &qualify,
+                        &crate::jni::compile::OutWire::from_leaf(leaf),
+                        &rest,
+                        quote!(#local),
+                        false,
+                        consuming,
+                    ),
+                    None => reach_leaf_flat(
+                        &qualify,
+                        &crate::jni::compile::OutWire::from_leaf(leaf),
+                        &leaf.path,
+                        base.clone(),
+                        base_is_ref,
+                        false,
+                    ),
+                };
+                if stmts.is_empty() && reached.to_string() == base.to_string() {
+                    return None;
+                }
+                Some(quote!({ #stmts #reached }))
+            };
+            match &uplan.shape {
+                UnfoldShape::Optional((), _) => match compose(quote!(__inner), by_ref) {
+                    Some(inner) => quote!({
+                        let __cvsrc = #raw_call;
+                        __cvsrc.map(|__inner| #inner)
+                    }),
+                    None => raw_call.clone(),
+                },
+                _ => match compose(quote!(__cvsrc), by_ref) {
+                    Some(v) => quote!({
+                        let __cvsrc = #raw_call;
+                        #v
+                    }),
+                    None => raw_call.clone(),
+                },
             }
-            Some(quote!({ #stmts #reached }))
-        };
-        match &uplan.shape {
-            UnfoldShape::Optional((), _) => match compose(quote!(__inner), by_ref) {
-                Some(inner) => quote!({
-                    let __cvsrc = #raw_call;
-                    __cvsrc.map(|__inner| #inner)
-                }),
-                None => raw_call.clone(),
-            },
-            _ => match compose(quote!(__cvsrc), by_ref) {
-                Some(v) => quote!({
-                    let __cvsrc = #raw_call;
-                    #v
-                }),
-                None => raw_call.clone(),
-            },
-        }
-    } else if let Some(ep) = error_plan {
-        // `Result<T, E>` peel (the automatic `?`): success ⇒ `T`; on `Err(e)`,
-        // decompose `e` into the `ze` leaves — through the SAME shared leaf
-        // encoder every output/callback delivery uses (typed jvalues, handle
-        // wraps, Option-nested accessor unwrap) — and invoke the typed DOMAIN
-        // handler (no `je`, no defaults), then return the sentinel. A failure
-        // while ENCODING the error itself degrades to the BINDING channel
-        // (`signal_binding_error`). The success `T` flows into the normal
-        // output phase.
-        let eze_idents: Vec<syn::Ident> = (0..ep.leaves.len())
-            .map(|i| format_ident!("__eze{}", i))
-            .collect();
-        let ze_fail = |msg: TokenStream| -> TokenStream {
-            quote! {
-                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &#msg);
-                return #on_err;
-            }
-        };
-        let context = LiveDeliveryContext::new(ext, registry);
-        let (ze_stmts, ze_args, _) = encode_plan_leaves(
-            &context,
-            crate::jni::emit::Delivered::planned(&ep.unfold, ep.wires.clone(), ep.chain.clone()),
-            &eze_idents,
-            &quote!(__de),
-            &ze_fail,
-            emit,
-        );
-        quote! {
-            match #raw_call {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__de) => {
-                    #ze_stmts
-                    signal_domain_error(
-                        &mut env, &__domain_sink,
-                        &__DSINK_MID, __DSINK_FQN, __DSINK_DESCR,
-                        &[#(#ze_args),*],
-                    );
+        } else if let Some(ep) = error_plan {
+            // `Result<T, E>` peel (the automatic `?`): success ⇒ `T`; on `Err(e)`,
+            // decompose `e` into the `ze` leaves — through the SAME shared leaf
+            // encoder every output/callback delivery uses (typed jvalues, handle
+            // wraps, Option-nested accessor unwrap) — and invoke the typed DOMAIN
+            // handler (no `je`, no defaults), then return the sentinel. A failure
+            // while ENCODING the error itself degrades to the BINDING channel
+            // (`signal_binding_error`). The success `T` flows into the normal
+            // output phase.
+            let eze_idents: Vec<syn::Ident> = (0..ep.leaves.len())
+                .map(|i| format_ident!("__eze{}", i))
+                .collect();
+            let ze_fail = |msg: TokenStream| -> TokenStream {
+                quote! {
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &#msg);
                     return #on_err;
                 }
+            };
+            let (ze_stmts, ze_args, _) = encode_plan_leaves(
+                &ep.delivery,
+                crate::jni::emit::Delivered::planned(
+                    &ep.unfold,
+                    ep.wires.clone(),
+                    ep.chain.clone(),
+                ),
+                &eze_idents,
+                &quote!(__de),
+                &ze_fail,
+                emit,
+            );
+            quote! {
+                match #raw_call {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__de) => {
+                        #ze_stmts
+                        signal_domain_error(
+                            &mut env, &__domain_sink,
+                            &__DSINK_MID, __DSINK_FQN, __DSINK_DESCR,
+                            &[#(#ze_args),*],
+                        );
+                        return #on_err;
+                    }
+                }
             }
-        }
-    } else {
-        raw_call
-    };
-
-    // Output phase. Three shapes:
-    //   * `Callback` output expansion: decompose the return value and deliver the
-    //     leaves to the foreign builder/fold (`__builder` / `__acc`+`__fold`).
-    //   * `Return` output expansion (convert) and normal returns: invoke the
-    //     frozen registry-planned pipeline once and route its `Err` through
-    //     `signal_error`. (For convert, `call_expr` above already deconstructed
-    //     the value.)
-    let mut builder_param: Option<TokenStream> = None;
-    let output_phase: TokenStream = if let FnOutputPlan::Unfold(u) = &plan.output {
-        // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
-        // Decompose/Optional: a single `__builder` callback.
-        let uplan = unfold_plan.expect("Unfold output ⇒ unfold plan present");
-        builder_param = Some(unfold_builder_param(u.iterable_fold));
-        // The delivery **binds** the returned value and matches it against the
-        // canonical shape its `kind` names (`Option`, then a run). Conversion
-        // follows the SYNTAX, and this position takes no converter — nothing
-        // between the source call and the match re-spells anything — so the
-        // wrappers the classification erased have to come off here, at the
-        // emitter's own binding, or the match is an `E0308` on a spelling the
-        // model deliberately reads as optional (#292).
-        //
-        // The value delivered is the `Ok` side when the error plan applied the
-        // `?`, and the return itself otherwise — the wrappers questioned are
-        // those over whatever `call_expr` actually yields.
-        let delivered = match error_plan {
-            Some(_) => f.ret.fallible_parts().map_or(&f.ret, |(ok, _)| ok),
-            None => &f.ret,
+        } else {
+            raw_call
         };
-        let call_expr =
-            read_through_erased_wrappers(delivered, call_expr.clone()).unwrap_or_else(|| {
-                panic!(
+
+        // Output phase. Three shapes:
+        //   * `Callback` output expansion: decompose the return value and deliver the
+        //     leaves to the foreign builder/fold (`__builder` / `__acc`+`__fold`).
+        //   * `Return` output expansion (convert) and normal returns: invoke the
+        //     frozen registry-planned pipeline once and route its `Err` through
+        //     `signal_error`. (For convert, `call_expr` above already deconstructed
+        //     the value.)
+        let mut builder_param: Option<TokenStream> = None;
+        let output_phase: TokenStream = if let FnOutputPlan::Unfold(u) = &plan.output {
+            // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
+            // Decompose/Optional: a single `__builder` callback.
+            let uplan = unfold_plan.expect("Unfold output ⇒ unfold plan present");
+            builder_param = Some(unfold_builder_param(u.iterable_fold));
+            // The delivery **binds** the returned value and matches it against the
+            // canonical shape its `kind` names (`Option`, then a run). Conversion
+            // follows the SYNTAX, and this position takes no converter — nothing
+            // between the source call and the match re-spells anything — so the
+            // wrappers the classification erased have to come off here, at the
+            // emitter's own binding, or the match is an `E0308` on a spelling the
+            // model deliberately reads as optional (#292).
+            //
+            // The value delivered is the `Ok` side when the error plan applied the
+            // `?`, and the return itself otherwise — the wrappers questioned are
+            // those over whatever `call_expr` actually yields.
+            let delivered = match error_plan {
+                Some(_) => f.ret.fallible_parts().map_or(&f.ret, |(ok, _)| ok),
+                None => &f.ret,
+            };
+            let call_expr = read_through_erased_wrappers(delivered, call_expr.clone())
+                .unwrap_or_else(|| {
+                    panic!(
                     "`{original_ident}` returns `{}`, whose leaves are delivered to a builder: \
                      the value has to be moved out of `{}` to be decomposed, and that wrapper \
                      does not permit it (a `Cow` payload cannot be moved through `Deref`). \
@@ -393,16 +453,16 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                     delivered,
                     delivered.erased_wrappers().join("<"),
                 )
-            });
-        emit_unfold_delivery(ext, registry, uplan, u, &call_expr, &on_err, emit)
-    } else {
-        let output = match &plan.output {
-            FnOutputPlan::Value(value) => value,
-            FnOutputPlan::Unfold(_) => unreachable!("normal output has a value plan"),
-        };
-        let convert = output.pipeline.invoke(quote!(__out), emit);
-        let mut phase: TokenStream = quote! { let __out = #call_expr; };
-        phase.extend(quote! {
+                });
+            emit_unfold_delivery(uplan, u, &call_expr, &on_err, emit)
+        } else {
+            let output = match &plan.output {
+                FnOutputPlan::Value(value) => value,
+                FnOutputPlan::Unfold(_) => unreachable!("normal output has a value plan"),
+            };
+            let convert = output.pipeline.invoke(quote!(__out), emit);
+            let mut phase: TokenStream = quote! { let __out = #call_expr; };
+            phase.extend(quote! {
             match #convert {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
@@ -411,69 +471,71 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                 }
             }
         });
-        phase
-    };
+            phase
+        };
 
-    // Error sinks. Both channels are typed `fun interface`s whose `run` method
-    // ID is resolved once per process on the interface class (the sink instance
-    // differs per call). The BINDING channel (`__error_sink` + `__SINK_*`, the
-    // base `JniErrorHandler`) is always present — every wrapper can hit a
-    // binding/marshalling failure. The DOMAIN channel (`__domain_sink` +
-    // `__DSINK_*`, the typed `<Src>Handler`) is present only for a fallible fn
-    // with a declared error plan; its `Err(E)` decomposition delivers the real
-    // leaves (no `je`, no fabricated defaults).
-    let error_ifaces = plan.onerror_iface.as_ref().unwrap_or_else(|| {
-        panic!(
-            "jnigen: cannot derive the onError handler interface for `{}`",
-            original_ident
-        )
-    });
-    let bsink_fqn_lit = syn::LitStr::new(&error_ifaces.binding.raw_slash_fqn(), Span::call_site());
-    let bsink_descr_lit = syn::LitStr::new(&error_ifaces.binding.descr, Span::call_site());
-    let (domain_setup, domain_sink_param) = match &error_ifaces.domain {
-        Some(dsink) => {
-            let dfqn = syn::LitStr::new(&dsink.raw_slash_fqn(), Span::call_site());
-            let ddescr = syn::LitStr::new(&dsink.descr, Span::call_site());
-            (
-                quote! {
-                    #[allow(non_upper_case_globals)]
-                    static __DSINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
-                        ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-                    const __DSINK_FQN: &str = #dfqn;
-                    const __DSINK_DESCR: &str = #ddescr;
-                },
-                quote!(__domain_sink: jni::objects::JObject<'a>,),
+        // Error sinks. Both channels are typed `fun interface`s whose `run` method
+        // ID is resolved once per process on the interface class (the sink instance
+        // differs per call). The BINDING channel (`__error_sink` + `__SINK_*`, the
+        // base `JniErrorHandler`) is always present — every wrapper can hit a
+        // binding/marshalling failure. The DOMAIN channel (`__domain_sink` +
+        // `__DSINK_*`, the typed `<Src>Handler`) is present only for a fallible fn
+        // with a declared error plan; its `Err(E)` decomposition delivers the real
+        // leaves (no `je`, no fabricated defaults).
+        let error_ifaces = plan.onerror_iface.as_ref().unwrap_or_else(|| {
+            panic!(
+                "jnigen: cannot derive the onError handler interface for `{}`",
+                original_ident
             )
-        }
-        None => (quote!(), quote!()),
-    };
-    let sinks_setup = quote! {
-        #[allow(non_upper_case_globals)]
-        static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
-            ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-        const __SINK_FQN: &str = #bsink_fqn_lit;
-        const __SINK_DESCR: &str = #bsink_descr_lit;
-        #domain_setup
-    };
+        });
+        let bsink_fqn_lit =
+            syn::LitStr::new(&error_ifaces.binding.raw_slash_fqn(), Span::call_site());
+        let bsink_descr_lit = syn::LitStr::new(&error_ifaces.binding.descr, Span::call_site());
+        let (domain_setup, domain_sink_param) = match &error_ifaces.domain {
+            Some(dsink) => {
+                let dfqn = syn::LitStr::new(&dsink.raw_slash_fqn(), Span::call_site());
+                let ddescr = syn::LitStr::new(&dsink.descr, Span::call_site());
+                (
+                    quote! {
+                        #[allow(non_upper_case_globals)]
+                        static __DSINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
+                            ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+                        const __DSINK_FQN: &str = #dfqn;
+                        const __DSINK_DESCR: &str = #ddescr;
+                    },
+                    quote!(__domain_sink: jni::objects::JObject<'a>,),
+                )
+            }
+            None => (quote!(), quote!()),
+        };
+        let sinks_setup = quote! {
+            #[allow(non_upper_case_globals)]
+            static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
+                ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+            const __SINK_FQN: &str = #bsink_fqn_lit;
+            const __SINK_DESCR: &str = #bsink_descr_lit;
+            #domain_setup
+        };
 
-    // Trailing sink params: `__error_sink` (binding) always, then
-    // `__domain_sink` (typed domain error) for a fallible fn — a capture is
-    // passed for each. Declared after the wire params + builder so the order
-    // matches the Kotlin `external fun`.
-    syn::parse_quote! {
-        #[no_mangle]
-        #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
-        pub unsafe extern "C" fn #wrapper_ident<'a>(
-            mut env: jni::JNIEnv<'a>,
-            _class: jni::objects::JClass<'a>,
-            #(#wire_params,)*
-            #builder_param
-            __error_sink: jni::objects::JObject<'a>,
-            #domain_sink_param
-        ) -> #wire_return {
-            #sinks_setup
-            #(#prelude)*
-            #output_phase
+        // Trailing sink params: `__error_sink` (binding) always, then
+        // `__domain_sink` (typed domain error) for a fallible fn — a capture is
+        // passed for each. Declared after the wire params + builder so the order
+        // matches the Kotlin `external fun`.
+        syn::parse_quote! {
+            #[no_mangle]
+            #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+            pub unsafe extern "C" fn #wrapper_ident<'a>(
+                mut env: jni::JNIEnv<'a>,
+                _class: jni::objects::JClass<'a>,
+                #(#wire_params,)*
+                #builder_param
+                __error_sink: jni::objects::JObject<'a>,
+                #domain_sink_param
+            ) -> #wire_return {
+                #sinks_setup
+                #(#prelude)*
+                #output_phase
+            }
         }
     }
 }

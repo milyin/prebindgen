@@ -60,6 +60,9 @@ pub(crate) struct ErrorOutputPlan {
     pub unfold: prebindgen_registry::unfold::UnfoldPlan,
     pub wires: Vec<crate::jni::compile::OutWire>,
     pub chain: Option<crate::jni::compile::ComposedChain>,
+    /// Origin qualification and sum shape for these leaves, frozen with them,
+    /// so rendering the `Err` arm asks the registry nothing.
+    pub delivery: crate::jni::emit::FrozenDelivery,
 }
 
 impl std::ops::Deref for ErrorOutputPlan {
@@ -79,6 +82,24 @@ pub(crate) struct PlanParam {
     /// could not disagree, in a form that could not be asked anything.
     pub ty: prebindgen_registry::flat::TypeRef,
     pub form: ParamForm,
+}
+
+impl PlanLeaf {
+    /// The converter this leaf is decoded through, which is the one its own
+    /// Rust operation invokes: a flattened data class and an optional pair are
+    /// rebuilt by one composed converter of their own, and every other kind
+    /// runs the frozen pipeline.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match &self.rust {
+            RustParamOp::Pipeline { .. } => self.pipeline.calls(out),
+            RustParamOp::OptionalPair(plan) => out.push(
+                prebindgen_registry::write::ArtifactKey::Operation(plan.chain.operation.clone()),
+            ),
+            RustParamOp::FlattenStruct(plan) => out.push(
+                prebindgen_registry::write::ArtifactKey::Operation(plan.chain.operation.clone()),
+            ),
+        }
+    }
 }
 
 /// How a source parameter crosses the boundary. The single leaf is boxed to
@@ -316,6 +337,9 @@ pub(crate) struct UnfoldOutputPlan {
     /// builder/folder singletons. `None` for a whole-element fold, which has
     /// no deconstructor declaration.
     pub decon: Option<std::rc::Rc<prebindgen_registry::unfold::DeconSpec>>,
+    /// Origin qualification and sum shape for these leaves, frozen with them,
+    /// so rendering the delivery asks the registry nothing.
+    pub delivery: crate::jni::emit::FrozenDelivery,
     /// Kotlin type variable of the wrapper: `None` for a fixed builder,
     /// `"A"` for an `Iterable` fold (bare or `Optional`-wrapped), `"R"`
     /// otherwise.
@@ -354,6 +378,10 @@ pub(crate) struct ValueOutputPlan {
     /// Primitive sentinels consumed by nested Optional enum layers,
     /// outside-in. Every one collapses to Kotlin `null` on output.
     pub enum_niches: Vec<String>,
+    /// Origin qualification for the accessor calls a `Return`-delivery
+    /// convert reaches its single leaf through, frozen with the plan. `None`
+    /// unless [`Self::is_convert`].
+    pub convert_delivery: Option<crate::jni::emit::FrozenDelivery>,
 }
 
 /// The pure classification core of `classify_return` — no import
@@ -460,7 +488,7 @@ impl PlanError {
         let at = self.location_suffix();
         match self {
             PlanError::Unresolved { ty } => format!(
-                "JniGen::on_function: input type `{}` for `{}` is unresolved{at}",
+                "JniGen extern: input type `{}` for `{}` is unresolved{at}",
                 ty.key(),
                 fn_ident,
             ),
@@ -470,7 +498,7 @@ impl PlanError {
                 param,
             ),
             PlanError::UnresolvedOutput { ty } => format!(
-                "JniGen::on_function: return type `{}` of `{}` has no registered output \
+                "JniGen extern: return type `{}` of `{}` has no registered output \
                  converter — register one via `Declarations::output_wrapper(pat, |…| Some((ty, exc, body)))` \
                  (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
                   to bind a domain exception){at}",
@@ -478,16 +506,16 @@ impl PlanError {
                 fn_ident,
             ),
             PlanError::UnknownOutputType { ty } => format!(
-                "JniGen::on_function: return type `{}` of `{}` is not registered — the \
+                "JniGen extern: return type `{}` of `{}` is not registered — the \
                  resolver never saw this type, so no converter can be selected for it. \
                  Declare the type (or the function that produces it) before binding `{}`",
                 ty, fn_ident, fn_ident,
             ),
             PlanError::UnflattenableDataClass(error) => {
-                format!("JniGen::on_function `{fn_ident}`: {}", error.message())
+                format!("JniGen extern `{fn_ident}`: {}", error.message())
             }
             PlanError::JvmParameterLimit { slots } => format!(
-                "JniGen::on_function `{fn_ident}`: flattened JNI signature uses {slots} JVM parameter slots (maximum 255, including the JNINative receiver); reduce the data-class shape or declare an intentional `data_class!(T).jobject_input()` boundary"
+                "JniGen extern `{fn_ident}`: flattened JNI signature uses {slots} JVM parameter slots (maximum 255, including the JNINative receiver); reduce the data-class shape or declare an intentional `data_class!(T).jobject_input()` boundary"
             ),
         }
     }
@@ -547,7 +575,7 @@ pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Resu
     }
 
     // Declared consts: their synthetic nullary getters run through the same
-    // plan machinery (`Declarations::on_const`).
+    // plan machinery, and reach the file as constant artifacts.
     if let Some(declared_consts) = ext.declared_consts() {
         let mut consts: Vec<&prebindgen_registry::flat::Constant> =
             registry.flat().constants().collect();
@@ -588,6 +616,49 @@ pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Resu
         Ok(())
     } else {
         Err(errors.join("\n"))
+    }
+}
+
+impl JniFunctionPlan {
+    /// Every converter the extern's body calls: one chain per parameter, the
+    /// output's, and the error arm's when the function has one.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for param in &self.params {
+            match &param.form {
+                ParamForm::Single(leaf) => leaf.calls(out),
+                ParamForm::Expanded { leaves, .. } => {
+                    for leaf in leaves {
+                        leaf.calls(out);
+                    }
+                }
+            }
+        }
+        match &self.output {
+            FnOutputPlan::Value(value) => value.pipeline.calls(out),
+            FnOutputPlan::Unfold(unfold) => {
+                for wire in &unfold.wires {
+                    wire.calls(out);
+                }
+                if let Some(chain) = &unfold.chain {
+                    out.push(prebindgen_registry::write::ArtifactKey::Operation(
+                        chain.operation.clone(),
+                    ));
+                }
+                if let Some(pipeline) = &unfold.element_pipeline {
+                    pipeline.calls(out);
+                }
+            }
+        }
+        if let Some(error) = &self.error {
+            for wire in &error.wires {
+                wire.calls(out);
+            }
+            if let Some(chain) = &error.chain {
+                out.push(prebindgen_registry::write::ArtifactKey::Operation(
+                    chain.operation.clone(),
+                ));
+            }
+        }
     }
 }
 
@@ -943,10 +1014,13 @@ fn build_error_output(
     } else {
         None
     };
+    let delivery =
+        crate::jni::emit::FrozenDelivery::new(ext, registry, &unfold, wires.clone(), chain.clone());
     Ok(ErrorOutputPlan {
         unfold,
         wires,
         chain,
+        delivery,
     })
 }
 
@@ -1052,9 +1126,17 @@ fn build_output(
             };
             (wires, chain, None)
         };
+        let delivery = crate::jni::emit::FrozenDelivery::new(
+            ext,
+            registry,
+            plan,
+            wires.clone(),
+            chain.clone(),
+        );
         return Ok(FnOutputPlan::Unfold(Box::new(UnfoldOutputPlan {
             wires,
             chain,
+            delivery,
             element_pipeline,
             iterable_fold,
             optional,
@@ -1127,6 +1209,23 @@ fn build_output(
         enum_niches,
         ..
     } = plan;
+    // The convert shortcut reaches the plan's single leaf itself rather than
+    // through the leaf encoder, and qualifies the accessor calls on that reach
+    // — so those origins are frozen here, with the leaf they belong to.
+    let convert_delivery = is_convert.then(|| {
+        let unfold = unfold_plan.expect("a convert is a Return delivery, which carries its plan");
+        crate::jni::emit::FrozenDelivery::new(
+            ext,
+            registry,
+            unfold,
+            unfold
+                .leaves
+                .iter()
+                .map(crate::jni::compile::OutWire::from_leaf)
+                .collect(),
+            None,
+        )
+    });
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
         is_convert,
         pipeline,
@@ -1134,6 +1233,7 @@ fn build_output(
         is_enum,
         is_option_enum,
         enum_niches,
+        convert_delivery,
     })))
 }
 

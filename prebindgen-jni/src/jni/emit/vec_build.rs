@@ -163,7 +163,7 @@ pub(crate) fn vec_build_elem(
 /// takes as a `&[T]`/`Vec<T>` input — the set the synthetic `…VecNew/Push/Free`
 /// externs are emitted for (once per type, shared across all such functions).
 /// Deduped by [`TypeKey`] and sorted for deterministic output (mirrors
-/// [`build_handle_destructor_items`]).
+/// [`crate::jni::plan_handle_destructors`]).
 ///
 /// The key is the **canonical** element's, since that is what
 /// [`vec_build_elem`] answers with — so `Vec<Payload>` and `Vec<Box<Payload>>`
@@ -262,7 +262,7 @@ fn vec_helper_symbol(ext: &Declarations, base: &str, suffix: &str) -> String {
 
 /// One `#[no_mangle] extern "C"` `…VecNew/Push/Free` trio per flattenable
 /// element type used as a `&[T]`/`Vec<T>` input — the Rust half of the
-/// build-the-Vec-incrementally path. Modeled on [`build_handle_destructor_items`]
+/// build-the-Vec-incrementally path. Modeled on [`crate::jni::plan_handle_destructors`]
 /// (deterministic symbol sort, emitted only for element types a scanned function
 /// actually takes by slice/Vec).
 ///
@@ -274,18 +274,45 @@ fn vec_helper_symbol(ext: &Declarations, base: &str, suffix: &str) -> String {
 /// error sink (the sink's typed `run` descriptor varies by caller, and `Push` is
 /// shared across all callers of a given element type). This keeps the Kotlin
 /// push loop free of a per-element failure check.
-pub(crate) fn build_vec_build_helper_items(
-    ext: &Declarations,
+pub(crate) fn plan_vec_build_helpers(ext: &Declarations) -> Vec<crate::jni::generation::JVecBuild> {
+    // Planned while the generation plan is being frozen, which is before that
+    // plan is installed on the declarations — so the helpers come from the
+    // planning store rather than through `collect_vec_build_helpers`, which
+    // every post-freeze reader uses. Order comes from the exported symbols
+    // below, so the store's own order does not matter here.
+    let helpers: Vec<_> = ext.vec_build_plans.borrow().values().cloned().collect();
+    let mut planned: Vec<crate::jni::generation::JVecBuild> = helpers
+        .into_iter()
+        .map(|helpers| {
+            let base = helpers.base.clone();
+            crate::jni::generation::JVecBuild::new(
+                helpers,
+                vec_helper_symbol(ext, &base, "New"),
+                vec_helper_symbol(ext, &base, "Push"),
+                vec_helper_symbol(ext, &base, "Free"),
+            )
+        })
+        .collect();
+    planned.sort_by(|a, b| a.sort_key().cmp(b.sort_key()));
+    planned
+}
+
+/// The trio's Rust items, in symbol order.
+pub(crate) fn render_vec_build_helpers(
+    plan: &crate::jni::generation::JVecBuild,
     emit: &prebindgen_registry::RustWriter,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
-    for h in collect_vec_build_helpers(ext) {
+    {
+        let h = plan.helpers();
+        let (new_sym, push_sym, free_sym) = (
+            plan.new_symbol().to_string(),
+            plan.push_symbol().to_string(),
+            plan.free_symbol().to_string(),
+        );
         // Generated Rust spells `spell()`; the reading is what the plan
         // and the key are taken from.
         let elem = emit.emit_source_type(&h.elem);
-        let new_sym = vec_helper_symbol(ext, &h.base, "New");
-        let push_sym = vec_helper_symbol(ext, &h.base, "Push");
-        let free_sym = vec_helper_symbol(ext, &h.base, "Free");
         let new_id = syn::Ident::new(&new_sym, Span::call_site());
         let push_id = syn::Ident::new(&push_sym, Span::call_site());
         let free_id = syn::Ident::new(&free_sym, Span::call_site());

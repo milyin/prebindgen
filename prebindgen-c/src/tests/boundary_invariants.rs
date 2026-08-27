@@ -381,8 +381,8 @@ fn no_raw_pointer_is_dereferenced_without_a_null_check() {
 
 #[test]
 fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
-    let source = include_str!("../emit.rs");
-    let file = syn::parse_file(source).expect("C emitter parses");
+    let source = include_str!("../assembly.rs");
+    let file = syn::parse_file(source).expect("C assembly parses");
     let wrapper = file
         .items
         .iter()
@@ -392,7 +392,7 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
         })
         .flat_map(|item| &item.items)
         .find_map(|item| match item {
-            syn::ImplItem::Fn(method) if method.sig.ident == "emit_function_wrapper" => {
+            syn::ImplItem::Fn(method) if method.sig.ident == "render_fn" => {
                 Some(method.block.to_token_stream().to_string())
             }
             _ => None,
@@ -413,9 +413,9 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
         );
     }
     for required in [
-        "generation_site(",
+        "self.site(",
         "failure_route()",
-        "emit_planned_inputs(",
+        "planned_inputs(",
         ".encode(",
     ] {
         assert!(
@@ -425,14 +425,64 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
     }
 }
 
+/// The wrapper is planned once, at the end of resolution: what it renders from
+/// is its own frozen state and the frozen plan, never the declaration object
+/// the binding was written into.
 #[test]
-fn callback_renderer_accepts_only_the_frozen_plan() {
-    let renderer: fn(
-        &prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>,
-        &str,
-        &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> = crate::chain::render_artifacts;
-    let _ = renderer;
+fn a_planned_wrapper_holds_no_declaration_object() {
+    let source = include_str!("../assembly.rs");
+    let file = syn::parse_file(source).expect("C assembly parses");
+    let fields = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Struct(item) if item.ident == "CWrapper" => {
+                Some(item.fields.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("the planned wrapper");
+    let fields: String = fields.split_whitespace().collect();
+    for forbidden in ["CbindgenBuilder", "Registry", "Compiled", "RefCell"] {
+        assert!(
+            !fields.contains(forbidden),
+            "a planned wrapper retains {forbidden}, so rendering could resume planning"
+        );
+    }
+    assert!(
+        fields.contains("GenerationPlan"),
+        "a planned wrapper must read its boundary sites from the frozen plan"
+    );
+}
+
+/// A planned artifact — an opaque handle, a value-opaque, a tagged union, a
+/// callback — reaches the file through a lookup in the frozen plan and the
+/// writer, and through nothing else.
+#[test]
+fn planned_artifacts_reach_the_file_through_the_frozen_plan() {
+    let source = include_str!("../assembly.rs");
+    let file = syn::parse_file(source).expect("C assembly parses");
+    let fields = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Struct(item) if item.ident == "CPlanned" => {
+                Some(item.fields.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("the planned-artifact placement");
+    let fields: String = fields.split_whitespace().collect();
+    for forbidden in ["CbindgenBuilder", "Registry", "Compiled", "RefCell"] {
+        assert!(
+            !fields.contains(forbidden),
+            "a placed artifact retains {forbidden}, so rendering could resume planning"
+        );
+    }
+    assert!(
+        fields.contains("Rc<GenerationPlan") && fields.contains("ArtifactId"),
+        "a placed artifact is a frozen plan and the identity to look up in it"
+    );
 }
 
 #[test]

@@ -643,3 +643,85 @@ fn cross_artifact_optional_iterable_fold_agrees() {
         "optional fold must redispatch a native error before casting its erased result:\n{wrappers}"
     );
 }
+
+/// The extern is planned once, at the end of resolution: what it renders from
+/// is its own frozen state, never the declaration object the binding was
+/// written into or the registry it was resolved against.
+///
+/// Fenced on the struct's fields rather than on the file, so a mention of
+/// either name in a doc comment or a neighbouring function cannot satisfy it.
+#[test]
+fn a_planned_extern_holds_no_declaration_object() {
+    let source = include_str!("../emit/wrapper.rs");
+    let file = syn::parse_file(source).expect("the JNI wrapper emitter parses");
+    let fields = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Struct(item) if item.ident == "JWrapper" => {
+                Some(item.fields.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("the planned extern");
+    let fields: String = fields.split_whitespace().collect();
+    for forbidden in ["Declarations", "Registry", "Compiled", "RefCell"] {
+        assert!(
+            !fields.contains(forbidden),
+            "a planned extern retains {forbidden}, so rendering could resume planning"
+        );
+    }
+    assert!(
+        fields.contains("JniFunctionPlan"),
+        "a planned extern must render from its frozen function plan"
+    );
+}
+
+/// The extern's body reads frozen plans only: the two live lookups it used to
+/// make — the function plan and the origin module of what it calls — are
+/// answered before rendering starts.
+#[test]
+fn extern_rendering_asks_the_registry_nothing() {
+    let source = include_str!("../emit/wrapper.rs");
+    let file = syn::parse_file(source).expect("the JNI wrapper emitter parses");
+    let renderer = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(item) => Some(item),
+            _ => None,
+        })
+        .flat_map(|item| &item.items)
+        .find_map(|item| match item {
+            syn::ImplItem::Fn(method) if method.sig.ident == "render_fn" => Some(method),
+            _ => None,
+        })
+        .expect("the extern renderer");
+    let inputs: String = renderer
+        .sig
+        .inputs
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+    assert_eq!(
+        inputs, "&self,emit:&prebindgen_registry::RustWriter",
+        "the extern renderer takes its frozen self and the writer, and nothing else"
+    );
+    let body: String = renderer
+        .block
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+    for forbidden in ["fn_plan(", "fn_module("] {
+        assert!(
+            !body.contains(forbidden),
+            "the extern renderer resumed planning through {forbidden}"
+        );
+    }
+    assert!(
+        body.contains("self.plan") && body.contains("self.callee"),
+        "the extern renderer must read its frozen plan and callee"
+    );
+}

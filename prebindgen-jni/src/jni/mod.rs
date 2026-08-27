@@ -538,10 +538,7 @@ impl JniGen {
         direction: prebindgen_registry::recipe::Direction,
         parts: bool,
     ) -> Result<(bool, String, String), String> {
-        use prebindgen_registry::{
-            recipe::{Compiler, Crossing},
-            write::RustFunction,
-        };
+        use prebindgen_registry::recipe::{Compiler, Crossing};
 
         let reading = self
             .registry
@@ -568,11 +565,12 @@ impl JniGen {
         }
         .map_err(|e| e.to_string())?;
         fragment.rust.mark_reachable();
-        let rendered = fragment
-            .rust
-            .render(&prebindgen_registry::RustWriter::for_registry_test(
-                &self.registry,
-            ));
+        let rendered =
+            fragment
+                .rust
+                .render_fn(&prebindgen_registry::RustWriter::for_registry_test(
+                    &self.registry,
+                ));
         Ok((
             fragment.composed_only,
             rendered.sig.ident.to_string(),
@@ -868,10 +866,9 @@ impl JniGen {
         let fragment = self
             .generation_plan()
             .fragment(&key, Direction::Construct)?;
-        let rendered = prebindgen_registry::write::RustFunction::render(
-            &fragment.rust,
-            &prebindgen_registry::RustWriter::for_test(),
-        );
+        let rendered = fragment
+            .rust
+            .render_fn(&prebindgen_registry::RustWriter::for_test());
         Some((rendered.sig.ident.to_string(), fragment.rust.is_invoke()))
     }
 }
@@ -900,16 +897,24 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
-        let conversions = self
-            .decls
-            .generation
-            .as_ref()
-            .expect("resolved JniGen has no frozen generation plan")
-            .converter_functions();
+        // Every binding a test writes also checks that the assembly's
+        // dependency edges name every call its artifacts render — the
+        // completeness the emission-time check reasons from.
+        #[cfg(test)]
+        prebindgen_registry::write::assert_edges_cover_rendered_calls(
+            self.decls
+                .generation
+                .as_ref()
+                .expect("resolved JniGen has no frozen generation plan")
+                .assembly(),
+            "jni",
+        );
         Ok(prebindgen_registry::write::write_rust(
-            &self.registry,
-            &self.decls,
-            &conversions,
+            self.decls
+                .generation
+                .as_ref()
+                .expect("resolved JniGen has no frozen generation plan")
+                .assembly(),
             out_path,
         )?)
     }

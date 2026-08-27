@@ -17,3 +17,9 @@ prebindgen-registry = { workspace = true }
 syn = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
+
+[dev-dependencies]
+# The registry's test support: `RustWriter::for_registry_test` and
+# `assert_edges_cover_rendered_calls`, which every binding these tests build
+# runs through.
+prebindgen-registry = { workspace = true, features = ["testing"] }

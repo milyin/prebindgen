@@ -209,6 +209,66 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
     )
 }
 
+/// The items every extern body reaches by bare name: the framework error
+/// alias, the `OwnedObject` carrier borrowed-handle plans return, and the two
+/// error-channel functions.
+///
+/// `__JniErr` is the **framework** error type alias — always the
+/// `JniBindingError` String-wrapper. Built-in converter bodies compose their
+/// `?` failures into this type via its `From<String>` impl. A `Result<T, E>`
+/// return instead binds its own raw `E`; both funnel to the per-call
+/// `signal_error` sink (generic over `Display`).
+///
+/// The two error-channel fns are `signal_binding_error` (binding/system
+/// failure → `JniErrorHandler`) and `signal_domain_error` (a fallible fn's
+/// `Err(E)` → the typed `<Src>Handler`). They are written above the converters
+/// so wrapper code references them by bare name; the binding crate reaches
+/// them as `<include_module>::signal_*` from outside the file.
+pub(crate) fn render_prelude() -> Vec<syn::Item> {
+    let error_type = framework_error_type();
+    let mut items: Vec<syn::Item> = vec![syn::parse_quote!(
+        #[allow(dead_code)]
+        pub(crate) type __JniErr = #error_type;
+    )];
+    items.extend(owned_object_prerequisite_items());
+    items.push(build_signal_binding_error_item());
+    items.push(build_signal_domain_error_item());
+    items
+}
+
+/// One nullary getter extern per binding-defined constant expression.
+///
+/// The expression is evaluated with a glob import of every source module, so
+/// it composes the source crate's items without qualification. The getter
+/// reuses the whole extern pipeline through a synthetic nullary signature,
+/// exactly like a const-backed getter.
+pub(crate) fn plan_constant_expressions(
+    ext: &Declarations,
+    registry: &Registry,
+) -> Vec<crate::jni::emit::JWrapper> {
+    let mut glob_modules = registry.all_source_modules();
+    if glob_modules.is_empty() {
+        glob_modules.push(ext.default_module(registry));
+    }
+    ext.packages
+        .values()
+        .flat_map(|package| &package.constant_exprs)
+        .map(|decl| {
+            validate_constant_expr(ext, &decl.kotlin_name, &decl.ty);
+            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+            let expr = &decl.expr;
+            let callee: syn::Expr = syn::parse_quote!({
+                #(
+                    #[allow(unused_imports)]
+                    use #glob_modules::*;
+                )*
+                #expr
+            });
+            crate::jni::emit::JWrapper::new(ext, registry, &getter, Some(callee))
+        })
+        .collect()
+}
+
 /// One `#[no_mangle] extern "C"` destructor per opaque handle — the Rust
 /// counterpart to the `public fun free() = free {
 /// freePtr<suffix>(it) }` / `private external fun freePtr<suffix>` pair
@@ -224,20 +284,19 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 /// the package/class-aware method hook — exact symmetry with the Kotlin
 /// `external fun <mangled-freePtr>` declaration in
 /// [`render_typed_handle_source`]. `ext.types` is a `HashMap`, so the
-/// items are sorted by symbol to keep generated output deterministic.
+/// artifacts are sorted by symbol to keep generated output deterministic.
 ///
-/// Emission is gated on the resolved `registry`: a destructor is only
-/// emitted for an opaque handle whose type a scanned `#[prebindgen]` fn
-/// actually references (as input or output). This mirrors converter
-/// emission and keeps feature-gated handles (e.g. `zenoh-ext`-only types
-/// whose declare/undeclare fns are `#[cfg]`'d out of the scan) from
-/// producing destructors that reference types not in scope.
-pub(crate) fn build_handle_destructor_items(
+/// Planning is gated on the resolved `registry`: a destructor is only planned
+/// for an opaque handle whose type a scanned `#[prebindgen]` fn actually
+/// references (as input or output). This mirrors converter emission and keeps
+/// feature-gated handles (e.g. `zenoh-ext`-only types whose declare/undeclare
+/// fns are `#[cfg]`'d out of the scan) from producing destructors that
+/// reference types not in scope.
+pub(crate) fn plan_handle_destructors(
     ext: &Declarations,
     registry: &Registry,
-    emit: &prebindgen_registry::RustWriter,
-) -> Vec<syn::Item> {
-    let mut named: Vec<(String, syn::Item)> = Vec::new();
+) -> Vec<crate::jni::generation::JHandleDestructor> {
+    let mut planned: Vec<crate::jni::generation::JHandleDestructor> = Vec::new();
     for (key, cfg) in &ext.types {
         if !cfg.is_opaque() {
             continue;
@@ -252,14 +311,13 @@ pub(crate) fn build_handle_destructor_items(
         if ext.in_frag(&reading).is_none() && ext.out_frag(&reading).is_none() {
             continue;
         }
-        let ty = emit.emit_source_type(&reading);
         let class_fqn = cfg
             .name_spec
             .as_ref()
             .map(|s| ext.fqn_of(s))
             .unwrap_or_else(|| {
                 panic!(
-                    "build_handle_destructor_items: opaque handle `{}` has no \
+                    "plan_handle_destructors: opaque handle `{}` has no \
                      name spec to derive a destructor symbol from",
                     key.as_str()
                 )
@@ -267,39 +325,13 @@ pub(crate) fn build_handle_destructor_items(
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         let class_package = class_fqn.rsplit_once('.').map(|(pkg, _)| pkg).unwrap_or("");
         let free_ptr = ext.mangle_method(class_package, class_short, "freePtr");
-        let symbol = super::symbol::native_symbol(class_package, class_short, &free_ptr);
-        let ident = syn::Ident::new(&symbol, Span::call_site());
-        // Bit 0 of the jlong is the Kotlin-side closed tag, so every handle
-        // type must leave it free: `Box` pointers to `T` are `align_of::<T>()`
-        // aligned, hence the compile-time floor of 2. `ty` is already the
-        // registry-owned final output fragment before it enters this macro.
-        let item: syn::Item = syn::parse_quote!(
-            const _: () = {
-                if ::core::mem::align_of::<#ty>() < 2 {
-                    panic!(
-                        "opaque handle types must have alignment >= 2 (bit 0 is the closed tag)"
-                    );
-                }
-            };
-        );
-        named.push((format!("{symbol}__align_assert"), item));
-        let item: syn::Item = syn::parse_quote!(
-            #[no_mangle]
-            #[allow(non_snake_case, unused_variables)]
-            pub(crate) unsafe extern "C" fn #ident(
-                _env: jni::JNIEnv,
-                _class: jni::objects::JClass,
-                ptr: jni::sys::jlong,
-            ) {
-                if ptr != 0 && (ptr & 1) == 0 {
-                    drop(Box::from_raw(ptr as *mut #ty));
-                }
-            }
-        );
-        named.push((symbol, item));
+        planned.push(crate::jni::generation::JHandleDestructor::new(
+            reading,
+            super::symbol::native_symbol(class_package, class_short, &free_ptr),
+        ));
     }
-    named.sort_by(|a, b| a.0.cmp(&b.0));
-    named.into_iter().map(|(_, item)| item).collect()
+    planned.sort_by(|a, b| a.symbol().cmp(b.symbol()));
+    planned
 }
 
 /// What generated Rust can do with one wrapper the model
@@ -1269,140 +1301,6 @@ impl Prebindgen for Declarations {
     /// be unambiguous, before ANY artifact writer touches disk.
     fn validate_resolved(&self, registry: &Registry) -> Result<(), String> {
         validate_bindings(self, registry)
-    }
-
-    /// Emit shared Rust items needed by JNI wrappers and late converters.
-    ///
-    /// This includes the `OwnedObject<T>` carrier used by borrowed opaque
-    /// handle plans. It is referenced unqualified from the same generated
-    /// file, so no `use` path leaks into the host crate's source tree.
-    fn prerequisites(
-        &self,
-        registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        // `__JniErr` is the **framework** error type alias — always the
-        // `JniBindingError` String-wrapper. Built-in converter bodies compose
-        // their `?` failures into this type via its `From<String>` impl. A
-        // `Result<T, E>` return instead binds its own raw `E`; both funnel to
-        // the per-call `signal_error` sink (generic over `Display`).
-        let error_type = framework_error_type();
-        let alias: syn::Item = syn::parse_quote!(
-            #[allow(dead_code)]
-            pub(crate) type __JniErr = #error_type;
-        );
-        let mut items = vec![alias];
-        items.extend(owned_object_prerequisite_items());
-        // The two error-channel fns the extern bodies call: `signal_binding_error`
-        // (binding/system failure → `JniErrorHandler`) and `signal_domain_error`
-        // (a fallible fn's `Err(E)` → the typed `<Src>Handler`). Emitted above the
-        // converters so wrapper code references them by bare name; the binding
-        // crate reaches them as `<include_module>::signal_*` from outside the file.
-        items.push(build_signal_binding_error_item());
-        items.push(build_signal_domain_error_item());
-        let _ = registry;
-        // Handle destructors — one `extern "C" freePtr<suffix>` per
-        // non-suppressed opaque handle (the Rust half of the typed-handle
-        // `free()` pair the Kotlin emitter generates).
-        items.extend(build_handle_destructor_items(self, registry, emit));
-        // Slice/Vec input helpers — a `…VecNew/Push/Free` trio per flattenable
-        // element type a scanned `&[T]`/`Vec<T>` param takes. Kotlin builds the
-        // Rust-side `Vec` by pushing each element's decoupled leaves, then passes
-        // the handle (see `ParamMode::VecBuild`), avoiding per-element
-        // `env.get_field(...)` upcalls on the Rust side.
-        items.extend(build_vec_build_helper_items(self, emit));
-        // Expression constants — one nullary JNI getter extern per
-        // `PackageDecl::constant_expr`, its value the binding-defined
-        // expression evaluated with a glob import of every source module (so
-        // it composes the source crate's items without qualification). The
-        // getter reuses the whole function-wrapper pipeline via the
-        // synthetic signature, exactly like a const-backed getter.
-        let mut glob_modules = registry.all_source_modules();
-        if glob_modules.is_empty() {
-            glob_modules.push(self.default_module(registry));
-        }
-        for decl in self.packages.values().flat_map(|p| &p.constant_exprs) {
-            validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
-            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
-            let expr = &decl.expr;
-            let callee: syn::Expr = syn::parse_quote!({
-                #(
-                    #[allow(unused_imports)]
-                    use #glob_modules::*;
-                )*
-                #expr
-            });
-            let wrapper =
-                emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
-            items.push(syn::Item::Fn(wrapper));
-        }
-        items
-    }
-
-    // ── Item methods ─────────────────────────────────────────────────
-
-    fn on_function(
-        &self,
-        f: &prebindgen_registry::flat::Function,
-        registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        vec![syn::Item::Fn(emit_jni_function_wrapper(
-            self, f, registry, emit,
-        ))]
-    }
-
-    fn on_struct(
-        &self,
-        _s: &prebindgen_registry::flat::Struct,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        // Struct converter bodies are emitted from retained registry plans;
-        // no separate per-struct item is needed.
-        Vec::new()
-    }
-
-    fn on_variant(
-        &self,
-        _v: &prebindgen_registry::flat::Variant,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
-    fn on_enum(
-        &self,
-        _e: &prebindgen_registry::flat::Enum,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
-    /// Declared consts only reach here (undeclared ones are gated out before
-    /// emission): re-emit the const as a path-alias
-    /// to its source-of-truth (initializer tokens are never copied — they
-    /// may reference source-crate internals) AND emit its nullary JNI getter
-    /// extern. The getter reuses the whole function-wrapper pipeline (so the
-    /// const's type flows through the ordinary output-converter machinery);
-    /// only the callee expression differs — a path to the const, not a call.
-    fn on_const(
-        &self,
-        c: &prebindgen_registry::flat::Constant,
-        registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
-    ) -> Vec<syn::Item> {
-        reject_handle_const(self, c);
-        let getter = const_getter_fn(c);
-        let const_ident = &c.name;
-        let source_module = self.fn_module(registry, const_ident);
-        let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
-        let wrapper =
-            emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
-        let alias = emit.const_alias(c, &source_module);
-        vec![syn::Item::Const(alias), syn::Item::Fn(wrapper)]
     }
 }
 

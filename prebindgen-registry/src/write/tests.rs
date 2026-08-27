@@ -7,7 +7,34 @@ use std::{
 use prebindgen::SourceLocation;
 
 use super::*;
-use crate::registry::RegistryBuilder;
+use crate::{prebindgen::Prebindgen, registry::RegistryBuilder};
+
+/// Freeze a test assembly from artifacts stated in emission order, against a
+/// registry with nothing in it — enough for artifacts that spell no source
+/// type.
+fn assembly_of<A: RustArtifact, I: IntoIterator<Item = A>>(artifacts: I) -> Assembly<A> {
+    assembly_from(&empty_registry(), artifacts)
+}
+
+/// Freeze a test assembly against a given registry.
+fn assembly_from<A: RustArtifact, I: IntoIterator<Item = A>>(
+    registry: &Registry,
+    artifacts: I,
+) -> Assembly<A> {
+    let mut builder = AssemblyBuilder::new();
+    for artifact in artifacts {
+        builder.artifact(artifact);
+    }
+    builder.build(registry, None)
+}
+
+/// A resolved registry holding no items.
+fn empty_registry() -> Registry {
+    crate::test_util::reg_from_items(Vec::new())
+        .expect("index")
+        .scanned()
+        .expect("scan")
+}
 
 struct IdentityExt;
 
@@ -25,58 +52,7 @@ impl IdentityExt {
     }
 }
 
-impl Prebindgen for IdentityExt {
-    fn on_function(
-        &self,
-        f: &prebindgen_flat::flat::Function,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &f.name;
-        vec![syn::parse_quote!(fn #ident() {})]
-    }
-
-    fn on_struct(
-        &self,
-        s: &prebindgen_flat::flat::Struct,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &s.name;
-        vec![syn::parse_quote!(pub struct #ident;)]
-    }
-
-    fn on_variant(
-        &self,
-        v: &prebindgen_flat::flat::Variant,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &v.name;
-        vec![syn::parse_quote!(pub enum #ident {})]
-    }
-
-    fn on_enum(
-        &self,
-        e: &prebindgen_flat::flat::Enum,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &e.name;
-        vec![syn::parse_quote!(pub enum #ident {})]
-    }
-
-    fn on_const(
-        &self,
-        c: &prebindgen_flat::flat::Constant,
-        _registry: &Registry,
-        emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &c.name;
-        let ty = emit.emit_source_type(&c.ty);
-        vec![syn::parse_quote!(pub const #ident: #ty = 0;)]
-    }
-}
+impl Prebindgen for IdentityExt {}
 
 #[derive(Clone)]
 struct LatePlan {
@@ -92,189 +68,208 @@ struct OperationPlan {
     rendered_reachable: Rc<Cell<bool>>,
 }
 
-impl RustFunction for OperationPlan {
-    fn operation_id(&self) -> &crate::generation::OperationId {
-        &self.operation
+impl RustArtifact for OperationPlan {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
     }
 
-    fn should_emit(&self) -> bool {
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Operation(self.operation.clone())
+    }
+
+    fn reachable(&self) -> bool {
         self.reachable
     }
 
-    fn render(&self, emit: &crate::RustWriter) -> syn::ItemFn {
+    fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item> {
         self.renders.set(self.renders.get() + 1);
         self.rendered_reachable.set(self.reachable);
         let ident = emit.operation_ident("test", &self.operation);
-        syn::parse_quote!(fn #ident() {})
+        vec![syn::parse_quote!(fn #ident() {})]
     }
 }
 
-impl RustFunction for LatePlan {
-    fn operation_id(&self) -> &crate::generation::OperationId {
-        &self.operation
+impl RustArtifact for LatePlan {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
     }
 
-    fn should_emit(&self) -> bool {
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Operation(self.operation.clone())
+    }
+
+    fn reachable(&self) -> bool {
         self.reachable.get()
     }
 
-    fn render(&self, emit: &crate::RustWriter) -> syn::ItemFn {
+    fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item> {
         let ident = emit.operation_ident("test", &self.operation);
-        syn::parse_quote!(
+        vec![syn::parse_quote!(
             fn #ident() {}
+        )]
+    }
+}
+
+/// An artifact that renders `a_fn`, calling the late converter plan.
+///
+/// Its own reachability is fixed; what varies is whether the plan it calls is
+/// reachable by the time the file is written.
+#[derive(Clone)]
+struct CallerPlan {
+    operation: crate::generation::OperationId,
+    /// Claim to provide the converter this calls, while rendering no such
+    /// function — the over-claim that would grant reachability to an item
+    /// nothing defines.
+    over_claims: bool,
+}
+
+impl RustArtifact for CallerPlan {
+    fn provides(&self) -> Vec<ArtifactKey> {
+        let mut provided = vec![self.key()];
+        if self.over_claims {
+            provided.push(ArtifactKey::Operation(self.operation.clone()));
+        }
+        provided
+    }
+
+    fn calls(&self) -> Vec<ArtifactKey> {
+        vec![ArtifactKey::Operation(self.operation.clone())]
+    }
+
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Artifact(
+            crate::generation::ArtifactId::new("test", "caller").expect("identity"),
         )
     }
+
+    fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item> {
+        let converter = emit.operation_ident("test", &self.operation);
+        vec![syn::Item::Fn(
+            syn::parse_quote!(fn a_fn() { #converter(); }),
+        )]
+    }
 }
 
-struct LateExt {
-    reachable: Rc<Cell<bool>>,
-    activate: bool,
-    call_converter: bool,
-    operation: crate::generation::OperationId,
+/// Either artifact of this test's assembly: a converter plan whose
+/// reachability can flip after the assembly is frozen, or the caller.
+#[derive(Clone)]
+enum LateOrCaller {
+    Converter(LatePlan),
+    Caller(CallerPlan),
 }
 
-impl Prebindgen for LateExt {
-    fn on_function(
-        &self,
-        f: &prebindgen_flat::flat::Function,
-        _registry: &Registry,
-        emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        if self.activate {
-            self.reachable.set(true);
-        }
-        if self.call_converter {
-            let ident = &f.name;
-            let converter = emit.operation_ident("test", &self.operation);
-            vec![syn::Item::Fn(
-                syn::parse_quote!(fn #ident() { #converter(); }),
-            )]
-        } else {
-            let ident = &f.name;
-            vec![syn::parse_quote!(fn #ident() {})]
+impl RustArtifact for LateOrCaller {
+    fn provides(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Converter(plan) => plan.provides(),
+            Self::Caller(plan) => plan.provides(),
         }
     }
 
-    fn on_struct(
-        &self,
-        s: &prebindgen_flat::flat::Struct,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &s.name;
-        vec![syn::parse_quote!(pub struct #ident;)]
+    fn calls(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Converter(plan) => plan.calls(),
+            Self::Caller(plan) => plan.calls(),
+        }
     }
 
-    fn on_variant(
-        &self,
-        v: &prebindgen_flat::flat::Variant,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &v.name;
-        vec![syn::parse_quote!(pub enum #ident {})]
+    fn key(&self) -> ArtifactKey {
+        match self {
+            Self::Converter(plan) => plan.key(),
+            Self::Caller(plan) => plan.key(),
+        }
     }
 
-    fn on_enum(
-        &self,
-        e: &prebindgen_flat::flat::Enum,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        let ident = &e.name;
-        vec![syn::parse_quote!(pub enum #ident {})]
+    fn reachable(&self) -> bool {
+        match self {
+            Self::Converter(plan) => plan.reachable(),
+            Self::Caller(plan) => plan.reachable(),
+        }
     }
 
-    fn on_const(
-        &self,
-        _c: &prebindgen_flat::flat::Constant,
-        _registry: &Registry,
-        _emit: &crate::RustWriter,
-    ) -> Vec<syn::Item> {
-        Vec::new()
+    fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item> {
+        match self {
+            Self::Converter(plan) => plan.render(emit),
+            Self::Caller(plan) => plan.render(emit),
+        }
     }
 }
 
+/// A converter plan that is dormant when the assembly is frozen and reachable
+/// by the time the file is written is emitted.
+///
+/// What this pins is that reachability is read when the file is written and
+/// not snapshotted while the assembly is frozen. It does not pin *when* during
+/// writing: nothing marks an artifact reachable while another renders, so
+/// reading every artifact's reachability just before the render loop would
+/// satisfy this too.
+///
+/// The property is not hypothetical. JniGen shares one reachability cell
+/// between every clone of a plan and sets it when a parent that calls the plan
+/// is compiled, which can happen after the plan has been added to the builder.
 #[test]
-fn per_item_planning_precedes_late_converter_filtering() {
-    let item: syn::ItemFn = syn::parse_quote!(
-        fn a_fn() {}
-    );
-    let ident: syn::Ident = syn::parse_quote!(a_fn);
-    let registry =
-        crate::test_util::reg_from_items(vec![(syn::Item::Fn(item), SourceLocation::default())])
-            .expect("index")
-            .export(&ident)
-            .scanned()
-            .expect("scan");
+fn an_artifact_reached_after_freezing_is_emitted() {
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
         crate::recipe::Direction::Construct,
     );
-    let ext = LateExt {
-        reachable: reachable.clone(),
-        activate: true,
-        call_converter: false,
-        operation: operation.clone(),
-    };
-    let plan = LatePlan {
+    let assembly = assembly_of([LateOrCaller::Converter(LatePlan {
         operation,
-        reachable,
-    };
+        reachable: reachable.clone(),
+    })]);
     let dir = crate::test_util::unique_test_dir("write_late_plan");
     std::fs::create_dir_all(&dir).unwrap();
 
-    let path = write_rust(&registry, &ext, &[plan], dir.join("gen.rs")).expect("write_rust");
+    // Frozen dormant, reached afterwards — as a parent compiled later does.
+    reachable.set(true);
+    let path = write_rust(&assembly, dir.join("gen.rs")).expect("write_rust");
     let source = std::fs::read_to_string(path).expect("read generated file");
 
     assert!(
         source.contains("fn __test_in_convert_wire_to_test_late_converter_"),
         "{source}"
     );
-    assert!(source.find("fn __test_in_convert").unwrap() < source.find("fn a_fn").unwrap());
 }
 
 #[test]
 fn a_call_to_a_filtered_converter_is_a_writer_error() {
-    let item: syn::ItemFn = syn::parse_quote!(
-        fn a_fn() {}
-    );
-    let ident: syn::Ident = syn::parse_quote!(a_fn);
-    let registry =
-        crate::test_util::reg_from_items(vec![(syn::Item::Fn(item), SourceLocation::default())])
-            .expect("index")
-            .export(&ident)
-            .scanned()
-            .expect("scan");
+    // The identities are semantic, not Rust symbols: the check runs before
+    // anything is rendered, so no name has been allocated yet.
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
         crate::recipe::Direction::Construct,
     );
-    let ext = LateExt {
-        reachable: reachable.clone(),
-        activate: false,
-        call_converter: true,
-        operation: operation.clone(),
-    };
-    let plan = LatePlan {
-        operation: operation.clone(),
-        reachable,
-    };
+    let assembly = assembly_of([
+        LateOrCaller::Converter(LatePlan {
+            operation: operation.clone(),
+            reachable,
+        }),
+        LateOrCaller::Caller(CallerPlan {
+            operation: operation.clone(),
+            over_claims: false,
+        }),
+    ]);
     let dir = crate::test_util::unique_test_dir("write_missing_converter");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("gen.rs");
 
-    let err = write_rust(&registry, &ext, &[plan], &path)
+    let err = write_rust(&assembly, &path)
         .expect_err("a call to a filtered private converter must fail in the writer");
 
     match err {
-        WriteError::UnrenderedConverterCalls { calls } => {
-            let missing = crate::RustWriter::for_test()
-                .operation_ident("test", &operation)
-                .to_string();
-            assert_eq!(calls, vec![("a_fn".to_string(), missing)]);
+        WriteError::UnreachedDependency { edges } => {
+            assert_eq!(
+                edges,
+                vec![(
+                    ArtifactKey::Artifact(
+                        crate::generation::ArtifactId::new("test", "caller").expect("identity")
+                    )
+                    .to_string(),
+                    ArtifactKey::Operation(operation).to_string(),
+                )]
+            );
         }
     }
     assert!(
@@ -283,18 +278,115 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
     );
 }
 
+/// The contract `Assembly`'s own documentation states: artifacts reach the
+/// file in the order the adapter added them.
+///
+/// Held here because the sentence is written here. Each adapter's chosen
+/// section order is pinned by its committed generated files, but reversing the
+/// envelope's own order is invisible to those: it moves every adapter's output
+/// at once, and nothing in this crate noticed.
+#[test]
+fn artifacts_reach_the_file_in_the_order_they_were_added() {
+    let operation = |name: &str| {
+        crate::generation::OperationId::shared(
+            crate::generation::ArtifactId::new("test", name).expect("identity"),
+            crate::recipe::Direction::Construct,
+        )
+    };
+    let (first, second) = (operation("first-converter"), operation("second-converter"));
+    let assembly = assembly_of([
+        LateOrCaller::Converter(LatePlan {
+            operation: first.clone(),
+            reachable: Rc::new(Cell::new(true)),
+        }),
+        LateOrCaller::Converter(LatePlan {
+            operation: second.clone(),
+            reachable: Rc::new(Cell::new(true)),
+        }),
+    ]);
+    let dir = crate::test_util::unique_test_dir("write_order");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let path = write_rust(&assembly, dir.join("gen.rs")).expect("write_rust");
+    let source = std::fs::read_to_string(path).expect("read generated file");
+
+    let emit = crate::RustWriter::for_test();
+    let position = |operation| {
+        let ident = emit.operation_ident("test", operation).to_string();
+        source
+            .find(&ident)
+            .unwrap_or_else(|| panic!("`{ident}` is missing:\n{source}"))
+    };
+    assert!(
+        position(&first) < position(&second),
+        "the order artifacts were added is the order they are written:\n{source}"
+    );
+}
+
+/// An assembly whose artifacts state their edges honestly passes the check
+/// both adapters run on every binding they build.
+#[test]
+fn honest_edges_pass_the_evidence_check() {
+    let operation = crate::generation::OperationId::shared(
+        crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
+        crate::recipe::Direction::Construct,
+    );
+    let assembly = assembly_of([
+        LateOrCaller::Converter(LatePlan {
+            operation: operation.clone(),
+            reachable: Rc::new(Cell::new(true)),
+        }),
+        LateOrCaller::Caller(CallerPlan {
+            operation,
+            over_claims: false,
+        }),
+    ]);
+
+    assert_edges_cover_rendered_calls(&assembly, "test");
+}
+
+/// Claiming an identity the artifact does not render would satisfy
+/// [`Assembly::reaches`] with nothing behind it, so the check refuses it.
+///
+/// Held here rather than only where the adapters opt in: this guard is what
+/// makes `provides` trustworthy, and an adapter that never called the helper
+/// would otherwise have none of its coverage.
+#[test]
+#[should_panic(expected = "claims to provide")]
+fn a_claimed_identity_must_be_rendered() {
+    let operation = crate::generation::OperationId::shared(
+        crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
+        crate::recipe::Direction::Construct,
+    );
+    let assembly = assembly_of([LateOrCaller::Caller(CallerPlan {
+        operation,
+        over_claims: true,
+    })]);
+
+    assert_edges_cover_rendered_calls(&assembly, "test");
+}
+
+/// Two reachable artifacts under one identity are a planning error. A
+/// converter is exempt: one registry operation is legitimately reached from
+/// several sites, which is what the de-duplication above is for.
+#[test]
+#[should_panic(expected = "two reachable artifacts share the identity")]
+fn two_reachable_artifacts_may_not_share_an_identity() {
+    let operation = crate::generation::OperationId::shared(
+        crate::generation::ArtifactId::new("test", "shared-converter").expect("identity"),
+        crate::recipe::Direction::Construct,
+    );
+    let caller = || {
+        LateOrCaller::Caller(CallerPlan {
+            operation: operation.clone(),
+            over_claims: false,
+        })
+    };
+    let _ = assembly_of([caller(), caller()]);
+}
+
 #[test]
 fn registry_operations_are_deduplicated_before_rendering() {
-    let item: syn::ItemFn = syn::parse_quote!(
-        fn a_fn() {}
-    );
-    let ident: syn::Ident = syn::parse_quote!(a_fn);
-    let registry =
-        crate::test_util::reg_from_items(vec![(syn::Item::Fn(item), SourceLocation::default())])
-            .expect("index")
-            .export(&ident)
-            .scanned()
-            .expect("scan");
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "shared-converter").expect("identity"),
         crate::recipe::Direction::Construct,
@@ -308,6 +400,14 @@ fn registry_operations_are_deduplicated_before_rendering() {
         rendered_reachable: rendered_reachable.clone(),
     };
     let reachable = OperationPlan {
+        operation: operation.clone(),
+        reachable: true,
+        renders: renders.clone(),
+        rendered_reachable: rendered_reachable.clone(),
+    };
+    // One registry operation reached from a second site: legal, and the
+    // exemption the duplicate-identity guard states.
+    let reached_again = OperationPlan {
         operation,
         reachable: true,
         renders: renders.clone(),
@@ -317,9 +417,7 @@ fn registry_operations_are_deduplicated_before_rendering() {
     std::fs::create_dir_all(&dir).unwrap();
 
     write_rust(
-        &registry,
-        &IdentityExt,
-        &[dormant, reachable],
+        &assembly_of([dormant, reachable, reached_again]),
         dir.join("gen.rs"),
     )
     .expect("write Rust");
@@ -327,7 +425,8 @@ fn registry_operations_are_deduplicated_before_rendering() {
     assert_eq!(
         renders.get(),
         1,
-        "a shared registry operation must be rendered exactly once"
+        "a shared registry operation must be rendered exactly once, however \
+         many sites reached it"
     );
     assert!(
         rendered_reachable.get(),
@@ -336,9 +435,10 @@ fn registry_operations_are_deduplicated_before_rendering() {
 }
 
 #[test]
-fn write_rust_sorts_declared_items_by_ident() {
-    // Fed in a deliberately un-sorted order: the assertion below is that
-    // emission sorts by name, and the model preserves stream order.
+fn declared_items_reach_the_file_only_as_artifacts() {
+    // Fed in a deliberately un-sorted order, as the sorting this replaced was
+    // fed: every kind is declared, and none of them may reach the file from
+    // the writer's own walk, because there is no such walk left.
     let loc = SourceLocation::default();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
@@ -405,34 +505,37 @@ fn write_rust_sorts_declared_items_by_ident() {
         .as_nanos();
     let path = std::env::temp_dir().join(format!("prebindgen-write-rust-{unique}.rs"));
     let written =
-        write_rust(&reg, &IdentityExt, &[] as &[OperationPlan], &path).expect("write_rust");
+        write_rust(&assembly_from(&reg, [] as [OperationPlan; 0]), &path).expect("write_rust");
     let content = std::fs::read_to_string(&written).expect("read generated file");
     let _ = std::fs::remove_file(&written);
 
-    assert!(
-        content.find("pub const A_CONST").unwrap() < content.find("pub const B_CONST").unwrap()
-    );
-    assert!(content.find("pub enum AEnum").unwrap() < content.find("pub enum BEnum").unwrap());
-    assert!(
-        content.find("pub struct AStruct").unwrap() < content.find("pub struct BStruct").unwrap()
-    );
-    assert!(content.find("fn a_fn").unwrap() < content.find("fn b_fn").unwrap());
+    for declared in [
+        "fn a_fn", "fn b_fn", "AStruct", "BStruct", "AEnum", "BEnum", "A_CONST", "B_CONST",
+    ] {
+        assert!(
+            !content.contains(declared),
+            "`{declared}` reached the file from an empty assembly:\n{content}"
+        );
+    }
 }
 
+/// The adapter hands the writer no Rust items at all — everything it emits is
+/// an artifact of its assembly — and the writer never turns tokens back into
+/// items itself.
 #[test]
-fn per_item_emission_carries_typed_items_without_reparsing() {
+fn the_adapter_emits_no_items_and_the_writer_reparses_none() {
     let contract = include_str!("../prebindgen.rs");
-    let item_methods = contract
-        .split_once("// ── Item methods")
-        .expect("item methods")
-        .1;
-    assert_eq!(item_methods.matches("-> Vec<syn::Item>").count(), 5);
+    assert_eq!(
+        contract.matches("-> Vec<syn::Item>").count(),
+        0,
+        "no method of the trait may return items for the writer to place"
+    );
 
     let writer = include_str!("../write.rs");
     for removed in ["parse_items_from_tokens", "BadTokens", "syn::parse2"] {
         assert!(
             !writer.contains(removed),
-            "typed per-item emission must not restore `{removed}`"
+            "typed emission must not restore `{removed}`"
         );
     }
 }
@@ -461,48 +564,7 @@ fn guards_emit_ungated_and_in_stream_order() {
         }
     }
 
-    impl Prebindgen for ConstGatingExt {
-        fn on_function(
-            &self,
-            _f: &prebindgen_flat::flat::Function,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
-        fn on_struct(
-            &self,
-            _s: &prebindgen_flat::flat::Struct,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
-        fn on_variant(
-            &self,
-            _v: &prebindgen_flat::flat::Variant,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
-        fn on_enum(
-            &self,
-            _e: &prebindgen_flat::flat::Enum,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
-        fn on_const(
-            &self,
-            _c: &prebindgen_flat::flat::Constant,
-            _r: &Registry,
-            _emit: &crate::RustWriter,
-        ) -> Vec<syn::Item> {
-            Vec::new()
-        }
-    }
+    impl Prebindgen for ConstGatingExt {}
 
     let loc = SourceLocation::default();
     // Two distinguishable guards, straddling the named const, so the assertion
@@ -538,9 +600,7 @@ fn guards_emit_ungated_and_in_stream_order() {
     std::fs::create_dir_all(&dir).unwrap();
     let registry = registry.resolve_gating(ConstGatingExt).expect("resolve");
     let path = crate::write::write_rust(
-        &registry,
-        &ConstGatingExt,
-        &[] as &[OperationPlan],
+        &assembly_from(&registry, [] as [OperationPlan; 0]),
         dir.join("gen.rs"),
     )
     .expect("write_rust");

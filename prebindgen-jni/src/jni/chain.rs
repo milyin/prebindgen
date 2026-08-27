@@ -5,7 +5,7 @@ use prebindgen_registry::{
     flat::TypeRef,
     generation::OperationId,
     recipe::Mode,
-    write::RustFunction,
+    write::{ArtifactKey, RustArtifact},
     RustWriter,
 };
 
@@ -200,8 +200,74 @@ impl JFunction {
     }
 }
 
-impl RustFunction for JFunction {
-    fn operation_id(&self) -> &OperationId {
+impl RustArtifact for JFunction {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        let mut calls = Vec::new();
+        let dependency = |plan: &JFunction, out: &mut Vec<ArtifactKey>| {
+            out.push(ArtifactKey::Operation(plan.operation_id().clone()))
+        };
+        match &self.0 {
+            // A marker converts nothing, and a codec converts the value itself.
+            JBody::Marker(_) => {}
+            JBody::ValueCodec(_) => {}
+            JBody::CustomConversion(_) => {}
+            JBody::HandleCodec(_) => {}
+            JBody::BorrowedOptionalHandle(_) => {}
+            JBody::Result(plan) => dependency(&plan.success, &mut calls),
+            JBody::Transparent(plan) => {
+                dependency(&plan.inner, &mut calls);
+                plan.child.calls(&mut calls);
+            }
+            JBody::Product(plan) => {
+                for child in &plan.dependencies {
+                    dependency(child, &mut calls);
+                }
+                for part in &plan.chain.parts {
+                    part.child.calls(&mut calls);
+                }
+            }
+            JBody::Choice(plan) => {
+                for child in &plan.dependencies {
+                    dependency(child, &mut calls);
+                }
+                for part in plan.chain.arms.iter().flat_map(|arm| &arm.parts) {
+                    part.child.calls(&mut calls);
+                }
+            }
+            JBody::Sequence(plan) => {
+                for child in &plan.dependencies {
+                    dependency(child, &mut calls);
+                }
+                plan.chain.child.calls(&mut calls);
+            }
+            JBody::Optional(plan) => {
+                for child in &plan.dependencies {
+                    dependency(child, &mut calls);
+                }
+                plan.chain.child.calls(&mut calls);
+            }
+            JBody::StructCodec(plan) => plan.calls(&mut calls),
+            JBody::SumCodec(plan) => plan.body.calls(&mut calls),
+            JBody::Invoke(plan) => plan.calls(&mut calls),
+        }
+        calls
+    }
+
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Operation(self.operation_id().clone())
+    }
+
+    fn reachable(&self) -> bool {
+        self.should_emit()
+    }
+
+    fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
+        vec![syn::Item::Fn(self.render_fn(emit))]
+    }
+}
+
+impl JFunction {
+    pub(crate) fn operation_id(&self) -> &OperationId {
         match &self.0 {
             JBody::Marker(operation) => operation,
             JBody::ValueCodec(plan) => &plan.operation,
@@ -220,7 +286,7 @@ impl RustFunction for JFunction {
         }
     }
 
-    fn should_emit(&self) -> bool {
+    pub(crate) fn should_emit(&self) -> bool {
         match &self.0 {
             JBody::Marker(_) => false,
             // Compatibility parents do not yet propagate reachability to the
@@ -247,7 +313,7 @@ impl RustFunction for JFunction {
         }
     }
 
-    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
+    pub(crate) fn render_fn(&self, emit: &RustWriter) -> syn::ItemFn {
         match &self.0 {
             JBody::Marker(operation) => planned_marker(&emit.operation_ident("jni", operation)),
             JBody::ValueCodec(plan) => plan.render(emit),
@@ -291,6 +357,14 @@ pub(crate) enum JStructCodecBody {
 }
 
 impl JStructCodecPlan {
+    /// The leaf converters this codec calls, one chain per field.
+    fn calls(&self, out: &mut Vec<ArtifactKey>) {
+        match &self.body {
+            JStructCodecBody::Input(plan) => plan.calls(out),
+            JStructCodecBody::Output { plan, .. } => plan.calls(out),
+        }
+    }
+
     fn render(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("jni", &self.operation);
         let source = emit.emit_source_type(&self.source);
@@ -954,6 +1028,17 @@ pub(crate) struct JChild {
 }
 
 impl JChild {
+    /// The converter this child calls, and the rust-side stages that compose
+    /// with it. Both are separately rendered artifacts.
+    pub(crate) fn calls(&self, out: &mut Vec<ArtifactKey>) {
+        out.push(ArtifactKey::Operation(self.call.operation_id().clone()));
+        out.extend(
+            self.stages
+                .iter()
+                .map(|stage| ArtifactKey::Operation(stage.clone())),
+        );
+    }
+
     pub(crate) fn input(
         converter: OperationId,
         stages: Vec<OperationId>,
@@ -1012,6 +1097,15 @@ struct JVecHandleInput {
 }
 
 impl JPipeline {
+    /// The converters invoking this pipeline calls. A `Vec` handle is
+    /// dereferenced rather than converted, so it calls nothing.
+    pub(crate) fn calls(&self, out: &mut Vec<ArtifactKey>) {
+        match &self.body {
+            JPipelineBody::Converter(child) => child.calls(out),
+            JPipelineBody::VecHandle(_) => {}
+        }
+    }
+
     pub(crate) fn new(wire: syn::Type, child: JChild, borrowed_optional_value: bool) -> Self {
         Self {
             wire,

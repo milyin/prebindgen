@@ -3,8 +3,11 @@ use prebindgen_registry::Conversions;
 use super::*;
 
 impl CbindgenBuilder {
-    pub(crate) fn prereq_domain_constants(&self, registry: &Registry) -> Vec<syn::Item> {
-        let mut items = Vec::new();
+    pub(crate) fn domain_constants(
+        &self,
+        registry: &Registry,
+    ) -> Vec<crate::assembly::CDomainConstant> {
+        let mut constants = Vec::new();
         for decl in &self.convert_decls {
             let Some(domain) = decl.domain() else {
                 continue;
@@ -35,21 +38,22 @@ impl CbindgenBuilder {
                 .take(demand)
                 .enumerate()
             {
-                let name = format_ident!("{}_NICHE_{}", base, index);
-                items.push(syn::parse_quote!(
-                    #[doc = "Reserved representation value used by generated sum-type ABIs."]
-                    pub const #name: #ty = #value;
+                constants.push(crate::assembly::CDomainConstant::niche(
+                    &base,
+                    index,
+                    ty.clone(),
+                    value.clone(),
                 ));
                 if index == 0 {
-                    let none = format_ident!("{}_NONE", base);
-                    items.push(syn::parse_quote!(
-                        #[doc = "Representation of None for the first optional layer."]
-                        pub const #none: #ty = #value;
+                    constants.push(crate::assembly::CDomainConstant::none(
+                        &base,
+                        ty.clone(),
+                        value,
                     ));
                 }
             }
         }
-        items
+        constants
     }
 
     pub(crate) fn custom_plan(

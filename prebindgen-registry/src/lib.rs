@@ -21,9 +21,12 @@
 //!   [`ConverterImpl`] (a converter artifact identity plus its wire type) for
 //!   each crossing the registry hands it, and gives them all back through
 //!   `RegistryBuilder::convert_with`.
-//! * **Owns the Rust-emission key** and emits wrapper code per item —
-//!   `on_function` / `on_struct` / `on_enum` / `on_const` on the
-//!   [`Prebindgen`] trait.
+//! * **Plans what the generated file holds** — every wrapper, converter,
+//!   helper, mirror and constant is an artifact of the adapter's frozen
+//!   [`Assembly`](write::Assembly), which the registry orders and
+//!   [`write::write_rust`] renders. The adapter emits nothing per item while
+//!   the file is written, and the [`Prebindgen`] trait it implements is two
+//!   validation hooks.
 //!
 //! Everything language-specific that must travel through the pipeline rides on
 //! the adapter's own conversions — a JNI back-end's Kotlin class names and
