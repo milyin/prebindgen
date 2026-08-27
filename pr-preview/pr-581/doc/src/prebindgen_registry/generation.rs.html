@@ -32,7 +32,7 @@
 <a href=#32 id=32 data-nosnippet>32</a><span class="doccomment">/// Stable identity of one private operation retained by a recipe fragment.
 <a href=#33 id=33 data-nosnippet>33</a>///
 <a href=#34 id=34 data-nosnippet>34</a>/// This is model identity, not a rendered Rust identifier. The final writer
-<a href=#35 id=35 data-nosnippet>35</a>/// allocates its private symbol through `Emit`; an adapter only supplies its
+<a href=#35 id=35 data-nosnippet>35</a>/// allocates its private symbol through `RustWriter`; an adapter only supplies its
 <a href=#36 id=36 data-nosnippet>36</a>/// target namespace while rendering.
 <a href=#37 id=37 data-nosnippet>37</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 <a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">pub struct </span>OperationId {
@@ -239,7 +239,7 @@
 <a href=#239 id=239 data-nosnippet>239</a>    /// Keeping this implementation beside the model identity prevents an
 <a href=#240 id=240 data-nosnippet>240</a>    /// adapter from reading or reinterpreting the `TypeKey` values contained
 <a href=#241 id=241 data-nosnippet>241</a>    /// by a fragment. The fingerprint deliberately has no public accessor;
-<a href=#242 id=242 data-nosnippet>242</a>    /// final emission exposes only the completed identifier through `Emit`.
+<a href=#242 id=242 data-nosnippet>242</a>    /// final emission exposes only the completed identifier through `RustWriter`.
 <a href=#243 id=243 data-nosnippet>243</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>stable_fingerprint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
 <a href=#244 id=244 data-nosnippet>244</a>        <span class="kw">let </span><span class="kw-2">mut </span>hash = <span class="number">0xcbf2_9ce4_8422_2325_u64</span>;
 <a href=#245 id=245 data-nosnippet>245</a>        <span class="kw">for </span>byte <span class="kw">in </span><span class="self">self</span>.stable_key().bytes() {
