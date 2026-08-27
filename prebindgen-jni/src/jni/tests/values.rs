@@ -794,6 +794,11 @@ fn flattened_field_composes_bounded_conversion_stages() {
          value the composed Optional bound:\n{rust}"
     );
     assert!(
+        !rc.contains("Some(__jni_in_convert_wire_to_Option_Duration"),
+        "the niche converter already yields the Option, so the composed layer must pass its \
+         answer through rather than wrap it:\n{rust}"
+    );
+    assert!(
         rc.contains("let___delay:jni::sys::jlong=__jni_out_convert_")
             && rc.contains("\"(J)Lio/test/jni/Timed;\""),
         "whole-struct output must pass the niche as primitive jlong:\n{rust}"
