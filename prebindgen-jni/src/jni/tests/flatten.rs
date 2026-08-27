@@ -2383,6 +2383,76 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
     );
 }
 
+/// The whole-object encode covers a shape the registry-facing decomposition
+/// refuses, and that divergence is deliberate.
+///
+/// `struct_out_wires_of` returns `None` for a struct with a nested
+/// `data_class` behind an `Option`, because there is no chain to reach the
+/// inlined leaves through. The whole-object output encode supports it as a
+/// `present` flag plus a defaulted group — which is why #596 step 5 records
+/// the two as different coverage rather than composing one from the other.
+///
+/// If this ever starts returning `Some`, the encode should be rendered from
+/// the decomposition and this test deleted; see #602.
+#[test]
+fn the_decomposition_refuses_what_the_whole_object_encode_supports() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Leaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub inner: Option<Leaf>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_id(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Leaf))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(holder_id)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let holder: syn::Ident = syn::parse_quote!(Holder);
+    assert!(
+        gen.declarations()
+            .struct_out_wires_of(gen.registry(), &holder)
+            .is_none(),
+        "the decomposition refuses an optional nested data class"
+    );
+
+    let dir = unique_test_dir("jnigen_decomposition_refusal");
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read generated file");
+    let compact: String = rust.split_whitespace().collect();
+    assert!(
+        compact.contains("__inner_present"),
+        "the whole-object encode still supports it, as a present flag:\n{rust}"
+    );
+}
+
 /// A nullable primitive keeps the allocation-free `(present, value)` pair
 /// rather than boxing, at field depth as at parameter depth.
 ///

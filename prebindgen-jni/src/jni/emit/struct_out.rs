@@ -105,6 +105,19 @@ pub(crate) fn synth_value_struct_leaves(
 /// an [`EncSlot`] describing its `JValue` slot. `access` is the Rust
 /// expression yielding the current struct value (`v`, `v.field`, or the
 /// matched `__cN` under an Option); `prefix` namespaces the generated idents.
+/// Walk the struct's fields and encode each leaf into a `fromParts` argument.
+///
+/// This is a source-value walk that the registry does not perform, and the
+/// reason is coverage rather than ownership. The registry-facing decomposition
+/// of a struct (`Declarations::struct_out_wires_at`) refuses a nested
+/// `data_class` behind an `Option` or a `Vec`; this encode supports both, an
+/// optional nested class as a `present` flag plus a defaulted group and a sum
+/// field as a tag plus one group per variant.
+///
+/// Rendering this through the registry's decomposition walk would therefore
+/// mean teaching that decomposition the gated shapes — which would also change
+/// what a foreign builder can be delivered, a feature rather than a
+/// refactoring. #596 step 5 records that decision; #602 proposes the feature.
 fn encode_plan(
     plan: &StructPlan,
     access: &TokenStream,

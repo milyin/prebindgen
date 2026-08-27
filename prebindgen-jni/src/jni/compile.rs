@@ -4226,6 +4226,15 @@ impl Declarations {
                 // A nested `data_class` inlines when it is reached directly.
                 // Behind an `Option` or a `Vec` there is no chain to reach
                 // through, so the whole value stays object-shaped.
+                //
+                // This refusal is why the whole-object output encode
+                // (`emit/struct_out.rs`) is not rendered from this
+                // decomposition: it supports the shapes refused here — an
+                // optional nested class becomes a `present` flag plus a
+                // defaulted group, and a sum field a tag plus one group per
+                // variant. Delivering those to a foreign builder is a feature
+                // this decomposition does not have, so the two are not two
+                // implementations of one thing. See #596 step 5, and #602.
                 crate::jni::classify::TypeKind::DataStruct {
                     st: _,
                     cfg: Some(_),
