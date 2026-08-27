@@ -443,17 +443,22 @@ pub struct CbindgenBuilder {
     >,
     /// Immutable registry-owned C generation plan for ordinary sites, callback
     /// argument sites, and callback artifacts.
-    pub(crate) generation:
-        Option<prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>>,
+    pub(crate) generation: Option<
+        std::rc::Rc<
+            prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>,
+        >,
+    >,
     /// Every final artifact of the generated Rust file, frozen in the order it
     /// is written. Filled from [`Self::generation`] once resolution is
     /// complete, and the only thing `write_rust` reads converters from.
-    pub(crate) assembly: Option<prebindgen_registry::write::Assembly<chain::CFunction>>,
+    pub(crate) assembly: Option<prebindgen_registry::write::Assembly<assembly::CFinalArtifact>>,
 }
 
 impl CbindgenBuilder {
     /// The frozen assembly the generated Rust file is written from.
-    pub(crate) fn assembly(&self) -> &prebindgen_registry::write::Assembly<chain::CFunction> {
+    pub(crate) fn assembly(
+        &self,
+    ) -> &prebindgen_registry::write::Assembly<assembly::CFinalArtifact> {
         self.assembly
             .as_ref()
             .expect("C assembly is frozen after resolution")
@@ -462,7 +467,12 @@ impl CbindgenBuilder {
     /// Frozen converter artifacts in registry-owned dependency order.
     #[cfg(test)]
     pub(crate) fn converter_functions(&self) -> impl Iterator<Item = &chain::CFunction> {
-        self.assembly().artifacts()
+        self.assembly()
+            .artifacts()
+            .filter_map(|artifact| match artifact {
+                assembly::CFinalArtifact::Converter(converter) => Some(&**converter),
+                assembly::CFinalArtifact::Wrapper(_) => None,
+            })
     }
 }
 
@@ -471,6 +481,7 @@ type Mangle1 = Box<dyn Fn(&str) -> String>;
 /// A mangler over a callback's argument bases.
 type MangleN = Box<dyn Fn(&[String]) -> String>;
 
+mod assembly;
 mod builder;
 mod chain;
 mod compile;

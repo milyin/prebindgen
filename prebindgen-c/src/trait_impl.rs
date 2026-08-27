@@ -1072,19 +1072,37 @@ impl CbindgenBuilder {
         for artifact in artifacts {
             generation.artifact(artifact);
         }
-        let generation = generation.build().map_err(|errors| {
+        let generation = std::rc::Rc::new(generation.build().map_err(|errors| {
             prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors.to_string(),
             }
-        })?;
-        // The file's artifacts, frozen in the plan's own dependency order.
-        self.assembly = Some(
-            generation
-                .fragments()
-                .filter_map(|fragment| fragment.artifact())
-                .cloned()
-                .collect(),
-        );
+        })?);
+        // The file's artifacts: every private converter in the plan's own
+        // dependency order, then one exported wrapper per declared function,
+        // named in source order so the file's layout does not depend on how
+        // the declarations were written.
+        let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
+        for converter in generation
+            .fragments()
+            .filter_map(|fragment| fragment.artifact())
+        {
+            assembly.artifact(crate::assembly::CFinalArtifact::Converter(Box::new(
+                converter.clone(),
+            )));
+        }
+        let declared = self.declared_functions();
+        let mut wrapped: Vec<_> = registry
+            .flat()
+            .functions()
+            .filter(|function| declared.contains(&function.name))
+            .collect();
+        wrapped.sort_by_key(|function| function.name.to_string());
+        for function in wrapped {
+            assembly.artifact(crate::assembly::CFinalArtifact::Wrapper(Box::new(
+                crate::assembly::CWrapper::new(&self, &generation, function),
+            )));
+        }
+        self.assembly = Some(assembly.build());
         self.generation = Some(generation);
         self.validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
@@ -1236,11 +1254,13 @@ impl Prebindgen for CbindgenBuilder {
 
     fn on_function(
         &self,
-        f: &prebindgen_registry::flat::Function,
+        _f: &prebindgen_registry::flat::Function,
         _registry: &Registry,
-        emit: &prebindgen_registry::RustWriter,
+        _emit: &prebindgen_registry::RustWriter,
     ) -> Vec<syn::Item> {
-        vec![syn::Item::Fn(self.emit_function_wrapper(f, emit))]
+        // Wrappers are frozen artifacts of the assembly, planned when the
+        // generation plan is. The method goes when JniGen's wrappers follow.
+        Vec::new()
     }
 
     fn on_struct(
