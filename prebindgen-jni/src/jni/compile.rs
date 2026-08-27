@@ -539,6 +539,28 @@ impl OutAbi {
     }
 }
 
+impl prebindgen_registry::unfold::DecomposedLeaf for OutWire {
+    fn reach(&self) -> &[prebindgen_registry::unfold::PathStep] {
+        OutWire::reach(self)
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn identity(&self) -> bool {
+        self.identity
+    }
+
+    fn source(&self) -> &TypeRef {
+        &self.out_ty
+    }
+
+    fn is_field_read(&self) -> bool {
+        OutWire::is_field_read(self)
+    }
+}
+
 impl OutWire {
     /// The converters encoding this leaf calls.
     pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {

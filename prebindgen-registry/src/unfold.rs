@@ -33,6 +33,12 @@ use crate::{
 };
 
 mod error;
+mod walk;
+pub use walk::{
+    bind_hoists, compose_step, fold_steps, project_leading_fields, reach_leaf_flat, DecomposedLeaf,
+    Hoisted,
+};
+
 mod plan;
 
 pub use self::{

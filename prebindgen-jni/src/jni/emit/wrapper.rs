@@ -1,7 +1,11 @@
 //! Extern `"C"` JNI wrapper functions: signature lowering, input
 //! params, and the expanded-param path.
 
-use prebindgen_registry::{types_util::result_ok_type, Conversions};
+use prebindgen_registry::{
+    types_util::result_ok_type,
+    unfold::{bind_hoists, reach_leaf_flat},
+    Conversions,
+};
 
 use super::*;
 use crate::jni::trait_impl::read_through_erased_wrappers;
