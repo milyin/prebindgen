@@ -405,23 +405,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary64_9d95f2f133e7e0ab<
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary64.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/perftest/ObjectBoundary32;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary64.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary64 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -452,23 +450,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary64Object_3c7cf869ff4
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary64Object.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/perftest/ObjectBoundary32;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary64Object.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary64Object {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -534,28 +530,24 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_7e701167233e784f<'env, 'v>
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Payload.id: {}", e)))? as _;
-        let id = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?;
         let __seq_raw: jni::sys::jint = env
             .get_field(v, "seq", "I")
             .and_then(|val| val.i())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Payload.seq: {}", e)))? as _;
-        let seq = __jni_in_convert_wire_to_i32_83b133e23cc76fc5(env, &__seq_raw)?;
         let __value_raw: jni::sys::jdouble = env
             .get_field(v, "value", "D")
             .and_then(|val| val.d())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Payload.value: {}", e)))? as _;
-        let value = __jni_in_convert_wire_to_f64_b312e1b95182cdfd(env, &__value_raw)?;
         let __flag_raw: jni::sys::jboolean = env
             .get_field(v, "flag", "Z")
             .and_then(|val| val.z())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Payload.flag: {}", e)))? as _;
-        let flag = __jni_in_convert_wire_to_bool_1be2f6c32f925207(env, &__flag_raw)?;
         let __label_jobj: jni::objects::JObject = env
             .get_field(v, "label", "Ljava/lang/String;")
             .and_then(|val| val.l())
@@ -563,16 +555,15 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_7e701167233e784f<'env, 'v>
                 String,
             >>::from(format!("Payload.label: {}", e)))?;
         let __label_raw: jni::objects::JString = __label_jobj.into();
-        let label = __jni_in_convert_wire_to_Option_Box_String_jni_optional_intermediate_input_niche_87b03b4201168b29(
-            env,
-            &__label_raw,
-        )?;
         perftest_flat::Payload {
-            id,
-            seq,
-            value,
-            flag,
-            label,
+            id: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?,
+            seq: __jni_in_convert_wire_to_i32_83b133e23cc76fc5(env, &__seq_raw)?,
+            value: __jni_in_convert_wire_to_f64_b312e1b95182cdfd(env, &__value_raw)?,
+            flag: __jni_in_convert_wire_to_bool_1be2f6c32f925207(env, &__flag_raw)?,
+            label: __jni_in_convert_wire_to_Option_Box_String_jni_optional_intermediate_input_niche_87b03b4201168b29(
+                env,
+                &__label_raw,
+            )?,
         }
     })
 }
@@ -914,23 +905,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d<
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary16.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/perftest/ObjectBoundary8;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary16.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary16 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -1103,23 +1092,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb<'
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary2.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/perftest/ObjectBoundaryLeaf;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary2.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary2 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -1270,23 +1257,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21<
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary32.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/perftest/ObjectBoundary16;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary32.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary32 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -1542,23 +1527,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f<'
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary4.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/perftest/ObjectBoundary2;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary4.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary4 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -2556,23 +2539,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267<'
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary8.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/perftest/ObjectBoundary4;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary8.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary8 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -2701,9 +2682,8 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab83
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundaryLeaf.value: {}", e)))? as _;
-        let value = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__value_raw)?;
         perftest_flat::ObjectBoundaryLeaf {
-            value,
+            value: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__value_raw)?,
         }
     })
 }

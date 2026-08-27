@@ -19,7 +19,6 @@ use crate::jni::trait_impl::build_through_erased_wrappers;
 #[derive(Clone)]
 pub(crate) struct JObjectStructInputPlan {
     shape: flat::Struct,
-    source_module: syn::Path,
     fields: Vec<JObjectStructFieldPlan>,
 }
 
@@ -115,6 +114,123 @@ impl prebindgen_registry::chain::OptionalBridge for JNullableProperty {
 
     fn build_present(&self, _child: TokenStream) -> TokenStream {
         unreachable!("a whole-object property is decoded, never encoded")
+    }
+}
+
+/// The source struct a whole-object decode builds, spelled through the shape
+/// the model holds.
+///
+/// A `data_class` is normally a named-field struct, and the registry's default
+/// construction is exactly that. A unit or tuple struct is not, and only the
+/// element knows which — so it travels with the policy that constructs it.
+#[derive(Clone)]
+struct JStructSource {
+    ordinary: crate::jni::chain::JSource,
+    shape: flat::Struct,
+}
+
+impl prebindgen_registry::chain::Source for JStructSource {
+    fn spell(&self, source: &TypeRef, emit: &prebindgen_registry::RustWriter) -> TokenStream {
+        prebindgen_registry::chain::Source::spell(&self.ordinary, source, emit)
+    }
+
+    fn build(&self, canonical: TokenStream) -> TokenStream {
+        prebindgen_registry::chain::Source::build(&self.ordinary, canonical)
+    }
+
+    fn construct(
+        &self,
+        head: TokenStream,
+        parts: &[(syn::Ident, TokenStream)],
+        emit: &prebindgen_registry::RustWriter,
+    ) -> TokenStream {
+        let bound: Vec<TokenStream> = self
+            .shape
+            .fields
+            .iter()
+            .zip(parts)
+            .map(|(field, (_, value))| field.bind(value))
+            .collect();
+        emit.shape_struct(&self.shape, head, &bound)
+    }
+}
+
+/// The JVM object a whole-object struct crosses as, read one property at a
+/// time.
+///
+/// This is the adapter half of the composed `Product`: the registry walks the
+/// struct's fields and builds the source value; this says what a part *is* —
+/// a property fetched off the object, which can fail.
+#[derive(Clone)]
+struct JObjectBridge {
+    properties: Vec<JObjectStructFieldPlan>,
+}
+
+impl prebindgen_registry::chain::ProductBridge for JObjectBridge {
+    fn intermediate(&self) -> syn::Type {
+        syn::parse_quote!(jni::objects::JObject)
+    }
+
+    fn part(
+        &self,
+        value: TokenStream,
+        index: usize,
+        _name: &syn::Ident,
+    ) -> prebindgen_registry::chain::PartRead {
+        let (prelude, value) = self.properties[index].read(value);
+        prebindgen_registry::chain::PartRead::fallible(prelude, value)
+    }
+
+    fn build(&self, _parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
+        unreachable!("a whole-object struct is decoded, never encoded, through this bridge")
+    }
+}
+
+/// What converts one property once its wire value has been read.
+///
+/// Either the property's own child converter, or — for a nullable property —
+/// the `Optional` layer composed over it, which decides absence before the
+/// child is reached.
+#[derive(Clone)]
+pub(crate) struct JPropertyChild {
+    call: prebindgen_registry::chain::Call,
+    conversion: JPropertyConversion,
+}
+
+#[derive(Clone)]
+enum JPropertyConversion {
+    Converter(crate::jni::chain::JChild),
+    Nullable(
+        Box<
+            prebindgen_registry::chain::Optional<
+                crate::jni::chain::JSource,
+                JNullableProperty,
+                crate::jni::chain::JChild,
+            >,
+        >,
+    ),
+}
+
+impl prebindgen_registry::chain::Child for JPropertyChild {
+    fn call(&self) -> &prebindgen_registry::chain::Call {
+        &self.call
+    }
+
+    fn invoke(&self, value: TokenStream, emit: &prebindgen_registry::RustWriter) -> TokenStream {
+        match &self.conversion {
+            JPropertyConversion::Converter(child) => {
+                prebindgen_registry::chain::Child::invoke(child, value, emit)
+            }
+            // The composed layer names its input `v`, as every chain does, so
+            // the block is what keeps that name local to this property.
+            JPropertyConversion::Nullable(chain) => {
+                let body = prebindgen_registry::chain::Chain::render(chain.as_ref(), emit).body;
+                quote!({
+                    let v = #value;
+                    #body
+                })
+            }
+        }
     }
 }
 
@@ -217,9 +333,9 @@ pub(crate) fn build_jobject_struct_input_plan(
             ext, &field.ty, name, property, error, false,
         )?);
     }
+    let _ = registry;
     Some(JObjectStructInputPlan {
         shape: s.clone(),
-        source_module: struct_module_path(ext, registry, &s.name),
         fields,
     })
 }
@@ -369,26 +485,45 @@ fn build_jobject_property_plan(
 }
 
 impl JObjectStructInputPlan {
+    /// The decode, composed by the registry: it walks the struct's fields,
+    /// reads each part through [`JObjectBridge`], calls each property's
+    /// conversion, and builds the source value.
     pub(crate) fn render(&self, emit: &prebindgen_registry::RustWriter) -> syn::Expr {
-        let mut preludes = Vec::new();
-        let mut inits = Vec::new();
-        for field in &self.fields {
-            preludes.push(field.render(quote!(v), emit));
-            let name = &field.name;
-            inits.push(quote!(#name));
-        }
-        let module = &self.source_module;
-        let ident = &self.shape.name;
-        let ctor = emit.shape_struct(&self.shape, quote!(#module::#ident), &inits);
-        syn::parse_quote!({
-            #(#preludes)*
-            #ctor
-        })
+        let product = prebindgen_registry::chain::Product {
+            source: self.shape.type_ref().clone(),
+            direction: prebindgen_registry::recipe::Direction::Construct,
+            source_policy: JStructSource {
+                ordinary: crate::jni::chain::JSource {
+                    wrappers: Vec::new(),
+                },
+                shape: self.shape.clone(),
+            },
+            bridge: JObjectBridge {
+                properties: self.fields.clone(),
+            },
+            parts: self
+                .fields
+                .iter()
+                .map(|field| prebindgen_registry::chain::ProductPart {
+                    name: field.name.clone(),
+                    child: field.child(),
+                    mode: prebindgen_registry::recipe::Mode::Owned,
+                    hold_uninit: false,
+                })
+                .collect(),
+        };
+        let body = prebindgen_registry::chain::Chain::render(&product, emit).body;
+        syn::parse_quote!(#body)
     }
 }
 
 impl JObjectStructFieldPlan {
-    fn render(&self, receiver: TokenStream, emit: &prebindgen_registry::RustWriter) -> TokenStream {
+    /// The statements that read this property's wire value off `receiver`,
+    /// and the expression naming it.
+    ///
+    /// Every read can fail — a JVM field access returns a `Result` — which is
+    /// why the composed `Product` above takes this as a fallible part.
+    fn read(&self, receiver: TokenStream) -> (TokenStream, TokenStream) {
         let name = &self.name;
         let property = &self.property;
         let error = &self.error;
@@ -402,109 +537,123 @@ impl JObjectStructFieldPlan {
         } else {
             format_ident!("__{}_jobj", name)
         };
-        match &self.kind {
-            JObjectStructFieldKind::Handle {
-                descriptor,
-                pipeline,
-            } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
-                quote! {
-                    let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                    let #raw: jni::sys::jlong = if #object.is_null() {
-                        0
-                    } else {
-                        env.call_method(&#object, "peek", "()J", &[])
-                            .and_then(|val| val.j())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?
-                    };
-                    let #name = #decode;
-                }
+        let fetch_object = |descriptor: &String| {
+            quote! {
+                let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
+                    .and_then(|val| val.l())
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
             }
-            JObjectStructFieldKind::Unsigned64 { pipeline } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
+        };
+        match &self.kind {
+            JObjectStructFieldKind::Handle { descriptor, .. } => {
+                let fetch = fetch_object(descriptor);
+                (
+                    quote! {
+                        #fetch
+                        let #raw: jni::sys::jlong = if #object.is_null() {
+                            0
+                        } else {
+                            env.call_method(&#object, "peek", "()J", &[])
+                                .and_then(|val| val.j())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?
+                        };
+                    },
+                    quote!(#raw),
+                )
+            }
+            JObjectStructFieldKind::Unsigned64 { .. } => (
                 quote! {
                     let #raw: jni::sys::jlong = env
                         .get_field(#receiver, #property, "J")
                         .and_then(|val| val.j())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                    let #name = #decode;
-                }
+                },
+                quote!(#raw),
+            ),
+            JObjectStructFieldKind::Enum { descriptor, .. } => {
+                let fetch = fetch_object(descriptor);
+                (
+                    quote! {
+                        #fetch
+                        let #raw: jni::sys::jint = env.call_method(&#object, "getValue", "()I", &[])
+                            .and_then(|val| val.i())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                    },
+                    quote!(#raw),
+                )
             }
-            JObjectStructFieldKind::Enum {
-                descriptor,
-                pipeline,
-            } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
-                quote! {
-                    let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                    let #raw: jni::sys::jint = env.call_method(&#object, "getValue", "()I", &[])
-                        .and_then(|val| val.i())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                    let #name = #decode;
-                }
-            }
-            // A nullable property: the reference is fetched here, and what it
-            // means — absent, or a value one unboxing call away — is decided
-            // by the registry-composed `Optional` layer.
+            // The reference itself is the wire value: whether it means absence
+            // is the composed `Optional` layer's decision, not the read's.
             JObjectStructFieldKind::Nullable(plan) => {
-                let descriptor = &plan.descriptor;
-                let optional =
-                    prebindgen_registry::chain::Chain::render(plan.chain.as_ref(), emit).body;
-                quote! {
-                    let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                    let #name = {
-                        let v = #object;
-                        #optional
-                    };
-                }
+                (fetch_object(&plan.descriptor), quote!(#object))
             }
             JObjectStructFieldKind::Primitive {
                 wire,
                 descriptor,
                 accessor,
-                pipeline,
-            } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
+                ..
+            } => (
                 quote! {
                     let #raw: #wire = env.get_field(#receiver, #property, #descriptor)
                         .and_then(|val| val.#accessor())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))? as _;
-                    let #name = #decode;
-                }
-            }
+                },
+                quote!(#raw),
+            ),
             JObjectStructFieldKind::IntoObject {
-                wire,
-                descriptor,
-                pipeline,
+                wire, descriptor, ..
             } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
-                quote! {
-                    let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                    let #raw: #wire = #object.into();
-                    let #name = #decode;
-                }
+                let fetch = fetch_object(descriptor);
+                (
+                    quote! {
+                        #fetch
+                        let #raw: #wire = #object.into();
+                    },
+                    quote!(#raw),
+                )
             }
-            JObjectStructFieldKind::Object {
-                descriptor,
-                pipeline,
-            } => {
-                let decode = pipeline.invoke_converter(quote!(env), quote!(#raw), name, emit);
+            JObjectStructFieldKind::Object { descriptor, .. } => (
                 quote! {
                     let #raw: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
                         .and_then(|val| val.l())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
-                    let #name = #decode;
-                }
-            }
+                },
+                quote!(#raw),
+            ),
         }
+    }
+
+    /// What converts this property once it is read.
+    fn child(&self) -> JPropertyChild {
+        let conversion = match &self.kind {
+            JObjectStructFieldKind::Nullable(plan) => {
+                JPropertyConversion::Nullable(plan.chain.clone())
+            }
+            JObjectStructFieldKind::Handle { pipeline, .. }
+            | JObjectStructFieldKind::Unsigned64 { pipeline }
+            | JObjectStructFieldKind::Enum { pipeline, .. }
+            | JObjectStructFieldKind::Primitive { pipeline, .. }
+            | JObjectStructFieldKind::IntoObject { pipeline, .. }
+            | JObjectStructFieldKind::Object { pipeline, .. } => {
+                JPropertyConversion::Converter(pipeline.converter_child().clone())
+            }
+        };
+        let call = match &conversion {
+            JPropertyConversion::Converter(child) => {
+                prebindgen_registry::chain::Child::call(child).clone()
+            }
+            // The layer propagates its own failures with `?`, so the composer
+            // adds none of its own; the identity is the child's, which is what
+            // the property depends on.
+            JPropertyConversion::Nullable(chain) => prebindgen_registry::chain::Call::operation(
+                prebindgen_registry::chain::Child::call(&chain.child)
+                    .operation_id()
+                    .clone(),
+                false,
+                false,
+            ),
+        };
+        JPropertyChild { call, conversion }
     }
 }
 
@@ -615,8 +764,25 @@ impl JObjectSumInputPlan {
             let mut preludes = Vec::new();
             let mut inits = Vec::new();
             for field in &alternative.fields {
-                preludes.push(field.property.render(quote!(__obj), emit));
+                // The sum still walks its payload itself — step 4 of #596 is
+                // what composes this as a `Choice`. It reads and converts each
+                // property through the same two halves the struct's composed
+                // `Product` uses.
+                let (read, value) = field.property.read(quote!(__obj));
                 let bind = &field.property.name;
+                let convert =
+                    prebindgen_registry::chain::Child::invoke(&field.property.child(), value, emit);
+                let convert = if prebindgen_registry::chain::Child::call(&field.property.child())
+                    .fallible()
+                {
+                    quote!(#convert?)
+                } else {
+                    convert
+                };
+                preludes.push(quote! {
+                    #read
+                    let #bind = #convert;
+                });
                 inits.push(field.shape.bind(&quote!(#bind)));
             }
             let ctor = emit.shape_alternative(
