@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The rendering protocol for a collector-owned callback key."><title>RustEmitter in prebindgen_flat - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prebindgen_flat" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0 (88d9e12ae 2026-08-18)" data-channel="1.98.0" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">RustEmitter</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prebindgen_flat/index.html">prebindgen_<wbr>flat</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Rust<wbr>Emitter</a></h2><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.discriminant" title="discriminant">discriminant</a></li><li><a href="#method.emit_source_type" title="emit_source_type">emit_source_type</a></li><li><a href="#method.guard" title="guard">guard</a></li><li><a href="#method.shape_alternative" title="shape_alternative">shape_alternative</a></li><li><a href="#method.shape_enum_value" title="shape_enum_value">shape_enum_value</a></li><li><a href="#method.shape_struct" title="shape_struct">shape_struct</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate prebindgen_<wbr>flat</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">prebindgen_flat</a></div><h1>Trait <span class="trait">Rust<wbr>Emitter</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/prebindgen_flat/flat/emit.rs.html#89-141">Source</a> </span></div><pre class="rust item-decl"><code>pub trait RustEmitter {
+    // Provided methods
+    fn <a href="#method.emit_source_type" class="fn">emit_source_type</a>(
+        &amp;self,
+        ty: &amp;<a class="struct" href="flat/struct.TypeRef.html" title="struct prebindgen_flat::flat::TypeRef">TypeRef</a>,
+        modules: &amp;<a class="struct" href="https://doc.rust-lang.org/1.98.0/std/collections/hash/map/struct.HashMap.html" title="struct std::collections::hash::map::HashMap">HashMap</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, <a class="struct" href="https://docs.rs/syn/2.0.119/syn/path/struct.Path.html" title="struct syn::path::Path">Path</a>&gt;,
+        default_module: &amp;<a class="struct" href="https://docs.rs/syn/2.0.119/syn/path/struct.Path.html" title="struct syn::path::Path">Path</a>,
+    ) -&gt; <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.guard" class="fn">guard</a>(&amp;self, guard: &amp;<a class="struct" href="flat/struct.Guard.html" title="struct prebindgen_flat::flat::Guard">Guard</a>) -&gt; <a class="struct" href="https://docs.rs/syn/2.0.119/syn/item/struct.ItemConst.html" title="struct syn::item::ItemConst">ItemConst</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.discriminant" class="fn">discriminant</a>(&amp;self, value: &amp;<a class="struct" href="flat/struct.EnumValue.html" title="struct prebindgen_flat::flat::EnumValue">EnumValue</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.shape_struct" class="fn">shape_struct</a>(
+        &amp;self,
+        item: &amp;<a class="struct" href="flat/struct.Struct.html" title="struct prebindgen_flat::flat::Struct">Struct</a>,
+        head: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>,
+        parts: &amp;[<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>],
+    ) -&gt; <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.shape_alternative" class="fn">shape_alternative</a>(
+        &amp;self,
+        item: &amp;<a class="struct" href="flat/struct.Alternative.html" title="struct prebindgen_flat::flat::Alternative">Alternative</a>,
+        head: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>,
+        parts: &amp;[<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>],
+    ) -&gt; <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.shape_enum_value" class="fn">shape_enum_value</a>(
+        &amp;self,
+        item: &amp;<a class="struct" href="flat/struct.EnumValue.html" title="struct prebindgen_flat::flat::EnumValue">EnumValue</a>,
+        head: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>,
+        parts: &amp;[<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>],
+    ) -&gt; <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The rendering protocol for a collector-owned callback key.</p>
+<p>The flat layer supplies the operations because it owns captured syntax; each
+collector decides which concrete key implements them and where that key is
+handed out. <code>prebindgen-registry</code> supplies its own private receiver behind
+the unconstructable <code>RustWriter</code> it hands to final callbacks.
+Rendering operations supplied by a pipeline-owned callback key.</p>
+<p>All methods are renderings. Classification uses the flat model
+(<code>TypeRef::kind</code>, keys and structural readings) and does not need this
+protocol. Source types are generated from those facts as inert tokens;
+retained syntax is never returned as a typed AST.</p>
+<p>This trait intentionally has no provided concrete key. Implementing it is a
+collector’s explicit decision to establish an emission boundary; adapters
+using that collector receive its key only where that collector chooses.
+The trait is object-safe so a collector wrapper can expose the full API by
+delegation without reproducing every method.</p>
+<p>An independent collector establishes its own boundary by implementing the
+protocol for its own key:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_flat::{Flat, RustEmitter};
+<span class="kw">use </span>std::collections::HashMap;
+
+<span class="kw">struct </span>MyCollectorKey;
+<span class="kw">impl </span>RustEmitter <span class="kw">for </span>MyCollectorKey {}
+
+<span class="kw">let </span>flat = Flat::builder().build()<span class="question-mark">?</span>;
+<span class="kw">let </span>syntax: syn::Type = <span class="macro">syn::parse_quote!</span>(<span class="prelude-ty">Option</span>&lt;String&gt;);
+<span class="kw">let </span>reading = flat.classify(<span class="kw-2">&amp;</span>syntax)<span class="question-mark">?</span>;
+<span class="kw">let </span>module: syn::Path = <span class="macro">syn::parse_quote!</span>(source);
+<span class="macro">assert_eq!</span>(MyCollectorKey
+    .emit_source_type(<span class="kw-2">&amp;</span>reading, <span class="kw-2">&amp;</span>HashMap::new(), <span class="kw-2">&amp;</span>module)
+    .to_string(), <span class="string">":: core :: option :: Option &lt; :: std :: string :: String &gt;"</span>);</code></pre></div></div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.emit_source_type" class="method"><a class="src rightside" href="../src/prebindgen_flat/flat/emit.rs.html#96-103">Source</a><h4 class="code-header">fn <a href="#method.emit_source_type" class="fn">emit_source_type</a>(
+    &amp;self,
+    ty: &amp;<a class="struct" href="flat/struct.TypeRef.html" title="struct prebindgen_flat::flat::TypeRef">TypeRef</a>,
+    modules: &amp;<a class="struct" href="https://doc.rust-lang.org/1.98.0/std/collections/hash/map/struct.HashMap.html" title="struct std::collections::hash::map::HashMap">HashMap</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, <a class="struct" href="https://docs.rs/syn/2.0.119/syn/path/struct.Path.html" title="struct syn::path::Path">Path</a>&gt;,
+    default_module: &amp;<a class="struct" href="https://docs.rs/syn/2.0.119/syn/path/struct.Path.html" title="struct syn::path::Path">Path</a>,
+) -&gt; <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a></h4></section></summary><div class="docblock"><p>Generate a source type from Flat facts, qualifying model-known nominal
+types and const extents to their declaration modules.</p>
+<p>This returns an inert output fragment. It neither exposes nor walks the
+captured Rust node; all structural decisions come from <code>TypeKind</code>,
+<code>TypeId</code>, and <code>ConstId</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.guard" class="method"><a class="src rightside" href="../src/prebindgen_flat/flat/emit.rs.html#108-110">Source</a><h4 class="code-header">fn <a href="#method.guard" class="fn">guard</a>(&amp;self, guard: &amp;<a class="struct" href="flat/struct.Guard.html" title="struct prebindgen_flat::flat::Guard">Guard</a>) -&gt; <a class="struct" href="https://docs.rs/syn/2.0.119/syn/item/struct.ItemConst.html" title="struct syn::item::ItemConst">ItemConst</a></h4></section></summary><div class="docblock"><p>Copy the pipeline-owned anonymous guard into the final file.</p>
+<p>The item is private model output, not an adapter-visible source node.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.discriminant" class="method"><a class="src rightside" href="../src/prebindgen_flat/flat/emit.rs.html#113-115">Source</a><h4 class="code-header">fn <a href="#method.discriminant" class="fn">discriminant</a>(&amp;self, value: &amp;<a class="struct" href="flat/struct.EnumValue.html" title="struct prebindgen_flat::flat::EnumValue">EnumValue</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;</h4></section></summary><div class="docblock"><p>Copy an explicit enum discriminant into the final output.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.shape_struct" class="method"><a class="src rightside" href="../src/prebindgen_flat/flat/emit.rs.html#118-120">Source</a><h4 class="code-header">fn <a href="#method.shape_struct" class="fn">shape_struct</a>(
+    &amp;self,
+    item: &amp;<a class="struct" href="flat/struct.Struct.html" title="struct prebindgen_flat::flat::Struct">Struct</a>,
+    head: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>,
+    parts: &amp;[<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>],
+) -&gt; <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a></h4></section></summary><div class="docblock"><p>Generate a struct pattern or constructor from its modeled shape.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.shape_alternative" class="method"><a class="src rightside" href="../src/prebindgen_flat/flat/emit.rs.html#123-130">Source</a><h4 class="code-header">fn <a href="#method.shape_alternative" class="fn">shape_alternative</a>(
+    &amp;self,
+    item: &amp;<a class="struct" href="flat/struct.Alternative.html" title="struct prebindgen_flat::flat::Alternative">Alternative</a>,
+    head: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>,
+    parts: &amp;[<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>],
+) -&gt; <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a></h4></section></summary><div class="docblock"><p>Generate an enum alternative from its modeled shape.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.shape_enum_value" class="method"><a class="src rightside" href="../src/prebindgen_flat/flat/emit.rs.html#133-140">Source</a><h4 class="code-header">fn <a href="#method.shape_enum_value" class="fn">shape_enum_value</a>(
+    &amp;self,
+    item: &amp;<a class="struct" href="flat/struct.EnumValue.html" title="struct prebindgen_flat::flat::EnumValue">EnumValue</a>,
+    head: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>,
+    parts: &amp;[<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>],
+) -&gt; <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a></h4></section></summary><div class="docblock"><p>Generate a fieldless enum value from its modeled shape.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait <b>is</b> <a href="https://doc.rust-lang.org/1.98.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety".</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/prebindgen_flat/flat/emit/trait.RustEmitter.js" async></script></section></div></main></body></html>
