@@ -890,7 +890,7 @@
 <a href=#890 id=890 data-nosnippet>890</a>            .ok_or_else(|| refuse(at, why))
 <a href=#891 id=891 data-nosnippet>891</a>    }
 <a href=#892 id=892 data-nosnippet>892</a>
-<a href=#893 id=893 data-nosnippet>893</a>    <span class="doccomment">/// Freeze a terminal value codec without asking `Emit` to spell its source.
+<a href=#893 id=893 data-nosnippet>893</a>    <span class="doccomment">/// Freeze a terminal value codec without asking the writer to spell its source.
 <a href=#894 id=894 data-nosnippet>894</a>    </span><span class="kw">fn </span>planned_value_codec(<span class="kw-2">&amp;</span><span class="self">self</span>, at: At&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;JFrag&gt; {
 <a href=#895 id=895 data-nosnippet>895</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(fragment) = <span class="self">self</span>.planned_enum_codec(at) {
 <a href=#896 id=896 data-nosnippet>896</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(fragment);
@@ -1113,7 +1113,7 @@
 <a href=#1113 id=1113 data-nosnippet>1113</a>    <span class="doccomment">/// Freeze a whole-object struct terminal from the Flat declaration and
 <a href=#1114 id=1114 data-nosnippet>1114</a>    /// already-selected child chains. No source type is spelled and no Rust
 <a href=#1115 id=1115 data-nosnippet>1115</a>    /// body is assembled here; [`JStructCodecPlan`](crate::jni::chain::JStructCodecPlan)
-<a href=#1116 id=1116 data-nosnippet>1116</a>    /// performs both only when the shared writer supplies `Emit`.
+<a href=#1116 id=1116 data-nosnippet>1116</a>    /// performs both only when the shared writer arrives.
 <a href=#1117 id=1117 data-nosnippet>1117</a>    </span><span class="kw">fn </span>planned_struct_codec(<span class="kw-2">&amp;</span><span class="self">self</span>, at: At&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;JFrag&gt; {
 <a href=#1118 id=1118 data-nosnippet>1118</a>        <span class="kw">let </span>source = at.crossing.spelled();
 <a href=#1119 id=1119 data-nosnippet>1119</a>        <span class="kw">let </span>TypeKind::Named { id, .. } = source.kind() <span class="kw">else </span>{

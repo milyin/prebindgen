@@ -87,7 +87,7 @@
 <a href=#87 id=87 data-nosnippet>87</a>    // `Origin&lt;syn::Type&gt;::declared_spelling` is public for build-script
 <a href=#88 id=88 data-nosnippet>88</a>    // declarations of that same Rust type; exposing this captured origin would
 <a href=#89 id=89 data-nosnippet>89</a>    // accidentally make that declaration-only spelling route available to
-<a href=#90 id=90 data-nosnippet>90</a>    // adapters without an `Emit` capability.
+<a href=#90 id=90 data-nosnippet>90</a>    // adapters without the final rendering capability.
 <a href=#91 id=91 data-nosnippet>91</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) origin: Origin&lt;syn::Type&gt;,
 <a href=#92 id=92 data-nosnippet>92</a>}
 <a href=#93 id=93 data-nosnippet>93</a>
@@ -268,7 +268,7 @@
 <a href=#268 id=268 data-nosnippet>268</a>    }
 <a href=#269 id=269 data-nosnippet>269</a>
 <a href=#270 id=270 data-nosnippet>270</a>    <span class="doccomment">/// The type as `syn` — **the escape**. See [`Origin::as_syn`].
-<a href=#271 id=271 data-nosnippet>271</a>    </span><span class="comment">// Test-only as of C7: `Emit` hands out a spelling, never the node, so the
+<a href=#271 id=271 data-nosnippet>271</a>    </span><span class="comment">// Test-only as of C7: the writer hands out a spelling, never the node, so the
 <a href=#272 id=272 data-nosnippet>272</a>    // round-trip checks (`syntax_is_recoverable_from_kind`) are the last
 <a href=#273 id=273 data-nosnippet>273</a>    // callers. That is the correct end state — the check that a kind can
 <a href=#274 id=274 data-nosnippet>274</a>    // reproduce its own syntax needs both halves.

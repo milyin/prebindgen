@@ -270,7 +270,7 @@
 <a href=#270 id=270 data-nosnippet>270</a><span class="doccomment">/// One whole-object struct terminal retained as Flat shape plus JNI policy.
 <a href=#271 id=271 data-nosnippet>271</a>///
 <a href=#272 id=272 data-nosnippet>272</a>/// The plan deliberately holds no `syn::Type` or token body for the source
-<a href=#273 id=273 data-nosnippet>273</a>/// crossing. The writer supplies [`Emit`] once resolution, glue planning, and
+<a href=#273 id=273 data-nosnippet>273</a>/// crossing. The writer arrives once resolution, glue planning, and
 <a href=#274 id=274 data-nosnippet>274</a>/// Kotlin planning are complete; only then is the source signature spelled and
 <a href=#275 id=275 data-nosnippet>275</a>/// the captured struct delimiter shape assembled.
 <a href=#276 id=276 data-nosnippet>276</a></span><span class="attr">#[derive(Clone)]
@@ -334,7 +334,7 @@
 <a href=#334 id=334 data-nosnippet>334</a>
 <a href=#335 id=335 data-nosnippet>335</a><span class="doccomment">/// One whole-object sealed-sum input retained as Flat alternatives plus JNI
 <a href=#336 id=336 data-nosnippet>336</a>/// property policy. Source spelling and alternative construction are deferred
-<a href=#337 id=337 data-nosnippet>337</a>/// to the final writer-owned [`Emit`] pass.
+<a href=#337 id=337 data-nosnippet>337</a>/// to the final writer-owned rendering pass.
 <a href=#338 id=338 data-nosnippet>338</a></span><span class="attr">#[derive(Clone)]
 <a href=#339 id=339 data-nosnippet>339</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>JSumCodecPlan {
 <a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) operation: OperationId,
@@ -648,7 +648,7 @@
 <a href=#648 id=648 data-nosnippet>648</a>
 <a href=#649 id=649 data-nosnippet>649</a><span class="doccomment">/// How a terminal codec obtains the Rust type in its generated signature.
 <a href=#650 id=650 data-nosnippet>650</a>///
-<a href=#651 id=651 data-nosnippet>651</a>/// A crossing is spelled by [`Emit`] at the final write. Text terminals can
+<a href=#651 id=651 data-nosnippet>651</a>/// A crossing is spelled by the writer at the final write. Text terminals can
 <a href=#652 id=652 data-nosnippet>652</a>/// instead select a semantic owned or borrowed carrier. The concrete Rust
 <a href=#653 id=653 data-nosnippet>653</a>/// spellings for those carriers are deliberately confined to `render` too.
 <a href=#654 id=654 data-nosnippet>654</a></span><span class="attr">#[derive(Clone, Copy)]
@@ -677,7 +677,7 @@
 <a href=#677 id=677 data-nosnippet>677</a>///
 <a href=#678 id=678 data-nosnippet>678</a>/// The JNI representation and source-independent conversion policy are safe
 <a href=#679 id=679 data-nosnippet>679</a>/// to freeze during recipe compilation. Source Rust spelling is not: the plan
-<a href=#680 id=680 data-nosnippet>680</a>/// keeps the Flat reading opaque until the writer supplies [`Emit`]. Most
+<a href=#680 id=680 data-nosnippet>680</a>/// keeps the Flat reading opaque until the writer arrives. Most
 <a href=#681 id=681 data-nosnippet>681</a>/// codecs retain a ready expression; fixed-size arrays retain their JNI policy
 <a href=#682 id=682 data-nosnippet>682</a>/// and build the source-typed expression only while rendering. Text codecs
 <a href=#683 id=683 data-nosnippet>683</a>/// retain only their ownership semantics; the concrete owned/borrowed Rust
@@ -1067,7 +1067,7 @@
 <a href=#1067 id=1067 data-nosnippet>1067</a>    ///
 <a href=#1068 id=1068 data-nosnippet>1068</a>    /// Output pipelines can only contain converter children. The transient
 <a href=#1069 id=1069 data-nosnippet>1069</a>    /// Vec-handle operation is an input-site ABI and is the sole pipeline body
-<a href=#1070 id=1070 data-nosnippet>1070</a>    /// that needs [`Emit`] to spell its element type. Keeping that case out of
+<a href=#1070 id=1070 data-nosnippet>1070</a>    /// that needs the writer to spell its element type. Keeping that case out of
 <a href=#1071 id=1071 data-nosnippet>1071</a>    /// this API lets return, error, and callback delivery assemble their JNI
 <a href=#1072 id=1072 data-nosnippet>1072</a>    /// protocol without gaining access to source Rust spelling.
 <a href=#1073 id=1073 data-nosnippet>1073</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>invoke_output(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream, emit: <span class="kw-2">&amp;</span>RustWriter) -&gt; TokenStream {
