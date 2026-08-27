@@ -9,7 +9,7 @@
 use prebindgen_registry::{
     chain::{self, Chain as _},
     flat::{Alternative, TypeRef},
-    generation::{ArtifactId, GenerationPlan, SiteId},
+    generation::{ArtifactId, SiteId},
     recipe::Mode,
     write::{ArtifactKey, RustArtifact},
     RustWriter,
@@ -1171,23 +1171,6 @@ impl CArtifact {
             Self::ValueOpaque(value) => value.render(emit),
         }
     }
-}
-
-/// Render one class of C artifacts from the frozen registry plan.
-///
-/// The deliberately narrow signature is the artifact-rendering boundary: final
-/// emission can generate source-type tokens from Flat facts through the writer, but it cannot
-/// reopen the registry or the adapter's mutable compilation cache.
-pub(crate) fn render_artifacts(
-    generation: &GenerationPlan<crate::compile::CRepresentation>,
-    kind: &str,
-    emit: &RustWriter,
-) -> Vec<syn::Item> {
-    generation
-        .artifacts()
-        .filter(|artifact| artifact.id().kind() == kind)
-        .flat_map(|artifact| artifact.payload().render(emit))
-        .collect()
 }
 
 /// One opaque C handle declaration and its typed destructor.
