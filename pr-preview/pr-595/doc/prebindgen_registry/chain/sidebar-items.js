@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Call","Choice","ChoiceArm","ChoicePart","Invoke","Optional","Product","ProductPart","Rendered","RenderedInvokePart","Sequence","TupleChoice","TupleProduct"],"trait":["Chain","Child","ChoiceBridge","InvokeBridge","InvokePart","OptionalBridge","ProductBridge","SequenceBridge","Source"]};
