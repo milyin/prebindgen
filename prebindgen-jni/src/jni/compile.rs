@@ -890,7 +890,7 @@ impl<R: Conversions> JCompile<'_, R> {
             .ok_or_else(|| refuse(at, why))
     }
 
-    /// Freeze a terminal value codec without asking `Emit` to spell its source.
+    /// Freeze a terminal value codec without asking the writer to spell its source.
     fn planned_value_codec(&self, at: At<'_>) -> Option<JFrag> {
         if let Some(fragment) = self.planned_enum_codec(at) {
             return Some(fragment);
@@ -1113,7 +1113,7 @@ impl<R: Conversions> JCompile<'_, R> {
     /// Freeze a whole-object struct terminal from the Flat declaration and
     /// already-selected child chains. No source type is spelled and no Rust
     /// body is assembled here; [`JStructCodecPlan`](crate::jni::chain::JStructCodecPlan)
-    /// performs both only when the shared writer supplies `Emit`.
+    /// performs both only when the shared writer arrives.
     fn planned_struct_codec(&self, at: At<'_>) -> Option<JFrag> {
         let source = at.crossing.spelled();
         let TypeKind::Named { id, .. } = source.kind() else {

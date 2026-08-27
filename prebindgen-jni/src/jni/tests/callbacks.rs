@@ -300,9 +300,9 @@ fn undeclared_expanded_callback_retains_its_registry_invoke_plan() {
 }
 
 /// Planning an Invoke may freeze Flat/model and JNI ABI facts, but only the
-/// final `RustFunction::render` boundary may receive `Emit`. Pin both sides of
+/// final `RustFunction::render` boundary may receive a `RustWriter`. Pin both sides of
 /// that seam: the recipe hook does not ask its compiler context for spelling,
-/// and the adapter planner cannot accept an `Emit` parameter later.
+/// and the adapter planner cannot accept a `RustWriter` parameter later.
 #[test]
 fn callback_planning_has_no_source_spelling_access() {
     // These delimiters deliberately follow rustfmt's stable spelling of both
@@ -326,7 +326,10 @@ fn callback_planning_has_no_source_spelling_access() {
         .split_once(") -> Option<(syn::Type, JInvokePlan)>")
         .expect("callback planner signature")
         .0;
-    assert!(!planner_signature.contains("Emit"), "{planner_signature}");
+    assert!(
+        !planner_signature.contains("RustWriter"),
+        "{planner_signature}"
+    );
 }
 
 /// Regression: a callback-delivered type that has BOTH a nested handle identity

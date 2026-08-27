@@ -175,7 +175,7 @@ fn byte_vectors_retain_late_registry_plans_in_both_directions() {
 
 /// Recipe compilation selects terminal representations from Flat kinds and
 /// retains source readings; it cannot spell source Rust or recover a kind by
-/// parsing a key string. `Emit` belongs only to the final renderer.
+/// parsing a key string. `RustWriter` belongs only to the final renderer.
 #[test]
 fn jni_recipe_planning_has_no_emit_or_key_text_escape() {
     let compile = include_str!("../compile.rs");
@@ -429,8 +429,8 @@ fn fixed_primitive_arrays_retain_late_registry_plans() {
 /// Whole-object planning may inspect Flat fields/alternatives and freeze JNI
 /// property policy, but it must not receive the capability that spells
 /// captured source types. Pin both struct and sum entry points: the recipe
-/// compiler never asks its context for `Emit`, and neither JObject plan builder
-/// can accept one later.
+/// compiler never asks its context for a renderer, and neither JObject plan
+/// builder can accept a `RustWriter` later.
 #[test]
 fn whole_object_planning_has_no_source_spelling_access() {
     let compile = include_str!("../compile.rs");
@@ -459,7 +459,10 @@ fn whole_object_planning_has_no_source_spelling_access() {
         .split_once(") -> Option<JObjectStructInputPlan>")
         .expect("JObject struct plan signature")
         .0;
-    assert!(!struct_signature.contains("Emit"), "{struct_signature}");
+    assert!(
+        !struct_signature.contains("RustWriter"),
+        "{struct_signature}"
+    );
     let sum_signature = input
         .split_once("pub(crate) fn build_jobject_sum_input_plan(")
         .expect("JObject sum plan builder")
@@ -467,7 +470,7 @@ fn whole_object_planning_has_no_source_spelling_access() {
         .split_once(") -> Option<JObjectSumInputPlan>")
         .expect("JObject sum plan signature")
         .0;
-    assert!(!sum_signature.contains("Emit"), "{sum_signature}");
+    assert!(!sum_signature.contains("RustWriter"), "{sum_signature}");
 }
 
 #[test]

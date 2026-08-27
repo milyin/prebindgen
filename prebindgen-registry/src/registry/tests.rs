@@ -320,10 +320,12 @@ fn conversion_carriers_cannot_store_complete_rust_syntax() {
     );
 }
 
-/// Recipe planning sees Flat readings and already-built answers. Restoring an
-/// `Emit` argument here would reopen source spelling before final rendering.
+/// Recipe planning sees Flat readings and already-built answers. Restoring a
+/// `RustWriter` argument here would reopen source spelling before final
+/// rendering — `RustWriter` is the rendering capability, so it is the name
+/// these fences hold out.
 #[test]
-fn conversion_planning_cannot_obtain_emit() {
+fn conversion_planning_cannot_obtain_the_writer() {
     let source = include_str!("declare.rs");
     let convert_with = source
         .split_once("pub fn convert_with")
@@ -332,7 +334,7 @@ fn conversion_planning_cannot_obtain_emit() {
         .split_once("/// The scanned registry")
         .expect("end of convert_with")
         .0;
-    assert!(!convert_with.contains("Emit"), "{convert_with}");
+    assert!(!convert_with.contains("RustWriter"), "{convert_with}");
     assert!(!convert_with.contains("spell_ty"), "{convert_with}");
 
     let recipes = include_str!("../recipe/compile.rs");
@@ -343,7 +345,7 @@ fn conversion_planning_cannot_obtain_emit() {
         .split_once("/// One part")
         .expect("end of recipe context")
         .0;
-    assert!(!cx.contains("Emit"), "{cx}");
+    assert!(!cx.contains("RustWriter"), "{cx}");
     assert!(!cx.contains("fn emit"), "{cx}");
     let compiler = recipes
         .split_once("pub struct Compiler")
@@ -352,7 +354,7 @@ fn conversion_planning_cannot_obtain_emit() {
         .split_once("impl<'a, C: Compile>")
         .expect("end of compiler fields")
         .0;
-    assert!(!compiler.contains("Emit"), "{compiler}");
+    assert!(!compiler.contains("RustWriter"), "{compiler}");
 }
 
 /// A name collision across two chained source streams fails registry

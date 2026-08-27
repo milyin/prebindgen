@@ -31,7 +31,7 @@ debug = []
 # Test-support constructors for the test suites of out-of-crate adapters
 # (`prebindgen-jni`, `prebindgen-c`). Non-default and not covered by semver:
 # with it off, the seals these bypass hold exactly as documented, so a normal
-# build is unaffected and production code still cannot mint an `Emit`.
+# build is unaffected and production code still cannot mint a `RustWriter`.
 testing = []
 
 [dev-dependencies]

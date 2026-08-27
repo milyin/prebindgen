@@ -30,7 +30,7 @@ pub(crate) enum TypeKind<'r, 'c> {
     /// The **element**, not its `syn::ItemStruct`. A flattening emitter wants
     /// each field's reading, and the model already decided one per field; going
     /// through the syntax means asking some other authority for it again. An
-    /// emitter that only re-emits the struct goes through the final `Emit`
+    /// emitter that only re-emits the struct goes through the final writer's
     /// boundary instead.
     DataStruct {
         st: &'r prebindgen_registry::flat::Struct,
