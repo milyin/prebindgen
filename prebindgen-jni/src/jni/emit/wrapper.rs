@@ -60,6 +60,15 @@ impl JWrapper {
     pub(crate) fn symbol(&self) -> &str {
         &self.plan.native_symbol
     }
+
+    /// What this extern's body calls: the converters its plan names, and the
+    /// prelude, whose error-channel functions every failure path routes
+    /// through.
+    pub(crate) fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        let mut calls = vec![crate::jni::generation::prelude_key()];
+        self.plan.calls(&mut calls);
+        calls
+    }
 }
 
 /// The synthetic nullary getter signature a declared const is emitted

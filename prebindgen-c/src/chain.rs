@@ -26,6 +26,11 @@ impl CCall {
         emit.operation_ident("c", self.0.operation_id())
     }
 
+    /// The identity of the artifact this call reaches.
+    pub(crate) fn artifact_key(&self) -> prebindgen_registry::write::ArtifactKey {
+        prebindgen_registry::write::ArtifactKey::Operation(self.0.operation_id().clone())
+    }
+
     pub(crate) fn fallible(&self) -> bool {
         self.0.fallible()
     }
@@ -321,6 +326,42 @@ impl CFunction {
 impl RustArtifact for CFunction {
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Operation(self.operation.clone())
+    }
+
+    fn calls(&self) -> Vec<ArtifactKey> {
+        let mut calls = Vec::new();
+        match &self.body {
+            // A terminal converts the value itself, except the two that hand
+            // C a `char*` block: those allocate it through the memory helpers.
+            CBody::OutputTerminal(OutputTerminalPlan {
+                operation:
+                    OutputTerminalOperation::String | OutputTerminalOperation::OpaqueError { .. },
+                ..
+            }) => calls.push(crate::assembly::memory_key()),
+            CBody::Custom(_)
+            | CBody::InputTerminal(_)
+            | CBody::OutputTerminal(_)
+            | CBody::Payload(_)
+            | CBody::Borrow(_)
+            | CBody::SliceInput(_)
+            | CBody::Marker(_) => {}
+            CBody::Product(plan) => calls.extend(
+                plan.fields
+                    .iter()
+                    .map(|field| field.converter.artifact_key()),
+            ),
+            CBody::Optional(plan) => calls.push(plan.converter.artifact_key()),
+            CBody::Sequence(plan) => calls.push(plan.child.artifact_key()),
+            CBody::Choice(plan) => calls.extend(
+                plan.arms
+                    .iter()
+                    .flat_map(|arm| &arm.parts)
+                    .map(|part| part.child.artifact_key()),
+            ),
+            // Rendered by its callback artifact, which states the calls.
+            CBody::DeferredInvoke => {}
+        }
+        calls
     }
 
     fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
@@ -1163,6 +1204,45 @@ pub(crate) enum CArtifact {
 }
 
 impl CArtifact {
+    /// Identities this artifact's items answer for beyond its own.
+    ///
+    /// A callback renders the Invoke helper of its converter operation, whose
+    /// fragment deliberately carries no artifact of its own.
+    pub(crate) fn provides(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        match self {
+            Self::Callback(callback) => vec![prebindgen_registry::write::ArtifactKey::Operation(
+                callback.invoke.operation.clone(),
+            )],
+            Self::OpaqueHandle(_) | Self::TaggedUnion(_) | Self::ValueOpaque(_) => Vec::new(),
+        }
+    }
+
+    /// The converters this artifact's body calls.
+    pub(crate) fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        let mut calls = Vec::new();
+        match self {
+            // The Invoke helper converts each argument on its way out.
+            Self::Callback(callback) => {
+                for argument in &callback.arguments {
+                    argument.value.calls(&mut calls);
+                }
+            }
+            // A tagged union's typed destructor frees what its live arm owns,
+            // which reaches a nested union's destructor and the memory helpers.
+            Self::TaggedUnion(union) => {
+                for field in union.arms.iter().flat_map(|arm| &arm.fields) {
+                    if let Some(cleanup) = &field.cleanup {
+                        cleanup.calls(&mut calls);
+                    }
+                }
+            }
+            // A handle is a pointer and a value-opaque is reinterpreted:
+            // neither converts nor frees anything of its own.
+            Self::OpaqueHandle(_) | Self::ValueOpaque(_) => {}
+        }
+        calls
+    }
+
     pub(crate) fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
         match self {
             Self::Callback(callback) => callback.render(emit),
@@ -1354,6 +1434,23 @@ impl PayloadCleanup {
                 }
             }
             Self::AllocatedString | Self::BoxedPointer { .. } => {}
+        }
+    }
+
+    /// The artifacts this cleanup calls: a nested union's own destructor, and
+    /// the memory helpers whose freer releases a `char*` block.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match self {
+            Self::NestedUnion { artifact, .. } => out.push(
+                prebindgen_registry::write::ArtifactKey::Artifact(artifact.clone()),
+            ),
+            Self::AllocatedString => out.push(crate::assembly::memory_key()),
+            Self::Fields(fields) => {
+                for (_, cleanup) in fields {
+                    cleanup.calls(out);
+                }
+            }
+            Self::BoxedPointer { .. } => {}
         }
     }
 

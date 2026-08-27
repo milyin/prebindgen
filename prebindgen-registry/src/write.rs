@@ -32,28 +32,26 @@ use crate::{destination::Destination, prebindgen::Prebindgen, registry::Registry
 /// while per-item output is assembled.
 #[derive(Debug)]
 pub enum WriteError {
-    /// Generated code calls a planned private converter whose function was
-    /// removed by reachability filtering.
-    UnrenderedConverterCalls {
-        /// `(caller, missing converter)` pairs, sorted and de-duplicated.
-        calls: Vec<(String, String)>,
+    /// A reachable artifact calls one that does not reach the file, either
+    /// because reachability filtering dropped it or because it was never
+    /// planned. Proven from the artifacts' own edges, before anything renders.
+    UnreachedDependency {
+        /// `(caller, unreached callee)` identities, sorted and de-duplicated.
+        edges: Vec<(String, String)>,
     },
 }
 
 impl std::fmt::Display for WriteError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WriteError::UnrenderedConverterCalls { calls } => {
-                write!(
-                    f,
-                    "generated code calls private converters that were not rendered:"
-                )?;
-                for (caller, converter) in calls {
-                    write!(f, "\n  - `{caller}` calls `{converter}`")?;
+            WriteError::UnreachedDependency { edges } => {
+                write!(f, "generated artifacts call artifacts the file omits:")?;
+                for (caller, callee) in edges {
+                    write!(f, "\n  - {caller} calls {callee}")?;
                 }
                 write!(
                     f,
-                    "\nconverter reachability or dependency planning is incomplete"
+                    "\nartifact reachability or dependency planning is incomplete"
                 )
             }
         }
@@ -105,6 +103,27 @@ pub trait RustArtifact {
         true
     }
 
+    /// The identities this artifact's items answer for.
+    ///
+    /// Defaults to its own — the common case, where one artifact renders the
+    /// items of one identity. An artifact that renders another identity's item
+    /// too says so here, which is how a dependency on that identity is
+    /// satisfied. The C callback artifact does exactly that: it renders the
+    /// Invoke helper of a converter operation whose own fragment deliberately
+    /// carries no artifact.
+    fn provides(&self) -> Vec<ArtifactKey> {
+        vec![self.key()]
+    }
+
+    /// The artifacts this one's body calls.
+    ///
+    /// Deliberately without a default: an artifact that calls nothing says so
+    /// by returning an empty vector, and one that gains a call has to answer
+    /// the question again. These edges are what proves the file complete —
+    /// see [`WriteError::UnreachedDependency`] — so an unanswered one is a
+    /// silently weaker check rather than a compile error.
+    fn calls(&self) -> Vec<ArtifactKey>;
+
     /// Materialize the artifact's Rust items.
     fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item>;
 }
@@ -117,13 +136,29 @@ pub trait RustArtifact {
 /// sharing never depends on the Rust symbol final emission allocates.
 pub struct Assembly<A> {
     artifacts: Vec<A>,
+    /// Every identity the held artifacts answer for, including the ones an
+    /// artifact provides beyond its own key.
+    provided: HashMap<ArtifactKey, usize>,
 }
 
 impl<A: RustArtifact> Assembly<A> {
-    /// The artifacts, in emission order. Includes the unreachable ones — the
-    /// writer renders those to report anything that still calls them.
+    /// The artifacts, in emission order, including the ones no reachable
+    /// artifact calls. The writer skips those; they are held so that
+    /// [`Self::reaches`] can tell "planned but unreached" from "never
+    /// planned".
     pub fn artifacts(&self) -> impl ExactSizeIterator<Item = &A> {
         self.artifacts.iter()
+    }
+
+    /// Whether an artifact answering for this identity reaches the file.
+    ///
+    /// Reachability is read here rather than when the assembly was frozen: an
+    /// adapter may reach an artifact after adding it, and the file is what
+    /// settles the answer.
+    pub fn reaches(&self, key: &ArtifactKey) -> bool {
+        self.provided
+            .get(key)
+            .is_some_and(|position| self.artifacts[*position].reachable())
     }
 }
 
@@ -184,8 +219,15 @@ impl<A: RustArtifact> AssemblyBuilder<A> {
 
     /// Freeze the assembly.
     pub fn build(self) -> Assembly<A> {
+        let mut provided = self.positions;
+        for (position, artifact) in self.artifacts.iter().enumerate() {
+            for key in artifact.provides() {
+                provided.insert(key, position);
+            }
+        }
         Assembly {
             artifacts: self.artifacts,
+            provided,
         }
     }
 }
@@ -197,6 +239,118 @@ impl<A: RustArtifact> FromIterator<A> for Assembly<A> {
             builder.artifact(artifact);
         }
         builder.build()
+    }
+}
+
+/// Check an assembly's edges against what its artifacts render: every call to
+/// another artifact's item is declared by [`RustArtifact::calls`], and every
+/// identity [`RustArtifact::provides`] claims is one the artifact defines.
+///
+/// Test support, like [`RustWriter::for_test`](crate::RustWriter::for_test).
+/// Emission proves the file complete from the edges alone, which is only worth
+/// anything if the edges name every call — and the one place the calls
+/// themselves are visible is the rendered output. So the adapters' own test
+/// suites run this over the bindings they build: production reasons from the
+/// edges, and this checks the edges against what rendering actually emits.
+///
+/// `namespace` is the adapter's operation namespace, the one it passes to
+/// [`RustWriter::operation_ident`](crate::RustWriter::operation_ident).
+///
+/// # Panics
+///
+/// Naming the caller, the callee and the undeclared call, if a rendered body
+/// calls a converter its artifact did not declare.
+#[cfg(any(test, feature = "testing"))]
+pub fn assert_edges_cover_rendered_calls<A: RustArtifact>(
+    assembly: &Assembly<A>,
+    emit: &crate::RustWriter,
+    namespace: &str,
+) {
+    // What every artifact actually renders, which is the ground truth both
+    // halves are checked against: a call resolves to an artifact by the name
+    // that artifact defines, whether the identity is an operation or an
+    // adapter-scoped artifact. A runtime helper is called by name like any
+    // converter.
+    let rendered: Vec<(ArtifactKey, BTreeSet<String>, BTreeSet<String>)> = assembly
+        .artifacts()
+        .map(|artifact| {
+            let mut called = CalledIdents(BTreeSet::new());
+            let mut defined = BTreeSet::new();
+            for mut item in artifact.render(emit) {
+                if let syn::Item::Fn(function) = &item {
+                    defined.insert(function.sig.ident.to_string());
+                }
+                syn::visit_mut::VisitMut::visit_item_mut(&mut called, &mut item);
+            }
+            (artifact.key(), defined, called.0)
+        })
+        .collect();
+    let mut definer: HashMap<&str, &ArtifactKey> = HashMap::new();
+    for (key, defined, _) in &rendered {
+        for name in defined {
+            definer.insert(name.as_str(), key);
+        }
+    }
+    let mut provider: HashMap<ArtifactKey, usize> = HashMap::new();
+    for (position, artifact) in assembly.artifacts().enumerate() {
+        for key in artifact.provides() {
+            provider.insert(key, position);
+        }
+    }
+
+    for (artifact, (key, defined, called)) in assembly.artifacts().zip(&rendered) {
+        // Every identity claimed must be one this artifact actually defines,
+        // or claiming it would grant reachability to an item no one renders.
+        for claimed in artifact.provides() {
+            if let ArtifactKey::Operation(operation) = &claimed {
+                let ident = emit.operation_ident(namespace, operation).to_string();
+                assert!(
+                    defined.contains(&ident),
+                    "{key} claims to provide {claimed}, but renders no `{ident}`"
+                );
+            }
+        }
+        if !artifact.reachable() {
+            continue;
+        }
+        let mut allowed: BTreeSet<&str> = defined.iter().map(String::as_str).collect();
+        for callee in artifact.calls() {
+            // Resolved the way emission resolves it: through whichever
+            // artifact answers for that identity, which is not always the one
+            // whose own key it is.
+            allowed.extend(
+                provider
+                    .get(&callee)
+                    .into_iter()
+                    .flat_map(|position| rendered[*position].1.iter().map(String::as_str)),
+            );
+        }
+        for name in called {
+            if allowed.contains(name.as_str()) {
+                continue;
+            }
+            if let Some(callee) = definer.get(name.as_str()) {
+                panic!(
+                    "{key} calls {callee} as `{name}`, which it does not declare as a dependency"
+                );
+            }
+        }
+    }
+}
+
+/// Every function name called in the visited items.
+#[cfg(any(test, feature = "testing"))]
+struct CalledIdents(BTreeSet<String>);
+
+#[cfg(any(test, feature = "testing"))]
+impl syn::visit_mut::VisitMut for CalledIdents {
+    fn visit_expr_call_mut(&mut self, call: &mut syn::ExprCall) {
+        if let syn::Expr::Path(path) = call.func.as_ref() {
+            if let Some(segment) = path.path.segments.last() {
+                self.0.insert(segment.ident.to_string());
+            }
+        }
+        syn::visit_mut::visit_expr_call_mut(self, call);
     }
 }
 
@@ -229,25 +383,28 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, A: RustArtifact>(
     let emit = crate::RustWriter::new(registry, ext.source_module());
     let mut items: Vec<syn::Item> = Vec::new();
 
-    // Every artifact renders, including the ones the adapter surface does not
-    // reach: an unreachable artifact still contributes its function names, so
-    // a caller that survived reachability filtering can be reported below.
-    let rendered: Vec<(bool, Vec<syn::Item>)> = assembly
-        .artifacts()
-        .map(|artifact| (artifact.reachable(), artifact.render(&emit)))
-        .collect();
-    let converter_names: BTreeSet<String> = rendered
-        .iter()
-        .flat_map(|(_, artifact_items)| artifact_items)
-        .filter_map(|item| match item {
-            syn::Item::Fn(function) => Some(function.sig.ident.to_string()),
-            _ => None,
-        })
-        .collect();
-    for (reachable, artifact_items) in rendered {
-        if reachable {
-            items.extend(artifact_items);
+    // Dependency completeness, proven from the artifacts' own edges before
+    // anything is rendered: whatever a reachable artifact calls must itself
+    // reach the file.
+    let mut unreached: BTreeSet<(String, String)> = BTreeSet::new();
+    for artifact in assembly.artifacts().filter(|artifact| artifact.reachable()) {
+        for callee in artifact.calls() {
+            if !assembly.reaches(&callee) {
+                unreached.insert((artifact.key().to_string(), callee.to_string()));
+            }
         }
+    }
+    if !unreached.is_empty() {
+        return Err(WriteError::UnreachedDependency {
+            edges: unreached.into_iter().collect(),
+        });
+    }
+
+    // Only what reaches the file renders. An unreachable artifact used to be
+    // rendered anyway, for its function names alone, so that a caller of one
+    // could be named; the edges above answer that question without it.
+    for artifact in assembly.artifacts().filter(|artifact| artifact.reachable()) {
+        items.extend(artifact.render(&emit));
     }
 
     // 2. Anonymous consts, verbatim. Last, and in stream order. These are
@@ -258,76 +415,8 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, A: RustArtifact>(
         items.push(syn::Item::Const(emit.guard(guard)));
     }
 
-    validate_converter_calls(&mut items, &converter_names)?;
     let dest: Destination = items.into_iter().collect();
     Ok(dest.write(out_path))
-}
-
-/// Refuse a generated file whose rendered functions still call a private
-/// converter plan removed by reachability filtering.
-///
-/// This is deliberately an integrity check for planned converter functions,
-/// not a general unresolved-name check. Calls to missing prerequisites or
-/// arbitrary external functions remain rustc's responsibility.
-fn validate_converter_calls(
-    items: &mut [syn::Item],
-    candidates: &BTreeSet<String>,
-) -> Result<(), WriteError> {
-    let rendered: BTreeSet<String> = items
-        .iter()
-        .filter_map(|item| match item {
-            syn::Item::Fn(function) => Some(function.sig.ident.to_string()),
-            _ => None,
-        })
-        .collect();
-    let mut visitor = ConverterCallValidator {
-        candidates,
-        rendered: &rendered,
-        caller: None,
-        calls: BTreeSet::new(),
-    };
-    for item in items {
-        syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
-    }
-    if visitor.calls.is_empty() {
-        Ok(())
-    } else {
-        Err(WriteError::UnrenderedConverterCalls {
-            calls: visitor.calls.into_iter().collect(),
-        })
-    }
-}
-
-struct ConverterCallValidator<'a> {
-    candidates: &'a BTreeSet<String>,
-    rendered: &'a BTreeSet<String>,
-    caller: Option<String>,
-    calls: BTreeSet<(String, String)>,
-}
-
-impl syn::visit_mut::VisitMut for ConverterCallValidator<'_> {
-    fn visit_item_fn_mut(&mut self, function: &mut syn::ItemFn) {
-        let previous = self.caller.replace(function.sig.ident.to_string());
-        syn::visit_mut::visit_item_fn_mut(self, function);
-        self.caller = previous;
-    }
-
-    fn visit_expr_call_mut(&mut self, call: &mut syn::ExprCall) {
-        if let syn::Expr::Path(path) = call.func.as_ref() {
-            if let Some(segment) = path.path.segments.last() {
-                let name = segment.ident.to_string();
-                if self.candidates.contains(&name) && !self.rendered.contains(&name) {
-                    self.calls.insert((
-                        self.caller
-                            .clone()
-                            .unwrap_or_else(|| "<generated item>".to_string()),
-                        name,
-                    ));
-                }
-            }
-        }
-        syn::visit_mut::visit_expr_call_mut(self, call);
-    }
 }
 
 #[cfg(test)]

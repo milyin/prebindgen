@@ -3,60 +3,6 @@ use prebindgen_registry::Conversions;
 use super::*;
 
 impl CbindgenBuilder {
-    /// Whether the generated layer hands `char*` data memory to C — a `String`
-    /// return value, or a declared data struct that is produced as output and has
-    /// a `String` field. When true, a `free_memory_function` must be declared.
-    pub(super) fn needs_free(&self, registry: &Registry) -> bool {
-        let string_ty: syn::Type = syn::parse_quote!(String);
-        // A `String` return hands out a `char*` — unless `String` is declared
-        // `opaque_ptr` (then it crosses as `string_t *`, freed by `string_drop`).
-        if registry
-            .reading_of(&string_ty)
-            .and_then(|tr| self.out_frag(&tr))
-            .is_some()
-            && !self.opaque.contains_key(&TypeKey::from_type(&string_ty))
-        {
-            return true;
-        }
-        // Opaque error types are marshalled to a malloc'd `char*` message.
-        if self.opaque_errors.keys().any(|key| {
-            registry
-                .reading(key)
-                .and_then(|tr| self.out_frag(&tr))
-                .is_some()
-        }) {
-            return true;
-        }
-        // A tagged union with a `String` payload hands out a `char*` per active
-        // arm — allocated by its output converter, released by its typed drop.
-        if self.tagged_unions.keys().any(|key| {
-            let Some(reading) = registry.reading(key) else {
-                return false;
-            };
-            self.out_frag(&reading).is_some()
-                && self
-                    .enum_alternatives(registry, key)
-                    .map(|alts| {
-                        alts.iter().flat_map(|a| a.fields.iter()).any(|f| {
-                            matches!(f.ty.kind(), prebindgen_registry::flat::TypeKind::String)
-                        })
-                    })
-                    .unwrap_or(false)
-        }) {
-            return true;
-        }
-        self.data.keys().any(|key| {
-            let Some(reading) = registry.reading(key) else {
-                return false;
-            };
-            self.out_frag(&reading).is_some()
-                && self
-                    .struct_fields(registry, key)
-                    .map(|fields| fields.iter().any(|(_, fty)| r_is_string(fty)))
-                    .unwrap_or(false)
-        })
-    }
-
     /// The alternatives of a declared sum, by **identity**.
     ///
     /// Off the element: an `Alternative` holds its fields already classified,
@@ -342,26 +288,6 @@ impl CbindgenBuilder {
                 Err(_) => false,
                 Ok(wire) => self.payload_wire_owns(&f.ty, &wire, registry),
             })
-    }
-
-    /// Whether any declared function returns a `Vec<_>` (possibly nested under
-    /// `Result`/`Option`), so the array builder/freer prelude must be emitted.
-    ///
-    /// A run of values is the whole question — `Vec<T>` and `[T]` alike, and
-    /// through a transparent wrapper, so `Cow<'_, [T]>` counts as the `Vec<T>`
-    /// it crosses as. [`sequence_elem`](prebindgen_registry::flat::TypeRef::sequence_elem)
-    /// answers all three, which is why the two spellings this used to test
-    /// separately need no arms of their own.
-    pub(super) fn produces_array(&self, registry: &Registry) -> bool {
-        self.functions.keys().any(|orig| {
-            registry
-                .flat()
-                .function(&orig)
-                // The model already decided that an elided return and `-> ()`
-                // are one thing, so there is no second arm to write here.
-                .map(|f| f.ret.walk().iter().any(|t| t.sequence_elem().is_some()))
-                .unwrap_or(false)
-        })
     }
 
     /// Fields (`name`, `type`) of a declared data struct, looked up from the

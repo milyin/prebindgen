@@ -47,6 +47,10 @@ struct OperationPlan {
 }
 
 impl RustArtifact for OperationPlan {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Operation(self.operation.clone())
     }
@@ -64,6 +68,10 @@ impl RustArtifact for OperationPlan {
 }
 
 impl RustArtifact for LatePlan {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Operation(self.operation.clone())
     }
@@ -87,9 +95,25 @@ impl RustArtifact for LatePlan {
 #[derive(Clone)]
 struct CallerPlan {
     operation: crate::generation::OperationId,
+    /// Claim to provide the converter this calls, while rendering no such
+    /// function — the over-claim that would grant reachability to an item
+    /// nothing defines.
+    over_claims: bool,
 }
 
 impl RustArtifact for CallerPlan {
+    fn provides(&self) -> Vec<ArtifactKey> {
+        let mut provided = vec![self.key()];
+        if self.over_claims {
+            provided.push(ArtifactKey::Operation(self.operation.clone()));
+        }
+        provided
+    }
+
+    fn calls(&self) -> Vec<ArtifactKey> {
+        vec![ArtifactKey::Operation(self.operation.clone())]
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Artifact(
             crate::generation::ArtifactId::new("test", "caller").expect("identity"),
@@ -113,6 +137,20 @@ enum LateOrCaller {
 }
 
 impl RustArtifact for LateOrCaller {
+    fn provides(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Converter(plan) => plan.provides(),
+            Self::Caller(plan) => plan.provides(),
+        }
+    }
+
+    fn calls(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Converter(plan) => plan.calls(),
+            Self::Caller(plan) => plan.calls(),
+        }
+    }
+
     fn key(&self) -> ArtifactKey {
         match self {
             Self::Converter(plan) => plan.key(),
@@ -176,6 +214,8 @@ fn an_artifact_reached_after_freezing_is_emitted() {
 
 #[test]
 fn a_call_to_a_filtered_converter_is_a_writer_error() {
+    // The identities are semantic, not Rust symbols: the check runs before
+    // anything is rendered, so no name has been allocated yet.
     let registry = late_test_registry();
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
@@ -189,6 +229,7 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
         }),
         LateOrCaller::Caller(CallerPlan {
             operation: operation.clone(),
+            over_claims: false,
         }),
     ]);
     let dir = crate::test_util::unique_test_dir("write_missing_converter");
@@ -199,17 +240,66 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
         .expect_err("a call to a filtered private converter must fail in the writer");
 
     match err {
-        WriteError::UnrenderedConverterCalls { calls } => {
-            let missing = crate::RustWriter::for_test()
-                .operation_ident("test", &operation)
-                .to_string();
-            assert_eq!(calls, vec![("a_fn".to_string(), missing)]);
+        WriteError::UnreachedDependency { edges } => {
+            assert_eq!(
+                edges,
+                vec![(
+                    ArtifactKey::Artifact(
+                        crate::generation::ArtifactId::new("test", "caller").expect("identity")
+                    )
+                    .to_string(),
+                    ArtifactKey::Operation(operation).to_string(),
+                )]
+            );
         }
     }
     assert!(
         !path.exists(),
         "an invalid generated file must not reach the destination"
     );
+}
+
+/// An assembly whose artifacts state their edges honestly passes the check
+/// both adapters run on every binding they build.
+#[test]
+fn honest_edges_pass_the_evidence_check() {
+    let operation = crate::generation::OperationId::shared(
+        crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
+        crate::recipe::Direction::Construct,
+    );
+    let assembly = assembly_of([
+        LateOrCaller::Converter(LatePlan {
+            operation: operation.clone(),
+            reachable: Rc::new(Cell::new(true)),
+        }),
+        LateOrCaller::Caller(CallerPlan {
+            operation,
+            over_claims: false,
+        }),
+    ]);
+
+    assert_edges_cover_rendered_calls(&assembly, &crate::RustWriter::for_test(), "test");
+}
+
+/// Claiming an identity the artifact does not render would satisfy
+/// [`Assembly::reaches`] with nothing behind it, so the check refuses it.
+///
+/// Held here rather than only where the adapters opt in: this guard is what
+/// makes `provides` trustworthy, and an adapter that never called the helper
+/// would otherwise have none of its coverage.
+#[test]
+#[should_panic(expected = "claims to provide")]
+fn a_claimed_identity_must_be_rendered() {
+    let operation = crate::generation::OperationId::shared(
+        crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
+        crate::recipe::Direction::Construct,
+    );
+    let assembly = assembly_of([LateOrCaller::Caller(CallerPlan {
+        operation,
+        over_claims: true,
+    })]);
+
+    assert_edges_cover_rendered_calls(&assembly, &crate::RustWriter::for_test(), "test");
 }
 
 /// A registry with one declared type, which is all these two tests need of it.
@@ -241,6 +331,7 @@ fn two_reachable_artifacts_may_not_share_an_identity() {
     let caller = || {
         LateOrCaller::Caller(CallerPlan {
             operation: operation.clone(),
+            over_claims: false,
         })
     };
     let _ = assembly_of([caller(), caller()]);

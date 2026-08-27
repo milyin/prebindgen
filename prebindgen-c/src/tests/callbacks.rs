@@ -591,10 +591,22 @@ fn a_run_of_converted_optionals_uses_the_declared_wire() {
             impl Fn(Vec<Option<Duration>>) + Send + Sync + 'static
         ))
         .base_name("z_closure_durations_t")
+        // The run hands C a malloc'd block, so the freer that releases it has
+        // to be declared — the same requirement a `Vec` return carries (#437).
+        .free_memory_function("z_free")
         .function(syn::parse_quote!(duration_each));
 
     let src = write(cbindgen, registry, "cb_vec_converted_optional");
     let compact: String = src.split_whitespace().collect();
+
+    // #437: the run is built by the array builder, and this binding returns no
+    // `Vec` at all — the helper is emitted because the callback's own encode
+    // declares it, not because a return type was scanned for one.
+    assert!(compact.contains("__cbg_alloc_array"), "{src}");
+    assert!(
+        compact.contains("fn__cbg_alloc_array<W>"),
+        "the array builder must be emitted for a callback that delivers a run:\n{src}"
+    );
 
     // The run lowers to the element's DECLARED wire, pointer and length.
     assert!(

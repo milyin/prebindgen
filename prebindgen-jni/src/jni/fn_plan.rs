@@ -84,6 +84,24 @@ pub(crate) struct PlanParam {
     pub form: ParamForm,
 }
 
+impl PlanLeaf {
+    /// The converter this leaf is decoded through, which is the one its own
+    /// Rust operation invokes: a flattened data class and an optional pair are
+    /// rebuilt by one composed converter of their own, and every other kind
+    /// runs the frozen pipeline.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match &self.rust {
+            RustParamOp::Pipeline { .. } => self.pipeline.calls(out),
+            RustParamOp::OptionalPair(plan) => out.push(
+                prebindgen_registry::write::ArtifactKey::Operation(plan.chain.operation.clone()),
+            ),
+            RustParamOp::FlattenStruct(plan) => out.push(
+                prebindgen_registry::write::ArtifactKey::Operation(plan.chain.operation.clone()),
+            ),
+        }
+    }
+}
+
 /// How a source parameter crosses the boundary. The single leaf is boxed to
 /// keep the variants near the same size (a [`PlanLeaf`] embeds whole
 /// sub-plans; the `Expanded` payload is just a `Vec` header).
@@ -598,6 +616,49 @@ pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Resu
         Ok(())
     } else {
         Err(errors.join("\n"))
+    }
+}
+
+impl JniFunctionPlan {
+    /// Every converter the extern's body calls: one chain per parameter, the
+    /// output's, and the error arm's when the function has one.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for param in &self.params {
+            match &param.form {
+                ParamForm::Single(leaf) => leaf.calls(out),
+                ParamForm::Expanded { leaves, .. } => {
+                    for leaf in leaves {
+                        leaf.calls(out);
+                    }
+                }
+            }
+        }
+        match &self.output {
+            FnOutputPlan::Value(value) => value.pipeline.calls(out),
+            FnOutputPlan::Unfold(unfold) => {
+                for wire in &unfold.wires {
+                    wire.calls(out);
+                }
+                if let Some(chain) = &unfold.chain {
+                    out.push(prebindgen_registry::write::ArtifactKey::Operation(
+                        chain.operation.clone(),
+                    ));
+                }
+                if let Some(pipeline) = &unfold.element_pipeline {
+                    pipeline.calls(out);
+                }
+            }
+        }
+        if let Some(error) = &self.error {
+            for wire in &error.wires {
+                wire.calls(out);
+            }
+            if let Some(chain) = &error.chain {
+                out.push(prebindgen_registry::write::ArtifactKey::Operation(
+                    chain.operation.clone(),
+                ));
+            }
+        }
     }
 }
 

@@ -33,6 +33,12 @@ pub(crate) struct JniGenerationPlan {
     assembly: prebindgen_registry::write::Assembly<JFinalArtifact>,
 }
 
+/// The prelude's identity, which every extern depends on: its body routes
+/// failure through the error-channel functions the prelude renders.
+pub(crate) fn prelude_key() -> prebindgen_registry::write::ArtifactKey {
+    jni_artifact("jni-runtime", "prelude")
+}
+
 /// An adapter-scoped artifact identity.
 fn jni_artifact(kind: &str, name: impl Into<String>) -> prebindgen_registry::write::ArtifactKey {
     prebindgen_registry::write::ArtifactKey::Artifact(
@@ -161,6 +167,23 @@ impl JVecBuild {
         &self.free_symbol
     }
 
+    /// The converters `Push` calls, one per leaf of the element it builds.
+    pub(crate) fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        self.helpers
+            .plan
+            .leaves
+            .iter()
+            .filter(|leaf| !leaf.is_present_flag())
+            .map(|leaf| {
+                prebindgen_registry::write::ArtifactKey::Operation(
+                    leaf.conv()
+                        .expect("a non-present leaf has a converter")
+                        .clone(),
+                )
+            })
+            .collect()
+    }
+
     /// The first of the three symbols, which orders the trios in the file.
     pub(crate) fn sort_key(&self) -> &str {
         [&self.free_symbol, &self.new_symbol, &self.push_symbol]
@@ -221,7 +244,7 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
                     .expect("an exported symbol is a non-empty artifact name"),
             ),
             Self::Const(constant) => jni_artifact("jni-const", constant.constant.name.to_string()),
-            Self::Prelude => jni_artifact("jni-runtime", "prelude"),
+            Self::Prelude => prelude_key(),
             Self::HandleDestructor(destructor) => {
                 jni_artifact("jni-handle-destructor", destructor.symbol())
             }
@@ -239,6 +262,25 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
             | Self::HandleDestructor(_)
             | Self::VecBuild(_)
             | Self::ConstantExpr(_) => true,
+        }
+    }
+
+    fn provides(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        // Each JNI artifact renders its own items and no one else's: unlike
+        // the C callback, nothing here stands in for an identity whose own
+        // artifact was never planned. Stated rather than inherited, so that an
+        // artifact which does needs a deliberate change here.
+        vec![self.key()]
+    }
+
+    fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        match self {
+            Self::Converter(converter) => converter.calls(),
+            Self::Wrapper(wrapper) | Self::ConstantExpr(wrapper) => wrapper.calls(),
+            Self::Const(constant) => constant.getter.calls(),
+            Self::VecBuild(helpers) => helpers.calls(),
+            // The prelude is self-contained, and a destructor drops a box.
+            Self::Prelude | Self::HandleDestructor(_) => Vec::new(),
         }
     }
 

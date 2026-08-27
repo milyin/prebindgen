@@ -27,6 +27,8 @@ pub(crate) enum CFinalArtifact {
     /// The memory helpers the generated layer hands `char*` and array blocks
     /// to C through.
     Memory(Box<CMemory>),
+    /// The array builder, which copies a `Vec<T>` into a C block.
+    ArrayBuilder,
     /// One `#[repr(C)]` mirror of a declared data struct.
     DataStruct(Box<CDataStruct>),
     /// One `#[repr(C)]` mirror of a declared fieldless enum.
@@ -45,10 +47,33 @@ impl RustArtifact for CFinalArtifact {
             Self::Wrapper(wrapper) => wrapper.key(),
             Self::Const(constant) => constant.key(),
             Self::Memory(memory) => memory.key(),
+            Self::ArrayBuilder => array_builder_key(),
             Self::DataStruct(item) => item.key(),
             Self::Enum(item) => item.key(),
             Self::DomainConstant(item) => item.key(),
             Self::Planned(item) => item.key(),
+        }
+    }
+
+    fn provides(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Planned(item) => item.provides(),
+            _ => vec![self.key()],
+        }
+    }
+
+    fn calls(&self) -> Vec<ArtifactKey> {
+        match self {
+            Self::Converter(converter) => converter.calls(),
+            Self::Wrapper(wrapper) => wrapper.calls(),
+            Self::Const(constant) => constant.calls(),
+            Self::Memory(memory) => memory.calls(),
+            // The block it fills is malloc'd, and freed by the universal freer.
+            Self::ArrayBuilder => vec![memory_key()],
+            Self::DataStruct(item) => item.calls(),
+            Self::Enum(item) => item.calls(),
+            Self::DomainConstant(item) => item.calls(),
+            Self::Planned(item) => item.calls(),
         }
     }
 
@@ -58,6 +83,7 @@ impl RustArtifact for CFinalArtifact {
             Self::Wrapper(wrapper) => wrapper.render(emit),
             Self::Const(constant) => constant.render(emit),
             Self::Memory(memory) => memory.render(emit),
+            Self::ArrayBuilder => CMemory::render_array_builder(),
             Self::DataStruct(item) => item.render(emit),
             Self::Enum(item) => item.render(emit),
             Self::DomainConstant(item) => item.render(emit),
@@ -118,6 +144,20 @@ impl CWrapper {
                 .map(|param| decls.alias_slot_of(&param.ty))
                 .collect(),
         }
+    }
+
+    /// One boundary site of this wrapper's own function, when the function has
+    /// one in that role. A void return and an infallible function have no
+    /// return or error site.
+    fn site_if_planned(
+        &self,
+        role: prebindgen_registry::recipe::Role,
+    ) -> Option<&prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation>> {
+        let id = prebindgen_registry::generation::SiteId::new(prebindgen_registry::recipe::Site {
+            owner: self.function.name.clone(),
+            role,
+        });
+        self.generation.site(&id)
     }
 
     /// One boundary site of this wrapper's own function.
@@ -549,6 +589,25 @@ impl CWrapper {
 }
 
 impl RustArtifact for CWrapper {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        // One site per parameter, plus the return and the error channel when
+        // the function has them — the same sites the body decodes and encodes
+        // through.
+        let mut calls = Vec::new();
+        let roles = (0..self.function.params.len())
+            .map(|index| prebindgen_registry::recipe::Role::Param { index })
+            .chain([
+                prebindgen_registry::recipe::Role::Return,
+                prebindgen_registry::recipe::Role::Error,
+            ]);
+        for role in roles {
+            if let Some(site) = self.site_if_planned(role) {
+                site.abi().payload().calls(&mut calls);
+            }
+        }
+        calls
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Artifact(
             prebindgen_registry::generation::ArtifactId::new("c-wrapper", self.symbol.to_string())
@@ -590,6 +649,10 @@ impl CConst {
 }
 
 impl RustArtifact for CConst {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Artifact(
             prebindgen_registry::generation::ArtifactId::new(
@@ -606,6 +669,18 @@ impl RustArtifact for CConst {
             .map(|module| vec![syn::Item::Const(emit.const_alias(&self.constant, module))])
             .unwrap_or_default()
     }
+}
+
+/// The memory helpers' identity, which every artifact that hands `char*`
+/// memory to C — or frees any block — depends on.
+pub(crate) fn memory_key() -> ArtifactKey {
+    artifact_id("c-runtime", "memory")
+}
+
+/// The array builder's identity, which every artifact that hands C a block of
+/// converted elements depends on.
+pub(crate) fn array_builder_key() -> ArtifactKey {
+    artifact_id("c-runtime", "array-builder")
 }
 
 /// An adapter-scoped artifact identity, for the artifacts this module names
@@ -645,7 +720,27 @@ impl CPlanned {
     }
 }
 
+impl CPlanned {
+    /// The plan's own artifact description.
+    fn payload(&self) -> &crate::chain::CArtifact {
+        self.generation
+            .artifact(&self.id)
+            .unwrap_or_else(|| panic!("the C generation plan lost artifact {}", self.id))
+            .payload()
+    }
+}
+
 impl RustArtifact for CPlanned {
+    fn provides(&self) -> Vec<ArtifactKey> {
+        let mut provided = vec![self.key()];
+        provided.extend(self.payload().provides());
+        provided
+    }
+
+    fn calls(&self) -> Vec<ArtifactKey> {
+        self.payload().calls()
+    }
+
     fn key(&self) -> ArtifactKey {
         ArtifactKey::Artifact(self.id.clone())
     }
@@ -668,41 +763,66 @@ impl RustArtifact for CPlanned {
 pub(crate) struct CMemory {
     /// The declared freer's exported symbol.
     free_ident: syn::Ident,
-    /// Whether a `Vec<T>` return hands out an array block.
-    arrays: bool,
 }
 
 impl CMemory {
-    /// Plan the memory helpers, if this binding hands memory to C at all.
-    pub(crate) fn new(decls: &CbindgenBuilder, registry: &Registry) -> Option<Self> {
-        let arrays = decls.produces_array(registry);
-        if !(decls.needs_free(registry) || arrays) {
-            return None;
-        }
+    /// Plan the memory helpers for a binding that hands memory to C.
+    ///
+    /// Whether it does is not asked here: the artifacts that allocate say so
+    /// through their own dependencies, and the caller plans this when one of
+    /// them names it.
+    pub(crate) fn new(decls: &CbindgenBuilder) -> Self {
         let Some(free_fn) = &decls.free_fn else {
             panic!(
-                "Cbindgen: the generated layer hands `char*` string memory to C \
-                 (a `String` return or a `String` data-struct field) but no \
-                 memory-freeing function is declared — add \
+                "Cbindgen: the generated layer hands C memory it must free — a \
+                 `char*` block (a `String` return or a `String` data-struct \
+                 field) or an array block (a `Vec` returned or delivered to a \
+                 callback) — but no memory-freeing function is declared: add \
                  `.free_memory_function(\"z_free\")`"
             )
         };
-        Some(Self {
+        Self {
             free_ident: format_ident!("{}", free_fn),
-            arrays,
-        })
+        }
+    }
+
+    /// Copy a `Vec<W>` into a C-`malloc`'d block of `W` and return
+    /// `(ptr, len)` (empty ⇒ `(NULL, 0)`). The block is freed C-side via the
+    /// `z_free_array` macro (per-element drop + the universal freer).
+    fn render_array_builder() -> Vec<syn::Item> {
+        vec![syn::parse_quote!(
+            #[allow(non_snake_case, dead_code)]
+            pub(crate) unsafe fn __cbg_alloc_array<W>(v: ::std::vec::Vec<W>) -> (*mut W, usize) {
+                let n = v.len();
+                if n == 0 {
+                    return (::core::ptr::null_mut(), 0);
+                }
+                let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
+                if p.is_null() {
+                    return (::core::ptr::null_mut(), 0);
+                }
+                for (i, e) in v.into_iter().enumerate() {
+                    ::core::ptr::write(p.add(i), e);
+                }
+                (p, n)
+            }
+        )]
     }
 }
 
 impl RustArtifact for CMemory {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
-        artifact_id("c-runtime", "memory")
+        memory_key()
     }
 
     fn render(&self, _emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
         let free_ident = &self.free_ident;
         // C allocator (linked from the C runtime; no crate dependency).
-        let mut items: Vec<syn::Item> = vec![
+        let items: Vec<syn::Item> = vec![
             syn::parse_quote!(
                 extern "C" {
                     fn malloc(size: usize) -> *mut ::core::ffi::c_void;
@@ -738,31 +858,6 @@ impl RustArtifact for CMemory {
                 }
             ),
         ];
-        if self.arrays {
-            // Array builder: copy a `Vec<W>` into a C-`malloc`'d block of `W`
-            // and return `(ptr, len)` (empty ⇒ `(NULL, 0)`). The block is freed
-            // C-side via the `z_free_array` macro (per-element drop + the
-            // universal freer).
-            items.push(syn::parse_quote!(
-                #[allow(non_snake_case, dead_code)]
-                pub(crate) unsafe fn __cbg_alloc_array<W>(
-                    v: ::std::vec::Vec<W>,
-                ) -> (*mut W, usize) {
-                    let n = v.len();
-                    if n == 0 {
-                        return (::core::ptr::null_mut(), 0);
-                    }
-                    let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
-                    if p.is_null() {
-                        return (::core::ptr::null_mut(), 0);
-                    }
-                    for (i, e) in v.into_iter().enumerate() {
-                        ::core::ptr::write(p.add(i), e);
-                    }
-                    (p, n)
-                }
-            ));
-        }
         items
     }
 }
@@ -816,6 +911,10 @@ impl CDataStruct {
 }
 
 impl RustArtifact for CDataStruct {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         artifact_id("c-data-struct", self.c_struct.to_string())
     }
@@ -877,6 +976,10 @@ impl CEnum {
 }
 
 impl RustArtifact for CEnum {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         artifact_id("c-enum", self.c_name.to_string())
     }
@@ -915,6 +1018,10 @@ pub(crate) struct CDomainConstant {
 }
 
 impl RustArtifact for CDomainConstant {
+    fn calls(&self) -> Vec<ArtifactKey> {
+        Vec::new()
+    }
+
     fn key(&self) -> ArtifactKey {
         artifact_id("c-domain-constant", self.name.to_string())
     }
