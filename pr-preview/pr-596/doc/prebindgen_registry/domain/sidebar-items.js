@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ScalarValue"],"struct":["RepresentationDomain"],"trait":["DomainScalar"]};
