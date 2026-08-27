@@ -1625,7 +1625,7 @@ impl Declarations {
         else {
             return (Niches::empty(), Vec::new());
         };
-        if TypeKey::from_type(domain.ty()).as_str() != "u64"
+        if domain.kind() != prebindgen_registry::DomainKind::U64
             || prebindgen_registry::types_util::path_tail_ident(wire)
                 .is_none_or(|ident| ident != "jlong")
         {

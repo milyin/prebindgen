@@ -1727,13 +1727,25 @@ impl<R: Conversions> JCompile<'_, R> {
             }
         };
         if let Some(domain) = decl.domain() {
-            let domain_key = TypeKey::from_type(domain.ty());
+            // A `TypeKey` is not reduced to a canonical spelling — the model's
+            // normalization covers constructors, not scalars — so this compares
+            // two spellings. It is exact anyway, from both sides: the domain's
+            // spelling is derived from its kind, and a path-qualified scalar
+            // reaches here by neither route it could take. A `fun!`
+            // representation names a captured source function, and the flat
+            // model refuses that function outright, because marked items live
+            // in one flat namespace of bare names. A `from!` / `into!`
+            // representation names a type directly, and its qualified key
+            // resolves to nothing — the route
+            // `a_qualified_scalar_representation_never_reaches_the_domain_check`
+            // takes.
+            let domain_key = TypeKey::from_type(&domain.ty());
             if domain_key != representation_key {
                 let direction = match direction {
                     Direction::Construct => "input",
                     Direction::Deconstruct => "output",
                 };
-                let domain = declared_type_name(domain.ty());
+                let domain = declared_type_name(&domain.ty());
                 match &representation {
                     crate::jni::chain::JCustomType::Model(reading) => panic!(
                         "convert!({source}): domain type {domain} does not match {direction} representation {reading}"

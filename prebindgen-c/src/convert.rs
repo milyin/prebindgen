@@ -74,9 +74,12 @@ impl CbindgenBuilder {
             "Cbindgen custom representations must be C scalar types"
         );
         if let Some(domain) = decl.domain() {
+            // Both sides are reduced to their kind first: a representation and
+            // a domain naming one scalar are the same type however either was
+            // spelled.
             assert_eq!(
-                TypeKey::from_type(domain.ty()),
-                TypeKey::from_type(&repr),
+                Some(domain.kind()),
+                prebindgen_registry::DomainKind::from_type(&repr),
                 "Cbindgen conversion domain type does not match its {} representation",
                 match direction {
                     Direction::Construct => "input",

@@ -103,7 +103,6 @@ use std::collections::{HashMap, HashSet};
 // `TypeRef` now, so what is left here serves the two node populations that
 // remain — a build-script declaration, and a converter's own generated
 // signature.
-pub(crate) use prebindgen_registry::types_util::path_tail_ident as type_path_tail;
 use prebindgen_registry::{
     decl::{ConvertDecl, ConvertSpec},
     flat::{extract_fn_trait_args, Field, Origin, ScalarKind, TypeKind, TypeRef},
@@ -525,7 +524,7 @@ fn sanitize(key: &TypeKey) -> String {
 /// The short name a C symbol is built from — the key's last path segment, or a
 /// sanitized rendering of the whole key when it is not a path.
 ///
-/// Off the **identity**: `type_path_tail` took the last segment of a node, and
+/// Off the **identity**: this took the last path segment of a node, and
 /// `TypeKey::short_name` is the same question asked of the canonical string, so
 /// the name no longer depends on holding the node it was derived from.
 fn type_short(key: &TypeKey) -> String {
@@ -697,27 +696,13 @@ fn bool_out_expr(value: TokenStream) -> TokenStream {
 
 /// Whether `ty` is an FFI-safe scalar primitive that passes through unchanged
 /// (`bool`, the fixed-width / pointer-width integers, and floats).
+///
+/// The set is `ScalarKind`'s, asked of the model rather than spelled out again
+/// here — the same reason [`r_is_scalar`] asks the classification. This one
+/// takes a written type because its caller has one: a `from!` / `into!`
+/// representation is a type the binding wrote, not a lowered `TypeRef`.
 fn is_scalar(ty: &syn::Type) -> bool {
-    type_path_tail(ty)
-        .map(|i| {
-            matches!(
-                i.to_string().as_str(),
-                "bool"
-                    | "i8"
-                    | "i16"
-                    | "i32"
-                    | "i64"
-                    | "isize"
-                    | "u8"
-                    | "u16"
-                    | "u32"
-                    | "u64"
-                    | "usize"
-                    | "f32"
-                    | "f64"
-            )
-        })
-        .unwrap_or(false)
+    ScalarKind::from_type(ty).is_some()
 }
 
 /// The element of a shared slice borrow (`&[E]`), off the classification.
