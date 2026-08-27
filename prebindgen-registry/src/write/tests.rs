@@ -9,6 +9,11 @@ use prebindgen::SourceLocation;
 use super::*;
 use crate::registry::RegistryBuilder;
 
+/// Freeze a test assembly from artifacts stated in emission order.
+fn assembly_of<A: RustArtifact, I: IntoIterator<Item = A>>(artifacts: I) -> Assembly<A> {
+    artifacts.into_iter().collect()
+}
+
 struct IdentityExt;
 
 impl IdentityExt {
@@ -92,37 +97,37 @@ struct OperationPlan {
     rendered_reachable: Rc<Cell<bool>>,
 }
 
-impl RustFunction for OperationPlan {
-    fn operation_id(&self) -> &crate::generation::OperationId {
-        &self.operation
+impl RustArtifact for OperationPlan {
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Operation(self.operation.clone())
     }
 
-    fn should_emit(&self) -> bool {
+    fn reachable(&self) -> bool {
         self.reachable
     }
 
-    fn render(&self, emit: &crate::RustWriter) -> syn::ItemFn {
+    fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item> {
         self.renders.set(self.renders.get() + 1);
         self.rendered_reachable.set(self.reachable);
         let ident = emit.operation_ident("test", &self.operation);
-        syn::parse_quote!(fn #ident() {})
+        vec![syn::parse_quote!(fn #ident() {})]
     }
 }
 
-impl RustFunction for LatePlan {
-    fn operation_id(&self) -> &crate::generation::OperationId {
-        &self.operation
+impl RustArtifact for LatePlan {
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Operation(self.operation.clone())
     }
 
-    fn should_emit(&self) -> bool {
+    fn reachable(&self) -> bool {
         self.reachable.get()
     }
 
-    fn render(&self, emit: &crate::RustWriter) -> syn::ItemFn {
+    fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item> {
         let ident = emit.operation_ident("test", &self.operation);
-        syn::parse_quote!(
+        vec![syn::parse_quote!(
             fn #ident() {}
-        )
+        )]
     }
 }
 
@@ -225,7 +230,8 @@ fn per_item_planning_precedes_late_converter_filtering() {
     let dir = crate::test_util::unique_test_dir("write_late_plan");
     std::fs::create_dir_all(&dir).unwrap();
 
-    let path = write_rust(&registry, &ext, &[plan], dir.join("gen.rs")).expect("write_rust");
+    let path =
+        write_rust(&registry, &ext, &assembly_of([plan]), dir.join("gen.rs")).expect("write_rust");
     let source = std::fs::read_to_string(path).expect("read generated file");
 
     assert!(
@@ -266,7 +272,7 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("gen.rs");
 
-    let err = write_rust(&registry, &ext, &[plan], &path)
+    let err = write_rust(&registry, &ext, &assembly_of([plan]), &path)
         .expect_err("a call to a filtered private converter must fail in the writer");
 
     match err {
@@ -319,7 +325,7 @@ fn registry_operations_are_deduplicated_before_rendering() {
     write_rust(
         &registry,
         &IdentityExt,
-        &[dormant, reachable],
+        &assembly_of([dormant, reachable]),
         dir.join("gen.rs"),
     )
     .expect("write Rust");
@@ -404,8 +410,13 @@ fn write_rust_sorts_declared_items_by_ident() {
         .expect("clock drift")
         .as_nanos();
     let path = std::env::temp_dir().join(format!("prebindgen-write-rust-{unique}.rs"));
-    let written =
-        write_rust(&reg, &IdentityExt, &[] as &[OperationPlan], &path).expect("write_rust");
+    let written = write_rust(
+        &reg,
+        &IdentityExt,
+        &assembly_of([] as [OperationPlan; 0]),
+        &path,
+    )
+    .expect("write_rust");
     let content = std::fs::read_to_string(&written).expect("read generated file");
     let _ = std::fs::remove_file(&written);
 
@@ -540,7 +551,7 @@ fn guards_emit_ungated_and_in_stream_order() {
     let path = crate::write::write_rust(
         &registry,
         &ConstGatingExt,
-        &[] as &[OperationPlan],
+        &assembly_of([] as [OperationPlan; 0]),
         dir.join("gen.rs"),
     )
     .expect("write_rust");

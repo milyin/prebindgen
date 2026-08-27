@@ -1,7 +1,7 @@
 //! Syntax-free plans for converters composed from recipe shapes.
 //!
 //! A plan keeps Flat [`TypeRef`]s opaque and records only shape operations,
-//! wire-side types and child converter contracts. [`RustFunction::render`]
+//! wire-side types and child converter contracts. [`RustArtifact::render`]
 //! receives the writer-owned [`RustWriter`] after resolution and validation, which is
 //! the first point at which the captured Rust types and function bodies are
 //! materialized.
@@ -11,7 +11,7 @@ use prebindgen_registry::{
     flat::{Alternative, TypeRef},
     generation::{ArtifactId, GenerationPlan, SiteId},
     recipe::Mode,
-    write::RustFunction,
+    write::{ArtifactKey, RustArtifact},
     RustWriter,
 };
 
@@ -318,12 +318,18 @@ impl CFunction {
     }
 }
 
-impl RustFunction for CFunction {
-    fn operation_id(&self) -> &prebindgen_registry::OperationId {
-        &self.operation
+impl RustArtifact for CFunction {
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Operation(self.operation.clone())
     }
 
-    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
+    fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
+        vec![syn::Item::Fn(self.render_fn(emit))]
+    }
+}
+
+impl CFunction {
+    fn render_fn(&self, emit: &RustWriter) -> syn::ItemFn {
         let name = emit.operation_ident("c", &self.operation);
         match &self.body {
             CBody::Custom(plan) => plan.render(emit, &name),

@@ -5,7 +5,7 @@ use prebindgen_registry::{
     flat::TypeRef,
     generation::OperationId,
     recipe::Mode,
-    write::RustFunction,
+    write::{ArtifactKey, RustArtifact},
     RustWriter,
 };
 
@@ -200,8 +200,22 @@ impl JFunction {
     }
 }
 
-impl RustFunction for JFunction {
-    fn operation_id(&self) -> &OperationId {
+impl RustArtifact for JFunction {
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Operation(self.operation_id().clone())
+    }
+
+    fn reachable(&self) -> bool {
+        self.should_emit()
+    }
+
+    fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
+        vec![syn::Item::Fn(self.render_fn(emit))]
+    }
+}
+
+impl JFunction {
+    pub(crate) fn operation_id(&self) -> &OperationId {
         match &self.0 {
             JBody::Marker(operation) => operation,
             JBody::ValueCodec(plan) => &plan.operation,
@@ -220,7 +234,7 @@ impl RustFunction for JFunction {
         }
     }
 
-    fn should_emit(&self) -> bool {
+    pub(crate) fn should_emit(&self) -> bool {
         match &self.0 {
             JBody::Marker(_) => false,
             // Compatibility parents do not yet propagate reachability to the
@@ -247,7 +261,7 @@ impl RustFunction for JFunction {
         }
     }
 
-    fn render(&self, emit: &RustWriter) -> syn::ItemFn {
+    pub(crate) fn render_fn(&self, emit: &RustWriter) -> syn::ItemFn {
         match &self.0 {
             JBody::Marker(operation) => planned_marker(&emit.operation_ident("jni", operation)),
             JBody::ValueCodec(plan) => plan.render(emit),
