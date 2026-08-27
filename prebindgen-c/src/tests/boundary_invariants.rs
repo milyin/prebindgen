@@ -381,8 +381,8 @@ fn no_raw_pointer_is_dereferenced_without_a_null_check() {
 
 #[test]
 fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
-    let source = include_str!("../emit.rs");
-    let file = syn::parse_file(source).expect("C emitter parses");
+    let source = include_str!("../assembly.rs");
+    let file = syn::parse_file(source).expect("C assembly parses");
     let wrapper = file
         .items
         .iter()
@@ -392,7 +392,7 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
         })
         .flat_map(|item| &item.items)
         .find_map(|item| match item {
-            syn::ImplItem::Fn(method) if method.sig.ident == "emit_function_wrapper" => {
+            syn::ImplItem::Fn(method) if method.sig.ident == "render_fn" => {
                 Some(method.block.to_token_stream().to_string())
             }
             _ => None,
@@ -413,9 +413,9 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
         );
     }
     for required in [
-        "generation_site(",
+        "self.site(",
         "failure_route()",
-        "emit_planned_inputs(",
+        "planned_inputs(",
         ".encode(",
     ] {
         assert!(
@@ -423,6 +423,36 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
             "ordinary wrapper renderer stopped consuming frozen plans through {required}"
         );
     }
+}
+
+/// The wrapper is planned once, at the end of resolution: what it renders from
+/// is its own frozen state and the frozen plan, never the declaration object
+/// the binding was written into.
+#[test]
+fn a_planned_wrapper_holds_no_declaration_object() {
+    let source = include_str!("../assembly.rs");
+    let file = syn::parse_file(source).expect("C assembly parses");
+    let fields = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Struct(item) if item.ident == "CWrapper" => {
+                Some(item.fields.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("the planned wrapper");
+    let fields: String = fields.split_whitespace().collect();
+    for forbidden in ["CbindgenBuilder", "Registry", "Compiled", "RefCell"] {
+        assert!(
+            !fields.contains(forbidden),
+            "a planned wrapper retains {forbidden}, so rendering could resume planning"
+        );
+    }
+    assert!(
+        fields.contains("GenerationPlan"),
+        "a planned wrapper must read its boundary sites from the frozen plan"
+    );
 }
 
 #[test]
