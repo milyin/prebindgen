@@ -1625,8 +1625,8 @@
 <a href=#1625 id=1625 data-nosnippet>1625</a>        <span class="kw">else </span>{
 <a href=#1626 id=1626 data-nosnippet>1626</a>            <span class="kw">return </span>(Niches::empty(), Vec::new());
 <a href=#1627 id=1627 data-nosnippet>1627</a>        };
-<a href=#1628 id=1628 data-nosnippet>1628</a>        <span class="kw">if </span>TypeKey::from_type(domain.ty()).as_str() != <span class="string">"u64"
-<a href=#1629 id=1629 data-nosnippet>1629</a>            </span>|| prebindgen_registry::types_util::path_tail_ident(wire)
+<a href=#1628 id=1628 data-nosnippet>1628</a>        <span class="kw">if </span>domain.kind() != prebindgen_registry::DomainKind::U64
+<a href=#1629 id=1629 data-nosnippet>1629</a>            || prebindgen_registry::types_util::path_tail_ident(wire)
 <a href=#1630 id=1630 data-nosnippet>1630</a>                .is_none_or(|ident| ident != <span class="string">"jlong"</span>)
 <a href=#1631 id=1631 data-nosnippet>1631</a>        {
 <a href=#1632 id=1632 data-nosnippet>1632</a>            <span class="kw">return </span>(Niches::empty(), Vec::new());
