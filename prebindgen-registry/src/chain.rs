@@ -1094,6 +1094,30 @@ mod tests {
         }
     }
 
+    /// A bridge whose part read binds a local and cannot fail — the middle
+    /// constructor, whose behaviour is not implied by its neighbours.
+    #[derive(Clone)]
+    struct TestBoundParts;
+
+    impl ProductBridge for TestBoundParts {
+        fn intermediate(&self) -> syn::Type {
+            syn::parse_quote!(TestObject)
+        }
+
+        fn part(&self, value: TokenStream, index: usize, _name: &syn::Ident) -> PartRead {
+            let local = format_ident!("__bound{index}");
+            let position = syn::Index::from(index);
+            PartRead::statements(
+                quote::quote!(let #local = (#value).#position;),
+                quote::quote!(#local),
+            )
+        }
+
+        fn build(&self, _parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
+            unreachable!("this fixture only constructs")
+        }
+    }
+
     /// A bridge may read its part with statements that can fail, and the
     /// composer runs them before it constructs the source value.
     ///
@@ -1144,6 +1168,41 @@ mod tests {
         assert!(
             body.contains("__read0") && body.contains("__read1"),
             "each part is read into its own local:\n{body}"
+        );
+    }
+
+    /// A prelude that cannot fail leaves the conversion infallible.
+    ///
+    /// This is the whole difference between `PartRead::statements` and
+    /// `PartRead::fallible`, and the only place it is visible: both emit their
+    /// prelude, and only one makes the caller handle an error.
+    #[test]
+    fn an_infallible_prelude_leaves_the_chain_infallible() {
+        let plan = Product {
+            source: TypeRef::scalar(ScalarKind::I64),
+            direction: Direction::Construct,
+            source_policy: TestSource {
+                spells: Rc::new(Cell::new(0)),
+            },
+            bridge: TestBoundParts,
+            parts: vec![ProductPart {
+                name: format_ident!("only"),
+                child: TestChild::new("only", false, false),
+                mode: Mode::Owned,
+                hold_uninit: false,
+            }],
+        };
+
+        let rendered = plan.render(&RustWriter::for_test());
+        let body = rendered.body.to_token_stream().to_string();
+
+        assert!(
+            body.contains("let __bound0"),
+            "the prelude is emitted:\n{body}"
+        );
+        assert!(
+            !rendered.fallible,
+            "a prelude that cannot fail leaves the conversion infallible:\n{body}"
         );
     }
 
@@ -1298,6 +1357,63 @@ mod tests {
                 },
             ],
         }
+    }
+
+    /// A Choice arm reads its parts through the same bridge call, so a
+    /// fallible prelude lands inside the arm — after the arm value is bound,
+    /// and before the value that reads it.
+    ///
+    /// That ordering is what a whole-object sealed sum will rest on: each
+    /// alternative binds its own payload object first, then reads properties
+    /// off it.
+    #[test]
+    fn a_choice_arm_runs_its_part_prelude_after_binding_the_arm() {
+        let plan: Choice<TestSource, TupleChoice, TestFallibleParts, TestChild> = Choice {
+            source: TypeRef::scalar(ScalarKind::I64),
+            direction: Direction::Construct,
+            source_policy: TestSource {
+                spells: Rc::new(Cell::new(0)),
+            },
+            bridge: TupleChoice {
+                tag: syn::parse_quote!(i32),
+                arms: vec![syn::parse_quote!(()), syn::parse_quote!((i64,))],
+                tags: vec![syn::parse_quote!(0), syn::parse_quote!(1)],
+                inactive: vec![quote!(()), quote!((0,))],
+                invalid: quote!("invalid tag"),
+            },
+            arms: vec![
+                ChoiceArm {
+                    alternative: alternative(syn::parse_quote!(A), 0),
+                    tag: syn::parse_quote!(0),
+                    bridge: TestFallibleParts,
+                    parts: Vec::new(),
+                },
+                ChoiceArm {
+                    alternative: alternative(syn::parse_quote!(B(i64)), 1),
+                    tag: syn::parse_quote!(1),
+                    bridge: TestFallibleParts,
+                    parts: vec![ChoicePart {
+                        child: TestChild::new("decode", true, false),
+                        mode: Mode::Owned,
+                        hold_uninit: false,
+                    }],
+                },
+            ],
+        };
+
+        let body = plan
+            .render(&RustWriter::for_test())
+            .body
+            .to_token_stream()
+            .to_string();
+
+        let arm = body.find("let __arm").expect(&body);
+        let prelude = body.find("read_property").expect(&body);
+        let construction = body.find("i64 :: B").expect(&body);
+        assert!(
+            arm < prelude && prelude < construction,
+            "the arm binds, then its prelude runs, then the value is built:\n{body}"
+        );
     }
 
     #[test]
