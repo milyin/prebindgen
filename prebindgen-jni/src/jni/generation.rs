@@ -27,6 +27,10 @@ pub(crate) struct JniGenerationPlan {
     structs: HashMap<TypeKey, Option<Rc<StructPlan>>>,
     sums: HashMap<TypeKey, Rc<crate::jni::kotlin_emit::SealedClassPlan>>,
     vec_builds: HashMap<TypeKey, Rc<VecBuildHelpers>>,
+    /// Every final artifact of the generated Rust file, frozen in the order it
+    /// is written. Derived from [`Self::conversions`] once the last fragment is
+    /// compiled, and the only thing `write_rust` reads converters from.
+    assembly: prebindgen_registry::write::Assembly<crate::jni::chain::JFunction>,
 }
 
 impl JniGenerationPlan {
@@ -82,8 +86,16 @@ impl JniGenerationPlan {
             let _ = decls.sealed_class_plan(registry, item);
         }
 
+        let conversions = std::mem::take(&mut *decls.compiled.borrow_mut());
+        let assembly = conversions
+            .fragments()
+            .into_iter()
+            .filter(|fragment| !fragment.composed_only)
+            .flat_map(crate::jni::compile::JFrag::converter_artifacts)
+            .collect();
         Self {
-            conversions: std::mem::take(&mut *decls.compiled.borrow_mut()),
+            conversions,
+            assembly,
             functions: std::mem::take(decls.fn_plans.get_mut()),
             interfaces: std::mem::take(decls.iface_specs.get_mut()),
             structs: std::mem::take(decls.struct_plans.get_mut()),
@@ -115,17 +127,11 @@ impl JniGenerationPlan {
         &self.conversions
     }
 
-    /// Frozen private converter artifacts derived from registry fragments.
-    ///
-    /// This is deliberately an ephemeral collection at the writer boundary,
-    /// not a second cache beside the fragment graph.
-    pub(crate) fn converter_functions(&self) -> Vec<crate::jni::chain::JFunction> {
-        self.conversions
-            .fragments()
-            .into_iter()
-            .filter(|fragment| !fragment.composed_only)
-            .flat_map(crate::jni::compile::JFrag::converter_artifacts)
-            .collect()
+    /// The frozen assembly the generated Rust file is written from.
+    pub(crate) fn assembly(
+        &self,
+    ) -> &prebindgen_registry::write::Assembly<crate::jni::chain::JFunction> {
+        &self.assembly
     }
 
     pub(crate) fn function(&self, ident: &syn::Ident) -> Option<Rc<JniFunctionPlan>> {

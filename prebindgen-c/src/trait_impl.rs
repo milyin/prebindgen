@@ -1072,11 +1072,20 @@ impl CbindgenBuilder {
         for artifact in artifacts {
             generation.artifact(artifact);
         }
-        self.generation = Some(generation.build().map_err(|errors| {
+        let generation = generation.build().map_err(|errors| {
             prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors.to_string(),
             }
-        })?);
+        })?;
+        // The file's artifacts, frozen in the plan's own dependency order.
+        self.assembly = Some(
+            generation
+                .fragments()
+                .filter_map(|fragment| fragment.artifact())
+                .cloned()
+                .collect(),
+        );
+        self.generation = Some(generation);
         self.validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         Ok(Cbindgen {

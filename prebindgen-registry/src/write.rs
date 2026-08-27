@@ -1,18 +1,18 @@
 //! Rust file emission for the resolved `Registry`.
 //!
-//! `write_rust` takes the conversions the adapter compiled, as a slice of
-//! [`RustFunction`] plans; renders them with the writer-owned [`crate::RustWriter`],
-//! adds every per-item `on_<kind>` output and every anonymous const, and hands
-//! the assembled file to `Destination::write`.
+//! `write_rust` takes the [`Assembly`] the adapter compiled — the frozen graph
+//! of final artifacts the file is made of; renders each with the writer-owned
+//! [`crate::RustWriter`], adds every per-item `on_<kind>` output and every
+//! anonymous const, and hands the assembled file to `Destination::write`.
 //!
-//! The conversions arrive from the adapter rather than being collected from the
+//! The artifacts arrive from the adapter rather than being collected from the
 //! registry, which is what lets one crossing contribute more than one function
 //! — or one that occupies more than a single wire value.
 //!
 //! This module is `pub`, so **every `pub` item in it is public API of the
-//! crate**. [`RustFunction`] is the deliberately narrow late-rendering seam for
-//! out-of-crate adapters. Every plan carries registry-owned semantic identity;
-//! final Rust names are never used as planning identity.
+//! crate**. [`RustArtifact`] is the deliberately narrow late-rendering seam for
+//! out-of-crate adapters. Every artifact carries registry-owned semantic
+//! identity; final Rust names are never used as planning identity.
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -65,45 +65,147 @@ impl std::fmt::Display for WriteError {
 
 impl std::error::Error for WriteError {}
 
-/// One planned private converter function.
+/// Identity of one final artifact in an [`Assembly`].
 ///
-/// Resolution may keep an adapter-specific semantic plan here instead of a
-/// rendered Rust body. The writer calls this only after planning and
-/// validation are complete, with the same [`crate::RustWriter`] capability used for
-/// the rest of final Rust emission.
-pub trait RustFunction {
-    /// Registry-owned semantic identity of this operation.
-    ///
-    /// Plans are de-duplicated before rendering, so sharing never depends on
-    /// the Rust symbol selected by final emission.
-    fn operation_id(&self) -> &crate::generation::OperationId;
+/// A private converter is identified by the registry operation it implements;
+/// every other final artifact — a helper the converter bodies call, an
+/// exported wrapper, a type mirror — is identified by the adapter-scoped
+/// [`ArtifactId`](crate::generation::ArtifactId) its plan was recorded under.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ArtifactKey {
+    /// A private converter, identified by its registry operation.
+    Operation(crate::generation::OperationId),
+    /// Any other final artifact, identified by its plan's artifact identity.
+    Artifact(crate::generation::ArtifactId),
+}
 
-    /// Whether this plan is reachable from the generated adapter surface.
-    /// Validation-only plans may return false and remain available for diagnostics.
-    fn should_emit(&self) -> bool {
+impl std::fmt::Display for ArtifactKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArtifactKey::Operation(operation) => operation.fmt(f),
+            ArtifactKey::Artifact(artifact) => artifact.fmt(f),
+        }
+    }
+}
+
+/// One final artifact of the generated Rust file.
+///
+/// Resolution decides what the artifact is and what it depends on; this trait
+/// is the one thing the artifact still owes the writer — the Rust items it
+/// becomes. [`Self::render`] runs at the final writing boundary, with the
+/// [`crate::RustWriter`] used for the rest of final Rust emission and with no
+/// access to a live [`Registry`], so an artifact cannot resume resolution
+/// while the file is being assembled.
+pub trait RustArtifact {
+    /// Semantic identity, owned by the registry rather than by the Rust
+    /// symbol final emission will choose.
+    fn key(&self) -> ArtifactKey;
+
+    /// Whether the generated adapter surface reaches this artifact.
+    /// Validation-only artifacts return false: they are still rendered so
+    /// that a caller of one can be reported, but they do not reach the file.
+    fn reachable(&self) -> bool {
         true
     }
 
-    /// Materialize the complete private converter function.
-    fn render(&self, emit: &crate::RustWriter) -> syn::ItemFn;
+    /// Materialize the artifact's Rust items.
+    fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item>;
 }
 
-/// Emit a resolved registry whose private converters are rendered at this
-/// final writing boundary.
+/// The frozen set of final artifacts a generated Rust file is assembled from.
 ///
-/// `conversions` is what the adapter's compilation produced. Registry-owned
-/// operations are de-duplicated by [`crate::generation::OperationId`] before
-/// rendering; if separate fragments retain separate reachability state, a
-/// reachable representative wins. Handing the plans over directly is what frees an
-/// adapter to emit a conversion the converter table could not hold — several
-/// functions for one crossing, or one occupying more than a single wire value.
+/// An assembly is ordered: artifacts reach the file in the order the adapter
+/// added them, which for converters is the registry-owned dependency order of
+/// the fragments they came from. It holds one artifact per [`ArtifactKey`], so
+/// sharing never depends on the Rust symbol final emission allocates.
+pub struct Assembly<A> {
+    artifacts: Vec<A>,
+}
+
+impl<A: RustArtifact> Assembly<A> {
+    /// The artifacts, in emission order. Includes the unreachable ones — the
+    /// writer renders those to report anything that still calls them.
+    pub fn artifacts(&self) -> impl ExactSizeIterator<Item = &A> {
+        self.artifacts.iter()
+    }
+}
+
+/// Collection phase preceding a frozen [`Assembly`].
+pub struct AssemblyBuilder<A> {
+    positions: HashMap<ArtifactKey, usize>,
+    artifacts: Vec<A>,
+}
+
+impl<A> Default for AssemblyBuilder<A> {
+    fn default() -> Self {
+        Self {
+            positions: HashMap::new(),
+            artifacts: Vec::new(),
+        }
+    }
+}
+
+impl<A: RustArtifact> AssemblyBuilder<A> {
+    /// Start an empty assembly.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add one final artifact.
+    ///
+    /// An identity already present is kept once. A reachable artifact replaces
+    /// an unreachable one already held under the same identity, which is what
+    /// lets an adapter add a dormant artifact before the parent that reaches
+    /// it has been planned.
+    pub fn artifact(&mut self, artifact: A) -> &mut Self {
+        match self.positions.get(&artifact.key()).copied() {
+            Some(position) => {
+                if !self.artifacts[position].reachable() && artifact.reachable() {
+                    self.artifacts[position] = artifact;
+                }
+            }
+            None => {
+                self.positions.insert(artifact.key(), self.artifacts.len());
+                self.artifacts.push(artifact);
+            }
+        }
+        self
+    }
+
+    /// Freeze the assembly.
+    pub fn build(self) -> Assembly<A> {
+        Assembly {
+            artifacts: self.artifacts,
+        }
+    }
+}
+
+impl<A: RustArtifact> FromIterator<A> for Assembly<A> {
+    fn from_iter<I: IntoIterator<Item = A>>(artifacts: I) -> Self {
+        let mut builder = AssemblyBuilder::new();
+        for artifact in artifacts {
+            builder.artifact(artifact);
+        }
+        builder.build()
+    }
+}
+
+/// Emit a resolved registry, assembling the generated Rust file from a frozen
+/// [`Assembly`].
+///
+/// The assembly is what the adapter's compilation produced: one final artifact
+/// per item the file will contain, already deduplicated and in registry-owned
+/// dependency order. Handing artifacts over instead of a converter table is
+/// what frees an adapter to emit a conversion the table could not hold —
+/// several functions for one crossing, or one occupying more than a single
+/// wire value.
 ///
 /// `out_path` may be relative (resolved against `OUT_DIR` by prebindgen) or
 /// absolute. Returns the path actually written.
-pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
+pub fn write_rust<P: AsRef<Path>, E: Prebindgen, A: RustArtifact>(
     registry: &Registry,
     ext: &E,
-    conversions: &[C],
+    assembly: &Assembly<A>,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
     // Validation already ran ONCE in the generator's `build` — a built generator
@@ -181,35 +283,24 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, C: RustFunction>(
             .flat_map(|(_, item)| ext.on_const(item, registry, &emit)),
     );
 
-    // Select one semantic operation only after per-item planning has marked
-    // late plans reachable. This lets a reached twin replace an earlier
-    // dormant twin without materializing either Rust function first.
-    let mut operation_positions: HashMap<crate::generation::OperationId, usize> = HashMap::new();
-    let mut unique_conversions: Vec<&C> = Vec::new();
-    for plan in conversions {
-        let operation = plan.operation_id();
-        match operation_positions.get(operation).copied() {
-            Some(position) if !unique_conversions[position].should_emit() && plan.should_emit() => {
-                unique_conversions[position] = plan;
-            }
-            Some(_) => {}
-            None => {
-                operation_positions.insert(operation.clone(), unique_conversions.len());
-                unique_conversions.push(plan);
-            }
-        }
-    }
-    let conversions: Vec<_> = unique_conversions
-        .into_iter()
-        .map(|plan| (plan.should_emit(), plan.render(&emit)))
+    // Every artifact renders, including the ones the adapter surface does not
+    // reach: an unreachable artifact still contributes its function names, so
+    // a caller that survived reachability filtering can be reported below.
+    let rendered: Vec<(bool, Vec<syn::Item>)> = assembly
+        .artifacts()
+        .map(|artifact| (artifact.reachable(), artifact.render(&emit)))
         .collect();
-    let converter_names: BTreeSet<String> = conversions
+    let converter_names: BTreeSet<String> = rendered
         .iter()
-        .map(|(_, function)| function.sig.ident.to_string())
+        .flat_map(|(_, artifact_items)| artifact_items)
+        .filter_map(|item| match item {
+            syn::Item::Fn(function) => Some(function.sig.ident.to_string()),
+            _ => None,
+        })
         .collect();
-    for (emit, item_fn) in conversions {
-        if emit {
-            items.push(syn::Item::Fn(item_fn));
+    for (reachable, artifact_items) in rendered {
+        if reachable {
+            items.extend(artifact_items);
         }
     }
     items.extend(body_items);
