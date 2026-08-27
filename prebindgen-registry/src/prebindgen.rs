@@ -1,10 +1,9 @@
 //! `Prebindgen` — what a generator still hands the emitter.
 //!
-//! The items an adapter's converters depend on (`prerequisites`), two
-//! invariant checks, and the source module emitted references are qualified
-//! against. Nothing here is per `#[prebindgen]` item any more: wrappers,
-//! constants and type artifacts are all planned into the adapter's frozen
-//! assembly.
+//! Two invariant checks, and nothing else. Everything an adapter emits is
+//! planned into its frozen assembly, and what the writer needs of the registry
+//! is frozen with it — so a generator hands the emitter no items, no
+//! prerequisites, and no questions to ask back.
 //!
 //! **Conversion is not here.** A generator builds those itself, one per
 //! crossing, inside `RegistryBuilder::convert_with` — so there is no
@@ -144,9 +143,9 @@ impl<M> ConverterImpl<M> {
 /// on the wire and what wrapper code to emit.
 ///
 /// The trait has no language-specific concepts of its own, and — since the
-/// registry stopped asking it questions and per-item emission became frozen
-/// artifacts — what is left is `prerequisites`, the two `validate` hooks for
-/// adapter invariants, and `source_module`.
+/// registry stopped asking it questions and every emitted item became an
+/// artifact of the adapter's frozen assembly — what is left is the two
+/// `validate` hooks for adapter invariants.
 ///
 /// What used to be here and is not any more: which items to build, how
 /// composites decompose, and the wire form of each type. A generator states the
@@ -228,14 +227,5 @@ pub trait Prebindgen {
     /// Default: no checks.
     fn validate_resolved(&self, _registry: &Registry) -> Result<(), String> {
         Ok(())
-    }
-
-    /// Absolute path under which the source crate's items are reachable
-    /// from the generated file (e.g. `zenoh_flat`), for adapters that
-    /// qualify emitted references against one. An adapter's constant artifact
-    /// commonly uses it to generate a path-alias to the source item instead of
-    /// copying initializer tokens. Default: `None`.
-    fn source_module(&self) -> Option<&syn::Path> {
-        None
     }
 }

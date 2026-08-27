@@ -7,11 +7,33 @@ use std::{
 use prebindgen::SourceLocation;
 
 use super::*;
-use crate::registry::RegistryBuilder;
+use crate::{prebindgen::Prebindgen, registry::RegistryBuilder};
 
-/// Freeze a test assembly from artifacts stated in emission order.
+/// Freeze a test assembly from artifacts stated in emission order, against a
+/// registry with nothing in it — enough for artifacts that spell no source
+/// type.
 fn assembly_of<A: RustArtifact, I: IntoIterator<Item = A>>(artifacts: I) -> Assembly<A> {
-    artifacts.into_iter().collect()
+    assembly_from(&empty_registry(), artifacts)
+}
+
+/// Freeze a test assembly against a given registry.
+fn assembly_from<A: RustArtifact, I: IntoIterator<Item = A>>(
+    registry: &Registry,
+    artifacts: I,
+) -> Assembly<A> {
+    let mut builder = AssemblyBuilder::new();
+    for artifact in artifacts {
+        builder.artifact(artifact);
+    }
+    builder.build(registry, None)
+}
+
+/// A resolved registry holding no items.
+fn empty_registry() -> Registry {
+    crate::test_util::reg_from_items(Vec::new())
+        .expect("index")
+        .scanned()
+        .expect("scan")
 }
 
 struct IdentityExt;
@@ -187,7 +209,6 @@ impl RustArtifact for LateOrCaller {
 /// is compiled, which can happen after the plan has been added to the builder.
 #[test]
 fn an_artifact_reached_after_freezing_is_emitted() {
-    let registry = late_test_registry();
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
@@ -202,8 +223,7 @@ fn an_artifact_reached_after_freezing_is_emitted() {
 
     // Frozen dormant, reached afterwards — as a parent compiled later does.
     reachable.set(true);
-    let path =
-        write_rust(&registry, &IdentityExt, &assembly, dir.join("gen.rs")).expect("write_rust");
+    let path = write_rust(&assembly, dir.join("gen.rs")).expect("write_rust");
     let source = std::fs::read_to_string(path).expect("read generated file");
 
     assert!(
@@ -216,7 +236,6 @@ fn an_artifact_reached_after_freezing_is_emitted() {
 fn a_call_to_a_filtered_converter_is_a_writer_error() {
     // The identities are semantic, not Rust symbols: the check runs before
     // anything is rendered, so no name has been allocated yet.
-    let registry = late_test_registry();
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
@@ -236,7 +255,7 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("gen.rs");
 
-    let err = write_rust(&registry, &IdentityExt, &assembly, &path)
+    let err = write_rust(&assembly, &path)
         .expect_err("a call to a filtered private converter must fail in the writer");
 
     match err {
@@ -278,7 +297,7 @@ fn honest_edges_pass_the_evidence_check() {
         }),
     ]);
 
-    assert_edges_cover_rendered_calls(&assembly, &crate::RustWriter::for_test(), "test");
+    assert_edges_cover_rendered_calls(&assembly, "test");
 }
 
 /// Claiming an identity the artifact does not render would satisfy
@@ -299,23 +318,7 @@ fn a_claimed_identity_must_be_rendered() {
         over_claims: true,
     })]);
 
-    assert_edges_cover_rendered_calls(&assembly, &crate::RustWriter::for_test(), "test");
-}
-
-/// A registry with one declared type, which is all these two tests need of it.
-fn late_test_registry() -> Registry {
-    crate::test_util::reg_from_items(vec![(
-        syn::Item::Struct(syn::parse_quote!(
-            pub struct AStruct;
-        )),
-        SourceLocation::default(),
-    )])
-    .expect("index")
-    .export_type(crate::test_util::declared_origin(syn::parse_quote!(
-        AStruct
-    )))
-    .scanned()
-    .expect("scan")
+    assert_edges_cover_rendered_calls(&assembly, "test");
 }
 
 /// Two reachable artifacts under one identity are a planning error. A
@@ -339,16 +342,6 @@ fn two_reachable_artifacts_may_not_share_an_identity() {
 
 #[test]
 fn registry_operations_are_deduplicated_before_rendering() {
-    let item: syn::ItemFn = syn::parse_quote!(
-        fn a_fn() {}
-    );
-    let ident: syn::Ident = syn::parse_quote!(a_fn);
-    let registry =
-        crate::test_util::reg_from_items(vec![(syn::Item::Fn(item), SourceLocation::default())])
-            .expect("index")
-            .export(&ident)
-            .scanned()
-            .expect("scan");
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "shared-converter").expect("identity"),
         crate::recipe::Direction::Construct,
@@ -379,8 +372,6 @@ fn registry_operations_are_deduplicated_before_rendering() {
     std::fs::create_dir_all(&dir).unwrap();
 
     write_rust(
-        &registry,
-        &IdentityExt,
         &assembly_of([dormant, reachable, reached_again]),
         dir.join("gen.rs"),
     )
@@ -468,13 +459,8 @@ fn declared_items_reach_the_file_only_as_artifacts() {
         .expect("clock drift")
         .as_nanos();
     let path = std::env::temp_dir().join(format!("prebindgen-write-rust-{unique}.rs"));
-    let written = write_rust(
-        &reg,
-        &IdentityExt,
-        &assembly_of([] as [OperationPlan; 0]),
-        &path,
-    )
-    .expect("write_rust");
+    let written =
+        write_rust(&assembly_from(&reg, [] as [OperationPlan; 0]), &path).expect("write_rust");
     let content = std::fs::read_to_string(&written).expect("read generated file");
     let _ = std::fs::remove_file(&written);
 
@@ -569,9 +555,7 @@ fn guards_emit_ungated_and_in_stream_order() {
     std::fs::create_dir_all(&dir).unwrap();
     let registry = registry.resolve_gating(ConstGatingExt).expect("resolve");
     let path = crate::write::write_rust(
-        &registry,
-        &ConstGatingExt,
-        &assembly_of([] as [OperationPlan; 0]),
+        &assembly_from(&registry, [] as [OperationPlan; 0]),
         dir.join("gen.rs"),
     )
     .expect("write_rust");

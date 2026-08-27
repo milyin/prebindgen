@@ -907,12 +907,9 @@ impl JniGen {
                 .as_ref()
                 .expect("resolved JniGen has no frozen generation plan")
                 .assembly(),
-            &prebindgen_registry::RustWriter::for_registry_test(&self.registry),
             "jni",
         );
         Ok(prebindgen_registry::write::write_rust(
-            &self.registry,
-            &self.decls,
             self.decls
                 .generation
                 .as_ref()
