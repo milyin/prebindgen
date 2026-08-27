@@ -419,7 +419,9 @@ impl JniGenerationPlan {
         for constant in constants {
             assembly.artifact(JFinalArtifact::Const(Box::new(constant)));
         }
-        let assembly = assembly.build();
+        // JniGen qualifies each source reference by the item's own origin
+        // module, so it declares no single one for the writer to fall back on.
+        let assembly = assembly.build(registry, None);
         Self {
             conversions,
             assembly,

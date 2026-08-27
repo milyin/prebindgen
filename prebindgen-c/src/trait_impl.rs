@@ -991,7 +991,7 @@ impl CbindgenBuilder {
         for artifact in artifacts {
             assembly.artifact(artifact);
         }
-        self.assembly = Some(assembly.build());
+        self.assembly = Some(assembly.build(&registry, self.source_module.as_ref()));
         self.generation = Some(generation);
         self.validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
@@ -1073,16 +1073,6 @@ impl Prebindgen for CbindgenBuilder {
             },
         );
         Ok(())
-    }
-
-    // Consts have no declaration mechanism here (`declared_consts` stays
-    // `None`), so every indexed const re-emits through the default
-    // `on_const` — a path-alias against this source module, keeping consts
-    // with non-portable initializers valid in the generated file. (cbindgen
-    // cannot evaluate a path initializer, so aliased consts don't surface
-    // as `#define`s in the C header.)
-    fn source_module(&self) -> Option<&syn::Path> {
-        self.source_module.as_ref()
     }
 
     // ── Structural type resolution ──────────────────────────────────────

@@ -353,12 +353,10 @@ impl Cbindgen {
         #[cfg(test)]
         prebindgen_registry::write::assert_edges_cover_rendered_calls(
             self.gen.assembly(),
-            &prebindgen_registry::RustWriter::for_registry_test(&self.registry),
+            self.gen.assembly().writer(),
             "c",
         );
         Ok(prebindgen_registry::write::write_rust(
-            &self.registry,
-            &self.gen,
             self.gen.assembly(),
             out_path,
         )?)

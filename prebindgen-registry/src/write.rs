@@ -20,13 +20,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{destination::Destination, prebindgen::Prebindgen, registry::Registry};
+use crate::{destination::Destination, registry::Registry};
 
 /// Errors surfaced by the file-emission phase.
 ///
 /// Binding validation is NOT here — it runs once in
 /// [`RegistryBuilder::build`](crate::RegistryBuilder::build)
-/// (see [`Prebindgen::validate_resolved`]), so an invalid binding fails
+/// (see [`Prebindgen::validate_resolved`](crate::Prebindgen::validate_resolved)),
+/// so an invalid binding fails
 /// before a built generator exists and never reaches a writer.
 /// Emission-integrity checks still run here because reachability is finalized
 /// while per-item output is assembled.
@@ -139,6 +140,15 @@ pub struct Assembly<A> {
     /// Every identity the held artifacts answer for, including the ones an
     /// artifact provides beyond its own key.
     provided: HashMap<ArtifactKey, usize>,
+    /// The rendering capability, minted while freezing. Writing an assembly
+    /// therefore needs no registry: what the writer needs of one — how to
+    /// qualify a source type, and the feature checks below — was taken when
+    /// the assembly was frozen and cannot change afterwards.
+    emit: crate::RustWriter,
+    /// Prebindgen's own injected feature checks, in stream order. Identical
+    /// for every adapter and named by none, so they are the registry's to
+    /// carry rather than any artifact's.
+    guards: Vec<prebindgen_flat::flat::Guard>,
 }
 
 impl<A: RustArtifact> Assembly<A> {
@@ -155,6 +165,16 @@ impl<A: RustArtifact> Assembly<A> {
     /// Reachability is read here rather than when the assembly was frozen: an
     /// adapter may reach an artifact after adding it, and the file is what
     /// settles the answer.
+    /// The rendering capability frozen with this assembly.
+    pub fn writer(&self) -> &crate::RustWriter {
+        &self.emit
+    }
+
+    /// Prebindgen's injected feature checks, in stream order.
+    pub fn guards(&self) -> impl ExactSizeIterator<Item = &prebindgen_flat::flat::Guard> {
+        self.guards.iter()
+    }
+
     pub fn reaches(&self, key: &ArtifactKey) -> bool {
         self.provided
             .get(key)
@@ -217,8 +237,13 @@ impl<A: RustArtifact> AssemblyBuilder<A> {
         self
     }
 
-    /// Freeze the assembly.
-    pub fn build(self) -> Assembly<A> {
+    /// Freeze the assembly against the resolved registry it was planned from.
+    ///
+    /// `source_module` is the path emitted references to source items are
+    /// qualified against, for an adapter that declares one; `None` leaves each
+    /// reference to the item's own origin module. Both arguments are read here
+    /// and not again: a frozen assembly is everything writing its file needs.
+    pub fn build(self, registry: &Registry, source_module: Option<&syn::Path>) -> Assembly<A> {
         let mut provided = self.positions;
         for (position, artifact) in self.artifacts.iter().enumerate() {
             for key in artifact.provides() {
@@ -228,17 +253,9 @@ impl<A: RustArtifact> AssemblyBuilder<A> {
         Assembly {
             artifacts: self.artifacts,
             provided,
+            emit: crate::RustWriter::new(registry, source_module),
+            guards: registry.flat().guards().cloned().collect(),
         }
-    }
-}
-
-impl<A: RustArtifact> FromIterator<A> for Assembly<A> {
-    fn from_iter<I: IntoIterator<Item = A>>(artifacts: I) -> Self {
-        let mut builder = AssemblyBuilder::new();
-        for artifact in artifacts {
-            builder.artifact(artifact);
-        }
-        builder.build()
     }
 }
 
@@ -366,21 +383,17 @@ impl syn::visit_mut::VisitMut for CalledIdents {
 ///
 /// `out_path` may be relative (resolved against `OUT_DIR` by prebindgen) or
 /// absolute. Returns the path actually written.
-pub fn write_rust<P: AsRef<Path>, E: Prebindgen, A: RustArtifact>(
-    registry: &Registry,
-    ext: &E,
+pub fn write_rust<P: AsRef<Path>, A: RustArtifact>(
     assembly: &Assembly<A>,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
-    // Validation already ran ONCE in the generator's `build` — a built generator
-    // (the only source of a resolved registry) is valid by construction, so
-    // this writer does no binding resolution. It does validate the assembled
-    // private call graph before handing the file to the destination.
-    // The capability, minted here and nowhere else in this function's reach.
-    // Every artifact below is handed a borrow; nothing else in the pipeline is.
-    // See `prebindgen_flat::flat::emit` for what that buys and what it
-    // deliberately does not.
-    let emit = crate::RustWriter::new(registry, ext.source_module());
+    // Nothing here can resolve anything. Validation ran once in the
+    // generator's `build`, planning ran once while the assembly was frozen,
+    // and what reaches this function is that frozen assembly and a path. The
+    // rendering capability comes with it; every artifact is handed a borrow of
+    // it and nothing else. See `prebindgen_flat::flat::emit` for what that
+    // buys and what it deliberately does not.
+    let emit = assembly.writer();
     let mut items: Vec<syn::Item> = Vec::new();
 
     // Dependency completeness, proven from the artifacts' own edges before
@@ -404,14 +417,11 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen, A: RustArtifact>(
     // rendered anyway, for its function names alone, so that a caller of one
     // could be named; the edges above answer that question without it.
     for artifact in assembly.artifacts().filter(|artifact| artifact.reachable()) {
-        items.extend(artifact.render(&emit));
+        items.extend(artifact.render(emit));
     }
 
-    // 2. Anonymous consts, verbatim. Last, and in stream order. These are
-    //    prebindgen's own injected feature checks, identical for every
-    //    adapter and named by none, so they are written here rather than
-    //    planned as an artifact of one adapter's assembly.
-    for guard in registry.flat().guards() {
+    // Anonymous consts, verbatim. Last, and in stream order.
+    for guard in assembly.guards() {
         items.push(syn::Item::Const(emit.guard(guard)));
     }
 
