@@ -213,6 +213,41 @@ fn trait_backed_custom_conversion_renders_from_the_late_plan() {
     );
 }
 
+/// `::core::primitive::u64` and `u64` name one scalar, and a domain declared
+/// over that scalar matches a representation written either way. Before the
+/// domain carried its kind, this fixture failed to build: the check compared
+/// the two spellings and reported "domain type does not match its input
+/// representation" for a type that does match.
+#[test]
+fn a_domain_matches_its_representation_however_the_representation_is_spelled() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> =
+        ["pub fn duration_echo(v: Duration) -> Duration { unimplemented!() }"]
+            .into_iter()
+            .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+            .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::from!(::core::primitive::u64))
+                .output(prebindgen_registry::into!(::core::primitive::u64))
+                .valid_range(0u64..=1_000_000u64),
+        )
+        .base_name("z_duration")
+        .function(syn::parse_quote!(duration_echo))
+        .panic();
+
+    let src = write(cbindgen, registry, "qualified_representation");
+    let compact: String = src.split_whitespace().collect();
+    assert!(
+        compact.contains("extern\"C\"fnduration_echo(v:::core::primitive::u64"),
+        "{src}"
+    );
+    assert!(compact.contains("(v)<=1000000u64"), "{src}");
+}
+
 #[test]
 fn output_terminals_stay_unrendered_until_final_write() {
     let loc = SourceLocation::default();

@@ -1727,13 +1727,16 @@ impl<R: Conversions> JCompile<'_, R> {
             }
         };
         if let Some(domain) = decl.domain() {
-            let domain_key = TypeKey::from_type(domain.ty());
+            // The domain's own spelling is derived from its kind, so this
+            // compares two canonical names: a domain cannot miss its
+            // representation by being written unusually.
+            let domain_key = TypeKey::from_type(&domain.ty());
             if domain_key != representation_key {
                 let direction = match direction {
                     Direction::Construct => "input",
                     Direction::Deconstruct => "output",
                 };
-                let domain = declared_type_name(domain.ty());
+                let domain = declared_type_name(&domain.ty());
                 match &representation {
                     crate::jni::chain::JCustomType::Model(reading) => panic!(
                         "convert!({source}): domain type {domain} does not match {direction} representation {reading}"

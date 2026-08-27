@@ -133,7 +133,7 @@ pub use self::{
         FieldsDecl, FunctionDecl, LocalField, LocalVariant,
     },
     diagnostics::{warn_unclaimed, Claimed},
-    domain::{DomainScalar, RepresentationDomain, ScalarValue},
+    domain::{DomainKind, DomainScalar, RepresentationDomain, ScalarValue},
     emit::RustWriter,
     generation::{
         AbiLayout, ArtifactId, ArtifactInput, ArtifactPlan, ChainValue, ChoiceArity, Cleanup,
