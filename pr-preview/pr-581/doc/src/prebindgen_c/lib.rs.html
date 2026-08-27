@@ -471,7 +471,7 @@
 <a href=#471 id=471 data-nosnippet>471</a>            .artifacts()
 <a href=#472 id=472 data-nosnippet>472</a>            .filter_map(|artifact| <span class="kw">match </span>artifact {
 <a href=#473 id=473 data-nosnippet>473</a>                assembly::CFinalArtifact::Converter(converter) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;**</span>converter),
-<a href=#474 id=474 data-nosnippet>474</a>                assembly::CFinalArtifact::Wrapper(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+<a href=#474 id=474 data-nosnippet>474</a>                assembly::CFinalArtifact::Wrapper(<span class="kw">_</span>) | assembly::CFinalArtifact::Const(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
 <a href=#475 id=475 data-nosnippet>475</a>            })
 <a href=#476 id=476 data-nosnippet>476</a>    }
 <a href=#477 id=477 data-nosnippet>477</a>}
