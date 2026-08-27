@@ -518,9 +518,9 @@ impl CbindgenBuilder {
     }
 }
 
-/// Per-section [`CbindgenBuilder::prerequisites`] emitters. Each returns the runtime-
-/// support items for one concern; the trait method concatenates them in order,
-/// so the emitted preamble is identical to the former single function.
+/// Declaration queries the planned artifacts read. Each answers one concern
+/// of the runtime support the file opens with; the artifacts that carry those
+/// items are in [`crate::assembly`].
 impl CbindgenBuilder {
     /// Converter fragments consumed by one type-level final artifact.
     fn artifact_fragment_inputs(
@@ -773,9 +773,8 @@ impl CbindgenBuilder {
     /// State this binding into `registry` — see `JniGenBuilder::declare_into`.
     ///
     /// Push, not pull: the build script calls this, and the registry never
-    /// calls back. cbindgen declares no selective const surface (its
-    /// `on_const` policy generates a source-module alias for every captured
-    /// const) and no decompositions.
+    /// calls back. cbindgen declares no selective const surface — it plans a
+    /// source-module alias for every captured const — and no decompositions.
     /// Binding-local fns declared by `convert!(..).local(..)`.
     fn collect_local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         let mut result = Vec::new();

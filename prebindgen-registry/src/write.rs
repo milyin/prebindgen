@@ -1,10 +1,10 @@
 //! Rust file emission for the resolved `Registry`.
 //!
 //! `write_rust` takes the [`Assembly`] the adapter compiled — the frozen set
-//! of final artifacts the file is made of; renders each with the writer-owned
-//! [`crate::RustWriter`], surrounds them with the adapter's prerequisites and
-//! prebindgen's own anonymous feature-check consts, and hands the assembled
-//! file to `Destination::write`.
+//! of final artifacts the file is made of; renders each with the
+//! [`crate::RustWriter`] frozen alongside them, ends the file with prebindgen's
+//! own anonymous feature-check consts, and hands the result to
+//! `Destination::write`.
 //!
 //! The artifacts arrive from the adapter rather than being collected from the
 //! registry, which is what lets one crossing contribute more than one function
@@ -16,7 +16,7 @@
 //! identity; final Rust names are never used as planning identity.
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
 };
 
@@ -137,9 +137,6 @@ pub trait RustArtifact {
 /// sharing never depends on the Rust symbol final emission allocates.
 pub struct Assembly<A> {
     artifacts: Vec<A>,
-    /// Every identity the held artifacts answer for, including the ones an
-    /// artifact provides beyond its own key.
-    provided: HashMap<ArtifactKey, usize>,
     /// The rendering capability, minted while freezing. Writing an assembly
     /// therefore needs no registry: what the writer needs of one — how to
     /// qualify a source type, and the feature checks below — was taken when
@@ -153,8 +150,9 @@ pub struct Assembly<A> {
 
 impl<A: RustArtifact> Assembly<A> {
     /// The artifacts, in emission order, including the ones no reachable
-    /// artifact calls. The writer skips those; they are held so that
-    /// [`Self::reaches`] can tell "planned but unreached" from "never
+    /// artifact calls. The writer skips those; they are held because an
+    /// adapter may reach one after adding it, and because keeping them lets
+    /// the dependency check tell "planned but unreached" from "never
     /// planned".
     pub fn artifacts(&self) -> impl ExactSizeIterator<Item = &A> {
         self.artifacts.iter()
@@ -170,20 +168,10 @@ impl<A: RustArtifact> Assembly<A> {
         &self.emit
     }
 
-    /// Prebindgen's injected feature checks, in stream order.
-    pub fn guards(&self) -> impl ExactSizeIterator<Item = &prebindgen_flat::flat::Guard> {
+    /// Prebindgen's injected feature checks, in stream order. Crate-private,
+    /// like [`Self::writer`]: the file's own writer is their only reader.
+    pub(crate) fn guards(&self) -> impl ExactSizeIterator<Item = &prebindgen_flat::flat::Guard> {
         self.guards.iter()
-    }
-
-    /// Whether an artifact answering for this identity reaches the file.
-    ///
-    /// Reachability is read here rather than when the assembly was frozen: an
-    /// adapter may reach an artifact after adding it, and the file is what
-    /// settles the answer.
-    pub fn reaches(&self, key: &ArtifactKey) -> bool {
-        self.provided
-            .get(key)
-            .is_some_and(|position| self.artifacts[*position].reachable())
     }
 }
 
@@ -249,15 +237,8 @@ impl<A: RustArtifact> AssemblyBuilder<A> {
     /// reference to the item's own origin module. Both arguments are read here
     /// and not again: a frozen assembly is everything writing its file needs.
     pub fn build(self, registry: &Registry, source_module: Option<&syn::Path>) -> Assembly<A> {
-        let mut provided = self.positions;
-        for (position, artifact) in self.artifacts.iter().enumerate() {
-            for key in artifact.provides() {
-                provided.insert(key, position);
-            }
-        }
         Assembly {
             artifacts: self.artifacts,
-            provided,
             emit: crate::RustWriter::new(registry, source_module),
             guards: registry.flat().guards().cloned().collect(),
         }
@@ -406,10 +387,21 @@ pub fn write_rust<P: AsRef<Path>, A: RustArtifact>(
     // Dependency completeness, proven from the artifacts' own edges before
     // anything is rendered: whatever a reachable artifact calls must itself
     // reach the file.
+    // Every identity the file answers for, read now rather than when the
+    // assembly was frozen: an adapter may reach an artifact after adding it,
+    // and the file is what settles the answer. Held as identities rather than
+    // as positions in the artifact list, so that filtering or reordering that
+    // list cannot leave a stale index behind.
+    let reached: HashSet<ArtifactKey> = assembly
+        .artifacts()
+        .filter(|artifact| artifact.reachable())
+        .flat_map(RustArtifact::provides)
+        .collect();
+
     let mut unreached: BTreeSet<(String, String)> = BTreeSet::new();
     for artifact in assembly.artifacts().filter(|artifact| artifact.reachable()) {
         for callee in artifact.calls() {
-            if !assembly.reaches(&callee) {
+            if !reached.contains(&callee) {
                 unreached.insert((artifact.key().to_string(), callee.to_string()));
             }
         }

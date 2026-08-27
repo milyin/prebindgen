@@ -278,6 +278,51 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
     );
 }
 
+/// The contract `Assembly`'s own documentation states: artifacts reach the
+/// file in the order the adapter added them.
+///
+/// Held here because the sentence is written here. Each adapter's chosen
+/// section order is pinned by its committed generated files, but reversing the
+/// envelope's own order is invisible to those: it moves every adapter's output
+/// at once, and nothing in this crate noticed.
+#[test]
+fn artifacts_reach_the_file_in_the_order_they_were_added() {
+    let operation = |name: &str| {
+        crate::generation::OperationId::shared(
+            crate::generation::ArtifactId::new("test", name).expect("identity"),
+            crate::recipe::Direction::Construct,
+        )
+    };
+    let (first, second) = (operation("first-converter"), operation("second-converter"));
+    let assembly = assembly_of([
+        LateOrCaller::Converter(LatePlan {
+            operation: first.clone(),
+            reachable: Rc::new(Cell::new(true)),
+        }),
+        LateOrCaller::Converter(LatePlan {
+            operation: second.clone(),
+            reachable: Rc::new(Cell::new(true)),
+        }),
+    ]);
+    let dir = crate::test_util::unique_test_dir("write_order");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let path = write_rust(&assembly, dir.join("gen.rs")).expect("write_rust");
+    let source = std::fs::read_to_string(path).expect("read generated file");
+
+    let emit = crate::RustWriter::for_test();
+    let position = |operation| {
+        let ident = emit.operation_ident("test", operation).to_string();
+        source
+            .find(&ident)
+            .unwrap_or_else(|| panic!("`{ident}` is missing:\n{source}"))
+    };
+    assert!(
+        position(&first) < position(&second),
+        "the order artifacts were added is the order they are written:\n{source}"
+    );
+}
+
 /// An assembly whose artifacts state their edges honestly passes the check
 /// both adapters run on every binding they build.
 #[test]

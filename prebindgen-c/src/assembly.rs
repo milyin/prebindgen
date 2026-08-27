@@ -62,6 +62,16 @@ impl RustArtifact for CFinalArtifact {
         }
     }
 
+    fn reachable(&self) -> bool {
+        // Every C artifact reaches the file. Unreached converters are pruned
+        // from the generation plan before the assembly sees them, and every
+        // other kind is planned only when something needs it — the memory
+        // helpers because an artifact says it calls them, a mirror because its
+        // type crosses. Stated rather than inherited: an artifact that needs a
+        // different answer should be a deliberate change here.
+        true
+    }
+
     fn calls(&self) -> Vec<ArtifactKey> {
         match self {
             Self::Converter(converter) => converter.calls(),

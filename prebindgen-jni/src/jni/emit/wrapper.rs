@@ -73,8 +73,8 @@ impl JWrapper {
 
 /// The synthetic nullary getter signature a declared const is emitted
 /// through: `pub fn const_get_<ident_lower>() -> <const ty>`. Both sides —
-/// the Rust extern ([`Declarations::on_const`] via
-/// [`emit_jni_function_wrapper_with_callee`]) and the Kotlin `val`
+/// the Rust extern (the constant artifact's getter, a [`JWrapper`] whose
+/// callee is a path to the const) and the Kotlin `val`
 /// initializer (`render_const_val`) — derive the extern symbol from this one
 /// ident, so they stay in sync by construction. The body is never used.
 pub(crate) fn const_getter_fn(
@@ -230,7 +230,7 @@ pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: 
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:
 /// `None` = the ordinary `<origin module>::<fn ident>(args)` call; `Some(e)`
 /// splices `e` verbatim as the value the output phase converts. Used by the
-/// const getter emission (`Declarations::on_const`), whose synthetic nullary `f`
+/// const getter emission (the constant artifact's), whose synthetic nullary `f`
 /// carries the signature while the value comes from
 /// `<origin module>::<CONST_IDENT>` — a path, not a call.
 impl JWrapper {
