@@ -471,7 +471,13 @@ impl CbindgenBuilder {
             .artifacts()
             .filter_map(|artifact| match artifact {
                 assembly::CFinalArtifact::Converter(converter) => Some(&**converter),
-                _ => None,
+                assembly::CFinalArtifact::Wrapper(_)
+                | assembly::CFinalArtifact::Const(_)
+                | assembly::CFinalArtifact::Memory(_)
+                | assembly::CFinalArtifact::DataStruct(_)
+                | assembly::CFinalArtifact::Enum(_)
+                | assembly::CFinalArtifact::DomainConstant(_)
+                | assembly::CFinalArtifact::Planned(_) => None,
             })
     }
 }

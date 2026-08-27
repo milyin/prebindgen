@@ -473,7 +473,7 @@ fn planned_artifacts_reach_the_file_through_the_frozen_plan() {
         })
         .expect("the planned-artifact placement");
     let fields: String = fields.split_whitespace().collect();
-    for forbidden in ["CbindgenBuilder", "Registry,", "Compiled", "RefCell"] {
+    for forbidden in ["CbindgenBuilder", "Registry", "Compiled", "RefCell"] {
         assert!(
             !fields.contains(forbidden),
             "a placed artifact retains {forbidden}, so rendering could resume planning"
