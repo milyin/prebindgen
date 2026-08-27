@@ -270,7 +270,7 @@ impl RustFunction for JFunction {
 /// One whole-object struct terminal retained as Flat shape plus JNI policy.
 ///
 /// The plan deliberately holds no `syn::Type` or token body for the source
-/// crossing. The writer supplies [`Emit`] once resolution, glue planning, and
+/// crossing. The writer arrives once resolution, glue planning, and
 /// Kotlin planning are complete; only then is the source signature spelled and
 /// the captured struct delimiter shape assembled.
 #[derive(Clone)]
@@ -334,7 +334,7 @@ impl JStructCodecPlan {
 
 /// One whole-object sealed-sum input retained as Flat alternatives plus JNI
 /// property policy. Source spelling and alternative construction are deferred
-/// to the final writer-owned [`Emit`] pass.
+/// to the final writer-owned rendering pass.
 #[derive(Clone)]
 pub(crate) struct JSumCodecPlan {
     pub(crate) operation: OperationId,
@@ -648,7 +648,7 @@ enum JValueBody {
 
 /// How a terminal codec obtains the Rust type in its generated signature.
 ///
-/// A crossing is spelled by [`Emit`] at the final write. Text terminals can
+/// A crossing is spelled by the writer at the final write. Text terminals can
 /// instead select a semantic owned or borrowed carrier. The concrete Rust
 /// spellings for those carriers are deliberately confined to `render` too.
 #[derive(Clone, Copy)]
@@ -677,7 +677,7 @@ impl JTextCarrier {
 ///
 /// The JNI representation and source-independent conversion policy are safe
 /// to freeze during recipe compilation. Source Rust spelling is not: the plan
-/// keeps the Flat reading opaque until the writer supplies [`Emit`]. Most
+/// keeps the Flat reading opaque until the writer arrives. Most
 /// codecs retain a ready expression; fixed-size arrays retain their JNI policy
 /// and build the source-typed expression only while rendering. Text codecs
 /// retain only their ownership semantics; the concrete owned/borrowed Rust
@@ -1067,7 +1067,7 @@ impl JPipeline {
     ///
     /// Output pipelines can only contain converter children. The transient
     /// Vec-handle operation is an input-site ABI and is the sole pipeline body
-    /// that needs [`Emit`] to spell its element type. Keeping that case out of
+    /// that needs the writer to spell its element type. Keeping that case out of
     /// this API lets return, error, and callback delivery assemble their JNI
     /// protocol without gaining access to source Rust spelling.
     pub(crate) fn invoke_output(&self, value: TokenStream, emit: &RustWriter) -> TokenStream {

@@ -131,7 +131,7 @@ pub use self::{
     },
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
-    emit::{Emit, RustWriter},
+    emit::RustWriter,
     generation::{
         AbiLayout, ArtifactId, ArtifactInput, ArtifactPlan, ChainValue, ChoiceArity, Cleanup,
         ContractAt, ConversionChain, ConverterPlan, ConverterStep, Failure, FixedArity, FragmentId,

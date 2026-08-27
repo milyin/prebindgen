@@ -32,7 +32,7 @@ pub struct FragmentId {
 /// Stable identity of one private operation retained by a recipe fragment.
 ///
 /// This is model identity, not a rendered Rust identifier. The final writer
-/// allocates its private symbol through `Emit`; an adapter only supplies its
+/// allocates its private symbol through `RustWriter`; an adapter only supplies its
 /// target namespace while rendering.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OperationId {
@@ -239,7 +239,7 @@ impl OperationId {
     /// Keeping this implementation beside the model identity prevents an
     /// adapter from reading or reinterpreting the `TypeKey` values contained
     /// by a fragment. The fingerprint deliberately has no public accessor;
-    /// final emission exposes only the completed identifier through `Emit`.
+    /// final emission exposes only the completed identifier through `RustWriter`.
     pub(crate) fn stable_fingerprint(&self) -> u64 {
         let mut hash = 0xcbf2_9ce4_8422_2325_u64;
         for byte in self.stable_key().bytes() {

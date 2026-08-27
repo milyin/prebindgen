@@ -38,7 +38,7 @@ prebindgen                BASE. Source stream only. No adapters, no registry.
 prebindgen-flat           the flat model + TypeKey + the RustEmitter protocol
   deps: prebindgen
 
-prebindgen-registry       language-agnostic pipeline + Emit key + shared decl vocabulary
+prebindgen-registry       language-agnostic pipeline + RustWriter + shared decl vocabulary
   deps: prebindgen-flat
 
 prebindgen-jni            JNI/Kotlin generator
@@ -88,10 +88,10 @@ The boundary is therefore split into protocol and key:
   methods emit source types from `TypeKind`/identities, constructors from
   `FieldShape`, and private output fragments recorded by Flat. It has no method
   returning a captured spelling or typed source AST.
-- `prebindgen-registry::Emit` is the concrete, zero-sized registry key. Its
-  constructor is registry-private and it carries no qualification or model state.
-- `prebindgen-registry::RustWriter` owns the frozen source-module map and the
-  private `Emit` token. Emission callbacks receive `&RustWriter`; its narrow
+- `prebindgen-registry::RustWriter` is the concrete registry capability. Its
+  constructor is registry-private, it owns the frozen source-module map, and it
+  implements the protocol through a private zero-sized receiver that is unnamed
+  in any public API. Emission callbacks receive `&RustWriter`; its narrow
   surface generates inert fragments and never returns a captured or typed AST.
 
 This preserves the dependency and mental model:
@@ -107,9 +107,10 @@ gaining access to retained source syntax.
 
 The registry's default path is compiler-checked. `prebindgen-registry` does
 not re-export `RustEmitter` through its `flat` model path, so an adapter that
-depends only on the registry cannot name the protocol or construct
-`prebindgen-registry::Emit`; it can render only after receiving `&RustWriter` in
-an emission callback. A compile-fail doctest pins both restrictions.
+depends only on the registry cannot name the protocol, and `RustWriter`'s
+constructor is registry-private; it can render only after receiving
+`&RustWriter` in an emission callback. Compile-fail doctests pin both
+restrictions.
 
 An adapter could add a direct `prebindgen-flat` dependency and implement the
 public protocol, but that only reproduces the same generate-only operations.
@@ -140,7 +141,7 @@ reversing the crate dependency.
 | **A2** | `prebindgen-{jni,c}-runtime` carved out; emitted paths repointed | done |
 | **A3** | shared decl vocabulary → `core::decl`; breaks `cbindgen → jnigen` | done |
 | **A5** | drop the `unstable-cbindgen` feature | done |
-| **A4** | rendering protocol → `flat`; registry-owned `Emit` key → `registry` | done |
+| **A4** | rendering protocol → `flat`; registry-owned `RustWriter` → `registry` | done |
 | **B1** | carve `prebindgen-c` | done |
 | **B2** | carve `prebindgen-jni` | done |
 | **B3** | carve `prebindgen-registry` | done |

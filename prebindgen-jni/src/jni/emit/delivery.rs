@@ -617,7 +617,7 @@ struct FrozenSum {
 /// Callback delivery facts frozen while the registry is available. Rust
 /// source types remain as opaque readings inside the wires/pipelines; the only
 /// syntax retained here is origin qualification and Flat alternative shape,
-/// both consumed with `Emit` by the final Invoke renderer.
+/// both consumed with the writer by the final Invoke renderer.
 #[derive(Clone)]
 pub(crate) struct FrozenDelivery {
     wires: Vec<crate::jni::compile::OutWire>,

@@ -2,7 +2,7 @@
 //!
 //! A plan keeps Flat [`TypeRef`]s opaque and records only shape operations,
 //! wire-side types and child converter contracts. [`RustFunction::render`]
-//! receives the writer-owned [`Emit`] after resolution and validation, which is
+//! receives the writer-owned [`RustWriter`] after resolution and validation, which is
 //! the first point at which the captured Rust types and function bodies are
 //! materialized.
 
@@ -647,7 +647,7 @@ impl InputTerminalOperation {
     }
 }
 
-/// A C input terminal retained until the final writer owns [`Emit`].
+/// A C input terminal retained until final rendering.
 #[derive(Clone)]
 pub(crate) struct InputTerminalPlan {
     pub(crate) source: TypeRef,
@@ -812,7 +812,7 @@ pub(crate) enum OutputTerminalOperation {
     },
 }
 
-/// A C output terminal retained until the final writer owns `Emit`.
+/// A C output terminal retained until final rendering.
 #[derive(Clone)]
 pub(crate) struct OutputTerminalPlan {
     pub(crate) source: TypeRef,
@@ -1170,7 +1170,7 @@ impl CArtifact {
 /// Render one class of C artifacts from the frozen registry plan.
 ///
 /// The deliberately narrow signature is the artifact-rendering boundary: final
-/// emission can generate source-type tokens from Flat facts through Emit, but it cannot
+/// emission can generate source-type tokens from Flat facts through the writer, but it cannot
 /// reopen the registry or the adapter's mutable compilation cache.
 pub(crate) fn render_artifacts(
     generation: &GenerationPlan<crate::compile::CRepresentation>,
