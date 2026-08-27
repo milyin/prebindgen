@@ -80,118 +80,122 @@ impl RustArtifact for LatePlan {
     }
 }
 
-struct LateExt {
-    reachable: Rc<Cell<bool>>,
-    activate: bool,
-    call_converter: bool,
+/// An artifact that renders `a_fn`, calling the late converter plan.
+///
+/// Its own reachability is fixed; what varies is whether the plan it calls is
+/// reachable by the time the file is written.
+#[derive(Clone)]
+struct CallerPlan {
     operation: crate::generation::OperationId,
 }
 
-impl Prebindgen for LateExt {
-    /// Emits `a_fn`, and (when `call_converter`) calls the late converter
-    /// plan from it. Prerequisites are the adapter's remaining output
-    /// produced while the file is written, so this is where a caller that
-    /// races the assembly's reachability filtering can still come from.
-    fn prerequisites(&self, _registry: &Registry, emit: &crate::RustWriter) -> Vec<syn::Item> {
-        if self.activate {
-            self.reachable.set(true);
+impl RustArtifact for CallerPlan {
+    fn key(&self) -> ArtifactKey {
+        ArtifactKey::Artifact(
+            crate::generation::ArtifactId::new("test", "caller").expect("identity"),
+        )
+    }
+
+    fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item> {
+        let converter = emit.operation_ident("test", &self.operation);
+        vec![syn::Item::Fn(
+            syn::parse_quote!(fn a_fn() { #converter(); }),
+        )]
+    }
+}
+
+/// Either artifact of this test's assembly: a converter plan whose
+/// reachability can flip after the assembly is frozen, or the caller.
+#[derive(Clone)]
+enum LateOrCaller {
+    Converter(LatePlan),
+    Caller(CallerPlan),
+}
+
+impl RustArtifact for LateOrCaller {
+    fn key(&self) -> ArtifactKey {
+        match self {
+            Self::Converter(plan) => plan.key(),
+            Self::Caller(plan) => plan.key(),
         }
-        if self.call_converter {
-            let converter = emit.operation_ident("test", &self.operation);
-            vec![syn::Item::Fn(
-                syn::parse_quote!(fn a_fn() { #converter(); }),
-            )]
-        } else {
-            vec![syn::parse_quote!(
-                fn a_fn() {}
-            )]
+    }
+
+    fn reachable(&self) -> bool {
+        match self {
+            Self::Converter(plan) => plan.reachable(),
+            Self::Caller(plan) => plan.reachable(),
+        }
+    }
+
+    fn render(&self, emit: &crate::RustWriter) -> Vec<syn::Item> {
+        match self {
+            Self::Converter(plan) => plan.render(emit),
+            Self::Caller(plan) => plan.render(emit),
         }
     }
 }
 
+/// A converter plan that is dormant when the assembly is frozen and reachable
+/// by the time the file is written is emitted.
+///
+/// What this pins is that reachability is read when the file is written and
+/// not snapshotted while the assembly is frozen. It does not pin *when* during
+/// writing: nothing marks an artifact reachable while another renders, so
+/// reading every artifact's reachability just before the render loop would
+/// satisfy this too.
+///
+/// The property is not hypothetical. JniGen shares one reachability cell
+/// between every clone of a plan and sets it when a parent that calls the plan
+/// is compiled, which can happen after the plan has been added to the builder.
 #[test]
-fn per_item_planning_precedes_late_converter_filtering() {
-    let item: syn::ItemStruct = syn::parse_quote!(
-        pub struct AStruct;
-    );
-    let registry = crate::test_util::reg_from_items(vec![(
-        syn::Item::Struct(item),
-        SourceLocation::default(),
-    )])
-    .expect("index")
-    .export_type(crate::test_util::declared_origin(syn::parse_quote!(
-        AStruct
-    )))
-    .scanned()
-    .expect("scan");
+fn an_artifact_reached_after_freezing_is_emitted() {
+    let registry = late_test_registry();
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
         crate::recipe::Direction::Construct,
     );
-    let ext = LateExt {
-        reachable: reachable.clone(),
-        activate: true,
-        call_converter: false,
-        operation: operation.clone(),
-    };
-    let plan = LatePlan {
+    let assembly = assembly_of([LateOrCaller::Converter(LatePlan {
         operation,
-        reachable,
-    };
+        reachable: reachable.clone(),
+    })]);
     let dir = crate::test_util::unique_test_dir("write_late_plan");
     std::fs::create_dir_all(&dir).unwrap();
 
+    // Frozen dormant, reached afterwards — as a parent compiled later does.
+    reachable.set(true);
     let path =
-        write_rust(&registry, &ext, &assembly_of([plan]), dir.join("gen.rs")).expect("write_rust");
+        write_rust(&registry, &IdentityExt, &assembly, dir.join("gen.rs")).expect("write_rust");
     let source = std::fs::read_to_string(path).expect("read generated file");
 
     assert!(
         source.contains("fn __test_in_convert_wire_to_test_late_converter_"),
         "{source}"
     );
-    // Prerequisites are written before the assembly, so the caller precedes
-    // the converter it activated. What the test pins is that the activation
-    // was seen at all: a plan marked reachable while the file is assembled
-    // survives the filter.
-    assert!(source.find("fn a_fn").unwrap() < source.find("fn __test_in_convert").unwrap());
 }
 
 #[test]
 fn a_call_to_a_filtered_converter_is_a_writer_error() {
-    let item: syn::ItemStruct = syn::parse_quote!(
-        pub struct AStruct;
-    );
-    let registry = crate::test_util::reg_from_items(vec![(
-        syn::Item::Struct(item),
-        SourceLocation::default(),
-    )])
-    .expect("index")
-    .export_type(crate::test_util::declared_origin(syn::parse_quote!(
-        AStruct
-    )))
-    .scanned()
-    .expect("scan");
+    let registry = late_test_registry();
     let reachable = Rc::new(Cell::new(false));
     let operation = crate::generation::OperationId::shared(
         crate::generation::ArtifactId::new("test", "late-converter").expect("identity"),
         crate::recipe::Direction::Construct,
     );
-    let ext = LateExt {
-        reachable: reachable.clone(),
-        activate: false,
-        call_converter: true,
-        operation: operation.clone(),
-    };
-    let plan = LatePlan {
-        operation: operation.clone(),
-        reachable,
-    };
+    let assembly = assembly_of([
+        LateOrCaller::Converter(LatePlan {
+            operation: operation.clone(),
+            reachable,
+        }),
+        LateOrCaller::Caller(CallerPlan {
+            operation: operation.clone(),
+        }),
+    ]);
     let dir = crate::test_util::unique_test_dir("write_missing_converter");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("gen.rs");
 
-    let err = write_rust(&registry, &ext, &assembly_of([plan]), &path)
+    let err = write_rust(&registry, &IdentityExt, &assembly, &path)
         .expect_err("a call to a filtered private converter must fail in the writer");
 
     match err {
@@ -206,6 +210,40 @@ fn a_call_to_a_filtered_converter_is_a_writer_error() {
         !path.exists(),
         "an invalid generated file must not reach the destination"
     );
+}
+
+/// A registry with one declared type, which is all these two tests need of it.
+fn late_test_registry() -> Registry {
+    crate::test_util::reg_from_items(vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct AStruct;
+        )),
+        SourceLocation::default(),
+    )])
+    .expect("index")
+    .export_type(crate::test_util::declared_origin(syn::parse_quote!(
+        AStruct
+    )))
+    .scanned()
+    .expect("scan")
+}
+
+/// Two reachable artifacts under one identity are a planning error. A
+/// converter is exempt: one registry operation is legitimately reached from
+/// several sites, which is what the de-duplication above is for.
+#[test]
+#[should_panic(expected = "two reachable artifacts share the identity")]
+fn two_reachable_artifacts_may_not_share_an_identity() {
+    let operation = crate::generation::OperationId::shared(
+        crate::generation::ArtifactId::new("test", "shared-converter").expect("identity"),
+        crate::recipe::Direction::Construct,
+    );
+    let caller = || {
+        LateOrCaller::Caller(CallerPlan {
+            operation: operation.clone(),
+        })
+    };
+    let _ = assembly_of([caller(), caller()]);
 }
 
 #[test]
@@ -233,6 +271,14 @@ fn registry_operations_are_deduplicated_before_rendering() {
         rendered_reachable: rendered_reachable.clone(),
     };
     let reachable = OperationPlan {
+        operation: operation.clone(),
+        reachable: true,
+        renders: renders.clone(),
+        rendered_reachable: rendered_reachable.clone(),
+    };
+    // One registry operation reached from a second site: legal, and the
+    // exemption the duplicate-identity guard states.
+    let reached_again = OperationPlan {
         operation,
         reachable: true,
         renders: renders.clone(),
@@ -244,7 +290,7 @@ fn registry_operations_are_deduplicated_before_rendering() {
     write_rust(
         &registry,
         &IdentityExt,
-        &assembly_of([dormant, reachable]),
+        &assembly_of([dormant, reachable, reached_again]),
         dir.join("gen.rs"),
     )
     .expect("write Rust");
@@ -252,7 +298,8 @@ fn registry_operations_are_deduplicated_before_rendering() {
     assert_eq!(
         renders.get(),
         1,
-        "a shared registry operation must be rendered exactly once"
+        "a shared registry operation must be rendered exactly once, however \
+         many sites reached it"
     );
     assert!(
         rendered_reachable.get(),
@@ -350,15 +397,16 @@ fn declared_items_reach_the_file_only_as_artifacts() {
     }
 }
 
-/// What an adapter still hands the writer is typed Rust items, and the writer
-/// never turns tokens back into items itself.
+/// The adapter hands the writer no Rust items at all — everything it emits is
+/// an artifact of its assembly — and the writer never turns tokens back into
+/// items itself.
 #[test]
-fn adapter_emission_carries_typed_items_without_reparsing() {
+fn the_adapter_emits_no_items_and_the_writer_reparses_none() {
     let contract = include_str!("../prebindgen.rs");
     assert_eq!(
         contract.matches("-> Vec<syn::Item>").count(),
-        1,
-        "`prerequisites` is the one method that still returns items to the writer"
+        0,
+        "no method of the trait may return items for the writer to place"
     );
 
     let writer = include_str!("../write.rs");
