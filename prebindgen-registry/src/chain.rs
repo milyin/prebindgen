@@ -232,6 +232,18 @@ pub trait OptionalBridge: Clone {
 
     /// Construct the outbound representation of a converted present child.
     fn build_present(&self, child: TokenStream) -> TokenStream;
+
+    /// The source-side `Some` arm, given the converted child.
+    ///
+    /// The default wraps, which is what an optional layer normally is: the
+    /// child yields the value, and this layer decides whether there is one.
+    /// A bridge overrides it when its child **already** yields the optional —
+    /// a nullable property whose inner converter carries its own niche
+    /// encoding of absence tests two things, a null reference and then that
+    /// niche, and the second answer is the whole answer.
+    fn source_present(&self, child: TokenStream) -> TokenStream {
+        quote::quote!(::core::option::Option::Some(#child))
+    }
 }
 
 /// Registry-composed converter plan for an Optional recipe.
@@ -649,12 +661,13 @@ where
                 let absent = self.bridge.is_absent();
                 let present = self.bridge.present(quote::quote!(v));
                 let child = child_value(&self.child, quote::quote!(__present), emit);
+                let present_arm = self.bridge.source_present(child);
                 let canonical = quote::quote!({
                     if #absent {
                         ::core::option::Option::None
                     } else {
                         let __present = #present;
-                        ::core::option::Option::Some(#child)
+                        #present_arm
                     }
                 });
                 let built = self.source_policy.build(canonical);

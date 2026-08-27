@@ -787,8 +787,16 @@ fn flattened_field_composes_bounded_conversion_stages() {
     );
     assert!(rc.contains("__jni_in_stage_0_"), "{rust}");
     assert!(
-        rc.contains("__jni_in_convert_") && rc.contains("env,&__delay_raw"),
-        "whole-JObject input must invoke the complete optional Duration converter:\n{rust}"
+        rc.contains(
+            "__jni_in_convert_wire_to_Option_Duration_jni_optional_intermediate_input_niche"
+        ) && rc.contains("env,&__present"),
+        "whole-JObject input must invoke the complete optional Duration converter, on the \
+         value the composed Optional bound:\n{rust}"
+    );
+    assert!(
+        !rc.contains("Some(__jni_in_convert_wire_to_Option_Duration"),
+        "the niche converter already yields the Option, so the composed layer must pass its \
+         answer through rather than wrap it:\n{rust}"
     );
     assert!(
         rc.contains("let___delay:jni::sys::jlong=__jni_out_convert_")
