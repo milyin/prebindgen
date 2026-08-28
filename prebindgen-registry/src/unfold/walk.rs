@@ -11,10 +11,9 @@
 //! this module cannot know: where a source item is qualified from
 //! (`qualify`), and what each leaf is ([`DecomposedLeaf`]).
 
+use prebindgen_flat::flat::TypeRef;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-
-use prebindgen_flat::flat::TypeRef;
 
 use crate::unfold::{steps_are_movable, PathStep};
 
