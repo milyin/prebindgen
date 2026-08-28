@@ -1180,17 +1180,15 @@ impl JPipeline {
     /// `env` is already the borrowed `JNIEnv` rather than an owned wrapper
     /// parameter. Whole-object property plans use this to retain child chains
     /// without retaining their generated Rust expressions.
-    pub(crate) fn invoke_converter(
-        &self,
-        env: TokenStream,
-        value: TokenStream,
-        stage_base: &syn::Ident,
-        emit: &RustWriter,
-    ) -> TokenStream {
+    /// The child converter this pipeline invokes.
+    ///
+    /// A whole-object property is decoded by one child; the transient
+    /// Vec-handle site ABI is a parameter-only shape and never reaches here.
+    pub(crate) fn converter_child(&self) -> &JChild {
         let JPipelineBody::Converter(child) = &self.body else {
-            unreachable!("a whole-object field cannot use the transient Vec-handle site ABI")
+            unreachable!("a whole-object property cannot use the transient Vec-handle site ABI")
         };
-        child.invoke_input_value_with_env(env, value, stage_base, emit)
+        child
     }
 
     /// Render the already-planned call graph around `value`.
@@ -1236,46 +1234,6 @@ impl JVecHandleInput {
 }
 
 impl JChild {
-    /// Render a constructing child as the value it yields inside an enclosing
-    /// converter. Unlike the ordinary chain API this consumes `Result` here,
-    /// because the enclosing function already owns the error channel. Stage
-    /// bindings are named by the property that owns them, preventing sibling
-    /// fields from colliding.
-    fn invoke_input_value_with_env(
-        &self,
-        env: TokenStream,
-        value: TokenStream,
-        stage_base: &syn::Ident,
-        emit: &RustWriter,
-    ) -> TokenStream {
-        assert_eq!(self.direction, Direction::Construct);
-        let converter = emit.operation_ident("jni", self.call.operation_id());
-        let value = match self.value_use {
-            JValueUse::Direct => value,
-            JValueUse::SharedRef => shared_ref(value),
-            JValueUse::Cloned => quote!((*#value).clone()),
-        };
-        let first = quote!(#converter(#env, #value));
-        if self.stages.is_empty() {
-            return quote!(#first?);
-        }
-        let first_name = format_ident!("{}_s0", stage_base);
-        let mut body = quote!(let #first_name = #first?;);
-        let mut previous = first_name;
-        for (index, stage) in self.stages.iter().enumerate() {
-            let stage = emit.operation_ident("jni", stage);
-            let next = format_ident!("{}_s{}", stage_base, index + 1);
-            body.extend(quote!(
-                let #next = #stage(#env, #previous)
-                    .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
-                        __e.to_string()
-                    ))?;
-            ));
-            previous = next;
-        }
-        quote!({ #body #previous })
-    }
-
     /// Render this child in a context that supplies its own `JNIEnv` expression.
     /// Registry-composed converter bodies receive an `&mut JNIEnv` named
     /// `env`; exported wrappers own a mutable `JNIEnv` and pass `&mut env`.

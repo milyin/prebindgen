@@ -230,7 +230,7 @@ fn restricted_inbound(
     if let syn::Type::Reference(r) = ty {
         return restricted_inbound(&r.elem, structs, enums, seen);
     }
-    let tail = type_path_tail(ty)?.to_string();
+    let tail = prebindgen_registry::types_util::path_tail_ident(ty)?.to_string();
     if tail == "MaybeUninit" {
         return None;
     }

@@ -897,6 +897,12 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        // Every binding a test writes also checks that a data class's two
+        // leaf derivations agree wherever both exist — the property #603
+        // measured and #602 needs before it can unify them.
+        #[cfg(test)]
+        self.assert_leaf_derivations_agree();
+
         // Every binding a test writes also checks that the assembly's
         // dependency edges name every call its artifacts render — the
         // completeness the emission-time check reasons from.
@@ -917,6 +923,79 @@ impl JniGen {
                 .assembly(),
             out_path,
         )?)
+    }
+
+    /// A declared data class is decomposed twice — by `struct_out_wires_of`,
+    /// whose leaves the registry receives, and by `StructPlan`, whose leaves
+    /// the whole-object encode emits and Kotlin's `fromParts` declares. Where
+    /// both exist they must name the same leaves in the same order.
+    ///
+    /// #603 records why the two are not one derivation: the first refuses
+    /// shapes the second supports, so unifying them is the feature #602
+    /// proposes. Until then this is what says they still agree — the
+    /// precondition that unification rests on.
+    ///
+    /// Both are available only after resolve, which is why this runs here and
+    /// not while planning.
+    #[cfg(test)]
+    fn assert_leaf_derivations_agree(&self) {
+        let emit = prebindgen_registry::RustWriter::for_registry_test(&self.registry);
+        for item in self.registry.flat().types() {
+            let prebindgen_registry::flat::Type::Struct(item) = item else {
+                continue;
+            };
+            // Only a declared data class has a frozen plan; the lookup is
+            // panic-backed for anything else, and an opaque handle's struct
+            // decomposes without ever having one.
+            let declared = self
+                .decls
+                .types
+                .get(&item.type_ref().key())
+                .is_some_and(|cfg| !cfg.special_decl() && cfg.name_spec.is_some());
+            if !declared {
+                continue;
+            }
+            let Some(wires) = self.decls.struct_out_wires_of(&self.registry, &item.name) else {
+                continue;
+            };
+            let Some(plan) = self.decls.struct_plan(&self.registry, item, 0) else {
+                continue;
+            };
+            // The two spell a leaf for different audiences: the decomposition
+            // names it as Kotlin will see it (`maybeLong`), the encode as Rust
+            // wrote it (`maybe_long`), and a keyword-colliding name keeps a
+            // trailing underscore on one side only. The property here is which
+            // leaves, in which order — so the comparison drops the spelling.
+            // Two comparisons, because a leaf has two properties that must
+            // agree and one that need not. Its *name* is spelled for two
+            // audiences — the decomposition names it as Kotlin will see it
+            // (`maybeLong`), the encode as Rust wrote it (`maybe_long`), and a
+            // keyword-colliding name keeps a trailing underscore on one side —
+            // so the comparison drops the spelling. Its *nesting* is structure:
+            // the decomposition joins an inlined class's path with the reserved
+            // `__` separator, and the encode counts the same inlining as depth.
+            let plain = |name: &str| name.replace('_', "").to_lowercase();
+            let decomposed: Vec<String> = wires.iter().map(|wire| plain(&wire.name)).collect();
+            let decomposed_depth: Vec<usize> = wires
+                .iter()
+                .map(|wire| wire.name.matches("__").count())
+                .collect();
+            let leaves = crate::jni::emit::encode_leaves(&plan, &emit);
+            let encoded: Vec<String> = leaves.iter().map(|(name, _)| plain(name)).collect();
+            let encoded_depth: Vec<usize> = leaves.iter().map(|(_, depth)| *depth).collect();
+            assert_eq!(
+                encoded, decomposed,
+                "`{}`: the whole-object encode and the registry-facing \
+                 decomposition name different leaves",
+                item.name
+            );
+            assert_eq!(
+                encoded_depth, decomposed_depth,
+                "`{}`: the whole-object encode and the registry-facing \
+                 decomposition flatten nesting differently",
+                item.name
+            );
+        }
     }
 
     /// The resolved registry — conversions, decompositions, and the model.

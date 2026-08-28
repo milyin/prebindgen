@@ -3,21 +3,92 @@
 use std::ops::{Bound, RangeBounds};
 
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::quote;
+
+/// The scalars a [`RepresentationDomain`] can be declared over: the variants,
+/// their spellings and the reduction from a written type all come from this one
+/// list, so a kind cannot be added to the set without answering for both.
+macro_rules! domain_kinds {
+    ($(($variant:ident, $name:literal)),* $(,)?) => {
+        /// The scalar a [`RepresentationDomain`] is declared over.
+        ///
+        /// This is the identity every domain question is decided on — whether a
+        /// bounds check needs a NaN test, which candidate values a niche is
+        /// picked from, and whether a domain and a conversion's representation
+        /// are the same type. Its spelling is derived from it and never the
+        /// other way round, so a domain written `::core::primitive::u64` and one
+        /// written `u64` are one kind.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        pub enum DomainKind {
+            $(
+                #[doc = concat!("The `", $name, "` scalar.")]
+                $variant
+            ),*
+        }
+
+        impl DomainKind {
+            /// The one canonical Rust spelling of this scalar.
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $name),*
+                }
+            }
+
+            /// The kind a written scalar type names, off its last path segment,
+            /// so every spelling of one scalar answers alike. `None` for a type
+            /// no domain can be declared over — `bool`, `isize` and `usize`
+            /// among them.
+            pub fn from_type(ty: &syn::Type) -> Option<Self> {
+                let ident = prebindgen_flat::types_util::path_tail_ident(ty)?;
+                $(if ident == $name {
+                    return Some(Self::$variant);
+                })*
+                None
+            }
+        }
+    };
+}
+
+domain_kinds!(
+    (I8, "i8"),
+    (I16, "i16"),
+    (I32, "i32"),
+    (I64, "i64"),
+    (I128, "i128"),
+    (U8, "u8"),
+    (U16, "u16"),
+    (U32, "u32"),
+    (U64, "u64"),
+    (U128, "u128"),
+    (F32, "f32"),
+    (F64, "f64"),
+);
+
+impl DomainKind {
+    /// The scalar's Rust type, built from [`Self::as_str`].
+    pub fn ty(self) -> syn::Type {
+        let ident = syn::Ident::new(self.as_str(), proc_macro2::Span::call_site());
+        syn::parse_quote!(#ident)
+    }
+
+    fn is_float(self) -> bool {
+        matches!(self, Self::F32 | Self::F64)
+    }
+}
 
 /// Scalar representations that can carry a declarative domain.
 pub trait DomainScalar: Copy + 'static {
     #[doc(hidden)]
     fn domain_value(self) -> ScalarValue;
     #[doc(hidden)]
-    fn domain_type() -> syn::Type;
+    fn domain_kind() -> DomainKind;
 }
 
 macro_rules! impl_ints {
     ($(($t:ty, $v:ident)),* $(,)?) => {$(
         impl DomainScalar for $t {
             fn domain_value(self) -> ScalarValue { ScalarValue::$v(self) }
-            fn domain_type() -> syn::Type { syn::parse_quote!($t) }
+            fn domain_kind() -> DomainKind { DomainKind::$v }
         }
     )*};
 }
@@ -38,16 +109,16 @@ impl DomainScalar for f32 {
     fn domain_value(self) -> ScalarValue {
         ScalarValue::F32(self.to_bits())
     }
-    fn domain_type() -> syn::Type {
-        syn::parse_quote!(f32)
+    fn domain_kind() -> DomainKind {
+        DomainKind::F32
     }
 }
 impl DomainScalar for f64 {
     fn domain_value(self) -> ScalarValue {
         ScalarValue::F64(self.to_bits())
     }
-    fn domain_type() -> syn::Type {
-        syn::parse_quote!(f64)
+    fn domain_kind() -> DomainKind {
+        DomainKind::F64
     }
 }
 
@@ -190,7 +261,7 @@ enum Base {
 /// Legal values of a custom conversion's scalar representation.
 #[derive(Clone)]
 pub struct RepresentationDomain {
-    ty: syn::Type,
+    kind: DomainKind,
     base: Base,
     excluded: Vec<ScalarValue>,
 }
@@ -213,7 +284,7 @@ impl RepresentationDomain {
             "representation-domain range cannot be empty"
         );
         Self {
-            ty: T::domain_type(),
+            kind: T::domain_kind(),
             base: Base::Range { start, end },
             excluded: vec![],
         }
@@ -226,7 +297,7 @@ impl RepresentationDomain {
             "representation-domain valid set cannot be empty"
         );
         Self {
-            ty: T::domain_type(),
+            kind: T::domain_kind(),
             base: Base::Values(values),
             excluded: vec![],
         }
@@ -234,8 +305,8 @@ impl RepresentationDomain {
 
     pub fn exclude<T: DomainScalar>(&mut self, values: impl IntoIterator<Item = T>) {
         assert_eq!(
-            prebindgen_flat::flat::TypeKey::from_type(&self.ty),
-            prebindgen_flat::flat::TypeKey::from_type(&T::domain_type()),
+            self.kind,
+            T::domain_kind(),
             "representation-domain exclusions must use the base domain's scalar type"
         );
         self.excluded
@@ -243,8 +314,14 @@ impl RepresentationDomain {
         self.excluded = dedup(std::mem::take(&mut self.excluded));
     }
 
-    pub fn ty(&self) -> &syn::Type {
-        &self.ty
+    /// The scalar this domain is declared over.
+    pub fn kind(&self) -> DomainKind {
+        self.kind
+    }
+
+    /// The scalar's Rust type, built from [`Self::kind`].
+    pub fn ty(&self) -> syn::Type {
+        self.kind.ty()
     }
 
     /// An expression testing whether `value` lies inside the legal domain —
@@ -254,10 +331,7 @@ impl RepresentationDomain {
             Base::Range { start, end } => {
                 let lo = bound_expr(start, &value, true);
                 let hi = bound_expr(end, &value, false);
-                let not_nan = if matches!(
-                    self.ty.to_token_stream().to_string().as_str(),
-                    "f32" | "f64"
-                ) {
+                let not_nan = if self.kind.is_float() {
                     quote!(!(#value).is_nan())
                 } else {
                     quote!(true)
@@ -284,20 +358,19 @@ impl RepresentationDomain {
             _ => 0,
         };
         let budget = limit.saturating_add(extra).max(1);
-        match self.ty.to_token_stream().to_string().as_str() {
-            "i8" => ints!(out, self, i8, I8, budget),
-            "i16" => ints!(out, self, i16, I16, budget),
-            "i32" => ints!(out, self, i32, I32, budget),
-            "i64" => ints!(out, self, i64, I64, budget),
-            "i128" => ints!(out, self, i128, I128, budget),
-            "u8" => ints!(out, self, u8, U8, budget),
-            "u16" => ints!(out, self, u16, U16, budget),
-            "u32" => ints!(out, self, u32, U32, budget),
-            "u64" => ints!(out, self, u64, U64, budget),
-            "u128" => ints!(out, self, u128, U128, budget),
-            "f32" => float32_candidates(&mut out, budget),
-            "f64" => float64_candidates(&mut out, budget),
-            _ => unreachable!(),
+        match self.kind {
+            DomainKind::I8 => ints!(out, self, i8, I8, budget),
+            DomainKind::I16 => ints!(out, self, i16, I16, budget),
+            DomainKind::I32 => ints!(out, self, i32, I32, budget),
+            DomainKind::I64 => ints!(out, self, i64, I64, budget),
+            DomainKind::I128 => ints!(out, self, i128, I128, budget),
+            DomainKind::U8 => ints!(out, self, u8, U8, budget),
+            DomainKind::U16 => ints!(out, self, u16, U16, budget),
+            DomainKind::U32 => ints!(out, self, u32, U32, budget),
+            DomainKind::U64 => ints!(out, self, u64, U64, budget),
+            DomainKind::U128 => ints!(out, self, u128, U128, budget),
+            DomainKind::F32 => float32_candidates(&mut out, budget),
+            DomainKind::F64 => float64_candidates(&mut out, budget),
         }
         out.extend(self.excluded.iter().copied());
         let mut selected = Vec::new();
@@ -470,6 +543,7 @@ fn dedup(values: Vec<ScalarValue>) -> Vec<ScalarValue> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quote::ToTokens;
 
     #[test]
     fn integer_range_derives_extreme_niches() {
@@ -507,6 +581,46 @@ mod tests {
         range.exclude([0.5f64]);
         assert!(!range.contains(ScalarValue::F64(0.5f64.to_bits())));
         assert!(!range.contains(ScalarValue::F64(f64::NAN.to_bits())));
+    }
+
+    /// The NaN test in a range check is decided by the domain's kind, and only
+    /// a float range carries one.
+    #[test]
+    fn only_a_float_range_guards_against_nan() {
+        let float = RepresentationDomain::range(0.0f64..=1.0f64);
+        assert!(float
+            .contains_expr(quote!(value))
+            .to_string()
+            .contains("is_nan"));
+
+        let integer = RepresentationDomain::range(0u64..=1u64);
+        assert!(!integer
+            .contains_expr(quote!(value))
+            .to_string()
+            .contains("is_nan"));
+    }
+
+    /// Every spelling of one scalar is one kind, and a domain's own spelling
+    /// is derived from that kind rather than kept from how it was declared.
+    #[test]
+    fn one_scalar_is_one_kind_however_it_is_written() {
+        assert_eq!(
+            DomainKind::from_type(&syn::parse_quote!(::core::primitive::u64)),
+            Some(DomainKind::U64)
+        );
+        assert_eq!(
+            DomainKind::from_type(&syn::parse_quote!(u64)),
+            Some(DomainKind::U64)
+        );
+        // `bool` is a scalar, but not one a domain can be declared over.
+        assert_eq!(DomainKind::from_type(&syn::parse_quote!(bool)), None);
+
+        let domain = RepresentationDomain::range(0u64..=1u64);
+        assert_eq!(domain.kind(), DomainKind::U64);
+        assert_eq!(
+            domain.ty().to_token_stream().to_string(),
+            quote!(u64).to_string()
+        );
     }
 
     #[test]

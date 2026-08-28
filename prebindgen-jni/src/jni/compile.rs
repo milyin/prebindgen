@@ -539,6 +539,24 @@ impl OutAbi {
     }
 }
 
+impl prebindgen_registry::unfold::DecomposedLeaf for OutWire {
+    fn reach(&self) -> &[prebindgen_registry::unfold::PathStep] {
+        OutWire::reach(self)
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn identity(&self) -> bool {
+        self.identity
+    }
+
+    fn source(&self) -> &TypeRef {
+        &self.out_ty
+    }
+}
+
 impl OutWire {
     /// The converters encoding this leaf calls.
     pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
@@ -602,19 +620,6 @@ impl OutWire {
     /// no reach describes — the selector, or a payload its arm's pattern binds.
     pub(crate) fn reach(&self) -> &[prebindgen_registry::unfold::PathStep] {
         &self.reach
-    }
-
-    /// Whether this value is **read off** a place rather than produced by a
-    /// call — so it is cloned out of the value that holds it.
-    ///
-    /// The last step being a field read is the whole question, and it is what
-    /// `LeafSource::Reach` meant: a value form's field leaf reads a field off
-    /// what the accessor returned, and an accessor leaf ends at the call.
-    pub(crate) fn is_field_read(&self) -> bool {
-        matches!(
-            self.reach.last(),
-            Some(prebindgen_registry::unfold::PathStep::Field { .. })
-        )
     }
 
     /// Whether this value is the synthesized selector.
@@ -1722,13 +1727,25 @@ impl<R: Conversions> JCompile<'_, R> {
             }
         };
         if let Some(domain) = decl.domain() {
-            let domain_key = TypeKey::from_type(domain.ty());
+            // A `TypeKey` is not reduced to a canonical spelling — the model's
+            // normalization covers constructors, not scalars — so this compares
+            // two spellings. It is exact anyway, from both sides: the domain's
+            // spelling is derived from its kind, and a path-qualified scalar
+            // reaches here by neither route it could take. A `fun!`
+            // representation names a captured source function, and the flat
+            // model refuses that function outright, because marked items live
+            // in one flat namespace of bare names. A `from!` / `into!`
+            // representation names a type directly, and its qualified key
+            // resolves to nothing — the route
+            // `a_qualified_scalar_representation_never_reaches_the_domain_check`
+            // takes.
+            let domain_key = TypeKey::from_type(&domain.ty());
             if domain_key != representation_key {
                 let direction = match direction {
                     Direction::Construct => "input",
                     Direction::Deconstruct => "output",
                 };
-                let domain = declared_type_name(domain.ty());
+                let domain = declared_type_name(&domain.ty());
                 match &representation {
                     crate::jni::chain::JCustomType::Model(reading) => panic!(
                         "convert!({source}): domain type {domain} does not match {direction} representation {reading}"
@@ -4221,6 +4238,17 @@ impl Declarations {
                 // A nested `data_class` inlines when it is reached directly.
                 // Behind an `Option` or a `Vec` there is no chain to reach
                 // through, so the whole value stays object-shaped.
+                //
+                // This refusal is why the whole-object output encode
+                // (`emit/struct_out.rs`) is not rendered from this
+                // decomposition: it supports the shapes refused here — an
+                // optional nested class becomes a `present` flag plus a
+                // defaulted group, and a sum field a tag plus one group per
+                // variant. Delivering those to a foreign builder is a feature
+                // this decomposition does not have: the encode is a superset
+                // rather than a second implementation. Where both apply they
+                // name the same leaves, which `assert_leaf_derivations_agree`
+                // checks. See #596 step 5, and #602.
                 crate::jni::classify::TypeKind::DataStruct {
                     st: _,
                     cfg: Some(_),

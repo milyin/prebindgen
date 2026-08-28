@@ -1124,6 +1124,16 @@ impl ScalarKind {
         })
     }
 
+    /// The kind a written scalar type names, off its last path segment.
+    /// `None` for anything that is not one of these scalars.
+    ///
+    /// The closed set below is the whole answer to "is this an FFI-safe scalar
+    /// primitive", so a caller asking that question asks it here rather than
+    /// keeping a name table of its own.
+    pub fn from_type(ty: &syn::Type) -> Option<Self> {
+        Self::from_name(&crate::types_util::path_tail_ident(ty)?.to_string())
+    }
+
     /// The Rust spelling — the identity this was lowered from.
     pub fn as_str(self) -> &'static str {
         match self {

@@ -41,6 +41,17 @@ pub(crate) fn handle_field_fqn(ext: &Declarations, h: &Projection) -> String {
 /// an absent `Option<nested>` parent.
 pub(crate) struct EncSlot {
     ident: proc_macro2::Ident,
+    /// How deeply nested the field this slot came from is: 0 for the struct's
+    /// own field, one more per inlined `data_class`.
+    ///
+    /// Read only by [`encode_leaves`], which
+    /// `JniGen::assert_leaf_derivations_agree` compares against the
+    /// registry-facing decomposition's own nesting — that one spells it with
+    /// the reserved `__` separator, this one counts it. The encode itself
+    /// needs the number while it recurses, not after, which is why nothing
+    /// else reads the field.
+    #[allow(dead_code)]
+    depth: usize,
     wire_ty: TokenStream,
     descriptor: String,
     is_object: bool,
@@ -105,6 +116,46 @@ pub(crate) fn synth_value_struct_leaves(
 /// an [`EncSlot`] describing its `JValue` slot. `access` is the Rust
 /// expression yielding the current struct value (`v`, `v.field`, or the
 /// matched `__cN` under an Option); `prefix` namespaces the generated idents.
+/// Walk the struct's fields and encode each leaf into a `fromParts` argument.
+///
+/// This is a source-value walk that the registry does not perform, and the
+/// reason is coverage rather than ownership. The registry-facing decomposition
+/// of a struct (`Declarations::struct_out_wires_at`) refuses a nested
+/// `data_class` behind an `Option` or a `Vec`; this encode supports both, an
+/// optional nested class as a `present` flag plus a defaulted group and a sum
+/// field as a tag plus one group per variant.
+///
+/// Rendering this through the registry's decomposition walk would therefore
+/// mean teaching that decomposition the gated shapes — which would also change
+/// what a foreign builder can be delivered, a feature rather than a
+/// refactoring. #596 step 5 records that decision; #602 proposes the feature.
+///
+/// Where both derivations do apply, they must name the same leaves in the same
+/// order: `JniGen::assert_leaf_derivations_agree` checks that on every binding
+/// a test writes, since that agreement is what #602 would rest on.
+/// The leaves this encode emits, flattened — the `fromParts` argument list,
+/// in order, each with how deeply nested the field it came from is.
+///
+/// Test support: the registry-facing decomposition of the same struct must
+/// agree with this wherever it exists, and #603 recorded that agreement as
+/// measured rather than checked. `JniGen::write_rust` checks it now.
+#[cfg(test)]
+pub(crate) fn encode_leaves(
+    plan: &StructPlan,
+    emit: &prebindgen_registry::RustWriter,
+) -> Vec<(String, usize)> {
+    let (_, slots) = encode_plan(plan, &quote!(v), "", 0, &quote!(env), emit);
+    slots
+        .iter()
+        .map(|slot| {
+            (
+                slot.ident.to_string().trim_start_matches('_').to_string(),
+                slot.depth,
+            )
+        })
+        .collect()
+}
+
 fn encode_plan(
     plan: &StructPlan,
     access: &TokenStream,
@@ -157,6 +208,7 @@ fn encode_field(
                     ProjectionKind::Handle => {
                         preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
                         slots.push(EncSlot {
+                            depth,
                             ident: id,
                             wire_ty: quote!(jni::sys::jlong),
                             descriptor: "J".to_string(),
@@ -168,6 +220,7 @@ fn encode_field(
                         FoldStrategy::Base => {
                             preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
                             slots.push(EncSlot {
+                                depth,
                                 ident: id,
                                 wire_ty: quote!(jni::sys::jlong),
                                 descriptor: "J".to_string(),
@@ -178,6 +231,7 @@ fn encode_field(
                         FoldStrategy::Optional(NullableKind::Niche, _) => {
                             preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
                             slots.push(EncSlot {
+                                depth,
                                 ident: id,
                                 wire_ty: quote!(jni::sys::jlong),
                                 descriptor: "J".to_string(),
@@ -189,6 +243,7 @@ fn encode_field(
                             preludes
                                 .extend(quote! { let #id: jni::objects::JObject = #value_expr; });
                             slots.push(EncSlot {
+                                depth,
                                 ident: id,
                                 wire_ty: quote!(jni::objects::JObject),
                                 descriptor: "Ljava/lang/Long;".to_string(),
@@ -207,6 +262,7 @@ fn encode_field(
                 let value_expr = conv_value(conv);
                 preludes.extend(quote! { let #id: jni::sys::jint = #value_expr; });
                 slots.push(EncSlot {
+                    depth,
                     ident: id,
                     wire_ty: quote!(jni::sys::jint),
                     descriptor: "I".to_string(),
@@ -221,6 +277,7 @@ fn encode_field(
                 if niche.is_some() {
                     preludes.extend(quote! { let #id: jni::sys::jint = #value_expr; });
                     slots.push(EncSlot {
+                        depth,
                         ident: id,
                         wire_ty: quote!(jni::sys::jint),
                         descriptor: "I".to_string(),
@@ -230,6 +287,7 @@ fn encode_field(
                 } else {
                     preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
                     slots.push(EncSlot {
+                        depth,
                         ident: id,
                         wire_ty: quote!(jni::objects::JObject),
                         descriptor: "Ljava/lang/Integer;".to_string(),
@@ -287,6 +345,7 @@ fn encode_field(
                         }
                     });
                     slots.push(EncSlot {
+                        depth,
                         ident: flag_id,
                         wire_ty: quote!(jni::sys::jboolean),
                         descriptor: "Z".to_string(),
@@ -295,6 +354,7 @@ fn encode_field(
                     });
                     for (i, sl) in child_slots.iter().enumerate() {
                         slots.push(EncSlot {
+                            depth,
                             ident: outer_ids[i].clone(),
                             wire_ty: sl.wire_ty.clone(),
                             descriptor: sl.descriptor.clone(),
@@ -445,6 +505,7 @@ fn encode_field(
                         }
                     });
                     slots.push(EncSlot {
+                        depth,
                         ident: flag_id,
                         wire_ty: quote!(jni::sys::jboolean),
                         descriptor: "Z".to_string(),
@@ -453,6 +514,7 @@ fn encode_field(
                     });
                 }
                 slots.push(EncSlot {
+                    depth,
                     ident: tag_id,
                     wire_ty: quote!(jni::sys::jint),
                     descriptor: "I".to_string(),
@@ -461,6 +523,7 @@ fn encode_field(
                 });
                 for (i, sl) in all.iter().enumerate() {
                     slots.push(EncSlot {
+                        depth,
                         ident: outer_ids[i].clone(),
                         wire_ty: sl.wire_ty.clone(),
                         descriptor: sl.descriptor.clone(),
@@ -482,6 +545,7 @@ fn encode_field(
                     LeafForm::Prim => {
                         preludes.extend(quote! { let #id: #wire = #value_expr; });
                         slots.push(EncSlot {
+                            depth,
                             ident: id,
                             wire_ty: quote!(#wire),
                             descriptor: descriptor.clone(),
@@ -494,6 +558,7 @@ fn encode_field(
                             quote! { let #id: jni::objects::JObject = #value_expr.into(); },
                         );
                         slots.push(EncSlot {
+                            depth,
                             ident: id,
                             wire_ty: quote!(jni::objects::JObject),
                             descriptor: descriptor.clone(),
@@ -504,6 +569,7 @@ fn encode_field(
                     LeafForm::Object => {
                         preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
                         slots.push(EncSlot {
+                            depth,
                             ident: id,
                             wire_ty: quote!(jni::objects::JObject),
                             descriptor: descriptor.clone(),

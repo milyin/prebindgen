@@ -66,6 +66,25 @@ pub trait Source: Clone {
         source
     }
 
+    /// Construct the source value from its converted parts.
+    ///
+    /// The default is a named-field literal, which is what a Product's parts
+    /// are addressed by. A policy whose source has another shape — a tuple
+    /// struct, a unit struct — overrides it: the model element that says which
+    /// is the adapter's to hold, and [`RustWriter::shape_struct`] is what
+    /// spells it.
+    fn construct(
+        &self,
+        head: TokenStream,
+        parts: &[(syn::Ident, TokenStream)],
+        emit: &RustWriter,
+    ) -> TokenStream {
+        let _ = emit;
+        let names = parts.iter().map(|(name, _)| name);
+        let values = parts.iter().map(|(_, value)| value);
+        quote::quote!(#head { #(#names: #values),* })
+    }
+
     /// Read one named Product field from the exact source spelling.
     ///
     /// The default keeps the common unwrapped access free of redundant
@@ -97,13 +116,57 @@ fn child_value<C: Child>(child: &C, value: TokenStream, emit: &RustWriter) -> To
     }
 }
 
+/// One part read out of a Product's intermediate value.
+///
+/// A bridge whose read is a projection — a tuple index, a field access —
+/// answers with [`Self::expression`]. One whose read is not an expression at
+/// all answers with [`Self::fallible`]: reading a property off a JVM object
+/// binds two locals and can fail, neither of which a bridge that could only
+/// return an expression can say.
+///
+/// The composer runs the preludes in part order, before the source value is
+/// constructed, and a fallible read makes the whole composed conversion
+/// fallible even when no child converter can fail.
+///
+/// Whether a read can fail is kept as its own fact rather than read off "has a
+/// prelude". The two coincide across today's two constructors, but a fallible
+/// read that needs no statements — an expression carrying its own `?` — would
+/// be silently demoted to infallible by the shorter rule.
+pub struct PartRead {
+    prelude: TokenStream,
+    value: TokenStream,
+    fallible: bool,
+}
+
+impl PartRead {
+    /// A part reached by an expression alone.
+    pub fn expression(value: TokenStream) -> Self {
+        Self {
+            prelude: TokenStream::new(),
+            value,
+            fallible: false,
+        }
+    }
+
+    /// A part reached by running `prelude` first, which can fail. The prelude
+    /// propagates its own failure — with `?`, or by returning — so the
+    /// composer only has to know that the conversion around it is fallible.
+    pub fn fallible(prelude: TokenStream, value: TokenStream) -> Self {
+        Self {
+            prelude,
+            value,
+            fallible: true,
+        }
+    }
+}
+
 /// Adapter-selected representation protocol for one Product shape.
 pub trait ProductBridge: Clone {
     /// The one intermediate Rust type assigned to this fragment.
     fn intermediate(&self) -> syn::Type;
 
     /// Read one child intermediate value from `value`.
-    fn part(&self, value: TokenStream, index: usize, name: &syn::Ident) -> TokenStream;
+    fn part(&self, value: TokenStream, index: usize, name: &syn::Ident) -> PartRead;
 
     /// Construct the intermediate value from converted children.
     fn build(&self, parts: &[(syn::Ident, TokenStream)]) -> TokenStream;
@@ -126,9 +189,9 @@ impl ProductBridge for TupleProduct {
         syn::parse_quote!((#(#parts,)*))
     }
 
-    fn part(&self, value: TokenStream, index: usize, _name: &syn::Ident) -> TokenStream {
+    fn part(&self, value: TokenStream, index: usize, _name: &syn::Ident) -> PartRead {
         let index = syn::Index::from(index);
-        quote::quote!((#value).#index)
+        PartRead::expression(quote::quote!((#value).#index))
     }
 
     fn build(&self, parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
@@ -184,6 +247,18 @@ pub trait OptionalBridge: Clone {
 
     /// Construct the outbound representation of a converted present child.
     fn build_present(&self, child: TokenStream) -> TokenStream;
+
+    /// The source-side `Some` arm, given the converted child.
+    ///
+    /// The default wraps, which is what an optional layer normally is: the
+    /// child yields the value, and this layer decides whether there is one.
+    /// A bridge overrides it when its child **already** yields the optional —
+    /// a nullable property whose inner converter carries its own niche
+    /// encoding of absence tests two things, a null reference and then that
+    /// niche, and the second answer is the whole answer.
+    fn source_present(&self, child: TokenStream) -> TokenStream {
+        quote::quote!(::core::option::Option::Some(#child))
+    }
 }
 
 /// Registry-composed converter plan for an Optional recipe.
@@ -517,25 +592,38 @@ where
     fn render(&self, emit: &RustWriter) -> Rendered {
         let source = self.source_policy.spell(&self.source, emit);
         let intermediate = self.bridge.intermediate();
-        let fallible = self.parts.iter().any(|part| part.child.call().fallible());
+        let mut fallible = self.parts.iter().any(|part| part.child.call().fallible());
         let body = match self.direction {
             Direction::Construct => {
                 let canonical_source = self.source_policy.spell(self.source.unwrapped(), emit);
+                let mut preludes: Vec<TokenStream> = Vec::new();
                 let fields: Vec<_> = self
                     .parts
                     .iter()
                     .enumerate()
                     .map(|(index, part)| {
                         let name = part.name.clone();
-                        let value = self.bridge.part(quote::quote!(v), index, &name);
-                        let value = child_value(&part.child, value, emit);
+                        let read = self.bridge.part(quote::quote!(v), index, &name);
+                        if !read.prelude.is_empty() {
+                            preludes.push(read.prelude);
+                        }
+                        fallible |= read.fallible;
+                        let value = child_value(&part.child, read.value, emit);
                         (name, value)
                     })
                     .collect();
-                let names = fields.iter().map(|(name, _)| name);
-                let values = fields.iter().map(|(_, value)| value);
-                let canonical = quote::quote!(#canonical_source { #(#names: #values),* });
+                let canonical = self
+                    .source_policy
+                    .construct(canonical_source, &fields, emit);
                 let built = self.source_policy.build(canonical);
+                // A bridge that reads its parts by expression alone keeps the
+                // bare constructor it always emitted; only a bridge with a
+                // prelude to run gets a block.
+                let built = if preludes.is_empty() {
+                    built
+                } else {
+                    quote::quote!({ #(#preludes)* #built })
+                };
                 syn::parse2(built).expect("a Product source constructor is a valid expression")
             }
             Direction::Deconstruct => {
@@ -588,12 +676,13 @@ where
                 let absent = self.bridge.is_absent();
                 let present = self.bridge.present(quote::quote!(v));
                 let child = child_value(&self.child, quote::quote!(__present), emit);
+                let present_arm = self.bridge.source_present(child);
                 let canonical = quote::quote!({
                     if #absent {
                         ::core::option::Option::None
                     } else {
                         let __present = #present;
-                        ::core::option::Option::Some(#child)
+                        #present_arm
                     }
                 });
                 let built = self.source_policy.build(canonical);
@@ -691,6 +780,9 @@ where
             .iter()
             .flat_map(|arm| &arm.parts)
             .any(|part| part.child.call().fallible());
+        // A fallible part read needs no flag of its own here: parts are read
+        // only when constructing, and construction is already fallible for
+        // every choice — an unrecognized tag returns an error.
         let body = match self.direction {
             Direction::Construct => {
                 let canonical_source = self.source_policy.spell(self.source.unwrapped(), emit);
@@ -698,6 +790,7 @@ where
                 let arms = self.arms.iter().enumerate().map(|(arm_index, arm)| {
                     let tag_pattern = &arm.tag;
                     let variant = &arm.alternative.name;
+                    let mut preludes: Vec<TokenStream> = Vec::new();
                     let fields: Vec<_> = arm
                         .parts
                         .iter()
@@ -710,8 +803,11 @@ where
                                     syn::Ident::new(&format!("v{}", index.index), index.span)
                                 }
                             };
-                            let value = arm.bridge.part(quote::quote!(__arm), part_index, &name);
-                            child_value(&part.child, value, emit)
+                            let read = arm.bridge.part(quote::quote!(__arm), part_index, &name);
+                            if !read.prelude.is_empty() {
+                                preludes.push(read.prelude);
+                            }
+                            child_value(&part.child, read.value, emit)
                         })
                         .collect();
                     let shaped: Vec<_> = arm
@@ -735,6 +831,7 @@ where
                         quote::quote!(#tag_pattern => {
                             let __choice = #prepared;
                             let __arm = #arm_value;
+                            #(#preludes)*
                             #built
                         })
                     }
@@ -876,7 +973,7 @@ where
 mod tests {
     use std::{cell::Cell, rc::Rc};
 
-    use quote::{quote, ToTokens};
+    use quote::{format_ident, quote, ToTokens};
 
     use super::*;
     use crate::{
@@ -999,6 +1096,111 @@ mod tests {
             "{body}"
         );
         assert!(rendered.fallible);
+    }
+
+    /// A bridge whose part read is neither an expression nor infallible: it
+    /// binds a local first and can fail, as a JVM property read does.
+    #[derive(Clone)]
+    struct TestFallibleParts;
+
+    impl ProductBridge for TestFallibleParts {
+        fn intermediate(&self) -> syn::Type {
+            syn::parse_quote!(TestObject)
+        }
+
+        fn part(&self, value: TokenStream, index: usize, name: &syn::Ident) -> PartRead {
+            let local = format_ident!("__read{index}");
+            let property = name.to_string();
+            PartRead::fallible(
+                quote::quote!(let #local = read_property(&#value, #property)?;),
+                quote::quote!(#local),
+            )
+        }
+
+        fn build(&self, _parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
+            unreachable!("this fixture only constructs")
+        }
+    }
+
+    /// A bridge may read its part with statements that can fail, and the
+    /// composer runs them before it constructs the source value.
+    ///
+    /// This is what a Product over a JVM object needs: `env.get_field(..)`
+    /// returns a `Result` and binds a local, so a bridge that could answer
+    /// only with an expression could not express the read at all.
+    #[test]
+    fn a_fallible_part_read_runs_before_construction_and_makes_the_chain_fallible() {
+        let spells = Rc::new(Cell::new(0));
+        let plan = Product {
+            source: TypeRef::scalar(ScalarKind::I64),
+            direction: Direction::Construct,
+            source_policy: TestSource {
+                spells: spells.clone(),
+            },
+            bridge: TestFallibleParts,
+            parts: vec![
+                ProductPart {
+                    name: format_ident!("first"),
+                    // Infallible children: whatever fallibility the rendered
+                    // chain reports comes from the reads alone.
+                    child: TestChild::new("first", false, false),
+                    mode: Mode::Owned,
+                    hold_uninit: false,
+                },
+                ProductPart {
+                    name: format_ident!("second"),
+                    child: TestChild::new("second", false, false),
+                    mode: Mode::Owned,
+                    hold_uninit: false,
+                },
+            ],
+        };
+
+        let rendered = plan.render(&RustWriter::for_test());
+        let body = rendered.body.to_token_stream().to_string();
+
+        assert!(
+            rendered.fallible,
+            "a fallible read makes the conversion fallible with no fallible child:\n{body}"
+        );
+        let first = body.find("read_property").expect(&body);
+        let construction = body.find("first :").expect(&body);
+        assert!(
+            first < construction,
+            "the reads run before the source value is constructed:\n{body}"
+        );
+        assert!(
+            body.contains("__read0") && body.contains("__read1"),
+            "each part is read into its own local:\n{body}"
+        );
+    }
+
+    /// A bridge that reads by expression alone keeps the bare constructor it
+    /// always emitted — no block, no locals.
+    #[test]
+    fn an_expression_part_read_adds_no_prelude() {
+        let plan = Product {
+            source: TypeRef::scalar(ScalarKind::I64),
+            direction: Direction::Construct,
+            source_policy: TestSource {
+                spells: Rc::new(Cell::new(0)),
+            },
+            bridge: TupleProduct {
+                parts: vec![syn::parse_quote!(i64)],
+            },
+            parts: vec![ProductPart {
+                name: format_ident!("only"),
+                child: TestChild::new("only", false, false),
+                mode: Mode::Owned,
+                hold_uninit: false,
+            }],
+        };
+
+        let rendered = plan.render(&RustWriter::for_test());
+        let body = rendered.body.to_token_stream().to_string();
+
+        assert!(!rendered.fallible, "{body}");
+        assert!(!body.starts_with('{'), "no block is introduced:\n{body}");
     }
 
     #[derive(Clone)]
@@ -1124,6 +1326,63 @@ mod tests {
                 },
             ],
         }
+    }
+
+    /// A Choice arm reads its parts through the same bridge call, so a
+    /// fallible prelude lands inside the arm — after the arm value is bound,
+    /// and before the value that reads it.
+    ///
+    /// That ordering is what a whole-object sealed sum will rest on: each
+    /// alternative binds its own payload object first, then reads properties
+    /// off it.
+    #[test]
+    fn a_choice_arm_runs_its_part_prelude_after_binding_the_arm() {
+        let plan: Choice<TestSource, TupleChoice, TestFallibleParts, TestChild> = Choice {
+            source: TypeRef::scalar(ScalarKind::I64),
+            direction: Direction::Construct,
+            source_policy: TestSource {
+                spells: Rc::new(Cell::new(0)),
+            },
+            bridge: TupleChoice {
+                tag: syn::parse_quote!(i32),
+                arms: vec![syn::parse_quote!(()), syn::parse_quote!((i64,))],
+                tags: vec![syn::parse_quote!(0), syn::parse_quote!(1)],
+                inactive: vec![quote!(()), quote!((0,))],
+                invalid: quote!("invalid tag"),
+            },
+            arms: vec![
+                ChoiceArm {
+                    alternative: alternative(syn::parse_quote!(A), 0),
+                    tag: syn::parse_quote!(0),
+                    bridge: TestFallibleParts,
+                    parts: Vec::new(),
+                },
+                ChoiceArm {
+                    alternative: alternative(syn::parse_quote!(B(i64)), 1),
+                    tag: syn::parse_quote!(1),
+                    bridge: TestFallibleParts,
+                    parts: vec![ChoicePart {
+                        child: TestChild::new("decode", true, false),
+                        mode: Mode::Owned,
+                        hold_uninit: false,
+                    }],
+                },
+            ],
+        };
+
+        let body = plan
+            .render(&RustWriter::for_test())
+            .body
+            .to_token_stream()
+            .to_string();
+
+        let arm = body.find("let __arm").expect(&body);
+        let prelude = body.find("read_property").expect(&body);
+        let construction = body.find("i64 :: B").expect(&body);
+        assert!(
+            arm < prelude && prelude < construction,
+            "the arm binds, then its prelude runs, then the value is built:\n{body}"
+        );
     }
 
     #[test]

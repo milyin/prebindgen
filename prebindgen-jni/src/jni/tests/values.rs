@@ -787,8 +787,16 @@ fn flattened_field_composes_bounded_conversion_stages() {
     );
     assert!(rc.contains("__jni_in_stage_0_"), "{rust}");
     assert!(
-        rc.contains("__jni_in_convert_") && rc.contains("env,&__delay_raw"),
-        "whole-JObject input must invoke the complete optional Duration converter:\n{rust}"
+        rc.contains(
+            "__jni_in_convert_wire_to_Option_Duration_jni_optional_intermediate_input_niche"
+        ) && rc.contains("env,&__present"),
+        "whole-JObject input must invoke the complete optional Duration converter, on the \
+         value the composed Optional bound:\n{rust}"
+    );
+    assert!(
+        !rc.contains("Some(__jni_in_convert_wire_to_Option_Duration"),
+        "the niche converter already yields the Option, so the composed layer must pass its \
+         answer through rather than wrap it:\n{rust}"
     );
     assert!(
         rc.contains("let___delay:jni::sys::jlong=__jni_out_convert_")
@@ -1194,6 +1202,37 @@ fn conversion_domain_must_match_the_representation() {
         .package(crate::package!("time").fun(prebindgen_registry::fun!(duration_use)));
 
     let _ = jni.build_with(registry);
+}
+
+/// A path-qualified scalar never reaches the domain check above: a marked item
+/// lives in one flat namespace of bare names, so a representation written
+/// `::core::primitive::u64` fails to resolve first. This pins that order —
+/// JniGen compares model type keys, which are not reduced to a canonical
+/// spelling, and would report a mismatch between two spellings of one scalar if
+/// such a representation ever got that far.
+#[test]
+fn a_qualified_scalar_representation_never_reaches_the_domain_check() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> =
+        ["pub fn duration_use(v: Duration) { unimplemented!() }"]
+            .into_iter()
+            .map(|source| {
+                let item: syn::Item = syn::parse_str(source).unwrap();
+                (item, loc.clone())
+            })
+            .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let jni = JniGenBuilder::new()
+        .convert(
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::from!(::core::primitive::u64))
+                .valid_range(0u64..=1_000u64),
+        )
+        .package(crate::package!("time").fun(prebindgen_registry::fun!(duration_use)));
+
+    let error = format!("{:?}", jni.build_with(registry).err());
+    assert!(error.contains("core :: primitive :: u64"), "{error}");
+    assert!(!error.contains("domain type"), "{error}");
 }
 
 /// Phase 4: a bare `Option<primitive>` with no niche crosses as a decoupled

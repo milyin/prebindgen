@@ -587,54 +587,58 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Annotated_152537b2916e97e3<'env, '
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Annotated.payload: {}", e)))?;
-        let payload = __jni_in_convert_wire_to_Payload_7e701167233e784f(
-            env,
-            &__payload_raw,
-        )?;
         let __alternate_raw: jni::objects::JObject = env
             .get_field(v, "alternate", "Lio/prebindgen/covertest/Payload;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Annotated.alternate: {}", e)))?;
-        let alternate = __jni_in_convert_wire_to_Option_Payload_jni_optional_intermediate_input_niche_30b639591c34824b(
-            env,
-            &__alternate_raw,
-        )?;
         let __ttl_raw: jni::objects::JObject = env
             .get_field(v, "ttl", "Ljava/lang/Long;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Annotated.ttl: {}", e)))?;
-        let ttl = __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_boxed_bebad25cf333cf7b(
-            env,
-            &__ttl_raw,
-        )?;
         let __priority_jobj: jni::objects::JObject = env
             .get_field(v, "priority", "Lio/prebindgen/covertest/model/Priority;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Annotated.priority: {}", e)))?;
-        let priority = if __priority_jobj.is_null() {
-            ::core::option::Option::None
-        } else {
-            let __priority_raw: jni::sys::jint = env
-                .call_method(&__priority_jobj, "getValue", "()I", &[])
-                .and_then(|val| val.i())
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Annotated.priority: {}", e)))?;
-            ::core::option::Option::Some(
-                __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(env, &__priority_raw)?,
-            )
-        };
         perftest_flat::Annotated {
-            payload,
-            alternate,
-            ttl,
-            priority,
+            payload: __jni_in_convert_wire_to_Payload_7e701167233e784f(
+                env,
+                &__payload_raw,
+            )?,
+            alternate: __jni_in_convert_wire_to_Option_Payload_jni_optional_intermediate_input_niche_30b639591c34824b(
+                env,
+                &__alternate_raw,
+            )?,
+            ttl: __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_boxed_bebad25cf333cf7b(
+                env,
+                &__ttl_raw,
+            )?,
+            priority: {
+                let v = __priority_jobj;
+                {
+                    if v.is_null() {
+                        ::core::option::Option::None
+                    } else {
+                        let __present = env
+                            .call_method(&v, "getValue", "()I", &[])
+                            .and_then(|val| val.i())
+                            .map_err(|e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(format!("Annotated.priority: {}", e)))?;
+                        ::core::option::Option::Some(
+                            __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
+                                env,
+                                &__present,
+                            )?,
+                        )
+                    }
+                }
+            },
         }
     })
 }
@@ -694,43 +698,46 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_DurationBoundary_3fd44c1cbdf7cf69<
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("DurationBoundary.required: {}", e)))?;
-        let required = {
-            let required_s0 = __jni_in_convert_wire_to_u64_8507143745dc33b9(
-                env,
-                &__required_raw,
-            )?;
-            let required_s1 = __jni_in_stage_0_wire_to_Duration_814bb872b19d3627(
-                    env,
-                    required_s0,
-                )
-                .map_err(|__e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(__e.to_string()))?;
-            required_s1
-        };
         let __delay_jobj: jni::objects::JObject = env
             .get_field(v, "delay", "Lkotlin/ULong;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("DurationBoundary.delay: {}", e)))?;
-        let delay = if __delay_jobj.is_null() {
-            ::core::option::Option::None
-        } else {
-            let __delay_raw: jni::sys::jlong = env
-                .call_method(&__delay_jobj, "unbox-impl", "()J", &[])
-                .and_then(|val| val.j())
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("DurationBoundary.delay: {}", e)))?;
-            __jni_in_convert_wire_to_Option_Duration_jni_optional_intermediate_input_niche_104bdfd3431d40b9(
-                env,
-                &__delay_raw,
-            )?
-        };
         perftest_flat::DurationBoundary {
-            required,
-            delay,
+            required: {
+                let __chain_s0 = __jni_in_convert_wire_to_u64_8507143745dc33b9(
+                    env,
+                    &__required_raw,
+                )?;
+                let __chain_s1 = __jni_in_stage_0_wire_to_Duration_814bb872b19d3627(
+                        env,
+                        __chain_s0,
+                    )
+                    .map_err(|__e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(__e.to_string()))?;
+                ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
+            }?,
+            delay: {
+                let v = __delay_jobj;
+                {
+                    if v.is_null() {
+                        ::core::option::Option::None
+                    } else {
+                        let __present = env
+                            .call_method(&v, "unbox-impl", "()J", &[])
+                            .and_then(|val| val.j())
+                            .map_err(|e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(format!("DurationBoundary.delay: {}", e)))?;
+                        __jni_in_convert_wire_to_Option_Duration_jni_optional_intermediate_input_niche_104bdfd3431d40b9(
+                            env,
+                            &__present,
+                        )?
+                    }
+                }
+            },
         }
     })
 }
@@ -816,23 +823,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary_22ff055237fda473<'e
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary64_9d95f2f133e7e0ab(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary63;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary63_abd593b6b57968fd(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary64_9d95f2f133e7e0ab(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary63_abd593b6b57968fd(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -898,28 +903,24 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_7e701167233e784f<'env, 'v>
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Payload.id: {}", e)))? as _;
-        let id = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?;
         let __seq_raw: jni::sys::jint = env
             .get_field(v, "seq", "I")
             .and_then(|val| val.i())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Payload.seq: {}", e)))? as _;
-        let seq = __jni_in_convert_wire_to_i32_83b133e23cc76fc5(env, &__seq_raw)?;
         let __value_raw: jni::sys::jdouble = env
             .get_field(v, "value", "D")
             .and_then(|val| val.d())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Payload.value: {}", e)))? as _;
-        let value = __jni_in_convert_wire_to_f64_b312e1b95182cdfd(env, &__value_raw)?;
         let __flag_raw: jni::sys::jboolean = env
             .get_field(v, "flag", "Z")
             .and_then(|val| val.z())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Payload.flag: {}", e)))? as _;
-        let flag = __jni_in_convert_wire_to_bool_1be2f6c32f925207(env, &__flag_raw)?;
         let __label_jobj: jni::objects::JObject = env
             .get_field(v, "label", "Ljava/lang/String;")
             .and_then(|val| val.l())
@@ -927,16 +928,15 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Payload_7e701167233e784f<'env, 'v>
                 String,
             >>::from(format!("Payload.label: {}", e)))?;
         let __label_raw: jni::objects::JString = __label_jobj.into();
-        let label = __jni_in_convert_wire_to_Option_Box_String_jni_optional_intermediate_input_niche_87b03b4201168b29(
-            env,
-            &__label_raw,
-        )?;
         perftest_flat::Payload {
-            id,
-            seq,
-            value,
-            flag,
-            label,
+            id: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?,
+            seq: __jni_in_convert_wire_to_i32_83b133e23cc76fc5(env, &__seq_raw)?,
+            value: __jni_in_convert_wire_to_f64_b312e1b95182cdfd(env, &__value_raw)?,
+            flag: __jni_in_convert_wire_to_bool_1be2f6c32f925207(env, &__flag_raw)?,
+            label: __jni_in_convert_wire_to_Option_Box_String_jni_optional_intermediate_input_niche_87b03b4201168b29(
+                env,
+                &__label_raw,
+            )?,
         }
     })
 }
@@ -1230,17 +1230,15 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Stamp_cccc3794c11688eb<'env, 'v>(
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Stamp.secs: {}", e)))? as _;
-        let secs = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__secs_raw)?;
         let __nanos_raw: jni::sys::jlong = env
             .get_field(v, "nanos", "J")
             .and_then(|val| val.j())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Stamp.nanos: {}", e)))? as _;
-        let nanos = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__nanos_raw)?;
         perftest_flat::Stamp {
-            secs,
-            nanos,
+            secs: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__secs_raw)?,
+            nanos: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__nanos_raw)?,
         }
     })
 }
@@ -1443,53 +1441,56 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Unsigned_802dffd3a2dd4ecb<'env, 'v
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Unsigned.byte: {}", e)))? as _;
-        let byte = __jni_in_convert_wire_to_u8_8a73e47df9fc7921(env, &__byte_raw)?;
         let __short_raw: jni::sys::jint = env
             .get_field(v, "short", "I")
             .and_then(|val| val.i())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Unsigned.short: {}", e)))? as _;
-        let short = __jni_in_convert_wire_to_u16_fc24f387ddcec321(env, &__short_raw)?;
         let __int_raw: jni::sys::jlong = env
             .get_field(v, "int", "J")
             .and_then(|val| val.j())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Unsigned.int: {}", e)))? as _;
-        let int = __jni_in_convert_wire_to_u32_25dff6d476799035(env, &__int_raw)?;
         let __long_raw: jni::sys::jlong = env
             .get_field(v, "long", "J")
             .and_then(|val| val.j())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Unsigned.long: {}", e)))?;
-        let long = __jni_in_convert_wire_to_u64_8507143745dc33b9(env, &__long_raw)?;
         let __maybe_long_jobj: jni::objects::JObject = env
             .get_field(v, "maybeLong", "Lkotlin/ULong;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Unsigned.maybeLong: {}", e)))?;
-        let maybe_long = if __maybe_long_jobj.is_null() {
-            ::core::option::Option::None
-        } else {
-            let __maybe_long_raw: jni::sys::jlong = env
-                .call_method(&__maybe_long_jobj, "unbox-impl", "()J", &[])
-                .and_then(|val| val.j())
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Unsigned.maybeLong: {}", e)))?;
-            ::core::option::Option::Some(
-                __jni_in_convert_wire_to_u64_8507143745dc33b9(env, &__maybe_long_raw)?,
-            )
-        };
         perftest_flat::Unsigned {
-            byte,
-            short,
-            int,
-            long,
-            maybe_long,
+            byte: __jni_in_convert_wire_to_u8_8a73e47df9fc7921(env, &__byte_raw)?,
+            short: __jni_in_convert_wire_to_u16_fc24f387ddcec321(env, &__short_raw)?,
+            int: __jni_in_convert_wire_to_u32_25dff6d476799035(env, &__int_raw)?,
+            long: __jni_in_convert_wire_to_u64_8507143745dc33b9(env, &__long_raw)?,
+            maybe_long: {
+                let v = __maybe_long_jobj;
+                {
+                    if v.is_null() {
+                        ::core::option::Option::None
+                    } else {
+                        let __present = env
+                            .call_method(&v, "unbox-impl", "()J", &[])
+                            .and_then(|val| val.j())
+                            .map_err(|e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(format!("Unsigned.maybeLong: {}", e)))?;
+                        ::core::option::Option::Some(
+                            __jni_in_convert_wire_to_u64_8507143745dc33b9(
+                                env,
+                                &__present,
+                            )?,
+                        )
+                    }
+                }
+            },
         }
     })
 }
@@ -1841,7 +1842,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Arrays_0394c6e5ac3eb91d<'env, 'v>(
                 String,
             >>::from(format!("Arrays.bytes: {}", e)))?;
         let __bytes_raw: jni::objects::JByteArray = __bytes_jobj.into();
-        let bytes = __jni_in_convert_wire_to_u8_4_86a2b86806cb23e9(env, &__bytes_raw)?;
         let __shorts_jobj: jni::objects::JObject = env
             .get_field(v, "shorts", "[S")
             .and_then(|val| val.l())
@@ -1849,10 +1849,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Arrays_0394c6e5ac3eb91d<'env, 'v>(
                 String,
             >>::from(format!("Arrays.shorts: {}", e)))?;
         let __shorts_raw: jni::objects::JShortArray = __shorts_jobj.into();
-        let shorts = __jni_in_convert_wire_to_i16_2_018133ba02a34157(
-            env,
-            &__shorts_raw,
-        )?;
         let __ints_jobj: jni::objects::JObject = env
             .get_field(v, "ints", "[I")
             .and_then(|val| val.l())
@@ -1860,7 +1856,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Arrays_0394c6e5ac3eb91d<'env, 'v>(
                 String,
             >>::from(format!("Arrays.ints: {}", e)))?;
         let __ints_raw: jni::objects::JIntArray = __ints_jobj.into();
-        let ints = __jni_in_convert_wire_to_i32_3_8cd5d1633507beb7(env, &__ints_raw)?;
         let __longs_jobj: jni::objects::JObject = env
             .get_field(v, "longs", "[J")
             .and_then(|val| val.l())
@@ -1868,7 +1863,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Arrays_0394c6e5ac3eb91d<'env, 'v>(
                 String,
             >>::from(format!("Arrays.longs: {}", e)))?;
         let __longs_raw: jni::objects::JLongArray = __longs_jobj.into();
-        let longs = __jni_in_convert_wire_to_i64_2_cf35a75ca7b37f53(env, &__longs_raw)?;
         let __doubles_jobj: jni::objects::JObject = env
             .get_field(v, "doubles", "[D")
             .and_then(|val| val.l())
@@ -1876,10 +1870,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Arrays_0394c6e5ac3eb91d<'env, 'v>(
                 String,
             >>::from(format!("Arrays.doubles: {}", e)))?;
         let __doubles_raw: jni::objects::JDoubleArray = __doubles_jobj.into();
-        let doubles = __jni_in_convert_wire_to_f64_2_60cd70210ac4ab83(
-            env,
-            &__doubles_raw,
-        )?;
         let __flags_jobj: jni::objects::JObject = env
             .get_field(v, "flags", "[Z")
             .and_then(|val| val.l())
@@ -1887,7 +1877,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Arrays_0394c6e5ac3eb91d<'env, 'v>(
                 String,
             >>::from(format!("Arrays.flags: {}", e)))?;
         let __flags_raw: jni::objects::JBooleanArray = __flags_jobj.into();
-        let flags = __jni_in_convert_wire_to_bool_3_7afc83abc6385c11(env, &__flags_raw)?;
         let __raw_jobj: jni::objects::JObject = env
             .get_field(v, "raw", "[J")
             .and_then(|val| val.l())
@@ -1895,15 +1884,17 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Arrays_0394c6e5ac3eb91d<'env, 'v>(
                 String,
             >>::from(format!("Arrays.raw: {}", e)))?;
         let __raw_raw: jni::objects::JLongArray = __raw_jobj.into();
-        let raw = __jni_in_convert_wire_to_u64_2_fb06d7eda96c221b(env, &__raw_raw)?;
         perftest_flat::Arrays {
-            bytes,
-            shorts,
-            ints,
-            longs,
-            doubles,
-            flags,
-            raw,
+            bytes: __jni_in_convert_wire_to_u8_4_86a2b86806cb23e9(env, &__bytes_raw)?,
+            shorts: __jni_in_convert_wire_to_i16_2_018133ba02a34157(env, &__shorts_raw)?,
+            ints: __jni_in_convert_wire_to_i32_3_8cd5d1633507beb7(env, &__ints_raw)?,
+            longs: __jni_in_convert_wire_to_i64_2_cf35a75ca7b37f53(env, &__longs_raw)?,
+            doubles: __jni_in_convert_wire_to_f64_2_60cd70210ac4ab83(
+                env,
+                &__doubles_raw,
+            )?,
+            flags: __jni_in_convert_wire_to_bool_3_7afc83abc6385c11(env, &__flags_raw)?,
+            raw: __jni_in_convert_wire_to_u64_2_fb06d7eda96c221b(env, &__raw_raw)?,
         }
     })
 }
@@ -2047,7 +2038,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_BlobValue_bb484d67a0d3c3af<'env, '
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("BlobValue.stamp: {}", e)))?;
-        let stamp = __jni_in_convert_wire_to_Stamp_cccc3794c11688eb(env, &__stamp_raw)?;
         let __id_jobj: jni::objects::JObject = env
             .get_field(v, "id", "[B")
             .and_then(|val| val.l())
@@ -2055,21 +2045,19 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_BlobValue_bb484d67a0d3c3af<'env, '
                 String,
             >>::from(format!("BlobValue.id: {}", e)))?;
         let __id_raw: jni::objects::JByteArray = __id_jobj.into();
-        let id = __jni_in_convert_wire_to_Vec_u8_80984e9556387695(env, &__id_raw)?;
         let __chunks_raw: jni::objects::JObject = env
             .get_field(v, "chunks", "Ljava/util/List;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("BlobValue.chunks: {}", e)))?;
-        let chunks = __jni_in_convert_wire_to_sequence_Vec_Vec_u8_6085b26606355944(
-            env,
-            &__chunks_raw,
-        )?;
         perftest_flat::BlobValue {
-            stamp,
-            id,
-            chunks,
+            stamp: __jni_in_convert_wire_to_Stamp_cccc3794c11688eb(env, &__stamp_raw)?,
+            id: __jni_in_convert_wire_to_Vec_u8_80984e9556387695(env, &__id_raw)?,
+            chunks: __jni_in_convert_wire_to_sequence_Vec_Vec_u8_6085b26606355944(
+                env,
+                &__chunks_raw,
+            )?,
         }
     })
 }
@@ -2681,20 +2669,18 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_CacheConfig_cf33c287d7f35ae3<'env,
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("CacheConfig.replies: {}", e)))?;
-        let replies = __jni_in_convert_wire_to_RepliesConfig_7a81db0e8d2214ef(
-            env,
-            &__replies_raw,
-        )?;
         let __ttl_raw: jni::sys::jlong = env
             .get_field(v, "ttl", "J")
             .and_then(|val| val.j())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("CacheConfig.ttl: {}", e)))? as _;
-        let ttl = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__ttl_raw)?;
         perftest_flat::CacheConfig {
-            replies,
-            ttl,
+            replies: __jni_in_convert_wire_to_RepliesConfig_7a81db0e8d2214ef(
+                env,
+                &__replies_raw,
+            )?,
+            ttl: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__ttl_raw)?,
         }
     })
 }
@@ -2770,20 +2756,18 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_CallbackHolder_38c8a01137bd5e33<'e
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("CallbackHolder.tag: {}", e)))? as _;
-        let tag = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__tag_raw)?;
         let __token_raw: jni::objects::JObject = env
             .get_field(v, "token", "Ljava/lang/Object;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("CallbackHolder.token: {}", e)))?;
-        let token = __jni_in_convert_wire_to_CallbackToken_9b692010fd44b7e3(
-            env,
-            &__token_raw,
-        )?;
         perftest_flat::CallbackHolder {
-            tag,
-            token,
+            tag: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__tag_raw)?,
+            token: __jni_in_convert_wire_to_CallbackToken_9b692010fd44b7e3(
+                env,
+                &__token_raw,
+            )?,
         }
     })
 }
@@ -2909,12 +2893,11 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_CallbackToken_9b692010fd44b7e3<'en
                     String,
                 >>::from(format!("CallbackToken.ingot: {}", e)))?
         };
-        let ingot = __jni_in_convert_wire_to_Ingot_jni_handle_codec_consume_input_b897008e06c95a05(
-            env,
-            &__ingot_raw,
-        )?;
         perftest_flat::CallbackToken {
-            ingot,
+            ingot: __jni_in_convert_wire_to_Ingot_jni_handle_codec_consume_input_b897008e06c95a05(
+                env,
+                &__ingot_raw,
+            )?,
         }
     })
 }
@@ -3087,11 +3070,12 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ConstArray_a949f4efa5050dbd<'env, 
                 String,
             >>::from(format!("ConstArray.bytes: {}", e)))?;
         let __bytes_raw: jni::objects::JByteArray = __bytes_jobj.into();
-        let bytes = __jni_in_convert_wire_to_u8_CONST_ARRAY_LEN_a01385174c7f0f63(
-            env,
-            &__bytes_raw,
-        )?;
-        cov_helpers::ConstArray { bytes }
+        cov_helpers::ConstArray {
+            bytes: __jni_in_convert_wire_to_u8_CONST_ARRAY_LEN_a01385174c7f0f63(
+                env,
+                &__bytes_raw,
+            )?,
+        }
     })
 }
 #[allow(
@@ -3179,20 +3163,15 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Dossier_5316a15bb0813dfb<'env, 'v>
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Dossier.note: {}", e)))? as _;
-        let note = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__note_raw)?;
         let __holder_raw: jni::objects::JObject = env
             .get_field(v, "holder", "Lio/prebindgen/covertest/Holder;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Dossier.holder: {}", e)))?;
-        let holder = __jni_in_convert_wire_to_Holder_e0a7dbed55dd2865(
-            env,
-            &__holder_raw,
-        )?;
         perftest_flat::Dossier {
-            note,
-            holder,
+            note: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__note_raw)?,
+            holder: __jni_in_convert_wire_to_Holder_e0a7dbed55dd2865(env, &__holder_raw)?,
         }
     })
 }
@@ -3484,67 +3463,83 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Hold_5a6747f2776b0f97<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<perftest_flat::Hold, __JniErr> {
     Ok({
-        let __obj = v;
-        (|| -> ::core::result::Result<perftest_flat::Hold, __JniErr> {
-            if __obj.is_null() {
+        let __tag = {
+            if v.is_null() {
                 return ::core::result::Result::Err(
                     <__JniErr as ::core::convert::From<
                         String,
                     >>::from("Hold: null value where a variant was required".to_string()),
                 );
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Hold$Indefinite")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Hold", ": instanceof ",
-                        "io/prebindgen/covertest/model/Hold$Indefinite", ": {}"), e
-                    ),
-                ))?
-            {
-                return ::core::result::Result::Ok(perftest_flat::Hold::Indefinite);
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Hold$For")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Hold", ": instanceof ",
-                        "io/prebindgen/covertest/model/Hold$For", ": {}"), e
-                    ),
-                ))?
-            {
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Hold$Indefinite")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Hold: instanceof io/prebindgen/covertest/model/Hold$Indefinite: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(0i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Hold$For")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Hold: instanceof io/prebindgen/covertest/model/Hold$For: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(1i32);
+                }
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        };
+        match __tag {
+            0i32 => perftest_flat::Hold::Indefinite,
+            1i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_raw: jni::sys::jlong = env
-                    .get_field(__obj, "v0", "J")
+                    .get_field(__arm, "v0", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Hold.For.v0: {}", e)))? as _;
-                let __p_v0 = {
-                    let __p_v0_s0 = __jni_in_convert_wire_to_u64_8507143745dc33b9(
-                        env,
-                        &__p_v0_raw,
-                    )?;
-                    let __p_v0_s1 = __jni_in_stage_0_wire_to_Duration_814bb872b19d3627(
+                perftest_flat::Hold::For(
+                    {
+                        let __chain_s0 = __jni_in_convert_wire_to_u64_8507143745dc33b9(
                             env,
-                            __p_v0_s0,
-                        )
-                        .map_err(|__e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(__e.to_string()))?;
-                    __p_v0_s1
-                };
-                return ::core::result::Result::Ok(perftest_flat::Hold::For(__p_v0));
+                            &__p_v0_raw,
+                        )?;
+                        let __chain_s1 = __jni_in_stage_0_wire_to_Duration_814bb872b19d3627(
+                                env,
+                                __chain_s0,
+                            )
+                            .map_err(|__e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(__e.to_string()))?;
+                        ::core::result::Result::<_, __JniErr>::Ok(__chain_s1)
+                    }?,
+                )
             }
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from("Hold: value is not one of its declared variants".to_string()),
-            )
-        })()?
+            _ => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Hold: value is not one of its declared variants".to_string(),
+                    ),
+                );
+            }
+        }
     })
 }
 #[allow(
@@ -3647,20 +3642,18 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_HoldPolicy_eb93c1846b0d934b<'env, 
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("HoldPolicy.hold: {}", e)))?;
-        let hold = __jni_in_convert_wire_to_Hold_5a6747f2776b0f97(env, &__hold_raw)?;
         let __grace_raw: jni::objects::JObject = env
             .get_field(v, "grace", "Lio/prebindgen/covertest/model/Hold;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("HoldPolicy.grace: {}", e)))?;
-        let grace = __jni_in_convert_wire_to_Option_Hold_jni_optional_intermediate_input_niche_d1e632bbd99fbe2e(
-            env,
-            &__grace_raw,
-        )?;
         perftest_flat::HoldPolicy {
-            hold,
-            grace,
+            hold: __jni_in_convert_wire_to_Hold_5a6747f2776b0f97(env, &__hold_raw)?,
+            grace: __jni_in_convert_wire_to_Option_Hold_jni_optional_intermediate_input_niche_d1e632bbd99fbe2e(
+                env,
+                &__grace_raw,
+            )?,
         }
     })
 }
@@ -3817,7 +3810,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Holder_e0a7dbed55dd2865<'env, 'v>(
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Holder.tag: {}", e)))? as _;
-        let tag = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__tag_raw)?;
         let __summary_jobj: jni::objects::JObject = env
             .get_field(v, "summary", "Lio/prebindgen/covertest/analytics/Summary;")
             .and_then(|val| val.l())
@@ -3833,13 +3825,12 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Holder_e0a7dbed55dd2865<'env, 'v>(
                     String,
                 >>::from(format!("Holder.summary: {}", e)))?
         };
-        let summary = __jni_in_convert_wire_to_Summary_jni_handle_codec_consume_input_a6c328c6a2331e58(
-            env,
-            &__summary_raw,
-        )?;
         perftest_flat::Holder {
-            tag,
-            summary,
+            tag: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__tag_raw)?,
+            summary: __jni_in_convert_wire_to_Summary_jni_handle_codec_consume_input_a6c328c6a2331e58(
+                env,
+                &__summary_raw,
+            )?,
         }
     })
 }
@@ -4145,9 +4136,8 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Lookup_2fa8248a2de561a5<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<perftest_flat::Lookup, __JniErr> {
     Ok({
-        let __obj = v;
-        (|| -> ::core::result::Result<perftest_flat::Lookup, __JniErr> {
-            if __obj.is_null() {
+        let __tag = {
+            if v.is_null() {
                 return ::core::result::Result::Err(
                     <__JniErr as ::core::convert::From<
                         String,
@@ -4156,33 +4146,58 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Lookup_2fa8248a2de561a5<'env, 'v>(
                     ),
                 );
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Lookup$Absent")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Lookup", ": instanceof ",
-                        "io/prebindgen/covertest/model/Lookup$Absent", ": {}"), e
-                    ),
-                ))?
-            {
-                return ::core::result::Result::Ok(perftest_flat::Lookup::Absent);
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Lookup$Found")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Lookup", ": instanceof ",
-                        "io/prebindgen/covertest/model/Lookup$Found", ": {}"), e
-                    ),
-                ))?
-            {
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Lookup$Absent")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Lookup: instanceof io/prebindgen/covertest/model/Lookup$Absent: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(0i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Lookup$Found")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Lookup: instanceof io/prebindgen/covertest/model/Lookup$Found: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(1i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Lookup$Failed")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Lookup: instanceof io/prebindgen/covertest/model/Lookup$Failed: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(2i32);
+                }
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        };
+        match __tag {
+            0i32 => perftest_flat::Lookup::Absent,
+            1i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_obj: jni::objects::JObject = env
                     .get_field(
-                        __obj,
+                        __arm,
                         "v0",
                         "Lio/prebindgen/covertest/analytics/Summary;",
                     )
@@ -4199,42 +4214,40 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Lookup_2fa8248a2de561a5<'env, 'v>(
                             String,
                         >>::from(format!("Lookup.Found.v0: {}", e)))?
                 };
-                let __p_v0 = __jni_in_convert_wire_to_Summary_jni_handle_codec_consume_input_a6c328c6a2331e58(
-                    env,
-                    &__p_v0_raw,
-                )?;
-                return ::core::result::Result::Ok(perftest_flat::Lookup::Found(__p_v0));
+                perftest_flat::Lookup::Found(
+                    __jni_in_convert_wire_to_Summary_jni_handle_codec_consume_input_a6c328c6a2331e58(
+                        env,
+                        &__p_v0_raw,
+                    )?,
+                )
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Lookup$Failed")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Lookup", ": instanceof ",
-                        "io/prebindgen/covertest/model/Lookup$Failed", ": {}"), e
-                    ),
-                ))?
-            {
+            2i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_obj: jni::objects::JObject = env
-                    .get_field(__obj, "v0", "Ljava/lang/String;")
+                    .get_field(__arm, "v0", "Ljava/lang/String;")
                     .and_then(|val| val.l())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Lookup.Failed.v0: {}", e)))?;
                 let __p_v0_raw: jni::objects::JString = __p_v0_obj.into();
-                let __p_v0 = __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
-                    env,
-                    &__p_v0_raw,
-                )?;
-                return ::core::result::Result::Ok(perftest_flat::Lookup::Failed(__p_v0));
+                perftest_flat::Lookup::Failed(
+                    __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
+                        env,
+                        &__p_v0_raw,
+                    )?,
+                )
             }
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from("Lookup: value is not one of its declared variants".to_string()),
-            )
-        })()?
+            _ => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Lookup: value is not one of its declared variants".to_string(),
+                    ),
+                );
+            }
+        }
     })
 }
 #[allow(
@@ -4363,9 +4376,8 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Marker_93f2fabe59a4f80d<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<perftest_flat::Marker, __JniErr> {
     Ok({
-        let __obj = v;
-        (|| -> ::core::result::Result<perftest_flat::Marker, __JniErr> {
-            if __obj.is_null() {
+        let __tag = {
+            if v.is_null() {
                 return ::core::result::Result::Err(
                     <__JniErr as ::core::convert::From<
                         String,
@@ -4374,60 +4386,80 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Marker_93f2fabe59a4f80d<'env, 'v>(
                     ),
                 );
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Marker$None_")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Marker", ": instanceof ",
-                        "io/prebindgen/covertest/model/Marker$None_", ": {}"), e
-                    ),
-                ))?
-            {
-                return ::core::result::Result::Ok(perftest_flat::Marker::None_);
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Marker$Ranked")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Marker", ": instanceof ",
-                        "io/prebindgen/covertest/model/Marker$Ranked", ": {}"), e
-                    ),
-                ))?
-            {
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Marker$None_")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Marker: instanceof io/prebindgen/covertest/model/Marker$None_: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(0i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Marker$Ranked")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Marker: instanceof io/prebindgen/covertest/model/Marker$Ranked: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(1i32);
+                }
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        };
+        match __tag {
+            0i32 => perftest_flat::Marker::None_,
+            1i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_obj: jni::objects::JObject = env
-                    .get_field(__obj, "v0", "Lio/prebindgen/covertest/model/Priority;")
+                    .get_field(__arm, "v0", "Lio/prebindgen/covertest/model/Priority;")
                     .and_then(|val| val.l())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Marker.Ranked.v0: {}", e)))?;
-                let __p_v0 = if __p_v0_obj.is_null() {
-                    ::core::option::Option::None
-                } else {
-                    let __p_v0_raw: jni::sys::jint = env
-                        .call_method(&__p_v0_obj, "getValue", "()I", &[])
-                        .and_then(|val| val.i())
-                        .map_err(|e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(format!("Marker.Ranked.v0: {}", e)))?;
-                    ::core::option::Option::Some(
-                        __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
-                            env,
-                            &__p_v0_raw,
-                        )?,
-                    )
-                };
-                return ::core::result::Result::Ok(perftest_flat::Marker::Ranked(__p_v0));
+                perftest_flat::Marker::Ranked({
+                    let v = __p_v0_obj;
+                    {
+                        if v.is_null() {
+                            ::core::option::Option::None
+                        } else {
+                            let __present = env
+                                .call_method(&v, "getValue", "()I", &[])
+                                .and_then(|val| val.i())
+                                .map_err(|e| <__JniErr as ::core::convert::From<
+                                    String,
+                                >>::from(format!("Marker.Ranked.v0: {}", e)))?;
+                            ::core::option::Option::Some(
+                                __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
+                                    env,
+                                    &__present,
+                                )?,
+                            )
+                        }
+                    }
+                })
             }
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from("Marker: value is not one of its declared variants".to_string()),
-            )
-        })()?
+            _ => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Marker: value is not one of its declared variants".to_string(),
+                    ),
+                );
+            }
+        }
     })
 }
 #[allow(
@@ -4492,7 +4524,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_MaybeHolder_fcb77d18203824e3<'env,
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("MaybeHolder.tag: {}", e)))? as _;
-        let tag = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__tag_raw)?;
         let __summary_jobj: jni::objects::JObject = env
             .get_field(v, "summary", "Lio/prebindgen/covertest/analytics/Summary;")
             .and_then(|val| val.l())
@@ -4508,13 +4539,12 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_MaybeHolder_fcb77d18203824e3<'env,
                     String,
                 >>::from(format!("MaybeHolder.summary: {}", e)))?
         };
-        let summary = __jni_in_convert_wire_to_Option_Summary_jni_optional_intermediate_input_niche_7efd102cd40f1e81(
-            env,
-            &__summary_raw,
-        )?;
         perftest_flat::MaybeHolder {
-            tag,
-            summary,
+            tag: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__tag_raw)?,
+            summary: __jni_in_convert_wire_to_Option_Summary_jni_optional_intermediate_input_niche_7efd102cd40f1e81(
+                env,
+                &__summary_raw,
+            )?,
         }
     })
 }
@@ -5556,23 +5586,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d<
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary16.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary8;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary16.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary16 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -5713,23 +5741,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb<'
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary2.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary2.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary2 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -5803,23 +5829,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21<
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary32.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary16;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary32.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary32 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -6040,23 +6064,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f<'
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary4.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary2;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary4.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary4 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -6140,67 +6162,61 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary63_abd593b6b57968fd<
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary63.leaves32: {}", e)))?;
-        let leaves32 = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
-            env,
-            &__leaves32_raw,
-        )?;
         let __leaves16_raw: jni::objects::JObject = env
             .get_field(v, "leaves16", "Lio/prebindgen/covertest/model/ObjectBoundary16;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary63.leaves16: {}", e)))?;
-        let leaves16 = __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
-            env,
-            &__leaves16_raw,
-        )?;
         let __leaves8_raw: jni::objects::JObject = env
             .get_field(v, "leaves8", "Lio/prebindgen/covertest/model/ObjectBoundary8;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary63.leaves8: {}", e)))?;
-        let leaves8 = __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
-            env,
-            &__leaves8_raw,
-        )?;
         let __leaves4_raw: jni::objects::JObject = env
             .get_field(v, "leaves4", "Lio/prebindgen/covertest/model/ObjectBoundary4;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary63.leaves4: {}", e)))?;
-        let leaves4 = __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
-            env,
-            &__leaves4_raw,
-        )?;
         let __leaves2_raw: jni::objects::JObject = env
             .get_field(v, "leaves2", "Lio/prebindgen/covertest/model/ObjectBoundary2;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary63.leaves2: {}", e)))?;
-        let leaves2 = __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
-            env,
-            &__leaves2_raw,
-        )?;
         let __leaf_raw: jni::objects::JObject = env
             .get_field(v, "leaf", "Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary63.leaf: {}", e)))?;
-        let leaf = __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
-            env,
-            &__leaf_raw,
-        )?;
         perftest_flat::ObjectBoundary63 {
-            leaves32,
-            leaves16,
-            leaves8,
-            leaves4,
-            leaves2,
-            leaf,
+            leaves32: __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+                env,
+                &__leaves32_raw,
+            )?,
+            leaves16: __jni_in_convert_wire_to_ObjectBoundary16_3944a3a904c1510d(
+                env,
+                &__leaves16_raw,
+            )?,
+            leaves8: __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267(
+                env,
+                &__leaves8_raw,
+            )?,
+            leaves4: __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
+                env,
+                &__leaves4_raw,
+            )?,
+            leaves2: __jni_in_convert_wire_to_ObjectBoundary2_a3195430eb031edb(
+                env,
+                &__leaves2_raw,
+            )?,
+            leaf: __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab837(
+                env,
+                &__leaf_raw,
+            )?,
         }
     })
 }
@@ -6645,23 +6661,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary64_9d95f2f133e7e0ab<
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary64.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary32;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary64.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary64 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary32_79abada03cc29a21(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -7126,23 +7140,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundary8_cca4b20df6695267<'
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary8.left: {}", e)))?;
-        let left = __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
-            env,
-            &__left_raw,
-        )?;
         let __right_raw: jni::objects::JObject = env
             .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary4;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundary8.right: {}", e)))?;
-        let right = __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
-            env,
-            &__right_raw,
-        )?;
         perftest_flat::ObjectBoundary8 {
-            left,
-            right,
+            left: __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
+                env,
+                &__left_raw,
+            )?,
+            right: __jni_in_convert_wire_to_ObjectBoundary4_feb5834d3248e52f(
+                env,
+                &__right_raw,
+            )?,
         }
     })
 }
@@ -7246,9 +7258,8 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_ObjectBoundaryLeaf_3132a7517e2ab83
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("ObjectBoundaryLeaf.value: {}", e)))? as _;
-        let value = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__value_raw)?;
         perftest_flat::ObjectBoundaryLeaf {
-            value,
+            value: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__value_raw)?,
         }
     })
 }
@@ -7371,27 +7382,18 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Observation_32843a8b8dec0a4b<'env,
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Observation.id: {}", e)))? as _;
-        let id = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?;
         let __reading_raw: jni::objects::JObject = env
             .get_field(v, "reading", "Lio/prebindgen/covertest/model/Reading;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Observation.reading: {}", e)))?;
-        let reading = __jni_in_convert_wire_to_Reading_a358e65c0c39d007(
-            env,
-            &__reading_raw,
-        )?;
         let __fallback_raw: jni::objects::JObject = env
             .get_field(v, "fallback", "Lio/prebindgen/covertest/model/Reading;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Observation.fallback: {}", e)))?;
-        let fallback = __jni_in_convert_wire_to_Option_Reading_jni_optional_intermediate_input_niche_edb3520bad0ebf25(
-            env,
-            &__fallback_raw,
-        )?;
         let __note_jobj: jni::objects::JObject = env
             .get_field(v, "note", "Ljava/lang/String;")
             .and_then(|val| val.l())
@@ -7399,15 +7401,20 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Observation_32843a8b8dec0a4b<'env,
                 String,
             >>::from(format!("Observation.note: {}", e)))?;
         let __note_raw: jni::objects::JString = __note_jobj.into();
-        let note = __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
-            env,
-            &__note_raw,
-        )?;
         perftest_flat::Observation {
-            id,
-            reading,
-            fallback,
-            note,
+            id: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?,
+            reading: __jni_in_convert_wire_to_Reading_a358e65c0c39d007(
+                env,
+                &__reading_raw,
+            )?,
+            fallback: __jni_in_convert_wire_to_Option_Reading_jni_optional_intermediate_input_niche_edb3520bad0ebf25(
+                env,
+                &__fallback_raw,
+            )?,
+            note: __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
+                env,
+                &__note_raw,
+            )?,
         }
     })
 }
@@ -9627,9 +9634,8 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Reading_a358e65c0c39d007<'env, 'v>
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<perftest_flat::Reading, __JniErr> {
     Ok({
-        let __obj = v;
-        (|| -> ::core::result::Result<perftest_flat::Reading, __JniErr> {
-            if __obj.is_null() {
+        let __tag = {
+            if v.is_null() {
                 return ::core::result::Result::Err(
                     <__JniErr as ::core::convert::From<
                         String,
@@ -9638,102 +9644,129 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Reading_a358e65c0c39d007<'env, 'v>
                     ),
                 );
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Missing")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Missing", ": {}"), e
-                    ),
-                ))?
-            {
-                return ::core::result::Result::Ok(perftest_flat::Reading::Missing);
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Exact")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Exact", ": {}"), e
-                    ),
-                ))?
-            {
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Missing")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Missing: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(0i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Exact")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Exact: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(1i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Range")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Range: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(2i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Tagged")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Tagged: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(3i32);
+                }
+                if env
+                    .is_instance_of(v, "io/prebindgen/covertest/model/Reading$Companion")
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Reading: instanceof io/prebindgen/covertest/model/Reading$Companion: {}",
+                            e
+                        ),
+                    ))?
+                {
+                    return ::core::result::Result::Ok(4i32);
+                }
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        };
+        match __tag {
+            0i32 => perftest_flat::Reading::Missing,
+            1i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_raw: jni::sys::jlong = env
-                    .get_field(__obj, "v0", "J")
+                    .get_field(__arm, "v0", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Exact.v0: {}", e)))? as _;
-                let __p_v0 = __jni_in_convert_wire_to_i64_da07d745d9e26f71(
-                    env,
-                    &__p_v0_raw,
-                )?;
-                return ::core::result::Result::Ok(perftest_flat::Reading::Exact(__p_v0));
+                perftest_flat::Reading::Exact(
+                    __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__p_v0_raw)?,
+                )
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Range")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Range", ": {}"), e
-                    ),
-                ))?
-            {
+            2i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_low_raw: jni::sys::jlong = env
-                    .get_field(__obj, "low", "J")
+                    .get_field(__arm, "low", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Range.low: {}", e)))? as _;
-                let __p_low = __jni_in_convert_wire_to_i64_da07d745d9e26f71(
-                    env,
-                    &__p_low_raw,
-                )?;
                 let __p_high_raw: jni::sys::jlong = env
-                    .get_field(__obj, "high", "J")
+                    .get_field(__arm, "high", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Range.high: {}", e)))? as _;
-                let __p_high = __jni_in_convert_wire_to_i64_da07d745d9e26f71(
-                    env,
-                    &__p_high_raw,
-                )?;
-                return ::core::result::Result::Ok(perftest_flat::Reading::Range {
-                    low: __p_low,
-                    high: __p_high,
-                });
+                perftest_flat::Reading::Range {
+                    low: __jni_in_convert_wire_to_i64_da07d745d9e26f71(
+                        env,
+                        &__p_low_raw,
+                    )?,
+                    high: __jni_in_convert_wire_to_i64_da07d745d9e26f71(
+                        env,
+                        &__p_high_raw,
+                    )?,
+                }
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Tagged")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Tagged", ": {}"), e
-                    ),
-                ))?
-            {
+            3i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_obj: jni::objects::JObject = env
-                    .get_field(__obj, "v0", "Ljava/lang/String;")
+                    .get_field(__arm, "v0", "Ljava/lang/String;")
                     .and_then(|val| val.l())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Tagged.v0: {}", e)))?;
                 let __p_v0_raw: jni::objects::JString = __p_v0_obj.into();
-                let __p_v0 = __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
-                    env,
-                    &__p_v0_raw,
-                )?;
                 let __p_v1_obj: jni::objects::JObject = env
-                    .get_field(__obj, "v1", "Lio/prebindgen/covertest/model/Priority;")
+                    .get_field(__arm, "v1", "Lio/prebindgen/covertest/model/Priority;")
                     .and_then(|val| val.l())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
@@ -9744,47 +9777,37 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Reading_a358e65c0c39d007<'env, 'v>
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Tagged.v1: {}", e)))?;
-                let __p_v1 = __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
-                    env,
-                    &__p_v1_raw,
-                )?;
-                return ::core::result::Result::Ok(
-                    perftest_flat::Reading::Labeled(__p_v0, __p_v1),
-                );
+                perftest_flat::Reading::Labeled(
+                    __jni_in_convert_wire_to_jni_text_codec_owned_40915aa02cf8d9ce(
+                        env,
+                        &__p_v0_raw,
+                    )?,
+                    __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(env, &__p_v1_raw)?,
+                )
             }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Companion")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Reading", ": instanceof ",
-                        "io/prebindgen/covertest/model/Reading$Companion", ": {}"), e
-                    ),
-                ))?
-            {
+            4i32 => {
+                let __choice = v;
+                let __arm = __choice;
                 let __p_v0_raw: jni::sys::jlong = env
-                    .get_field(__obj, "v0", "J")
+                    .get_field(__arm, "v0", "J")
                     .and_then(|val| val.j())
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
                     >>::from(format!("Reading.Companion.v0: {}", e)))? as _;
-                let __p_v0 = __jni_in_convert_wire_to_i64_da07d745d9e26f71(
-                    env,
-                    &__p_v0_raw,
-                )?;
-                return ::core::result::Result::Ok(
-                    perftest_flat::Reading::Companion(__p_v0),
+                perftest_flat::Reading::Companion(
+                    __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__p_v0_raw)?,
+                )
+            }
+            _ => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Reading: value is not one of its declared variants".to_string(),
+                    ),
                 );
             }
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    "Reading: value is not one of its declared variants".to_string(),
-                ),
-            )
-        })()?
+        }
     })
 }
 #[allow(
@@ -9940,23 +9963,21 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_RepliesConfig_7a81db0e8d2214ef<'en
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("RepliesConfig.priority: {}", e)))?;
-        let priority = __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
-            env,
-            &__priority_raw,
-        )?;
         let __max_samples_raw: jni::sys::jlong = env
             .get_field(v, "maxSamples", "J")
             .and_then(|val| val.j())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("RepliesConfig.maxSamples: {}", e)))? as _;
-        let max_samples = __jni_in_convert_wire_to_i64_da07d745d9e26f71(
-            env,
-            &__max_samples_raw,
-        )?;
         perftest_flat::RepliesConfig {
-            priority,
-            max_samples,
+            priority: __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
+                env,
+                &__priority_raw,
+            )?,
+            max_samples: __jni_in_convert_wire_to_i64_da07d745d9e26f71(
+                env,
+                &__max_samples_raw,
+            )?,
         }
     })
 }
@@ -10302,20 +10323,15 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Tagged_279b04b60843d675<'env, 'v>(
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Tagged.id: {}", e)))? as _;
-        let id = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?;
         let __marker_raw: jni::objects::JObject = env
             .get_field(v, "marker", "Lio/prebindgen/covertest/model/Marker;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Tagged.marker: {}", e)))?;
-        let marker = __jni_in_convert_wire_to_Marker_93f2fabe59a4f80d(
-            env,
-            &__marker_raw,
-        )?;
         perftest_flat::Tagged {
-            id,
-            marker,
+            id: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?,
+            marker: __jni_in_convert_wire_to_Marker_93f2fabe59a4f80d(env, &__marker_raw)?,
         }
     })
 }
@@ -10873,20 +10889,18 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Verdict_21661560f50a2bdb<'env, 'v>
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Verdict.id: {}", e)))? as _;
-        let id = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?;
         let __outcome_raw: jni::objects::JObject = env
             .get_field(v, "outcome", "Lio/prebindgen/covertest/model/Lookup;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("Verdict.outcome: {}", e)))?;
-        let outcome = __jni_in_convert_wire_to_Lookup_2fa8248a2de561a5(
-            env,
-            &__outcome_raw,
-        )?;
         perftest_flat::Verdict {
-            id,
-            outcome,
+            id: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?,
+            outcome: __jni_in_convert_wire_to_Lookup_2fa8248a2de561a5(
+                env,
+                &__outcome_raw,
+            )?,
         }
     })
 }
@@ -11028,27 +11042,18 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_WrappedFields_34734732a60d048b<'en
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("WrappedFields.id: {}", e)))? as _;
-        let id = __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?;
         let __boxed_raw: jni::objects::JObject = env
             .get_field(v, "boxed", "Ljava/lang/Long;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("WrappedFields.boxed: {}", e)))?;
-        let boxed = __jni_in_convert_wire_to_Box_Option_i64_jni_optional_intermediate_input_boxed_9c68bc2a7a3540b4(
-            env,
-            &__boxed_raw,
-        )?;
         let __plain_raw: jni::objects::JObject = env
             .get_field(v, "plain", "Ljava/lang/Long;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("WrappedFields.plain: {}", e)))?;
-        let plain = __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_boxed_bebad25cf333cf7b(
-            env,
-            &__plain_raw,
-        )?;
         let __boxed_enum_jobj: jni::objects::JObject = env
             .get_field(v, "boxedEnum", "Lio/prebindgen/covertest/model/Priority;")
             .and_then(|val| val.l())
@@ -11061,10 +11066,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_WrappedFields_34734732a60d048b<'en
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("WrappedFields.boxedEnum: {}", e)))?;
-        let boxed_enum = __jni_in_convert_wire_to_Box_Priority_781460985a632f7e(
-            env,
-            &__boxed_enum_raw,
-        )?;
         let __plain_enum_jobj: jni::objects::JObject = env
             .get_field(v, "plainEnum", "Lio/prebindgen/covertest/model/Priority;")
             .and_then(|val| val.l())
@@ -11077,16 +11078,24 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_WrappedFields_34734732a60d048b<'en
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("WrappedFields.plainEnum: {}", e)))?;
-        let plain_enum = __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
-            env,
-            &__plain_enum_raw,
-        )?;
         perftest_flat::WrappedFields {
-            id,
-            boxed,
-            plain,
-            boxed_enum,
-            plain_enum,
+            id: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?,
+            boxed: __jni_in_convert_wire_to_Box_Option_i64_jni_optional_intermediate_input_boxed_9c68bc2a7a3540b4(
+                env,
+                &__boxed_raw,
+            )?,
+            plain: __jni_in_convert_wire_to_Option_i64_jni_optional_intermediate_input_boxed_bebad25cf333cf7b(
+                env,
+                &__plain_raw,
+            )?,
+            boxed_enum: __jni_in_convert_wire_to_Box_Priority_781460985a632f7e(
+                env,
+                &__boxed_enum_raw,
+            )?,
+            plain_enum: __jni_in_convert_wire_to_Priority_2f3eb78aa92f8bfd(
+                env,
+                &__plain_enum_raw,
+            )?,
         }
     })
 }
