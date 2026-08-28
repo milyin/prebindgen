@@ -542,8 +542,9 @@ fn dedup(values: Vec<ScalarValue>) -> Vec<ScalarValue> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use quote::ToTokens;
+
+    use super::*;
 
     #[test]
     fn integer_range_derives_extreme_niches() {
