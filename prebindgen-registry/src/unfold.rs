@@ -1,5 +1,5 @@
 //! Output (data) expansion — the dual of constructor expansion
-//! (`api/core/expand.rs`). A function returning a rich type is *decomposed* by a
+//! ([`crate::expand`]). A function returning a rich type is *decomposed* by a
 //! **deconstructor** into a set of leaf values.
 //!
 //! A **deconstructor** (a type-level `expand_return!` `.field*` list,

@@ -1,4 +1,31 @@
 //! Output-expansion delivery: unfold plans and leaf encoding.
+//!
+//! # What this module still walks
+//!
+//! #596 moved the mechanical half of the decomposition walk into
+//! `prebindgen_registry::unfold` — folding a path onto a base, composing one
+//! step, binding hoists, and the flat leaf reach. The rules below stayed, and
+//! none of them is JNI policy: each is a fact about Rust values that any
+//! adapter decomposing a return would have to restate.
+//!
+//! * **Rebasing and ownership** — which value form a leaf reaches off (the
+//!   innermost hoist, a conditional form's `Some` binding, or the value
+//!   itself), and whether the reached place is moved or cloned.
+//! * **Sum segmentation** — a decomposed sum's leaves are not independent, so
+//!   the selector and the group leaves after it are emitted as one `match`.
+//! * **Optional-sum gating** — an `Option<sum>` gates the whole segment rather
+//!   than each slot, because absence cannot be the per-leaf null an ordinary
+//!   optional field gets (#220).
+//! * **Borrow projection** — a plain field chain is borrowed directly rather
+//!   than through the base, which the borrow checker rejects once a sibling
+//!   leaf has moved a field out.
+//! * **The gated leaf reach** (`reach_leaf`) — a second derivation of
+//!   `unfold::reach_leaf_flat` that handles an optional step by emitting an
+//!   absent arm. Only what absence looks like is this adapter's.
+//!
+//! They are here because there is no delivery bridge to hand the encoding half
+//! to, so nothing could be lifted without lifting `jvalue` layout with it. See
+//! the umbrella that tracks moving them.
 
 use prebindgen_registry::{
     unfold::{

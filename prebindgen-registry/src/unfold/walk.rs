@@ -175,8 +175,9 @@ pub fn reach_leaf_flat<L: DecomposedLeaf>(
 ) -> TokenStream {
     // An optional step BEFORE the last one needs a `match` whose `None` arm has
     // somewhere to go. This derivation has none — it yields a plain Rust value,
-    // not a `JObject` that could be null — so the shape is refused here rather
-    // than composed into code that cannot type-check in the consumer's crate.
+    // not a representation that can carry absence — so the shape is refused
+    // here rather than composed into code that cannot type-check in the
+    // consumer's crate.
     //
     // Asked of the leaf's OWN path, not of `path`. The caller may hand a
     // suffix: `wrapper.rs` rebases onto a hoisted local, and `Hoisted::innermost`
@@ -304,11 +305,16 @@ impl Hoisted {
         self.consuming[i]
     }
 }
-/// Fold `path` over `base` the way [`reach_leaf`] does, but yielding an
-/// `Option<…>` rather than a `JObject`: the optional steps become a
-/// `map`/`and_then` chain, so an absent value short-circuits to `None` instead
-/// of to a null object. `body` renders the innermost reached expression as a
-/// BARE value — the chain's last link wraps it.
+/// Fold `path` over `base` the way an adapter's own gated reach does, but
+/// yielding an `Option<…>` rather than the adapter's absent value: the optional
+/// steps become a `map`/`and_then` chain, so an absent value short-circuits to
+/// `None` instead of to whatever that adapter uses for absence. `body` renders
+/// the innermost reached expression as a BARE value — the chain's last link
+/// wraps it.
+///
+/// The gated reach this mirrors is not in this crate. JniGen keeps its own, as
+/// `emit::delivery::reach_leaf`, because the absent value is its
+/// representation's — which is one of the walks this module was meant to end.
 ///
 /// This is how a CONDITIONAL value form is bound — the accessor runs only where
 /// the value it decomposes is actually present.
