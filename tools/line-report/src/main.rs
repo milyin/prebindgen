@@ -368,9 +368,11 @@ fn expression_attrs(expression: &syn::Expr) -> &[syn::Attribute] {
 }
 
 /// The constructs each round of #614's review found, and what the counter says
-/// about them. Run with
-/// `cargo run -p prebindgen-registry --features line-report --example
-/// line-report -- --self-test`.
+/// about them.
+///
+/// Run by `the_boundary_cases_stay_pinned`, which CI runs as
+/// `cargo test --manifest-path tools/line-report/Cargo.toml`, and by hand with
+/// `cargo run --manifest-path tools/line-report/Cargo.toml -- --self-test`.
 fn self_test() {
     // Every case here defeated a delimiter heuristic: the gated call ends in
     // `);` rather than a brace; the raw string and the block comment contain a
