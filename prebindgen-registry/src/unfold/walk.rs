@@ -572,11 +572,13 @@ pub fn segments<L: DecomposedLeaf>(leaves: &[L]) -> Vec<std::ops::Range<usize>> 
 }
 
 /// Render one segment off `place`, gating the whole of it when the selector
-/// reaches its sum through an optional step.
+/// reaches the value it selects on through an optional step.
 ///
-/// `group` renders the segment's own encode from the expression naming the
-/// live sum — that half is the adapter's, since what a group of slots is
-/// filled with is a target-language question.
+/// A segment's **selected value** is what its selector chooses over: the sum a
+/// tag names an alternative of, or the optional value a presence flag says is
+/// there. `group` renders the segment's own encode from the expression naming
+/// it — that half is the adapter's, since what a group of slots is filled with
+/// is a target-language question.
 ///
 /// **An optional value gates the segment, not each slot.** A segment's leaves
 /// are not independent, so absence cannot be the per-leaf absent value
@@ -604,8 +606,9 @@ pub fn segment<B: DeliveryBridge>(
     // this field while sibling fields move is exactly what a consuming value
     // form does.
     let (projected, lead) = project_leading_fields(&place.base, place.base_is_ref, path);
-    // The selector's own path reaches the sum (empty when the sum IS the
-    // value), and a step on it MAY be optional.
+    // The selector's own path reaches the selected value (empty when that
+    // value IS the delivered one), and a step on it MAY be optional — which is
+    // always so for a presence flag, whose whole subject is that step.
     let Some(k) = (lead..path.len()).find(|&i| path[i].is_optional()) else {
         return group(fold_steps(qualify, &path[lead..], projected, false));
     };
@@ -615,9 +618,9 @@ pub fn segment<B: DeliveryBridge>(
     let opt_e = fold_steps(qualify, &path[lead..=k], projected, false);
     let bind = format_ident!("__sg{}", index);
     // ONE optional step is what this gate handles. A second one in the tail
-    // would compose `match &Option<..>` against bare variant patterns — an
-    // E0308 in the consumer's crate — so the named diagnostic is raised here
-    // instead.
+    // would compose `match &Option<..>` against the patterns the group's own
+    // encode writes — an E0308 in the consumer's crate — so the named
+    // diagnostic is raised here instead.
     //
     // `assert!`, not `debug_assert!`: a build script inherits the consumer's
     // profile, so a debug-only check is absent from exactly the release build
@@ -625,22 +628,22 @@ pub fn segment<B: DeliveryBridge>(
     // phrasing, as the single-return optional-step assert in [`reach_leaf`].
     //
     // The condition is what actually breaks, not the stronger fact that
-    // happens to hold: every sum leaf's path stops AT the sum, so the tail is
-    // empty today, but a NON-optional tail composes correctly through
-    // [`fold_steps`] — refusing it would refuse a shape that works.
+    // happens to hold: a selector's path stops AT the value it selects on, so
+    // the tail is empty today, but a NON-optional tail composes correctly
+    // through [`fold_steps`] — refusing it would refuse a shape that works.
     assert!(
         !path[k + 1..].iter().any(PathStep::is_optional),
-        "unfold: leaf `{}` reaches its sum through TWO optional steps — the \
-         segment gate has one `None` arm, so the second would be matched as if \
-         it were the sum itself",
+        "unfold: leaf `{}` reaches the value it selects on through TWO optional \
+         steps — the segment gate has one `None` arm, so the second would be \
+         matched as if it were that value itself",
         leaves
             .first()
             .expect("a segment has at least its selector")
             .name(),
     );
     // What the `match` binds, asked of the step rather than assumed: the FIELD
-    // branch scrutinizes `&Option<_>`, so ergonomics binds `&Sum` — a borrow.
-    // Only an owned-yielding CALL binds an owned value.
+    // branch scrutinizes `&Option<_>`, so ergonomics binds a borrow of the
+    // selected value. Only an owned-yielding CALL binds an owned one.
     let inner = group(fold_steps(
         qualify,
         &path[k + 1..],
