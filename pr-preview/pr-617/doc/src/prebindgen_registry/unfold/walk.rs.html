@@ -572,456 +572,459 @@
 <a href=#572 id=572 data-nosnippet>572</a>}
 <a href=#573 id=573 data-nosnippet>573</a>
 <a href=#574 id=574 data-nosnippet>574</a><span class="doccomment">/// Render one segment off `place`, gating the whole of it when the selector
-<a href=#575 id=575 data-nosnippet>575</a>/// reaches its sum through an optional step.
+<a href=#575 id=575 data-nosnippet>575</a>/// reaches the value it selects on through an optional step.
 <a href=#576 id=576 data-nosnippet>576</a>///
-<a href=#577 id=577 data-nosnippet>577</a>/// `group` renders the segment's own encode from the expression naming the
-<a href=#578 id=578 data-nosnippet>578</a>/// live sum — that half is the adapter's, since what a group of slots is
-<a href=#579 id=579 data-nosnippet>579</a>/// filled with is a target-language question.
-<a href=#580 id=580 data-nosnippet>580</a>///
-<a href=#581 id=581 data-nosnippet>581</a>/// **An optional value gates the segment, not each slot.** A segment's leaves
-<a href=#582 id=582 data-nosnippet>582</a>/// are not independent, so absence cannot be the per-leaf absent value
-<a href=#583 id=583 data-nosnippet>583</a>/// [`reach_leaf`] gives an ordinary optional field: it is one tuple bind whose
-<a href=#584 id=584 data-nosnippet>584</a>/// `None` arm carries every slot's default. That is the same shape a
-<a href=#585 id=585 data-nosnippet>585</a>/// conditional value form's hoist emits, applied to an optional step inside
-<a href=#586 id=586 data-nosnippet>586</a>/// the segment's own path (#220).
-<a href=#587 id=587 data-nosnippet>587</a>///
-<a href=#588 id=588 data-nosnippet>588</a>/// `index` names the segment's locals, so two segments of one delivery cannot
-<a href=#589 id=589 data-nosnippet>589</a>/// collide.
-<a href=#590 id=590 data-nosnippet>590</a></span><span class="kw">pub fn </span>segment&lt;B: DeliveryBridge&gt;(
-<a href=#591 id=591 data-nosnippet>591</a>    bridge: <span class="kw-2">&amp;</span>B,
-<a href=#592 id=592 data-nosnippet>592</a>    qualify: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>syn::Ident) -&gt; syn::Path,
-<a href=#593 id=593 data-nosnippet>593</a>    place: <span class="kw-2">&amp;</span>LeafPlace,
-<a href=#594 id=594 data-nosnippet>594</a>    index: usize,
-<a href=#595 id=595 data-nosnippet>595</a>    leaves: <span class="kw-2">&amp;</span>[B::Leaf],
-<a href=#596 id=596 data-nosnippet>596</a>    slots: <span class="kw-2">&amp;</span>[syn::Ident],
-<a href=#597 id=597 data-nosnippet>597</a>    group: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(TokenStream) -&gt; TokenStream,
-<a href=#598 id=598 data-nosnippet>598</a>) -&gt; TokenStream {
-<a href=#599 id=599 data-nosnippet>599</a>    <span class="kw">let </span>path = <span class="kw-2">&amp;</span>place.path;
-<a href=#600 id=600 data-nosnippet>600</a>    <span class="comment">// A plain field chain is borrowed DIRECTLY (`&amp;base.a.b`) rather than
-<a href=#601 id=601 data-nosnippet>601</a>    // through the base (`&amp;(&amp;base).a.b`). The two are the same value, but the
-<a href=#602 id=602 data-nosnippet>602</a>    // second borrows the base as a whole, which the borrow checker rejects
-<a href=#603 id=603 data-nosnippet>603</a>    // once a sibling leaf has moved another field out of it — and borrowing
-<a href=#604 id=604 data-nosnippet>604</a>    // this field while sibling fields move is exactly what a consuming value
-<a href=#605 id=605 data-nosnippet>605</a>    // form does.
-<a href=#606 id=606 data-nosnippet>606</a>    </span><span class="kw">let </span>(projected, lead) = project_leading_fields(<span class="kw-2">&amp;</span>place.base, place.base_is_ref, path);
-<a href=#607 id=607 data-nosnippet>607</a>    <span class="comment">// The selector's own path reaches the sum (empty when the sum IS the
-<a href=#608 id=608 data-nosnippet>608</a>    // value), and a step on it MAY be optional.
-<a href=#609 id=609 data-nosnippet>609</a>    </span><span class="kw">let </span><span class="prelude-val">Some</span>(k) = (lead..path.len()).find(|<span class="kw-2">&amp;</span>i| path[i].is_optional()) <span class="kw">else </span>{
-<a href=#610 id=610 data-nosnippet>610</a>        <span class="kw">return </span>group(fold_steps(qualify, <span class="kw-2">&amp;</span>path[lead..], projected, <span class="bool-val">false</span>));
-<a href=#611 id=611 data-nosnippet>611</a>    };
-<a href=#612 id=612 data-nosnippet>612</a>    <span class="comment">// Through the optional step INCLUSIVE, then the rest off the binding — the
-<a href=#613 id=613 data-nosnippet>613</a>    // same split [`reach_leaf`] makes, so the borrow in front of it stays the
-<a href=#614 id=614 data-nosnippet>614</a>    // ordinary rule rather than a second statement of it.
-<a href=#615 id=615 data-nosnippet>615</a>    </span><span class="kw">let </span>opt_e = fold_steps(qualify, <span class="kw-2">&amp;</span>path[lead..=k], projected, <span class="bool-val">false</span>);
-<a href=#616 id=616 data-nosnippet>616</a>    <span class="kw">let </span>bind = <span class="macro">format_ident!</span>(<span class="string">"__sg{}"</span>, index);
-<a href=#617 id=617 data-nosnippet>617</a>    <span class="comment">// ONE optional step is what this gate handles. A second one in the tail
-<a href=#618 id=618 data-nosnippet>618</a>    // would compose `match &amp;Option&lt;..&gt;` against bare variant patterns — an
-<a href=#619 id=619 data-nosnippet>619</a>    // E0308 in the consumer's crate — so the named diagnostic is raised here
-<a href=#620 id=620 data-nosnippet>620</a>    // instead.
-<a href=#621 id=621 data-nosnippet>621</a>    //
-<a href=#622 id=622 data-nosnippet>622</a>    // `assert!`, not `debug_assert!`: a build script inherits the consumer's
-<a href=#623 id=623 data-nosnippet>623</a>    // profile, so a debug-only check is absent from exactly the release build
-<a href=#624 id=624 data-nosnippet>624</a>    // where a mis-emission costs the most to diagnose. Same rule, same
-<a href=#625 id=625 data-nosnippet>625</a>    // phrasing, as the single-return optional-step assert in [`reach_leaf`].
-<a href=#626 id=626 data-nosnippet>626</a>    //
-<a href=#627 id=627 data-nosnippet>627</a>    // The condition is what actually breaks, not the stronger fact that
-<a href=#628 id=628 data-nosnippet>628</a>    // happens to hold: every sum leaf's path stops AT the sum, so the tail is
-<a href=#629 id=629 data-nosnippet>629</a>    // empty today, but a NON-optional tail composes correctly through
-<a href=#630 id=630 data-nosnippet>630</a>    // [`fold_steps`] — refusing it would refuse a shape that works.
-<a href=#631 id=631 data-nosnippet>631</a>    </span><span class="macro">assert!</span>(
-<a href=#632 id=632 data-nosnippet>632</a>        !path[k + <span class="number">1</span>..].iter().any(PathStep::is_optional),
-<a href=#633 id=633 data-nosnippet>633</a>        <span class="string">"unfold: leaf `{}` reaches its sum through TWO optional steps — the \
-<a href=#634 id=634 data-nosnippet>634</a>         segment gate has one `None` arm, so the second would be matched as if \
-<a href=#635 id=635 data-nosnippet>635</a>         it were the sum itself"</span>,
-<a href=#636 id=636 data-nosnippet>636</a>        leaves
-<a href=#637 id=637 data-nosnippet>637</a>            .first()
-<a href=#638 id=638 data-nosnippet>638</a>            .expect(<span class="string">"a segment has at least its selector"</span>)
-<a href=#639 id=639 data-nosnippet>639</a>            .name(),
-<a href=#640 id=640 data-nosnippet>640</a>    );
-<a href=#641 id=641 data-nosnippet>641</a>    <span class="comment">// What the `match` binds, asked of the step rather than assumed: the FIELD
-<a href=#642 id=642 data-nosnippet>642</a>    // branch scrutinizes `&amp;Option&lt;_&gt;`, so ergonomics binds `&amp;Sum` — a borrow.
-<a href=#643 id=643 data-nosnippet>643</a>    // Only an owned-yielding CALL binds an owned value.
-<a href=#644 id=644 data-nosnippet>644</a>    </span><span class="kw">let </span>inner = group(fold_steps(
-<a href=#645 id=645 data-nosnippet>645</a>        qualify,
-<a href=#646 id=646 data-nosnippet>646</a>        <span class="kw-2">&amp;</span>path[k + <span class="number">1</span>..],
-<a href=#647 id=647 data-nosnippet>647</a>        <span class="macro">quote!</span>(#bind),
-<a href=#648 id=648 data-nosnippet>648</a>        path[k].yields_owned(),
-<a href=#649 id=649 data-nosnippet>649</a>    ));
-<a href=#650 id=650 data-nosnippet>650</a>    <span class="kw">let </span>filled: Vec&lt;Slot&gt; = leaves.iter().map(|leaf| bridge.slot(leaf)).collect();
-<a href=#651 id=651 data-nosnippet>651</a>    <span class="kw">let </span>tys = filled.iter().map(|slot| <span class="kw-2">&amp;</span>slot.ty);
-<a href=#652 id=652 data-nosnippet>652</a>    <span class="kw">let </span>defaults = filled.iter().map(|slot| <span class="kw-2">&amp;</span>slot.default);
-<a href=#653 id=653 data-nosnippet>653</a>    <span class="comment">// A FIELD step composes to a borrow, so it goes through a coercion site
-<a href=#654 id=654 data-nosnippet>654</a>    // and the destructure stops caring which representation the source spelled
-<a href=#655 id=655 data-nosnippet>655</a>    // the optional as (#268). A CALL yields its own owned value, whose payload
-<a href=#656 id=656 data-nosnippet>656</a>    // downstream may move, so it keeps the direct match — the same division
-<a href=#657 id=657 data-nosnippet>657</a>    // [`reach_leaf`] makes.
-<a href=#658 id=658 data-nosnippet>658</a>    </span><span class="kw">let </span>(prelude, scrutinee) = <span class="kw">if </span>path[k].is_field() {
-<a href=#659 id=659 data-nosnippet>659</a>        <span class="kw">let </span>opt_bind = <span class="macro">format_ident!</span>(<span class="string">"__so{}"</span>, index);
-<a href=#660 id=660 data-nosnippet>660</a>        (bind_as_option(<span class="kw-2">&amp;</span>opt_e, <span class="kw-2">&amp;</span>opt_bind), <span class="macro">quote!</span>(#opt_bind))
-<a href=#661 id=661 data-nosnippet>661</a>    } <span class="kw">else </span>{
-<a href=#662 id=662 data-nosnippet>662</a>        (TokenStream::new(), opt_e)
-<a href=#663 id=663 data-nosnippet>663</a>    };
-<a href=#664 id=664 data-nosnippet>664</a>    <span class="macro">quote!</span> {
-<a href=#665 id=665 data-nosnippet>665</a>        <span class="kw">let </span>(#(#slots,)<span class="kw-2">*</span>): (#(#tys,)<span class="kw-2">*</span>) = {
-<a href=#666 id=666 data-nosnippet>666</a>            #prelude
-<a href=#667 id=667 data-nosnippet>667</a>            <span class="kw">match </span>#scrutinee {
-<a href=#668 id=668 data-nosnippet>668</a>                ::core::option::Option::Some(#bind) =&gt; {
-<a href=#669 id=669 data-nosnippet>669</a>                    #inner
-<a href=#670 id=670 data-nosnippet>670</a>                    (#(#slots,)<span class="kw-2">*</span>)
-<a href=#671 id=671 data-nosnippet>671</a>                }
-<a href=#672 id=672 data-nosnippet>672</a>                ::core::option::Option::None =&gt; (#(#defaults,)<span class="kw-2">*</span>),
-<a href=#673 id=673 data-nosnippet>673</a>            }
-<a href=#674 id=674 data-nosnippet>674</a>        };
-<a href=#675 id=675 data-nosnippet>675</a>    }
-<a href=#676 id=676 data-nosnippet>676</a>}
-<a href=#677 id=677 data-nosnippet>677</a>
-<a href=#678 id=678 data-nosnippet>678</a><span class="doccomment">/// The `match` a **conditional** value form's leaves share.
-<a href=#679 id=679 data-nosnippet>679</a>///
-<a href=#680 id=680 data-nosnippet>680</a>/// A hoist under an optional step ran only where the value was present, so its
-<a href=#681 id=681 data-nosnippet>681</a>/// leaves cannot be independent statements: their slots exist either way, and
-<a href=#682 id=682 data-nosnippet>682</a>/// only one arm computes them. The `Some` arm runs `body` — the statements
-<a href=#683 id=683 data-nosnippet>683</a>/// those leaves contributed — and yields their slots as a tuple; the `None`
-<a href=#684 id=684 data-nosnippet>684</a>/// arm yields each slot's default, the same shape [`segment`] gives an absent
-<a href=#685 id=685 data-nosnippet>685</a>/// sum. Binding the tuple outside the `match` keeps the slots in scope for the
-<a href=#686 id=686 data-nosnippet>686</a>/// call's argument list, which is indifferent to how a slot was filled.
-<a href=#687 id=687 data-nosnippet>687</a>///
-<a href=#688 id=688 data-nosnippet>688</a>/// Matched BY VALUE: the local is this arm's alone, every leaf under the hoist
-<a href=#689 id=689 data-nosnippet>689</a>/// being in it, so a consuming value form's fields move out here exactly as
-<a href=#690 id=690 data-nosnippet>690</a>/// they do at an unconditional one.
-<a href=#691 id=691 data-nosnippet>691</a></span><span class="kw">pub fn </span>conditional_arm&lt;B: DeliveryBridge&gt;(
-<a href=#692 id=692 data-nosnippet>692</a>    bridge: <span class="kw-2">&amp;</span>B,
-<a href=#693 id=693 data-nosnippet>693</a>    hoisted: <span class="kw-2">&amp;</span>Hoisted,
-<a href=#694 id=694 data-nosnippet>694</a>    index: usize,
-<a href=#695 id=695 data-nosnippet>695</a>    leaves: <span class="kw-2">&amp;</span>[B::Leaf],
-<a href=#696 id=696 data-nosnippet>696</a>    slots: <span class="kw-2">&amp;</span>[syn::Ident],
-<a href=#697 id=697 data-nosnippet>697</a>    body: TokenStream,
-<a href=#698 id=698 data-nosnippet>698</a>) -&gt; TokenStream {
-<a href=#699 id=699 data-nosnippet>699</a>    <span class="kw">let </span>local = hoisted.local(index);
-<a href=#700 id=700 data-nosnippet>700</a>    <span class="kw">let </span>bind = <span class="macro">format_ident!</span>(<span class="string">"__u{}"</span>, index);
-<a href=#701 id=701 data-nosnippet>701</a>    <span class="kw">let </span>under: Vec&lt;usize&gt; = (<span class="number">0</span>..leaves.len())
-<a href=#702 id=702 data-nosnippet>702</a>        .filter(|<span class="kw-2">&amp;</span>k| {
-<a href=#703 id=703 data-nosnippet>703</a>            hoisted
-<a href=#704 id=704 data-nosnippet>704</a>                .conditional(leaves[k].reach())
-<a href=#705 id=705 data-nosnippet>705</a>                .is_some_and(|(j, ..)| j == index)
-<a href=#706 id=706 data-nosnippet>706</a>        })
-<a href=#707 id=707 data-nosnippet>707</a>        .collect();
-<a href=#708 id=708 data-nosnippet>708</a>    <span class="kw">let </span>ids: Vec&lt;<span class="kw-2">&amp;</span>syn::Ident&gt; = under.iter().map(|<span class="kw-2">&amp;</span>k| <span class="kw-2">&amp;</span>slots[k]).collect();
-<a href=#709 id=709 data-nosnippet>709</a>    <span class="kw">let </span>filled: Vec&lt;Slot&gt; = under.iter().map(|<span class="kw-2">&amp;</span>k| bridge.slot(<span class="kw-2">&amp;</span>leaves[k])).collect();
-<a href=#710 id=710 data-nosnippet>710</a>    <span class="kw">let </span>tys = filled.iter().map(|slot| <span class="kw-2">&amp;</span>slot.ty);
-<a href=#711 id=711 data-nosnippet>711</a>    <span class="kw">let </span>defaults = filled.iter().map(|slot| <span class="kw-2">&amp;</span>slot.default);
-<a href=#712 id=712 data-nosnippet>712</a>    <span class="macro">quote!</span> {
-<a href=#713 id=713 data-nosnippet>713</a>        <span class="kw">let </span>(#(#ids,)<span class="kw-2">*</span>): (#(#tys,)<span class="kw-2">*</span>) = <span class="kw">match </span>#local {
-<a href=#714 id=714 data-nosnippet>714</a>            ::core::option::Option::Some(#bind) =&gt; { #body (#(#ids,)<span class="kw-2">*</span>) }
-<a href=#715 id=715 data-nosnippet>715</a>            ::core::option::Option::None =&gt; (#(#defaults,)<span class="kw-2">*</span>),
-<a href=#716 id=716 data-nosnippet>716</a>        };
-<a href=#717 id=717 data-nosnippet>717</a>    }
-<a href=#718 id=718 data-nosnippet>718</a>}
-<a href=#719 id=719 data-nosnippet>719</a>
-<a href=#720 id=720 data-nosnippet>720</a><span class="doccomment">/// Bind `e` so it can be destructured as an `Option` **whatever Rust
-<a href=#721 id=721 data-nosnippet>721</a>/// representation the source used for it**.
-<a href=#722 id=722 data-nosnippet>722</a>///
-<a href=#723 id=723 data-nosnippet>723</a>/// The model says a position is optional; it deliberately does not say whether
-<a href=#724 id=724 data-nosnippet>724</a>/// Rust spells that `Option&lt;T&gt;`, `Box&lt;Option&lt;T&gt;&gt;`, or something else — the
-<a href=#725 id=725 data-nosnippet>725</a>/// side interpreting the classification is the side that must accept any
-<a href=#726 id=726 data-nosnippet>726</a>/// representation. Matching the reached place directly assumed one, which is
-<a href=#727 id=727 data-nosnippet>727</a>/// "classify off the model, spell from the model" broken in the direction
-<a href=#728 id=728 data-nosnippet>728</a>/// nothing was watching: `Box&lt;Option&lt;T&gt;&gt;` then produced
-<a href=#729 id=729 data-nosnippet>729</a>/// `match &amp;place { Some(..) =&gt; .. }` and an E0308 (#268).
-<a href=#730 id=730 data-nosnippet>730</a>///
-<a href=#731 id=731 data-nosnippet>731</a>/// A type-ascribed `let` is a coercion site, and deref coercion is transitive
-<a href=#732 id=732 data-nosnippet>732</a>/// **and** a no-op when the types already match — so this one shape serves
-<a href=#733 id=733 data-nosnippet>733</a>/// every representation, and the plain `Option&lt;T&gt;` case is unchanged.
-<a href=#734 id=734 data-nosnippet>734</a>///
-<a href=#735 id=735 data-nosnippet>735</a>/// `e` is expected to be a **reference** already — [`compose_step`] composes a
-<a href=#736 id=736 data-nosnippet>736</a>/// field read as `&amp;(e).f` — so nothing is borrowed here. Borrowing only: an
-<a href=#737 id=737 data-nosnippet>737</a>/// owned position cannot be made representation-agnostic this way, because
-<a href=#738 id=738 data-nosnippet>738</a>/// deref coercion applies to references and moving out of a wrapper is
-<a href=#739 id=739 data-nosnippet>739</a>/// something only some of them permit (`Box` does, `Rc` cannot). A site that
-<a href=#740 id=740 data-nosnippet>740</a>/// must MOVE the payload keeps its direct match.
-<a href=#741 id=741 data-nosnippet>741</a></span><span class="kw">pub fn </span>bind_as_option(e: <span class="kw-2">&amp;</span>TokenStream, bind: <span class="kw-2">&amp;</span>syn::Ident) -&gt; TokenStream {
-<a href=#742 id=742 data-nosnippet>742</a>    <span class="macro">quote!</span> { <span class="kw">let </span>#bind: <span class="kw-2">&amp;</span>::core::option::Option&lt;<span class="kw">_</span>&gt; = #e; }
-<a href=#743 id=743 data-nosnippet>743</a>}
-<a href=#744 id=744 data-nosnippet>744</a>
-<a href=#745 id=745 data-nosnippet>745</a><span class="doccomment">/// Every value form on a plan, evaluated **once** and bound to a local
-<a href=#746 id=746 data-nosnippet>746</a>/// (`__vf0`, `__vf1`, …), so a struct is built once per delivery rather than
-<a href=#747 id=747 data-nosnippet>747</a>/// once per field. The bound prefixes come back with the statements, since
-<a href=#748 id=748 data-nosnippet>748</a>/// reaching a leaf means starting from the innermost local it sits under.
-<a href=#749 id=749 data-nosnippet>749</a>///
-<a href=#750 id=750 data-nosnippet>750</a>/// Shared by both delivery paths — the multi-leaf encoder below and the
-<a href=#751 id=751 data-nosnippet>751</a>/// single-leaf `Delivery::Return` shortcut in `emit/wrapper.rs`. The shortcut
-<a href=#752 id=752 data-nosnippet>752</a>/// used to compose its reach straight off the raw value, which for a consuming
-<a href=#753 id=753 data-nosnippet>753</a>/// value form emitted `f(&amp;v)` against a by-value receiver: ill-typed Rust in
-<a href=#754 id=754 data-nosnippet>754</a>/// the consumer's crate. One binder, so the two cannot disagree about what a
-<a href=#755 id=755 data-nosnippet>755</a>/// hoist is or who owns it.
-<a href=#756 id=756 data-nosnippet>756</a></span><span class="kw">pub struct </span>Hoisted {
-<a href=#757 id=757 data-nosnippet>757</a>    <span class="doccomment">/// The `let __vfN = …;` bindings, outermost-first.
-<a href=#758 id=758 data-nosnippet>758</a>    </span><span class="kw">pub </span>stmts: TokenStream,
-<a href=#759 id=759 data-nosnippet>759</a>    <span class="doccomment">/// Each hoist's path prefix and the local it was bound to.
-<a href=#760 id=760 data-nosnippet>760</a>    </span>bound: Vec&lt;(Vec&lt;PathStep&gt;, syn::Ident)&gt;,
-<a href=#761 id=761 data-nosnippet>761</a>    <span class="doccomment">/// Whether each bound hoist consumed the value it decomposed.
-<a href=#762 id=762 data-nosnippet>762</a>    </span>consuming: Vec&lt;bool&gt;,
-<a href=#763 id=763 data-nosnippet>763</a>    <span class="doccomment">/// Whether each bound local is `Option&lt;TStruct&gt;` rather than `TStruct` —
-<a href=#764 id=764 data-nosnippet>764</a>    /// the hoist sits under an optional step, so the value form ran only where
-<a href=#765 id=765 data-nosnippet>765</a>    /// the value was present. Its leaves cannot be emitted as independent
-<a href=#766 id=766 data-nosnippet>766</a>    /// statements: they share ONE `match` on the local (see
-<a href=#767 id=767 data-nosnippet>767</a>    /// [`encode_plan_leaves`]), taken by value, so a consuming form's fields
-<a href=#768 id=768 data-nosnippet>768</a>    /// still move out inside the arm.
-<a href=#769 id=769 data-nosnippet>769</a>    </span>optional: Vec&lt;bool&gt;,
-<a href=#770 id=770 data-nosnippet>770</a>}
-<a href=#771 id=771 data-nosnippet>771</a><span class="kw">impl </span>Hoisted {
-<a href=#772 id=772 data-nosnippet>772</a>    <span class="doccomment">/// Index of the innermost bound hoist `path` sits under, with that prefix
-<a href=#773 id=773 data-nosnippet>773</a>    /// already consumed. `None` for a leaf under no value form at all — a
-<a href=#774 id=774 data-nosnippet>774</a>    /// sibling `.field()` / `.field_self()`, which still reaches from the value
-<a href=#775 id=775 data-nosnippet>775</a>    /// itself.
-<a href=#776 id=776 data-nosnippet>776</a>    </span><span class="kw">fn </span>innermost(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>[PathStep]) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, Vec&lt;PathStep&gt;)&gt; {
-<a href=#777 id=777 data-nosnippet>777</a>        <span class="self">self</span>.bound
-<a href=#778 id=778 data-nosnippet>778</a>            .iter()
-<a href=#779 id=779 data-nosnippet>779</a>            .enumerate()
-<a href=#780 id=780 data-nosnippet>780</a>            .filter(|(<span class="kw">_</span>, (p, <span class="kw">_</span>))| p.len() &lt; path.len() &amp;&amp; path.starts_with(p))
-<a href=#781 id=781 data-nosnippet>781</a>            .max_by_key(|(<span class="kw">_</span>, (p, <span class="kw">_</span>))| p.len())
-<a href=#782 id=782 data-nosnippet>782</a>            .map(|(i, (p, <span class="kw">_</span>))| (i, path[p.len()..].to_vec()))
-<a href=#783 id=783 data-nosnippet>783</a>    }
-<a href=#784 id=784 data-nosnippet>784</a>
-<a href=#785 id=785 data-nosnippet>785</a>    <span class="doccomment">/// The innermost bound local `path` sits under, with that prefix already
-<a href=#786 id=786 data-nosnippet>786</a>    /// consumed, and whether that hoist gave its value away.
-<a href=#787 id=787 data-nosnippet>787</a>    </span><span class="kw">pub fn </span>rebase(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>[PathStep]) -&gt; <span class="prelude-ty">Option</span>&lt;(syn::Ident, Vec&lt;PathStep&gt;, bool)&gt; {
-<a href=#788 id=788 data-nosnippet>788</a>        <span class="self">self</span>.innermost(path)
-<a href=#789 id=789 data-nosnippet>789</a>            .map(|(i, rest)| (<span class="self">self</span>.bound[i].<span class="number">1</span>.clone(), rest, <span class="self">self</span>.consuming[i]))
-<a href=#790 id=790 data-nosnippet>790</a>    }
-<a href=#791 id=791 data-nosnippet>791</a>
-<a href=#792 id=792 data-nosnippet>792</a>    <span class="doccomment">/// The innermost **conditional** hoist `path` sits under: its index, the
-<a href=#793 id=793 data-nosnippet>793</a>    /// local holding the `Option`, the name its `Some` arm binds, and the steps
-<a href=#794 id=794 data-nosnippet>794</a>    /// left to reach the leaf from there. `None` when the leaf's innermost
-<a href=#795 id=795 data-nosnippet>795</a>    /// hoist is unconditional (or there is none) — then [`Self::rebase`]
-<a href=#796 id=796 data-nosnippet>796</a>    /// applies and the leaf is an ordinary standalone statement.
-<a href=#797 id=797 data-nosnippet>797</a>    </span><span class="kw">pub fn </span>conditional(
-<a href=#798 id=798 data-nosnippet>798</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#799 id=799 data-nosnippet>799</a>        path: <span class="kw-2">&amp;</span>[PathStep],
-<a href=#800 id=800 data-nosnippet>800</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, syn::Ident, syn::Ident, Vec&lt;PathStep&gt;)&gt; {
-<a href=#801 id=801 data-nosnippet>801</a>        <span class="kw">let </span>(i, rest) = <span class="self">self</span>.innermost(path)<span class="question-mark">?</span>;
-<a href=#802 id=802 data-nosnippet>802</a>        <span class="self">self</span>.optional[i].then(|| (i, <span class="self">self</span>.bound[i].<span class="number">1</span>.clone(), <span class="macro">format_ident!</span>(<span class="string">"__u{}"</span>, i), rest))
-<a href=#803 id=803 data-nosnippet>803</a>    }
-<a href=#804 id=804 data-nosnippet>804</a>
-<a href=#805 id=805 data-nosnippet>805</a>    <span class="doccomment">/// Where a leaf's reach starts, once these hoists are bound.
-<a href=#806 id=806 data-nosnippet>806</a>    ///
-<a href=#807 id=807 data-nosnippet>807</a>    /// Three cases, and the leaf's own path decides which.
-<a href=#808 id=808 data-nosnippet>808</a>    ///
-<a href=#809 id=809 data-nosnippet>809</a>    /// A leaf under a **conditional** value form reaches off the name that
-<a href=#810 id=810 data-nosnippet>810</a>    /// form's `Some` arm binds. That arm matches the hoist's `Option` by
-<a href=#811 id=811 data-nosnippet>811</a>    /// value — every leaf under the hoist is inside it, so the local is the
-<a href=#812 id=812 data-nosnippet>812</a>    /// arm's alone — which makes the binding an owned payload: a consuming
-<a href=#813 id=813 data-nosnippet>813</a>    /// form's fields move out of it exactly as they do at an unconditional
-<a href=#814 id=814 data-nosnippet>814</a>    /// one, and [`LeafPlace::owned`] says so. The leaf's statements belong in
-<a href=#815 id=815 data-nosnippet>815</a>    /// that arm, because that is where the binding exists.
-<a href=#816 id=816 data-nosnippet>816</a>    ///
-<a href=#817 id=817 data-nosnippet>817</a>    /// A leaf under an **ordinary** value form reaches off the local that form
-<a href=#818 id=818 data-nosnippet>818</a>    /// was bound to, with the prefix already consumed and the form's own
-<a href=#819 id=819 data-nosnippet>819</a>    /// ownership carried along.
-<a href=#820 id=820 data-nosnippet>820</a>    ///
-<a href=#821 id=821 data-nosnippet>821</a>    /// A leaf under **no** value form — a sibling accessor of the delivered
-<a href=#822 id=822 data-nosnippet>822</a>    /// value — reaches from that value.
-<a href=#823 id=823 data-nosnippet>823</a>    </span><span class="kw">pub fn </span>place&lt;L: DecomposedLeaf&gt;(
-<a href=#824 id=824 data-nosnippet>824</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#825 id=825 data-nosnippet>825</a>        leaf: <span class="kw-2">&amp;</span>L,
-<a href=#826 id=826 data-nosnippet>826</a>        value: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#827 id=827 data-nosnippet>827</a>        by_ref: bool,
-<a href=#828 id=828 data-nosnippet>828</a>    ) -&gt; LeafPlace {
-<a href=#829 id=829 data-nosnippet>829</a>        <span class="kw">let </span>path = leaf.reach();
-<a href=#830 id=830 data-nosnippet>830</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((i, <span class="kw">_</span>, bind, rest)) = <span class="self">self</span>.conditional(path) {
-<a href=#831 id=831 data-nosnippet>831</a>            <span class="kw">return </span>LeafPlace {
-<a href=#832 id=832 data-nosnippet>832</a>                base: <span class="macro">quote!</span>(#bind),
-<a href=#833 id=833 data-nosnippet>833</a>                base_is_ref: <span class="bool-val">false</span>,
-<a href=#834 id=834 data-nosnippet>834</a>                path: rest,
-<a href=#835 id=835 data-nosnippet>835</a>                consuming: <span class="self">self</span>.consumed(i),
-<a href=#836 id=836 data-nosnippet>836</a>                conditional: <span class="prelude-val">Some</span>(i),
-<a href=#837 id=837 data-nosnippet>837</a>            };
-<a href=#838 id=838 data-nosnippet>838</a>        }
-<a href=#839 id=839 data-nosnippet>839</a>        <span class="kw">match </span><span class="self">self</span>.rebase(path) {
-<a href=#840 id=840 data-nosnippet>840</a>            <span class="prelude-val">Some</span>((local, rest, consuming)) =&gt; LeafPlace {
-<a href=#841 id=841 data-nosnippet>841</a>                base: <span class="macro">quote!</span>(#local),
-<a href=#842 id=842 data-nosnippet>842</a>                base_is_ref: <span class="bool-val">false</span>,
-<a href=#843 id=843 data-nosnippet>843</a>                path: rest,
-<a href=#844 id=844 data-nosnippet>844</a>                consuming,
-<a href=#845 id=845 data-nosnippet>845</a>                conditional: <span class="prelude-val">None</span>,
-<a href=#846 id=846 data-nosnippet>846</a>            },
-<a href=#847 id=847 data-nosnippet>847</a>            <span class="prelude-val">None </span>=&gt; LeafPlace {
-<a href=#848 id=848 data-nosnippet>848</a>                base: value.clone(),
-<a href=#849 id=849 data-nosnippet>849</a>                base_is_ref: by_ref,
-<a href=#850 id=850 data-nosnippet>850</a>                path: path.to_vec(),
-<a href=#851 id=851 data-nosnippet>851</a>                consuming: <span class="bool-val">false</span>,
-<a href=#852 id=852 data-nosnippet>852</a>                conditional: <span class="prelude-val">None</span>,
-<a href=#853 id=853 data-nosnippet>853</a>            },
-<a href=#854 id=854 data-nosnippet>854</a>        }
-<a href=#855 id=855 data-nosnippet>855</a>    }
-<a href=#856 id=856 data-nosnippet>856</a>
-<a href=#857 id=857 data-nosnippet>857</a>    <span class="doccomment">/// The local a hoist was bound to.
-<a href=#858 id=858 data-nosnippet>858</a>    </span><span class="kw">pub fn </span>local(<span class="kw-2">&amp;</span><span class="self">self</span>, i: usize) -&gt; syn::Ident {
-<a href=#859 id=859 data-nosnippet>859</a>        <span class="self">self</span>.bound[i].<span class="number">1</span>.clone()
-<a href=#860 id=860 data-nosnippet>860</a>    }
-<a href=#861 id=861 data-nosnippet>861</a>
-<a href=#862 id=862 data-nosnippet>862</a>    <span class="doccomment">/// Whether a hoist consumed the value it decomposed.
-<a href=#863 id=863 data-nosnippet>863</a>    </span><span class="kw">pub fn </span>consumed(<span class="kw-2">&amp;</span><span class="self">self</span>, i: usize) -&gt; bool {
-<a href=#864 id=864 data-nosnippet>864</a>        <span class="self">self</span>.consuming[i]
-<a href=#865 id=865 data-nosnippet>865</a>    }
-<a href=#866 id=866 data-nosnippet>866</a>}
-<a href=#867 id=867 data-nosnippet>867</a><span class="doccomment">/// Fold `path` over `base` the way an adapter's own gated reach does, but
-<a href=#868 id=868 data-nosnippet>868</a>/// yielding an `Option&lt;…&gt;` rather than the adapter's absent value: the optional
-<a href=#869 id=869 data-nosnippet>869</a>/// steps become a `map`/`and_then` chain, so an absent value short-circuits to
-<a href=#870 id=870 data-nosnippet>870</a>/// `None` instead of to whatever that adapter uses for absence. `body` renders
-<a href=#871 id=871 data-nosnippet>871</a>/// the innermost reached expression as a BARE value — the chain's last link
-<a href=#872 id=872 data-nosnippet>872</a>/// wraps it.
-<a href=#873 id=873 data-nosnippet>873</a>///
-<a href=#874 id=874 data-nosnippet>874</a>/// The gated reach this mirrors is [`reach_leaf`], which takes the absent
-<a href=#875 id=875 data-nosnippet>875</a>/// value from the adapter rather than choosing one. This one yields an
-<a href=#876 id=876 data-nosnippet>876</a>/// `Option` instead, because what it binds is a hoist rather than a delivered
-<a href=#877 id=877 data-nosnippet>877</a>/// leaf: the value form runs where the value is present, and the `None` the
-<a href=#878 id=878 data-nosnippet>878</a>/// chain produces is the local's own.
-<a href=#879 id=879 data-nosnippet>879</a>///
-<a href=#880 id=880 data-nosnippet>880</a>/// This is how a CONDITIONAL value form is bound — the accessor runs only where
-<a href=#881 id=881 data-nosnippet>881</a>/// the value it decomposes is actually present.
-<a href=#882 id=882 data-nosnippet>882</a></span><span class="kw">fn </span>reach_optional(
-<a href=#883 id=883 data-nosnippet>883</a>    qualify: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>syn::Ident) -&gt; syn::Path,
-<a href=#884 id=884 data-nosnippet>884</a>    path: <span class="kw-2">&amp;</span>[PathStep],
-<a href=#885 id=885 data-nosnippet>885</a>    base: TokenStream,
-<a href=#886 id=886 data-nosnippet>886</a>    base_is_ref: bool,
-<a href=#887 id=887 data-nosnippet>887</a>    depth: usize,
-<a href=#888 id=888 data-nosnippet>888</a>    body: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(TokenStream) -&gt; TokenStream,
-<a href=#889 id=889 data-nosnippet>889</a>) -&gt; TokenStream {
-<a href=#890 id=890 data-nosnippet>890</a>    <span class="kw">let </span>(e, lead) = project_leading_fields(<span class="kw-2">&amp;</span>base, base_is_ref, path);
-<a href=#891 id=891 data-nosnippet>891</a>    <span class="kw">match </span>(lead..path.len()).find(|<span class="kw-2">&amp;</span>i| path[i].is_optional()) {
-<a href=#892 id=892 data-nosnippet>892</a>        <span class="prelude-val">None </span>=&gt; body(fold_steps(qualify, <span class="kw-2">&amp;</span>path[lead..], e, <span class="bool-val">false</span>)),
-<a href=#893 id=893 data-nosnippet>893</a>        <span class="prelude-val">Some</span>(k) =&gt; {
-<a href=#894 id=894 data-nosnippet>894</a>            <span class="comment">// Through the optional step INCLUSIVE: the same fold, so the
-<a href=#895 id=895 data-nosnippet>895</a>            // borrow in front of it is the ordinary rule rather than a second
-<a href=#896 id=896 data-nosnippet>896</a>            // statement of it.
-<a href=#897 id=897 data-nosnippet>897</a>            </span><span class="kw">let </span>opt_e = fold_steps(qualify, <span class="kw-2">&amp;</span>path[lead..=k], e, <span class="bool-val">false</span>);
-<a href=#898 id=898 data-nosnippet>898</a>            <span class="kw">let </span>bind = <span class="macro">format_ident!</span>(<span class="string">"__hb{}"</span>, depth);
-<a href=#899 id=899 data-nosnippet>899</a>            <span class="comment">// What the arm binds is the step's own value: an OWNED payload is a
-<a href=#900 id=900 data-nosnippet>900</a>            // bare `T`, so composing the next step onto it directly would hand
-<a href=#901 id=901 data-nosnippet>901</a>            // `T` to an accessor typed for `&amp;T`. Say it is not a reference and
-<a href=#902 id=902 data-nosnippet>902</a>            // let `project_leading_fields` borrow it; a borrowed payload is
-<a href=#903 id=903 data-nosnippet>903</a>            // already one and passes through.
-<a href=#904 id=904 data-nosnippet>904</a>            //
-<a href=#905 id=905 data-nosnippet>905</a>            // With NO steps left the binding goes to `body` untouched — that is
-<a href=#906 id=906 data-nosnippet>906</a>            // what lets a consuming value form MOVE an owned payload rather than
-<a href=#907 id=907 data-nosnippet>907</a>            // borrow it straight back, so the terminal case stays "already a
-<a href=#908 id=908 data-nosnippet>908</a>            // reference" whatever the payload is.
-<a href=#909 id=909 data-nosnippet>909</a>            </span><span class="kw">let </span>rest = <span class="kw-2">&amp;</span>path[k + <span class="number">1</span>..];
-<a href=#910 id=910 data-nosnippet>910</a>            <span class="kw">let </span>inner = reach_optional(
-<a href=#911 id=911 data-nosnippet>911</a>                qualify,
-<a href=#912 id=912 data-nosnippet>912</a>                rest,
-<a href=#913 id=913 data-nosnippet>913</a>                <span class="macro">quote!</span>(#bind),
-<a href=#914 id=914 data-nosnippet>914</a>                rest.is_empty() || !path[k].yields_owned(),
-<a href=#915 id=915 data-nosnippet>915</a>                depth + <span class="number">1</span>,
-<a href=#916 id=916 data-nosnippet>916</a>                body,
-<a href=#917 id=917 data-nosnippet>917</a>            );
-<a href=#918 id=918 data-nosnippet>918</a>            <span class="comment">// `map` when this is the LAST optional step (the body yields a bare
-<a href=#919 id=919 data-nosnippet>919</a>            // value) and `and_then` when another follows (the recursion yields
-<a href=#920 id=920 data-nosnippet>920</a>            // an `Option` that must not nest). The equivalent `match` reads the
-<a href=#921 id=921 data-nosnippet>921</a>            // same but generated code runs through the consumer's lints, where
-<a href=#922 id=922 data-nosnippet>922</a>            // `clippy::manual_map` is a denial.
-<a href=#923 id=923 data-nosnippet>923</a>            </span><span class="kw">let </span>combinator = <span class="kw">if </span>rest.iter().any(PathStep::is_optional) {
-<a href=#924 id=924 data-nosnippet>924</a>                <span class="macro">format_ident!</span>(<span class="string">"and_then"</span>)
-<a href=#925 id=925 data-nosnippet>925</a>            } <span class="kw">else </span>{
-<a href=#926 id=926 data-nosnippet>926</a>                <span class="macro">format_ident!</span>(<span class="string">"map"</span>)
-<a href=#927 id=927 data-nosnippet>927</a>            };
-<a href=#928 id=928 data-nosnippet>928</a>            <span class="macro">quote!</span> {
-<a href=#929 id=929 data-nosnippet>929</a>                #opt_e.#combinator(|#bind| #inner)
-<a href=#930 id=930 data-nosnippet>930</a>            }
-<a href=#931 id=931 data-nosnippet>931</a>        }
-<a href=#932 id=932 data-nosnippet>932</a>    }
-<a href=#933 id=933 data-nosnippet>933</a>}
-<a href=#934 id=934 data-nosnippet>934</a><span class="kw">pub fn </span>bind_hoists(
-<a href=#935 id=935 data-nosnippet>935</a>    qualify: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>syn::Ident) -&gt; syn::Path,
-<a href=#936 id=936 data-nosnippet>936</a>    hoists: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::unfold::Hoist],
-<a href=#937 id=937 data-nosnippet>937</a>    value: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#938 id=938 data-nosnippet>938</a>    by_ref: bool,
-<a href=#939 id=939 data-nosnippet>939</a>) -&gt; Hoisted {
-<a href=#940 id=940 data-nosnippet>940</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = Hoisted {
-<a href=#941 id=941 data-nosnippet>941</a>        stmts: TokenStream::new(),
-<a href=#942 id=942 data-nosnippet>942</a>        bound: Vec::new(),
-<a href=#943 id=943 data-nosnippet>943</a>        consuming: Vec::new(),
-<a href=#944 id=944 data-nosnippet>944</a>        optional: Vec::new(),
-<a href=#945 id=945 data-nosnippet>945</a>    };
-<a href=#946 id=946 data-nosnippet>946</a>    <span class="comment">// Value forms COMPOSE, so each hoist is built from the longest hoist that
-<a href=#947 id=947 data-nosnippet>947</a>    // is already a proper prefix of it (they arrive outermost-first), and from
-<a href=#948 id=948 data-nosnippet>948</a>    // `value` otherwise.
-<a href=#949 id=949 data-nosnippet>949</a>    </span><span class="kw">for </span>(i, h) <span class="kw">in </span>hoists.iter().enumerate() {
-<a href=#950 id=950 data-nosnippet>950</a>        <span class="kw">let </span>local = <span class="macro">format_ident!</span>(<span class="string">"__vf{}"</span>, i);
-<a href=#951 id=951 data-nosnippet>951</a>        <span class="comment">// A hoist under an optional step binds `Option&lt;TStruct&gt;`: the value
-<a href=#952 id=952 data-nosnippet>952</a>        // form runs in the `Some` arm only. Core refuses to nest these, so the
-<a href=#953 id=953 data-nosnippet>953</a>        // enclosing value is always the plan's own — no rebase to consider.
-<a href=#954 id=954 data-nosnippet>954</a>        </span><span class="kw">if </span>h.prefix.iter().any(PathStep::is_optional) {
-<a href=#955 id=955 data-nosnippet>955</a>            <span class="kw">let </span>(last, lead) = h
-<a href=#956 id=956 data-nosnippet>956</a>                .prefix
-<a href=#957 id=957 data-nosnippet>957</a>                .split_last()
-<a href=#958 id=958 data-nosnippet>958</a>                .expect(<span class="string">"a hoist prefix ends in its value-form call"</span>);
-<a href=#959 id=959 data-nosnippet>959</a>            <span class="kw">let </span>consuming = h.consuming;
-<a href=#960 id=960 data-nosnippet>960</a>            <span class="comment">// The value form is handed the payload only when the optional step
-<a href=#961 id=961 data-nosnippet>961</a>            // is the LAST thing before it; any step in between composes as a
-<a href=#962 id=962 data-nosnippet>962</a>            // borrow, so what arrives is a reference either way.
-<a href=#963 id=963 data-nosnippet>963</a>            </span><span class="kw">let </span>owned = lead.last().is_some_and(PathStep::yields_owned);
-<a href=#964 id=964 data-nosnippet>964</a>            <span class="kw">let </span>expr = reach_optional(qualify, lead, value.clone(), by_ref, <span class="number">0</span>, <span class="kw-2">&amp;</span>|reached| {
-<a href=#965 id=965 data-nosnippet>965</a>                compose_value_form_call(qualify, last, reached, owned, consuming)
-<a href=#966 id=966 data-nosnippet>966</a>            });
-<a href=#967 id=967 data-nosnippet>967</a>            out.stmts.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#local = #expr; });
-<a href=#968 id=968 data-nosnippet>968</a>            out.bound.push((h.prefix.clone(), local));
-<a href=#969 id=969 data-nosnippet>969</a>            out.consuming.push(h.consuming);
-<a href=#970 id=970 data-nosnippet>970</a>            out.optional.push(<span class="bool-val">true</span>);
-<a href=#971 id=971 data-nosnippet>971</a>            <span class="kw">continue</span>;
-<a href=#972 id=972 data-nosnippet>972</a>        }
-<a href=#973 id=973 data-nosnippet>973</a>        <span class="comment">// Where the fold starts, and whether what it starts from is OWNED. The
-<a href=#974 id=974 data-nosnippet>974</a>        // value form's own boundary is decided below, from what the fold ends
-<a href=#975 id=975 data-nosnippet>975</a>        // up holding — never from where it began.
-<a href=#976 id=976 data-nosnippet>976</a>        </span><span class="kw">let </span>(from, start, start_owned) = <span class="kw">match </span>out.rebase(<span class="kw-2">&amp;</span>h.prefix) {
-<a href=#977 id=977 data-nosnippet>977</a>            <span class="comment">// A NESTED consuming form is handed the parent's field by MOVE: a
-<a href=#978 id=978 data-nosnippet>978</a>            // hoisted value form is an owned struct and its fields are
-<a href=#979 id=979 data-nosnippet>979</a>            // disjoint, so moving one out leaves every sibling leaf readable.
-<a href=#980 id=980 data-nosnippet>980</a>            // `compose_step` borrows (`&amp;(e).f`), so a plain field run to that
-<a href=#981 id=981 data-nosnippet>981</a>            // field is projected here instead of going through it.
-<a href=#982 id=982 data-nosnippet>982</a>            </span><span class="prelude-val">Some</span>((outer, rest, <span class="kw">_</span>))
-<a href=#983 id=983 data-nosnippet>983</a>                <span class="kw">if </span>h.consuming &amp;&amp; rest[..rest.len() - <span class="number">1</span>].iter().all(PathStep::is_plain_field) =&gt;
-<a href=#984 id=984 data-nosnippet>984</a>            {
-<a href=#985 id=985 data-nosnippet>985</a>                <span class="kw">let </span>lead = <span class="kw-2">&amp;</span>rest[..rest.len() - <span class="number">1</span>];
-<a href=#986 id=986 data-nosnippet>986</a>                <span class="kw">let </span>segs: Vec&lt;<span class="kw-2">&amp;</span>syn::Ident&gt; = lead.iter().map(PathStep::ident).collect();
-<a href=#987 id=987 data-nosnippet>987</a>                (h.prefix.len() - <span class="number">1</span>, <span class="macro">quote!</span>(#outer #(.#segs)<span class="kw-2">*</span>), <span class="bool-val">true</span>)
-<a href=#988 id=988 data-nosnippet>988</a>            }
-<a href=#989 id=989 data-nosnippet>989</a>            <span class="comment">// Any other rebased hoist: project its own leading field run
-<a href=#990 id=990 data-nosnippet>990</a>            // DIRECTLY off the parent local rather than reaching it through a
-<a href=#991 id=991 data-nosnippet>991</a>            // borrow of the parent. A sibling hoist may already have moved a
-<a href=#992 id=992 data-nosnippet>992</a>            // different field out — that is what a consuming value form does —
-<a href=#993 id=993 data-nosnippet>993</a>            // and `&amp;(&amp;__vf0).wrapper` borrows the partially moved parent as a
-<a href=#994 id=994 data-nosnippet>994</a>            // whole where `&amp;__vf0.wrapper` is a disjoint borrow that survives.
-<a href=#995 id=995 data-nosnippet>995</a>            // Same invariant `project_leading_fields` states for leaf reaches,
-<a href=#996 id=996 data-nosnippet>996</a>            // and the same reason.
-<a href=#997 id=997 data-nosnippet>997</a>            </span><span class="prelude-val">Some</span>((outer, rest, <span class="kw">_</span>)) =&gt; {
-<a href=#998 id=998 data-nosnippet>998</a>                <span class="kw">let </span>(e, lead) = project_leading_fields(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(#outer), <span class="bool-val">false</span>, <span class="kw-2">&amp;</span>rest);
-<a href=#999 id=999 data-nosnippet>999</a>                (h.prefix.len() - rest.len() + lead, e, <span class="bool-val">false</span>)
-<a href=#1000 id=1000 data-nosnippet>1000</a>            }
-<a href=#1001 id=1001 data-nosnippet>1001</a>            <span class="prelude-val">None </span><span class="kw">if </span>by_ref =&gt; (<span class="number">0</span>, value.clone(), <span class="bool-val">false</span>),
-<a href=#1002 id=1002 data-nosnippet>1002</a>            <span class="prelude-val">None </span>=&gt; (<span class="number">0</span>, value.clone(), <span class="bool-val">true</span>),
-<a href=#1003 id=1003 data-nosnippet>1003</a>        };
-<a href=#1004 id=1004 data-nosnippet>1004</a>        <span class="comment">// Everything before the value form is an ordinary accessor chain.
-<a href=#1005 id=1005 data-nosnippet>1005</a>        </span><span class="kw">let </span>last = h.prefix.len() - <span class="number">1</span>;
-<a href=#1006 id=1006 data-nosnippet>1006</a>        <span class="kw">let </span>head = <span class="kw-2">&amp;</span>h.prefix[from..last];
-<a href=#1007 id=1007 data-nosnippet>1007</a>        <span class="kw">let </span>e = fold_steps(qualify, head, start, start_owned);
-<a href=#1008 id=1008 data-nosnippet>1008</a>        <span class="kw">let </span>e_owned = head.last().map_or(start_owned, PathStep::yields_owned);
-<a href=#1009 id=1009 data-nosnippet>1009</a>        <span class="comment">// The value form itself. A CONSUMING one takes its receiver BY VALUE —
-<a href=#1010 id=1010 data-nosnippet>1010</a>        // that is the move the whole declaration exists for — so it is handed
-<a href=#1011 id=1011 data-nosnippet>1011</a>        // what the fold holds when that is ours, and a clone when it is not:
-<a href=#1012 id=1012 data-nosnippet>1012</a>        // the same cost the borrowing form of the accessor would have paid,
-<a href=#1013 id=1013 data-nosnippet>1013</a>        // which keeps one declaration usable by both owned and `&amp;T` returns.
-<a href=#1014 id=1014 data-nosnippet>1014</a>        // A borrowing one takes a reference, so an owned value is borrowed.
-<a href=#1015 id=1015 data-nosnippet>1015</a>        //
-<a href=#1016 id=1016 data-nosnippet>1016</a>        // Deciding this from the fold's RESULT rather than from its start is
-<a href=#1017 id=1017 data-nosnippet>1017</a>        // what lets a consuming form sit behind ordinary accessors: the chain
-<a href=#1018 id=1018 data-nosnippet>1018</a>        // in front borrows, the form itself still moves.
-<a href=#1019 id=1019 data-nosnippet>1019</a>        </span><span class="kw">let </span>expr = compose_value_form_call(qualify, <span class="kw-2">&amp;</span>h.prefix[last], e, e_owned, h.consuming);
-<a href=#1020 id=1020 data-nosnippet>1020</a>        out.stmts.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#local = #expr; });
-<a href=#1021 id=1021 data-nosnippet>1021</a>        out.bound.push((h.prefix.clone(), local));
-<a href=#1022 id=1022 data-nosnippet>1022</a>        out.consuming.push(h.consuming);
-<a href=#1023 id=1023 data-nosnippet>1023</a>        out.optional.push(<span class="bool-val">false</span>);
-<a href=#1024 id=1024 data-nosnippet>1024</a>    }
-<a href=#1025 id=1025 data-nosnippet>1025</a>    out
-<a href=#1026 id=1026 data-nosnippet>1026</a>}
+<a href=#577 id=577 data-nosnippet>577</a>/// A segment's **selected value** is what its selector chooses over: the sum a
+<a href=#578 id=578 data-nosnippet>578</a>/// tag names an alternative of, or the optional value a presence flag says is
+<a href=#579 id=579 data-nosnippet>579</a>/// there. `group` renders the segment's own encode from the expression naming
+<a href=#580 id=580 data-nosnippet>580</a>/// it — that half is the adapter's, since what a group of slots is filled with
+<a href=#581 id=581 data-nosnippet>581</a>/// is a target-language question.
+<a href=#582 id=582 data-nosnippet>582</a>///
+<a href=#583 id=583 data-nosnippet>583</a>/// **An optional value gates the segment, not each slot.** A segment's leaves
+<a href=#584 id=584 data-nosnippet>584</a>/// are not independent, so absence cannot be the per-leaf absent value
+<a href=#585 id=585 data-nosnippet>585</a>/// [`reach_leaf`] gives an ordinary optional field: it is one tuple bind whose
+<a href=#586 id=586 data-nosnippet>586</a>/// `None` arm carries every slot's default. That is the same shape a
+<a href=#587 id=587 data-nosnippet>587</a>/// conditional value form's hoist emits, applied to an optional step inside
+<a href=#588 id=588 data-nosnippet>588</a>/// the segment's own path (#220).
+<a href=#589 id=589 data-nosnippet>589</a>///
+<a href=#590 id=590 data-nosnippet>590</a>/// `index` names the segment's locals, so two segments of one delivery cannot
+<a href=#591 id=591 data-nosnippet>591</a>/// collide.
+<a href=#592 id=592 data-nosnippet>592</a></span><span class="kw">pub fn </span>segment&lt;B: DeliveryBridge&gt;(
+<a href=#593 id=593 data-nosnippet>593</a>    bridge: <span class="kw-2">&amp;</span>B,
+<a href=#594 id=594 data-nosnippet>594</a>    qualify: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>syn::Ident) -&gt; syn::Path,
+<a href=#595 id=595 data-nosnippet>595</a>    place: <span class="kw-2">&amp;</span>LeafPlace,
+<a href=#596 id=596 data-nosnippet>596</a>    index: usize,
+<a href=#597 id=597 data-nosnippet>597</a>    leaves: <span class="kw-2">&amp;</span>[B::Leaf],
+<a href=#598 id=598 data-nosnippet>598</a>    slots: <span class="kw-2">&amp;</span>[syn::Ident],
+<a href=#599 id=599 data-nosnippet>599</a>    group: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(TokenStream) -&gt; TokenStream,
+<a href=#600 id=600 data-nosnippet>600</a>) -&gt; TokenStream {
+<a href=#601 id=601 data-nosnippet>601</a>    <span class="kw">let </span>path = <span class="kw-2">&amp;</span>place.path;
+<a href=#602 id=602 data-nosnippet>602</a>    <span class="comment">// A plain field chain is borrowed DIRECTLY (`&amp;base.a.b`) rather than
+<a href=#603 id=603 data-nosnippet>603</a>    // through the base (`&amp;(&amp;base).a.b`). The two are the same value, but the
+<a href=#604 id=604 data-nosnippet>604</a>    // second borrows the base as a whole, which the borrow checker rejects
+<a href=#605 id=605 data-nosnippet>605</a>    // once a sibling leaf has moved another field out of it — and borrowing
+<a href=#606 id=606 data-nosnippet>606</a>    // this field while sibling fields move is exactly what a consuming value
+<a href=#607 id=607 data-nosnippet>607</a>    // form does.
+<a href=#608 id=608 data-nosnippet>608</a>    </span><span class="kw">let </span>(projected, lead) = project_leading_fields(<span class="kw-2">&amp;</span>place.base, place.base_is_ref, path);
+<a href=#609 id=609 data-nosnippet>609</a>    <span class="comment">// The selector's own path reaches the selected value (empty when that
+<a href=#610 id=610 data-nosnippet>610</a>    // value IS the delivered one), and a step on it MAY be optional — which is
+<a href=#611 id=611 data-nosnippet>611</a>    // always so for a presence flag, whose whole subject is that step.
+<a href=#612 id=612 data-nosnippet>612</a>    </span><span class="kw">let </span><span class="prelude-val">Some</span>(k) = (lead..path.len()).find(|<span class="kw-2">&amp;</span>i| path[i].is_optional()) <span class="kw">else </span>{
+<a href=#613 id=613 data-nosnippet>613</a>        <span class="kw">return </span>group(fold_steps(qualify, <span class="kw-2">&amp;</span>path[lead..], projected, <span class="bool-val">false</span>));
+<a href=#614 id=614 data-nosnippet>614</a>    };
+<a href=#615 id=615 data-nosnippet>615</a>    <span class="comment">// Through the optional step INCLUSIVE, then the rest off the binding — the
+<a href=#616 id=616 data-nosnippet>616</a>    // same split [`reach_leaf`] makes, so the borrow in front of it stays the
+<a href=#617 id=617 data-nosnippet>617</a>    // ordinary rule rather than a second statement of it.
+<a href=#618 id=618 data-nosnippet>618</a>    </span><span class="kw">let </span>opt_e = fold_steps(qualify, <span class="kw-2">&amp;</span>path[lead..=k], projected, <span class="bool-val">false</span>);
+<a href=#619 id=619 data-nosnippet>619</a>    <span class="kw">let </span>bind = <span class="macro">format_ident!</span>(<span class="string">"__sg{}"</span>, index);
+<a href=#620 id=620 data-nosnippet>620</a>    <span class="comment">// ONE optional step is what this gate handles. A second one in the tail
+<a href=#621 id=621 data-nosnippet>621</a>    // would compose `match &amp;Option&lt;..&gt;` against the patterns the group's own
+<a href=#622 id=622 data-nosnippet>622</a>    // encode writes — an E0308 in the consumer's crate — so the named
+<a href=#623 id=623 data-nosnippet>623</a>    // diagnostic is raised here instead.
+<a href=#624 id=624 data-nosnippet>624</a>    //
+<a href=#625 id=625 data-nosnippet>625</a>    // `assert!`, not `debug_assert!`: a build script inherits the consumer's
+<a href=#626 id=626 data-nosnippet>626</a>    // profile, so a debug-only check is absent from exactly the release build
+<a href=#627 id=627 data-nosnippet>627</a>    // where a mis-emission costs the most to diagnose. Same rule, same
+<a href=#628 id=628 data-nosnippet>628</a>    // phrasing, as the single-return optional-step assert in [`reach_leaf`].
+<a href=#629 id=629 data-nosnippet>629</a>    //
+<a href=#630 id=630 data-nosnippet>630</a>    // The condition is what actually breaks, not the stronger fact that
+<a href=#631 id=631 data-nosnippet>631</a>    // happens to hold: a selector's path stops AT the value it selects on, so
+<a href=#632 id=632 data-nosnippet>632</a>    // the tail is empty today, but a NON-optional tail composes correctly
+<a href=#633 id=633 data-nosnippet>633</a>    // through [`fold_steps`] — refusing it would refuse a shape that works.
+<a href=#634 id=634 data-nosnippet>634</a>    </span><span class="macro">assert!</span>(
+<a href=#635 id=635 data-nosnippet>635</a>        !path[k + <span class="number">1</span>..].iter().any(PathStep::is_optional),
+<a href=#636 id=636 data-nosnippet>636</a>        <span class="string">"unfold: leaf `{}` reaches the value it selects on through TWO optional \
+<a href=#637 id=637 data-nosnippet>637</a>         steps — the segment gate has one `None` arm, so the second would be \
+<a href=#638 id=638 data-nosnippet>638</a>         matched as if it were that value itself"</span>,
+<a href=#639 id=639 data-nosnippet>639</a>        leaves
+<a href=#640 id=640 data-nosnippet>640</a>            .first()
+<a href=#641 id=641 data-nosnippet>641</a>            .expect(<span class="string">"a segment has at least its selector"</span>)
+<a href=#642 id=642 data-nosnippet>642</a>            .name(),
+<a href=#643 id=643 data-nosnippet>643</a>    );
+<a href=#644 id=644 data-nosnippet>644</a>    <span class="comment">// What the `match` binds, asked of the step rather than assumed: the FIELD
+<a href=#645 id=645 data-nosnippet>645</a>    // branch scrutinizes `&amp;Option&lt;_&gt;`, so ergonomics binds a borrow of the
+<a href=#646 id=646 data-nosnippet>646</a>    // selected value. Only an owned-yielding CALL binds an owned one.
+<a href=#647 id=647 data-nosnippet>647</a>    </span><span class="kw">let </span>inner = group(fold_steps(
+<a href=#648 id=648 data-nosnippet>648</a>        qualify,
+<a href=#649 id=649 data-nosnippet>649</a>        <span class="kw-2">&amp;</span>path[k + <span class="number">1</span>..],
+<a href=#650 id=650 data-nosnippet>650</a>        <span class="macro">quote!</span>(#bind),
+<a href=#651 id=651 data-nosnippet>651</a>        path[k].yields_owned(),
+<a href=#652 id=652 data-nosnippet>652</a>    ));
+<a href=#653 id=653 data-nosnippet>653</a>    <span class="kw">let </span>filled: Vec&lt;Slot&gt; = leaves.iter().map(|leaf| bridge.slot(leaf)).collect();
+<a href=#654 id=654 data-nosnippet>654</a>    <span class="kw">let </span>tys = filled.iter().map(|slot| <span class="kw-2">&amp;</span>slot.ty);
+<a href=#655 id=655 data-nosnippet>655</a>    <span class="kw">let </span>defaults = filled.iter().map(|slot| <span class="kw-2">&amp;</span>slot.default);
+<a href=#656 id=656 data-nosnippet>656</a>    <span class="comment">// A FIELD step composes to a borrow, so it goes through a coercion site
+<a href=#657 id=657 data-nosnippet>657</a>    // and the destructure stops caring which representation the source spelled
+<a href=#658 id=658 data-nosnippet>658</a>    // the optional as (#268). A CALL yields its own owned value, whose payload
+<a href=#659 id=659 data-nosnippet>659</a>    // downstream may move, so it keeps the direct match — the same division
+<a href=#660 id=660 data-nosnippet>660</a>    // [`reach_leaf`] makes.
+<a href=#661 id=661 data-nosnippet>661</a>    </span><span class="kw">let </span>(prelude, scrutinee) = <span class="kw">if </span>path[k].is_field() {
+<a href=#662 id=662 data-nosnippet>662</a>        <span class="kw">let </span>opt_bind = <span class="macro">format_ident!</span>(<span class="string">"__so{}"</span>, index);
+<a href=#663 id=663 data-nosnippet>663</a>        (bind_as_option(<span class="kw-2">&amp;</span>opt_e, <span class="kw-2">&amp;</span>opt_bind), <span class="macro">quote!</span>(#opt_bind))
+<a href=#664 id=664 data-nosnippet>664</a>    } <span class="kw">else </span>{
+<a href=#665 id=665 data-nosnippet>665</a>        (TokenStream::new(), opt_e)
+<a href=#666 id=666 data-nosnippet>666</a>    };
+<a href=#667 id=667 data-nosnippet>667</a>    <span class="macro">quote!</span> {
+<a href=#668 id=668 data-nosnippet>668</a>        <span class="kw">let </span>(#(#slots,)<span class="kw-2">*</span>): (#(#tys,)<span class="kw-2">*</span>) = {
+<a href=#669 id=669 data-nosnippet>669</a>            #prelude
+<a href=#670 id=670 data-nosnippet>670</a>            <span class="kw">match </span>#scrutinee {
+<a href=#671 id=671 data-nosnippet>671</a>                ::core::option::Option::Some(#bind) =&gt; {
+<a href=#672 id=672 data-nosnippet>672</a>                    #inner
+<a href=#673 id=673 data-nosnippet>673</a>                    (#(#slots,)<span class="kw-2">*</span>)
+<a href=#674 id=674 data-nosnippet>674</a>                }
+<a href=#675 id=675 data-nosnippet>675</a>                ::core::option::Option::None =&gt; (#(#defaults,)<span class="kw-2">*</span>),
+<a href=#676 id=676 data-nosnippet>676</a>            }
+<a href=#677 id=677 data-nosnippet>677</a>        };
+<a href=#678 id=678 data-nosnippet>678</a>    }
+<a href=#679 id=679 data-nosnippet>679</a>}
+<a href=#680 id=680 data-nosnippet>680</a>
+<a href=#681 id=681 data-nosnippet>681</a><span class="doccomment">/// The `match` a **conditional** value form's leaves share.
+<a href=#682 id=682 data-nosnippet>682</a>///
+<a href=#683 id=683 data-nosnippet>683</a>/// A hoist under an optional step ran only where the value was present, so its
+<a href=#684 id=684 data-nosnippet>684</a>/// leaves cannot be independent statements: their slots exist either way, and
+<a href=#685 id=685 data-nosnippet>685</a>/// only one arm computes them. The `Some` arm runs `body` — the statements
+<a href=#686 id=686 data-nosnippet>686</a>/// those leaves contributed — and yields their slots as a tuple; the `None`
+<a href=#687 id=687 data-nosnippet>687</a>/// arm yields each slot's default, the same shape [`segment`] gives an absent
+<a href=#688 id=688 data-nosnippet>688</a>/// sum. Binding the tuple outside the `match` keeps the slots in scope for the
+<a href=#689 id=689 data-nosnippet>689</a>/// call's argument list, which is indifferent to how a slot was filled.
+<a href=#690 id=690 data-nosnippet>690</a>///
+<a href=#691 id=691 data-nosnippet>691</a>/// Matched BY VALUE: the local is this arm's alone, every leaf under the hoist
+<a href=#692 id=692 data-nosnippet>692</a>/// being in it, so a consuming value form's fields move out here exactly as
+<a href=#693 id=693 data-nosnippet>693</a>/// they do at an unconditional one.
+<a href=#694 id=694 data-nosnippet>694</a></span><span class="kw">pub fn </span>conditional_arm&lt;B: DeliveryBridge&gt;(
+<a href=#695 id=695 data-nosnippet>695</a>    bridge: <span class="kw-2">&amp;</span>B,
+<a href=#696 id=696 data-nosnippet>696</a>    hoisted: <span class="kw-2">&amp;</span>Hoisted,
+<a href=#697 id=697 data-nosnippet>697</a>    index: usize,
+<a href=#698 id=698 data-nosnippet>698</a>    leaves: <span class="kw-2">&amp;</span>[B::Leaf],
+<a href=#699 id=699 data-nosnippet>699</a>    slots: <span class="kw-2">&amp;</span>[syn::Ident],
+<a href=#700 id=700 data-nosnippet>700</a>    body: TokenStream,
+<a href=#701 id=701 data-nosnippet>701</a>) -&gt; TokenStream {
+<a href=#702 id=702 data-nosnippet>702</a>    <span class="kw">let </span>local = hoisted.local(index);
+<a href=#703 id=703 data-nosnippet>703</a>    <span class="kw">let </span>bind = <span class="macro">format_ident!</span>(<span class="string">"__u{}"</span>, index);
+<a href=#704 id=704 data-nosnippet>704</a>    <span class="kw">let </span>under: Vec&lt;usize&gt; = (<span class="number">0</span>..leaves.len())
+<a href=#705 id=705 data-nosnippet>705</a>        .filter(|<span class="kw-2">&amp;</span>k| {
+<a href=#706 id=706 data-nosnippet>706</a>            hoisted
+<a href=#707 id=707 data-nosnippet>707</a>                .conditional(leaves[k].reach())
+<a href=#708 id=708 data-nosnippet>708</a>                .is_some_and(|(j, ..)| j == index)
+<a href=#709 id=709 data-nosnippet>709</a>        })
+<a href=#710 id=710 data-nosnippet>710</a>        .collect();
+<a href=#711 id=711 data-nosnippet>711</a>    <span class="kw">let </span>ids: Vec&lt;<span class="kw-2">&amp;</span>syn::Ident&gt; = under.iter().map(|<span class="kw-2">&amp;</span>k| <span class="kw-2">&amp;</span>slots[k]).collect();
+<a href=#712 id=712 data-nosnippet>712</a>    <span class="kw">let </span>filled: Vec&lt;Slot&gt; = under.iter().map(|<span class="kw-2">&amp;</span>k| bridge.slot(<span class="kw-2">&amp;</span>leaves[k])).collect();
+<a href=#713 id=713 data-nosnippet>713</a>    <span class="kw">let </span>tys = filled.iter().map(|slot| <span class="kw-2">&amp;</span>slot.ty);
+<a href=#714 id=714 data-nosnippet>714</a>    <span class="kw">let </span>defaults = filled.iter().map(|slot| <span class="kw-2">&amp;</span>slot.default);
+<a href=#715 id=715 data-nosnippet>715</a>    <span class="macro">quote!</span> {
+<a href=#716 id=716 data-nosnippet>716</a>        <span class="kw">let </span>(#(#ids,)<span class="kw-2">*</span>): (#(#tys,)<span class="kw-2">*</span>) = <span class="kw">match </span>#local {
+<a href=#717 id=717 data-nosnippet>717</a>            ::core::option::Option::Some(#bind) =&gt; { #body (#(#ids,)<span class="kw-2">*</span>) }
+<a href=#718 id=718 data-nosnippet>718</a>            ::core::option::Option::None =&gt; (#(#defaults,)<span class="kw-2">*</span>),
+<a href=#719 id=719 data-nosnippet>719</a>        };
+<a href=#720 id=720 data-nosnippet>720</a>    }
+<a href=#721 id=721 data-nosnippet>721</a>}
+<a href=#722 id=722 data-nosnippet>722</a>
+<a href=#723 id=723 data-nosnippet>723</a><span class="doccomment">/// Bind `e` so it can be destructured as an `Option` **whatever Rust
+<a href=#724 id=724 data-nosnippet>724</a>/// representation the source used for it**.
+<a href=#725 id=725 data-nosnippet>725</a>///
+<a href=#726 id=726 data-nosnippet>726</a>/// The model says a position is optional; it deliberately does not say whether
+<a href=#727 id=727 data-nosnippet>727</a>/// Rust spells that `Option&lt;T&gt;`, `Box&lt;Option&lt;T&gt;&gt;`, or something else — the
+<a href=#728 id=728 data-nosnippet>728</a>/// side interpreting the classification is the side that must accept any
+<a href=#729 id=729 data-nosnippet>729</a>/// representation. Matching the reached place directly assumed one, which is
+<a href=#730 id=730 data-nosnippet>730</a>/// "classify off the model, spell from the model" broken in the direction
+<a href=#731 id=731 data-nosnippet>731</a>/// nothing was watching: `Box&lt;Option&lt;T&gt;&gt;` then produced
+<a href=#732 id=732 data-nosnippet>732</a>/// `match &amp;place { Some(..) =&gt; .. }` and an E0308 (#268).
+<a href=#733 id=733 data-nosnippet>733</a>///
+<a href=#734 id=734 data-nosnippet>734</a>/// A type-ascribed `let` is a coercion site, and deref coercion is transitive
+<a href=#735 id=735 data-nosnippet>735</a>/// **and** a no-op when the types already match — so this one shape serves
+<a href=#736 id=736 data-nosnippet>736</a>/// every representation, and the plain `Option&lt;T&gt;` case is unchanged.
+<a href=#737 id=737 data-nosnippet>737</a>///
+<a href=#738 id=738 data-nosnippet>738</a>/// `e` is expected to be a **reference** already — [`compose_step`] composes a
+<a href=#739 id=739 data-nosnippet>739</a>/// field read as `&amp;(e).f` — so nothing is borrowed here. Borrowing only: an
+<a href=#740 id=740 data-nosnippet>740</a>/// owned position cannot be made representation-agnostic this way, because
+<a href=#741 id=741 data-nosnippet>741</a>/// deref coercion applies to references and moving out of a wrapper is
+<a href=#742 id=742 data-nosnippet>742</a>/// something only some of them permit (`Box` does, `Rc` cannot). A site that
+<a href=#743 id=743 data-nosnippet>743</a>/// must MOVE the payload keeps its direct match.
+<a href=#744 id=744 data-nosnippet>744</a></span><span class="kw">pub fn </span>bind_as_option(e: <span class="kw-2">&amp;</span>TokenStream, bind: <span class="kw-2">&amp;</span>syn::Ident) -&gt; TokenStream {
+<a href=#745 id=745 data-nosnippet>745</a>    <span class="macro">quote!</span> { <span class="kw">let </span>#bind: <span class="kw-2">&amp;</span>::core::option::Option&lt;<span class="kw">_</span>&gt; = #e; }
+<a href=#746 id=746 data-nosnippet>746</a>}
+<a href=#747 id=747 data-nosnippet>747</a>
+<a href=#748 id=748 data-nosnippet>748</a><span class="doccomment">/// Every value form on a plan, evaluated **once** and bound to a local
+<a href=#749 id=749 data-nosnippet>749</a>/// (`__vf0`, `__vf1`, …), so a struct is built once per delivery rather than
+<a href=#750 id=750 data-nosnippet>750</a>/// once per field. The bound prefixes come back with the statements, since
+<a href=#751 id=751 data-nosnippet>751</a>/// reaching a leaf means starting from the innermost local it sits under.
+<a href=#752 id=752 data-nosnippet>752</a>///
+<a href=#753 id=753 data-nosnippet>753</a>/// Shared by both delivery paths — the multi-leaf encoder below and the
+<a href=#754 id=754 data-nosnippet>754</a>/// single-leaf `Delivery::Return` shortcut in `emit/wrapper.rs`. The shortcut
+<a href=#755 id=755 data-nosnippet>755</a>/// used to compose its reach straight off the raw value, which for a consuming
+<a href=#756 id=756 data-nosnippet>756</a>/// value form emitted `f(&amp;v)` against a by-value receiver: ill-typed Rust in
+<a href=#757 id=757 data-nosnippet>757</a>/// the consumer's crate. One binder, so the two cannot disagree about what a
+<a href=#758 id=758 data-nosnippet>758</a>/// hoist is or who owns it.
+<a href=#759 id=759 data-nosnippet>759</a></span><span class="kw">pub struct </span>Hoisted {
+<a href=#760 id=760 data-nosnippet>760</a>    <span class="doccomment">/// The `let __vfN = …;` bindings, outermost-first.
+<a href=#761 id=761 data-nosnippet>761</a>    </span><span class="kw">pub </span>stmts: TokenStream,
+<a href=#762 id=762 data-nosnippet>762</a>    <span class="doccomment">/// Each hoist's path prefix and the local it was bound to.
+<a href=#763 id=763 data-nosnippet>763</a>    </span>bound: Vec&lt;(Vec&lt;PathStep&gt;, syn::Ident)&gt;,
+<a href=#764 id=764 data-nosnippet>764</a>    <span class="doccomment">/// Whether each bound hoist consumed the value it decomposed.
+<a href=#765 id=765 data-nosnippet>765</a>    </span>consuming: Vec&lt;bool&gt;,
+<a href=#766 id=766 data-nosnippet>766</a>    <span class="doccomment">/// Whether each bound local is `Option&lt;TStruct&gt;` rather than `TStruct` —
+<a href=#767 id=767 data-nosnippet>767</a>    /// the hoist sits under an optional step, so the value form ran only where
+<a href=#768 id=768 data-nosnippet>768</a>    /// the value was present. Its leaves cannot be emitted as independent
+<a href=#769 id=769 data-nosnippet>769</a>    /// statements: they share ONE `match` on the local (see
+<a href=#770 id=770 data-nosnippet>770</a>    /// [`encode_plan_leaves`]), taken by value, so a consuming form's fields
+<a href=#771 id=771 data-nosnippet>771</a>    /// still move out inside the arm.
+<a href=#772 id=772 data-nosnippet>772</a>    </span>optional: Vec&lt;bool&gt;,
+<a href=#773 id=773 data-nosnippet>773</a>}
+<a href=#774 id=774 data-nosnippet>774</a><span class="kw">impl </span>Hoisted {
+<a href=#775 id=775 data-nosnippet>775</a>    <span class="doccomment">/// Index of the innermost bound hoist `path` sits under, with that prefix
+<a href=#776 id=776 data-nosnippet>776</a>    /// already consumed. `None` for a leaf under no value form at all — a
+<a href=#777 id=777 data-nosnippet>777</a>    /// sibling `.field()` / `.field_self()`, which still reaches from the value
+<a href=#778 id=778 data-nosnippet>778</a>    /// itself.
+<a href=#779 id=779 data-nosnippet>779</a>    </span><span class="kw">fn </span>innermost(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>[PathStep]) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, Vec&lt;PathStep&gt;)&gt; {
+<a href=#780 id=780 data-nosnippet>780</a>        <span class="self">self</span>.bound
+<a href=#781 id=781 data-nosnippet>781</a>            .iter()
+<a href=#782 id=782 data-nosnippet>782</a>            .enumerate()
+<a href=#783 id=783 data-nosnippet>783</a>            .filter(|(<span class="kw">_</span>, (p, <span class="kw">_</span>))| p.len() &lt; path.len() &amp;&amp; path.starts_with(p))
+<a href=#784 id=784 data-nosnippet>784</a>            .max_by_key(|(<span class="kw">_</span>, (p, <span class="kw">_</span>))| p.len())
+<a href=#785 id=785 data-nosnippet>785</a>            .map(|(i, (p, <span class="kw">_</span>))| (i, path[p.len()..].to_vec()))
+<a href=#786 id=786 data-nosnippet>786</a>    }
+<a href=#787 id=787 data-nosnippet>787</a>
+<a href=#788 id=788 data-nosnippet>788</a>    <span class="doccomment">/// The innermost bound local `path` sits under, with that prefix already
+<a href=#789 id=789 data-nosnippet>789</a>    /// consumed, and whether that hoist gave its value away.
+<a href=#790 id=790 data-nosnippet>790</a>    </span><span class="kw">pub fn </span>rebase(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>[PathStep]) -&gt; <span class="prelude-ty">Option</span>&lt;(syn::Ident, Vec&lt;PathStep&gt;, bool)&gt; {
+<a href=#791 id=791 data-nosnippet>791</a>        <span class="self">self</span>.innermost(path)
+<a href=#792 id=792 data-nosnippet>792</a>            .map(|(i, rest)| (<span class="self">self</span>.bound[i].<span class="number">1</span>.clone(), rest, <span class="self">self</span>.consuming[i]))
+<a href=#793 id=793 data-nosnippet>793</a>    }
+<a href=#794 id=794 data-nosnippet>794</a>
+<a href=#795 id=795 data-nosnippet>795</a>    <span class="doccomment">/// The innermost **conditional** hoist `path` sits under: its index, the
+<a href=#796 id=796 data-nosnippet>796</a>    /// local holding the `Option`, the name its `Some` arm binds, and the steps
+<a href=#797 id=797 data-nosnippet>797</a>    /// left to reach the leaf from there. `None` when the leaf's innermost
+<a href=#798 id=798 data-nosnippet>798</a>    /// hoist is unconditional (or there is none) — then [`Self::rebase`]
+<a href=#799 id=799 data-nosnippet>799</a>    /// applies and the leaf is an ordinary standalone statement.
+<a href=#800 id=800 data-nosnippet>800</a>    </span><span class="kw">pub fn </span>conditional(
+<a href=#801 id=801 data-nosnippet>801</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#802 id=802 data-nosnippet>802</a>        path: <span class="kw-2">&amp;</span>[PathStep],
+<a href=#803 id=803 data-nosnippet>803</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, syn::Ident, syn::Ident, Vec&lt;PathStep&gt;)&gt; {
+<a href=#804 id=804 data-nosnippet>804</a>        <span class="kw">let </span>(i, rest) = <span class="self">self</span>.innermost(path)<span class="question-mark">?</span>;
+<a href=#805 id=805 data-nosnippet>805</a>        <span class="self">self</span>.optional[i].then(|| (i, <span class="self">self</span>.bound[i].<span class="number">1</span>.clone(), <span class="macro">format_ident!</span>(<span class="string">"__u{}"</span>, i), rest))
+<a href=#806 id=806 data-nosnippet>806</a>    }
+<a href=#807 id=807 data-nosnippet>807</a>
+<a href=#808 id=808 data-nosnippet>808</a>    <span class="doccomment">/// Where a leaf's reach starts, once these hoists are bound.
+<a href=#809 id=809 data-nosnippet>809</a>    ///
+<a href=#810 id=810 data-nosnippet>810</a>    /// Three cases, and the leaf's own path decides which.
+<a href=#811 id=811 data-nosnippet>811</a>    ///
+<a href=#812 id=812 data-nosnippet>812</a>    /// A leaf under a **conditional** value form reaches off the name that
+<a href=#813 id=813 data-nosnippet>813</a>    /// form's `Some` arm binds. That arm matches the hoist's `Option` by
+<a href=#814 id=814 data-nosnippet>814</a>    /// value — every leaf under the hoist is inside it, so the local is the
+<a href=#815 id=815 data-nosnippet>815</a>    /// arm's alone — which makes the binding an owned payload: a consuming
+<a href=#816 id=816 data-nosnippet>816</a>    /// form's fields move out of it exactly as they do at an unconditional
+<a href=#817 id=817 data-nosnippet>817</a>    /// one, and [`LeafPlace::owned`] says so. The leaf's statements belong in
+<a href=#818 id=818 data-nosnippet>818</a>    /// that arm, because that is where the binding exists.
+<a href=#819 id=819 data-nosnippet>819</a>    ///
+<a href=#820 id=820 data-nosnippet>820</a>    /// A leaf under an **ordinary** value form reaches off the local that form
+<a href=#821 id=821 data-nosnippet>821</a>    /// was bound to, with the prefix already consumed and the form's own
+<a href=#822 id=822 data-nosnippet>822</a>    /// ownership carried along.
+<a href=#823 id=823 data-nosnippet>823</a>    ///
+<a href=#824 id=824 data-nosnippet>824</a>    /// A leaf under **no** value form — a sibling accessor of the delivered
+<a href=#825 id=825 data-nosnippet>825</a>    /// value — reaches from that value.
+<a href=#826 id=826 data-nosnippet>826</a>    </span><span class="kw">pub fn </span>place&lt;L: DecomposedLeaf&gt;(
+<a href=#827 id=827 data-nosnippet>827</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#828 id=828 data-nosnippet>828</a>        leaf: <span class="kw-2">&amp;</span>L,
+<a href=#829 id=829 data-nosnippet>829</a>        value: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#830 id=830 data-nosnippet>830</a>        by_ref: bool,
+<a href=#831 id=831 data-nosnippet>831</a>    ) -&gt; LeafPlace {
+<a href=#832 id=832 data-nosnippet>832</a>        <span class="kw">let </span>path = leaf.reach();
+<a href=#833 id=833 data-nosnippet>833</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((i, <span class="kw">_</span>, bind, rest)) = <span class="self">self</span>.conditional(path) {
+<a href=#834 id=834 data-nosnippet>834</a>            <span class="kw">return </span>LeafPlace {
+<a href=#835 id=835 data-nosnippet>835</a>                base: <span class="macro">quote!</span>(#bind),
+<a href=#836 id=836 data-nosnippet>836</a>                base_is_ref: <span class="bool-val">false</span>,
+<a href=#837 id=837 data-nosnippet>837</a>                path: rest,
+<a href=#838 id=838 data-nosnippet>838</a>                consuming: <span class="self">self</span>.consumed(i),
+<a href=#839 id=839 data-nosnippet>839</a>                conditional: <span class="prelude-val">Some</span>(i),
+<a href=#840 id=840 data-nosnippet>840</a>            };
+<a href=#841 id=841 data-nosnippet>841</a>        }
+<a href=#842 id=842 data-nosnippet>842</a>        <span class="kw">match </span><span class="self">self</span>.rebase(path) {
+<a href=#843 id=843 data-nosnippet>843</a>            <span class="prelude-val">Some</span>((local, rest, consuming)) =&gt; LeafPlace {
+<a href=#844 id=844 data-nosnippet>844</a>                base: <span class="macro">quote!</span>(#local),
+<a href=#845 id=845 data-nosnippet>845</a>                base_is_ref: <span class="bool-val">false</span>,
+<a href=#846 id=846 data-nosnippet>846</a>                path: rest,
+<a href=#847 id=847 data-nosnippet>847</a>                consuming,
+<a href=#848 id=848 data-nosnippet>848</a>                conditional: <span class="prelude-val">None</span>,
+<a href=#849 id=849 data-nosnippet>849</a>            },
+<a href=#850 id=850 data-nosnippet>850</a>            <span class="prelude-val">None </span>=&gt; LeafPlace {
+<a href=#851 id=851 data-nosnippet>851</a>                base: value.clone(),
+<a href=#852 id=852 data-nosnippet>852</a>                base_is_ref: by_ref,
+<a href=#853 id=853 data-nosnippet>853</a>                path: path.to_vec(),
+<a href=#854 id=854 data-nosnippet>854</a>                consuming: <span class="bool-val">false</span>,
+<a href=#855 id=855 data-nosnippet>855</a>                conditional: <span class="prelude-val">None</span>,
+<a href=#856 id=856 data-nosnippet>856</a>            },
+<a href=#857 id=857 data-nosnippet>857</a>        }
+<a href=#858 id=858 data-nosnippet>858</a>    }
+<a href=#859 id=859 data-nosnippet>859</a>
+<a href=#860 id=860 data-nosnippet>860</a>    <span class="doccomment">/// The local a hoist was bound to.
+<a href=#861 id=861 data-nosnippet>861</a>    </span><span class="kw">pub fn </span>local(<span class="kw-2">&amp;</span><span class="self">self</span>, i: usize) -&gt; syn::Ident {
+<a href=#862 id=862 data-nosnippet>862</a>        <span class="self">self</span>.bound[i].<span class="number">1</span>.clone()
+<a href=#863 id=863 data-nosnippet>863</a>    }
+<a href=#864 id=864 data-nosnippet>864</a>
+<a href=#865 id=865 data-nosnippet>865</a>    <span class="doccomment">/// Whether a hoist consumed the value it decomposed.
+<a href=#866 id=866 data-nosnippet>866</a>    </span><span class="kw">pub fn </span>consumed(<span class="kw-2">&amp;</span><span class="self">self</span>, i: usize) -&gt; bool {
+<a href=#867 id=867 data-nosnippet>867</a>        <span class="self">self</span>.consuming[i]
+<a href=#868 id=868 data-nosnippet>868</a>    }
+<a href=#869 id=869 data-nosnippet>869</a>}
+<a href=#870 id=870 data-nosnippet>870</a><span class="doccomment">/// Fold `path` over `base` the way an adapter's own gated reach does, but
+<a href=#871 id=871 data-nosnippet>871</a>/// yielding an `Option&lt;…&gt;` rather than the adapter's absent value: the optional
+<a href=#872 id=872 data-nosnippet>872</a>/// steps become a `map`/`and_then` chain, so an absent value short-circuits to
+<a href=#873 id=873 data-nosnippet>873</a>/// `None` instead of to whatever that adapter uses for absence. `body` renders
+<a href=#874 id=874 data-nosnippet>874</a>/// the innermost reached expression as a BARE value — the chain's last link
+<a href=#875 id=875 data-nosnippet>875</a>/// wraps it.
+<a href=#876 id=876 data-nosnippet>876</a>///
+<a href=#877 id=877 data-nosnippet>877</a>/// The gated reach this mirrors is [`reach_leaf`], which takes the absent
+<a href=#878 id=878 data-nosnippet>878</a>/// value from the adapter rather than choosing one. This one yields an
+<a href=#879 id=879 data-nosnippet>879</a>/// `Option` instead, because what it binds is a hoist rather than a delivered
+<a href=#880 id=880 data-nosnippet>880</a>/// leaf: the value form runs where the value is present, and the `None` the
+<a href=#881 id=881 data-nosnippet>881</a>/// chain produces is the local's own.
+<a href=#882 id=882 data-nosnippet>882</a>///
+<a href=#883 id=883 data-nosnippet>883</a>/// This is how a CONDITIONAL value form is bound — the accessor runs only where
+<a href=#884 id=884 data-nosnippet>884</a>/// the value it decomposes is actually present.
+<a href=#885 id=885 data-nosnippet>885</a></span><span class="kw">fn </span>reach_optional(
+<a href=#886 id=886 data-nosnippet>886</a>    qualify: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>syn::Ident) -&gt; syn::Path,
+<a href=#887 id=887 data-nosnippet>887</a>    path: <span class="kw-2">&amp;</span>[PathStep],
+<a href=#888 id=888 data-nosnippet>888</a>    base: TokenStream,
+<a href=#889 id=889 data-nosnippet>889</a>    base_is_ref: bool,
+<a href=#890 id=890 data-nosnippet>890</a>    depth: usize,
+<a href=#891 id=891 data-nosnippet>891</a>    body: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(TokenStream) -&gt; TokenStream,
+<a href=#892 id=892 data-nosnippet>892</a>) -&gt; TokenStream {
+<a href=#893 id=893 data-nosnippet>893</a>    <span class="kw">let </span>(e, lead) = project_leading_fields(<span class="kw-2">&amp;</span>base, base_is_ref, path);
+<a href=#894 id=894 data-nosnippet>894</a>    <span class="kw">match </span>(lead..path.len()).find(|<span class="kw-2">&amp;</span>i| path[i].is_optional()) {
+<a href=#895 id=895 data-nosnippet>895</a>        <span class="prelude-val">None </span>=&gt; body(fold_steps(qualify, <span class="kw-2">&amp;</span>path[lead..], e, <span class="bool-val">false</span>)),
+<a href=#896 id=896 data-nosnippet>896</a>        <span class="prelude-val">Some</span>(k) =&gt; {
+<a href=#897 id=897 data-nosnippet>897</a>            <span class="comment">// Through the optional step INCLUSIVE: the same fold, so the
+<a href=#898 id=898 data-nosnippet>898</a>            // borrow in front of it is the ordinary rule rather than a second
+<a href=#899 id=899 data-nosnippet>899</a>            // statement of it.
+<a href=#900 id=900 data-nosnippet>900</a>            </span><span class="kw">let </span>opt_e = fold_steps(qualify, <span class="kw-2">&amp;</span>path[lead..=k], e, <span class="bool-val">false</span>);
+<a href=#901 id=901 data-nosnippet>901</a>            <span class="kw">let </span>bind = <span class="macro">format_ident!</span>(<span class="string">"__hb{}"</span>, depth);
+<a href=#902 id=902 data-nosnippet>902</a>            <span class="comment">// What the arm binds is the step's own value: an OWNED payload is a
+<a href=#903 id=903 data-nosnippet>903</a>            // bare `T`, so composing the next step onto it directly would hand
+<a href=#904 id=904 data-nosnippet>904</a>            // `T` to an accessor typed for `&amp;T`. Say it is not a reference and
+<a href=#905 id=905 data-nosnippet>905</a>            // let `project_leading_fields` borrow it; a borrowed payload is
+<a href=#906 id=906 data-nosnippet>906</a>            // already one and passes through.
+<a href=#907 id=907 data-nosnippet>907</a>            //
+<a href=#908 id=908 data-nosnippet>908</a>            // With NO steps left the binding goes to `body` untouched — that is
+<a href=#909 id=909 data-nosnippet>909</a>            // what lets a consuming value form MOVE an owned payload rather than
+<a href=#910 id=910 data-nosnippet>910</a>            // borrow it straight back, so the terminal case stays "already a
+<a href=#911 id=911 data-nosnippet>911</a>            // reference" whatever the payload is.
+<a href=#912 id=912 data-nosnippet>912</a>            </span><span class="kw">let </span>rest = <span class="kw-2">&amp;</span>path[k + <span class="number">1</span>..];
+<a href=#913 id=913 data-nosnippet>913</a>            <span class="kw">let </span>inner = reach_optional(
+<a href=#914 id=914 data-nosnippet>914</a>                qualify,
+<a href=#915 id=915 data-nosnippet>915</a>                rest,
+<a href=#916 id=916 data-nosnippet>916</a>                <span class="macro">quote!</span>(#bind),
+<a href=#917 id=917 data-nosnippet>917</a>                rest.is_empty() || !path[k].yields_owned(),
+<a href=#918 id=918 data-nosnippet>918</a>                depth + <span class="number">1</span>,
+<a href=#919 id=919 data-nosnippet>919</a>                body,
+<a href=#920 id=920 data-nosnippet>920</a>            );
+<a href=#921 id=921 data-nosnippet>921</a>            <span class="comment">// `map` when this is the LAST optional step (the body yields a bare
+<a href=#922 id=922 data-nosnippet>922</a>            // value) and `and_then` when another follows (the recursion yields
+<a href=#923 id=923 data-nosnippet>923</a>            // an `Option` that must not nest). The equivalent `match` reads the
+<a href=#924 id=924 data-nosnippet>924</a>            // same but generated code runs through the consumer's lints, where
+<a href=#925 id=925 data-nosnippet>925</a>            // `clippy::manual_map` is a denial.
+<a href=#926 id=926 data-nosnippet>926</a>            </span><span class="kw">let </span>combinator = <span class="kw">if </span>rest.iter().any(PathStep::is_optional) {
+<a href=#927 id=927 data-nosnippet>927</a>                <span class="macro">format_ident!</span>(<span class="string">"and_then"</span>)
+<a href=#928 id=928 data-nosnippet>928</a>            } <span class="kw">else </span>{
+<a href=#929 id=929 data-nosnippet>929</a>                <span class="macro">format_ident!</span>(<span class="string">"map"</span>)
+<a href=#930 id=930 data-nosnippet>930</a>            };
+<a href=#931 id=931 data-nosnippet>931</a>            <span class="macro">quote!</span> {
+<a href=#932 id=932 data-nosnippet>932</a>                #opt_e.#combinator(|#bind| #inner)
+<a href=#933 id=933 data-nosnippet>933</a>            }
+<a href=#934 id=934 data-nosnippet>934</a>        }
+<a href=#935 id=935 data-nosnippet>935</a>    }
+<a href=#936 id=936 data-nosnippet>936</a>}
+<a href=#937 id=937 data-nosnippet>937</a><span class="kw">pub fn </span>bind_hoists(
+<a href=#938 id=938 data-nosnippet>938</a>    qualify: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>syn::Ident) -&gt; syn::Path,
+<a href=#939 id=939 data-nosnippet>939</a>    hoists: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::unfold::Hoist],
+<a href=#940 id=940 data-nosnippet>940</a>    value: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#941 id=941 data-nosnippet>941</a>    by_ref: bool,
+<a href=#942 id=942 data-nosnippet>942</a>) -&gt; Hoisted {
+<a href=#943 id=943 data-nosnippet>943</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = Hoisted {
+<a href=#944 id=944 data-nosnippet>944</a>        stmts: TokenStream::new(),
+<a href=#945 id=945 data-nosnippet>945</a>        bound: Vec::new(),
+<a href=#946 id=946 data-nosnippet>946</a>        consuming: Vec::new(),
+<a href=#947 id=947 data-nosnippet>947</a>        optional: Vec::new(),
+<a href=#948 id=948 data-nosnippet>948</a>    };
+<a href=#949 id=949 data-nosnippet>949</a>    <span class="comment">// Value forms COMPOSE, so each hoist is built from the longest hoist that
+<a href=#950 id=950 data-nosnippet>950</a>    // is already a proper prefix of it (they arrive outermost-first), and from
+<a href=#951 id=951 data-nosnippet>951</a>    // `value` otherwise.
+<a href=#952 id=952 data-nosnippet>952</a>    </span><span class="kw">for </span>(i, h) <span class="kw">in </span>hoists.iter().enumerate() {
+<a href=#953 id=953 data-nosnippet>953</a>        <span class="kw">let </span>local = <span class="macro">format_ident!</span>(<span class="string">"__vf{}"</span>, i);
+<a href=#954 id=954 data-nosnippet>954</a>        <span class="comment">// A hoist under an optional step binds `Option&lt;TStruct&gt;`: the value
+<a href=#955 id=955 data-nosnippet>955</a>        // form runs in the `Some` arm only. Core refuses to nest these, so the
+<a href=#956 id=956 data-nosnippet>956</a>        // enclosing value is always the plan's own — no rebase to consider.
+<a href=#957 id=957 data-nosnippet>957</a>        </span><span class="kw">if </span>h.prefix.iter().any(PathStep::is_optional) {
+<a href=#958 id=958 data-nosnippet>958</a>            <span class="kw">let </span>(last, lead) = h
+<a href=#959 id=959 data-nosnippet>959</a>                .prefix
+<a href=#960 id=960 data-nosnippet>960</a>                .split_last()
+<a href=#961 id=961 data-nosnippet>961</a>                .expect(<span class="string">"a hoist prefix ends in its value-form call"</span>);
+<a href=#962 id=962 data-nosnippet>962</a>            <span class="kw">let </span>consuming = h.consuming;
+<a href=#963 id=963 data-nosnippet>963</a>            <span class="comment">// The value form is handed the payload only when the optional step
+<a href=#964 id=964 data-nosnippet>964</a>            // is the LAST thing before it; any step in between composes as a
+<a href=#965 id=965 data-nosnippet>965</a>            // borrow, so what arrives is a reference either way.
+<a href=#966 id=966 data-nosnippet>966</a>            </span><span class="kw">let </span>owned = lead.last().is_some_and(PathStep::yields_owned);
+<a href=#967 id=967 data-nosnippet>967</a>            <span class="kw">let </span>expr = reach_optional(qualify, lead, value.clone(), by_ref, <span class="number">0</span>, <span class="kw-2">&amp;</span>|reached| {
+<a href=#968 id=968 data-nosnippet>968</a>                compose_value_form_call(qualify, last, reached, owned, consuming)
+<a href=#969 id=969 data-nosnippet>969</a>            });
+<a href=#970 id=970 data-nosnippet>970</a>            out.stmts.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#local = #expr; });
+<a href=#971 id=971 data-nosnippet>971</a>            out.bound.push((h.prefix.clone(), local));
+<a href=#972 id=972 data-nosnippet>972</a>            out.consuming.push(h.consuming);
+<a href=#973 id=973 data-nosnippet>973</a>            out.optional.push(<span class="bool-val">true</span>);
+<a href=#974 id=974 data-nosnippet>974</a>            <span class="kw">continue</span>;
+<a href=#975 id=975 data-nosnippet>975</a>        }
+<a href=#976 id=976 data-nosnippet>976</a>        <span class="comment">// Where the fold starts, and whether what it starts from is OWNED. The
+<a href=#977 id=977 data-nosnippet>977</a>        // value form's own boundary is decided below, from what the fold ends
+<a href=#978 id=978 data-nosnippet>978</a>        // up holding — never from where it began.
+<a href=#979 id=979 data-nosnippet>979</a>        </span><span class="kw">let </span>(from, start, start_owned) = <span class="kw">match </span>out.rebase(<span class="kw-2">&amp;</span>h.prefix) {
+<a href=#980 id=980 data-nosnippet>980</a>            <span class="comment">// A NESTED consuming form is handed the parent's field by MOVE: a
+<a href=#981 id=981 data-nosnippet>981</a>            // hoisted value form is an owned struct and its fields are
+<a href=#982 id=982 data-nosnippet>982</a>            // disjoint, so moving one out leaves every sibling leaf readable.
+<a href=#983 id=983 data-nosnippet>983</a>            // `compose_step` borrows (`&amp;(e).f`), so a plain field run to that
+<a href=#984 id=984 data-nosnippet>984</a>            // field is projected here instead of going through it.
+<a href=#985 id=985 data-nosnippet>985</a>            </span><span class="prelude-val">Some</span>((outer, rest, <span class="kw">_</span>))
+<a href=#986 id=986 data-nosnippet>986</a>                <span class="kw">if </span>h.consuming &amp;&amp; rest[..rest.len() - <span class="number">1</span>].iter().all(PathStep::is_plain_field) =&gt;
+<a href=#987 id=987 data-nosnippet>987</a>            {
+<a href=#988 id=988 data-nosnippet>988</a>                <span class="kw">let </span>lead = <span class="kw-2">&amp;</span>rest[..rest.len() - <span class="number">1</span>];
+<a href=#989 id=989 data-nosnippet>989</a>                <span class="kw">let </span>segs: Vec&lt;<span class="kw-2">&amp;</span>syn::Ident&gt; = lead.iter().map(PathStep::ident).collect();
+<a href=#990 id=990 data-nosnippet>990</a>                (h.prefix.len() - <span class="number">1</span>, <span class="macro">quote!</span>(#outer #(.#segs)<span class="kw-2">*</span>), <span class="bool-val">true</span>)
+<a href=#991 id=991 data-nosnippet>991</a>            }
+<a href=#992 id=992 data-nosnippet>992</a>            <span class="comment">// Any other rebased hoist: project its own leading field run
+<a href=#993 id=993 data-nosnippet>993</a>            // DIRECTLY off the parent local rather than reaching it through a
+<a href=#994 id=994 data-nosnippet>994</a>            // borrow of the parent. A sibling hoist may already have moved a
+<a href=#995 id=995 data-nosnippet>995</a>            // different field out — that is what a consuming value form does —
+<a href=#996 id=996 data-nosnippet>996</a>            // and `&amp;(&amp;__vf0).wrapper` borrows the partially moved parent as a
+<a href=#997 id=997 data-nosnippet>997</a>            // whole where `&amp;__vf0.wrapper` is a disjoint borrow that survives.
+<a href=#998 id=998 data-nosnippet>998</a>            // Same invariant `project_leading_fields` states for leaf reaches,
+<a href=#999 id=999 data-nosnippet>999</a>            // and the same reason.
+<a href=#1000 id=1000 data-nosnippet>1000</a>            </span><span class="prelude-val">Some</span>((outer, rest, <span class="kw">_</span>)) =&gt; {
+<a href=#1001 id=1001 data-nosnippet>1001</a>                <span class="kw">let </span>(e, lead) = project_leading_fields(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(#outer), <span class="bool-val">false</span>, <span class="kw-2">&amp;</span>rest);
+<a href=#1002 id=1002 data-nosnippet>1002</a>                (h.prefix.len() - rest.len() + lead, e, <span class="bool-val">false</span>)
+<a href=#1003 id=1003 data-nosnippet>1003</a>            }
+<a href=#1004 id=1004 data-nosnippet>1004</a>            <span class="prelude-val">None </span><span class="kw">if </span>by_ref =&gt; (<span class="number">0</span>, value.clone(), <span class="bool-val">false</span>),
+<a href=#1005 id=1005 data-nosnippet>1005</a>            <span class="prelude-val">None </span>=&gt; (<span class="number">0</span>, value.clone(), <span class="bool-val">true</span>),
+<a href=#1006 id=1006 data-nosnippet>1006</a>        };
+<a href=#1007 id=1007 data-nosnippet>1007</a>        <span class="comment">// Everything before the value form is an ordinary accessor chain.
+<a href=#1008 id=1008 data-nosnippet>1008</a>        </span><span class="kw">let </span>last = h.prefix.len() - <span class="number">1</span>;
+<a href=#1009 id=1009 data-nosnippet>1009</a>        <span class="kw">let </span>head = <span class="kw-2">&amp;</span>h.prefix[from..last];
+<a href=#1010 id=1010 data-nosnippet>1010</a>        <span class="kw">let </span>e = fold_steps(qualify, head, start, start_owned);
+<a href=#1011 id=1011 data-nosnippet>1011</a>        <span class="kw">let </span>e_owned = head.last().map_or(start_owned, PathStep::yields_owned);
+<a href=#1012 id=1012 data-nosnippet>1012</a>        <span class="comment">// The value form itself. A CONSUMING one takes its receiver BY VALUE —
+<a href=#1013 id=1013 data-nosnippet>1013</a>        // that is the move the whole declaration exists for — so it is handed
+<a href=#1014 id=1014 data-nosnippet>1014</a>        // what the fold holds when that is ours, and a clone when it is not:
+<a href=#1015 id=1015 data-nosnippet>1015</a>        // the same cost the borrowing form of the accessor would have paid,
+<a href=#1016 id=1016 data-nosnippet>1016</a>        // which keeps one declaration usable by both owned and `&amp;T` returns.
+<a href=#1017 id=1017 data-nosnippet>1017</a>        // A borrowing one takes a reference, so an owned value is borrowed.
+<a href=#1018 id=1018 data-nosnippet>1018</a>        //
+<a href=#1019 id=1019 data-nosnippet>1019</a>        // Deciding this from the fold's RESULT rather than from its start is
+<a href=#1020 id=1020 data-nosnippet>1020</a>        // what lets a consuming form sit behind ordinary accessors: the chain
+<a href=#1021 id=1021 data-nosnippet>1021</a>        // in front borrows, the form itself still moves.
+<a href=#1022 id=1022 data-nosnippet>1022</a>        </span><span class="kw">let </span>expr = compose_value_form_call(qualify, <span class="kw-2">&amp;</span>h.prefix[last], e, e_owned, h.consuming);
+<a href=#1023 id=1023 data-nosnippet>1023</a>        out.stmts.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#local = #expr; });
+<a href=#1024 id=1024 data-nosnippet>1024</a>        out.bound.push((h.prefix.clone(), local));
+<a href=#1025 id=1025 data-nosnippet>1025</a>        out.consuming.push(h.consuming);
+<a href=#1026 id=1026 data-nosnippet>1026</a>        out.optional.push(<span class="bool-val">false</span>);
+<a href=#1027 id=1027 data-nosnippet>1027</a>    }
+<a href=#1028 id=1028 data-nosnippet>1028</a>    out
+<a href=#1029 id=1029 data-nosnippet>1029</a>}
 </code></pre></div></section></main></body></html>
