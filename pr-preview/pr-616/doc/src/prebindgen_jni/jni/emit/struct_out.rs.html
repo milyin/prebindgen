@@ -164,525 +164,538 @@
 <a href=#164 id=164 data-nosnippet>164</a>        .collect()
 <a href=#165 id=165 data-nosnippet>165</a>}
 <a href=#166 id=166 data-nosnippet>166</a>
-<a href=#167 id=167 data-nosnippet>167</a><span class="doccomment">/// The segment marking an arm-local binding, dropped from the outer slot it
-<a href=#168 id=168 data-nosnippet>168</a>/// feeds. A leaf's name is the same on both sides — it is one leaf — and the
-<a href=#169 id=169 data-nosnippet>169</a>/// marker is what lets the two live in one function.
-<a href=#170 id=170 data-nosnippet>170</a></span><span class="kw">const </span>ARM_MARKER: <span class="kw-2">&amp;</span>str = <span class="string">"_xg"</span>;
-<a href=#171 id=171 data-nosnippet>171</a>
-<a href=#172 id=172 data-nosnippet>172</a><span class="doccomment">/// The outer slot ident for an arm-local binding.
-<a href=#173 id=173 data-nosnippet>173</a></span><span class="kw">fn </span>outer_of(inner: <span class="kw-2">&amp;</span>proc_macro2::Ident) -&gt; proc_macro2::Ident {
-<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">let </span>name = inner.to_string();
-<a href=#175 id=175 data-nosnippet>175</a>    <span class="kw">let </span>outer = name.replacen(ARM_MARKER, <span class="string">""</span>, <span class="number">1</span>);
-<a href=#176 id=176 data-nosnippet>176</a>    <span class="macro">assert_ne!</span>(
-<a href=#177 id=177 data-nosnippet>177</a>        outer, name,
-<a href=#178 id=178 data-nosnippet>178</a>        <span class="string">"an arm-local binding carries the marker its outer slot drops"
-<a href=#179 id=179 data-nosnippet>179</a>    </span>);
-<a href=#180 id=180 data-nosnippet>180</a>    <span class="macro">format_ident!</span>(<span class="string">"{outer}"</span>)
-<a href=#181 id=181 data-nosnippet>181</a>}
-<a href=#182 id=182 data-nosnippet>182</a>
-<a href=#183 id=183 data-nosnippet>183</a><span class="kw">fn </span>encode_plan(
-<a href=#184 id=184 data-nosnippet>184</a>    plan: <span class="kw-2">&amp;</span>StructPlan,
-<a href=#185 id=185 data-nosnippet>185</a>    access: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#186 id=186 data-nosnippet>186</a>    prefix: <span class="kw-2">&amp;</span>str,
-<a href=#187 id=187 data-nosnippet>187</a>    depth: usize,
-<a href=#188 id=188 data-nosnippet>188</a>    env_expr: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#189 id=189 data-nosnippet>189</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
-<a href=#190 id=190 data-nosnippet>190</a>) -&gt; (TokenStream, Vec&lt;EncSlot&gt;) {
-<a href=#191 id=191 data-nosnippet>191</a>    <span class="kw">let </span><span class="kw-2">mut </span>preludes = TokenStream::new();
-<a href=#192 id=192 data-nosnippet>192</a>    <span class="kw">let </span><span class="kw-2">mut </span>slots: Vec&lt;EncSlot&gt; = Vec::new();
-<a href=#193 id=193 data-nosnippet>193</a>
-<a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">for </span>f <span class="kw">in </span><span class="kw-2">&amp;</span>plan.fields {
-<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">let </span>fname = <span class="kw-2">&amp;</span>f.fname;
-<a href=#196 id=196 data-nosnippet>196</a>        <span class="kw">let </span>base = <span class="macro">format!</span>(<span class="string">"{}_{}"</span>, prefix, fname);
-<a href=#197 id=197 data-nosnippet>197</a>        <span class="kw">let </span>value = <span class="macro">quote!</span> { #access.#fname };
-<a href=#198 id=198 data-nosnippet>198</a>        <span class="kw">let </span>(pre, sl) = encode_field(<span class="kw-2">&amp;</span>f.kind, <span class="kw-2">&amp;</span>value, <span class="kw-2">&amp;</span>base, depth, env_expr, emit);
-<a href=#199 id=199 data-nosnippet>199</a>        preludes.extend(pre);
-<a href=#200 id=200 data-nosnippet>200</a>        slots.extend(sl);
-<a href=#201 id=201 data-nosnippet>201</a>    }
-<a href=#202 id=202 data-nosnippet>202</a>    (preludes, slots)
-<a href=#203 id=203 data-nosnippet>203</a>}
-<a href=#204 id=204 data-nosnippet>204</a>
-<a href=#205 id=205 data-nosnippet>205</a><span class="doccomment">/// Emit the Rust-side wire encode of ONE value position — a struct field or a
-<a href=#206 id=206 data-nosnippet>206</a>/// sum's variant payload. `value` is the Rust expression yielding it (`v.mode`
-<a href=#207 id=207 data-nosnippet>207</a>/// at a struct field, the bound pattern variable inside a variant arm), which
-<a href=#208 id=208 data-nosnippet>208</a>/// is what lets a sum reuse this for its payloads: a payload is encoded by the
-<a href=#209 id=209 data-nosnippet>209</a>/// same code as a field of the same type, not by a parallel walk.
-<a href=#210 id=210 data-nosnippet>210</a></span><span class="kw">fn </span>encode_field(
-<a href=#211 id=211 data-nosnippet>211</a>    kind: <span class="kw-2">&amp;</span>PlanFieldKind,
-<a href=#212 id=212 data-nosnippet>212</a>    value: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#213 id=213 data-nosnippet>213</a>    base: <span class="kw-2">&amp;</span>str,
-<a href=#214 id=214 data-nosnippet>214</a>    depth: usize,
-<a href=#215 id=215 data-nosnippet>215</a>    env_expr: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#216 id=216 data-nosnippet>216</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
-<a href=#217 id=217 data-nosnippet>217</a>) -&gt; (TokenStream, Vec&lt;EncSlot&gt;) {
-<a href=#218 id=218 data-nosnippet>218</a>    <span class="kw">let </span><span class="kw-2">mut </span>preludes = TokenStream::new();
-<a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">let </span><span class="kw-2">mut </span>slots: Vec&lt;EncSlot&gt; = Vec::new();
-<a href=#220 id=220 data-nosnippet>220</a>    {
-<a href=#221 id=221 data-nosnippet>221</a>        <span class="kw">let </span>id = <span class="macro">format_ident!</span>(<span class="string">"__{}"</span>, base);
-<a href=#222 id=222 data-nosnippet>222</a>        <span class="comment">// The leaf's COMPLETE chain, not just its wire-facing converter: a
-<a href=#223 id=223 data-nosnippet>223</a>        // `convert!`-declared type (`Duration`) reaches the wire through its
-<a href=#224 id=224 data-nosnippet>224</a>        // rust-side stages first (`Duration → u64 → jlong`).
-<a href=#225 id=225 data-nosnippet>225</a>        </span><span class="kw">let </span>conv_value =
-<a href=#226 id=226 data-nosnippet>226</a>            |conv: <span class="kw-2">&amp;</span>ConvChain| -&gt; TokenStream { conv.call(env_expr, value, base, emit) };
-<a href=#227 id=227 data-nosnippet>227</a>        <span class="kw">match </span>kind {
-<a href=#228 id=228 data-nosnippet>228</a>            <span class="comment">// Projection leaf (opaque handle → jlong, `ULong` → jlong).
-<a href=#229 id=229 data-nosnippet>229</a>            </span>PlanFieldKind::Projection { conv, proj, .. } =&gt; {
-<a href=#230 id=230 data-nosnippet>230</a>                <span class="kw">let </span>value_expr = conv_value(conv);
-<a href=#231 id=231 data-nosnippet>231</a>                <span class="kw">match </span>proj.kind {
-<a href=#232 id=232 data-nosnippet>232</a>                    ProjectionKind::Handle =&gt; {
-<a href=#233 id=233 data-nosnippet>233</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jlong = #value_expr; });
-<a href=#234 id=234 data-nosnippet>234</a>                        slots.push(EncSlot {
-<a href=#235 id=235 data-nosnippet>235</a>                            depth,
-<a href=#236 id=236 data-nosnippet>236</a>                            ident: id,
-<a href=#237 id=237 data-nosnippet>237</a>                            wire_ty: <span class="macro">quote!</span>(jni::sys::jlong),
-<a href=#238 id=238 data-nosnippet>238</a>                            descriptor: <span class="string">"J"</span>.to_string(),
-<a href=#239 id=239 data-nosnippet>239</a>                            is_object: <span class="bool-val">false</span>,
-<a href=#240 id=240 data-nosnippet>240</a>                            default: <span class="macro">quote!</span>(<span class="number">0i64</span>),
-<a href=#241 id=241 data-nosnippet>241</a>                        });
-<a href=#242 id=242 data-nosnippet>242</a>                    }
-<a href=#243 id=243 data-nosnippet>243</a>                    ProjectionKind::Unsigned64 =&gt; <span class="kw">match </span>proj.strategy {
-<a href=#244 id=244 data-nosnippet>244</a>                        FoldStrategy::Base =&gt; {
-<a href=#245 id=245 data-nosnippet>245</a>                            preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jlong = #value_expr; });
-<a href=#246 id=246 data-nosnippet>246</a>                            slots.push(EncSlot {
-<a href=#247 id=247 data-nosnippet>247</a>                                depth,
-<a href=#248 id=248 data-nosnippet>248</a>                                ident: id,
-<a href=#249 id=249 data-nosnippet>249</a>                                wire_ty: <span class="macro">quote!</span>(jni::sys::jlong),
-<a href=#250 id=250 data-nosnippet>250</a>                                descriptor: <span class="string">"J"</span>.to_string(),
-<a href=#251 id=251 data-nosnippet>251</a>                                is_object: <span class="bool-val">false</span>,
-<a href=#252 id=252 data-nosnippet>252</a>                                default: <span class="macro">quote!</span>(<span class="number">0i64</span>),
-<a href=#253 id=253 data-nosnippet>253</a>                            });
-<a href=#254 id=254 data-nosnippet>254</a>                        }
-<a href=#255 id=255 data-nosnippet>255</a>                        FoldStrategy::Optional(NullableKind::Niche, <span class="kw">_</span>) =&gt; {
-<a href=#256 id=256 data-nosnippet>256</a>                            preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jlong = #value_expr; });
-<a href=#257 id=257 data-nosnippet>257</a>                            slots.push(EncSlot {
-<a href=#258 id=258 data-nosnippet>258</a>                                depth,
-<a href=#259 id=259 data-nosnippet>259</a>                                ident: id,
-<a href=#260 id=260 data-nosnippet>260</a>                                wire_ty: <span class="macro">quote!</span>(jni::sys::jlong),
-<a href=#261 id=261 data-nosnippet>261</a>                                descriptor: <span class="string">"J"</span>.to_string(),
-<a href=#262 id=262 data-nosnippet>262</a>                                is_object: <span class="bool-val">false</span>,
-<a href=#263 id=263 data-nosnippet>263</a>                                default: <span class="macro">quote!</span>(<span class="number">0i64</span>),
-<a href=#264 id=264 data-nosnippet>264</a>                            });
-<a href=#265 id=265 data-nosnippet>265</a>                        }
-<a href=#266 id=266 data-nosnippet>266</a>                        FoldStrategy::Optional(NullableKind::Boxed, <span class="kw">_</span>) =&gt; {
-<a href=#267 id=267 data-nosnippet>267</a>                            preludes
-<a href=#268 id=268 data-nosnippet>268</a>                                .extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr; });
-<a href=#269 id=269 data-nosnippet>269</a>                            slots.push(EncSlot {
-<a href=#270 id=270 data-nosnippet>270</a>                                depth,
-<a href=#271 id=271 data-nosnippet>271</a>                                ident: id,
-<a href=#272 id=272 data-nosnippet>272</a>                                wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
-<a href=#273 id=273 data-nosnippet>273</a>                                descriptor: <span class="string">"Ljava/lang/Long;"</span>.to_string(),
-<a href=#274 id=274 data-nosnippet>274</a>                                is_object: <span class="bool-val">true</span>,
-<a href=#275 id=275 data-nosnippet>275</a>                                default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
-<a href=#276 id=276 data-nosnippet>276</a>                            });
-<a href=#277 id=277 data-nosnippet>277</a>                        }
-<a href=#278 id=278 data-nosnippet>278</a>                        FoldStrategy::Iterable(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(
-<a href=#279 id=279 data-nosnippet>279</a>                            <span class="string">"projection collection fields are rejected by build_struct_plan"
-<a href=#280 id=280 data-nosnippet>280</a>                        </span>),
-<a href=#281 id=281 data-nosnippet>281</a>                    },
-<a href=#282 id=282 data-nosnippet>282</a>                }
-<a href=#283 id=283 data-nosnippet>283</a>            }
-<a href=#284 id=284 data-nosnippet>284</a>            <span class="comment">// Enum leaf → jint discriminant (Kotlin `fromParts` calls `fromInt`).
-<a href=#285 id=285 data-nosnippet>285</a>            </span>PlanFieldKind::Enum { conv, .. } =&gt; {
-<a href=#286 id=286 data-nosnippet>286</a>                <span class="kw">let </span>value_expr = conv_value(conv);
-<a href=#287 id=287 data-nosnippet>287</a>                preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jint = #value_expr; });
-<a href=#288 id=288 data-nosnippet>288</a>                slots.push(EncSlot {
-<a href=#289 id=289 data-nosnippet>289</a>                    depth,
-<a href=#290 id=290 data-nosnippet>290</a>                    ident: id,
-<a href=#291 id=291 data-nosnippet>291</a>                    wire_ty: <span class="macro">quote!</span>(jni::sys::jint),
-<a href=#292 id=292 data-nosnippet>292</a>                    descriptor: <span class="string">"I"</span>.to_string(),
-<a href=#293 id=293 data-nosnippet>293</a>                    is_object: <span class="bool-val">false</span>,
-<a href=#294 id=294 data-nosnippet>294</a>                    default: <span class="macro">quote!</span>(<span class="number">0i32</span>),
-<a href=#295 id=295 data-nosnippet>295</a>                });
-<a href=#296 id=296 data-nosnippet>296</a>            }
-<a href=#297 id=297 data-nosnippet>297</a>            <span class="comment">// `Option&lt;enum&gt;` uses the enum's frozen primitive niche. Keep the
-<a href=#298 id=298 data-nosnippet>298</a>            // boxed Integer branch for plans produced without niche metadata.
-<a href=#299 id=299 data-nosnippet>299</a>            </span>PlanFieldKind::OptionEnum { conv, niche, .. } =&gt; {
-<a href=#300 id=300 data-nosnippet>300</a>                <span class="kw">let </span>value_expr = conv_value(conv);
-<a href=#301 id=301 data-nosnippet>301</a>                <span class="kw">if </span>niche.is_some() {
-<a href=#302 id=302 data-nosnippet>302</a>                    preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jint = #value_expr; });
-<a href=#303 id=303 data-nosnippet>303</a>                    slots.push(EncSlot {
-<a href=#304 id=304 data-nosnippet>304</a>                        depth,
-<a href=#305 id=305 data-nosnippet>305</a>                        ident: id,
-<a href=#306 id=306 data-nosnippet>306</a>                        wire_ty: <span class="macro">quote!</span>(jni::sys::jint),
-<a href=#307 id=307 data-nosnippet>307</a>                        descriptor: <span class="string">"I"</span>.to_string(),
-<a href=#308 id=308 data-nosnippet>308</a>                        is_object: <span class="bool-val">false</span>,
-<a href=#309 id=309 data-nosnippet>309</a>                        default: <span class="macro">quote!</span>(<span class="number">0i32</span>),
-<a href=#310 id=310 data-nosnippet>310</a>                    });
-<a href=#311 id=311 data-nosnippet>311</a>                } <span class="kw">else </span>{
-<a href=#312 id=312 data-nosnippet>312</a>                    preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr; });
-<a href=#313 id=313 data-nosnippet>313</a>                    slots.push(EncSlot {
-<a href=#314 id=314 data-nosnippet>314</a>                        depth,
-<a href=#315 id=315 data-nosnippet>315</a>                        ident: id,
-<a href=#316 id=316 data-nosnippet>316</a>                        wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
-<a href=#317 id=317 data-nosnippet>317</a>                        descriptor: <span class="string">"Ljava/lang/Integer;"</span>.to_string(),
-<a href=#318 id=318 data-nosnippet>318</a>                        is_object: <span class="bool-val">true</span>,
-<a href=#319 id=319 data-nosnippet>319</a>                        default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
-<a href=#320 id=320 data-nosnippet>320</a>                    });
-<a href=#321 id=321 data-nosnippet>321</a>                }
-<a href=#322 id=322 data-nosnippet>322</a>            }
-<a href=#323 id=323 data-nosnippet>323</a>            <span class="comment">// Nested data-class: inline the child's leaves; under `Option` add
-<a href=#324 id=324 data-nosnippet>324</a>            // a `present` flag and default the child slots in the `None` arm.
-<a href=#325 id=325 data-nosnippet>325</a>            </span>PlanFieldKind::Nested {
-<a href=#326 id=326 data-nosnippet>326</a>                optional,
-<a href=#327 id=327 data-nosnippet>327</a>                plan: child,
-<a href=#328 id=328 data-nosnippet>328</a>                ..
-<a href=#329 id=329 data-nosnippet>329</a>            } =&gt; {
-<a href=#330 id=330 data-nosnippet>330</a>                <span class="kw">if </span>!<span class="kw-2">*</span>optional {
-<a href=#331 id=331 data-nosnippet>331</a>                    <span class="kw">let </span>(child_pre, child_slots) =
-<a href=#332 id=332 data-nosnippet>332</a>                        encode_plan(child, value, base, depth + <span class="number">1</span>, env_expr, emit);
-<a href=#333 id=333 data-nosnippet>333</a>                    preludes.extend(child_pre);
-<a href=#334 id=334 data-nosnippet>334</a>                    slots.extend(child_slots);
-<a href=#335 id=335 data-nosnippet>335</a>                } <span class="kw">else </span>{
-<a href=#336 id=336 data-nosnippet>336</a>                    <span class="kw">let </span>cbind = <span class="macro">format_ident!</span>(<span class="string">"__c{}"</span>, depth);
-<a href=#337 id=337 data-nosnippet>337</a>                    <span class="kw">let </span>child_access = <span class="macro">quote!</span> { #cbind };
-<a href=#338 id=338 data-nosnippet>338</a>                    <span class="kw">let </span>(child_pre, child_slots) =
-<a href=#339 id=339 data-nosnippet>339</a>                        encode_plan(child, <span class="kw-2">&amp;</span>child_access, base, depth + <span class="number">1</span>, env_expr, emit);
-<a href=#340 id=340 data-nosnippet>340</a>                    <span class="kw">let </span>flag_id = <span class="macro">format_ident!</span>(<span class="string">"__{}_present"</span>, base);
-<a href=#341 id=341 data-nosnippet>341</a>                    <span class="kw">let </span>outer_ids: Vec&lt;proc_macro2::Ident&gt; = (<span class="number">0</span>..child_slots.len())
-<a href=#342 id=342 data-nosnippet>342</a>                        .map(|i| <span class="macro">format_ident!</span>(<span class="string">"__{}_o{}"</span>, base, i))
-<a href=#343 id=343 data-nosnippet>343</a>                        .collect();
-<a href=#344 id=344 data-nosnippet>344</a>                    <span class="kw">let </span>outer_tys: Vec&lt;TokenStream&gt; =
-<a href=#345 id=345 data-nosnippet>345</a>                        child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
-<a href=#346 id=346 data-nosnippet>346</a>                    <span class="kw">let </span>inner_ids: Vec&lt;proc_macro2::Ident&gt; =
-<a href=#347 id=347 data-nosnippet>347</a>                        child_slots.iter().map(|sl| sl.ident.clone()).collect();
-<a href=#348 id=348 data-nosnippet>348</a>                    <span class="kw">let </span>defaults: Vec&lt;TokenStream&gt; =
-<a href=#349 id=349 data-nosnippet>349</a>                        child_slots.iter().map(|sl| sl.default.clone()).collect();
-<a href=#350 id=350 data-nosnippet>350</a>                    <span class="comment">// Destructured through a coercion site: `kind` says this
-<a href=#351 id=351 data-nosnippet>351</a>                    // field is optional, and how Rust spells that is the
-<a href=#352 id=352 data-nosnippet>352</a>                    // source's business (#268).
-<a href=#353 id=353 data-nosnippet>353</a>                    </span><span class="kw">let </span>obind = <span class="macro">format_ident!</span>(<span class="string">"__on{}"</span>, depth);
-<a href=#354 id=354 data-nosnippet>354</a>                    <span class="kw">let </span>coerce =
-<a href=#355 id=355 data-nosnippet>355</a>                        prebindgen_registry::unfold::bind_as_option(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(<span class="kw-2">&amp;</span>#value), <span class="kw-2">&amp;</span>obind);
-<a href=#356 id=356 data-nosnippet>356</a>                    preludes.extend(<span class="macro">quote!</span> {
-<a href=#357 id=357 data-nosnippet>357</a>                        <span class="kw">let </span>#flag_id: jni::sys::jboolean;
-<a href=#358 id=358 data-nosnippet>358</a>                        #( <span class="kw">let </span>#outer_ids: #outer_tys; )*
-<a href=#359 id=359 data-nosnippet>359</a>                        #coerce
-<a href=#360 id=360 data-nosnippet>360</a>                        <span class="kw">match </span>#obind {
-<a href=#361 id=361 data-nosnippet>361</a>                            ::core::option::Option::Some(#cbind) =&gt; {
-<a href=#362 id=362 data-nosnippet>362</a>                                #child_pre
-<a href=#363 id=363 data-nosnippet>363</a>                                #flag_id = <span class="number">1u8</span>;
-<a href=#364 id=364 data-nosnippet>364</a>                                #( #outer_ids = #inner_ids; )*
-<a href=#365 id=365 data-nosnippet>365</a>                            }
-<a href=#366 id=366 data-nosnippet>366</a>                            ::core::option::Option::None =&gt; {
-<a href=#367 id=367 data-nosnippet>367</a>                                #flag_id = <span class="number">0u8</span>;
-<a href=#368 id=368 data-nosnippet>368</a>                                #( #outer_ids = #defaults; )*
-<a href=#369 id=369 data-nosnippet>369</a>                            }
-<a href=#370 id=370 data-nosnippet>370</a>                        }
-<a href=#371 id=371 data-nosnippet>371</a>                    });
-<a href=#372 id=372 data-nosnippet>372</a>                    slots.push(EncSlot {
-<a href=#373 id=373 data-nosnippet>373</a>                        depth,
-<a href=#374 id=374 data-nosnippet>374</a>                        ident: flag_id,
-<a href=#375 id=375 data-nosnippet>375</a>                        wire_ty: <span class="macro">quote!</span>(jni::sys::jboolean),
-<a href=#376 id=376 data-nosnippet>376</a>                        descriptor: <span class="string">"Z"</span>.to_string(),
-<a href=#377 id=377 data-nosnippet>377</a>                        is_object: <span class="bool-val">false</span>,
-<a href=#378 id=378 data-nosnippet>378</a>                        default: <span class="macro">quote!</span>(<span class="number">0u8</span>),
+<a href=#167 id=167 data-nosnippet>167</a><span class="doccomment">/// The prefix an arm-local binding carries, and the outer slot it feeds.
+<a href=#168 id=168 data-nosnippet>168</a>///
+<a href=#169 id=169 data-nosnippet>169</a>/// A leaf's name is the same on both sides — it is one leaf — so the two would
+<a href=#170 id=170 data-nosnippet>170</a>/// collide in one function. The arm-local name is the outer name with a
+<a href=#171 id=171 data-nosnippet>171</a>/// **prefix** this module adds, which is why recovering the outer one is
+<a href=#172 id=172 data-nosnippet>172</a>/// stripping a known prefix at a known position rather than searching for a
+<a href=#173 id=173 data-nosnippet>173</a>/// marker: `base` and every slot fragment come from source identifiers, and
+<a href=#174 id=174 data-nosnippet>174</a>/// any sentinel spelled inside one of them can appear in the middle of a name
+<a href=#175 id=175 data-nosnippet>175</a>/// too (#616 review).
+<a href=#176 id=176 data-nosnippet>176</a></span><span class="kw">fn </span>arm_local_base(tag: usize, base: <span class="kw-2">&amp;</span>str) -&gt; String {
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="macro">format!</span>(<span class="string">"arm{tag}_{base}"</span>)
+<a href=#178 id=178 data-nosnippet>178</a>}
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a><span class="doccomment">/// The outer slot ident for an arm-local binding produced under
+<a href=#181 id=181 data-nosnippet>181</a>/// [`arm_local_base`].
+<a href=#182 id=182 data-nosnippet>182</a></span><span class="kw">fn </span>outer_of(tag: usize, inner: <span class="kw-2">&amp;</span>proc_macro2::Ident) -&gt; proc_macro2::Ident {
+<a href=#183 id=183 data-nosnippet>183</a>    <span class="kw">let </span>name = inner.to_string();
+<a href=#184 id=184 data-nosnippet>184</a>    <span class="kw">let </span>prefix = <span class="macro">format!</span>(<span class="string">"__arm{tag}_"</span>);
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="kw">let </span>rest = name.strip_prefix(<span class="kw-2">&amp;</span>prefix).unwrap_or_else(|| {
+<a href=#186 id=186 data-nosnippet>186</a>        <span class="macro">panic!</span>(<span class="string">"an arm-local binding starts with the prefix its outer slot drops: `{name}`"</span>)
+<a href=#187 id=187 data-nosnippet>187</a>    });
+<a href=#188 id=188 data-nosnippet>188</a>    <span class="macro">format_ident!</span>(<span class="string">"__{rest}"</span>)
+<a href=#189 id=189 data-nosnippet>189</a>}
+<a href=#190 id=190 data-nosnippet>190</a>
+<a href=#191 id=191 data-nosnippet>191</a><span class="kw">fn </span>encode_plan(
+<a href=#192 id=192 data-nosnippet>192</a>    plan: <span class="kw-2">&amp;</span>StructPlan,
+<a href=#193 id=193 data-nosnippet>193</a>    access: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#194 id=194 data-nosnippet>194</a>    prefix: <span class="kw-2">&amp;</span>str,
+<a href=#195 id=195 data-nosnippet>195</a>    depth: usize,
+<a href=#196 id=196 data-nosnippet>196</a>    env_expr: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#197 id=197 data-nosnippet>197</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
+<a href=#198 id=198 data-nosnippet>198</a>) -&gt; (TokenStream, Vec&lt;EncSlot&gt;) {
+<a href=#199 id=199 data-nosnippet>199</a>    <span class="kw">let </span><span class="kw-2">mut </span>preludes = TokenStream::new();
+<a href=#200 id=200 data-nosnippet>200</a>    <span class="kw">let </span><span class="kw-2">mut </span>slots: Vec&lt;EncSlot&gt; = Vec::new();
+<a href=#201 id=201 data-nosnippet>201</a>
+<a href=#202 id=202 data-nosnippet>202</a>    <span class="kw">for </span>f <span class="kw">in </span><span class="kw-2">&amp;</span>plan.fields {
+<a href=#203 id=203 data-nosnippet>203</a>        <span class="kw">let </span>fname = <span class="kw-2">&amp;</span>f.fname;
+<a href=#204 id=204 data-nosnippet>204</a>        <span class="kw">let </span>base = <span class="macro">format!</span>(<span class="string">"{}_{}"</span>, prefix, fname);
+<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span>value = <span class="macro">quote!</span> { #access.#fname };
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">let </span>(pre, sl) = encode_field(<span class="kw-2">&amp;</span>f.kind, <span class="kw-2">&amp;</span>value, <span class="kw-2">&amp;</span>base, depth, env_expr, emit);
+<a href=#207 id=207 data-nosnippet>207</a>        preludes.extend(pre);
+<a href=#208 id=208 data-nosnippet>208</a>        slots.extend(sl);
+<a href=#209 id=209 data-nosnippet>209</a>    }
+<a href=#210 id=210 data-nosnippet>210</a>    (preludes, slots)
+<a href=#211 id=211 data-nosnippet>211</a>}
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a><span class="doccomment">/// Emit the Rust-side wire encode of ONE value position — a struct field or a
+<a href=#214 id=214 data-nosnippet>214</a>/// sum's variant payload. `value` is the Rust expression yielding it (`v.mode`
+<a href=#215 id=215 data-nosnippet>215</a>/// at a struct field, the bound pattern variable inside a variant arm), which
+<a href=#216 id=216 data-nosnippet>216</a>/// is what lets a sum reuse this for its payloads: a payload is encoded by the
+<a href=#217 id=217 data-nosnippet>217</a>/// same code as a field of the same type, not by a parallel walk.
+<a href=#218 id=218 data-nosnippet>218</a></span><span class="kw">fn </span>encode_field(
+<a href=#219 id=219 data-nosnippet>219</a>    kind: <span class="kw-2">&amp;</span>PlanFieldKind,
+<a href=#220 id=220 data-nosnippet>220</a>    value: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#221 id=221 data-nosnippet>221</a>    base: <span class="kw-2">&amp;</span>str,
+<a href=#222 id=222 data-nosnippet>222</a>    depth: usize,
+<a href=#223 id=223 data-nosnippet>223</a>    env_expr: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#224 id=224 data-nosnippet>224</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
+<a href=#225 id=225 data-nosnippet>225</a>) -&gt; (TokenStream, Vec&lt;EncSlot&gt;) {
+<a href=#226 id=226 data-nosnippet>226</a>    <span class="kw">let </span><span class="kw-2">mut </span>preludes = TokenStream::new();
+<a href=#227 id=227 data-nosnippet>227</a>    <span class="kw">let </span><span class="kw-2">mut </span>slots: Vec&lt;EncSlot&gt; = Vec::new();
+<a href=#228 id=228 data-nosnippet>228</a>    {
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">let </span>id = <span class="macro">format_ident!</span>(<span class="string">"__{}"</span>, base);
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="comment">// The leaf's COMPLETE chain, not just its wire-facing converter: a
+<a href=#231 id=231 data-nosnippet>231</a>        // `convert!`-declared type (`Duration`) reaches the wire through its
+<a href=#232 id=232 data-nosnippet>232</a>        // rust-side stages first (`Duration → u64 → jlong`).
+<a href=#233 id=233 data-nosnippet>233</a>        </span><span class="kw">let </span>conv_value =
+<a href=#234 id=234 data-nosnippet>234</a>            |conv: <span class="kw-2">&amp;</span>ConvChain| -&gt; TokenStream { conv.call(env_expr, value, base, emit) };
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">match </span>kind {
+<a href=#236 id=236 data-nosnippet>236</a>            <span class="comment">// Projection leaf (opaque handle → jlong, `ULong` → jlong).
+<a href=#237 id=237 data-nosnippet>237</a>            </span>PlanFieldKind::Projection { conv, proj, .. } =&gt; {
+<a href=#238 id=238 data-nosnippet>238</a>                <span class="kw">let </span>value_expr = conv_value(conv);
+<a href=#239 id=239 data-nosnippet>239</a>                <span class="kw">match </span>proj.kind {
+<a href=#240 id=240 data-nosnippet>240</a>                    ProjectionKind::Handle =&gt; {
+<a href=#241 id=241 data-nosnippet>241</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jlong = #value_expr; });
+<a href=#242 id=242 data-nosnippet>242</a>                        slots.push(EncSlot {
+<a href=#243 id=243 data-nosnippet>243</a>                            depth,
+<a href=#244 id=244 data-nosnippet>244</a>                            ident: id,
+<a href=#245 id=245 data-nosnippet>245</a>                            wire_ty: <span class="macro">quote!</span>(jni::sys::jlong),
+<a href=#246 id=246 data-nosnippet>246</a>                            descriptor: <span class="string">"J"</span>.to_string(),
+<a href=#247 id=247 data-nosnippet>247</a>                            is_object: <span class="bool-val">false</span>,
+<a href=#248 id=248 data-nosnippet>248</a>                            default: <span class="macro">quote!</span>(<span class="number">0i64</span>),
+<a href=#249 id=249 data-nosnippet>249</a>                        });
+<a href=#250 id=250 data-nosnippet>250</a>                    }
+<a href=#251 id=251 data-nosnippet>251</a>                    ProjectionKind::Unsigned64 =&gt; <span class="kw">match </span>proj.strategy {
+<a href=#252 id=252 data-nosnippet>252</a>                        FoldStrategy::Base =&gt; {
+<a href=#253 id=253 data-nosnippet>253</a>                            preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jlong = #value_expr; });
+<a href=#254 id=254 data-nosnippet>254</a>                            slots.push(EncSlot {
+<a href=#255 id=255 data-nosnippet>255</a>                                depth,
+<a href=#256 id=256 data-nosnippet>256</a>                                ident: id,
+<a href=#257 id=257 data-nosnippet>257</a>                                wire_ty: <span class="macro">quote!</span>(jni::sys::jlong),
+<a href=#258 id=258 data-nosnippet>258</a>                                descriptor: <span class="string">"J"</span>.to_string(),
+<a href=#259 id=259 data-nosnippet>259</a>                                is_object: <span class="bool-val">false</span>,
+<a href=#260 id=260 data-nosnippet>260</a>                                default: <span class="macro">quote!</span>(<span class="number">0i64</span>),
+<a href=#261 id=261 data-nosnippet>261</a>                            });
+<a href=#262 id=262 data-nosnippet>262</a>                        }
+<a href=#263 id=263 data-nosnippet>263</a>                        FoldStrategy::Optional(NullableKind::Niche, <span class="kw">_</span>) =&gt; {
+<a href=#264 id=264 data-nosnippet>264</a>                            preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jlong = #value_expr; });
+<a href=#265 id=265 data-nosnippet>265</a>                            slots.push(EncSlot {
+<a href=#266 id=266 data-nosnippet>266</a>                                depth,
+<a href=#267 id=267 data-nosnippet>267</a>                                ident: id,
+<a href=#268 id=268 data-nosnippet>268</a>                                wire_ty: <span class="macro">quote!</span>(jni::sys::jlong),
+<a href=#269 id=269 data-nosnippet>269</a>                                descriptor: <span class="string">"J"</span>.to_string(),
+<a href=#270 id=270 data-nosnippet>270</a>                                is_object: <span class="bool-val">false</span>,
+<a href=#271 id=271 data-nosnippet>271</a>                                default: <span class="macro">quote!</span>(<span class="number">0i64</span>),
+<a href=#272 id=272 data-nosnippet>272</a>                            });
+<a href=#273 id=273 data-nosnippet>273</a>                        }
+<a href=#274 id=274 data-nosnippet>274</a>                        FoldStrategy::Optional(NullableKind::Boxed, <span class="kw">_</span>) =&gt; {
+<a href=#275 id=275 data-nosnippet>275</a>                            preludes
+<a href=#276 id=276 data-nosnippet>276</a>                                .extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr; });
+<a href=#277 id=277 data-nosnippet>277</a>                            slots.push(EncSlot {
+<a href=#278 id=278 data-nosnippet>278</a>                                depth,
+<a href=#279 id=279 data-nosnippet>279</a>                                ident: id,
+<a href=#280 id=280 data-nosnippet>280</a>                                wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
+<a href=#281 id=281 data-nosnippet>281</a>                                descriptor: <span class="string">"Ljava/lang/Long;"</span>.to_string(),
+<a href=#282 id=282 data-nosnippet>282</a>                                is_object: <span class="bool-val">true</span>,
+<a href=#283 id=283 data-nosnippet>283</a>                                default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
+<a href=#284 id=284 data-nosnippet>284</a>                            });
+<a href=#285 id=285 data-nosnippet>285</a>                        }
+<a href=#286 id=286 data-nosnippet>286</a>                        FoldStrategy::Iterable(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(
+<a href=#287 id=287 data-nosnippet>287</a>                            <span class="string">"projection collection fields are rejected by build_struct_plan"
+<a href=#288 id=288 data-nosnippet>288</a>                        </span>),
+<a href=#289 id=289 data-nosnippet>289</a>                    },
+<a href=#290 id=290 data-nosnippet>290</a>                }
+<a href=#291 id=291 data-nosnippet>291</a>            }
+<a href=#292 id=292 data-nosnippet>292</a>            <span class="comment">// Enum leaf → jint discriminant (Kotlin `fromParts` calls `fromInt`).
+<a href=#293 id=293 data-nosnippet>293</a>            </span>PlanFieldKind::Enum { conv, .. } =&gt; {
+<a href=#294 id=294 data-nosnippet>294</a>                <span class="kw">let </span>value_expr = conv_value(conv);
+<a href=#295 id=295 data-nosnippet>295</a>                preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jint = #value_expr; });
+<a href=#296 id=296 data-nosnippet>296</a>                slots.push(EncSlot {
+<a href=#297 id=297 data-nosnippet>297</a>                    depth,
+<a href=#298 id=298 data-nosnippet>298</a>                    ident: id,
+<a href=#299 id=299 data-nosnippet>299</a>                    wire_ty: <span class="macro">quote!</span>(jni::sys::jint),
+<a href=#300 id=300 data-nosnippet>300</a>                    descriptor: <span class="string">"I"</span>.to_string(),
+<a href=#301 id=301 data-nosnippet>301</a>                    is_object: <span class="bool-val">false</span>,
+<a href=#302 id=302 data-nosnippet>302</a>                    default: <span class="macro">quote!</span>(<span class="number">0i32</span>),
+<a href=#303 id=303 data-nosnippet>303</a>                });
+<a href=#304 id=304 data-nosnippet>304</a>            }
+<a href=#305 id=305 data-nosnippet>305</a>            <span class="comment">// `Option&lt;enum&gt;` uses the enum's frozen primitive niche. Keep the
+<a href=#306 id=306 data-nosnippet>306</a>            // boxed Integer branch for plans produced without niche metadata.
+<a href=#307 id=307 data-nosnippet>307</a>            </span>PlanFieldKind::OptionEnum { conv, niche, .. } =&gt; {
+<a href=#308 id=308 data-nosnippet>308</a>                <span class="kw">let </span>value_expr = conv_value(conv);
+<a href=#309 id=309 data-nosnippet>309</a>                <span class="kw">if </span>niche.is_some() {
+<a href=#310 id=310 data-nosnippet>310</a>                    preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::sys::jint = #value_expr; });
+<a href=#311 id=311 data-nosnippet>311</a>                    slots.push(EncSlot {
+<a href=#312 id=312 data-nosnippet>312</a>                        depth,
+<a href=#313 id=313 data-nosnippet>313</a>                        ident: id,
+<a href=#314 id=314 data-nosnippet>314</a>                        wire_ty: <span class="macro">quote!</span>(jni::sys::jint),
+<a href=#315 id=315 data-nosnippet>315</a>                        descriptor: <span class="string">"I"</span>.to_string(),
+<a href=#316 id=316 data-nosnippet>316</a>                        is_object: <span class="bool-val">false</span>,
+<a href=#317 id=317 data-nosnippet>317</a>                        default: <span class="macro">quote!</span>(<span class="number">0i32</span>),
+<a href=#318 id=318 data-nosnippet>318</a>                    });
+<a href=#319 id=319 data-nosnippet>319</a>                } <span class="kw">else </span>{
+<a href=#320 id=320 data-nosnippet>320</a>                    preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr; });
+<a href=#321 id=321 data-nosnippet>321</a>                    slots.push(EncSlot {
+<a href=#322 id=322 data-nosnippet>322</a>                        depth,
+<a href=#323 id=323 data-nosnippet>323</a>                        ident: id,
+<a href=#324 id=324 data-nosnippet>324</a>                        wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
+<a href=#325 id=325 data-nosnippet>325</a>                        descriptor: <span class="string">"Ljava/lang/Integer;"</span>.to_string(),
+<a href=#326 id=326 data-nosnippet>326</a>                        is_object: <span class="bool-val">true</span>,
+<a href=#327 id=327 data-nosnippet>327</a>                        default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
+<a href=#328 id=328 data-nosnippet>328</a>                    });
+<a href=#329 id=329 data-nosnippet>329</a>                }
+<a href=#330 id=330 data-nosnippet>330</a>            }
+<a href=#331 id=331 data-nosnippet>331</a>            <span class="comment">// Nested data-class: inline the child's leaves; under `Option` add
+<a href=#332 id=332 data-nosnippet>332</a>            // a `present` flag and default the child slots in the `None` arm.
+<a href=#333 id=333 data-nosnippet>333</a>            </span>PlanFieldKind::Nested {
+<a href=#334 id=334 data-nosnippet>334</a>                optional,
+<a href=#335 id=335 data-nosnippet>335</a>                plan: child,
+<a href=#336 id=336 data-nosnippet>336</a>                ..
+<a href=#337 id=337 data-nosnippet>337</a>            } =&gt; {
+<a href=#338 id=338 data-nosnippet>338</a>                <span class="kw">if </span>!<span class="kw-2">*</span>optional {
+<a href=#339 id=339 data-nosnippet>339</a>                    <span class="kw">let </span>(child_pre, child_slots) =
+<a href=#340 id=340 data-nosnippet>340</a>                        encode_plan(child, value, base, depth + <span class="number">1</span>, env_expr, emit);
+<a href=#341 id=341 data-nosnippet>341</a>                    preludes.extend(child_pre);
+<a href=#342 id=342 data-nosnippet>342</a>                    slots.extend(child_slots);
+<a href=#343 id=343 data-nosnippet>343</a>                } <span class="kw">else </span>{
+<a href=#344 id=344 data-nosnippet>344</a>                    <span class="kw">let </span>cbind = <span class="macro">format_ident!</span>(<span class="string">"__c{}"</span>, depth);
+<a href=#345 id=345 data-nosnippet>345</a>                    <span class="kw">let </span>child_access = <span class="macro">quote!</span> { #cbind };
+<a href=#346 id=346 data-nosnippet>346</a>                    <span class="kw">let </span>(child_pre, child_slots) =
+<a href=#347 id=347 data-nosnippet>347</a>                        encode_plan(child, <span class="kw-2">&amp;</span>child_access, base, depth + <span class="number">1</span>, env_expr, emit);
+<a href=#348 id=348 data-nosnippet>348</a>                    <span class="kw">let </span>flag_id = <span class="macro">format_ident!</span>(<span class="string">"__{}_present"</span>, base);
+<a href=#349 id=349 data-nosnippet>349</a>                    <span class="kw">let </span>outer_ids: Vec&lt;proc_macro2::Ident&gt; = (<span class="number">0</span>..child_slots.len())
+<a href=#350 id=350 data-nosnippet>350</a>                        .map(|i| <span class="macro">format_ident!</span>(<span class="string">"__{}_o{}"</span>, base, i))
+<a href=#351 id=351 data-nosnippet>351</a>                        .collect();
+<a href=#352 id=352 data-nosnippet>352</a>                    <span class="kw">let </span>outer_tys: Vec&lt;TokenStream&gt; =
+<a href=#353 id=353 data-nosnippet>353</a>                        child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
+<a href=#354 id=354 data-nosnippet>354</a>                    <span class="kw">let </span>inner_ids: Vec&lt;proc_macro2::Ident&gt; =
+<a href=#355 id=355 data-nosnippet>355</a>                        child_slots.iter().map(|sl| sl.ident.clone()).collect();
+<a href=#356 id=356 data-nosnippet>356</a>                    <span class="kw">let </span>defaults: Vec&lt;TokenStream&gt; =
+<a href=#357 id=357 data-nosnippet>357</a>                        child_slots.iter().map(|sl| sl.default.clone()).collect();
+<a href=#358 id=358 data-nosnippet>358</a>                    <span class="comment">// Destructured through a coercion site: `kind` says this
+<a href=#359 id=359 data-nosnippet>359</a>                    // field is optional, and how Rust spells that is the
+<a href=#360 id=360 data-nosnippet>360</a>                    // source's business (#268).
+<a href=#361 id=361 data-nosnippet>361</a>                    </span><span class="kw">let </span>obind = <span class="macro">format_ident!</span>(<span class="string">"__on{}"</span>, depth);
+<a href=#362 id=362 data-nosnippet>362</a>                    <span class="kw">let </span>coerce =
+<a href=#363 id=363 data-nosnippet>363</a>                        prebindgen_registry::unfold::bind_as_option(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(<span class="kw-2">&amp;</span>#value), <span class="kw-2">&amp;</span>obind);
+<a href=#364 id=364 data-nosnippet>364</a>                    preludes.extend(<span class="macro">quote!</span> {
+<a href=#365 id=365 data-nosnippet>365</a>                        <span class="kw">let </span>#flag_id: jni::sys::jboolean;
+<a href=#366 id=366 data-nosnippet>366</a>                        #( <span class="kw">let </span>#outer_ids: #outer_tys; )*
+<a href=#367 id=367 data-nosnippet>367</a>                        #coerce
+<a href=#368 id=368 data-nosnippet>368</a>                        <span class="kw">match </span>#obind {
+<a href=#369 id=369 data-nosnippet>369</a>                            ::core::option::Option::Some(#cbind) =&gt; {
+<a href=#370 id=370 data-nosnippet>370</a>                                #child_pre
+<a href=#371 id=371 data-nosnippet>371</a>                                #flag_id = <span class="number">1u8</span>;
+<a href=#372 id=372 data-nosnippet>372</a>                                #( #outer_ids = #inner_ids; )*
+<a href=#373 id=373 data-nosnippet>373</a>                            }
+<a href=#374 id=374 data-nosnippet>374</a>                            ::core::option::Option::None =&gt; {
+<a href=#375 id=375 data-nosnippet>375</a>                                #flag_id = <span class="number">0u8</span>;
+<a href=#376 id=376 data-nosnippet>376</a>                                #( #outer_ids = #defaults; )*
+<a href=#377 id=377 data-nosnippet>377</a>                            }
+<a href=#378 id=378 data-nosnippet>378</a>                        }
 <a href=#379 id=379 data-nosnippet>379</a>                    });
-<a href=#380 id=380 data-nosnippet>380</a>                    <span class="kw">for </span>(i, sl) <span class="kw">in </span>child_slots.iter().enumerate() {
-<a href=#381 id=381 data-nosnippet>381</a>                        slots.push(EncSlot {
-<a href=#382 id=382 data-nosnippet>382</a>                            depth,
-<a href=#383 id=383 data-nosnippet>383</a>                            ident: outer_ids[i].clone(),
-<a href=#384 id=384 data-nosnippet>384</a>                            wire_ty: sl.wire_ty.clone(),
-<a href=#385 id=385 data-nosnippet>385</a>                            descriptor: sl.descriptor.clone(),
-<a href=#386 id=386 data-nosnippet>386</a>                            is_object: sl.is_object,
-<a href=#387 id=387 data-nosnippet>387</a>                            default: sl.default.clone(),
-<a href=#388 id=388 data-nosnippet>388</a>                        });
-<a href=#389 id=389 data-nosnippet>389</a>                    }
-<a href=#390 id=390 data-nosnippet>390</a>                }
-<a href=#391 id=391 data-nosnippet>391</a>            }
-<a href=#392 id=392 data-nosnippet>392</a>            <span class="comment">// Data-carrying enum: one `match` binds the tag and EVERY group's
-<a href=#393 id=393 data-nosnippet>393</a>            // slots — the live group from its payload, the rest from the same
-<a href=#394 id=394 data-nosnippet>394</a>            // defaults an absent `Option&lt;nested&gt;` uses. One crossing, no JVM
-<a href=#395 id=395 data-nosnippet>395</a>            // object built for the sum.
-<a href=#396 id=396 data-nosnippet>396</a>            </span>PlanFieldKind::Sum {
-<a href=#397 id=397 data-nosnippet>397</a>                source,
-<a href=#398 id=398 data-nosnippet>398</a>                optional,
-<a href=#399 id=399 data-nosnippet>399</a>                variants,
-<a href=#400 id=400 data-nosnippet>400</a>                ..
-<a href=#401 id=401 data-nosnippet>401</a>            } =&gt; {
-<a href=#402 id=402 data-nosnippet>402</a>                <span class="kw">let </span>tag_id = <span class="macro">format_ident!</span>(<span class="string">"__{}__tag"</span>, base);
-<a href=#403 id=403 data-nosnippet>403</a>
-<a href=#404 id=404 data-nosnippet>404</a>                <span class="comment">// Encode each variant's group once, against its own pattern
-<a href=#405 id=405 data-nosnippet>405</a>                // bindings. `arms` keeps them aligned with the flat slot list.
-<a href=#406 id=406 data-nosnippet>406</a>                </span><span class="kw">struct </span>Arm {
-<a href=#407 id=407 data-nosnippet>407</a>                    pattern: TokenStream,
-<a href=#408 id=408 data-nosnippet>408</a>                    preludes: TokenStream,
-<a href=#409 id=409 data-nosnippet>409</a>                    slots: Vec&lt;EncSlot&gt;,
-<a href=#410 id=410 data-nosnippet>410</a>                }
-<a href=#411 id=411 data-nosnippet>411</a>                <span class="kw">let </span><span class="kw-2">mut </span>arms: Vec&lt;Arm&gt; = Vec::new();
-<a href=#412 id=412 data-nosnippet>412</a>                <span class="kw">for </span>v <span class="kw">in </span>variants {
-<a href=#413 id=413 data-nosnippet>413</a>                    <span class="kw">let </span>vident = <span class="kw-2">&amp;</span>v.rust_ident;
-<a href=#414 id=414 data-nosnippet>414</a>                    <span class="kw">let </span>binds: Vec&lt;syn::Ident&gt; = (<span class="number">0</span>..v.fields.len())
-<a href=#415 id=415 data-nosnippet>415</a>                        .map(|i| <span class="macro">format_ident!</span>(<span class="string">"__s{}_{}"</span>, depth, i))
-<a href=#416 id=416 data-nosnippet>416</a>                        .collect();
-<a href=#417 id=417 data-nosnippet>417</a>                    <span class="kw">let </span><span class="kw-2">mut </span>vpre = TokenStream::new();
-<a href=#418 id=418 data-nosnippet>418</a>                    <span class="kw">let </span><span class="kw-2">mut </span>vslots: Vec&lt;EncSlot&gt; = Vec::new();
-<a href=#419 id=419 data-nosnippet>419</a>                    <span class="kw">for </span>(f, bind) <span class="kw">in </span>v.fields.iter().zip(<span class="kw-2">&amp;</span>binds) {
-<a href=#420 id=420 data-nosnippet>420</a>                        <span class="comment">// The arm's own bindings carry a marker segment the
-<a href=#421 id=421 data-nosnippet>421</a>                        // outer slots drop: the two are the same leaf and want
-<a href=#422 id=422 data-nosnippet>422</a>                        // the same name, and one scope assigns from the other.
-<a href=#423 id=423 data-nosnippet>423</a>                        </span><span class="kw">let </span>fbase = <span class="macro">format!</span>(<span class="string">"{base}_{}{ARM_MARKER}"</span>, f.slot);
-<a href=#424 id=424 data-nosnippet>424</a>                        <span class="kw">let </span>bind_expr = <span class="macro">quote!</span>(#bind);
-<a href=#425 id=425 data-nosnippet>425</a>                        <span class="kw">let </span>(p, s) =
-<a href=#426 id=426 data-nosnippet>426</a>                            encode_field(<span class="kw-2">&amp;</span>f.kind, <span class="kw-2">&amp;</span>bind_expr, <span class="kw-2">&amp;</span>fbase, depth + <span class="number">1</span>, env_expr, emit);
-<a href=#427 id=427 data-nosnippet>427</a>                        vpre.extend(p);
-<a href=#428 id=428 data-nosnippet>428</a>                        vslots.extend(s);
-<a href=#429 id=429 data-nosnippet>429</a>                    }
-<a href=#430 id=430 data-nosnippet>430</a>                    <span class="comment">// Bind every payload field, shaped like the variant.
-<a href=#431 id=431 data-nosnippet>431</a>                    </span><span class="kw">let </span>pattern = <span class="kw">match </span>v.fields.first().map(|f| <span class="kw-2">&amp;</span>f.member) {
-<a href=#432 id=432 data-nosnippet>432</a>                        <span class="prelude-val">None </span>=&gt; <span class="macro">quote!</span>(#source::#vident),
-<a href=#433 id=433 data-nosnippet>433</a>                        <span class="prelude-val">Some</span>(syn::Member::Named(<span class="kw">_</span>)) =&gt; {
-<a href=#434 id=434 data-nosnippet>434</a>                            <span class="kw">let </span>pairs = v.fields.iter().zip(<span class="kw-2">&amp;</span>binds).map(|(f, b)| {
-<a href=#435 id=435 data-nosnippet>435</a>                                <span class="kw">let </span>syn::Member::Named(n) = <span class="kw-2">&amp;</span>f.member <span class="kw">else </span>{
-<a href=#436 id=436 data-nosnippet>436</a>                                    <span class="macro">unreachable!</span>(<span class="string">"variant field shapes are uniform"</span>)
-<a href=#437 id=437 data-nosnippet>437</a>                                };
-<a href=#438 id=438 data-nosnippet>438</a>                                <span class="macro">quote!</span>(#n: #b)
-<a href=#439 id=439 data-nosnippet>439</a>                            });
-<a href=#440 id=440 data-nosnippet>440</a>                            <span class="macro">quote!</span>(#source::#vident { #(#pairs),* })
-<a href=#441 id=441 data-nosnippet>441</a>                        }
-<a href=#442 id=442 data-nosnippet>442</a>                        <span class="prelude-val">Some</span>(syn::Member::Unnamed(<span class="kw">_</span>)) =&gt; <span class="macro">quote!</span>(#source::#vident(#(#binds),<span class="kw-2">*</span>)),
-<a href=#443 id=443 data-nosnippet>443</a>                    };
-<a href=#444 id=444 data-nosnippet>444</a>                    arms.push(Arm {
-<a href=#445 id=445 data-nosnippet>445</a>                        pattern,
-<a href=#446 id=446 data-nosnippet>446</a>                        preludes: vpre,
-<a href=#447 id=447 data-nosnippet>447</a>                        slots: vslots,
-<a href=#448 id=448 data-nosnippet>448</a>                    });
-<a href=#449 id=449 data-nosnippet>449</a>                }
-<a href=#450 id=450 data-nosnippet>450</a>
-<a href=#451 id=451 data-nosnippet>451</a>                <span class="comment">// Outer bindings: the tag plus every group's slots, side by
-<a href=#452 id=452 data-nosnippet>452</a>                // side in variant order. Each arm assigns its own group from
-<a href=#453 id=453 data-nosnippet>453</a>                // the values it just computed and defaults all the others.
-<a href=#454 id=454 data-nosnippet>454</a>                </span><span class="kw">let </span>all: Vec&lt;<span class="kw-2">&amp;</span>EncSlot&gt; = arms.iter().flat_map(|a| a.slots.iter()).collect();
-<a href=#455 id=455 data-nosnippet>455</a>                <span class="comment">// Named after the leaf each slot carries — `__outcome_found_v0`,
-<a href=#456 id=456 data-nosnippet>456</a>                // not `__outcome_g0`. The inner bindings already use that
-<a href=#457 id=457 data-nosnippet>457</a>                // naming, and it is what the registry-facing decomposition
-<a href=#458 id=458 data-nosnippet>458</a>                // calls the same leaf, so the two derivations agree by
-<a href=#459 id=459 data-nosnippet>459</a>                // construction rather than by a positional coincidence. The
-<a href=#460 id=460 data-nosnippet>460</a>                // inner binding of the same name lives inside its match arm
-<a href=#461 id=461 data-nosnippet>461</a>                // and shadows nothing the outer tuple reads.
-<a href=#462 id=462 data-nosnippet>462</a>                </span><span class="kw">let </span>outer_ids: Vec&lt;proc_macro2::Ident&gt; =
-<a href=#463 id=463 data-nosnippet>463</a>                    all.iter().map(|slot| outer_of(<span class="kw-2">&amp;</span>slot.ident)).collect();
-<a href=#464 id=464 data-nosnippet>464</a>                <span class="kw">let </span>outer_tys: Vec&lt;TokenStream&gt; = all.iter().map(|s| s.wire_ty.clone()).collect();
-<a href=#465 id=465 data-nosnippet>465</a>                <span class="kw">let </span>defaults: Vec&lt;TokenStream&gt; = all.iter().map(|s| s.default.clone()).collect();
-<a href=#466 id=466 data-nosnippet>466</a>
-<a href=#467 id=467 data-nosnippet>467</a>                <span class="kw">let </span><span class="kw-2">mut </span>offset = <span class="number">0usize</span>;
-<a href=#468 id=468 data-nosnippet>468</a>                <span class="kw">let </span>arm_code: Vec&lt;TokenStream&gt; = arms
-<a href=#469 id=469 data-nosnippet>469</a>                    .iter()
-<a href=#470 id=470 data-nosnippet>470</a>                    .enumerate()
-<a href=#471 id=471 data-nosnippet>471</a>                    .map(|(tag, a)| {
-<a href=#472 id=472 data-nosnippet>472</a>                        <span class="kw">let </span>n = a.slots.len();
-<a href=#473 id=473 data-nosnippet>473</a>                        <span class="kw">let </span>live_outer = <span class="kw-2">&amp;</span>outer_ids[offset..offset + n];
-<a href=#474 id=474 data-nosnippet>474</a>                        <span class="kw">let </span>live_inner: Vec&lt;proc_macro2::Ident&gt; =
-<a href=#475 id=475 data-nosnippet>475</a>                            a.slots.iter().map(|s| s.ident.clone()).collect();
-<a href=#476 id=476 data-nosnippet>476</a>                        <span class="comment">// Every slot outside this arm's own group is inert.
-<a href=#477 id=477 data-nosnippet>477</a>                        </span><span class="kw">let </span>inert_outer: Vec&lt;proc_macro2::Ident&gt; = outer_ids
-<a href=#478 id=478 data-nosnippet>478</a>                            .iter()
-<a href=#479 id=479 data-nosnippet>479</a>                            .enumerate()
-<a href=#480 id=480 data-nosnippet>480</a>                            .filter(|(i, <span class="kw">_</span>)| <span class="kw-2">*</span>i &lt; offset || <span class="kw-2">*</span>i &gt;= offset + n)
-<a href=#481 id=481 data-nosnippet>481</a>                            .map(|(<span class="kw">_</span>, id)| id.clone())
-<a href=#482 id=482 data-nosnippet>482</a>                            .collect();
-<a href=#483 id=483 data-nosnippet>483</a>                        <span class="kw">let </span>inert_defaults: Vec&lt;TokenStream&gt; = defaults
-<a href=#484 id=484 data-nosnippet>484</a>                            .iter()
-<a href=#485 id=485 data-nosnippet>485</a>                            .enumerate()
-<a href=#486 id=486 data-nosnippet>486</a>                            .filter(|(i, <span class="kw">_</span>)| <span class="kw-2">*</span>i &lt; offset || <span class="kw-2">*</span>i &gt;= offset + n)
-<a href=#487 id=487 data-nosnippet>487</a>                            .map(|(<span class="kw">_</span>, d)| d.clone())
-<a href=#488 id=488 data-nosnippet>488</a>                            .collect();
-<a href=#489 id=489 data-nosnippet>489</a>                        offset += n;
-<a href=#490 id=490 data-nosnippet>490</a>                        <span class="kw">let </span>pattern = <span class="kw-2">&amp;</span>a.pattern;
-<a href=#491 id=491 data-nosnippet>491</a>                        <span class="kw">let </span>pre = <span class="kw-2">&amp;</span>a.preludes;
-<a href=#492 id=492 data-nosnippet>492</a>                        <span class="kw">let </span>tag_lit = proc_macro2::Literal::i32_unsuffixed(tag <span class="kw">as </span>i32);
-<a href=#493 id=493 data-nosnippet>493</a>                        <span class="macro">quote!</span> {
-<a href=#494 id=494 data-nosnippet>494</a>                            #pattern =&gt; {
-<a href=#495 id=495 data-nosnippet>495</a>                                #pre
-<a href=#496 id=496 data-nosnippet>496</a>                                #tag_id = #tag_lit;
-<a href=#497 id=497 data-nosnippet>497</a>                                #( #live_outer = #live_inner; )*
-<a href=#498 id=498 data-nosnippet>498</a>                                #( #inert_outer = #inert_defaults; )*
-<a href=#499 id=499 data-nosnippet>499</a>                            }
-<a href=#500 id=500 data-nosnippet>500</a>                        }
-<a href=#501 id=501 data-nosnippet>501</a>                    })
-<a href=#502 id=502 data-nosnippet>502</a>                    .collect();
-<a href=#503 id=503 data-nosnippet>503</a>
-<a href=#504 id=504 data-nosnippet>504</a>                <span class="kw">let </span>decls = <span class="macro">quote!</span> {
-<a href=#505 id=505 data-nosnippet>505</a>                    <span class="kw">let </span>#tag_id: jni::sys::jint;
-<a href=#506 id=506 data-nosnippet>506</a>                    #( <span class="kw">let </span>#outer_ids: #outer_tys; )*
-<a href=#507 id=507 data-nosnippet>507</a>                };
-<a href=#508 id=508 data-nosnippet>508</a>                <span class="kw">if </span>!<span class="kw-2">*</span>optional {
-<a href=#509 id=509 data-nosnippet>509</a>                    preludes.extend(<span class="macro">quote!</span> {
-<a href=#510 id=510 data-nosnippet>510</a>                        #decls
-<a href=#511 id=511 data-nosnippet>511</a>                        <span class="kw">match </span><span class="kw-2">&amp;</span>#value { #(#arm_code)* }
-<a href=#512 id=512 data-nosnippet>512</a>                    });
-<a href=#513 id=513 data-nosnippet>513</a>                } <span class="kw">else </span>{
-<a href=#514 id=514 data-nosnippet>514</a>                    <span class="comment">// `Option&lt;sum&gt;` keeps its own present flag ahead of the
-<a href=#515 id=515 data-nosnippet>515</a>                    // tag: optionality and choice are independent facts.
-<a href=#516 id=516 data-nosnippet>516</a>                    </span><span class="kw">let </span>flag_id = <span class="macro">format_ident!</span>(<span class="string">"__{}_present"</span>, base);
-<a href=#517 id=517 data-nosnippet>517</a>                    <span class="kw">let </span>sbind = <span class="macro">format_ident!</span>(<span class="string">"__o{}"</span>, depth);
-<a href=#518 id=518 data-nosnippet>518</a>                    <span class="kw">let </span>inner_arms: Vec&lt;TokenStream&gt; =
-<a href=#519 id=519 data-nosnippet>519</a>                        arm_code.iter().map(|a| <span class="macro">quote!</span> { #a }).collect();
-<a href=#520 id=520 data-nosnippet>520</a>                    <span class="comment">// Destructured through a coercion site: `kind` says this
-<a href=#521 id=521 data-nosnippet>521</a>                    // field is optional, and how Rust spells that is the
-<a href=#522 id=522 data-nosnippet>522</a>                    // source's business (#268).
-<a href=#523 id=523 data-nosnippet>523</a>                    </span><span class="kw">let </span>obind = <span class="macro">format_ident!</span>(<span class="string">"__oc{}"</span>, depth);
-<a href=#524 id=524 data-nosnippet>524</a>                    <span class="kw">let </span>coerce =
-<a href=#525 id=525 data-nosnippet>525</a>                        prebindgen_registry::unfold::bind_as_option(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(<span class="kw-2">&amp;</span>#value), <span class="kw-2">&amp;</span>obind);
-<a href=#526 id=526 data-nosnippet>526</a>                    preludes.extend(<span class="macro">quote!</span> {
-<a href=#527 id=527 data-nosnippet>527</a>                        <span class="kw">let </span>#flag_id: jni::sys::jboolean;
-<a href=#528 id=528 data-nosnippet>528</a>                        #decls
-<a href=#529 id=529 data-nosnippet>529</a>                        #coerce
-<a href=#530 id=530 data-nosnippet>530</a>                        <span class="kw">match </span>#obind {
-<a href=#531 id=531 data-nosnippet>531</a>                            ::core::option::Option::Some(#sbind) =&gt; {
-<a href=#532 id=532 data-nosnippet>532</a>                                #flag_id = <span class="number">1u8</span>;
-<a href=#533 id=533 data-nosnippet>533</a>                                <span class="kw">match </span>#sbind { #(#inner_arms)* }
-<a href=#534 id=534 data-nosnippet>534</a>                            }
-<a href=#535 id=535 data-nosnippet>535</a>                            ::core::option::Option::None =&gt; {
-<a href=#536 id=536 data-nosnippet>536</a>                                #flag_id = <span class="number">0u8</span>;
-<a href=#537 id=537 data-nosnippet>537</a>                                #tag_id = <span class="number">0i32</span>;
-<a href=#538 id=538 data-nosnippet>538</a>                                #( #outer_ids = #defaults; )*
-<a href=#539 id=539 data-nosnippet>539</a>                            }
-<a href=#540 id=540 data-nosnippet>540</a>                        }
-<a href=#541 id=541 data-nosnippet>541</a>                    });
-<a href=#542 id=542 data-nosnippet>542</a>                    slots.push(EncSlot {
-<a href=#543 id=543 data-nosnippet>543</a>                        depth,
-<a href=#544 id=544 data-nosnippet>544</a>                        ident: flag_id,
-<a href=#545 id=545 data-nosnippet>545</a>                        wire_ty: <span class="macro">quote!</span>(jni::sys::jboolean),
-<a href=#546 id=546 data-nosnippet>546</a>                        descriptor: <span class="string">"Z"</span>.to_string(),
-<a href=#547 id=547 data-nosnippet>547</a>                        is_object: <span class="bool-val">false</span>,
-<a href=#548 id=548 data-nosnippet>548</a>                        default: <span class="macro">quote!</span>(<span class="number">0u8</span>),
-<a href=#549 id=549 data-nosnippet>549</a>                    });
-<a href=#550 id=550 data-nosnippet>550</a>                }
-<a href=#551 id=551 data-nosnippet>551</a>                <span class="comment">// A sum field's slots sit one level inside the struct, the
-<a href=#552 id=552 data-nosnippet>552</a>                // same as an inlined nested class's: the tag and the groups
-<a href=#553 id=553 data-nosnippet>553</a>                // are reached THROUGH the field. The decomposition says so by
-<a href=#554 id=554 data-nosnippet>554</a>                // joining the names with `__`, and depth is that count.
-<a href=#555 id=555 data-nosnippet>555</a>                </span>slots.push(EncSlot {
-<a href=#556 id=556 data-nosnippet>556</a>                    depth: depth + <span class="number">1</span>,
-<a href=#557 id=557 data-nosnippet>557</a>                    ident: tag_id,
-<a href=#558 id=558 data-nosnippet>558</a>                    wire_ty: <span class="macro">quote!</span>(jni::sys::jint),
-<a href=#559 id=559 data-nosnippet>559</a>                    descriptor: <span class="string">"I"</span>.to_string(),
-<a href=#560 id=560 data-nosnippet>560</a>                    is_object: <span class="bool-val">false</span>,
-<a href=#561 id=561 data-nosnippet>561</a>                    default: <span class="macro">quote!</span>(<span class="number">0i32</span>),
-<a href=#562 id=562 data-nosnippet>562</a>                });
-<a href=#563 id=563 data-nosnippet>563</a>                <span class="kw">for </span>(i, sl) <span class="kw">in </span>all.iter().enumerate() {
-<a href=#564 id=564 data-nosnippet>564</a>                    slots.push(EncSlot {
-<a href=#565 id=565 data-nosnippet>565</a>                        depth: sl.depth,
-<a href=#566 id=566 data-nosnippet>566</a>                        ident: outer_ids[i].clone(),
-<a href=#567 id=567 data-nosnippet>567</a>                        wire_ty: sl.wire_ty.clone(),
-<a href=#568 id=568 data-nosnippet>568</a>                        descriptor: sl.descriptor.clone(),
-<a href=#569 id=569 data-nosnippet>569</a>                        is_object: sl.is_object,
-<a href=#570 id=570 data-nosnippet>570</a>                        default: sl.default.clone(),
-<a href=#571 id=571 data-nosnippet>571</a>                    });
-<a href=#572 id=572 data-nosnippet>572</a>                }
-<a href=#573 id=573 data-nosnippet>573</a>            }
-<a href=#574 id=574 data-nosnippet>574</a>            <span class="comment">// Simple leaf: bind per the plan's wire form.
-<a href=#575 id=575 data-nosnippet>575</a>            </span>PlanFieldKind::Leaf {
-<a href=#576 id=576 data-nosnippet>576</a>                conv,
-<a href=#577 id=577 data-nosnippet>577</a>                wire,
-<a href=#578 id=578 data-nosnippet>578</a>                form,
-<a href=#579 id=579 data-nosnippet>579</a>                descriptor,
-<a href=#580 id=580 data-nosnippet>580</a>                ..
-<a href=#581 id=581 data-nosnippet>581</a>            } =&gt; {
-<a href=#582 id=582 data-nosnippet>582</a>                <span class="kw">let </span>value_expr = conv_value(conv);
-<a href=#583 id=583 data-nosnippet>583</a>                <span class="kw">match </span>form {
-<a href=#584 id=584 data-nosnippet>584</a>                    LeafForm::Prim =&gt; {
-<a href=#585 id=585 data-nosnippet>585</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: #wire = #value_expr; });
-<a href=#586 id=586 data-nosnippet>586</a>                        slots.push(EncSlot {
-<a href=#587 id=587 data-nosnippet>587</a>                            depth,
-<a href=#588 id=588 data-nosnippet>588</a>                            ident: id,
-<a href=#589 id=589 data-nosnippet>589</a>                            wire_ty: <span class="macro">quote!</span>(#wire),
-<a href=#590 id=590 data-nosnippet>590</a>                            descriptor: descriptor.clone(),
-<a href=#591 id=591 data-nosnippet>591</a>                            is_object: <span class="bool-val">false</span>,
-<a href=#592 id=592 data-nosnippet>592</a>                            default: primitive_default_for_descriptor(descriptor),
-<a href=#593 id=593 data-nosnippet>593</a>                        });
-<a href=#594 id=594 data-nosnippet>594</a>                    }
-<a href=#595 id=595 data-nosnippet>595</a>                    LeafForm::IntoObject =&gt; {
-<a href=#596 id=596 data-nosnippet>596</a>                        preludes.extend(
-<a href=#597 id=597 data-nosnippet>597</a>                            <span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr.into(); },
-<a href=#598 id=598 data-nosnippet>598</a>                        );
+<a href=#380 id=380 data-nosnippet>380</a>                    slots.push(EncSlot {
+<a href=#381 id=381 data-nosnippet>381</a>                        depth,
+<a href=#382 id=382 data-nosnippet>382</a>                        ident: flag_id,
+<a href=#383 id=383 data-nosnippet>383</a>                        wire_ty: <span class="macro">quote!</span>(jni::sys::jboolean),
+<a href=#384 id=384 data-nosnippet>384</a>                        descriptor: <span class="string">"Z"</span>.to_string(),
+<a href=#385 id=385 data-nosnippet>385</a>                        is_object: <span class="bool-val">false</span>,
+<a href=#386 id=386 data-nosnippet>386</a>                        default: <span class="macro">quote!</span>(<span class="number">0u8</span>),
+<a href=#387 id=387 data-nosnippet>387</a>                    });
+<a href=#388 id=388 data-nosnippet>388</a>                    <span class="kw">for </span>(i, sl) <span class="kw">in </span>child_slots.iter().enumerate() {
+<a href=#389 id=389 data-nosnippet>389</a>                        slots.push(EncSlot {
+<a href=#390 id=390 data-nosnippet>390</a>                            depth,
+<a href=#391 id=391 data-nosnippet>391</a>                            ident: outer_ids[i].clone(),
+<a href=#392 id=392 data-nosnippet>392</a>                            wire_ty: sl.wire_ty.clone(),
+<a href=#393 id=393 data-nosnippet>393</a>                            descriptor: sl.descriptor.clone(),
+<a href=#394 id=394 data-nosnippet>394</a>                            is_object: sl.is_object,
+<a href=#395 id=395 data-nosnippet>395</a>                            default: sl.default.clone(),
+<a href=#396 id=396 data-nosnippet>396</a>                        });
+<a href=#397 id=397 data-nosnippet>397</a>                    }
+<a href=#398 id=398 data-nosnippet>398</a>                }
+<a href=#399 id=399 data-nosnippet>399</a>            }
+<a href=#400 id=400 data-nosnippet>400</a>            <span class="comment">// Data-carrying enum: one `match` binds the tag and EVERY group's
+<a href=#401 id=401 data-nosnippet>401</a>            // slots — the live group from its payload, the rest from the same
+<a href=#402 id=402 data-nosnippet>402</a>            // defaults an absent `Option&lt;nested&gt;` uses. One crossing, no JVM
+<a href=#403 id=403 data-nosnippet>403</a>            // object built for the sum.
+<a href=#404 id=404 data-nosnippet>404</a>            </span>PlanFieldKind::Sum {
+<a href=#405 id=405 data-nosnippet>405</a>                source,
+<a href=#406 id=406 data-nosnippet>406</a>                optional,
+<a href=#407 id=407 data-nosnippet>407</a>                variants,
+<a href=#408 id=408 data-nosnippet>408</a>                ..
+<a href=#409 id=409 data-nosnippet>409</a>            } =&gt; {
+<a href=#410 id=410 data-nosnippet>410</a>                <span class="kw">let </span>tag_id = <span class="macro">format_ident!</span>(<span class="string">"__{}__tag"</span>, base);
+<a href=#411 id=411 data-nosnippet>411</a>
+<a href=#412 id=412 data-nosnippet>412</a>                <span class="comment">// Encode each variant's group once, against its own pattern
+<a href=#413 id=413 data-nosnippet>413</a>                // bindings. `arms` keeps them aligned with the flat slot list.
+<a href=#414 id=414 data-nosnippet>414</a>                </span><span class="kw">struct </span>Arm {
+<a href=#415 id=415 data-nosnippet>415</a>                    pattern: TokenStream,
+<a href=#416 id=416 data-nosnippet>416</a>                    preludes: TokenStream,
+<a href=#417 id=417 data-nosnippet>417</a>                    slots: Vec&lt;EncSlot&gt;,
+<a href=#418 id=418 data-nosnippet>418</a>                }
+<a href=#419 id=419 data-nosnippet>419</a>                <span class="kw">let </span><span class="kw-2">mut </span>arms: Vec&lt;Arm&gt; = Vec::new();
+<a href=#420 id=420 data-nosnippet>420</a>                <span class="kw">for </span>(tag, v) <span class="kw">in </span>variants.iter().enumerate() {
+<a href=#421 id=421 data-nosnippet>421</a>                    <span class="kw">let </span>vident = <span class="kw-2">&amp;</span>v.rust_ident;
+<a href=#422 id=422 data-nosnippet>422</a>                    <span class="kw">let </span>binds: Vec&lt;syn::Ident&gt; = (<span class="number">0</span>..v.fields.len())
+<a href=#423 id=423 data-nosnippet>423</a>                        .map(|i| <span class="macro">format_ident!</span>(<span class="string">"__s{}_{}"</span>, depth, i))
+<a href=#424 id=424 data-nosnippet>424</a>                        .collect();
+<a href=#425 id=425 data-nosnippet>425</a>                    <span class="kw">let </span><span class="kw-2">mut </span>vpre = TokenStream::new();
+<a href=#426 id=426 data-nosnippet>426</a>                    <span class="kw">let </span><span class="kw-2">mut </span>vslots: Vec&lt;EncSlot&gt; = Vec::new();
+<a href=#427 id=427 data-nosnippet>427</a>                    <span class="kw">for </span>(f, bind) <span class="kw">in </span>v.fields.iter().zip(<span class="kw-2">&amp;</span>binds) {
+<a href=#428 id=428 data-nosnippet>428</a>                        <span class="comment">// The arm's own bindings carry a marker segment the
+<a href=#429 id=429 data-nosnippet>429</a>                        // outer slots drop: the two are the same leaf and want
+<a href=#430 id=430 data-nosnippet>430</a>                        // the same name, and one scope assigns from the other.
+<a href=#431 id=431 data-nosnippet>431</a>                        </span><span class="kw">let </span>fbase = arm_local_base(tag, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{base}_{}"</span>, f.slot));
+<a href=#432 id=432 data-nosnippet>432</a>                        <span class="kw">let </span>bind_expr = <span class="macro">quote!</span>(#bind);
+<a href=#433 id=433 data-nosnippet>433</a>                        <span class="kw">let </span>(p, s) =
+<a href=#434 id=434 data-nosnippet>434</a>                            encode_field(<span class="kw-2">&amp;</span>f.kind, <span class="kw-2">&amp;</span>bind_expr, <span class="kw-2">&amp;</span>fbase, depth + <span class="number">1</span>, env_expr, emit);
+<a href=#435 id=435 data-nosnippet>435</a>                        vpre.extend(p);
+<a href=#436 id=436 data-nosnippet>436</a>                        vslots.extend(s);
+<a href=#437 id=437 data-nosnippet>437</a>                    }
+<a href=#438 id=438 data-nosnippet>438</a>                    <span class="comment">// Bind every payload field, shaped like the variant.
+<a href=#439 id=439 data-nosnippet>439</a>                    </span><span class="kw">let </span>pattern = <span class="kw">match </span>v.fields.first().map(|f| <span class="kw-2">&amp;</span>f.member) {
+<a href=#440 id=440 data-nosnippet>440</a>                        <span class="prelude-val">None </span>=&gt; <span class="macro">quote!</span>(#source::#vident),
+<a href=#441 id=441 data-nosnippet>441</a>                        <span class="prelude-val">Some</span>(syn::Member::Named(<span class="kw">_</span>)) =&gt; {
+<a href=#442 id=442 data-nosnippet>442</a>                            <span class="kw">let </span>pairs = v.fields.iter().zip(<span class="kw-2">&amp;</span>binds).map(|(f, b)| {
+<a href=#443 id=443 data-nosnippet>443</a>                                <span class="kw">let </span>syn::Member::Named(n) = <span class="kw-2">&amp;</span>f.member <span class="kw">else </span>{
+<a href=#444 id=444 data-nosnippet>444</a>                                    <span class="macro">unreachable!</span>(<span class="string">"variant field shapes are uniform"</span>)
+<a href=#445 id=445 data-nosnippet>445</a>                                };
+<a href=#446 id=446 data-nosnippet>446</a>                                <span class="macro">quote!</span>(#n: #b)
+<a href=#447 id=447 data-nosnippet>447</a>                            });
+<a href=#448 id=448 data-nosnippet>448</a>                            <span class="macro">quote!</span>(#source::#vident { #(#pairs),* })
+<a href=#449 id=449 data-nosnippet>449</a>                        }
+<a href=#450 id=450 data-nosnippet>450</a>                        <span class="prelude-val">Some</span>(syn::Member::Unnamed(<span class="kw">_</span>)) =&gt; <span class="macro">quote!</span>(#source::#vident(#(#binds),<span class="kw-2">*</span>)),
+<a href=#451 id=451 data-nosnippet>451</a>                    };
+<a href=#452 id=452 data-nosnippet>452</a>                    arms.push(Arm {
+<a href=#453 id=453 data-nosnippet>453</a>                        pattern,
+<a href=#454 id=454 data-nosnippet>454</a>                        preludes: vpre,
+<a href=#455 id=455 data-nosnippet>455</a>                        slots: vslots,
+<a href=#456 id=456 data-nosnippet>456</a>                    });
+<a href=#457 id=457 data-nosnippet>457</a>                }
+<a href=#458 id=458 data-nosnippet>458</a>
+<a href=#459 id=459 data-nosnippet>459</a>                <span class="comment">// Outer bindings: the tag plus every group's slots, side by
+<a href=#460 id=460 data-nosnippet>460</a>                // side in variant order. Each arm assigns its own group from
+<a href=#461 id=461 data-nosnippet>461</a>                // the values it just computed and defaults all the others.
+<a href=#462 id=462 data-nosnippet>462</a>                </span><span class="kw">let </span>all: Vec&lt;<span class="kw-2">&amp;</span>EncSlot&gt; = arms.iter().flat_map(|a| a.slots.iter()).collect();
+<a href=#463 id=463 data-nosnippet>463</a>                <span class="comment">// Named after the leaf each slot carries — `__outcome_found_v0`,
+<a href=#464 id=464 data-nosnippet>464</a>                // not `__outcome_g0`. The inner bindings already use that
+<a href=#465 id=465 data-nosnippet>465</a>                // naming, and it is what the registry-facing decomposition
+<a href=#466 id=466 data-nosnippet>466</a>                // calls the same leaf, so the two derivations agree by
+<a href=#467 id=467 data-nosnippet>467</a>                // construction rather than by a positional coincidence. The
+<a href=#468 id=468 data-nosnippet>468</a>                // inner binding of the same name lives inside its match arm
+<a href=#469 id=469 data-nosnippet>469</a>                // and shadows nothing the outer tuple reads.
+<a href=#470 id=470 data-nosnippet>470</a>                </span><span class="kw">let </span>outer_ids: Vec&lt;proc_macro2::Ident&gt; = arms
+<a href=#471 id=471 data-nosnippet>471</a>                    .iter()
+<a href=#472 id=472 data-nosnippet>472</a>                    .enumerate()
+<a href=#473 id=473 data-nosnippet>473</a>                    .flat_map(|(tag, arm)| {
+<a href=#474 id=474 data-nosnippet>474</a>                        arm.slots.iter().map(<span class="kw">move </span>|slot| outer_of(tag, <span class="kw-2">&amp;</span>slot.ident))
+<a href=#475 id=475 data-nosnippet>475</a>                    })
+<a href=#476 id=476 data-nosnippet>476</a>                    .collect();
+<a href=#477 id=477 data-nosnippet>477</a>                <span class="kw">let </span>outer_tys: Vec&lt;TokenStream&gt; = all.iter().map(|s| s.wire_ty.clone()).collect();
+<a href=#478 id=478 data-nosnippet>478</a>                <span class="kw">let </span>defaults: Vec&lt;TokenStream&gt; = all.iter().map(|s| s.default.clone()).collect();
+<a href=#479 id=479 data-nosnippet>479</a>
+<a href=#480 id=480 data-nosnippet>480</a>                <span class="kw">let </span><span class="kw-2">mut </span>offset = <span class="number">0usize</span>;
+<a href=#481 id=481 data-nosnippet>481</a>                <span class="kw">let </span>arm_code: Vec&lt;TokenStream&gt; = arms
+<a href=#482 id=482 data-nosnippet>482</a>                    .iter()
+<a href=#483 id=483 data-nosnippet>483</a>                    .enumerate()
+<a href=#484 id=484 data-nosnippet>484</a>                    .map(|(tag, a)| {
+<a href=#485 id=485 data-nosnippet>485</a>                        <span class="kw">let </span>n = a.slots.len();
+<a href=#486 id=486 data-nosnippet>486</a>                        <span class="kw">let </span>live_outer = <span class="kw-2">&amp;</span>outer_ids[offset..offset + n];
+<a href=#487 id=487 data-nosnippet>487</a>                        <span class="kw">let </span>live_inner: Vec&lt;proc_macro2::Ident&gt; =
+<a href=#488 id=488 data-nosnippet>488</a>                            a.slots.iter().map(|s| s.ident.clone()).collect();
+<a href=#489 id=489 data-nosnippet>489</a>                        <span class="comment">// Every slot outside this arm's own group is inert.
+<a href=#490 id=490 data-nosnippet>490</a>                        </span><span class="kw">let </span>inert_outer: Vec&lt;proc_macro2::Ident&gt; = outer_ids
+<a href=#491 id=491 data-nosnippet>491</a>                            .iter()
+<a href=#492 id=492 data-nosnippet>492</a>                            .enumerate()
+<a href=#493 id=493 data-nosnippet>493</a>                            .filter(|(i, <span class="kw">_</span>)| <span class="kw-2">*</span>i &lt; offset || <span class="kw-2">*</span>i &gt;= offset + n)
+<a href=#494 id=494 data-nosnippet>494</a>                            .map(|(<span class="kw">_</span>, id)| id.clone())
+<a href=#495 id=495 data-nosnippet>495</a>                            .collect();
+<a href=#496 id=496 data-nosnippet>496</a>                        <span class="kw">let </span>inert_defaults: Vec&lt;TokenStream&gt; = defaults
+<a href=#497 id=497 data-nosnippet>497</a>                            .iter()
+<a href=#498 id=498 data-nosnippet>498</a>                            .enumerate()
+<a href=#499 id=499 data-nosnippet>499</a>                            .filter(|(i, <span class="kw">_</span>)| <span class="kw-2">*</span>i &lt; offset || <span class="kw-2">*</span>i &gt;= offset + n)
+<a href=#500 id=500 data-nosnippet>500</a>                            .map(|(<span class="kw">_</span>, d)| d.clone())
+<a href=#501 id=501 data-nosnippet>501</a>                            .collect();
+<a href=#502 id=502 data-nosnippet>502</a>                        offset += n;
+<a href=#503 id=503 data-nosnippet>503</a>                        <span class="kw">let </span>pattern = <span class="kw-2">&amp;</span>a.pattern;
+<a href=#504 id=504 data-nosnippet>504</a>                        <span class="kw">let </span>pre = <span class="kw-2">&amp;</span>a.preludes;
+<a href=#505 id=505 data-nosnippet>505</a>                        <span class="kw">let </span>tag_lit = proc_macro2::Literal::i32_unsuffixed(tag <span class="kw">as </span>i32);
+<a href=#506 id=506 data-nosnippet>506</a>                        <span class="macro">quote!</span> {
+<a href=#507 id=507 data-nosnippet>507</a>                            #pattern =&gt; {
+<a href=#508 id=508 data-nosnippet>508</a>                                #pre
+<a href=#509 id=509 data-nosnippet>509</a>                                #tag_id = #tag_lit;
+<a href=#510 id=510 data-nosnippet>510</a>                                #( #live_outer = #live_inner; )*
+<a href=#511 id=511 data-nosnippet>511</a>                                #( #inert_outer = #inert_defaults; )*
+<a href=#512 id=512 data-nosnippet>512</a>                            }
+<a href=#513 id=513 data-nosnippet>513</a>                        }
+<a href=#514 id=514 data-nosnippet>514</a>                    })
+<a href=#515 id=515 data-nosnippet>515</a>                    .collect();
+<a href=#516 id=516 data-nosnippet>516</a>
+<a href=#517 id=517 data-nosnippet>517</a>                <span class="kw">let </span>decls = <span class="macro">quote!</span> {
+<a href=#518 id=518 data-nosnippet>518</a>                    <span class="kw">let </span>#tag_id: jni::sys::jint;
+<a href=#519 id=519 data-nosnippet>519</a>                    #( <span class="kw">let </span>#outer_ids: #outer_tys; )*
+<a href=#520 id=520 data-nosnippet>520</a>                };
+<a href=#521 id=521 data-nosnippet>521</a>                <span class="kw">if </span>!<span class="kw-2">*</span>optional {
+<a href=#522 id=522 data-nosnippet>522</a>                    preludes.extend(<span class="macro">quote!</span> {
+<a href=#523 id=523 data-nosnippet>523</a>                        #decls
+<a href=#524 id=524 data-nosnippet>524</a>                        <span class="kw">match </span><span class="kw-2">&amp;</span>#value { #(#arm_code)* }
+<a href=#525 id=525 data-nosnippet>525</a>                    });
+<a href=#526 id=526 data-nosnippet>526</a>                } <span class="kw">else </span>{
+<a href=#527 id=527 data-nosnippet>527</a>                    <span class="comment">// `Option&lt;sum&gt;` keeps its own present flag ahead of the
+<a href=#528 id=528 data-nosnippet>528</a>                    // tag: optionality and choice are independent facts.
+<a href=#529 id=529 data-nosnippet>529</a>                    </span><span class="kw">let </span>flag_id = <span class="macro">format_ident!</span>(<span class="string">"__{}_present"</span>, base);
+<a href=#530 id=530 data-nosnippet>530</a>                    <span class="kw">let </span>sbind = <span class="macro">format_ident!</span>(<span class="string">"__o{}"</span>, depth);
+<a href=#531 id=531 data-nosnippet>531</a>                    <span class="kw">let </span>inner_arms: Vec&lt;TokenStream&gt; =
+<a href=#532 id=532 data-nosnippet>532</a>                        arm_code.iter().map(|a| <span class="macro">quote!</span> { #a }).collect();
+<a href=#533 id=533 data-nosnippet>533</a>                    <span class="comment">// Destructured through a coercion site: `kind` says this
+<a href=#534 id=534 data-nosnippet>534</a>                    // field is optional, and how Rust spells that is the
+<a href=#535 id=535 data-nosnippet>535</a>                    // source's business (#268).
+<a href=#536 id=536 data-nosnippet>536</a>                    </span><span class="kw">let </span>obind = <span class="macro">format_ident!</span>(<span class="string">"__oc{}"</span>, depth);
+<a href=#537 id=537 data-nosnippet>537</a>                    <span class="kw">let </span>coerce =
+<a href=#538 id=538 data-nosnippet>538</a>                        prebindgen_registry::unfold::bind_as_option(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(<span class="kw-2">&amp;</span>#value), <span class="kw-2">&amp;</span>obind);
+<a href=#539 id=539 data-nosnippet>539</a>                    preludes.extend(<span class="macro">quote!</span> {
+<a href=#540 id=540 data-nosnippet>540</a>                        <span class="kw">let </span>#flag_id: jni::sys::jboolean;
+<a href=#541 id=541 data-nosnippet>541</a>                        #decls
+<a href=#542 id=542 data-nosnippet>542</a>                        #coerce
+<a href=#543 id=543 data-nosnippet>543</a>                        <span class="kw">match </span>#obind {
+<a href=#544 id=544 data-nosnippet>544</a>                            ::core::option::Option::Some(#sbind) =&gt; {
+<a href=#545 id=545 data-nosnippet>545</a>                                #flag_id = <span class="number">1u8</span>;
+<a href=#546 id=546 data-nosnippet>546</a>                                <span class="kw">match </span>#sbind { #(#inner_arms)* }
+<a href=#547 id=547 data-nosnippet>547</a>                            }
+<a href=#548 id=548 data-nosnippet>548</a>                            ::core::option::Option::None =&gt; {
+<a href=#549 id=549 data-nosnippet>549</a>                                #flag_id = <span class="number">0u8</span>;
+<a href=#550 id=550 data-nosnippet>550</a>                                #tag_id = <span class="number">0i32</span>;
+<a href=#551 id=551 data-nosnippet>551</a>                                #( #outer_ids = #defaults; )*
+<a href=#552 id=552 data-nosnippet>552</a>                            }
+<a href=#553 id=553 data-nosnippet>553</a>                        }
+<a href=#554 id=554 data-nosnippet>554</a>                    });
+<a href=#555 id=555 data-nosnippet>555</a>                    slots.push(EncSlot {
+<a href=#556 id=556 data-nosnippet>556</a>                        depth,
+<a href=#557 id=557 data-nosnippet>557</a>                        ident: flag_id,
+<a href=#558 id=558 data-nosnippet>558</a>                        wire_ty: <span class="macro">quote!</span>(jni::sys::jboolean),
+<a href=#559 id=559 data-nosnippet>559</a>                        descriptor: <span class="string">"Z"</span>.to_string(),
+<a href=#560 id=560 data-nosnippet>560</a>                        is_object: <span class="bool-val">false</span>,
+<a href=#561 id=561 data-nosnippet>561</a>                        default: <span class="macro">quote!</span>(<span class="number">0u8</span>),
+<a href=#562 id=562 data-nosnippet>562</a>                    });
+<a href=#563 id=563 data-nosnippet>563</a>                }
+<a href=#564 id=564 data-nosnippet>564</a>                <span class="comment">// A sum field's slots sit one level inside the struct, the
+<a href=#565 id=565 data-nosnippet>565</a>                // same as an inlined nested class's: the tag and the groups
+<a href=#566 id=566 data-nosnippet>566</a>                // are reached THROUGH the field. The decomposition says so by
+<a href=#567 id=567 data-nosnippet>567</a>                // joining the names with `__`, and depth is that count.
+<a href=#568 id=568 data-nosnippet>568</a>                </span>slots.push(EncSlot {
+<a href=#569 id=569 data-nosnippet>569</a>                    depth: depth + <span class="number">1</span>,
+<a href=#570 id=570 data-nosnippet>570</a>                    ident: tag_id,
+<a href=#571 id=571 data-nosnippet>571</a>                    wire_ty: <span class="macro">quote!</span>(jni::sys::jint),
+<a href=#572 id=572 data-nosnippet>572</a>                    descriptor: <span class="string">"I"</span>.to_string(),
+<a href=#573 id=573 data-nosnippet>573</a>                    is_object: <span class="bool-val">false</span>,
+<a href=#574 id=574 data-nosnippet>574</a>                    default: <span class="macro">quote!</span>(<span class="number">0i32</span>),
+<a href=#575 id=575 data-nosnippet>575</a>                });
+<a href=#576 id=576 data-nosnippet>576</a>                <span class="kw">for </span>(i, sl) <span class="kw">in </span>all.iter().enumerate() {
+<a href=#577 id=577 data-nosnippet>577</a>                    slots.push(EncSlot {
+<a href=#578 id=578 data-nosnippet>578</a>                        depth: sl.depth,
+<a href=#579 id=579 data-nosnippet>579</a>                        ident: outer_ids[i].clone(),
+<a href=#580 id=580 data-nosnippet>580</a>                        wire_ty: sl.wire_ty.clone(),
+<a href=#581 id=581 data-nosnippet>581</a>                        descriptor: sl.descriptor.clone(),
+<a href=#582 id=582 data-nosnippet>582</a>                        is_object: sl.is_object,
+<a href=#583 id=583 data-nosnippet>583</a>                        default: sl.default.clone(),
+<a href=#584 id=584 data-nosnippet>584</a>                    });
+<a href=#585 id=585 data-nosnippet>585</a>                }
+<a href=#586 id=586 data-nosnippet>586</a>            }
+<a href=#587 id=587 data-nosnippet>587</a>            <span class="comment">// Simple leaf: bind per the plan's wire form.
+<a href=#588 id=588 data-nosnippet>588</a>            </span>PlanFieldKind::Leaf {
+<a href=#589 id=589 data-nosnippet>589</a>                conv,
+<a href=#590 id=590 data-nosnippet>590</a>                wire,
+<a href=#591 id=591 data-nosnippet>591</a>                form,
+<a href=#592 id=592 data-nosnippet>592</a>                descriptor,
+<a href=#593 id=593 data-nosnippet>593</a>                ..
+<a href=#594 id=594 data-nosnippet>594</a>            } =&gt; {
+<a href=#595 id=595 data-nosnippet>595</a>                <span class="kw">let </span>value_expr = conv_value(conv);
+<a href=#596 id=596 data-nosnippet>596</a>                <span class="kw">match </span>form {
+<a href=#597 id=597 data-nosnippet>597</a>                    LeafForm::Prim =&gt; {
+<a href=#598 id=598 data-nosnippet>598</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: #wire = #value_expr; });
 <a href=#599 id=599 data-nosnippet>599</a>                        slots.push(EncSlot {
 <a href=#600 id=600 data-nosnippet>600</a>                            depth,
 <a href=#601 id=601 data-nosnippet>601</a>                            ident: id,
-<a href=#602 id=602 data-nosnippet>602</a>                            wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
+<a href=#602 id=602 data-nosnippet>602</a>                            wire_ty: <span class="macro">quote!</span>(#wire),
 <a href=#603 id=603 data-nosnippet>603</a>                            descriptor: descriptor.clone(),
-<a href=#604 id=604 data-nosnippet>604</a>                            is_object: <span class="bool-val">true</span>,
-<a href=#605 id=605 data-nosnippet>605</a>                            default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
+<a href=#604 id=604 data-nosnippet>604</a>                            is_object: <span class="bool-val">false</span>,
+<a href=#605 id=605 data-nosnippet>605</a>                            default: primitive_default_for_descriptor(descriptor),
 <a href=#606 id=606 data-nosnippet>606</a>                        });
 <a href=#607 id=607 data-nosnippet>607</a>                    }
-<a href=#608 id=608 data-nosnippet>608</a>                    LeafForm::Object =&gt; {
-<a href=#609 id=609 data-nosnippet>609</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr; });
-<a href=#610 id=610 data-nosnippet>610</a>                        slots.push(EncSlot {
-<a href=#611 id=611 data-nosnippet>611</a>                            depth,
-<a href=#612 id=612 data-nosnippet>612</a>                            ident: id,
-<a href=#613 id=613 data-nosnippet>613</a>                            wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
-<a href=#614 id=614 data-nosnippet>614</a>                            descriptor: descriptor.clone(),
-<a href=#615 id=615 data-nosnippet>615</a>                            is_object: <span class="bool-val">true</span>,
-<a href=#616 id=616 data-nosnippet>616</a>                            default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
-<a href=#617 id=617 data-nosnippet>617</a>                        });
-<a href=#618 id=618 data-nosnippet>618</a>                    }
-<a href=#619 id=619 data-nosnippet>619</a>                }
-<a href=#620 id=620 data-nosnippet>620</a>            }
-<a href=#621 id=621 data-nosnippet>621</a>        }
-<a href=#622 id=622 data-nosnippet>622</a>    }
-<a href=#623 id=623 data-nosnippet>623</a>    (preludes, slots)
-<a href=#624 id=624 data-nosnippet>624</a>}
-<a href=#625 id=625 data-nosnippet>625</a>
-<a href=#626 id=626 data-nosnippet>626</a><span class="doccomment">/// Assemble the Rust→JVM half of a frozen whole-struct codec.
-<a href=#627 id=627 data-nosnippet>627</a>///
-<a href=#628 id=628 data-nosnippet>628</a>/// Classification, child selection, JVM descriptors, and the target Kotlin
-<a href=#629 id=629 data-nosnippet>629</a>/// class are all frozen before this point. This function only turns that plan
-<a href=#630 id=630 data-nosnippet>630</a>/// into the final converter body; it performs no registry or declaration
-<a href=#631 id=631 data-nosnippet>631</a>/// lookup and cannot rediscover source-type facts.
-<a href=#632 id=632 data-nosnippet>632</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render_struct_output_body(
-<a href=#633 id=633 data-nosnippet>633</a>    plan: <span class="kw-2">&amp;</span>StructPlan,
-<a href=#634 id=634 data-nosnippet>634</a>    java_class_name: <span class="kw-2">&amp;</span>str,
-<a href=#635 id=635 data-nosnippet>635</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
-<a href=#636 id=636 data-nosnippet>636</a>) -&gt; syn::Expr {
-<a href=#637 id=637 data-nosnippet>637</a>    <span class="comment">// Recursively flatten the whole object graph into leaf wires, then build it
-<a href=#638 id=638 data-nosnippet>638</a>    // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI
-<a href=#639 id=639 data-nosnippet>639</a>    // crossing. The Kotlin `fromParts` factory (recursively flattened the same
-<a href=#640 id=640 data-nosnippet>640</a>    // way in `render_data_class_source`) reassembles the graph in bytecode.
-<a href=#641 id=641 data-nosnippet>641</a>    </span><span class="kw">let </span>access = <span class="macro">quote!</span>(v);
-<a href=#642 id=642 data-nosnippet>642</a>    <span class="kw">let </span>(preludes, slots) = encode_plan(plan, <span class="kw-2">&amp;</span>access, <span class="string">""</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span><span class="macro">quote!</span>(env), emit);
-<a href=#643 id=643 data-nosnippet>643</a>
-<a href=#644 id=644 data-nosnippet>644</a>    <span class="kw">let </span><span class="kw-2">mut </span>sig = String::from(<span class="string">"("</span>);
-<a href=#645 id=645 data-nosnippet>645</a>    <span class="kw">let </span><span class="kw-2">mut </span>args: Vec&lt;TokenStream&gt; = Vec::new();
-<a href=#646 id=646 data-nosnippet>646</a>    <span class="kw">for </span>sl <span class="kw">in </span><span class="kw-2">&amp;</span>slots {
-<a href=#647 id=647 data-nosnippet>647</a>        sig.push_str(<span class="kw-2">&amp;</span>sl.descriptor);
-<a href=#648 id=648 data-nosnippet>648</a>        <span class="kw">let </span>id = <span class="kw-2">&amp;</span>sl.ident;
-<a href=#649 id=649 data-nosnippet>649</a>        <span class="kw">if </span>sl.is_object {
-<a href=#650 id=650 data-nosnippet>650</a>            args.push(<span class="macro">quote!</span>(jni::objects::JValue::Object(<span class="kw-2">&amp;</span>#id)));
-<a href=#651 id=651 data-nosnippet>651</a>        } <span class="kw">else </span>{
-<a href=#652 id=652 data-nosnippet>652</a>            args.push(<span class="macro">quote!</span>(jni::objects::JValue::from(#id)));
-<a href=#653 id=653 data-nosnippet>653</a>        }
-<a href=#654 id=654 data-nosnippet>654</a>    }
-<a href=#655 id=655 data-nosnippet>655</a>    sig.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">")L{};"</span>, java_class_name));
-<a href=#656 id=656 data-nosnippet>656</a>    <span class="kw">let </span>factory_sig_lit = syn::LitStr::new(<span class="kw-2">&amp;</span>sig, Span::call_site());
-<a href=#657 id=657 data-nosnippet>657</a>
-<a href=#658 id=658 data-nosnippet>658</a>    <span class="kw">let </span>body: syn::Expr = <span class="macro">syn::parse_quote!</span>({
-<a href=#659 id=659 data-nosnippet>659</a>        #preludes
-<a href=#660 id=660 data-nosnippet>660</a>        <span class="kw">let </span>__obj = env.call_static_method(
-<a href=#661 id=661 data-nosnippet>661</a>            #java_class_name,
-<a href=#662 id=662 data-nosnippet>662</a>            <span class="string">"fromParts"</span>,
-<a href=#663 id=663 data-nosnippet>663</a>            #factory_sig_lit,
-<a href=#664 id=664 data-nosnippet>664</a>            <span class="kw-2">&amp;</span>[#(#args),<span class="kw-2">*</span>],
-<a href=#665 id=665 data-nosnippet>665</a>        )
-<a href=#666 id=666 data-nosnippet>666</a>        .and_then(|__v| __v.l())
-<a href=#667 id=667 data-nosnippet>667</a>        .map_err(|e| &lt;__JniErr <span class="kw">as </span>::core::convert::From&lt;String&gt;&gt;::from(<span class="macro">format!</span>(<span class="string">"encode struct via fromParts: {}"</span>, e)))<span class="question-mark">?</span>;
-<a href=#668 id=668 data-nosnippet>668</a>        __obj
-<a href=#669 id=669 data-nosnippet>669</a>    });
-<a href=#670 id=670 data-nosnippet>670</a>    body
-<a href=#671 id=671 data-nosnippet>671</a>}
-<a href=#672 id=672 data-nosnippet>672</a>
-<a href=#673 id=673 data-nosnippet>673</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>struct_module_path(
-<a href=#674 id=674 data-nosnippet>674</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#675 id=675 data-nosnippet>675</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#676 id=676 data-nosnippet>676</a>    name: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#677 id=677 data-nosnippet>677</a>) -&gt; syn::Path {
-<a href=#678 id=678 data-nosnippet>678</a>    <span class="comment">// The module the struct is reachable under from the generated file: its
-<a href=#679 id=679 data-nosnippet>679</a>    // origin crate (multi-source registries) or the default module. Takes the
-<a href=#680 id=680 data-nosnippet>680</a>    // NAME, which is all it needs — so it serves a caller holding the element
-<a href=#681 id=681 data-nosnippet>681</a>    // and one still holding the item.
-<a href=#682 id=682 data-nosnippet>682</a>    </span>ext.fn_module(registry, name)
-<a href=#683 id=683 data-nosnippet>683</a>}
-<a href=#684 id=684 data-nosnippet>684</a>
-<a href=#685 id=685 data-nosnippet>685</a><span class="comment">// ──────────────────────────────────────────────────────────────────────
-<a href=#686 id=686 data-nosnippet>686</a>// Enum rank-0 bodies
-<a href=#687 id=687 data-nosnippet>687</a>// ──────────────────────────────────────────────────────────────────────
+<a href=#608 id=608 data-nosnippet>608</a>                    LeafForm::IntoObject =&gt; {
+<a href=#609 id=609 data-nosnippet>609</a>                        preludes.extend(
+<a href=#610 id=610 data-nosnippet>610</a>                            <span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr.into(); },
+<a href=#611 id=611 data-nosnippet>611</a>                        );
+<a href=#612 id=612 data-nosnippet>612</a>                        slots.push(EncSlot {
+<a href=#613 id=613 data-nosnippet>613</a>                            depth,
+<a href=#614 id=614 data-nosnippet>614</a>                            ident: id,
+<a href=#615 id=615 data-nosnippet>615</a>                            wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
+<a href=#616 id=616 data-nosnippet>616</a>                            descriptor: descriptor.clone(),
+<a href=#617 id=617 data-nosnippet>617</a>                            is_object: <span class="bool-val">true</span>,
+<a href=#618 id=618 data-nosnippet>618</a>                            default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
+<a href=#619 id=619 data-nosnippet>619</a>                        });
+<a href=#620 id=620 data-nosnippet>620</a>                    }
+<a href=#621 id=621 data-nosnippet>621</a>                    LeafForm::Object =&gt; {
+<a href=#622 id=622 data-nosnippet>622</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr; });
+<a href=#623 id=623 data-nosnippet>623</a>                        slots.push(EncSlot {
+<a href=#624 id=624 data-nosnippet>624</a>                            depth,
+<a href=#625 id=625 data-nosnippet>625</a>                            ident: id,
+<a href=#626 id=626 data-nosnippet>626</a>                            wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
+<a href=#627 id=627 data-nosnippet>627</a>                            descriptor: descriptor.clone(),
+<a href=#628 id=628 data-nosnippet>628</a>                            is_object: <span class="bool-val">true</span>,
+<a href=#629 id=629 data-nosnippet>629</a>                            default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
+<a href=#630 id=630 data-nosnippet>630</a>                        });
+<a href=#631 id=631 data-nosnippet>631</a>                    }
+<a href=#632 id=632 data-nosnippet>632</a>                }
+<a href=#633 id=633 data-nosnippet>633</a>            }
+<a href=#634 id=634 data-nosnippet>634</a>        }
+<a href=#635 id=635 data-nosnippet>635</a>    }
+<a href=#636 id=636 data-nosnippet>636</a>    (preludes, slots)
+<a href=#637 id=637 data-nosnippet>637</a>}
+<a href=#638 id=638 data-nosnippet>638</a>
+<a href=#639 id=639 data-nosnippet>639</a><span class="doccomment">/// Assemble the Rust→JVM half of a frozen whole-struct codec.
+<a href=#640 id=640 data-nosnippet>640</a>///
+<a href=#641 id=641 data-nosnippet>641</a>/// Classification, child selection, JVM descriptors, and the target Kotlin
+<a href=#642 id=642 data-nosnippet>642</a>/// class are all frozen before this point. This function only turns that plan
+<a href=#643 id=643 data-nosnippet>643</a>/// into the final converter body; it performs no registry or declaration
+<a href=#644 id=644 data-nosnippet>644</a>/// lookup and cannot rediscover source-type facts.
+<a href=#645 id=645 data-nosnippet>645</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render_struct_output_body(
+<a href=#646 id=646 data-nosnippet>646</a>    plan: <span class="kw-2">&amp;</span>StructPlan,
+<a href=#647 id=647 data-nosnippet>647</a>    java_class_name: <span class="kw-2">&amp;</span>str,
+<a href=#648 id=648 data-nosnippet>648</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
+<a href=#649 id=649 data-nosnippet>649</a>) -&gt; syn::Expr {
+<a href=#650 id=650 data-nosnippet>650</a>    <span class="comment">// Recursively flatten the whole object graph into leaf wires, then build it
+<a href=#651 id=651 data-nosnippet>651</a>    // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI
+<a href=#652 id=652 data-nosnippet>652</a>    // crossing. The Kotlin `fromParts` factory (recursively flattened the same
+<a href=#653 id=653 data-nosnippet>653</a>    // way in `render_data_class_source`) reassembles the graph in bytecode.
+<a href=#654 id=654 data-nosnippet>654</a>    </span><span class="kw">let </span>access = <span class="macro">quote!</span>(v);
+<a href=#655 id=655 data-nosnippet>655</a>    <span class="kw">let </span>(preludes, slots) = encode_plan(plan, <span class="kw-2">&amp;</span>access, <span class="string">""</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span><span class="macro">quote!</span>(env), emit);
+<a href=#656 id=656 data-nosnippet>656</a>
+<a href=#657 id=657 data-nosnippet>657</a>    <span class="kw">let </span><span class="kw-2">mut </span>sig = String::from(<span class="string">"("</span>);
+<a href=#658 id=658 data-nosnippet>658</a>    <span class="kw">let </span><span class="kw-2">mut </span>args: Vec&lt;TokenStream&gt; = Vec::new();
+<a href=#659 id=659 data-nosnippet>659</a>    <span class="kw">for </span>sl <span class="kw">in </span><span class="kw-2">&amp;</span>slots {
+<a href=#660 id=660 data-nosnippet>660</a>        sig.push_str(<span class="kw-2">&amp;</span>sl.descriptor);
+<a href=#661 id=661 data-nosnippet>661</a>        <span class="kw">let </span>id = <span class="kw-2">&amp;</span>sl.ident;
+<a href=#662 id=662 data-nosnippet>662</a>        <span class="kw">if </span>sl.is_object {
+<a href=#663 id=663 data-nosnippet>663</a>            args.push(<span class="macro">quote!</span>(jni::objects::JValue::Object(<span class="kw-2">&amp;</span>#id)));
+<a href=#664 id=664 data-nosnippet>664</a>        } <span class="kw">else </span>{
+<a href=#665 id=665 data-nosnippet>665</a>            args.push(<span class="macro">quote!</span>(jni::objects::JValue::from(#id)));
+<a href=#666 id=666 data-nosnippet>666</a>        }
+<a href=#667 id=667 data-nosnippet>667</a>    }
+<a href=#668 id=668 data-nosnippet>668</a>    sig.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">")L{};"</span>, java_class_name));
+<a href=#669 id=669 data-nosnippet>669</a>    <span class="kw">let </span>factory_sig_lit = syn::LitStr::new(<span class="kw-2">&amp;</span>sig, Span::call_site());
+<a href=#670 id=670 data-nosnippet>670</a>
+<a href=#671 id=671 data-nosnippet>671</a>    <span class="kw">let </span>body: syn::Expr = <span class="macro">syn::parse_quote!</span>({
+<a href=#672 id=672 data-nosnippet>672</a>        #preludes
+<a href=#673 id=673 data-nosnippet>673</a>        <span class="kw">let </span>__obj = env.call_static_method(
+<a href=#674 id=674 data-nosnippet>674</a>            #java_class_name,
+<a href=#675 id=675 data-nosnippet>675</a>            <span class="string">"fromParts"</span>,
+<a href=#676 id=676 data-nosnippet>676</a>            #factory_sig_lit,
+<a href=#677 id=677 data-nosnippet>677</a>            <span class="kw-2">&amp;</span>[#(#args),<span class="kw-2">*</span>],
+<a href=#678 id=678 data-nosnippet>678</a>        )
+<a href=#679 id=679 data-nosnippet>679</a>        .and_then(|__v| __v.l())
+<a href=#680 id=680 data-nosnippet>680</a>        .map_err(|e| &lt;__JniErr <span class="kw">as </span>::core::convert::From&lt;String&gt;&gt;::from(<span class="macro">format!</span>(<span class="string">"encode struct via fromParts: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#681 id=681 data-nosnippet>681</a>        __obj
+<a href=#682 id=682 data-nosnippet>682</a>    });
+<a href=#683 id=683 data-nosnippet>683</a>    body
+<a href=#684 id=684 data-nosnippet>684</a>}
+<a href=#685 id=685 data-nosnippet>685</a>
+<a href=#686 id=686 data-nosnippet>686</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>struct_module_path(
+<a href=#687 id=687 data-nosnippet>687</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#688 id=688 data-nosnippet>688</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#689 id=689 data-nosnippet>689</a>    name: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#690 id=690 data-nosnippet>690</a>) -&gt; syn::Path {
+<a href=#691 id=691 data-nosnippet>691</a>    <span class="comment">// The module the struct is reachable under from the generated file: its
+<a href=#692 id=692 data-nosnippet>692</a>    // origin crate (multi-source registries) or the default module. Takes the
+<a href=#693 id=693 data-nosnippet>693</a>    // NAME, which is all it needs — so it serves a caller holding the element
+<a href=#694 id=694 data-nosnippet>694</a>    // and one still holding the item.
+<a href=#695 id=695 data-nosnippet>695</a>    </span>ext.fn_module(registry, name)
+<a href=#696 id=696 data-nosnippet>696</a>}
+<a href=#697 id=697 data-nosnippet>697</a>
+<a href=#698 id=698 data-nosnippet>698</a><span class="comment">// ──────────────────────────────────────────────────────────────────────
+<a href=#699 id=699 data-nosnippet>699</a>// Enum rank-0 bodies
+<a href=#700 id=700 data-nosnippet>700</a>// ──────────────────────────────────────────────────────────────────────
 </span></code></pre></div></section></main></body></html>
