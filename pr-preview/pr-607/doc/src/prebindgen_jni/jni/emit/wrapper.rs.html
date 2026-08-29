@@ -318,7 +318,7 @@
 <a href=#318 id=318 data-nosnippet>318</a>                FnOutputPlan::Unfold(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(<span class="string">"a convert has a value output plan"</span>),
 <a href=#319 id=319 data-nosnippet>319</a>            };
 <a href=#320 id=320 data-nosnippet>320</a>            <span class="kw">let </span>qualify = |id: <span class="kw-2">&amp;</span>syn::Ident| -&gt; syn::Path {
-<a href=#321 id=321 data-nosnippet>321</a>                <span class="kw">crate</span>::jni::emit::DeliveryContext::qualify(delivery, id)
+<a href=#321 id=321 data-nosnippet>321</a>                prebindgen_registry::unfold::DeliveryBridge::qualify(delivery, id)
 <a href=#322 id=322 data-nosnippet>322</a>            };
 <a href=#323 id=323 data-nosnippet>323</a>            <span class="comment">// `None` when the reach is the IDENTITY of `base` and no value form had
 <a href=#324 id=324 data-nosnippet>324</a>            // to be bound — the leaf IS the value, so there is nothing to compose.
