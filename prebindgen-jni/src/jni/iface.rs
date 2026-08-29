@@ -921,6 +921,13 @@ fn plan_leaf_param(
         let ty = if leaf.nullable { ty.nullable() } else { ty };
         return Some(IfaceParam::same(name, ty));
     }
+    // A presence flag has no converter behind it either: it is a `Boolean` the
+    // gate assigns, and the value it speaks for crosses through the leaves it
+    // gates rather than through this slot. Its `out_ty` is that optional value,
+    // which is why the type cannot be read off it.
+    if matches!(leaf.from, crate::jni::compile::OutFrom::Present) {
+        return Some(IfaceParam::same(name, KtType::boolean()));
+    }
     // A group slot is INERT whenever another variant is live, and the encoder
     // fills an inert object slot with `JObject::null()`. A JVM null handed to a
     // non-null Kotlin parameter throws inside the intrinsic null-check before

@@ -101,6 +101,9 @@ import io.prebindgen.covertest.model.probeEach
 import io.prebindgen.covertest.model.probeNew
 import io.prebindgen.covertest.model.lookupOf
 import io.prebindgen.covertest.model.layeredOf
+import io.prebindgen.covertest.model.Envelope
+import io.prebindgen.covertest.model.envelopeEach
+import io.prebindgen.covertest.model.envelopeNew
 import io.prebindgen.covertest.model.verdictEach
 import io.prebindgen.covertest.model.verdictNew
 import io.prebindgen.covertest.model.dossierNew
@@ -698,6 +701,30 @@ fun main() {
         val absent = verdictNew(8L, 0L, 0.0, boom).orThrow()
         check(absent.outcome === Lookup.Absent)
         absent.close()
+    }
+
+    // An OPTIONAL nested data class, the shape #602 names first. The
+    // decomposition refused it outright until it learned a presence flag, so a
+    // struct carrying one got no fixed-builder delivery at all — on either
+    // route. Both routes are here because they fill the gated slots by
+    // different code: a return through the class's own factory, a callback
+    // through its interface.
+    section("an optional nested data class crosses as presence plus its group") {
+        val present = envelopeNew(7L, true, boom).orThrow()
+        check(present.id == 7L)
+        check(present.stamp == Stamp(7L, 14L)) { "got ${present.stamp}" }
+
+        // Absent: the flag is false and the group carries wire defaults, which
+        // the factory must read as "no value" rather than as a zeroed one.
+        val absent = envelopeNew(9L, false, boom).orThrow()
+        check(absent.id == 9L)
+        check(absent.stamp == null) { "got ${absent.stamp}" }
+
+        val seen = mutableListOf<String>()
+        envelopeEach(4L, { envelope ->
+            seen.add("${envelope.id}:${envelope.stamp?.secs ?: "-"}")
+        }, boom).orThrow()
+        check(seen == listOf("0:-", "1:1", "2:-", "3:3")) { "got $seen" }
     }
 
     // The same data class arriving at a CALLBACK rather than as a return.

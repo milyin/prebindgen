@@ -503,6 +503,28 @@ public data class DurationBoundary(val required: ULong, val delay: ULong?) {
 }
 
 /**
+ * A data class whose nested class sits behind an `Option` — the shape #602
+ * names first and the one a decomposition refused outright until it learned
+ * a presence flag.
+ *
+ * Nothing else about it is unusual: a sibling scalar beside a nested class
+ * that is sometimes there. `Annotated` has the same field, but also an
+ * `enum_class` one, which is a refusal of its own — so the shape needs a
+ * struct of its own to show up at all.
+ */
+public data class Envelope(val id: Long, val stamp: Stamp?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            id: Long,
+            stamp__present: Boolean,
+            stamp_secs: Long,
+            stamp_nanos: Long,
+        ): Envelope = Envelope(id, if (stamp__present) Stamp.fromParts(stamp_secs, stamp_nanos) else null)
+    }
+}
+
+/**
  * A retention policy: a required converted-payload sum beside an optional one.
  *
  * The data-class position for [`Hold`], so the converted payload is exercised
@@ -1276,6 +1298,26 @@ public class VaultHolder private constructor(initialPtr: Long) : NativeHandle(in
     }
 }
 
+public fun interface EnvelopeCallback {
+    public fun run(envelope: Envelope)
+}
+
+internal fun interface EnvelopeCallbackRaw {
+    public fun run(id: Long, stamp__present: Boolean, stamp__secs: Long, stamp__nanos: Long)
+}
+
+@JvmSynthetic
+internal fun EnvelopeCallback.asRaw(): EnvelopeCallbackRaw =
+    EnvelopeCallbackRaw {
+        id,
+        stamp__present,
+        stamp__secs,
+        stamp__nanos ->
+        run(
+            Envelope.fromParts(id, stamp__present, stamp__secs, stamp__nanos)
+        )
+    }
+
 public fun interface LookupCallback {
     public fun run(lookup: Lookup)
 }
@@ -1470,6 +1512,14 @@ internal fun interface DurationBoundaryBuilderRaw<out R> {
 @get:JvmSynthetic
 internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
 DurationBoundaryBuilderRaw { required, delay -> DurationBoundary.fromParts(required, delay) }
+
+public fun interface EnvelopeBuilder<out R> {
+    public fun run(id: Long, stamp__present: Boolean, stamp__secs: Long, stamp__nanos: Long): R
+}
+
+@get:JvmSynthetic
+internal val __EnvelopeBuilder: EnvelopeBuilder<Envelope> =
+EnvelopeBuilder { id, stamp__present, stamp__secs, stamp__nanos -> Envelope.fromParts(id, stamp__present, stamp__secs, stamp__nanos) }
 
 internal fun interface HoldBuilderRaw<out R> {
     public fun run(tag: Int, for_v0: Long): R
@@ -2277,6 +2327,29 @@ public fun verdictEach(
 ) {
     val __bcap = JniErrorHandlerCapture.acquire()
     CovNative.verdictEach(n, total, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build an [`Envelope`], with or without its nested stamp.
+ *
+ * The Rust `Envelope` result is delivered decomposed: the builder callback receives (`id`, `stamp__present`, `stamp__secs`, `stamp__nanos`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun envelopeNew(id: Long, present: Boolean, onError: JniErrorHandler<Envelope?>): Envelope? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.envelopeNew(id, present, __EnvelopeBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Envelope
+}
+
+/**
+ * The same value handed to a callback, which reassembles the leaves by the
+ * other route.
+ */
+public fun envelopeEach(n: Long, sink: EnvelopeCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.envelopeEach(n, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 

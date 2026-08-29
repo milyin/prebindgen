@@ -1291,6 +1291,12 @@ internal object CovNative {
     external fun durationOutOfRange(errorSink: Any): Long
 
     @JvmSynthetic
+    external fun envelopeEach(n: Long, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun envelopeNew(id: Long, present: Boolean, build: Any, errorSink: Any): Any?
+
+    @JvmSynthetic
     external fun escapeProbeNew(value: Long, errorSink: Any): Long
 
     @JvmSynthetic

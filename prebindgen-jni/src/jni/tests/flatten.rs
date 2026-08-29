@@ -2545,6 +2545,95 @@ fn a_sum_field_decomposes_into_its_tag_and_groups() {
     );
 }
 
+/// One selector may not own another: an optional nested class whose own child
+/// carries a selector stays on the whole-object path.
+///
+/// `group` is a flat `Option<i32>`, so a nested selector would have to be both
+/// a member of the outer group and a selector of its own, and `segments` would
+/// return overlapping ranges — the outer render then reaches the inner
+/// selector as if it were an ordinary payload. Refusing is a decomposition
+/// this adapter declines, not a panic during `write_rust`: the value keeps the
+/// whole-object encode, which handles the shape.
+///
+/// Nested segments are the endpoint (#602). Until then this test is what says
+/// the boundary is deliberate, and `write_rust` is what proves the refusal
+/// happens before anything renders.
+#[test]
+fn a_selector_inside_a_gated_group_is_refused_rather_than_rendered() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Leaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Mid {
+                    pub inner: Option<Leaf>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Outer {
+                    pub mid: Option<Mid>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn outer_new() -> Outer {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Leaf))
+                .class(crate::data_class!(Mid))
+                .class(crate::data_class!(Outer))
+                .fun(prebindgen_registry::fun!(outer_new)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    // `Mid` decomposes: one selector, its own group.
+    let mid: syn::Ident = syn::parse_quote!(Mid);
+    let names: Vec<String> = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry(), &mid)
+        .expect("one level of gating decomposes")
+        .iter()
+        .map(|wire| wire.name.clone())
+        .collect();
+    assert_eq!(names, ["inner__present", "inner__id"]);
+
+    // `Outer` would need a selector inside a gated group, and declines.
+    let outer: syn::Ident = syn::parse_quote!(Outer);
+    assert!(
+        gen.declarations()
+            .struct_out_wires_of(gen.registry(), &outer)
+            .is_none(),
+        "a selector inside a gated group is refused"
+    );
+
+    // And the refusal holds through rendering: `Outer` keeps the whole-object
+    // encode rather than reaching a selector where a payload was expected.
+    let dir = unique_test_dir("jnigen_nested_selector");
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+}
+
 /// A field whose own name contains what used to be the arm-local marker is
 /// just a name.
 ///
@@ -2619,19 +2708,20 @@ fn a_field_named_like_the_arm_marker_is_just_a_field() {
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
 }
 
-/// The whole-object encode covers a shape the registry-facing decomposition
-/// refuses, and that divergence is deliberate.
+/// An OPTIONAL nested `data_class` decomposes: a presence flag, then the
+/// child's leaves as the group it gates.
 ///
-/// `struct_out_wires_of` returns `None` for a struct with a nested
-/// `data_class` behind an `Option`, because there is no chain to reach the
-/// inlined leaves through. The whole-object output encode supports it as a
-/// `present` flag plus a defaulted group — which is why #596 step 5 records
-/// the two as different coverage rather than composing one from the other.
+/// This was the refusal #602 leads with, and the one this test used to pin the
+/// other way round. The whole-object encode always supported the shape — a
+/// `present` flag plus a defaulted group — and the decomposition refusing it
+/// is what kept a struct with an optional nested class off fixed-builder
+/// delivery entirely.
 ///
-/// If this ever starts returning `Some`, the encode should be rendered from
-/// the decomposition and this test deleted; see #602.
+/// A `Vec` of them is still refused, and that one is not a gap: a repeated
+/// value has no fixed number of leaves to lay beside its siblings, which is a
+/// sequence rather than a decomposition.
 #[test]
-fn the_decomposition_refuses_what_the_whole_object_encode_supports() {
+fn an_optional_nested_class_decomposes_behind_its_presence() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
         (
@@ -2671,22 +2761,30 @@ fn the_decomposition_refuses_what_the_whole_object_encode_supports() {
     let gen = jni.build_with(registry).expect("resolve");
 
     let holder: syn::Ident = syn::parse_quote!(Holder);
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry(), &holder)
+        .expect("an optional nested data class no longer refuses the decomposition");
+    let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["inner__present", "inner__id"],
+        "the presence flag, then the child's leaves"
+    );
     assert!(
-        gen.declarations()
-            .struct_out_wires_of(gen.registry(), &holder)
-            .is_none(),
-        "the decomposition refuses an optional nested data class"
+        matches!(wires[0].from, crate::jni::compile::OutFrom::Present),
+        "presence is synthesized, not read off a place holding a boolean"
+    );
+    assert_eq!(
+        wires[1].group,
+        Some(0),
+        "the child's leaves are the one group that flag gates"
     );
 
-    let dir = unique_test_dir("jnigen_decomposition_refusal");
+    // Rendering runs the encode and `assert_leaf_derivations_agree` over it.
+    let dir = unique_test_dir("jnigen_optional_nested");
     std::fs::create_dir_all(&dir).unwrap();
-    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
-        .expect("read generated file");
-    let compact: String = rust.split_whitespace().collect();
-    assert!(
-        compact.contains("__inner_present"),
-        "the whole-object encode still supports it, as a present flag:\n{rust}"
-    );
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
 }
 
 /// A nullable primitive keeps the allocation-free `(present, value)` pair

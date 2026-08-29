@@ -111,6 +111,7 @@ pub(crate) fn synth_value_struct_leaves(
                 // than trying to compile the sum type as a crossing.
                 source: match w.from {
                     crate::jni::compile::OutFrom::Tag => LeafSource::SumTag,
+                    crate::jni::compile::OutFrom::Present => LeafSource::Presence,
                     _ => LeafSource::Reach,
                 },
                 group: w.group,
@@ -173,6 +174,10 @@ pub(crate) fn encode_leaves(
 /// marker: `base` and every slot fragment come from source identifiers, and
 /// any sentinel spelled inside one of them can appear in the middle of a name
 /// too (#616 review).
+/// The one "arm" an optional value has: present. Absence contributes no
+/// bindings of its own, only the defaults its group carries.
+const PRESENT_ARM: usize = 0;
+
 fn arm_local_base(tag: usize, base: &str) -> String {
     format!("arm{tag}_{base}")
 }
@@ -343,11 +348,22 @@ fn encode_field(
                 } else {
                     let cbind = format_ident!("__c{}", depth);
                     let child_access = quote! { #cbind };
-                    let (child_pre, child_slots) =
-                        encode_plan(child, &child_access, base, depth + 1, env_expr, emit);
+                    // The child encodes under an arm-local base, and the outer
+                    // slots drop that prefix: the two are the same leaf, named
+                    // the same way the decomposition names it, and one scope
+                    // assigns from the other.
+                    let (child_pre, child_slots) = encode_plan(
+                        child,
+                        &child_access,
+                        &arm_local_base(PRESENT_ARM, base),
+                        depth + 1,
+                        env_expr,
+                        emit,
+                    );
                     let flag_id = format_ident!("__{}_present", base);
-                    let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
-                        .map(|i| format_ident!("__{}_o{}", base, i))
+                    let outer_ids: Vec<proc_macro2::Ident> = child_slots
+                        .iter()
+                        .map(|slot| outer_of(PRESENT_ARM, &slot.ident))
                         .collect();
                     let outer_tys: Vec<TokenStream> =
                         child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
@@ -377,8 +393,11 @@ fn encode_field(
                             }
                         }
                     });
+                    // The flag sits one level inside the struct, with the
+                    // group it gates: it is reached THROUGH this field, which
+                    // is what the decomposition's `__` join says.
                     slots.push(EncSlot {
-                        depth,
+                        depth: depth + 1,
                         ident: flag_id,
                         wire_ty: quote!(jni::sys::jboolean),
                         descriptor: "Z".to_string(),
@@ -387,7 +406,7 @@ fn encode_field(
                     });
                     for (i, sl) in child_slots.iter().enumerate() {
                         slots.push(EncSlot {
-                            depth,
+                            depth: sl.depth,
                             ident: outer_ids[i].clone(),
                             wire_ty: sl.wire_ty.clone(),
                             descriptor: sl.descriptor.clone(),

@@ -379,6 +379,10 @@ fn main() {
                 // instance methods (`secs()` / `nanos()`) whose receiver crosses
                 // as those field leaves, and `Vec<Stamp>` surfaces as
                 // `List<Stamp>`.
+                // The optional nested class #602 names first: `Envelope`'s
+                // stamp is sometimes there, and the decomposition says so with
+                // a presence flag ahead of the child's leaves.
+                .class(data_class!(Envelope))
                 .class(
                     data_class!(Stamp)
                         .method(fun!(stamp_secs))
@@ -643,6 +647,9 @@ fn main() {
                 // return path — a different question about the same leaves
                 // (#616 review).
                 .fun(fun!(verdict_each))
+                // The optional nested class on both delivery routes.
+                .fun(fun!(envelope_new))
+                .fun(fun!(envelope_each))
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
                 .fun(fun!(dossier_new))

@@ -1676,49 +1676,49 @@ pub(crate) unsafe fn __jni_out_convert_Annotated_to_wire_e7aba1468b19001a<'a>(
             )?
             .into();
         let ___alternate_present: jni::sys::jboolean;
-        let ___alternate_o0: jni::sys::jlong;
-        let ___alternate_o1: jni::sys::jint;
-        let ___alternate_o2: jni::sys::jdouble;
-        let ___alternate_o3: jni::sys::jboolean;
-        let ___alternate_o4: jni::objects::JObject;
+        let ___alternate_id: jni::sys::jlong;
+        let ___alternate_seq: jni::sys::jint;
+        let ___alternate_value: jni::sys::jdouble;
+        let ___alternate_flag: jni::sys::jboolean;
+        let ___alternate_label: jni::objects::JObject;
         let __on0: &::core::option::Option<_> = &v.alternate;
         match __on0 {
             ::core::option::Option::Some(__c0) => {
-                let ___alternate_id: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                let __arm0__alternate_id: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                     env,
                     __c0.id.clone(),
                 )?;
-                let ___alternate_seq: jni::sys::jint = __jni_out_convert_i32_to_wire_67173b19ae5a9348(
+                let __arm0__alternate_seq: jni::sys::jint = __jni_out_convert_i32_to_wire_67173b19ae5a9348(
                     env,
                     __c0.seq.clone(),
                 )?;
-                let ___alternate_value: jni::sys::jdouble = __jni_out_convert_f64_to_wire_61461de12ea6bc04(
+                let __arm0__alternate_value: jni::sys::jdouble = __jni_out_convert_f64_to_wire_61461de12ea6bc04(
                     env,
                     __c0.value.clone(),
                 )?;
-                let ___alternate_flag: jni::sys::jboolean = __jni_out_convert_bool_to_wire_3ee62077915d5228(
+                let __arm0__alternate_flag: jni::sys::jboolean = __jni_out_convert_bool_to_wire_3ee62077915d5228(
                     env,
                     __c0.flag.clone(),
                 )?;
-                let ___alternate_label: jni::objects::JObject = __jni_out_convert_Option_Box_String_jni_optional_intermediate_output_niche_to_wire_57342b1f497b4507(
+                let __arm0__alternate_label: jni::objects::JObject = __jni_out_convert_Option_Box_String_jni_optional_intermediate_output_niche_to_wire_57342b1f497b4507(
                         env,
                         __c0.label.clone(),
                     )?
                     .into();
                 ___alternate_present = 1u8;
-                ___alternate_o0 = ___alternate_id;
-                ___alternate_o1 = ___alternate_seq;
-                ___alternate_o2 = ___alternate_value;
-                ___alternate_o3 = ___alternate_flag;
-                ___alternate_o4 = ___alternate_label;
+                ___alternate_id = __arm0__alternate_id;
+                ___alternate_seq = __arm0__alternate_seq;
+                ___alternate_value = __arm0__alternate_value;
+                ___alternate_flag = __arm0__alternate_flag;
+                ___alternate_label = __arm0__alternate_label;
             }
             ::core::option::Option::None => {
                 ___alternate_present = 0u8;
-                ___alternate_o0 = 0i64;
-                ___alternate_o1 = 0i32;
-                ___alternate_o2 = 0.0f64;
-                ___alternate_o3 = 0u8;
-                ___alternate_o4 = jni::objects::JObject::null();
+                ___alternate_id = 0i64;
+                ___alternate_seq = 0i32;
+                ___alternate_value = 0.0f64;
+                ___alternate_flag = 0u8;
+                ___alternate_label = jni::objects::JObject::null();
             }
         }
         let ___ttl: jni::objects::JObject = __jni_out_convert_Option_i64_jni_optional_intermediate_output_boxed_to_wire_a906c53b92fcc585(
@@ -1741,11 +1741,11 @@ pub(crate) unsafe fn __jni_out_convert_Annotated_to_wire_e7aba1468b19001a<'a>(
                     jni::objects::JValue::from(___payload_flag),
                     jni::objects::JValue::Object(&___payload_label),
                     jni::objects::JValue::from(___alternate_present),
-                    jni::objects::JValue::from(___alternate_o0),
-                    jni::objects::JValue::from(___alternate_o1),
-                    jni::objects::JValue::from(___alternate_o2),
-                    jni::objects::JValue::from(___alternate_o3),
-                    jni::objects::JValue::Object(&___alternate_o4),
+                    jni::objects::JValue::from(___alternate_id),
+                    jni::objects::JValue::from(___alternate_seq),
+                    jni::objects::JValue::from(___alternate_value),
+                    jni::objects::JValue::from(___alternate_flag),
+                    jni::objects::JValue::Object(&___alternate_label),
                     jni::objects::JValue::Object(&___ttl),
                     jni::objects::JValue::from(___priority),
                 ],
@@ -3415,6 +3415,110 @@ pub(crate) unsafe fn __jni_out_convert_DurationBoundary_to_wire_3e3dd8df0414a6fa
                 &[
                     jni::objects::JValue::from(___required),
                     jni::objects::JValue::from(___delay),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn __jni_in_convert_wire_to_Envelope_acbb011ea2aa03e5<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::Envelope, __JniErr> {
+    Ok({
+        let __id_raw: jni::sys::jlong = env
+            .get_field(v, "id", "J")
+            .and_then(|val| val.j())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Envelope.id: {}", e)))? as _;
+        let __stamp_raw: jni::objects::JObject = env
+            .get_field(v, "stamp", "Lio/prebindgen/covertest/model/Stamp;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Envelope.stamp: {}", e)))?;
+        perftest_flat::Envelope {
+            id: __jni_in_convert_wire_to_i64_da07d745d9e26f71(env, &__id_raw)?,
+            stamp: __jni_in_convert_wire_to_Option_Stamp_jni_optional_intermediate_input_niche_e4305db2eca2412c(
+                env,
+                &__stamp_raw,
+            )?,
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn __jni_out_convert_Envelope_to_wire_c1f991e7596a2df6<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Envelope,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___id: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+            env,
+            v.id.clone(),
+        )?;
+        let ___stamp_present: jni::sys::jboolean;
+        let ___stamp_secs: jni::sys::jlong;
+        let ___stamp_nanos: jni::sys::jlong;
+        let __on0: &::core::option::Option<_> = &v.stamp;
+        match __on0 {
+            ::core::option::Option::Some(__c0) => {
+                let __arm0__stamp_secs: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                    env,
+                    __c0.secs.clone(),
+                )?;
+                let __arm0__stamp_nanos: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                    env,
+                    __c0.nanos.clone(),
+                )?;
+                ___stamp_present = 1u8;
+                ___stamp_secs = __arm0__stamp_secs;
+                ___stamp_nanos = __arm0__stamp_nanos;
+            }
+            ::core::option::Option::None => {
+                ___stamp_present = 0u8;
+                ___stamp_secs = 0i64;
+                ___stamp_nanos = 0i64;
+            }
+        }
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/Envelope",
+                "fromParts",
+                "(JZJJ)Lio/prebindgen/covertest/model/Envelope;",
+                &[
+                    jni::objects::JValue::from(___id),
+                    jni::objects::JValue::from(___stamp_present),
+                    jni::objects::JValue::from(___stamp_secs),
+                    jni::objects::JValue::from(___stamp_nanos),
                 ],
             )
             .and_then(|__v| __v.l())
@@ -8724,6 +8828,37 @@ pub(crate) unsafe fn __jni_out_convert_Option_Reading_jni_optional_intermediate_
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Stamp_jni_optional_intermediate_input_niche_e4305db2eca2412c<
+    'env,
+    'v,
+>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<::core::option::Option<perftest_flat::Stamp>, __JniErr> {
+    ::core::result::Result::Ok({
+        if v.is_null() {
+            ::core::option::Option::None
+        } else {
+            let __present = v;
+            ::core::option::Option::Some(
+                __jni_in_convert_wire_to_Stamp_cccc3794c11688eb(env, __present)?,
+            )
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn __jni_out_convert_Option_Stamp_jni_optional_intermediate_output_niche_to_wire_4df932077a6f39aa<
     'a,
 >(
@@ -12459,6 +12594,167 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Duration_Send_Sync_static_
                 Ok(())
             })()
                 .map_err(|e| tracing::error!("{} callback error: {e}", "Fn(Duration)"));
+        })
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Envelope_Send_Sync_static_aeebfa75b28fc34b<
+    'env,
+    'v,
+>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<
+    impl Fn(perftest_flat::Envelope) + Send + Sync + 'static,
+    __JniErr,
+> {
+    Ok({
+        use std::sync::Arc;
+        let java_vm = Arc::new(
+            env
+                .get_java_vm()
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Unable to retrieve JVM: {}", e)))?,
+        );
+        let callback_global_ref = env
+            .new_global_ref(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Unable to global-ref callback: {}", e)))?;
+        let __invoke_class = env
+            .get_object_class(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(
+                format!("Unable to get callback class for {}: {}", "Fn(Envelope)", e),
+            ))?;
+        let __invoke_id = env
+            .get_method_id(&__invoke_class, "run", "(JZJJ)V")
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Unable to resolve run for {}: {}", "Fn(Envelope)", e)))?;
+        Box::new(move |__cb_arg0: perftest_flat::Envelope| {
+            let _ = (|| -> ::core::result::Result<(), __JniErr> {
+                let mut env = java_vm
+                    .attach_current_thread_as_daemon()
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Attach thread for {}: {}", "Fn(Envelope)", e)))?;
+                env.push_local_frame(16)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!("push local frame for {}: {}", "Fn(Envelope)", e),
+                    ))?;
+                let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
+                    let (
+                        __cb0_obj1,
+                        __cb0_obj2,
+                        __cb0_obj3,
+                    ): (jni::sys::jvalue, jni::sys::jvalue, jni::sys::jvalue) = {
+                        let __so1: &::core::option::Option<_> = &(&__cb_arg0).stamp;
+                        match __so1 {
+                            ::core::option::Option::Some(__sg1) => {
+                                let __cb0_obj1: jni::sys::jvalue = jni::sys::jvalue {
+                                    z: 1u8,
+                                };
+                                let __cb0_obj2: jni::sys::jvalue = {
+                                    let __enc1 = match __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                                        &mut env,
+                                        (&(__sg1).secs).clone(),
+                                    ) {
+                                        ::core::result::Result::Ok(__w) => __w,
+                                        ::core::result::Result::Err(__e) => {
+                                            return ::core::result::Result::Err(
+                                                <__JniErr as ::core::convert::From<
+                                                    String,
+                                                >>::from(__e.to_string()),
+                                            );
+                                        }
+                                    };
+                                    jni::sys::jvalue { j: __enc1 }
+                                };
+                                let __cb0_obj3: jni::sys::jvalue = {
+                                    let __enc2 = match __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                                        &mut env,
+                                        (&(__sg1).nanos).clone(),
+                                    ) {
+                                        ::core::result::Result::Ok(__w) => __w,
+                                        ::core::result::Result::Err(__e) => {
+                                            return ::core::result::Result::Err(
+                                                <__JniErr as ::core::convert::From<
+                                                    String,
+                                                >>::from(__e.to_string()),
+                                            );
+                                        }
+                                    };
+                                    jni::sys::jvalue { j: __enc2 }
+                                };
+                                (__cb0_obj1, __cb0_obj2, __cb0_obj3)
+                            }
+                            ::core::option::Option::None => {
+                                (
+                                    jni::sys::jvalue { z: 0u8 },
+                                    jni::sys::jvalue { j: 0i64 },
+                                    jni::sys::jvalue { j: 0i64 },
+                                )
+                            }
+                        }
+                    };
+                    let __cb0_obj0: jni::sys::jvalue = {
+                        let __enc0 = match __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                            &mut env,
+                            (&__cb_arg0.id).clone(),
+                        ) {
+                            ::core::result::Result::Ok(__w) => __w,
+                            ::core::result::Result::Err(__e) => {
+                                return ::core::result::Result::Err(
+                                    <__JniErr as ::core::convert::From<
+                                        String,
+                                    >>::from(__e.to_string()),
+                                );
+                            }
+                        };
+                        jni::sys::jvalue { j: __enc0 }
+                    };
+                    let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
+                        env.call_method_unchecked(
+                            &callback_global_ref,
+                            __invoke_id,
+                            jni::signature::ReturnType::Primitive(
+                                jni::signature::Primitive::Void,
+                            ),
+                            &[__cb0_obj0, __cb0_obj1, __cb0_obj2, __cb0_obj3],
+                        )
+                    }
+                        .map(|_| ())
+                        .map_err(|e| {
+                            let _ = env.exception_describe();
+                            <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(e.to_string())
+                        });
+                    __call_res?;
+                    Ok(())
+                })();
+                let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                __frame_res?;
+                Ok(())
+            })()
+                .map_err(|e| tracing::error!("{} callback error: {e}", "Fn(Envelope)"));
         })
     })
 }
@@ -17076,6 +17372,224 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_durationOutOfRan
                 &__e.to_string(),
             );
             0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_envelopeEach<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    n: jni::sys::jlong,
+    sink: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> () {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let n = match __jni_in_convert_wire_to_i64_da07d745d9e26f71(&mut env, &n) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let sink = match __jni_in_convert_wire_to_impl_Fn_Envelope_Send_Sync_static_aeebfa75b28fc34b(
+        &mut env,
+        &sink,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let __out = perftest_flat::envelope_each(n, sink);
+    match __jni_out_convert_unit_to_wire_9e1510fd173c1fd6(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            ()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_envelopeNew<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    id: jni::sys::jlong,
+    present: jni::sys::jboolean,
+    __builder: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let id = match __jni_in_convert_wire_to_i64_da07d745d9e26f71(&mut env, &id) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let present = match __jni_in_convert_wire_to_bool_1be2f6c32f925207(
+        &mut env,
+        &present,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/EnvelopeBuilder";
+    const __CB_DESCR: &str = "(JZJJ)Ljava/lang/Object;";
+    let __out = perftest_flat::envelope_new(id, present);
+    let (
+        __obj1,
+        __obj2,
+        __obj3,
+    ): (jni::sys::jvalue, jni::sys::jvalue, jni::sys::jvalue) = {
+        let __so1: &::core::option::Option<_> = &(&__out).stamp;
+        match __so1 {
+            ::core::option::Option::Some(__sg1) => {
+                let __obj1: jni::sys::jvalue = jni::sys::jvalue { z: 1u8 };
+                let __obj2: jni::sys::jvalue = {
+                    let __enc1 = match __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                        &mut env,
+                        (&(__sg1).secs).clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    jni::sys::jvalue { j: __enc1 }
+                };
+                let __obj3: jni::sys::jvalue = {
+                    let __enc2 = match __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                        &mut env,
+                        (&(__sg1).nanos).clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    jni::sys::jvalue { j: __enc2 }
+                };
+                (__obj1, __obj2, __obj3)
+            }
+            ::core::option::Option::None => {
+                (
+                    jni::sys::jvalue { z: 0u8 },
+                    jni::sys::jvalue { j: 0i64 },
+                    jni::sys::jvalue { j: 0i64 },
+                )
+            }
+        }
+    };
+    let __obj0: jni::sys::jvalue = {
+        let __enc0 = match __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+            &mut env,
+            (&__out.id).clone(),
+        ) {
+            ::core::result::Result::Ok(__w) => __w,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        jni::sys::jvalue { j: __enc0 }
+    };
+    match __CB_MID
+        .call_object(
+            &mut env,
+            __CB_FQN,
+            "run",
+            __CB_DESCR,
+            &__builder,
+            &[__obj0, __obj1, __obj2, __obj3],
+        )
+    {
+        ::core::result::Result::Ok(__o) => __o,
+        ::core::result::Result::Err(__e) => {
+            let _ = env.exception_describe();
+            let __e2 = <__JniErr as ::core::convert::From<
+                String,
+            >>::from(__e.to_string());
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e2.to_string(),
+            );
+            jni::objects::JObject::null().into()
         }
     }
 }

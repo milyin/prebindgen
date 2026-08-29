@@ -548,6 +548,9 @@ pub(crate) struct OutWire {
 pub(crate) enum OutAbi {
     /// Synthesized Choice selector: raw `jint`, with no converter.
     Tag,
+    /// Synthesized presence flag: raw `jboolean`, with no converter. The value
+    /// it tests crosses through the leaves it gates, not through this one.
+    Present,
     /// One value encoded through its registry-planned pipeline. Projection is
     /// retained because handle/unsigned delivery owns special jvalue policy.
     Value(Box<OutValueAbi>),
@@ -566,7 +569,9 @@ impl OutAbi {
     /// converted.
     pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
         match self {
-            Self::Tag => {}
+            // Assigned, not converted: a tag by the emitter, a presence flag
+            // by the gate that unwrapped the value.
+            Self::Tag | Self::Present => {}
             Self::Value(value) => value.pipeline.calls(out),
         }
     }
@@ -596,7 +601,11 @@ impl prebindgen_registry::unfold::DecomposedLeaf for OutWire {
     }
 
     fn selects(&self) -> bool {
-        self.is_tag()
+        // A presence flag selects too: between the group being live and the
+        // group carrying its defaults. The walk emits both as one gated
+        // segment, which is the shape an absent optional needs — a per-leaf
+        // absent value cannot fill a primitive slot.
+        matches!(self.from, OutFrom::Tag | OutFrom::Present)
     }
 
     fn group(&self) -> Option<i32> {
@@ -625,6 +634,7 @@ impl OutWire {
             group: leaf.group,
             from: match &leaf.source {
                 LeafSource::SumTag => OutFrom::Tag,
+                LeafSource::Presence => OutFrom::Present,
                 LeafSource::VariantField { variant, member } => OutFrom::Payload {
                     variant: Some(variant.clone()),
                     member: member.clone(),
@@ -684,6 +694,10 @@ pub(crate) enum OutFrom {
     /// Read off the place [`OutWire::reach`] names — a field access, or the
     /// result of the accessor the reach ends in.
     Place,
+    /// The synthesized presence of an optional value the decomposition looks
+    /// through: the emitter tests the place [`OutWire::reach`] names and the
+    /// leaves after it carry the value when it is there.
+    Present,
     /// A payload of one alternative, bound by that arm's pattern.
     Payload {
         /// The alternative's ident as the source enum declares it. Empty until
@@ -2796,6 +2810,8 @@ pub(crate) fn freeze_out_wires(
             let mut wire = OutWire::from_leaf(leaf);
             wire.abi = Some(if wire.is_tag() {
                 OutAbi::Tag
+            } else if matches!(wire.from, OutFrom::Present) {
+                OutAbi::Present
             } else {
                 let crossing = prebindgen_registry::recipe::Crossing::new(
                     wire.out_ty.clone(),
@@ -4405,40 +4421,85 @@ impl Declarations {
                     }
                     continue;
                 }
-                // A nested `data_class` inlines when it is reached directly.
-                // Behind an `Option` or a `Vec` there is no chain to reach
-                // through, so the whole value stays object-shaped.
+                // A nested `data_class` inlines: its own leaves are reached
+                // through this field. An OPTIONAL one contributes a presence
+                // flag ahead of them, and its group carries wire defaults when
+                // the value is absent — the same shape a sum field's tag gives
+                // its groups, with presence in place of an alternative.
                 //
-                // This refusal is why the whole-object output encode
-                // (`emit/struct_out.rs`) is not rendered from this
-                // decomposition: it supports the shapes refused here — an
-                // optional nested class becomes a `present` flag plus a
-                // defaulted group, and a sum field a tag plus one group per
-                // variant. Delivering those to a foreign builder is a feature
-                // this decomposition does not have: the encode is a superset
-                // rather than a second implementation. Where both apply they
-                // name the same leaves, which `assert_leaf_derivations_agree`
-                // checks. See #596 step 5, and #602.
+                // A `Vec` of them is still refused: a repeated value has no
+                // fixed number of leaves to lay side by side, which is a
+                // sequence rather than a decomposition.
                 crate::jni::classify::TypeKind::DataStruct {
                     st: _,
                     cfg: Some(_),
                 } => {
-                    if field.ty.optional_inner().is_some()
-                        || matches!(field.ty.kind(), TypeKind::Vec(_))
-                    {
+                    if matches!(field.ty.kind(), TypeKind::Vec(_)) {
                         return None;
                     }
                     let child = match probe.unwrapped().kind() {
                         TypeKind::Named { id, .. } => id.ident()?,
                         _ => return None,
                     };
-                    wires.extend(self.struct_out_wires_at(
-                        registry,
-                        &child,
-                        &field_path,
-                        &name,
-                        depth + 1,
-                    )?);
+                    let optional = field.ty.optional_inner().is_some();
+                    if optional {
+                        // The flag's own reach ends in the OPTIONAL step it
+                        // tests: presence is the gate, and the walk emits a
+                        // gate exactly where a segment's selector reaches
+                        // through one. The group's leaves then reach on from
+                        // the value that gate unwrapped.
+                        let mut reach: Vec<prebindgen_registry::unfold::PathStep> =
+                            field_path.iter().map(field_step).collect();
+                        reach[path.len()] =
+                            prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                        wires.push(OutWire {
+                            name: format!("{name}__{}", crate::jni::emit::PRESENT_LEAF),
+                            out_ty: field.ty.clone(),
+                            group: None,
+                            from: OutFrom::Present,
+                            reach,
+                            nullable: false,
+                            identity: false,
+                            abi: None,
+                        });
+                    }
+                    let inlined =
+                        self.struct_out_wires_at(registry, &child, &field_path, &name, depth + 1)?;
+                    // One selector may not own another yet: `group` is a flat
+                    // `Option<i32>`, so a selector inside this group would have
+                    // to be both "the group's member" and "a selector of its
+                    // own", and `segments` would return overlapping ranges.
+                    // Refused HERE, before the leaves are registered as a
+                    // `ValueDecon`, so the shape stays on the whole-object path
+                    // rather than panicking during rendering. Nested segments
+                    // are the endpoint; see #602.
+                    if optional
+                        && inlined
+                            .iter()
+                            .any(prebindgen_registry::unfold::DecomposedLeaf::selects)
+                    {
+                        return None;
+                    }
+                    wires.extend(inlined.into_iter().map(|wire| {
+                        let mut reach = wire.reach;
+                        if optional {
+                            // The step reaching THIS field is optional for the
+                            // child's leaves: they are inside the value the
+                            // presence flag tests, so the walk gates them on
+                            // it. The flag's own reach stops at the `Option`,
+                            // which is the value it tests rather than one
+                            // inside it.
+                            reach[path.len()] =
+                                prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                        }
+                        OutWire {
+                            reach,
+                            // Under a presence flag the child's leaves are the
+                            // one group that flag gates.
+                            group: optional.then_some(0).or(wire.group),
+                            ..wire
+                        }
+                    }));
                     continue;
                 }
                 _ => {}

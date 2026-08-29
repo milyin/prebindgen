@@ -88,6 +88,9 @@ Base package: `io.prebindgen.covertest`
 - `duration_emit` — `fun durationEmit(value: ULong, f: DurationCallback, onError: JniErrorHandler<Unit>)`
 - `duration_optional` — `fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
 - `duration_out_of_range` — `fun durationOutOfRange(onError: JniErrorHandler<ULong?>): ULong?`
+- `envelope_each` — `fun envelopeEach(n: Long, sink: EnvelopeCallback, onError: JniErrorHandler<Unit>)`
+- `envelope_new` — `fun envelopeNew(id: Long, present: Boolean, onError: JniErrorHandler<Envelope?>): Envelope?`
+  - shaped by: return `Envelope` decomposed → [id, stamp__present, stamp__secs, stamp__nanos] (Callback delivery)
 - `hold_echo` — `fun holdEcho(h: Hold, onError: JniErrorHandler<Hold?>): Hold?`
   - shaped by: return `Hold` decomposed → [tag, for_v0] (Callback delivery)
 - `hold_policy_echo` — `fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy?`
@@ -240,6 +243,7 @@ Base package: `io.prebindgen.covertest`
 - `ConstArray`: data_class → `io.prebindgen.covertest.model.ConstArray` (wire `jni :: objects :: JObject`)
 - `Dossier`: data_class → `io.prebindgen.covertest.Dossier` (wire `jni :: objects :: JObject`)
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
+- `Envelope`: data_class → `io.prebindgen.covertest.model.Envelope` (wire `jni :: objects :: JObject`)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
 - `Hold`: sealed_class → `io.prebindgen.covertest.model.Hold` (wire `?`)
 - `HoldPolicy`: data_class → `io.prebindgen.covertest.model.HoldPolicy` (wire `jni :: objects :: JObject`)
