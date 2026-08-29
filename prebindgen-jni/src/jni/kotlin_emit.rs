@@ -1233,8 +1233,12 @@ impl Declarations {
                             .decon
                             .clone()
                             .expect("fixed decomposed output carries its declaration plan");
-                        let sum =
-                            is_sum_row(&crate::jni::compile::OutWire::from_leaves(&unfold.leaves));
+                        // Whether the delivered value IS a sum — a struct
+                        // with a sum-typed field contains a tag and still
+                        // reassembles through its own `fromParts`.
+                        let sum = crate::jni::emit::is_whole_sum_row(
+                            &crate::jni::compile::OutWire::from_leaves(&unfold.leaves),
+                        );
                         match (output.iterable_fold, sum) {
                             (true, true) => FixedSingleton::SumFolder(decon),
                             (true, false) => FixedSingleton::StructFolder(decon),

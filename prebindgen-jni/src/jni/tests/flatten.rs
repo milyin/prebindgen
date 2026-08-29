@@ -2467,6 +2467,158 @@ fn the_two_derivations_agree_on_a_nested_data_class() {
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
 }
 
+/// A `sealed_class` field decomposes: the struct's leaves carry the sum's tag
+/// and one group per alternative, reached through the field.
+///
+/// This is #602's larger half — a sum field was the most common refusal, four
+/// of the nine in the two examples — and what it buys is fixed-builder
+/// delivery: a declared function returning the struct, or an `impl Fn(T)`
+/// callback taking one, now hands the foreign builder leaves instead of
+/// falling back to a whole JVM object.
+#[test]
+fn a_sum_field_decomposes_into_its_tag_and_groups() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Outcome {
+                    Found(i64),
+                    Missing,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub id: i64,
+                    pub outcome: Outcome,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_id(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Outcome))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(holder_id)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let holder: syn::Ident = syn::parse_quote!(Holder);
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry(), &holder)
+        .expect("a sum field no longer refuses the decomposition");
+    let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["id", "outcome__tag", "outcome__found_v0"],
+        "the sibling field, then the sum's tag and its one payload group, \
+         each named through the field that carries them"
+    );
+    assert!(
+        wires[1].is_tag(),
+        "the selector is a tag, not a value read off a place"
+    );
+    assert_eq!(
+        wires[2].group,
+        Some(0),
+        "the payload joins the group its tag selects"
+    );
+    assert!(
+        !wires[1].reach.is_empty(),
+        "and the tag is reached THROUGH the field, which is what distinguishes \
+         a struct carrying a sum from a value that IS one"
+    );
+}
+
+/// A field whose own name contains what used to be the arm-local marker is
+/// just a name.
+///
+/// The encode binds a sum's groups twice — once inside each match arm, once in
+/// the tuple those arms fill — and the two are the same leaf, so they cannot
+/// share a name. The arm-local one carries a generated `__arm{tag}_` prefix,
+/// and the outer name is recovered by stripping it at that known position. An
+/// earlier version searched the middle of the ident for a sentinel, which any
+/// source-derived component could contain (#616 review); this fixture spells
+/// that sentinel in a field name and in a variant payload beneath it.
+///
+/// `write_rust` is what makes it a regression rather than an inspection: it
+/// renders the encode and runs `assert_leaf_derivations_agree` over the
+/// result.
+#[test]
+fn a_field_named_like_the_arm_marker_is_just_a_field() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Outcome_xg {
+                    Found_xg(i64),
+                    Missing,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub id: i64,
+                    pub state_xg: Outcome_xg,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_id(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Outcome_xg))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(holder_id)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let holder: syn::Ident = syn::parse_quote!(Holder);
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry(), &holder)
+        .expect("a sum field decomposes whatever its name spells");
+    let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["id", "stateXg__tag", "stateXg__found_xg_v0"],
+        "the sentinel is part of the name, not a marker to search for"
+    );
+
+    // Rendering is what runs the encode and the agreement check over it.
+    let dir = unique_test_dir("jnigen_arm_marker_name");
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+}
+
 /// The whole-object encode covers a shape the registry-facing decomposition
 /// refuses, and that divergence is deliberate.
 ///

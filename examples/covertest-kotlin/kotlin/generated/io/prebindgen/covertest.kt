@@ -14,8 +14,6 @@ import io.prebindgen.covertest.model.ObjectBoundary
 import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
-import io.prebindgen.covertest.model.Tagged
-import io.prebindgen.covertest.model.Verdict
 import java.lang.ref.Cleaner
 import java.lang.ref.Cleaner.Cleanable
 import java.util.concurrent.atomic.AtomicLong
@@ -1768,7 +1766,7 @@ internal object CovNative {
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
 
     @JvmSynthetic
-    external fun taggedNew(which: Int, errorSink: Any): Tagged
+    external fun taggedNew(which: Int, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic
     external fun taggedRank(tId: Long, tMarkerTag: Int, tMarkerRankedV0: Int, errorSink: Any): Int
@@ -1817,7 +1815,10 @@ internal object CovNative {
     ): Any?
 
     @JvmSynthetic
-    external fun verdictNew(id: Long, count: Long, total: Double, errorSink: Any): Verdict
+    external fun verdictEach(n: Long, total: Double, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun verdictNew(id: Long, count: Long, total: Double, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic
     external fun wrappedFieldsSum(

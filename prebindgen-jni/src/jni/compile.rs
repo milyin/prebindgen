@@ -4378,9 +4378,33 @@ impl Declarations {
             // look through, `Vec` to decline — never a last path segment.
             let probe = field.ty.optional_inner().unwrap_or(&field.ty);
             match self.type_kind(registry, &probe.key()) {
-                crate::jni::classify::TypeKind::Handle
-                | crate::jni::classify::TypeKind::Enum
-                | crate::jni::classify::TypeKind::Sum => return None,
+                crate::jni::classify::TypeKind::Handle | crate::jni::classify::TypeKind::Enum => {
+                    return None
+                }
+                // A `sealed_class` field contributes what a sealed_class
+                // crossing does — a tag naming the live alternative, then one
+                // group of leaves per alternative — reached through this
+                // field. Only one group is live per value, which is what the
+                // registry's segment gate emits as a single `match`.
+                crate::jni::classify::TypeKind::Sum => {
+                    if field.ty.optional_inner().is_some() {
+                        return None;
+                    }
+                    let sum_ident = match probe.unwrapped().kind() {
+                        TypeKind::Named { id, .. } => id.ident()?,
+                        _ => return None,
+                    };
+                    let reach: Vec<prebindgen_registry::unfold::PathStep> =
+                        field_path.iter().map(field_step).collect();
+                    for wire in self.sum_out_wires(registry, &sum_ident, probe)? {
+                        wires.push(OutWire {
+                            name: format!("{name}__{}", wire.name),
+                            reach: reach.clone(),
+                            ..wire
+                        });
+                    }
+                    continue;
+                }
                 // A nested `data_class` inlines when it is reached directly.
                 // Behind an `Option` or a `Vec` there is no chain to reach
                 // through, so the whole value stays object-shaped.

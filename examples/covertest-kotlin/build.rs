@@ -638,6 +638,11 @@ fn main() {
                 // #218: the same handle reached through a data-class FIELD, so
                 // the JVM harness can assert the container's cascade closes it.
                 .fun(fun!(verdict_new))
+                // …and the same data class handed to a CALLBACK, which
+                // reassembles through the interface path rather than the
+                // return path — a different question about the same leaves
+                // (#616 review).
+                .fun(fun!(verdict_each))
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
                 .fun(fun!(dossier_new))

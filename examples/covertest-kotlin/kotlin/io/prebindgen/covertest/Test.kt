@@ -101,6 +101,7 @@ import io.prebindgen.covertest.model.probeEach
 import io.prebindgen.covertest.model.probeNew
 import io.prebindgen.covertest.model.lookupOf
 import io.prebindgen.covertest.model.layeredOf
+import io.prebindgen.covertest.model.verdictEach
 import io.prebindgen.covertest.model.verdictNew
 import io.prebindgen.covertest.model.dossierNew
 import io.prebindgen.covertest.model.archiveReading
@@ -697,6 +698,42 @@ fun main() {
         val absent = verdictNew(8L, 0L, 0.0, boom).orThrow()
         check(absent.outcome === Lookup.Absent)
         absent.close()
+    }
+
+    // The same data class arriving at a CALLBACK rather than as a return.
+    //
+    // #602 taught the decomposition a sum-typed field, so `Verdict` crosses as
+    // its leaves — `id`, the outcome's tag, and one slot per alternative — on
+    // both paths. They are two different reassemblies of the same leaves: the
+    // return path builds through the class's own `fromParts`, and this one
+    // through the callback interface, whose derivation asked a different
+    // question about the tag and used to reject a struct that merely contains
+    // one (#616 review). Only a run proves both rebuild the same value.
+    section("a data class with a sum field arrives whole at a callback") {
+        val seen = mutableListOf<String>()
+        val escaped = mutableListOf<Summary>()
+        verdictEach(3L, 2.5, { verdict ->
+            seen.add("${verdict.id}:" + when (val o = verdict.outcome) {
+                is Lookup.Failed -> "failed:${o.v0}"
+                Lookup.Absent -> "absent"
+                is Lookup.Found -> {
+                    val s = o.v0
+                    check(!s.isClosed())
+                    escaped.add(s)
+                    "found:${s.count(boom)}"
+                }
+            })
+        }, boom).orThrow()
+
+        // One value per iteration, each rebuilt from the leaves: the id is the
+        // sibling field, and the outcome is the alternative its tag selected —
+        // all three alternatives, since `lookup_of(i - 1)` walks them.
+        check(seen == listOf("0:failed:negative count", "1:absent", "2:found:1")) { "got $seen" }
+
+        // The container is closed when `run` returns, and its cascade reaches
+        // the handle the sum holds — the same close-unless-taken contract a
+        // bare handle argument has.
+        check(escaped.all { it.isClosed() }) { "the cascade closed every payload" }
     }
 
     // The FOURTH position, and the row an emission test cannot cover: the field

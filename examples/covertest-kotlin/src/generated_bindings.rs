@@ -3676,15 +3676,15 @@ pub(crate) unsafe fn __jni_out_convert_HoldPolicy_to_wire_3068aef2f204dafc<'a>(
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
         let ___hold__tag: jni::sys::jint;
-        let ___hold_g0: jni::sys::jlong;
+        let ___hold_for_v0: jni::sys::jlong;
         match &v.hold {
             perftest_flat::Hold::Indefinite => {
                 ___hold__tag = 0;
-                ___hold_g0 = 0i64;
+                ___hold_for_v0 = 0i64;
             }
             perftest_flat::Hold::For(__s0_0) => {
-                let ___hold_for_v0: jni::sys::jlong = {
-                    let ___hold_for_v0_s0 = __jni_out_stage_0_Duration_to_wire_37da00112022eac0(
+                let __arm1__hold_for_v0: jni::sys::jlong = {
+                    let __arm1__hold_for_v0_s0 = __jni_out_stage_0_Duration_to_wire_37da00112022eac0(
                             env,
                             __s0_0.clone(),
                         )
@@ -3693,16 +3693,16 @@ pub(crate) unsafe fn __jni_out_convert_HoldPolicy_to_wire_3068aef2f204dafc<'a>(
                         >>::from(__e.to_string()))?;
                     __jni_out_convert_u64_to_wire_c9db59f6e5bef648(
                         env,
-                        ___hold_for_v0_s0,
+                        __arm1__hold_for_v0_s0,
                     )?
                 };
                 ___hold__tag = 1;
-                ___hold_g0 = ___hold_for_v0;
+                ___hold_for_v0 = __arm1__hold_for_v0;
             }
         }
         let ___grace_present: jni::sys::jboolean;
         let ___grace__tag: jni::sys::jint;
-        let ___grace_g0: jni::sys::jlong;
+        let ___grace_for_v0: jni::sys::jlong;
         let __oc0: &::core::option::Option<_> = &v.grace;
         match __oc0 {
             ::core::option::Option::Some(__o0) => {
@@ -3710,11 +3710,11 @@ pub(crate) unsafe fn __jni_out_convert_HoldPolicy_to_wire_3068aef2f204dafc<'a>(
                 match __o0 {
                     perftest_flat::Hold::Indefinite => {
                         ___grace__tag = 0;
-                        ___grace_g0 = 0i64;
+                        ___grace_for_v0 = 0i64;
                     }
                     perftest_flat::Hold::For(__s0_0) => {
-                        let ___grace_for_v0: jni::sys::jlong = {
-                            let ___grace_for_v0_s0 = __jni_out_stage_0_Duration_to_wire_37da00112022eac0(
+                        let __arm1__grace_for_v0: jni::sys::jlong = {
+                            let __arm1__grace_for_v0_s0 = __jni_out_stage_0_Duration_to_wire_37da00112022eac0(
                                     env,
                                     __s0_0.clone(),
                                 )
@@ -3723,18 +3723,18 @@ pub(crate) unsafe fn __jni_out_convert_HoldPolicy_to_wire_3068aef2f204dafc<'a>(
                                 >>::from(__e.to_string()))?;
                             __jni_out_convert_u64_to_wire_c9db59f6e5bef648(
                                 env,
-                                ___grace_for_v0_s0,
+                                __arm1__grace_for_v0_s0,
                             )?
                         };
                         ___grace__tag = 1;
-                        ___grace_g0 = ___grace_for_v0;
+                        ___grace_for_v0 = __arm1__grace_for_v0;
                     }
                 }
             }
             ::core::option::Option::None => {
                 ___grace_present = 0u8;
                 ___grace__tag = 0i32;
-                ___grace_g0 = 0i64;
+                ___grace_for_v0 = 0i64;
             }
         }
         let __obj = env
@@ -3744,10 +3744,10 @@ pub(crate) unsafe fn __jni_out_convert_HoldPolicy_to_wire_3068aef2f204dafc<'a>(
                 "(IJZIJ)Lio/prebindgen/covertest/model/HoldPolicy;",
                 &[
                     jni::objects::JValue::from(___hold__tag),
-                    jni::objects::JValue::from(___hold_g0),
+                    jni::objects::JValue::from(___hold_for_v0),
                     jni::objects::JValue::from(___grace_present),
                     jni::objects::JValue::from(___grace__tag),
-                    jni::objects::JValue::from(___grace_g0),
+                    jni::objects::JValue::from(___grace_for_v0),
                 ],
             )
             .and_then(|__v| __v.l())
@@ -7441,92 +7441,92 @@ pub(crate) unsafe fn __jni_out_convert_Observation_to_wire_d96ad3cc48a04f0a<'a>(
             v.id.clone(),
         )?;
         let ___reading__tag: jni::sys::jint;
-        let ___reading_g0: jni::sys::jlong;
-        let ___reading_g1: jni::sys::jlong;
-        let ___reading_g2: jni::sys::jlong;
-        let ___reading_g3: jni::objects::JObject;
-        let ___reading_g4: jni::sys::jint;
-        let ___reading_g5: jni::sys::jlong;
+        let ___reading_exact_v0: jni::sys::jlong;
+        let ___reading_range_low: jni::sys::jlong;
+        let ___reading_range_high: jni::sys::jlong;
+        let ___reading_tagged_v0: jni::objects::JObject;
+        let ___reading_tagged_v1: jni::sys::jint;
+        let ___reading_companion_v0: jni::sys::jlong;
         match &v.reading {
             perftest_flat::Reading::Missing => {
                 ___reading__tag = 0;
-                ___reading_g0 = 0i64;
-                ___reading_g1 = 0i64;
-                ___reading_g2 = 0i64;
-                ___reading_g3 = jni::objects::JObject::null();
-                ___reading_g4 = 0i32;
-                ___reading_g5 = 0i64;
+                ___reading_exact_v0 = 0i64;
+                ___reading_range_low = 0i64;
+                ___reading_range_high = 0i64;
+                ___reading_tagged_v0 = jni::objects::JObject::null();
+                ___reading_tagged_v1 = 0i32;
+                ___reading_companion_v0 = 0i64;
             }
             perftest_flat::Reading::Exact(__s0_0) => {
-                let ___reading_exact_v0: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                let __arm1__reading_exact_v0: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                     env,
                     __s0_0.clone(),
                 )?;
                 ___reading__tag = 1;
-                ___reading_g0 = ___reading_exact_v0;
-                ___reading_g1 = 0i64;
-                ___reading_g2 = 0i64;
-                ___reading_g3 = jni::objects::JObject::null();
-                ___reading_g4 = 0i32;
-                ___reading_g5 = 0i64;
+                ___reading_exact_v0 = __arm1__reading_exact_v0;
+                ___reading_range_low = 0i64;
+                ___reading_range_high = 0i64;
+                ___reading_tagged_v0 = jni::objects::JObject::null();
+                ___reading_tagged_v1 = 0i32;
+                ___reading_companion_v0 = 0i64;
             }
             perftest_flat::Reading::Range { low: __s0_0, high: __s0_1 } => {
-                let ___reading_range_low: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                let __arm2__reading_range_low: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                     env,
                     __s0_0.clone(),
                 )?;
-                let ___reading_range_high: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                let __arm2__reading_range_high: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                     env,
                     __s0_1.clone(),
                 )?;
                 ___reading__tag = 2;
-                ___reading_g1 = ___reading_range_low;
-                ___reading_g2 = ___reading_range_high;
-                ___reading_g0 = 0i64;
-                ___reading_g3 = jni::objects::JObject::null();
-                ___reading_g4 = 0i32;
-                ___reading_g5 = 0i64;
+                ___reading_range_low = __arm2__reading_range_low;
+                ___reading_range_high = __arm2__reading_range_high;
+                ___reading_exact_v0 = 0i64;
+                ___reading_tagged_v0 = jni::objects::JObject::null();
+                ___reading_tagged_v1 = 0i32;
+                ___reading_companion_v0 = 0i64;
             }
             perftest_flat::Reading::Labeled(__s0_0, __s0_1) => {
-                let ___reading_tagged_v0: jni::objects::JObject = __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9adbcb(
+                let __arm3__reading_tagged_v0: jni::objects::JObject = __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9adbcb(
                         env,
                         __s0_0.clone(),
                     )?
                     .into();
-                let ___reading_tagged_v1: jni::sys::jint = __jni_out_convert_Priority_to_wire_55b65fa623d4787e(
+                let __arm3__reading_tagged_v1: jni::sys::jint = __jni_out_convert_Priority_to_wire_55b65fa623d4787e(
                     env,
                     __s0_1.clone(),
                 )?;
                 ___reading__tag = 3;
-                ___reading_g3 = ___reading_tagged_v0;
-                ___reading_g4 = ___reading_tagged_v1;
-                ___reading_g0 = 0i64;
-                ___reading_g1 = 0i64;
-                ___reading_g2 = 0i64;
-                ___reading_g5 = 0i64;
+                ___reading_tagged_v0 = __arm3__reading_tagged_v0;
+                ___reading_tagged_v1 = __arm3__reading_tagged_v1;
+                ___reading_exact_v0 = 0i64;
+                ___reading_range_low = 0i64;
+                ___reading_range_high = 0i64;
+                ___reading_companion_v0 = 0i64;
             }
             perftest_flat::Reading::Companion(__s0_0) => {
-                let ___reading_companion_v0: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                let __arm4__reading_companion_v0: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                     env,
                     __s0_0.clone(),
                 )?;
                 ___reading__tag = 4;
-                ___reading_g5 = ___reading_companion_v0;
-                ___reading_g0 = 0i64;
-                ___reading_g1 = 0i64;
-                ___reading_g2 = 0i64;
-                ___reading_g3 = jni::objects::JObject::null();
-                ___reading_g4 = 0i32;
+                ___reading_companion_v0 = __arm4__reading_companion_v0;
+                ___reading_exact_v0 = 0i64;
+                ___reading_range_low = 0i64;
+                ___reading_range_high = 0i64;
+                ___reading_tagged_v0 = jni::objects::JObject::null();
+                ___reading_tagged_v1 = 0i32;
             }
         }
         let ___fallback_present: jni::sys::jboolean;
         let ___fallback__tag: jni::sys::jint;
-        let ___fallback_g0: jni::sys::jlong;
-        let ___fallback_g1: jni::sys::jlong;
-        let ___fallback_g2: jni::sys::jlong;
-        let ___fallback_g3: jni::objects::JObject;
-        let ___fallback_g4: jni::sys::jint;
-        let ___fallback_g5: jni::sys::jlong;
+        let ___fallback_exact_v0: jni::sys::jlong;
+        let ___fallback_range_low: jni::sys::jlong;
+        let ___fallback_range_high: jni::sys::jlong;
+        let ___fallback_tagged_v0: jni::objects::JObject;
+        let ___fallback_tagged_v1: jni::sys::jint;
+        let ___fallback_companion_v0: jni::sys::jlong;
         let __oc0: &::core::option::Option<_> = &v.fallback;
         match __oc0 {
             ::core::option::Option::Some(__o0) => {
@@ -7534,85 +7534,85 @@ pub(crate) unsafe fn __jni_out_convert_Observation_to_wire_d96ad3cc48a04f0a<'a>(
                 match __o0 {
                     perftest_flat::Reading::Missing => {
                         ___fallback__tag = 0;
-                        ___fallback_g0 = 0i64;
-                        ___fallback_g1 = 0i64;
-                        ___fallback_g2 = 0i64;
-                        ___fallback_g3 = jni::objects::JObject::null();
-                        ___fallback_g4 = 0i32;
-                        ___fallback_g5 = 0i64;
+                        ___fallback_exact_v0 = 0i64;
+                        ___fallback_range_low = 0i64;
+                        ___fallback_range_high = 0i64;
+                        ___fallback_tagged_v0 = jni::objects::JObject::null();
+                        ___fallback_tagged_v1 = 0i32;
+                        ___fallback_companion_v0 = 0i64;
                     }
                     perftest_flat::Reading::Exact(__s0_0) => {
-                        let ___fallback_exact_v0: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                        let __arm1__fallback_exact_v0: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                             env,
                             __s0_0.clone(),
                         )?;
                         ___fallback__tag = 1;
-                        ___fallback_g0 = ___fallback_exact_v0;
-                        ___fallback_g1 = 0i64;
-                        ___fallback_g2 = 0i64;
-                        ___fallback_g3 = jni::objects::JObject::null();
-                        ___fallback_g4 = 0i32;
-                        ___fallback_g5 = 0i64;
+                        ___fallback_exact_v0 = __arm1__fallback_exact_v0;
+                        ___fallback_range_low = 0i64;
+                        ___fallback_range_high = 0i64;
+                        ___fallback_tagged_v0 = jni::objects::JObject::null();
+                        ___fallback_tagged_v1 = 0i32;
+                        ___fallback_companion_v0 = 0i64;
                     }
                     perftest_flat::Reading::Range { low: __s0_0, high: __s0_1 } => {
-                        let ___fallback_range_low: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                        let __arm2__fallback_range_low: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                             env,
                             __s0_0.clone(),
                         )?;
-                        let ___fallback_range_high: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                        let __arm2__fallback_range_high: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                             env,
                             __s0_1.clone(),
                         )?;
                         ___fallback__tag = 2;
-                        ___fallback_g1 = ___fallback_range_low;
-                        ___fallback_g2 = ___fallback_range_high;
-                        ___fallback_g0 = 0i64;
-                        ___fallback_g3 = jni::objects::JObject::null();
-                        ___fallback_g4 = 0i32;
-                        ___fallback_g5 = 0i64;
+                        ___fallback_range_low = __arm2__fallback_range_low;
+                        ___fallback_range_high = __arm2__fallback_range_high;
+                        ___fallback_exact_v0 = 0i64;
+                        ___fallback_tagged_v0 = jni::objects::JObject::null();
+                        ___fallback_tagged_v1 = 0i32;
+                        ___fallback_companion_v0 = 0i64;
                     }
                     perftest_flat::Reading::Labeled(__s0_0, __s0_1) => {
-                        let ___fallback_tagged_v0: jni::objects::JObject = __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9adbcb(
+                        let __arm3__fallback_tagged_v0: jni::objects::JObject = __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9adbcb(
                                 env,
                                 __s0_0.clone(),
                             )?
                             .into();
-                        let ___fallback_tagged_v1: jni::sys::jint = __jni_out_convert_Priority_to_wire_55b65fa623d4787e(
+                        let __arm3__fallback_tagged_v1: jni::sys::jint = __jni_out_convert_Priority_to_wire_55b65fa623d4787e(
                             env,
                             __s0_1.clone(),
                         )?;
                         ___fallback__tag = 3;
-                        ___fallback_g3 = ___fallback_tagged_v0;
-                        ___fallback_g4 = ___fallback_tagged_v1;
-                        ___fallback_g0 = 0i64;
-                        ___fallback_g1 = 0i64;
-                        ___fallback_g2 = 0i64;
-                        ___fallback_g5 = 0i64;
+                        ___fallback_tagged_v0 = __arm3__fallback_tagged_v0;
+                        ___fallback_tagged_v1 = __arm3__fallback_tagged_v1;
+                        ___fallback_exact_v0 = 0i64;
+                        ___fallback_range_low = 0i64;
+                        ___fallback_range_high = 0i64;
+                        ___fallback_companion_v0 = 0i64;
                     }
                     perftest_flat::Reading::Companion(__s0_0) => {
-                        let ___fallback_companion_v0: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
+                        let __arm4__fallback_companion_v0: jni::sys::jlong = __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                             env,
                             __s0_0.clone(),
                         )?;
                         ___fallback__tag = 4;
-                        ___fallback_g5 = ___fallback_companion_v0;
-                        ___fallback_g0 = 0i64;
-                        ___fallback_g1 = 0i64;
-                        ___fallback_g2 = 0i64;
-                        ___fallback_g3 = jni::objects::JObject::null();
-                        ___fallback_g4 = 0i32;
+                        ___fallback_companion_v0 = __arm4__fallback_companion_v0;
+                        ___fallback_exact_v0 = 0i64;
+                        ___fallback_range_low = 0i64;
+                        ___fallback_range_high = 0i64;
+                        ___fallback_tagged_v0 = jni::objects::JObject::null();
+                        ___fallback_tagged_v1 = 0i32;
                     }
                 }
             }
             ::core::option::Option::None => {
                 ___fallback_present = 0u8;
                 ___fallback__tag = 0i32;
-                ___fallback_g0 = 0i64;
-                ___fallback_g1 = 0i64;
-                ___fallback_g2 = 0i64;
-                ___fallback_g3 = jni::objects::JObject::null();
-                ___fallback_g4 = 0i32;
-                ___fallback_g5 = 0i64;
+                ___fallback_exact_v0 = 0i64;
+                ___fallback_range_low = 0i64;
+                ___fallback_range_high = 0i64;
+                ___fallback_tagged_v0 = jni::objects::JObject::null();
+                ___fallback_tagged_v1 = 0i32;
+                ___fallback_companion_v0 = 0i64;
             }
         }
         let ___note: jni::objects::JObject = __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9adbcb(
@@ -7628,20 +7628,20 @@ pub(crate) unsafe fn __jni_out_convert_Observation_to_wire_d96ad3cc48a04f0a<'a>(
                 &[
                     jni::objects::JValue::from(___id),
                     jni::objects::JValue::from(___reading__tag),
-                    jni::objects::JValue::from(___reading_g0),
-                    jni::objects::JValue::from(___reading_g1),
-                    jni::objects::JValue::from(___reading_g2),
-                    jni::objects::JValue::Object(&___reading_g3),
-                    jni::objects::JValue::from(___reading_g4),
-                    jni::objects::JValue::from(___reading_g5),
+                    jni::objects::JValue::from(___reading_exact_v0),
+                    jni::objects::JValue::from(___reading_range_low),
+                    jni::objects::JValue::from(___reading_range_high),
+                    jni::objects::JValue::Object(&___reading_tagged_v0),
+                    jni::objects::JValue::from(___reading_tagged_v1),
+                    jni::objects::JValue::from(___reading_companion_v0),
                     jni::objects::JValue::from(___fallback_present),
                     jni::objects::JValue::from(___fallback__tag),
-                    jni::objects::JValue::from(___fallback_g0),
-                    jni::objects::JValue::from(___fallback_g1),
-                    jni::objects::JValue::from(___fallback_g2),
-                    jni::objects::JValue::Object(&___fallback_g3),
-                    jni::objects::JValue::from(___fallback_g4),
-                    jni::objects::JValue::from(___fallback_g5),
+                    jni::objects::JValue::from(___fallback_exact_v0),
+                    jni::objects::JValue::from(___fallback_range_low),
+                    jni::objects::JValue::from(___fallback_range_high),
+                    jni::objects::JValue::Object(&___fallback_tagged_v0),
+                    jni::objects::JValue::from(___fallback_tagged_v1),
+                    jni::objects::JValue::from(___fallback_companion_v0),
                     jni::objects::JValue::Object(&___note),
                 ],
             )
@@ -10348,6 +10348,37 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Tagged_279b04b60843d675<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+#[inline(always)]
+pub(crate) unsafe fn __jni_out_convert_Tagged_jni_product_intermediate_tuple_to_wire_69425de72da0b919<
+    'a,
+>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Tagged,
+) -> ::core::result::Result<
+    (jni::sys::jlong, (jni::sys::jint, (), (jni::sys::jint,))),
+    __JniErr,
+> {
+    ::core::result::Result::Ok((
+        __jni_out_convert_i64_to_wire_15d458bf28dc9c80(env, v.id)?,
+        __jni_out_convert_Marker_jni_choice_intermediate_tagged_tuple_to_wire_ded71b6862a11416(
+            env,
+            v.marker,
+        )?,
+    ))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn __jni_out_convert_Tagged_to_wire_b6acfb4fd9df43fa<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Tagged,
@@ -10358,19 +10389,19 @@ pub(crate) unsafe fn __jni_out_convert_Tagged_to_wire_b6acfb4fd9df43fa<'a>(
             v.id.clone(),
         )?;
         let ___marker__tag: jni::sys::jint;
-        let ___marker_g0: jni::sys::jint;
+        let ___marker_ranked_v0: jni::sys::jint;
         match &v.marker {
             perftest_flat::Marker::None_ => {
                 ___marker__tag = 0;
-                ___marker_g0 = 0i32;
+                ___marker_ranked_v0 = 0i32;
             }
             perftest_flat::Marker::Ranked(__s0_0) => {
-                let ___marker_ranked_v0: jni::sys::jint = __jni_out_convert_Option_Priority_jni_optional_intermediate_output_niche_to_wire_f8a537414a30bc3f(
+                let __arm1__marker_ranked_v0: jni::sys::jint = __jni_out_convert_Option_Priority_jni_optional_intermediate_output_niche_to_wire_f8a537414a30bc3f(
                     env,
                     __s0_0.clone(),
                 )?;
                 ___marker__tag = 1;
-                ___marker_g0 = ___marker_ranked_v0;
+                ___marker_ranked_v0 = __arm1__marker_ranked_v0;
             }
         }
         let __obj = env
@@ -10381,7 +10412,7 @@ pub(crate) unsafe fn __jni_out_convert_Tagged_to_wire_b6acfb4fd9df43fa<'a>(
                 &[
                     jni::objects::JValue::from(___id),
                     jni::objects::JValue::from(___marker__tag),
-                    jni::objects::JValue::from(___marker_g0),
+                    jni::objects::JValue::from(___marker_ranked_v0),
                 ],
             )
             .and_then(|__v| __v.l())
@@ -10917,6 +10948,40 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Verdict_21661560f50a2bdb<'env, 'v>
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+#[inline(always)]
+pub(crate) unsafe fn __jni_out_convert_Verdict_jni_product_intermediate_tuple_to_wire_c931393a6622afaa<
+    'a,
+>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Verdict,
+) -> ::core::result::Result<
+    (
+        jni::sys::jlong,
+        (jni::sys::jint, (), (jni::sys::jlong,), (jni::objects::JString<'a>,)),
+    ),
+    __JniErr,
+> {
+    ::core::result::Result::Ok((
+        __jni_out_convert_i64_to_wire_15d458bf28dc9c80(env, v.id)?,
+        __jni_out_convert_Lookup_jni_choice_intermediate_tagged_tuple_to_wire_84cb04db62f15f7a(
+            env,
+            v.outcome,
+        )?,
+    ))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn __jni_out_convert_Verdict_to_wire_26a1dc521db8a9ae<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Verdict,
@@ -10927,32 +10992,32 @@ pub(crate) unsafe fn __jni_out_convert_Verdict_to_wire_26a1dc521db8a9ae<'a>(
             v.id.clone(),
         )?;
         let ___outcome__tag: jni::sys::jint;
-        let ___outcome_g0: jni::sys::jlong;
-        let ___outcome_g1: jni::objects::JObject;
+        let ___outcome_found_v0: jni::sys::jlong;
+        let ___outcome_failed_v0: jni::objects::JObject;
         match &v.outcome {
             perftest_flat::Lookup::Absent => {
                 ___outcome__tag = 0;
-                ___outcome_g0 = 0i64;
-                ___outcome_g1 = jni::objects::JObject::null();
+                ___outcome_found_v0 = 0i64;
+                ___outcome_failed_v0 = jni::objects::JObject::null();
             }
             perftest_flat::Lookup::Found(__s0_0) => {
-                let ___outcome_found_v0: jni::sys::jlong = __jni_out_convert_Summary_jni_handle_codec_own_output_to_wire_236099c944f0abfc(
+                let __arm1__outcome_found_v0: jni::sys::jlong = __jni_out_convert_Summary_jni_handle_codec_own_output_to_wire_236099c944f0abfc(
                     env,
                     __s0_0.clone(),
                 )?;
                 ___outcome__tag = 1;
-                ___outcome_g0 = ___outcome_found_v0;
-                ___outcome_g1 = jni::objects::JObject::null();
+                ___outcome_found_v0 = __arm1__outcome_found_v0;
+                ___outcome_failed_v0 = jni::objects::JObject::null();
             }
             perftest_flat::Lookup::Failed(__s0_0) => {
-                let ___outcome_failed_v0: jni::objects::JObject = __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9adbcb(
+                let __arm2__outcome_failed_v0: jni::objects::JObject = __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9adbcb(
                         env,
                         __s0_0.clone(),
                     )?
                     .into();
                 ___outcome__tag = 2;
-                ___outcome_g1 = ___outcome_failed_v0;
-                ___outcome_g0 = 0i64;
+                ___outcome_failed_v0 = __arm2__outcome_failed_v0;
+                ___outcome_found_v0 = 0i64;
             }
         }
         let __obj = env
@@ -10963,8 +11028,8 @@ pub(crate) unsafe fn __jni_out_convert_Verdict_to_wire_26a1dc521db8a9ae<'a>(
                 &[
                     jni::objects::JValue::from(___id),
                     jni::objects::JValue::from(___outcome__tag),
-                    jni::objects::JValue::from(___outcome_g0),
-                    jni::objects::JValue::Object(&___outcome_g1),
+                    jni::objects::JValue::from(___outcome_found_v0),
+                    jni::objects::JValue::Object(&___outcome_failed_v0),
                 ],
             )
             .and_then(|__v| __v.l())
@@ -14324,6 +14389,128 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Vec_Option_Ticks_Send_Sync
                         "{} callback error: {e}", "Fn(Vec < Option < Ticks > >)"
                     )
                 });
+        })
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Verdict_Send_Sync_static_2a95bb2d7b157f05<
+    'env,
+    'v,
+>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<
+    impl Fn(perftest_flat::Verdict) + Send + Sync + 'static,
+    __JniErr,
+> {
+    Ok({
+        use std::sync::Arc;
+        let java_vm = Arc::new(
+            env
+                .get_java_vm()
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Unable to retrieve JVM: {}", e)))?,
+        );
+        let callback_global_ref = env
+            .new_global_ref(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Unable to global-ref callback: {}", e)))?;
+        let __invoke_class = env
+            .get_object_class(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(
+                format!("Unable to get callback class for {}: {}", "Fn(Verdict)", e),
+            ))?;
+        let __invoke_id = env
+            .get_method_id(&__invoke_class, "run", "(JIJLjava/lang/String;)V")
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Unable to resolve run for {}: {}", "Fn(Verdict)", e)))?;
+        Box::new(move |__cb_arg0: perftest_flat::Verdict| {
+            let _ = (|| -> ::core::result::Result<(), __JniErr> {
+                let mut env = java_vm
+                    .attach_current_thread_as_daemon()
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Attach thread for {}: {}", "Fn(Verdict)", e)))?;
+                env.push_local_frame(16)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("push local frame for {}: {}", "Fn(Verdict)", e)))?;
+                let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
+                    let (
+                        __chain_wire0,
+                        (__chain_wire1, (), (__chain_wire2,), (__chain_wire3,)),
+                    ) = match __jni_out_convert_Verdict_jni_product_intermediate_tuple_to_wire_c931393a6622afaa(
+                        &mut env,
+                        __cb_arg0,
+                    ) {
+                        ::core::result::Result::Ok(__intermediate) => __intermediate,
+                        ::core::result::Result::Err(__chain_error) => {
+                            return ::core::result::Result::Err(
+                                <__JniErr as ::core::convert::From<
+                                    String,
+                                >>::from(__chain_error.to_string()),
+                            );
+                        }
+                    };
+                    let __cb0_obj0 = jni::sys::jvalue {
+                        j: __chain_wire0,
+                    };
+                    let __cb0_obj1 = jni::sys::jvalue {
+                        i: __chain_wire1,
+                    };
+                    let __cb0_obj2 = jni::sys::jvalue {
+                        j: __chain_wire2,
+                    };
+                    let __cb0_obj3: jni::objects::JObject = __chain_wire3.into();
+                    let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
+                        env.call_method_unchecked(
+                            &callback_global_ref,
+                            __invoke_id,
+                            jni::signature::ReturnType::Primitive(
+                                jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                __cb0_obj0,
+                                __cb0_obj1,
+                                __cb0_obj2,
+                                jni::sys::jvalue {
+                                    l: __cb0_obj3.as_raw(),
+                                },
+                            ],
+                        )
+                    }
+                        .map(|_| ())
+                        .map_err(|e| {
+                            let _ = env.exception_describe();
+                            <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(e.to_string())
+                        });
+                    __call_res?;
+                    Ok(())
+                })();
+                let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                __frame_res?;
+                Ok(())
+            })()
+                .map_err(|e| tracing::error!("{} callback error: {e}", "Fn(Verdict)"));
         })
     })
 }
@@ -25473,6 +25660,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_taggedNew<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
     which: jni::sys::jint,
+    __builder: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
@@ -25493,17 +25681,60 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_taggedNew<'a>(
             return jni::objects::JObject::null().into();
         }
     };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/TaggedBuilder";
+    const __CB_DESCR: &str = "(JII)Ljava/lang/Object;";
     let __out = perftest_flat::tagged_new(which);
-    match __jni_out_convert_Tagged_to_wire_b6acfb4fd9df43fa(&mut env, __out) {
-        ::core::result::Result::Ok(__w) => __w,
-        ::core::result::Result::Err(__e) => {
+    let (__chain_wire0, (__chain_wire1, (), (__chain_wire2,))) = match __jni_out_convert_Tagged_jni_product_intermediate_tuple_to_wire_69425de72da0b919(
+        &mut env,
+        __out,
+    ) {
+        ::core::result::Result::Ok(__intermediate) => __intermediate,
+        ::core::result::Result::Err(__chain_error) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__e.to_string(),
+                &__chain_error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __obj0 = jni::sys::jvalue {
+        j: __chain_wire0,
+    };
+    let __obj1 = jni::sys::jvalue {
+        i: __chain_wire1,
+    };
+    let __obj2 = jni::sys::jvalue {
+        i: __chain_wire2,
+    };
+    match __CB_MID
+        .call_object(
+            &mut env,
+            __CB_FQN,
+            "run",
+            __CB_DESCR,
+            &__builder,
+            &[__obj0, __obj1, __obj2],
+        )
+    {
+        ::core::result::Result::Ok(__o) => __o,
+        ::core::result::Result::Err(__e) => {
+            let _ = env.exception_describe();
+            let __e2 = <__JniErr as ::core::convert::From<
+                String,
+            >>::from(__e.to_string());
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e2.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -26179,12 +26410,88 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_vaultHolderNew<'
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_verdictEach<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    n: jni::sys::jlong,
+    total: jni::sys::jdouble,
+    sink: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> () {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let n = match __jni_in_convert_wire_to_i64_da07d745d9e26f71(&mut env, &n) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let total = match __jni_in_convert_wire_to_f64_b312e1b95182cdfd(&mut env, &total) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let sink = match __jni_in_convert_wire_to_impl_Fn_Verdict_Send_Sync_static_2a95bb2d7b157f05(
+        &mut env,
+        &sink,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let __out = perftest_flat::verdict_each(n, total, sink);
+    match __jni_out_convert_unit_to_wire_9e1510fd173c1fd6(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            ()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_verdictNew<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
     id: jni::sys::jlong,
     count: jni::sys::jlong,
     total: jni::sys::jdouble,
+    __builder: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
@@ -26233,17 +26540,68 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_verdictNew<'a>(
             return jni::objects::JObject::null().into();
         }
     };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/VerdictBuilderRaw";
+    const __CB_DESCR: &str = "(JIJLjava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::verdict_new(id, count, total);
-    match __jni_out_convert_Verdict_to_wire_26a1dc521db8a9ae(&mut env, __out) {
-        ::core::result::Result::Ok(__w) => __w,
-        ::core::result::Result::Err(__e) => {
+    let (__chain_wire0, (__chain_wire1, (), (__chain_wire2,), (__chain_wire3,))) = match __jni_out_convert_Verdict_jni_product_intermediate_tuple_to_wire_c931393a6622afaa(
+        &mut env,
+        __out,
+    ) {
+        ::core::result::Result::Ok(__intermediate) => __intermediate,
+        ::core::result::Result::Err(__chain_error) => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__e.to_string(),
+                &__chain_error.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __obj0 = jni::sys::jvalue {
+        j: __chain_wire0,
+    };
+    let __obj1 = jni::sys::jvalue {
+        i: __chain_wire1,
+    };
+    let __obj2 = jni::sys::jvalue {
+        j: __chain_wire2,
+    };
+    let __obj3: jni::objects::JObject = __chain_wire3.into();
+    match __CB_MID
+        .call_object(
+            &mut env,
+            __CB_FQN,
+            "run",
+            __CB_DESCR,
+            &__builder,
+            &[
+                __obj0,
+                __obj1,
+                __obj2,
+                jni::sys::jvalue {
+                    l: __obj3.as_raw(),
+                },
+            ],
+        )
+    {
+        ::core::result::Result::Ok(__o) => __o,
+        ::core::result::Result::Err(__e) => {
+            let _ = env.exception_describe();
+            let __e2 = <__JniErr as ::core::convert::From<
+                String,
+            >>::from(__e.to_string());
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e2.to_string(),
             );
             jni::objects::JObject::null().into()
         }
