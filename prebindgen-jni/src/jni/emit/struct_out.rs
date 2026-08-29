@@ -104,7 +104,15 @@ pub(crate) fn synth_value_struct_leaves(
                 out_ty: w.out_ty,
                 identity: false,
                 nullable: w.nullable,
-                source: LeafSource::Reach,
+                // A selector is not read off a place: the emitter assigns the
+                // live alternative's number in each arm of its `match`, which
+                // is what `LeafSource::SumTag` says and what keeps
+                // `OutWire::from_leaf` round-tripping it back to a tag rather
+                // than trying to compile the sum type as a crossing.
+                source: match w.from {
+                    crate::jni::compile::OutFrom::Tag => LeafSource::SumTag,
+                    _ => LeafSource::Reach,
+                },
                 group: w.group,
             })
             .collect(),
@@ -154,6 +162,22 @@ pub(crate) fn encode_leaves(
             )
         })
         .collect()
+}
+
+/// The segment marking an arm-local binding, dropped from the outer slot it
+/// feeds. A leaf's name is the same on both sides — it is one leaf — and the
+/// marker is what lets the two live in one function.
+const ARM_MARKER: &str = "_xg";
+
+/// The outer slot ident for an arm-local binding.
+fn outer_of(inner: &proc_macro2::Ident) -> proc_macro2::Ident {
+    let name = inner.to_string();
+    let outer = name.replacen(ARM_MARKER, "", 1);
+    assert_ne!(
+        outer, name,
+        "an arm-local binding carries the marker its outer slot drops"
+    );
+    format_ident!("{outer}")
 }
 
 fn encode_plan(
@@ -393,7 +417,10 @@ fn encode_field(
                     let mut vpre = TokenStream::new();
                     let mut vslots: Vec<EncSlot> = Vec::new();
                     for (f, bind) in v.fields.iter().zip(&binds) {
-                        let fbase = format!("{base}_{}", f.slot);
+                        // The arm's own bindings carry a marker segment the
+                        // outer slots drop: the two are the same leaf and want
+                        // the same name, and one scope assigns from the other.
+                        let fbase = format!("{base}_{}{ARM_MARKER}", f.slot);
                         let bind_expr = quote!(#bind);
                         let (p, s) =
                             encode_field(&f.kind, &bind_expr, &fbase, depth + 1, env_expr, emit);
@@ -425,9 +452,15 @@ fn encode_field(
                 // side in variant order. Each arm assigns its own group from
                 // the values it just computed and defaults all the others.
                 let all: Vec<&EncSlot> = arms.iter().flat_map(|a| a.slots.iter()).collect();
-                let outer_ids: Vec<proc_macro2::Ident> = (0..all.len())
-                    .map(|i| format_ident!("__{}_g{}", base, i))
-                    .collect();
+                // Named after the leaf each slot carries — `__outcome_found_v0`,
+                // not `__outcome_g0`. The inner bindings already use that
+                // naming, and it is what the registry-facing decomposition
+                // calls the same leaf, so the two derivations agree by
+                // construction rather than by a positional coincidence. The
+                // inner binding of the same name lives inside its match arm
+                // and shadows nothing the outer tuple reads.
+                let outer_ids: Vec<proc_macro2::Ident> =
+                    all.iter().map(|slot| outer_of(&slot.ident)).collect();
                 let outer_tys: Vec<TokenStream> = all.iter().map(|s| s.wire_ty.clone()).collect();
                 let defaults: Vec<TokenStream> = all.iter().map(|s| s.default.clone()).collect();
 
@@ -515,8 +548,12 @@ fn encode_field(
                         default: quote!(0u8),
                     });
                 }
+                // A sum field's slots sit one level inside the struct, the
+                // same as an inlined nested class's: the tag and the groups
+                // are reached THROUGH the field. The decomposition says so by
+                // joining the names with `__`, and depth is that count.
                 slots.push(EncSlot {
-                    depth,
+                    depth: depth + 1,
                     ident: tag_id,
                     wire_ty: quote!(jni::sys::jint),
                     descriptor: "I".to_string(),
@@ -525,7 +562,7 @@ fn encode_field(
                 });
                 for (i, sl) in all.iter().enumerate() {
                     slots.push(EncSlot {
-                        depth,
+                        depth: sl.depth,
                         ident: outer_ids[i].clone(),
                         wire_ty: sl.wire_ty.clone(),
                         descriptor: sl.descriptor.clone(),

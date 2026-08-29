@@ -122,6 +122,20 @@ pub(crate) fn is_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
     leaves.iter().any(|l| l.is_tag())
 }
 
+/// Whether the delivered value **is** a sum, rather than merely containing one.
+///
+/// The tag comes first and reaches nothing: it selects over the whole value.
+/// A struct with a sum-typed FIELD also carries a tag — reached through that
+/// field — and is a product whose fields include a segment. The two were the
+/// same question only while a field could not decompose to a tag, which is
+/// what #602 changed: a builder asked [`is_sum_row`] and tried to build a
+/// sealed-class builder for a struct.
+pub(crate) fn is_whole_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
+    leaves
+        .first()
+        .is_some_and(|leaf| leaf.is_tag() && leaf.reach.is_empty())
+}
+
 /// Emit the Rust-side encode of a decomposed sum: ONE `match` over the value
 /// binding the tag and EVERY group's slots — the live group from its variant
 /// pattern's payload bindings, every other group from the same wire defaults an

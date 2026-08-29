@@ -1570,6 +1570,14 @@ public fun interface StampBuilder<out R> {
 internal val __StampBuilder: StampBuilder<Stamp> =
 StampBuilder { secs, nanos -> Stamp.fromParts(secs, nanos) }
 
+public fun interface TaggedBuilder<out R> {
+    public fun run(id: Long, marker__tag: Int, marker__ranked_v0: Int): R
+}
+
+@get:JvmSynthetic
+internal val __TaggedBuilder: TaggedBuilder<Tagged> =
+TaggedBuilder { id, marker__tag, marker__ranked_v0 -> Tagged.fromParts(id, marker__tag, marker__ranked_v0) }
+
 internal fun interface UnsignedBuilderRaw<out R> {
     public fun run(byte: Int, short: Int, int: Long, long: Long, maybeLong: Long?): R
 }
@@ -1596,6 +1604,19 @@ internal fun <R> VaultHolderBuilder<R>.asRaw(): VaultHolderBuilderRaw<R> =
             vaultHolderVault__maybe?.let { if (it == 0L) null else Ingot.fromRawPtr(it) }
         )
     }
+
+internal fun interface VerdictBuilderRaw<out R> {
+    public fun run(
+        id: Long,
+        outcome__tag: Int,
+        outcome__found_v0: Long,
+        outcome__failed_v0: String?,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __VerdictBuilderRaw: VerdictBuilderRaw<Verdict> =
+VerdictBuilderRaw { id, outcome__tag, outcome__found_v0, outcome__failed_v0 -> Verdict.fromParts(id, outcome__tag, outcome__found_v0, outcome__failed_v0) }
 
 internal fun interface ReadingFolderRaw<A> {
     public fun run(
@@ -2022,12 +2043,17 @@ public fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int 
     return __ret
 }
 
-/** Build a [`Tagged`]: `which` 0 = `None_`, 1 = `Ranked(None)`, 2 = `Ranked(Some(High))`. */
+/**
+ * Build a [`Tagged`]: `which` 0 = `None_`, 1 = `Ranked(None)`, 2 = `Ranked(Some(High))`.
+ *
+ * The Rust `Tagged` result is delivered decomposed: the builder callback receives (`id`, `marker__tag`, `marker__ranked_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun taggedNew(which: Int, onError: JniErrorHandler<Tagged?>): Tagged? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.taggedNew(which, __bcap)
+    val __ret = CovNative.taggedNew(which, __TaggedBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Tagged
 }
 
 /**
@@ -2188,7 +2214,12 @@ public fun ticksEmit(f: TicksCallback, onError: JniErrorHandler<Unit>) {
     if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
-/** Build a [`Verdict`] whose outcome comes from [`lookup_of`]. */
+/**
+ * Build a [`Verdict`] whose outcome comes from [`lookup_of`].
+ *
+ * The Rust `Verdict` result is delivered decomposed: the builder callback receives (`id`, `outcome__tag`, `outcome__found_v0`, `outcome__failed_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun verdictNew(
     id: Long,
     count: Long,
@@ -2196,9 +2227,9 @@ public fun verdictNew(
     onError: JniErrorHandler<Verdict?>,
 ): Verdict? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.verdictNew(id, count, total, __bcap)
+    val __ret = CovNative.verdictNew(id, count, total, __VerdictBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Verdict
 }
 
 /** Build a [`Dossier`] over a fresh [`Summary`] — the two-level container. */

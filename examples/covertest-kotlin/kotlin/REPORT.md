@@ -139,6 +139,7 @@ Base package: `io.prebindgen.covertest`
 - `stamp_series` — `fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>?>): List<Stamp>?`
   - shaped by: return `Stamp` decomposed → [secs, nanos] (Callback delivery)
 - `tagged_new` — `fun taggedNew(which: Int, onError: JniErrorHandler<Tagged?>): Tagged?`
+  - shaped by: return `Tagged` decomposed → [id, marker__tag, marker__ranked_v0] (Callback delivery)
 - `tagged_rank` — `fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int`
 - `ticks_emit` — `fun ticksEmit(f: TicksCallback, onError: JniErrorHandler<Unit>)`
 - `unsigned_data_maybe` — `fun unsignedDataMaybe(value: Unsigned, onError: JniErrorHandler<ULong?>): ULong?`
@@ -151,6 +152,7 @@ Base package: `io.prebindgen.covertest`
 - `vault_holder_new` — `fun <R> vaultHolderNew(seq: Long, count: Long, maybeCount: Long, onError: JniErrorHandler<R?>, build: VaultHolderBuilder<R>): R?`
   - shaped by: return `VaultHolder` decomposed → [vaultHolderVault__always, vaultHolderVault__maybe] (Callback delivery)
 - `verdict_new` — `fun verdictNew(id: Long, count: Long, total: Double, onError: JniErrorHandler<Verdict?>): Verdict?`
+  - shaped by: return `Verdict` decomposed → [id, outcome__tag, outcome__found_v0, outcome__failed_v0] (Callback delivery)
 - `wrapped_fields_sum` — `fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long`
 
 ## package `io.prebindgen.covertest.storage`
