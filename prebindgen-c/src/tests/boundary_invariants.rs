@@ -739,3 +739,47 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "a C production path accepts the deleted generic converter carrier"
     );
 }
+
+/// The C adapter declares exactly one shape vocabulary of its own, and #613 is
+/// about removing it rather than gaining another.
+///
+/// A shape-shaped enum — one naming three or more of the registry's structural
+/// forms — is a place where the same structural question is asked a second
+/// time. Two are recorded here: `CShape`, which restates the registry's
+/// `ShapePlan` variant for variant while `CFrag::freeze` translates between
+/// them, and `CBody`, which is the rendering half of the same split. Both are
+/// deletion targets, so this list may shrink; it may not grow without a reader
+/// deciding that a third is worth having.
+#[test]
+fn the_c_adapter_gains_no_third_shape_vocabulary() {
+    let found = prebindgen_registry::generation::shape_like_enums(&[
+        (
+            "prebindgen-c/src/assembly.rs",
+            include_str!("../assembly.rs"),
+        ),
+        ("prebindgen-c/src/builder.rs", include_str!("../builder.rs")),
+        ("prebindgen-c/src/chain.rs", include_str!("../chain.rs")),
+        ("prebindgen-c/src/compile.rs", include_str!("../compile.rs")),
+        ("prebindgen-c/src/convert.rs", include_str!("../convert.rs")),
+        ("prebindgen-c/src/emit.rs", include_str!("../emit.rs")),
+        ("prebindgen-c/src/lib.rs", include_str!("../lib.rs")),
+        ("prebindgen-c/src/recipes.rs", include_str!("../recipes.rs")),
+        (
+            "prebindgen-c/src/trait_impl.rs",
+            include_str!("../trait_impl.rs"),
+        ),
+    ]);
+    let names: Vec<String> = found
+        .iter()
+        .map(|(name, label)| format!("{name} ({label})"))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "CBody (prebindgen-c/src/chain.rs)",
+            "CShape (prebindgen-c/src/compile.rs)",
+        ],
+        "the C shape vocabularies changed; #613 shrinks this list, and a new \
+         entry needs an argument rather than a test update"
+    );
+}

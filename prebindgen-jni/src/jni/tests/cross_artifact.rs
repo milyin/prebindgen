@@ -725,3 +725,159 @@ fn extern_rendering_asks_the_registry_nothing() {
         "the extern renderer must read its frozen plan and callee"
     );
 }
+
+/// JniGen declares one shape vocabulary of its own, and #613 is about removing
+/// it rather than gaining another.
+///
+/// A shape-shaped enum — one naming three or more of the registry's structural
+/// forms — is a place where the same structural question is asked a second
+/// time. Two are recorded here: `JLayout`, the shape of the single adapter-side
+/// intermediate over flattened ABI leaves, and `JBody`, the rendering half.
+/// Both are deletion targets of steps 4 and 5, so this list may shrink; it may
+/// not grow without a reader deciding that a third is worth having.
+#[test]
+fn jnigen_gains_no_third_shape_vocabulary() {
+    let found = prebindgen_registry::generation::shape_like_enums(&[
+        (
+            "prebindgen-jni/src/jni/builder.rs",
+            include_str!("../builder.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/chain.rs",
+            include_str!("../chain.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/classify.rs",
+            include_str!("../classify.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/compile.rs",
+            include_str!("../compile.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/config.rs",
+            include_str!("../config.rs"),
+        ),
+        ("prebindgen-jni/src/jni/decl.rs", include_str!("../decl.rs")),
+        (
+            "prebindgen-jni/src/jni/equality.rs",
+            include_str!("../equality.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/fn_plan.rs",
+            include_str!("../fn_plan.rs"),
+        ),
+        ("prebindgen-jni/src/jni/fold.rs", include_str!("../fold.rs")),
+        (
+            "prebindgen-jni/src/jni/generation.rs",
+            include_str!("../generation.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/iface.rs",
+            include_str!("../iface.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/kotlin_emit.rs",
+            include_str!("../kotlin_emit.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/metadata.rs",
+            include_str!("../metadata.rs"),
+        ),
+        ("prebindgen-jni/src/jni/mod.rs", include_str!("../mod.rs")),
+        (
+            "prebindgen-jni/src/jni/overloads.rs",
+            include_str!("../overloads.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/prim_array.rs",
+            include_str!("../prim_array.rs"),
+        ),
+        ("prebindgen-jni/src/jni/prim.rs", include_str!("../prim.rs")),
+        (
+            "prebindgen-jni/src/jni/recipes.rs",
+            include_str!("../recipes.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/render.rs",
+            include_str!("../render.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/report.rs",
+            include_str!("../report.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/struct_plan.rs",
+            include_str!("../struct_plan.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/symbol.rs",
+            include_str!("../symbol.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/symbols.rs",
+            include_str!("../symbols.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/trait_impl.rs",
+            include_str!("../trait_impl.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/wire_access.rs",
+            include_str!("../wire_access.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/callback.rs",
+            include_str!("../emit/callback.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/convert.rs",
+            include_str!("../emit/convert.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/delivery.rs",
+            include_str!("../emit/delivery.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/flat_input.rs",
+            include_str!("../emit/flat_input.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/mod.rs",
+            include_str!("../emit/mod.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/names.rs",
+            include_str!("../emit/names.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/struct_out.rs",
+            include_str!("../emit/struct_out.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/sum_out.rs",
+            include_str!("../emit/sum_out.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/vec_build.rs",
+            include_str!("../emit/vec_build.rs"),
+        ),
+        (
+            "prebindgen-jni/src/jni/emit/wrapper.rs",
+            include_str!("../emit/wrapper.rs"),
+        ),
+    ]);
+    let names: Vec<String> = found
+        .iter()
+        .map(|(name, label)| format!("{name} ({label})"))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "JBody (prebindgen-jni/src/jni/chain.rs)",
+            "JLayout (prebindgen-jni/src/jni/compile.rs)",
+        ],
+        "the JniGen shape vocabularies changed; #613 shrinks this list, and a \
+         new entry needs an argument rather than a test update"
+    );
+}

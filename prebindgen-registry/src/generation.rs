@@ -1764,3 +1764,58 @@ fn reachable_fragments<R: Representation>(
     }
     reached
 }
+
+/// The names of the shape-shaped enums a set of sources declares.
+///
+/// A **shape-shaped** enum is one whose variants name three or more of the
+/// structural forms this crate's model already has words for — `Atomic`,
+/// `Product`, `Optional`, `Sequence`, `Choice`, `Invoke`, `Leaf`. Each such
+/// enum is a place where the same structural question is asked again, and #613
+/// exists to reduce their number rather than let it grow: an adapter fences
+/// this against the list it has, so a new one fails a test and a deleted one is
+/// a deliberate edit to that list.
+///
+/// `sources` pairs a label — the path a reader should open — with the file's
+/// text, since a fence names what it found.
+#[cfg(any(test, feature = "testing"))]
+pub fn shape_like_enums(sources: &[(&str, &str)]) -> Vec<(String, String)> {
+    const FORMS: [&str; 7] = [
+        "Atomic", "Product", "Optional", "Sequence", "Choice", "Invoke", "Leaf",
+    ];
+    let mut found = Vec::new();
+    for (label, source) in sources {
+        let file: syn::File = match syn::parse_str(source) {
+            Ok(file) => file,
+            // A fence reports what it could not read rather than passing
+            // silently on a file it failed to parse.
+            Err(error) => panic!("shape-enum fence cannot parse {label}: {error}"),
+        };
+        // Inline modules too: an enum does not stop being a second shape
+        // vocabulary by being declared one `mod` deeper.
+        fn walk(items: &[syn::Item], forms: &[&str], label: &str, out: &mut Vec<(String, String)>) {
+            for item in items {
+                match item {
+                    syn::Item::Enum(item) => {
+                        let named = item
+                            .variants
+                            .iter()
+                            .filter(|variant| forms.contains(&variant.ident.to_string().as_str()))
+                            .count();
+                        if named >= 3 {
+                            out.push((item.ident.to_string(), label.to_string()));
+                        }
+                    }
+                    syn::Item::Mod(module) => {
+                        if let Some((_, items)) = &module.content {
+                            walk(items, forms, label, out);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        walk(&file.items, &FORMS, label, &mut found);
+    }
+    found.sort();
+    found
+}
