@@ -34,8 +34,8 @@
 
 use prebindgen_registry::{
     unfold::{
-        bind_hoists, fold_steps, project_leading_fields, steps_are_movable, DecomposedLeaf,
-        DeliveryBridge, PathStep,
+        bind_hoists, fold_steps, project_leading_fields, steps_are_movable, DeliveryBridge,
+        PathStep,
     },
     Conversions,
 };
@@ -599,6 +599,13 @@ impl prebindgen_registry::unfold::DeliveryBridge for FrozenDelivery {
         quote! { let #slot: jni::objects::JObject = #expr; }
     }
 
+    /// A leaf whose value was not there delivers a JVM null. Every slot that
+    /// can be absent is an object slot for exactly that reason: a primitive
+    /// one has no null to carry.
+    fn absent(&self) -> TokenStream {
+        quote!(jni::objects::JObject::null())
+    }
+
     /// How a filled slot rides the typed `run` call: a primitive-wire leaf IS
     /// its jvalue, and every other leaf's `JObject` passes its raw pointer in
     /// the `l` slot. Matches the descriptor [`crate::jni::iface`] derives for
@@ -655,82 +662,6 @@ impl<'a> Delivered<'a> {
 /// must MOVE the payload keeps its direct match; see `owned_place` below.
 pub(crate) fn bind_as_option(e: &TokenStream, bind: &syn::Ident) -> TokenStream {
     quote! { let #bind: &::core::option::Option<_> = #e; }
-}
-
-/// Reach a leaf's input by folding its `path` over `base`, then hand the
-/// reached expression to `body` (which renders the encode and yields
-/// `JObject`). Every optional nesting step becomes a `match`: its `None` arm
-/// short-circuits the whole leaf to `JObject::null()` (the value is absent ⇒
-/// the leaf is null) — any number of optional steps on the path nest.
-/// With `unwrap_last == false` the final path element composes directly — a
-/// non-identity leaf's converter takes the final step's **full** type
-/// (`Option` included), so only the steps *before* it are nesting. An
-/// identity leaf (`unwrap_last == true`) delivers the reached value itself, so
-/// a final `Option` step unwraps too.
-fn reach_leaf(
-    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-    path: &[PathStep],
-    base: TokenStream,
-    base_is_ref: bool,
-    unwrap_last: bool,
-    depth: usize,
-    body: &dyn Fn(TokenStream) -> TokenStream,
-) -> TokenStream {
-    let limit = if unwrap_last {
-        path.len()
-    } else {
-        path.len().saturating_sub(1)
-    };
-    let (e, lead) = project_leading_fields(&base, base_is_ref, path);
-    match (lead..limit).find(|&i| path[i].is_optional()) {
-        // No (more) optional nesting steps: compose the rest plainly.
-        None => body(fold_steps(qualify, &path[lead..], e, false)),
-        Some(k) => {
-            // Through the optional step INCLUSIVE: the same fold, so the
-            // borrow in front of it is the ordinary rule rather than a second
-            // statement of it.
-            let opt_e = fold_steps(qualify, &path[lead..=k], e, false);
-            let nested = format_ident!("__n{}", depth);
-            let inner = reach_leaf(
-                qualify,
-                &path[k + 1..],
-                quote!(#nested),
-                true,
-                unwrap_last,
-                depth + 1,
-                body,
-            );
-            // A FIELD read composes to a borrow (`&(e).f`), so it goes through
-            // a coercion site and the destructuring stops caring which
-            // representation the source spelled the optional as.
-            //
-            // A CALL composes to the accessor's own returned value, which is
-            // owned and whose payload downstream may move. Borrowing it to
-            // coerce would change that ownership, so it keeps its direct match
-            // — and an owned position could not be made representation-agnostic
-            // this way regardless (see [`bind_as_option`]).
-            if path[k].is_field() {
-                let opt_bind = format_ident!("__o{}", depth);
-                let coerce = bind_as_option(&opt_e, &opt_bind);
-                quote! {
-                    {
-                        #coerce
-                        match #opt_bind {
-                            ::core::option::Option::Some(#nested) => { #inner }
-                            ::core::option::Option::None => jni::objects::JObject::null(),
-                        }
-                    }
-                }
-            } else {
-                quote! {
-                    match #opt_e {
-                        ::core::option::Option::Some(#nested) => { #inner }
-                        ::core::option::Option::None => jni::objects::JObject::null(),
-                    }
-                }
-            }
-        }
-    }
 }
 
 /// Encode a plan's leaves off `value` (`__out`, a `Some`-bound `__inner`, a Vec
@@ -1034,6 +965,30 @@ pub(crate) fn encode_plan_leaves(
         };
         let (value, by_ref, path, consuming) = rebase(leaf);
         let value = &value;
+        // Every reach below is the registry's, with this adapter's absence in
+        // its `None` arms. The terminal treatment — move, clone or borrow —
+        // comes with it, which is what let the three-way dispatch this loop
+        // used to make disappear.
+        let absent = || DeliveryBridge::absent(context);
+        let gated = |path: &[PathStep],
+                     base: TokenStream,
+                     base_is_ref: bool,
+                     unwrap_last: bool,
+                     body: &dyn Fn(TokenStream) -> TokenStream| {
+            prebindgen_registry::unfold::reach_leaf(
+                &qualify,
+                prebindgen_registry::unfold::LeafAt {
+                    leaf,
+                    path,
+                    base,
+                    base_is_ref,
+                    consuming,
+                    unwrap_last,
+                },
+                Some(&absent),
+                body,
+            )
+        };
         let (frozen_pipeline, frozen_projection) = match &leaf.abi {
             Some(crate::jni::compile::OutAbi::Value(value)) => {
                 (&value.pipeline, value.projection.as_ref())
@@ -1170,21 +1125,13 @@ pub(crate) fn encode_plan_leaves(
                     } else if !leaf.nullable {
                         // Reached non-null handle: clone via the converter,
                         // raw jlong (no Option steps on the path).
-                        let expr = reach_leaf(
-                            &qualify,
-                            &path,
-                            value.clone(),
-                            by_ref,
-                            true,
-                            0,
-                            &|reached| {
-                                let __encoded = conv(quote!(#reached));
-                                quote! {{
-                                    let #handle_ident: jni::sys::jlong = #__encoded;
-                                    jni::sys::jvalue { j: #handle_ident }
-                                }}
-                            },
-                        );
+                        let expr = gated(&path, value.clone(), by_ref, true, &|reached| {
+                            let __encoded = conv(quote!(#reached));
+                            quote! {{
+                                let #handle_ident: jni::sys::jlong = #__encoded;
+                                jni::sys::jvalue { j: #handle_ident }
+                            }}
+                        });
                         stmts.extend(quote! {
                             let #obj_ident: jni::sys::jvalue = #expr;
                         });
@@ -1193,26 +1140,18 @@ pub(crate) fn encode_plan_leaves(
                         // `java.lang.Long` when present (cached valueOf),
                         // JVM null when absent — matching the `Long?` param.
                         let box_fail = fail(quote!(__e.to_string()));
-                        let expr = reach_leaf(
-                            &qualify,
-                            &path,
-                            value.clone(),
-                            by_ref,
-                            true,
-                            0,
-                            &|reached| {
-                                let __encoded = conv(quote!(#reached));
-                                quote! {{
-                                    let #handle_ident: jni::sys::jlong = #__encoded;
-                                    match ::prebindgen_jni_runtime::box_jlong(&mut env, #handle_ident) {
-                                        ::core::result::Result::Ok(__o) => __o,
-                                        ::core::result::Result::Err(__e) => {
-                                            #box_fail
-                                        }
+                        let expr = gated(&path, value.clone(), by_ref, true, &|reached| {
+                            let __encoded = conv(quote!(#reached));
+                            quote! {{
+                                let #handle_ident: jni::sys::jlong = #__encoded;
+                                match ::prebindgen_jni_runtime::box_jlong(&mut env, #handle_ident) {
+                                    ::core::result::Result::Ok(__o) => __o,
+                                    ::core::result::Result::Err(__e) => {
+                                        #box_fail
                                     }
-                                }}
-                            },
-                        );
+                                }
+                            }}
+                        });
                         stmts.extend(bind_obj(obj_ident, expr));
                     }
                 }
@@ -1229,38 +1168,24 @@ pub(crate) fn encode_plan_leaves(
                         let expr = encode(value.clone());
                         stmts.extend(quote! { let #obj_ident: jni::sys::jvalue = #expr; });
                     } else if !leaf.nullable {
-                        let expr = reach_leaf(
-                            &qualify,
-                            &path,
-                            value.clone(),
-                            by_ref,
-                            true,
-                            0,
-                            &|reached| encode(quote!(*#reached)),
-                        );
+                        let expr = gated(&path, value.clone(), by_ref, true, &|reached| {
+                            encode(quote!(*#reached))
+                        });
                         stmts.extend(quote! { let #obj_ident: jni::sys::jvalue = #expr; });
                     } else {
                         let box_fail = fail(quote!(__e.to_string()));
-                        let expr = reach_leaf(
-                            &qualify,
-                            &path,
-                            value.clone(),
-                            by_ref,
-                            true,
-                            0,
-                            &|reached| {
-                                let __encoded = conv(quote!(*#reached));
-                                quote! {{
-                                    let #enc_ident: jni::sys::jlong = #__encoded;
-                                    match ::prebindgen_jni_runtime::box_jlong(&mut env, #enc_ident) {
-                                        ::core::result::Result::Ok(__o) => __o,
-                                        ::core::result::Result::Err(__e) => {
-                                            #box_fail
-                                        }
+                        let expr = gated(&path, value.clone(), by_ref, true, &|reached| {
+                            let __encoded = conv(quote!(*#reached));
+                            quote! {{
+                                let #enc_ident: jni::sys::jlong = #__encoded;
+                                match ::prebindgen_jni_runtime::box_jlong(&mut env, #enc_ident) {
+                                    ::core::result::Result::Ok(__o) => __o,
+                                    ::core::result::Result::Err(__e) => {
+                                        #box_fail
                                     }
-                                }}
-                            },
-                        );
+                                }
+                            }}
+                        });
                         stmts.extend(bind_obj(obj_ident, expr));
                     }
                 }
@@ -1279,38 +1204,10 @@ pub(crate) fn encode_plan_leaves(
         // Which of the two it is, asked of the wire: a field read ends its
         // reach in a field step, an accessor's ends at the call. That is what
         // `LeafSource` said, and saying it off the reach keeps one answer.
+        // A non-identity leaf's converter takes the final step's full type,
+        // `Option` included, so the last step is not unwrapped here.
         let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
-            match leaf.is_field_read() {
-                false => reach_leaf(&qualify, &path, value.clone(), by_ref, false, 0, body),
-                // Under a CONSUMING value form the leaf owns its field, so it
-                // is **moved** out; the whole point of consuming is that this
-                // clone disappears. Each field is read by exactly one leaf, so
-                // the partial moves are disjoint — but nothing may then borrow
-                // the local as a whole, which is why the reach below projects
-                // the field directly rather than through `&(&local)`.
-                true if path.iter().all(PathStep::is_plain_field) => {
-                    let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
-                    match consuming {
-                        true => body(quote!(#value #(.#segs)*)),
-                        false => body(quote!(#value #(.#segs)*.clone())),
-                    }
-                }
-                // A `.fields()` leaf reaches its field through the value-form
-                // accessor, so the path can be mixed: compose it like an
-                // accessor leaf — the final step composes directly, since the
-                // converter takes the field type as written (`Option` and all)
-                // — and clone the reached borrow, which is what a field leaf
-                // delivers.
-                true => reach_leaf(
-                    &qualify,
-                    &path,
-                    value.clone(),
-                    by_ref,
-                    false,
-                    0,
-                    &|reached| body(quote!((#reached).clone())),
-                ),
-            }
+            gated(&path, value.clone(), by_ref, false, body)
         };
 
         // The encode itself is the bridge's: this loop hands it the leaf's
@@ -1481,13 +1378,18 @@ mod tests {
                 true,
                 LeafSource::Reach,
             );
-            let got = prebindgen_registry::unfold::reach_leaf_flat(
+            let got = prebindgen_registry::unfold::reach_leaf(
                 &qualify,
-                &crate::jni::compile::OutWire::from_leaf(&l),
-                &path,
-                quote!(__src),
-                false,
-                false,
+                prebindgen_registry::unfold::LeafAt {
+                    leaf: &crate::jni::compile::OutWire::from_leaf(&l),
+                    path: &path,
+                    base: quote!(__src),
+                    base_is_ref: false,
+                    consuming: false,
+                    unwrap_last: false,
+                },
+                None,
+                &|reached| reached,
             )
             .to_string();
             assert!(
@@ -1508,13 +1410,18 @@ mod tests {
             true,
             LeafSource::Reach,
         );
-        let got = prebindgen_registry::unfold::reach_leaf_flat(
+        let got = prebindgen_registry::unfold::reach_leaf(
             &qualify,
-            &crate::jni::compile::OutWire::from_leaf(&l),
-            &path,
-            quote!(__src),
-            false,
-            false,
+            prebindgen_registry::unfold::LeafAt {
+                leaf: &crate::jni::compile::OutWire::from_leaf(&l),
+                path: &path,
+                base: quote!(__src),
+                base_is_ref: false,
+                consuming: false,
+                unwrap_last: false,
+            },
+            None,
+            &|reached| reached,
         )
         .to_string();
         assert!(
@@ -1540,13 +1447,18 @@ mod tests {
             false,
             LeafSource::Reach,
         );
-        let got = prebindgen_registry::unfold::reach_leaf_flat(
+        let got = prebindgen_registry::unfold::reach_leaf(
             &qualify,
-            &crate::jni::compile::OutWire::from_leaf(&l),
-            &path,
-            quote!(__src),
-            false,
-            false,
+            prebindgen_registry::unfold::LeafAt {
+                leaf: &crate::jni::compile::OutWire::from_leaf(&l),
+                path: &path,
+                base: quote!(__src),
+                base_is_ref: false,
+                consuming: false,
+                unwrap_last: false,
+            },
+            None,
+            &|reached| reached,
         )
         .to_string();
         assert!(
@@ -1572,13 +1484,18 @@ mod tests {
         // The suffix a rebase would hand over — the optional call is gone from
         // it, and used to take the guard with it.
         let rest = vec![PathStep::field(syn::parse_quote!(a), false)];
-        let _ = prebindgen_registry::unfold::reach_leaf_flat(
+        let _ = prebindgen_registry::unfold::reach_leaf(
             &qualify,
-            &crate::jni::compile::OutWire::from_leaf(&l),
-            &rest,
-            quote!(__vf0),
-            false,
-            false,
+            prebindgen_registry::unfold::LeafAt {
+                leaf: &crate::jni::compile::OutWire::from_leaf(&l),
+                path: &rest,
+                base: quote!(__vf0),
+                base_is_ref: false,
+                consuming: false,
+                unwrap_last: false,
+            },
+            None,
+            &|reached| reached,
         );
     }
 }

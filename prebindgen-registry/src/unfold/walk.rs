@@ -91,6 +91,12 @@ pub trait DeliveryBridge {
 
     /// The expression that passes `slot` as one argument of the delivery call.
     fn argument(&self, leaf: &Self::Leaf, slot: &syn::Ident) -> TokenStream;
+
+    /// What a leaf delivers when an optional step on the way to it found
+    /// nothing. [`reach_leaf`] gates on this rather than on a value of its
+    /// own: absence is a target-language representation, and this crate has
+    /// none.
+    fn absent(&self) -> TokenStream;
 }
 
 /// Compose one [`PathStep`] onto the reference expression reached so far.
@@ -204,24 +210,137 @@ pub fn project_leading_fields(
     (quote!(&#base #(.#segs)*), n)
 }
 
-/// Fold a leaf's whole `path` over `base` with no optional-step handling, then
-/// apply the terminal treatment the leaf calls for: a leaf reached by a field
-/// read is **cloned** out of the place it reached, because its converter takes
-/// the field type as written (owned); every other leaf keeps the borrow its
-/// converter expects.
+/// One leaf, and the place a reach of it starts from.
+///
+/// A caller that has already bound a hoist hands over the local it bound and
+/// the steps that are left, which is why `path` is a suffix of the leaf's own
+/// reach rather than always equal to it.
+pub struct LeafAt<'a, L> {
+    /// The leaf being reached.
+    pub leaf: &'a L,
+    /// The steps still to walk from `base`.
+    pub path: &'a [PathStep],
+    /// What the walk starts from — the delivered value, or a local a hoist or
+    /// a gate bound.
+    pub base: TokenStream,
+    /// Whether `base` is already a reference.
+    pub base_is_ref: bool,
+    /// Whether the form that produced `base` gave its value away, which is
+    /// what lets a field of it be moved rather than cloned.
+    pub consuming: bool,
+    /// Whether a FINAL optional step is gated too. An identity leaf delivers
+    /// the reached value itself, so it is; every other leaf hands the final
+    /// step's full type to its own converter, `Option` and all.
+    pub unwrap_last: bool,
+}
+
+/// Reach one leaf from `base` and hand what it reached to `body`.
+///
+/// Three things happen on the way, and all three are facts about Rust values
+/// rather than about any target language:
+///
+/// * **Gating.** An optional step before the leaf becomes a `match` whose
+///   `None` arm yields `absent()` — the adapter's own absence, since this
+///   crate has none to offer. `unwrap_last` says whether a FINAL optional step
+///   is gated too: an identity leaf delivers the reached value itself, so it
+///   is, while every other leaf hands the final step's full type to its own
+///   converter, `Option` and all.
+/// * **Refusal.** `absent` is `None` at a site that cannot express absence at
+///   all — a single delivered return value, which has no arm to put one in.
+///   An optional step before the end is then refused rather than composed into
+///   code the consumer's crate cannot type-check.
+/// * **Ownership**: the reached place is moved when it is ours, cloned when
+///   it is a field read of a place that is not, and borrowed otherwise.
 ///
 /// One derivation, used by every delivery an adapter renders and by the
 /// single-leaf shortcut a decomposed return takes. They drifted once while
 /// they were two — the shortcut was missing the field clone and handed `&F` to
-/// an `F` converter — which is why the walk is the registry's.
-pub fn reach_leaf_flat<L: DecomposedLeaf>(
+/// an `F` converter — and a second pair, ungated here and gated in JniGen,
+/// drifted the same way until #607 folded them together.
+pub fn reach_leaf<L: DecomposedLeaf>(
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-    leaf: &L,
-    path: &[PathStep],
-    base: TokenStream,
-    base_is_ref: bool,
-    consuming: bool,
+    at: LeafAt<'_, L>,
+    absent: Option<&dyn Fn() -> TokenStream>,
+    body: &dyn Fn(TokenStream) -> TokenStream,
 ) -> TokenStream {
+    reach_leaf_at(qualify, at, absent, 0, body)
+}
+
+fn reach_leaf_at<L: DecomposedLeaf>(
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    at: LeafAt<'_, L>,
+    absent: Option<&dyn Fn() -> TokenStream>,
+    depth: usize,
+    body: &dyn Fn(TokenStream) -> TokenStream,
+) -> TokenStream {
+    let LeafAt {
+        path,
+        ref base,
+        base_is_ref,
+        unwrap_last,
+        ..
+    } = at;
+    // Every optional step on the way to the leaf becomes a `match` whose
+    // `None` arm is the adapter's absent value. A site with no absent value to
+    // give — a single delivered return, which has no arm to put one in —
+    // passes `None`, and an optional step before the end is then refused
+    // rather than composed into code the consumer's crate cannot type-check.
+    if let Some(absent) = absent {
+        let limit = if unwrap_last {
+            path.len()
+        } else {
+            // A non-identity leaf's converter takes the final step's FULL type,
+            // `Option` included, so only the steps before it are nesting.
+            path.len().saturating_sub(1)
+        };
+        let (projected, lead) = project_leading_fields(base, base_is_ref, path);
+        if let Some(k) = (lead..limit).find(|&i| path[i].is_optional()) {
+            // Through the optional step INCLUSIVE: the same fold, so the borrow
+            // in front of it is the ordinary rule rather than a second
+            // statement of it.
+            let opt_e = fold_steps(qualify, &path[lead..=k], projected, false);
+            let nested = format_ident!("__n{}", depth);
+            let inner = reach_leaf_at(
+                qualify,
+                LeafAt {
+                    path: &path[k + 1..],
+                    base: quote!(#nested),
+                    base_is_ref: true,
+                    ..at
+                },
+                Some(absent),
+                depth + 1,
+                body,
+            );
+            let gone = absent();
+            // A FIELD read composes to a borrow (`&(e).f`), so it goes through
+            // a coercion site and the destructuring stops caring which
+            // representation the source spelled the optional as (#268).
+            //
+            // A CALL composes to the accessor's own returned value, which is
+            // owned and whose payload downstream may move. Borrowing it to
+            // coerce would change that ownership, so it keeps its direct match.
+            if path[k].is_field() {
+                let opt_bind = format_ident!("__o{}", depth);
+                return quote! {
+                    {
+                        let #opt_bind: &::core::option::Option<_> = #opt_e;
+                        match #opt_bind {
+                            ::core::option::Option::Some(#nested) => { #inner }
+                            ::core::option::Option::None => #gone,
+                        }
+                    }
+                };
+            }
+            return quote! {
+                match #opt_e {
+                    ::core::option::Option::Some(#nested) => { #inner }
+                    ::core::option::Option::None => #gone,
+                }
+            };
+        }
+        return body(reached_place(qualify, &at));
+    }
     // An optional step BEFORE the last one needs a `match` whose `None` arm has
     // somewhere to go. This derivation has none — it yields a plain Rust value,
     // not a representation that can carry absence — so the shape is refused
@@ -235,13 +354,13 @@ pub fn reach_leaf_flat<L: DecomposedLeaf>(
     // conditional one, which is the case that cannot compose (an `Option<T>`
     // local with a field read hung off it). The full path is what the shape
     // question is about.
-    let own_path = leaf.reach();
+    let own_path = at.leaf.reach();
     assert!(
         !own_path.iter().rev().skip(1).any(PathStep::is_optional),
         "unfold: leaf `{}` reaches through an optional step but is \
          delivered as a single return value, which has no `None` arm — this \
          shape needs callback delivery",
-        leaf.name(),
+        at.leaf.name(),
     );
     // Whether what this leaf reaches is OURS, and so is moved rather than
     // borrowed or cloned. The two leaf kinds say it differently:
@@ -264,6 +383,25 @@ pub fn reach_leaf_flat<L: DecomposedLeaf>(
     // somewhere else. `plan.rs` says two readings would drift and the
     // disagreement would be a borrow handed to an owning converter; this is the
     // second reading, removed.
+    body(reached_place(qualify, &at))
+}
+
+/// The place a leaf reaches, with the terminal treatment its ownership calls
+/// for: moved out when it is ours and the path projects a place, cloned out
+/// when it is a field read of a place that is not, and borrowed otherwise.
+fn reached_place<L: DecomposedLeaf>(
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    at: &LeafAt<'_, L>,
+) -> TokenStream {
+    let LeafAt {
+        leaf,
+        path,
+        base,
+        base_is_ref,
+        consuming,
+        ..
+    } = at;
+    let (base_is_ref, consuming) = (*base_is_ref, *consuming);
     let reached_is_ours = if leaf.identity() {
         !matches!(
             leaf.source().kind(),
@@ -276,8 +414,15 @@ pub fn reach_leaf_flat<L: DecomposedLeaf>(
         let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
         return quote!(#base #(.#segs)*);
     }
-    let (e, lead) = project_leading_fields(&base, base_is_ref, path);
+    let (e, lead) = project_leading_fields(base, base_is_ref, path);
     let e = fold_steps(qualify, &path[lead..], e, false);
+    // Cloned out of the BORROW the reach yields, not out of the place behind
+    // it. The two agree for a field of an owned type and disagree for a field
+    // that is itself a reference: `place.clone()` there resolves through the
+    // reference and deep-clones the pointee, where the converter takes the
+    // field type as written. JniGen's own reach spelled it the short way and
+    // no declared field exercised the difference — the drift this step exists
+    // to close.
     if leaf.is_field_read() {
         quote!((#e).clone())
     } else {
@@ -361,9 +506,11 @@ impl Hoisted {
 /// the innermost reached expression as a BARE value — the chain's last link
 /// wraps it.
 ///
-/// The gated reach this mirrors is not in this crate. JniGen keeps its own, as
-/// `emit::delivery::reach_leaf`, because the absent value is its
-/// representation's — which is one of the walks this module was meant to end.
+/// The gated reach this mirrors is [`reach_leaf`], which takes the absent
+/// value from the adapter rather than choosing one. This one yields an
+/// `Option` instead, because what it binds is a hoist rather than a delivered
+/// leaf: the value form runs where the value is present, and the `None` the
+/// chain produces is the local's own.
 ///
 /// This is how a CONDITIONAL value form is bound — the accessor runs only where
 /// the value it decomposes is actually present.
