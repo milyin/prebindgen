@@ -13668,7 +13668,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_Probe_Send_Sync_static_b0d
                     let __cb0_obj0: jni::sys::jvalue = {
                         let __enc0 = match __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
                             &mut env,
-                            __vf0.seq.clone(),
+                            (&__vf0.seq).clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -20059,7 +20059,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_probeNew<'a>(
     let __obj0: jni::sys::jvalue = {
         let __enc0 = match __jni_out_convert_i64_to_wire_15d458bf28dc9c80(
             &mut env,
-            __vf0.seq.clone(),
+            (&__vf0.seq).clone(),
         ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
@@ -20953,7 +20953,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_spanHolderNew<'a
                     {
                         let __chain_s0 = __jni_out_stage_0_Duration_to_wire_37da00112022eac0(
                                 &mut env,
-                                __u0.required.clone(),
+                                (&__u0.required).clone(),
                             )
                             .map_err(|__e| <__JniErr as ::core::convert::From<
                                 String,
@@ -20995,7 +20995,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_spanHolderNew<'a
             let __obj1: jni::objects::JObject = {
                 let __enc1 = match __jni_out_convert_Option_Duration_jni_optional_intermediate_output_niche_to_wire_dc11bc4c611f2997(
                     &mut env,
-                    __u0.delay.clone(),
+                    (&__u0.delay).clone(),
                 ) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
@@ -26073,7 +26073,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_vaultHolderNew<'
             let __obj0: jni::objects::JObject = {
                 let __enc0 = match __jni_out_convert_Ingot_jni_handle_codec_own_output_to_wire_c5c73cbcd23adbdb(
                     &mut env,
-                    __u0.always.clone(),
+                    (&__u0.always).clone(),
                 ) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
@@ -26106,7 +26106,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_vaultHolderNew<'
             let __obj1: jni::objects::JObject = {
                 let __enc1 = match __jni_out_convert_Option_Ingot_jni_optional_intermediate_output_niche_to_wire_5b17cf852f44637e(
                     &mut env,
-                    __u0.maybe.clone(),
+                    (&__u0.maybe).clone(),
                 ) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {

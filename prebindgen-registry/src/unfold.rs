@@ -35,8 +35,8 @@ use crate::{
 mod error;
 mod walk;
 pub use walk::{
-    bind_hoists, compose_step, fold_steps, project_leading_fields, reach_leaf_flat, DecomposedLeaf,
-    DeliveryBridge, Hoisted, Reach,
+    bind_hoists, compose_step, fold_steps, project_leading_fields, reach_leaf, DecomposedLeaf,
+    DeliveryBridge, Hoisted, LeafAt, Reach,
 };
 
 mod plan;
