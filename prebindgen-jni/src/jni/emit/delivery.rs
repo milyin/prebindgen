@@ -2,41 +2,31 @@
 //!
 //! # What this module still walks
 //!
-//! #596 moved the mechanical half of the decomposition walk into
-//! `prebindgen_registry::unfold` — folding a path onto a base, composing one
-//! step, binding hoists, and the flat leaf reach. The rules below stayed, and
-//! none of them is JNI policy: each is a fact about Rust values that any
-//! adapter decomposing a return would have to restate.
+//! The decomposition walk is the registry's: folding a path onto a base,
+//! binding the hoists, gating each optional step, deciding where a leaf's
+//! reach starts and whether what it reaches is moved, cloned or borrowed. This
+//! module supplies the target-language half through [`DeliveryBridge`] —
+//! encoding a leaf, placing it as a call argument, and what absence looks
+//! like — and keeps `jvalue` layout, local-frame sizing, cached method lookup
+//! and exception routing, which are JNI policy.
 //!
-//! * **Rebasing and ownership** — which value form a leaf reaches off (the
-//!   innermost hoist, a conditional form's `Some` binding, or the value
-//!   itself), and whether the reached place is moved or cloned.
+//! Two rules are still here, and neither is JNI policy. Each is a fact about
+//! Rust values that any adapter decomposing a return would have to restate:
+//!
 //! * **Sum segmentation** — a decomposed sum's leaves are not independent, so
 //!   the selector and the group leaves after it are emitted as one `match`.
 //! * **Optional-sum gating** — an `Option<sum>` gates the whole segment rather
 //!   than each slot, because absence cannot be the per-leaf null an ordinary
 //!   optional field gets (#220).
-//! * **Borrow projection** — a plain field chain is borrowed directly rather
-//!   than through the base, which the borrow checker rejects once a sibling
-//!   leaf has moved a field out.
-//! * **The gated leaf reach** (`reach_leaf`) — a second derivation of
-//!   `unfold::reach_leaf_flat` that handles an optional step by emitting an
-//!   absent arm. Only what absence looks like is this adapter's.
 //!
-//! They are still here, but the reason they had to be is gone: the encoding
-//! half now has somewhere to go. [`DeliveryBridge`] is the registry's, this
-//! module implements it for [`FrozenDelivery`], and two of its operations are
-//! live — a leaf's encode, and how a filled slot rides the call. What remains
-//! above is reaching, owning and grouping, which the steps after this one
-//! move onto the walk that already owns the hoists.
+//! Both belong to the segment rather than to a leaf, which is why they outlast
+//! the reach that moved: the walk hands over one leaf at a time and a segment
+//! is several. #607's next step moves them.
 //!
 //! [`DeliveryBridge`]: prebindgen_registry::unfold::DeliveryBridge
 
 use prebindgen_registry::{
-    unfold::{
-        bind_hoists, fold_steps, project_leading_fields, steps_are_movable, DeliveryBridge,
-        PathStep,
-    },
+    unfold::{bind_hoists, fold_steps, project_leading_fields, DeliveryBridge, PathStep},
     Conversions,
 };
 
@@ -764,24 +754,10 @@ pub(crate) fn encode_plan_leaves(
     let hoisted = bind_hoists(&qualify, hoists, value, by_ref);
     let mut stmts = hoisted.stmts.clone();
 
-    // Reach a leaf off the innermost value form it sits under, with that
-    // prefix's steps already consumed, and say whether that form CONSUMED its
-    // value — so the leaf owns its field and may move it out rather than clone
-    // it. A leaf under no value form at all (a sibling `.field()` /
-    // `.field_self()`) still reaches from the value itself.
-    // A leaf under a CONDITIONAL value form reaches off the name that form's
-    // `Some` arm binds — a borrow of the struct, so nothing moves out of it —
-    // and its statements are collected into that arm rather than emitted here.
-    let rebase = |leaf: &crate::jni::compile::OutWire| -> (TokenStream, bool, Vec<PathStep>, bool) {
-        let path = leaf.reach();
-        if let Some((i, _, bind, rest)) = hoisted.conditional(path) {
-            return (quote!(#bind), false, rest, hoisted.consumed(i));
-        }
-        match hoisted.rebase(path) {
-            Some((local, rest, consuming)) => (quote!(#local), false, rest, consuming),
-            None => (value.clone(), by_ref, path.to_vec(), false),
-        }
-    };
+    // Where each leaf's reach starts is the walk's answer, not this loop's:
+    // `Hoisted::place` decides which value form a leaf sits under, what is
+    // left of its path, and whether that form gave its value away.
+    let place = |leaf: &crate::jni::compile::OutWire| hoisted.place(leaf, value, by_ref);
 
     // A decomposed **sum** is the one shape whose leaves are not independent:
     // only one group is live per value, so its whole segment — the selector
@@ -820,7 +796,9 @@ pub(crate) fn encode_plan_leaves(
 
     for seg in &sum_segments {
         let leaf = &wires[seg.start];
-        let (base, base_is_ref, path, _) = rebase(leaf);
+        let at = place(leaf);
+        let at_conditional = at.conditional;
+        let (base, base_is_ref, path) = (at.base, at.base_is_ref, at.path);
         // The value to `match` on. The selector's own path reaches the sum
         // (empty when the sum IS the value), and a step on it MAY be optional:
         // the refusal that used to guarantee otherwise is gone (#220), which is
@@ -935,8 +913,8 @@ pub(crate) fn encode_plan_leaves(
         };
         // The whole segment — its slot declarations and its `match` — is
         // routed like any other leaf under the same form.
-        match hoisted.conditional(leaf.reach()) {
-            Some((i, ..)) => cond_stmts
+        match at_conditional {
+            Some(i) => cond_stmts
                 .get_mut(&i)
                 .expect("a conditional leaf's hoist has a bucket")
                 .extend(group_stmts),
@@ -956,15 +934,17 @@ pub(crate) fn encode_plan_leaves(
     for idx in order {
         let leaf = &wires[idx];
         let obj_ident = &obj_idents[idx];
+        let at = place(leaf);
         // Route this leaf's statements: into its conditional arm, or straight
-        // out. Shadows `stmts` for the rest of the body, so every `extend`
-        // below lands in the right place without knowing which case it is in.
-        let stmts: &mut TokenStream = match hoisted.conditional(leaf.reach()) {
-            Some((i, ..)) => cond_stmts.get_mut(&i).expect("collected above"),
+        // out. The arm is the place's own answer. Shadows `stmts` for the rest
+        // of the body, so every `extend` below lands in the right place
+        // without knowing which case it is in.
+        let stmts: &mut TokenStream = match at.conditional {
+            Some(i) => cond_stmts.get_mut(&i).expect("collected above"),
             None => &mut stmts,
         };
-        let (value, by_ref, path, consuming) = rebase(leaf);
-        let value = &value;
+        let owned_place = at.owned(leaf);
+        let (value, by_ref, path, consuming) = (&at.base, at.base_is_ref, &at.path, at.consuming);
         // Every reach below is the registry's, with this adapter's absence in
         // its `None` arms. The terminal treatment — move, clone or borrow —
         // comes with it, which is what let the three-way dispatch this loop
@@ -1040,28 +1020,13 @@ pub(crate) fn encode_plan_leaves(
                     leaf.out_ty.key()
                 )
             });
-            // The place this handle lives, when it is OURS to give away — the
-            // owned root, or a field of a CONSUMING value form, which handed its
+            // `owned_place` — bound above from `LeafPlace::owned` — is the
+            // place this handle lives when it is OURS to give away: the owned
+            // root, or a field of a CONSUMING value form, which handed its
             // value over so its handle fields move out like every other field
             // rather than being cloned through the borrowed converter (which
-            // would also demand a `Clone` the type need not have).
-            //
-            // Which it is was decided in the plan, not here: an owned `out_ty`
-            // IS the statement that this leaf owns what it reaches, and it is
-            // what selected the owning converter. `steps_are_movable` then says
-            // how to project it — a plain-field run directly, a trailing
-            // `Option` through the nullable branch's `match`, which moves the
-            // whole `Option` in rather than borrowing it.
-            let owned_place: Option<TokenStream> = if !matches!(
-                leaf.out_ty.kind(),
-                prebindgen_registry::flat::TypeKind::Ref { .. }
-            ) && steps_are_movable(&path)
-            {
-                let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
-                Some(quote!(#value #(.#segs)*))
-            } else {
-                None
-            };
+            // would also demand a `Clone` the type need not have). Which it is
+            // was decided in the plan and is read there, not restated here.
             match proj.kind {
                 ProjectionKind::Handle => {
                     let handle_ident = format_ident!("__h{}", idx);
@@ -1125,7 +1090,7 @@ pub(crate) fn encode_plan_leaves(
                     } else if !leaf.nullable {
                         // Reached non-null handle: clone via the converter,
                         // raw jlong (no Option steps on the path).
-                        let expr = gated(&path, value.clone(), by_ref, true, &|reached| {
+                        let expr = gated(path, value.clone(), by_ref, true, &|reached| {
                             let __encoded = conv(quote!(#reached));
                             quote! {{
                                 let #handle_ident: jni::sys::jlong = #__encoded;
@@ -1140,7 +1105,7 @@ pub(crate) fn encode_plan_leaves(
                         // `java.lang.Long` when present (cached valueOf),
                         // JVM null when absent — matching the `Long?` param.
                         let box_fail = fail(quote!(__e.to_string()));
-                        let expr = gated(&path, value.clone(), by_ref, true, &|reached| {
+                        let expr = gated(path, value.clone(), by_ref, true, &|reached| {
                             let __encoded = conv(quote!(#reached));
                             quote! {{
                                 let #handle_ident: jni::sys::jlong = #__encoded;
@@ -1168,13 +1133,13 @@ pub(crate) fn encode_plan_leaves(
                         let expr = encode(value.clone());
                         stmts.extend(quote! { let #obj_ident: jni::sys::jvalue = #expr; });
                     } else if !leaf.nullable {
-                        let expr = gated(&path, value.clone(), by_ref, true, &|reached| {
+                        let expr = gated(path, value.clone(), by_ref, true, &|reached| {
                             encode(quote!(*#reached))
                         });
                         stmts.extend(quote! { let #obj_ident: jni::sys::jvalue = #expr; });
                     } else {
                         let box_fail = fail(quote!(__e.to_string()));
-                        let expr = gated(&path, value.clone(), by_ref, true, &|reached| {
+                        let expr = gated(path, value.clone(), by_ref, true, &|reached| {
                             let __encoded = conv(quote!(*#reached));
                             quote! {{
                                 let #enc_ident: jni::sys::jlong = #__encoded;
@@ -1207,7 +1172,7 @@ pub(crate) fn encode_plan_leaves(
         // A non-identity leaf's converter takes the final step's full type,
         // `Option` included, so the last step is not unwrapped here.
         let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
-            gated(&path, value.clone(), by_ref, false, body)
+            gated(path, value.clone(), by_ref, false, body)
         };
 
         // The encode itself is the bridge's: this loop hands it the leaf's
@@ -1371,7 +1336,10 @@ mod tests {
                 PathStep::field(syn::parse_quote!(b), true),
             ],
         ] {
-            assert!(steps_are_movable(&path), "fixture must be movable");
+            assert!(
+                prebindgen_registry::unfold::steps_are_movable(&path),
+                "fixture must be movable"
+            );
             let l = leaf(
                 syn::parse_quote!(Owned),
                 path.clone(),

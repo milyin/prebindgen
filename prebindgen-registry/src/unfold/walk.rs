@@ -210,6 +210,66 @@ pub fn project_leading_fields(
     (quote!(&#base #(.#segs)*), n)
 }
 
+/// Where one leaf's reach starts, once the hoists are bound.
+///
+/// Produced by [`Hoisted::place`], which is the one place that decides it: the
+/// innermost value form the leaf sits under, the name a conditional form's
+/// `Some` arm binds, or the delivered value itself.
+pub struct LeafPlace {
+    /// What to reach from.
+    pub base: TokenStream,
+    /// Whether `base` is already a reference.
+    pub base_is_ref: bool,
+    /// The steps left from `base` — the leaf's own path with the prefix that
+    /// bound the hoist already consumed.
+    pub path: Vec<PathStep>,
+    /// Whether the form that produced `base` gave its value away.
+    pub consuming: bool,
+    /// The conditional hoist whose `Some` arm this leaf belongs in. Its
+    /// statements go there rather than beside the others, because the arm is
+    /// where the binding they reach off exists.
+    pub conditional: Option<usize>,
+}
+
+impl LeafPlace {
+    /// The place this leaf may MOVE out of, or `None` when what it reaches is
+    /// not the delivery's to give away, or is not a place a move can name.
+    ///
+    /// The same question [`reach_leaf`] answers on its way to the terminal
+    /// treatment, asked separately by a leaf whose encode needs the place
+    /// itself rather than an expression reaching it — a handle that is boxed
+    /// rather than converted.
+    pub fn owned<L: DecomposedLeaf>(&self, leaf: &L) -> Option<TokenStream> {
+        (reached_is_ours(leaf, self.consuming) && steps_are_movable(&self.path)).then(|| {
+            let base = &self.base;
+            let segs: Vec<&syn::Ident> = self.path.iter().map(PathStep::ident).collect();
+            quote!(#base #(.#segs)*)
+        })
+    }
+}
+
+/// Whether what a leaf reaches is OURS, and so is moved rather than borrowed
+/// or cloned. The two leaf kinds say it differently:
+///
+/// * an IDENTITY leaf carries the answer in its own reading — the plan
+///   resolved that to the owned type exactly when the value is the plan's to
+///   give away (an owned root, or a field of a CONSUMING value form), and that
+///   is also what selected the owning converter, which boxes the move rather
+///   than cloning a borrow;
+/// * every other leaf reads a field, whose reading is the field type as
+///   written and owned either way, so ownership is the enclosing form's: only
+///   a consuming one gives its fields away.
+pub fn reached_is_ours<L: DecomposedLeaf>(leaf: &L, consuming: bool) -> bool {
+    if leaf.identity() {
+        !matches!(
+            leaf.source().kind(),
+            prebindgen_flat::flat::TypeKind::Ref { .. }
+        )
+    } else {
+        consuming
+    }
+}
+
 /// One leaf, and the place a reach of it starts from.
 ///
 /// A caller that has already bound a hoist hands over the local it bound and
@@ -415,15 +475,16 @@ fn reached_place<L: DecomposedLeaf>(
         ..
     } = at;
     let (base_is_ref, consuming) = (*base_is_ref, *consuming);
-    let reached_is_ours = if leaf.identity() {
-        !matches!(
-            leaf.source().kind(),
-            prebindgen_flat::flat::TypeKind::Ref { .. }
-        )
-    } else {
-        consuming
-    };
-    if reached_is_ours && steps_are_movable(path) {
+    // How to project a movable place is `steps_are_movable`'s question, asked
+    // there rather than restated here. This used to spell it
+    // `all(is_plain_field)`, defending the restatement on the grounds that a
+    // trailing `Option` cannot reach return delivery anyway — true, and
+    // enforced in `single_return`, which is precisely why a local restatement
+    // could disagree with the rule for as long as the invariant held somewhere
+    // else. `plan.rs` says two readings would drift and the disagreement would
+    // be a borrow handed to an owning converter; this is the second reading,
+    // removed.
+    if reached_is_ours(*leaf, consuming) && steps_are_movable(path) {
         let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
         return quote!(#base #(.#segs)*);
     }
@@ -500,6 +561,50 @@ impl Hoisted {
     ) -> Option<(usize, syn::Ident, syn::Ident, Vec<PathStep>)> {
         let (i, rest) = self.innermost(path)?;
         self.optional[i].then(|| (i, self.bound[i].1.clone(), format_ident!("__u{}", i), rest))
+    }
+
+    /// Where a leaf's reach starts, once these hoists are bound.
+    ///
+    /// Three cases, and the leaf's own path decides which: a leaf under a
+    /// CONDITIONAL value form reaches off the name that form's `Some` arm
+    /// binds — a borrow of the struct, so nothing moves out of it — and its
+    /// statements belong in that arm; a leaf under an ordinary value form
+    /// reaches off the local that form was bound to, with the prefix already
+    /// consumed and the form's own ownership carried along; and a leaf under
+    /// no value form at all — a sibling accessor of the delivered value —
+    /// reaches from that value.
+    pub fn place<L: DecomposedLeaf>(
+        &self,
+        leaf: &L,
+        value: &TokenStream,
+        by_ref: bool,
+    ) -> LeafPlace {
+        let path = leaf.reach();
+        if let Some((i, _, bind, rest)) = self.conditional(path) {
+            return LeafPlace {
+                base: quote!(#bind),
+                base_is_ref: false,
+                path: rest,
+                consuming: self.consumed(i),
+                conditional: Some(i),
+            };
+        }
+        match self.rebase(path) {
+            Some((local, rest, consuming)) => LeafPlace {
+                base: quote!(#local),
+                base_is_ref: false,
+                path: rest,
+                consuming,
+                conditional: None,
+            },
+            None => LeafPlace {
+                base: value.clone(),
+                base_is_ref: by_ref,
+                path: path.to_vec(),
+                consuming: false,
+                conditional: None,
+            },
+        }
     }
 
     /// The local a hoist was bound to.
