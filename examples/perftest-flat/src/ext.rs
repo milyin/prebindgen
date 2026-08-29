@@ -604,6 +604,47 @@ pub struct Stamp {
     pub nanos: i64,
 }
 
+/// A data class whose nested class sits behind an `Option` — the shape #602
+/// names first and the one a decomposition refused outright until it learned
+/// a presence flag.
+///
+/// Nothing else about it is unusual: a sibling scalar beside a nested class
+/// that is sometimes there. `Annotated` has the same field, but also an
+/// `enum_class` one, which is a refusal of its own — so the shape needs a
+/// struct of its own to show up at all.
+#[prebindgen]
+pub struct Envelope {
+    pub id: i64,
+    pub stamp: Option<Stamp>,
+}
+
+/// Build an [`Envelope`], with or without its nested stamp.
+#[prebindgen]
+pub fn envelope_new(id: i64, present: bool) -> Envelope {
+    Envelope {
+        id,
+        stamp: present.then(|| Stamp {
+            secs: id,
+            nanos: id * 2,
+        }),
+    }
+}
+
+/// The same value handed to a callback, which reassembles the leaves by the
+/// other route.
+#[prebindgen]
+pub fn envelope_each(n: i64, sink: impl Fn(Envelope) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(Envelope {
+            id: i,
+            stamp: (i % 2 == 1).then(|| Stamp {
+                secs: i,
+                nanos: i * 2,
+            }),
+        });
+    }
+}
+
 /// Build a [`Stamp`] (data-class **return**).
 #[prebindgen]
 pub fn stamp_new(secs: i64, nanos: i64) -> Stamp {

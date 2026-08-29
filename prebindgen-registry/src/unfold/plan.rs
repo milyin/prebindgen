@@ -217,6 +217,18 @@ pub enum LeafSource {
         /// How the payload field is addressed in the arm's pattern.
         member: syn::Member,
     },
+    /// The **synthesized presence** of an optional value the decomposition
+    /// looks through: a boolean saying whether the leaves that follow carry
+    /// anything.
+    ///
+    /// The selector [`SumTag`](Self::SumTag) is for a value that is one of
+    /// several alternatives; this is for a value that is either there or not,
+    /// and the difference is not a two-alternative sum: absence has no
+    /// alternative of its own to name, and the group it gates is the value's
+    /// own leaves rather than one arm's payload. Like a tag it is not read off
+    /// the value — the emitter assigns it — so [`UnfoldLeaf::path`] reaches
+    /// the OPTIONAL value it tests, not a place holding a boolean.
+    Presence,
 }
 
 /// A resolved output expansion for one function.
@@ -367,6 +379,9 @@ impl UnfoldLeaf {
     /// an entry says one resolved — three separate claims, and a `SumTag` leaf
     /// makes only the first (#282).
     pub fn has_converter(&self) -> bool {
-        self.source != LeafSource::SumTag
+        // A presence flag is synthesized like a tag: it says whether the
+        // leaves after it carry anything, and the value it tests crosses
+        // through those leaves rather than through this one.
+        !matches!(self.source, LeafSource::SumTag | LeafSource::Presence)
     }
 }

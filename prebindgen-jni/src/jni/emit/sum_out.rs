@@ -25,6 +25,10 @@ use super::*;
 /// variant fragment from its property.
 pub(crate) const SUM_TAG_LEAF: &str = "tag";
 
+/// The leaf-name fragment of a presence flag — what an optional nested class
+/// contributes ahead of the group it gates.
+pub(crate) const PRESENT_LEAF: &str = "present";
+
 /// The leaves of one `sealed_class`-declared sum, as the expansion plans want
 /// them: the [`LeafSource::SumTag`] selector followed by one
 /// [`LeafSource::VariantField`] leaf per payload field, in tag order, each
@@ -64,6 +68,7 @@ pub(crate) fn synth_sum_leaves(
                     }
                 }
                 crate::jni::compile::OutFrom::Place => LeafSource::Reach,
+                crate::jni::compile::OutFrom::Present => LeafSource::Presence,
             },
             group: w.group,
         })
@@ -303,8 +308,8 @@ fn encode_group_leaf(
 ) -> TokenStream {
     let frozen_pipeline = match &leaf.abi {
         Some(crate::jni::compile::OutAbi::Value(value)) => &value.pipeline,
-        Some(crate::jni::compile::OutAbi::Tag) => {
-            unreachable!("a Choice payload is not its selector")
+        Some(crate::jni::compile::OutAbi::Tag) | Some(crate::jni::compile::OutAbi::Present) => {
+            unreachable!("a segment's payload is not its selector")
         }
         None => panic!(
             "jnigen sum delivery: payload leaf `{}` reached Rust rendering without a frozen output ABI",
@@ -339,4 +344,58 @@ fn encode_group_leaf(
             #obj_ident = #cast;
         }
     }
+}
+
+/// The encode of a **presence** segment: an optional nested value's flag and
+/// the leaves it gates, from the value the walk has already unwrapped.
+///
+/// [`prebindgen_registry::unfold::segment`] supplies the gate — one tuple bind
+/// whose absent arm carries every slot's default — and calls this for the
+/// present arm, so what is here is the flag and the child's own leaves read
+/// off the unwrapped value. The sum twin next to it answers the same shape
+/// with alternatives in place of presence.
+pub(crate) fn encode_presence_group(
+    context: &crate::jni::emit::delivery::FrozenDelivery,
+    leaves: &[crate::jni::compile::OutWire],
+    obj_idents: &[syn::Ident],
+    matched: TokenStream,
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    fail: &dyn Fn(TokenStream) -> TokenStream,
+    emit: &prebindgen_registry::RustWriter,
+) -> (TokenStream, Vec<TokenStream>) {
+    use prebindgen_registry::unfold::DeliveryBridge;
+
+    let flag = &obj_idents[0];
+    let flag_slot = leaf_slot(context, &leaves[0]);
+    let flag_ty = &flag_slot.ty;
+    let mut stmts = quote! { let #flag: #flag_ty = jni::sys::jvalue { z: 1u8 }; };
+    let mut args: Vec<TokenStream> = vec![quote!(#flag)];
+
+    // The prefix the presence flag reaches is already consumed: the walk bound
+    // what it found there, so each gated leaf reaches on from that binding.
+    let consumed = leaves[0].reach.len();
+    for (index, leaf) in leaves.iter().enumerate().skip(1) {
+        let slot = &obj_idents[index];
+        let tail: Vec<prebindgen_registry::unfold::PathStep> =
+            leaf.reach.iter().skip(consumed).cloned().collect();
+        let matched = matched.clone();
+        let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
+            prebindgen_registry::unfold::reach_leaf(
+                qualify,
+                prebindgen_registry::unfold::LeafAt {
+                    leaf,
+                    path: &tail,
+                    base: matched.clone(),
+                    base_is_ref: true,
+                    consuming: false,
+                    unwrap_last: false,
+                },
+                Some(&|| DeliveryBridge::absent(context)),
+                body,
+            )
+        };
+        stmts.extend(context.encode(leaf, index, slot, &reach, fail, emit));
+        args.push(context.argument(leaf, slot));
+    }
+    (stmts, args)
 }

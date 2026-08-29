@@ -201,6 +201,8 @@ fn freeze_callback_delivery(
             .map(|mut wire| {
                 wire.abi = Some(if wire.is_tag() {
                     crate::jni::compile::OutAbi::Tag
+                } else if matches!(wire.from, crate::jni::compile::OutFrom::Present) {
+                    crate::jni::compile::OutAbi::Present
                 } else {
                     ext.out_frag(&wire.out_ty)?.output_abi()
                 });

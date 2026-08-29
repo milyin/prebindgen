@@ -533,8 +533,8 @@ impl prebindgen_registry::unfold::DeliveryBridge for FrozenDelivery {
     ) -> TokenStream {
         let pipeline = match &leaf.abi {
             Some(crate::jni::compile::OutAbi::Value(value)) => &value.pipeline,
-            Some(crate::jni::compile::OutAbi::Tag) => {
-                unreachable!("a sum selector is encoded with its own segment")
+            Some(crate::jni::compile::OutAbi::Tag) | Some(crate::jni::compile::OutAbi::Present) => {
+                unreachable!("a selector is encoded with its own segment")
             }
             None => panic!(
                 "jnigen delivery: leaf `{}` reached Rust rendering without a frozen output ABI",
@@ -768,14 +768,30 @@ pub(crate) fn encode_plan_leaves(
             &wires[seg.clone()],
             &obj_idents[seg.clone()],
             &|matched| {
-                let (stmts, args) = encode_sum_group(
-                    context,
-                    &wires[seg.clone()],
-                    &obj_idents[seg.clone()],
-                    matched,
-                    fail,
-                    emit,
-                );
+                // A segment is selected by a tag or by a presence flag, and
+                // the two fill their group differently: one alternative's
+                // payload, or the child's own leaves off the value the gate
+                // unwrapped.
+                let (stmts, args) = if wires[seg.start].is_tag() {
+                    encode_sum_group(
+                        context,
+                        &wires[seg.clone()],
+                        &obj_idents[seg.clone()],
+                        matched,
+                        fail,
+                        emit,
+                    )
+                } else {
+                    crate::jni::emit::encode_presence_group(
+                        context,
+                        &wires[seg.clone()],
+                        &obj_idents[seg.clone()],
+                        matched,
+                        &qualify,
+                        fail,
+                        emit,
+                    )
+                };
                 *group_args.borrow_mut() = args;
                 stmts
             },
@@ -843,8 +859,8 @@ pub(crate) fn encode_plan_leaves(
             Some(crate::jni::compile::OutAbi::Value(value)) => {
                 (&value.pipeline, value.projection.as_ref())
             }
-            Some(crate::jni::compile::OutAbi::Tag) => {
-                unreachable!("sum selector segments are encoded above")
+            Some(crate::jni::compile::OutAbi::Tag) | Some(crate::jni::compile::OutAbi::Present) => {
+                unreachable!("selector segments are encoded above")
             }
             None => panic!(
                 "jnigen delivery: leaf `{}` reached Rust rendering without a frozen output ABI",
@@ -1064,6 +1080,7 @@ pub(crate) fn encode_plan_leaves(
 fn frozen_leaf_wire(leaf: &crate::jni::compile::OutWire) -> syn::Type {
     match &leaf.abi {
         Some(crate::jni::compile::OutAbi::Tag) => syn::parse_quote!(jni::sys::jint),
+        Some(crate::jni::compile::OutAbi::Present) => syn::parse_quote!(jni::sys::jboolean),
         Some(crate::jni::compile::OutAbi::Value(value)) => value.pipeline.wire().clone(),
         None => panic!("frozen JNI delivery leaf `{}` has no output ABI", leaf.name),
     }
@@ -1083,6 +1100,11 @@ fn frozen_leaf_wire(leaf: &crate::jni::compile::OutWire) -> syn::Type {
 fn frozen_leaf_is_prim(leaf: &crate::jni::compile::OutWire) -> bool {
     if leaf.is_tag() {
         return !leaf.nullable;
+    }
+    // A presence flag is a `jboolean` the gate assigns — there is nothing to
+    // box and no value behind it that could be absent.
+    if matches!(leaf.abi, Some(crate::jni::compile::OutAbi::Present)) {
+        return true;
     }
     if leaf.nullable {
         return false;

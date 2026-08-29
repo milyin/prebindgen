@@ -499,6 +499,7 @@ fn leaf_reach(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> String {
     use prebindgen_registry::unfold::LeafSource;
     match &leaf.source {
         LeafSource::SumTag => "tag".to_string(),
+        LeafSource::Presence => format!("present({})", reach_of(&leaf.path)),
         LeafSource::VariantField { variant, member } => format!(
             "{variant}.{}",
             crate::jni::struct_plan::sum_field_prop_name(member)
@@ -642,6 +643,9 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Present => {
+                            format!("present({})", reach_of(&w.reach))
+                        }
                         crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
@@ -708,6 +712,9 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Present => {
+                            format!("present({})", reach_of(&w.reach))
+                        }
                         crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
