@@ -217,157 +217,190 @@
 <a href=#217 id=217 data-nosnippet>217</a>        <span class="doccomment">/// How the payload field is addressed in the arm's pattern.
 <a href=#218 id=218 data-nosnippet>218</a>        </span>member: syn::Member,
 <a href=#219 id=219 data-nosnippet>219</a>    },
-<a href=#220 id=220 data-nosnippet>220</a>}
-<a href=#221 id=221 data-nosnippet>221</a>
-<a href=#222 id=222 data-nosnippet>222</a><span class="doccomment">/// A resolved output expansion for one function.
-<a href=#223 id=223 data-nosnippet>223</a></span><span class="attr">#[derive(Clone)]
-<a href=#224 id=224 data-nosnippet>224</a></span><span class="kw">pub struct </span>UnfoldPlan {
-<a href=#225 id=225 data-nosnippet>225</a>    <span class="doccomment">/// Owned core type the records decompose — the function's return after
-<a href=#226 id=226 data-nosnippet>226</a>    /// peeling `&amp;` / `Option` / `Vec`.
-<a href=#227 id=227 data-nosnippet>227</a>    </span><span class="kw">pub </span>source: prebindgen_flat::flat::TypeRef,
-<a href=#228 id=228 data-nosnippet>228</a>    <span class="doccomment">/// Which deconstructor declaration produced [`Self::leaves`] — the
-<a href=#229 id=229 data-nosnippet>229</a>    /// identity adapters key signature artifacts on. `None` only for the
-<a href=#230 id=230 data-nosnippet>230</a>    /// whole-element `Iterable` arm (no declaration involved).
-<a href=#231 id=231 data-nosnippet>231</a>    </span><span class="kw">pub </span>decon: <span class="prelude-ty">Option</span>&lt;DeconId&gt;,
-<a href=#232 id=232 data-nosnippet>232</a>    <span class="doccomment">/// True when the return was `&amp;T` / `Option&lt;&amp;T&gt;`: the identity leaf clones
-<a href=#233 id=233 data-nosnippet>233</a>    /// the borrow; otherwise it moves the owned value.
-<a href=#234 id=234 data-nosnippet>234</a>    </span><span class="kw">pub </span>by_ref: bool,
-<a href=#235 id=235 data-nosnippet>235</a>    <span class="doccomment">/// Outer shape over the core decomposition (`Decompose` for a plain
-<a href=#236 id=236 data-nosnippet>236</a>    /// `T`/`&amp;T` return).
-<a href=#237 id=237 data-nosnippet>237</a>    </span><span class="kw">pub </span>shape: UnfoldShape,
-<a href=#238 id=238 data-nosnippet>238</a>    <span class="doccomment">/// Flattened output leaves, in builder-argument order. Populated for
-<a href=#239 id=239 data-nosnippet>239</a>    /// `Decompose`/`Optional` (accessor decomposition) and for a **decomposed**
-<a href=#240 id=240 data-nosnippet>240</a>    /// `Iterable` fold (per-element leaves — explicit-accessor or a synthesized
-<a href=#241 id=241 data-nosnippet>241</a>    /// `data_class` [`Self::fixed_builder`]); **empty** only for a
-<a href=#242 id=242 data-nosnippet>242</a>    /// **whole-element** `Iterable`, which delivers each element via
-<a href=#243 id=243 data-nosnippet>243</a>    /// [`Self::element`].
-<a href=#244 id=244 data-nosnippet>244</a>    </span><span class="kw">pub </span>leaves: Vec&lt;UnfoldLeaf&gt;,
-<a href=#245 id=245 data-nosnippet>245</a>    <span class="doccomment">/// For a **whole-element** `Iterable` plan: the owned/ref element type,
-<a href=#246 id=246 data-nosnippet>246</a>    /// delivered to the fold via its own output converter + projection (not
-<a href=#247 id=247 data-nosnippet>247</a>    /// decomposed). `None` for `Decompose`/`Optional` and for a **decomposed**
-<a href=#248 id=248 data-nosnippet>248</a>    /// `Iterable` fold (which uses [`Self::leaves`]).
-<a href=#249 id=249 data-nosnippet>249</a>    </span><span class="kw">pub </span>element: <span class="prelude-ty">Option</span>&lt;prebindgen_flat::flat::TypeRef&gt;,
-<a href=#250 id=250 data-nosnippet>250</a>    <span class="doccomment">/// Callback (`deconstruct_output`) vs return-value (`convert_output`)
-<a href=#251 id=251 data-nosnippet>251</a>    /// delivery.
-<a href=#252 id=252 data-nosnippet>252</a>    </span><span class="kw">pub </span>delivery: Delivery,
-<a href=#253 id=253 data-nosnippet>253</a>    <span class="doccomment">/// For [`Delivery::Return`]: the single leaf's `out_ty` lifted through the
-<a href=#254 id=254 data-nosnippet>254</a>    /// shape (`Decompose` ⇒ `out_ty`, `Optional` ⇒ `Option&lt;out_ty&gt;`). The
-<a href=#255 id=255 data-nosnippet>255</a>    /// wrapper returns this value through its ordinary output converter (no
-<a href=#256 id=256 data-nosnippet>256</a>    /// callback). `None` for [`Delivery::Callback`].
-<a href=#257 id=257 data-nosnippet>257</a>    </span><span class="kw">pub </span>convert_out_ty: <span class="prelude-ty">Option</span>&lt;prebindgen_flat::flat::TypeRef&gt;,
-<a href=#258 id=258 data-nosnippet>258</a>    <span class="doccomment">/// `true` for a synthesized by-value `data_class` decomposition (see
-<a href=#259 id=259 data-nosnippet>259</a>    /// [`ValueDecon`](crate::unfold::ValueDecon)): the builder/folder
-<a href=#260 id=260 data-nosnippet>260</a>    /// is a **fixed, hoisted** foreign singleton that reconstructs the concrete
-<a href=#261 id=261 data-nosnippet>261</a>    /// class (the wrapper takes no caller `build`/`fold` param and is not
-<a href=#262 id=262 data-nosnippet>262</a>    /// generic over `R`/`A` — it returns the concrete type). `false` for the
-<a href=#263 id=263 data-nosnippet>263</a>    /// accessor-declared deconstructors, whose builder is caller-supplied.
-<a href=#264 id=264 data-nosnippet>264</a>    </span><span class="kw">pub </span>fixed_builder: bool,
-<a href=#265 id=265 data-nosnippet>265</a>    <span class="doccomment">/// Value forms that must be evaluated **once** and bound to a local. Every
-<a href=#266 id=266 data-nosnippet>266</a>    /// leaf below one reaches off that local — otherwise each field would
-<a href=#267 id=267 data-nosnippet>267</a>    /// rebuild the whole struct, cloning all of it once per leaf.
-<a href=#268 id=268 data-nosnippet>268</a>    ///
-<a href=#269 id=269 data-nosnippet>269</a>    /// A list rather than a single accessor because value forms **compose**: a
-<a href=#270 id=270 data-nosnippet>270</a>    /// field may splice a child type whose own boundary is derived from *its*
-<a href=#271 id=271 data-nosnippet>271</a>    /// value form, and that child call is a second hoist nested under the
-<a href=#272 id=272 data-nosnippet>272</a>    /// first. Ordered outermost-first, so a hoist can be composed from the
-<a href=#273 id=273 data-nosnippet>273</a>    /// longest already-bound prefix of itself.
-<a href=#274 id=274 data-nosnippet>274</a>    </span><span class="kw">pub </span>hoists: Vec&lt;Hoist&gt;,
-<a href=#275 id=275 data-nosnippet>275</a>}
-<a href=#276 id=276 data-nosnippet>276</a>
-<a href=#277 id=277 data-nosnippet>277</a><span class="kw">impl </span>UnfoldPlan {
-<a href=#278 id=278 data-nosnippet>278</a>    <span class="doccomment">/// Whether this plan is exactly one Optional layer over one scalar/product
-<a href=#279 id=279 data-nosnippet>279</a>    /// decomposition. Iterable and future composed inner shapes answer false.
-<a href=#280 id=280 data-nosnippet>280</a>    </span><span class="kw">pub fn </span>is_optional_base(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#281 id=281 data-nosnippet>281</a>        <span class="macro">matches!</span>(
-<a href=#282 id=282 data-nosnippet>282</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.shape,
-<a href=#283 id=283 data-nosnippet>283</a>            UnfoldShape::Optional((), inner) <span class="kw">if </span><span class="macro">matches!</span>(<span class="kw-2">**</span>inner, UnfoldShape::Base)
-<a href=#284 id=284 data-nosnippet>284</a>        )
-<a href=#285 id=285 data-nosnippet>285</a>    }
-<a href=#286 id=286 data-nosnippet>286</a>}
-<a href=#287 id=287 data-nosnippet>287</a>
-<a href=#288 id=288 data-nosnippet>288</a><span class="doccomment">/// One hoisted value form: where it sits, and whether it **consumes** the value
-<a href=#289 id=289 data-nosnippet>289</a>/// it decomposes.
-<a href=#290 id=290 data-nosnippet>290</a></span><span class="attr">#[derive(Clone)]
-<a href=#291 id=291 data-nosnippet>291</a></span><span class="kw">pub struct </span>Hoist {
-<a href=#292 id=292 data-nosnippet>292</a>    <span class="doccomment">/// The path prefix to bind, ending in the value form's
-<a href=#293 id=293 data-nosnippet>293</a>    /// [`PathStep::Call`] (`DeconRecord::Fields`).
-<a href=#294 id=294 data-nosnippet>294</a>    </span><span class="kw">pub </span>prefix: Vec&lt;PathStep&gt;,
-<a href=#295 id=295 data-nosnippet>295</a>    <span class="doccomment">/// `true` when the accessor takes its receiver **by value**
-<a href=#296 id=296 data-nosnippet>296</a>    /// (`f(v: T) -&gt; TStruct`), so the value is moved in and each field can be
-<a href=#297 id=297 data-nosnippet>297</a>    /// moved *out* into its leaf instead of cloned — the whole point of a
-<a href=#298 id=298 data-nosnippet>298</a>    /// consuming value form.
-<a href=#299 id=299 data-nosnippet>299</a>    ///
-<a href=#300 id=300 data-nosnippet>300</a>    /// Carried on the hoist rather than on [`PathStep::Call`] because only a
-<a href=#301 id=301 data-nosnippet>301</a>    /// value-form root can consume: the ordinary accessor-chain steps are
-<a href=#302 id=302 data-nosnippet>302</a>    /// always borrows.
-<a href=#303 id=303 data-nosnippet>303</a>    </span><span class="kw">pub </span>consuming: bool,
-<a href=#304 id=304 data-nosnippet>304</a>}
-<a href=#305 id=305 data-nosnippet>305</a>
-<a href=#306 id=306 data-nosnippet>306</a><span class="doccomment">/// One flattened output leaf of a decomposed return value.
-<a href=#307 id=307 data-nosnippet>307</a></span><span class="attr">#[derive(Clone)]
-<a href=#308 id=308 data-nosnippet>308</a></span><span class="kw">pub struct </span>UnfoldLeaf {
-<a href=#309 id=309 data-nosnippet>309</a>    <span class="doccomment">/// The author-supplied leaf name, used **literally** (no casing / stripping /
-<a href=#310 id=310 data-nosnippet>310</a>    /// keyword escaping). Nested records prefix the child's name with their own
-<a href=#311 id=311 data-nosnippet>311</a>    /// name, joined by the reserved `"__"` separator (`"sample"` splicing
-<a href=#312 id=312 data-nosnippet>312</a>    /// `"keyExpr"` → `"sample__keyExpr"`); a root identity leaf is `"handle"`.
-<a href=#313 id=313 data-nosnippet>313</a>    /// Names are unique within a deconstructor (a duplicate is a hard error).
-<a href=#314 id=314 data-nosnippet>314</a>    </span><span class="kw">pub </span>name: String,
-<a href=#315 id=315 data-nosnippet>315</a>    <span class="doccomment">/// Reach chain from the root value (`[]` = the identity/root itself;
-<a href=#316 id=316 data-nosnippet>316</a>    /// `[Call(f)]` = `f(&amp;root)`; longer = nested records, M3). Steps of both
-<a href=#317 id=317 data-nosnippet>317</a>    /// kinds may mix — see [`PathStep`].
-<a href=#318 id=318 data-nosnippet>318</a>    </span><span class="kw">pub </span>path: Vec&lt;PathStep&gt;,
-<a href=#319 id=319 data-nosnippet>319</a>    <span class="doccomment">/// The **reading** of the type whose resolved output converter encodes this
-<a href=#320 id=320 data-nosnippet>320</a>    /// leaf — a reference type for accessors (`&amp;str`, `&amp;F`), `&amp;Source` for the
-<a href=#321 id=321 data-nosnippet>321</a>    /// identity leaf (so the borrowed-opaque clone converter / projection is
-<a href=#322 id=322 data-nosnippet>322</a>    /// reused). Spell it with `emit.emit_source_type(&amp;out_ty)` in an emission callback.
-<a href=#323 id=323 data-nosnippet>323</a>    ///
-<a href=#324 id=324 data-nosnippet>324</a>    /// A reading rather than a spelling because a consumer asking what this
-<a href=#325 id=325 data-nosnippet>325</a>    /// leaf's type *means* had to hand the spelling back to the registry and
-<a href=#326 id=326 data-nosnippet>326</a>    /// hope for a cell — the round trip #263 removed from `api/core`, surviving
-<a href=#327 id=327 data-nosnippet>327</a>    /// in the plans, and answering "no layer" for a type it had never seen
-<a href=#328 id=328 data-nosnippet>328</a>    /// (#275). The composed ones (`&amp;Source`) are built by
-<a href=#329 id=329 data-nosnippet>329</a>    /// [`TypeRef::borrowed`](prebindgen_flat::flat::TypeRef::borrowed), which
-<a href=#330 id=330 data-nosnippet>330</a>    /// pairs the kind with its own spelling.
-<a href=#331 id=331 data-nosnippet>331</a>    </span><span class="kw">pub </span>out_ty: prebindgen_flat::flat::TypeRef,
-<a href=#332 id=332 data-nosnippet>332</a>    <span class="doccomment">/// `true` for the move/clone-the-value handle leaf, emitted **last** (after
-<a href=#333 id=333 data-nosnippet>333</a>    /// every reference leaf's JVM conversion has ended its borrow).
-<a href=#334 id=334 data-nosnippet>334</a>    </span><span class="kw">pub </span>identity: bool,
-<a href=#335 id=335 data-nosnippet>335</a>    <span class="doccomment">/// `true` when a nesting accessor on [`Self::path`] returns `Option` (M3):
-<a href=#336 id=336 data-nosnippet>336</a>    /// the reached value may be absent, so the leaf is nullable on the
-<a href=#337 id=337 data-nosnippet>337</a>    /// destination side (e.g. a Kotlin `?` type); emit wraps the encode in a
-<a href=#338 id=338 data-nosnippet>338</a>    /// `match Some/None`.
-<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">pub </span>nullable: bool,
-<a href=#340 id=340 data-nosnippet>340</a>    <span class="doccomment">/// How [`Self::path`] is reached from the value — an accessor-fn chain
-<a href=#341 id=341 data-nosnippet>341</a>    /// (default), a struct-field chain (synthesized `data_class`), or a
-<a href=#342 id=342 data-nosnippet>342</a>    /// variant pattern binding (decomposed sum).
-<a href=#343 id=343 data-nosnippet>343</a>    </span><span class="kw">pub </span>source: LeafSource,
-<a href=#344 id=344 data-nosnippet>344</a>    <span class="doccomment">/// **Group membership**: `Some(tag)` marks the leaf as belonging to the
-<a href=#345 id=345 data-nosnippet>345</a>    /// leaf group of the sum alternative with that tag — live only when the
-<a href=#346 id=346 data-nosnippet>346</a>    /// value's [`LeafSource::SumTag`] leaf equals `tag`, wire-defaulted
-<a href=#347 id=347 data-nosnippet>347</a>    /// otherwise. `None` for an unconditional (product) leaf, including the
-<a href=#348 id=348 data-nosnippet>348</a>    /// tag leaf itself, which selects between groups rather than joining one.
-<a href=#349 id=349 data-nosnippet>349</a>    ///
-<a href=#350 id=350 data-nosnippet>350</a>    /// Grouping is what turns a leaf list into a `match`: leaves sharing a
-<a href=#351 id=351 data-nosnippet>351</a>    /// group are emitted together in one arm instead of as independent
-<a href=#352 id=352 data-nosnippet>352</a>    /// per-leaf expressions.
-<a href=#353 id=353 data-nosnippet>353</a>    </span><span class="kw">pub </span>group: <span class="prelude-ty">Option</span>&lt;i32&gt;,
-<a href=#354 id=354 data-nosnippet>354</a>}
-<a href=#355 id=355 data-nosnippet>355</a>
-<a href=#356 id=356 data-nosnippet>356</a><span class="kw">impl </span>UnfoldLeaf {
-<a href=#357 id=357 data-nosnippet>357</a>    <span class="doccomment">/// Whether this leaf's [`out_ty`](Self::out_ty) needs a resolved **output
-<a href=#358 id=358 data-nosnippet>358</a>    /// converter**. False only for the synthesized [`LeafSource::SumTag`]
-<a href=#359 id=359 data-nosnippet>359</a>    /// selector: it is assigned per `match` arm, never converted, so requiring
-<a href=#360 id=360 data-nosnippet>360</a>    /// a converter for it would make every sum depend on an unrelated `i32`
-<a href=#361 id=361 data-nosnippet>361</a>    /// crossing existing in the binding.
-<a href=#362 id=362 data-nosnippet>362</a>    ///
-<a href=#363 id=363 data-nosnippet>363</a>    /// **This is the root question, not the registration question.** Every
-<a href=#364 id=364 data-nosnippet>364</a>    /// leaf's `out_ty` gets a table cell; this decides which of them the
-<a href=#365 id=365 data-nosnippet>365</a>    /// binding additionally *demands* a converter for. A cell says the type
-<a href=#366 id=366 data-nosnippet>366</a>    /// entered the pipeline, a root says the binding asked for it directly, and
-<a href=#367 id=367 data-nosnippet>367</a>    /// an entry says one resolved — three separate claims, and a `SumTag` leaf
-<a href=#368 id=368 data-nosnippet>368</a>    /// makes only the first (#282).
-<a href=#369 id=369 data-nosnippet>369</a>    </span><span class="kw">pub fn </span>has_converter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#370 id=370 data-nosnippet>370</a>        <span class="self">self</span>.source != LeafSource::SumTag
-<a href=#371 id=371 data-nosnippet>371</a>    }
-<a href=#372 id=372 data-nosnippet>372</a>}
+<a href=#220 id=220 data-nosnippet>220</a>    <span class="doccomment">/// The **synthesized presence** of an optional value the decomposition
+<a href=#221 id=221 data-nosnippet>221</a>    /// looks through: a boolean saying whether the leaves that follow carry
+<a href=#222 id=222 data-nosnippet>222</a>    /// anything.
+<a href=#223 id=223 data-nosnippet>223</a>    ///
+<a href=#224 id=224 data-nosnippet>224</a>    /// The selector [`SumTag`](Self::SumTag) is for a value that is one of
+<a href=#225 id=225 data-nosnippet>225</a>    /// several alternatives; this is for a value that is either there or not,
+<a href=#226 id=226 data-nosnippet>226</a>    /// and the difference is not a two-alternative sum: absence has no
+<a href=#227 id=227 data-nosnippet>227</a>    /// alternative of its own to name, and the group it gates is the value's
+<a href=#228 id=228 data-nosnippet>228</a>    /// own leaves rather than one arm's payload. Like a tag it is not read off
+<a href=#229 id=229 data-nosnippet>229</a>    /// the value — the emitter assigns it — so [`UnfoldLeaf::path`] reaches
+<a href=#230 id=230 data-nosnippet>230</a>    /// the OPTIONAL value it tests, not a place holding a boolean.
+<a href=#231 id=231 data-nosnippet>231</a>    </span>Presence,
+<a href=#232 id=232 data-nosnippet>232</a>}
+<a href=#233 id=233 data-nosnippet>233</a>
+<a href=#234 id=234 data-nosnippet>234</a><span class="doccomment">/// A resolved output expansion for one function.
+<a href=#235 id=235 data-nosnippet>235</a></span><span class="attr">#[derive(Clone)]
+<a href=#236 id=236 data-nosnippet>236</a></span><span class="kw">pub struct </span>UnfoldPlan {
+<a href=#237 id=237 data-nosnippet>237</a>    <span class="doccomment">/// Owned core type the records decompose — the function's return after
+<a href=#238 id=238 data-nosnippet>238</a>    /// peeling `&amp;` / `Option` / `Vec`.
+<a href=#239 id=239 data-nosnippet>239</a>    </span><span class="kw">pub </span>source: prebindgen_flat::flat::TypeRef,
+<a href=#240 id=240 data-nosnippet>240</a>    <span class="doccomment">/// Which deconstructor declaration produced [`Self::leaves`] — the
+<a href=#241 id=241 data-nosnippet>241</a>    /// identity adapters key signature artifacts on. `None` only for the
+<a href=#242 id=242 data-nosnippet>242</a>    /// whole-element `Iterable` arm (no declaration involved).
+<a href=#243 id=243 data-nosnippet>243</a>    </span><span class="kw">pub </span>decon: <span class="prelude-ty">Option</span>&lt;DeconId&gt;,
+<a href=#244 id=244 data-nosnippet>244</a>    <span class="doccomment">/// True when the return was `&amp;T` / `Option&lt;&amp;T&gt;`: the identity leaf clones
+<a href=#245 id=245 data-nosnippet>245</a>    /// the borrow; otherwise it moves the owned value.
+<a href=#246 id=246 data-nosnippet>246</a>    </span><span class="kw">pub </span>by_ref: bool,
+<a href=#247 id=247 data-nosnippet>247</a>    <span class="doccomment">/// Outer shape over the core decomposition (`Decompose` for a plain
+<a href=#248 id=248 data-nosnippet>248</a>    /// `T`/`&amp;T` return).
+<a href=#249 id=249 data-nosnippet>249</a>    </span><span class="kw">pub </span>shape: UnfoldShape,
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="doccomment">/// Flattened output leaves, in builder-argument order. Populated for
+<a href=#251 id=251 data-nosnippet>251</a>    /// `Decompose`/`Optional` (accessor decomposition) and for a **decomposed**
+<a href=#252 id=252 data-nosnippet>252</a>    /// `Iterable` fold (per-element leaves — explicit-accessor or a synthesized
+<a href=#253 id=253 data-nosnippet>253</a>    /// `data_class` [`Self::fixed_builder`]); **empty** only for a
+<a href=#254 id=254 data-nosnippet>254</a>    /// **whole-element** `Iterable`, which delivers each element via
+<a href=#255 id=255 data-nosnippet>255</a>    /// [`Self::element`].
+<a href=#256 id=256 data-nosnippet>256</a>    </span><span class="kw">pub </span>leaves: Vec&lt;UnfoldLeaf&gt;,
+<a href=#257 id=257 data-nosnippet>257</a>    <span class="doccomment">/// For a **whole-element** `Iterable` plan: the owned/ref element type,
+<a href=#258 id=258 data-nosnippet>258</a>    /// delivered to the fold via its own output converter + projection (not
+<a href=#259 id=259 data-nosnippet>259</a>    /// decomposed). `None` for `Decompose`/`Optional` and for a **decomposed**
+<a href=#260 id=260 data-nosnippet>260</a>    /// `Iterable` fold (which uses [`Self::leaves`]).
+<a href=#261 id=261 data-nosnippet>261</a>    </span><span class="kw">pub </span>element: <span class="prelude-ty">Option</span>&lt;prebindgen_flat::flat::TypeRef&gt;,
+<a href=#262 id=262 data-nosnippet>262</a>    <span class="doccomment">/// Callback (`deconstruct_output`) vs return-value (`convert_output`)
+<a href=#263 id=263 data-nosnippet>263</a>    /// delivery.
+<a href=#264 id=264 data-nosnippet>264</a>    </span><span class="kw">pub </span>delivery: Delivery,
+<a href=#265 id=265 data-nosnippet>265</a>    <span class="doccomment">/// For [`Delivery::Return`]: the single leaf's `out_ty` lifted through the
+<a href=#266 id=266 data-nosnippet>266</a>    /// shape (`Decompose` ⇒ `out_ty`, `Optional` ⇒ `Option&lt;out_ty&gt;`). The
+<a href=#267 id=267 data-nosnippet>267</a>    /// wrapper returns this value through its ordinary output converter (no
+<a href=#268 id=268 data-nosnippet>268</a>    /// callback). `None` for [`Delivery::Callback`].
+<a href=#269 id=269 data-nosnippet>269</a>    </span><span class="kw">pub </span>convert_out_ty: <span class="prelude-ty">Option</span>&lt;prebindgen_flat::flat::TypeRef&gt;,
+<a href=#270 id=270 data-nosnippet>270</a>    <span class="doccomment">/// `true` for a synthesized by-value `data_class` decomposition (see
+<a href=#271 id=271 data-nosnippet>271</a>    /// [`ValueDecon`](crate::unfold::ValueDecon)): the builder/folder
+<a href=#272 id=272 data-nosnippet>272</a>    /// is a **fixed, hoisted** foreign singleton that reconstructs the concrete
+<a href=#273 id=273 data-nosnippet>273</a>    /// class (the wrapper takes no caller `build`/`fold` param and is not
+<a href=#274 id=274 data-nosnippet>274</a>    /// generic over `R`/`A` — it returns the concrete type). `false` for the
+<a href=#275 id=275 data-nosnippet>275</a>    /// accessor-declared deconstructors, whose builder is caller-supplied.
+<a href=#276 id=276 data-nosnippet>276</a>    </span><span class="kw">pub </span>fixed_builder: bool,
+<a href=#277 id=277 data-nosnippet>277</a>    <span class="doccomment">/// Value forms that must be evaluated **once** and bound to a local. Every
+<a href=#278 id=278 data-nosnippet>278</a>    /// leaf below one reaches off that local — otherwise each field would
+<a href=#279 id=279 data-nosnippet>279</a>    /// rebuild the whole struct, cloning all of it once per leaf.
+<a href=#280 id=280 data-nosnippet>280</a>    ///
+<a href=#281 id=281 data-nosnippet>281</a>    /// A list rather than a single accessor because value forms **compose**: a
+<a href=#282 id=282 data-nosnippet>282</a>    /// field may splice a child type whose own boundary is derived from *its*
+<a href=#283 id=283 data-nosnippet>283</a>    /// value form, and that child call is a second hoist nested under the
+<a href=#284 id=284 data-nosnippet>284</a>    /// first. Ordered outermost-first, so a hoist can be composed from the
+<a href=#285 id=285 data-nosnippet>285</a>    /// longest already-bound prefix of itself.
+<a href=#286 id=286 data-nosnippet>286</a>    </span><span class="kw">pub </span>hoists: Vec&lt;Hoist&gt;,
+<a href=#287 id=287 data-nosnippet>287</a>}
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a><span class="kw">impl </span>UnfoldPlan {
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="doccomment">/// Whether this plan is exactly one Optional layer over one scalar/product
+<a href=#291 id=291 data-nosnippet>291</a>    /// decomposition. Iterable and future composed inner shapes answer false.
+<a href=#292 id=292 data-nosnippet>292</a>    </span><span class="kw">pub fn </span>is_optional_base(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#293 id=293 data-nosnippet>293</a>        <span class="macro">matches!</span>(
+<a href=#294 id=294 data-nosnippet>294</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.shape,
+<a href=#295 id=295 data-nosnippet>295</a>            UnfoldShape::Optional((), inner) <span class="kw">if </span><span class="macro">matches!</span>(<span class="kw-2">**</span>inner, UnfoldShape::Base)
+<a href=#296 id=296 data-nosnippet>296</a>        )
+<a href=#297 id=297 data-nosnippet>297</a>    }
+<a href=#298 id=298 data-nosnippet>298</a>}
+<a href=#299 id=299 data-nosnippet>299</a>
+<a href=#300 id=300 data-nosnippet>300</a><span class="doccomment">/// One hoisted value form: where it sits, and whether it **consumes** the value
+<a href=#301 id=301 data-nosnippet>301</a>/// it decomposes.
+<a href=#302 id=302 data-nosnippet>302</a></span><span class="attr">#[derive(Clone)]
+<a href=#303 id=303 data-nosnippet>303</a></span><span class="kw">pub struct </span>Hoist {
+<a href=#304 id=304 data-nosnippet>304</a>    <span class="doccomment">/// The path prefix to bind, ending in the value form's
+<a href=#305 id=305 data-nosnippet>305</a>    /// [`PathStep::Call`] (`DeconRecord::Fields`).
+<a href=#306 id=306 data-nosnippet>306</a>    </span><span class="kw">pub </span>prefix: Vec&lt;PathStep&gt;,
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="doccomment">/// `true` when the accessor takes its receiver **by value**
+<a href=#308 id=308 data-nosnippet>308</a>    /// (`f(v: T) -&gt; TStruct`), so the value is moved in and each field can be
+<a href=#309 id=309 data-nosnippet>309</a>    /// moved *out* into its leaf instead of cloned — the whole point of a
+<a href=#310 id=310 data-nosnippet>310</a>    /// consuming value form.
+<a href=#311 id=311 data-nosnippet>311</a>    ///
+<a href=#312 id=312 data-nosnippet>312</a>    /// Carried on the hoist rather than on [`PathStep::Call`] because only a
+<a href=#313 id=313 data-nosnippet>313</a>    /// value-form root can consume: the ordinary accessor-chain steps are
+<a href=#314 id=314 data-nosnippet>314</a>    /// always borrows.
+<a href=#315 id=315 data-nosnippet>315</a>    </span><span class="kw">pub </span>consuming: bool,
+<a href=#316 id=316 data-nosnippet>316</a>}
+<a href=#317 id=317 data-nosnippet>317</a>
+<a href=#318 id=318 data-nosnippet>318</a><span class="doccomment">/// One flattened output leaf of a decomposed return value.
+<a href=#319 id=319 data-nosnippet>319</a></span><span class="attr">#[derive(Clone)]
+<a href=#320 id=320 data-nosnippet>320</a></span><span class="kw">pub struct </span>UnfoldLeaf {
+<a href=#321 id=321 data-nosnippet>321</a>    <span class="doccomment">/// The author-supplied leaf name, used **literally** (no casing / stripping /
+<a href=#322 id=322 data-nosnippet>322</a>    /// keyword escaping). Nested records prefix the child's name with their own
+<a href=#323 id=323 data-nosnippet>323</a>    /// name, joined by the reserved `"__"` separator (`"sample"` splicing
+<a href=#324 id=324 data-nosnippet>324</a>    /// `"keyExpr"` → `"sample__keyExpr"`); a root identity leaf is `"handle"`.
+<a href=#325 id=325 data-nosnippet>325</a>    /// Names are unique within a deconstructor (a duplicate is a hard error).
+<a href=#326 id=326 data-nosnippet>326</a>    </span><span class="kw">pub </span>name: String,
+<a href=#327 id=327 data-nosnippet>327</a>    <span class="doccomment">/// Reach chain from the root value (`[]` = the identity/root itself;
+<a href=#328 id=328 data-nosnippet>328</a>    /// `[Call(f)]` = `f(&amp;root)`; longer = nested records, M3). Steps of both
+<a href=#329 id=329 data-nosnippet>329</a>    /// kinds may mix — see [`PathStep`].
+<a href=#330 id=330 data-nosnippet>330</a>    </span><span class="kw">pub </span>path: Vec&lt;PathStep&gt;,
+<a href=#331 id=331 data-nosnippet>331</a>    <span class="doccomment">/// The **reading** of the type whose resolved output converter encodes this
+<a href=#332 id=332 data-nosnippet>332</a>    /// leaf — a reference type for accessors (`&amp;str`, `&amp;F`), `&amp;Source` for the
+<a href=#333 id=333 data-nosnippet>333</a>    /// identity leaf (so the borrowed-opaque clone converter / projection is
+<a href=#334 id=334 data-nosnippet>334</a>    /// reused). Spell it with `emit.emit_source_type(&amp;out_ty)` in an emission callback.
+<a href=#335 id=335 data-nosnippet>335</a>    ///
+<a href=#336 id=336 data-nosnippet>336</a>    /// A reading rather than a spelling because a consumer asking what this
+<a href=#337 id=337 data-nosnippet>337</a>    /// leaf's type *means* had to hand the spelling back to the registry and
+<a href=#338 id=338 data-nosnippet>338</a>    /// hope for a cell — the round trip #263 removed from `api/core`, surviving
+<a href=#339 id=339 data-nosnippet>339</a>    /// in the plans, and answering "no layer" for a type it had never seen
+<a href=#340 id=340 data-nosnippet>340</a>    /// (#275). The composed ones (`&amp;Source`) are built by
+<a href=#341 id=341 data-nosnippet>341</a>    /// [`TypeRef::borrowed`](prebindgen_flat::flat::TypeRef::borrowed), which
+<a href=#342 id=342 data-nosnippet>342</a>    /// pairs the kind with its own spelling.
+<a href=#343 id=343 data-nosnippet>343</a>    </span><span class="kw">pub </span>out_ty: prebindgen_flat::flat::TypeRef,
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="doccomment">/// `true` for the move/clone-the-value handle leaf, emitted **last** (after
+<a href=#345 id=345 data-nosnippet>345</a>    /// every reference leaf's JVM conversion has ended its borrow).
+<a href=#346 id=346 data-nosnippet>346</a>    </span><span class="kw">pub </span>identity: bool,
+<a href=#347 id=347 data-nosnippet>347</a>    <span class="doccomment">/// `true` when a nesting accessor on [`Self::path`] returns `Option` (M3):
+<a href=#348 id=348 data-nosnippet>348</a>    /// the reached value may be absent, so the leaf is nullable on the
+<a href=#349 id=349 data-nosnippet>349</a>    /// destination side (e.g. a Kotlin `?` type); emit wraps the encode in a
+<a href=#350 id=350 data-nosnippet>350</a>    /// `match Some/None`.
+<a href=#351 id=351 data-nosnippet>351</a>    </span><span class="kw">pub </span>nullable: bool,
+<a href=#352 id=352 data-nosnippet>352</a>    <span class="doccomment">/// How [`Self::path`] is reached from the value — an accessor-fn chain
+<a href=#353 id=353 data-nosnippet>353</a>    /// (default), a struct-field chain (synthesized `data_class`), a variant
+<a href=#354 id=354 data-nosnippet>354</a>    /// pattern binding (decomposed sum), or one of the two synthesized
+<a href=#355 id=355 data-nosnippet>355</a>    /// selectors, which are assigned rather than reached.
+<a href=#356 id=356 data-nosnippet>356</a>    </span><span class="kw">pub </span>source: LeafSource,
+<a href=#357 id=357 data-nosnippet>357</a>    <span class="doccomment">/// **Group membership**: `Some(n)` marks the leaf as belonging to the
+<a href=#358 id=358 data-nosnippet>358</a>    /// group a **selector** chooses — live only when that selector says so,
+<a href=#359 id=359 data-nosnippet>359</a>    /// wire-defaulted otherwise. `None` for an unconditional leaf, and for a
+<a href=#360 id=360 data-nosnippet>360</a>    /// selector itself, which chooses between groups rather than joining one.
+<a href=#361 id=361 data-nosnippet>361</a>    ///
+<a href=#362 id=362 data-nosnippet>362</a>    /// There are two selectors, and `n` means what each of them selects on:
+<a href=#363 id=363 data-nosnippet>363</a>    ///
+<a href=#364 id=364 data-nosnippet>364</a>    /// * a [`SumTag`](LeafSource::SumTag) chooses among alternatives, and `n`
+<a href=#365 id=365 data-nosnippet>365</a>    ///   is the alternative's tag;
+<a href=#366 id=366 data-nosnippet>366</a>    /// * a [`Presence`](LeafSource::Presence) chooses between "the value is
+<a href=#367 id=367 data-nosnippet>367</a>    ///   there" and "it is not", and `n` is `0` — the one group a presence
+<a href=#368 id=368 data-nosnippet>368</a>    ///   flag gates, carried by the leaves of the value it speaks for.
+<a href=#369 id=369 data-nosnippet>369</a>    ///
+<a href=#370 id=370 data-nosnippet>370</a>    /// Grouping is what turns a leaf list into a `match`: leaves sharing a
+<a href=#371 id=371 data-nosnippet>371</a>    /// group are emitted together in one arm instead of as independent
+<a href=#372 id=372 data-nosnippet>372</a>    /// per-leaf expressions.
+<a href=#373 id=373 data-nosnippet>373</a>    ///
+<a href=#374 id=374 data-nosnippet>374</a>    /// **One selector may not own another.** A group's leaves may not include
+<a href=#375 id=375 data-nosnippet>375</a>    /// a selector, because this field cannot say both "member of the outer
+<a href=#376 id=376 data-nosnippet>376</a>    /// group" and "selector of an inner one" at once —
+<a href=#377 id=377 data-nosnippet>377</a>    /// [`segments`](crate::unfold::segments) would return overlapping ranges
+<a href=#378 id=378 data-nosnippet>378</a>    /// and the outer render would meet a selector where a value was expected.
+<a href=#379 id=379 data-nosnippet>379</a>    /// A decomposition that would need it declines instead, leaving the value
+<a href=#380 id=380 data-nosnippet>380</a>    /// to whatever whole-value encode the adapter has. Nesting is the
+<a href=#381 id=381 data-nosnippet>381</a>    /// endpoint; the representation it needs is not this one.
+<a href=#382 id=382 data-nosnippet>382</a>    </span><span class="kw">pub </span>group: <span class="prelude-ty">Option</span>&lt;i32&gt;,
+<a href=#383 id=383 data-nosnippet>383</a>}
+<a href=#384 id=384 data-nosnippet>384</a>
+<a href=#385 id=385 data-nosnippet>385</a><span class="kw">impl </span>UnfoldLeaf {
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="doccomment">/// Whether this leaf's [`out_ty`](Self::out_ty) needs a resolved **output
+<a href=#387 id=387 data-nosnippet>387</a>    /// converter**. False for a synthesized **selector** — a
+<a href=#388 id=388 data-nosnippet>388</a>    /// [`SumTag`](LeafSource::SumTag) or a [`Presence`](LeafSource::Presence):
+<a href=#389 id=389 data-nosnippet>389</a>    /// each is assigned by the emitter rather than converted, so requiring
+<a href=#390 id=390 data-nosnippet>390</a>    /// a converter for one would make every sum depend on an unrelated `i32`
+<a href=#391 id=391 data-nosnippet>391</a>    /// crossing existing in the binding.
+<a href=#392 id=392 data-nosnippet>392</a>    ///
+<a href=#393 id=393 data-nosnippet>393</a>    /// **This is the root question, not the registration question.** Every
+<a href=#394 id=394 data-nosnippet>394</a>    /// leaf's `out_ty` gets a table cell; this decides which of them the
+<a href=#395 id=395 data-nosnippet>395</a>    /// binding additionally *demands* a converter for. A cell says the type
+<a href=#396 id=396 data-nosnippet>396</a>    /// entered the pipeline, a root says the binding asked for it directly, and
+<a href=#397 id=397 data-nosnippet>397</a>    /// an entry says one resolved — three separate claims, and a `SumTag` leaf
+<a href=#398 id=398 data-nosnippet>398</a>    /// makes only the first (#282).
+<a href=#399 id=399 data-nosnippet>399</a>    </span><span class="kw">pub fn </span>has_converter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#400 id=400 data-nosnippet>400</a>        <span class="comment">// A presence flag is synthesized like a tag: it says whether the
+<a href=#401 id=401 data-nosnippet>401</a>        // leaves after it carry anything, and the value it tests crosses
+<a href=#402 id=402 data-nosnippet>402</a>        // through those leaves rather than through this one.
+<a href=#403 id=403 data-nosnippet>403</a>        </span>!<span class="macro">matches!</span>(<span class="self">self</span>.source, LeafSource::SumTag | LeafSource::Presence)
+<a href=#404 id=404 data-nosnippet>404</a>    }
+<a href=#405 id=405 data-nosnippet>405</a>}
 </code></pre></div></section></main></body></html>
