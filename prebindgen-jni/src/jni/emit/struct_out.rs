@@ -164,20 +164,28 @@ pub(crate) fn encode_leaves(
         .collect()
 }
 
-/// The segment marking an arm-local binding, dropped from the outer slot it
-/// feeds. A leaf's name is the same on both sides — it is one leaf — and the
-/// marker is what lets the two live in one function.
-const ARM_MARKER: &str = "_xg";
+/// The prefix an arm-local binding carries, and the outer slot it feeds.
+///
+/// A leaf's name is the same on both sides — it is one leaf — so the two would
+/// collide in one function. The arm-local name is the outer name with a
+/// **prefix** this module adds, which is why recovering the outer one is
+/// stripping a known prefix at a known position rather than searching for a
+/// marker: `base` and every slot fragment come from source identifiers, and
+/// any sentinel spelled inside one of them can appear in the middle of a name
+/// too (#616 review).
+fn arm_local_base(tag: usize, base: &str) -> String {
+    format!("arm{tag}_{base}")
+}
 
-/// The outer slot ident for an arm-local binding.
-fn outer_of(inner: &proc_macro2::Ident) -> proc_macro2::Ident {
+/// The outer slot ident for an arm-local binding produced under
+/// [`arm_local_base`].
+fn outer_of(tag: usize, inner: &proc_macro2::Ident) -> proc_macro2::Ident {
     let name = inner.to_string();
-    let outer = name.replacen(ARM_MARKER, "", 1);
-    assert_ne!(
-        outer, name,
-        "an arm-local binding carries the marker its outer slot drops"
-    );
-    format_ident!("{outer}")
+    let prefix = format!("__arm{tag}_");
+    let rest = name.strip_prefix(&prefix).unwrap_or_else(|| {
+        panic!("an arm-local binding starts with the prefix its outer slot drops: `{name}`")
+    });
+    format_ident!("__{rest}")
 }
 
 fn encode_plan(
@@ -409,7 +417,7 @@ fn encode_field(
                     slots: Vec<EncSlot>,
                 }
                 let mut arms: Vec<Arm> = Vec::new();
-                for v in variants {
+                for (tag, v) in variants.iter().enumerate() {
                     let vident = &v.rust_ident;
                     let binds: Vec<syn::Ident> = (0..v.fields.len())
                         .map(|i| format_ident!("__s{}_{}", depth, i))
@@ -420,7 +428,7 @@ fn encode_field(
                         // The arm's own bindings carry a marker segment the
                         // outer slots drop: the two are the same leaf and want
                         // the same name, and one scope assigns from the other.
-                        let fbase = format!("{base}_{}{ARM_MARKER}", f.slot);
+                        let fbase = arm_local_base(tag, &format!("{base}_{}", f.slot));
                         let bind_expr = quote!(#bind);
                         let (p, s) =
                             encode_field(&f.kind, &bind_expr, &fbase, depth + 1, env_expr, emit);
@@ -459,8 +467,13 @@ fn encode_field(
                 // construction rather than by a positional coincidence. The
                 // inner binding of the same name lives inside its match arm
                 // and shadows nothing the outer tuple reads.
-                let outer_ids: Vec<proc_macro2::Ident> =
-                    all.iter().map(|slot| outer_of(&slot.ident)).collect();
+                let outer_ids: Vec<proc_macro2::Ident> = arms
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(tag, arm)| {
+                        arm.slots.iter().map(move |slot| outer_of(tag, &slot.ident))
+                    })
+                    .collect();
                 let outer_tys: Vec<TokenStream> = all.iter().map(|s| s.wire_ty.clone()).collect();
                 let defaults: Vec<TokenStream> = all.iter().map(|s| s.default.clone()).collect();
 

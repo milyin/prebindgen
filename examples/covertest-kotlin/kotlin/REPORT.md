@@ -151,6 +151,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `u64` decomposed → [] (Callback delivery)
 - `vault_holder_new` — `fun <R> vaultHolderNew(seq: Long, count: Long, maybeCount: Long, onError: JniErrorHandler<R?>, build: VaultHolderBuilder<R>): R?`
   - shaped by: return `VaultHolder` decomposed → [vaultHolderVault__always, vaultHolderVault__maybe] (Callback delivery)
+- `verdict_each` — `fun verdictEach(n: Long, total: Double, sink: VerdictCallback, onError: JniErrorHandler<Unit>)`
 - `verdict_new` — `fun verdictNew(id: Long, count: Long, total: Double, onError: JniErrorHandler<Verdict?>): Verdict?`
   - shaped by: return `Verdict` decomposed → [id, outcome__tag, outcome__found_v0, outcome__failed_v0] (Callback delivery)
 - `wrapped_fields_sum` — `fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long`

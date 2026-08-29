@@ -1306,16 +1306,39 @@ fn fixed_reassembly(
     class_fqn: &str,
     first_slot: usize,
 ) -> (String, Vec<String>) {
-    let slots: Vec<String> = (0..wires.len())
-        .map(|i| format!("${}", i + first_slot))
-        .collect();
-    if !is_sum_row(wires) {
+    // Whether the delivered value IS a sum, not whether it contains one. A
+    // struct with a sum-typed field carries a tag and still reassembles
+    // through its own `fromParts`, with the field's `when` inlined as one
+    // argument; asking the containing question sent it to `sum_reconstruct`,
+    // which panics on a struct (#616 review).
+    if !crate::jni::emit::is_whole_sum_row(wires) {
+        let slots: Vec<String> = (0..wires.len())
+            .map(|i| format!("${}", i + first_slot))
+            .collect();
         let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
         return (
             format!("{class_short}.fromParts({})", slots.join(", ")),
             Vec::new(),
         );
     }
+    sum_segment_reassembly(ext, registry, source, wires, first_slot)
+}
+
+/// The `when` that rebuilds one sum from its own segment — a selector followed
+/// by its groups.
+///
+/// Called directly where the caller has already isolated the segment, and
+/// through [`fixed_reassembly`] where the whole delivered value is the sum.
+fn sum_segment_reassembly(
+    ext: &Declarations,
+    registry: &impl Conversions,
+    source: &TypeKey,
+    wires: &[crate::jni::compile::OutWire],
+    first_slot: usize,
+) -> (String, Vec<String>) {
+    let slots: Vec<String> = (0..wires.len())
+        .map(|i| format!("${}", i + first_slot))
+        .collect();
     let params = plan_leaf_params(ext, wires).unwrap_or_default();
     let mut imports: BTreeSet<String> = BTreeSet::new();
     let (_, when) = ext.sum_reconstruct(registry, source, wires, &params, &slots, &mut imports);
@@ -1473,12 +1496,13 @@ pub(crate) fn callback_iface_spec(
                     if leaf.is_tag() {
                         any_fixed = true;
                         let fqn = ext.kotlin_fqn(&leaf.out_ty.key())?;
-                        let (reassemble, imports) = fixed_reassembly(
+                        // An isolated segment: its first leaf IS the tag, so
+                        // the `when` is the answer without asking again.
+                        let (reassemble, imports) = sum_segment_reassembly(
                             ext,
                             registry,
                             &leaf.out_ty.key(),
                             &wires[k..seg],
-                            &fqn,
                             0,
                         );
                         groups.push(GroupDesc {

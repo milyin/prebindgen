@@ -115,21 +115,15 @@ pub(crate) fn leaf_slot(
     }
 }
 
-/// True when these values decompose a sum — they carry the synthesized
-/// selector. The one place that question is asked, so every consumer agrees on
-/// it.
-pub(crate) fn is_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
-    leaves.iter().any(|l| l.is_tag())
-}
-
 /// Whether the delivered value **is** a sum, rather than merely containing one.
 ///
 /// The tag comes first and reaches nothing: it selects over the whole value.
 /// A struct with a sum-typed FIELD also carries a tag — reached through that
 /// field — and is a product whose fields include a segment. The two were the
 /// same question only while a field could not decompose to a tag, which is
-/// what #602 changed: a builder asked [`is_sum_row`] and tried to build a
-/// sealed-class builder for a struct.
+/// what #602 changed: the predicate this replaced answered "any leaf is a
+/// tag", and a builder asking it tried to build a sealed-class builder for a
+/// struct.
 pub(crate) fn is_whole_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
     leaves
         .first()

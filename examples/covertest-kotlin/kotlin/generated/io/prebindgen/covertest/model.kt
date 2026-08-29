@@ -1403,6 +1403,34 @@ internal fun ReportCallback.asRaw(): ReportCallbackRaw =
         }
     }
 
+public fun interface VerdictCallback {
+    public fun run(verdict: Verdict)
+}
+
+internal fun interface VerdictCallbackRaw {
+    public fun run(
+        id: Long,
+        outcome__tag: Int,
+        outcome__found_v0: Long,
+        outcome__failed_v0: String?,
+    )
+}
+
+@JvmSynthetic
+internal fun VerdictCallback.asRaw(): VerdictCallbackRaw =
+    VerdictCallbackRaw {
+        id,
+        outcome__tag,
+        outcome__found_v0,
+        outcome__failed_v0 ->
+        val __own0 = Verdict.fromParts(id, outcome__tag, outcome__found_v0, outcome__failed_v0)
+        try {
+            run(__own0)
+        } finally {
+            __own0.close()
+        }
+    }
+
 public fun interface ArraysBuilder<out R> {
     public fun run(
         bytes: ByteArray,
@@ -2230,6 +2258,26 @@ public fun verdictNew(
     val __ret = CovNative.verdictNew(id, count, total, __VerdictBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as Verdict
+}
+
+/**
+ * A `Verdict` — a `data_class` whose field is a **sum** — handed to a
+ * callback, which is the other half of what #602's coverage buys.
+ *
+ * A returned `Verdict` reaches its foreign builder through the return path;
+ * this one reaches the callback-interface path, whose reassembly asks a
+ * different question about the same leaves. Both must rebuild the value from
+ * its tag and groups rather than through a whole JVM object.
+ */
+public fun verdictEach(
+    n: Long,
+    total: Double,
+    sink: VerdictCallback,
+    onError: JniErrorHandler<Unit>,
+) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.verdictEach(n, total, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
 /** Build a [`Dossier`] over a fresh [`Summary`] — the two-level container. */

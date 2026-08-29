@@ -1815,6 +1815,9 @@ internal object CovNative {
     ): Any?
 
     @JvmSynthetic
+    external fun verdictEach(n: Long, total: Double, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
     external fun verdictNew(id: Long, count: Long, total: Double, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic

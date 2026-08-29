@@ -521,6 +521,23 @@ pub struct Verdict {
     pub outcome: Lookup,
 }
 
+/// A `Verdict` — a `data_class` whose field is a **sum** — handed to a
+/// callback, which is the other half of what #602's coverage buys.
+///
+/// A returned `Verdict` reaches its foreign builder through the return path;
+/// this one reaches the callback-interface path, whose reassembly asks a
+/// different question about the same leaves. Both must rebuild the value from
+/// its tag and groups rather than through a whole JVM object.
+#[prebindgen]
+pub fn verdict_each(n: i64, total: f64, sink: impl Fn(Verdict) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(Verdict {
+            id: i,
+            outcome: lookup_of(i - 1, total),
+        });
+    }
+}
+
 /// Build a [`Verdict`] whose outcome comes from [`lookup_of`].
 #[prebindgen]
 pub fn verdict_new(id: i64, count: i64, total: f64) -> Verdict {
