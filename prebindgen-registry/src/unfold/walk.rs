@@ -34,13 +34,23 @@ pub trait DecomposedLeaf {
     /// The reading the leaf delivers.
     fn source(&self) -> &TypeRef;
 
-    /// Whether this leaf is the synthesized **selector** — the value naming
-    /// which alternative of a decomposed sum is live. It selects between the
-    /// groups rather than joining one.
+    /// Whether this leaf is a synthesized **selector** — a value naming which
+    /// group of the leaves after it is live. It chooses between groups rather
+    /// than joining one, so its own [`Self::group`] is `None`.
+    ///
+    /// Two kinds select: a sum's tag, which names the live alternative, and an
+    /// optional value's presence, which says whether its one group carries
+    /// anything.
     fn selects(&self) -> bool;
 
-    /// The alternative this leaf belongs to, when it is one of a sum's group
-    /// leaves. `None` for a leaf that is always live.
+    /// The group this leaf belongs to — an alternative's tag, or `0` for the
+    /// one group a presence flag gates. `None` for a leaf that is always live,
+    /// and for a selector.
+    ///
+    /// A group's leaves may not include a selector: see
+    /// [`UnfoldLeaf::group`](crate::unfold::UnfoldLeaf::group) for why one
+    /// `Option<i32>` cannot express nesting, and what a decomposition does
+    /// instead.
     fn group(&self) -> Option<i32>;
 
     /// Whether the last step reaching it is a field read rather than a call.
@@ -530,11 +540,16 @@ fn reached_place<L: DecomposedLeaf>(
 /// The **segments** of a decomposition: each selector leaf, together with the
 /// group leaves that follow it.
 ///
-/// A sum's leaves are not independent — only one alternative is live per value
-/// — so a segment is emitted as one `match` rather than as a leaf at a time.
-/// The plan already says which leaves those are: a selector says so of itself,
-/// and each of the leaves after it carries the alternative it belongs to until
-/// one does not. A decomposition may carry several segments, or none: a sum
+/// A segment's leaves are not independent — one alternative of a sum is live
+/// per value, and a gated group is live only when its value is there — so a
+/// segment is emitted as one `match` rather than as a leaf at a time. The plan
+/// already says which leaves those are: a selector says so of itself, and each
+/// of the leaves after it carries the group it belongs to until one does not.
+///
+/// Segments do not nest: a group's leaves may not include a selector, or these
+/// ranges would overlap. [`UnfoldLeaf::group`](crate::unfold::UnfoldLeaf::group)
+/// states that invariant and what a decomposition does with a shape that would
+/// need it. A decomposition may carry several segments, or none: a sum
 /// that IS the delivered value is one segment covering everything, and a value
 /// form contributes one per sum-typed field.
 ///
@@ -563,8 +578,8 @@ pub fn segments<L: DecomposedLeaf>(leaves: &[L]) -> Vec<std::ops::Range<usize>> 
 /// live sum — that half is the adapter's, since what a group of slots is
 /// filled with is a target-language question.
 ///
-/// **An `Option<sum>` gates the segment, not each slot.** A sum's leaves are
-/// not independent, so absence cannot be the per-leaf absent value
+/// **An optional value gates the segment, not each slot.** A segment's leaves
+/// are not independent, so absence cannot be the per-leaf absent value
 /// [`reach_leaf`] gives an ordinary optional field: it is one tuple bind whose
 /// `None` arm carries every slot's default. That is the same shape a
 /// conditional value form's hoist emits, applied to an optional step inside

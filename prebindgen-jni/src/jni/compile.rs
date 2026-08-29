@@ -4465,6 +4465,21 @@ impl Declarations {
                     }
                     let inlined =
                         self.struct_out_wires_at(registry, &child, &field_path, &name, depth + 1)?;
+                    // One selector may not own another yet: `group` is a flat
+                    // `Option<i32>`, so a selector inside this group would have
+                    // to be both "the group's member" and "a selector of its
+                    // own", and `segments` would return overlapping ranges.
+                    // Refused HERE, before the leaves are registered as a
+                    // `ValueDecon`, so the shape stays on the whole-object path
+                    // rather than panicking during rendering. Nested segments
+                    // are the endpoint; see #602.
+                    if optional
+                        && inlined
+                            .iter()
+                            .any(prebindgen_registry::unfold::DecomposedLeaf::selects)
+                    {
+                        return None;
+                    }
                     wires.extend(inlined.into_iter().map(|wire| {
                         let mut reach = wire.reach;
                         if optional {

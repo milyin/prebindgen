@@ -2545,6 +2545,95 @@ fn a_sum_field_decomposes_into_its_tag_and_groups() {
     );
 }
 
+/// One selector may not own another: an optional nested class whose own child
+/// carries a selector stays on the whole-object path.
+///
+/// `group` is a flat `Option<i32>`, so a nested selector would have to be both
+/// a member of the outer group and a selector of its own, and `segments` would
+/// return overlapping ranges — the outer render then reaches the inner
+/// selector as if it were an ordinary payload. Refusing is a decomposition
+/// this adapter declines, not a panic during `write_rust`: the value keeps the
+/// whole-object encode, which handles the shape.
+///
+/// Nested segments are the endpoint (#602). Until then this test is what says
+/// the boundary is deliberate, and `write_rust` is what proves the refusal
+/// happens before anything renders.
+#[test]
+fn a_selector_inside_a_gated_group_is_refused_rather_than_rendered() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Leaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Mid {
+                    pub inner: Option<Leaf>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Outer {
+                    pub mid: Option<Mid>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn outer_new() -> Outer {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Leaf))
+                .class(crate::data_class!(Mid))
+                .class(crate::data_class!(Outer))
+                .fun(prebindgen_registry::fun!(outer_new)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    // `Mid` decomposes: one selector, its own group.
+    let mid: syn::Ident = syn::parse_quote!(Mid);
+    let names: Vec<String> = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry(), &mid)
+        .expect("one level of gating decomposes")
+        .iter()
+        .map(|wire| wire.name.clone())
+        .collect();
+    assert_eq!(names, ["inner__present", "inner__id"]);
+
+    // `Outer` would need a selector inside a gated group, and declines.
+    let outer: syn::Ident = syn::parse_quote!(Outer);
+    assert!(
+        gen.declarations()
+            .struct_out_wires_of(gen.registry(), &outer)
+            .is_none(),
+        "a selector inside a gated group is refused"
+    );
+
+    // And the refusal holds through rendering: `Outer` keeps the whole-object
+    // encode rather than reaching a selector where a payload was expected.
+    let dir = unique_test_dir("jnigen_nested_selector");
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+}
+
 /// A field whose own name contains what used to be the arm-local marker is
 /// just a name.
 ///
