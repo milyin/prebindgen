@@ -140,8 +140,23 @@ fn count(text: &str, label: &str) -> (usize, usize) {
     let file: syn::File = syn::parse_file(text)
         .unwrap_or_else(|error| panic!("line report cannot parse {label}: {error}"));
     let mut gated = BTreeSet::new();
-    let mut walk = Walk { gated: &mut gated };
+    let mut walk = Walk {
+        gated: &mut gated,
+        met: BTreeSet::new(),
+    };
     syn::visit::Visit::visit_file(&mut walk, &file);
+    let unattributed: Vec<usize> = walk
+        .met
+        .iter()
+        .copied()
+        .filter(|line| !gated.contains(line))
+        .collect();
+    assert!(
+        unattributed.is_empty(),
+        "{label}: a `#[cfg(test)]` at line(s) {unattributed:?} is on a syntax node this \
+         report does not know how to bound. Counting what it gates as production would \
+         understate the test lines silently, so add that node kind to `Walk` instead."
+    );
     let lines = text.lines().count();
     let items = gated.len();
     (lines - items, items)
@@ -151,8 +166,15 @@ fn count(text: &str, label: &str) -> (usize, usize) {
 ///
 /// A set of lines rather than a count: two gated nodes can share a line, and a
 /// gated node inside a gated module must not be counted twice.
+///
+/// `met` is what makes the coverage claim checkable. The visitors below name
+/// the node kinds this understands; `visit_attribute` sees EVERY attribute in
+/// the file, whatever owns it. A `#[cfg(test)]` that was met but never
+/// attributed is a node kind this walk does not know, and [`count`] fails
+/// naming the file and line rather than counting what it gates as production.
 struct Walk<'a> {
     gated: &'a mut BTreeSet<usize>,
+    met: BTreeSet<usize>,
 }
 
 impl Walk<'_> {
@@ -227,6 +249,37 @@ impl<'ast> syn::visit::Visit<'ast> for Walk<'_> {
         self.record(&variant.attrs, variant);
         syn::visit::visit_variant(self, variant);
     }
+
+    fn visit_foreign_item(&mut self, item: &'ast syn::ForeignItem) {
+        if let Some(attrs) = foreign_item_attrs(item) {
+            self.record(attrs, item);
+        }
+        syn::visit::visit_foreign_item(self, item);
+    }
+
+    fn visit_arm(&mut self, arm: &'ast syn::Arm) {
+        self.record(&arm.attrs, arm);
+        syn::visit::visit_arm(self, arm);
+    }
+
+    /// Every attribute in the file, whatever owns it — the completeness check
+    /// [`count`] makes against what the visitors above could attribute.
+    fn visit_attribute(&mut self, attr: &'ast syn::Attribute) {
+        if is_cfg_test(attr) {
+            self.met.insert(attr.span().start().line);
+        }
+        syn::visit::visit_attribute(self, attr);
+    }
+}
+
+fn foreign_item_attrs(item: &syn::ForeignItem) -> Option<&[syn::Attribute]> {
+    Some(match item {
+        syn::ForeignItem::Fn(item) => &item.attrs,
+        syn::ForeignItem::Static(item) => &item.attrs,
+        syn::ForeignItem::Type(item) => &item.attrs,
+        syn::ForeignItem::Macro(item) => &item.attrs,
+        _ => return None,
+    })
 }
 
 fn item_attrs(item: &syn::Item) -> Option<&[syn::Attribute]> {
@@ -376,6 +429,19 @@ impl Thing {
     }
 }
 
+extern "C" {
+    #[cfg(test)]
+    fn gated_foreign();
+}
+
+fn production_three(value: u8) -> u8 {
+    match value {
+        #[cfg(test)]
+        0 => 1,
+        other => other,
+    }
+}
+
 #[cfg(any(test, feature = "testing"))]
 pub fn shipped_under_a_feature() -> bool {
     true
@@ -385,12 +451,24 @@ pub fn shipped_under_a_feature() -> bool {
     let total = fixture.lines().count();
     assert_eq!(production + items, total, "every line is counted once");
     // `mod tests;` 2, `gated_method` 4, the call 5, the `if`/`else` 6, the
-    // chained initializer 5, and the two nested functions 7 each — 36 lines.
-    // The statements between them, `self.second();` among them, are production.
-    assert_eq!(items, 36, "the gated constructs are 36 lines");
+    // chained initializer 5, the two nested functions 7 each, the foreign fn 2
+    // and the match arm 2 — 40 lines. The statements between them,
+    // `self.second();` among them, are production.
+    assert_eq!(items, 40, "the gated constructs are 40 lines");
     assert!(
-        production > 0 && production == total - 36,
+        production > 0 && production == total - 40,
         "nothing outside a gated construct is counted as one"
     );
     println!("self-test ok: {total} lines, {items} gated, {production} production");
+}
+
+#[cfg(test)]
+mod tests {
+    /// The five boundary constructs and the two node kinds #614's reviews
+    /// found, run by `cargo test --manifest-path tools/line-report/Cargo.toml`
+    /// so a later edit cannot break them while every other check stays green.
+    #[test]
+    fn the_boundary_cases_stay_pinned() {
+        super::self_test();
+    }
 }

@@ -149,4 +149,13 @@ cargo run --manifest-path tools/line-report/Cargo.toml -- --self-test
 The tool is deliberately outside the workspace: source locations on spans are a
 Cargo feature of `proc-macro2`, features are additive, and a `Span` that stores
 its location makes `syn::Type` large enough to trip `clippy::large_enum_variant`
-across the C adapter in any `--all-features` build.
+across the C adapter in any `--all-features` build. Its `Cargo.lock` is
+committed — an un-ignore in `.gitignore` — because the numbers depend on the
+exact `syn` and `proc-macro2` that parse them, and CI runs its tests so the
+pinned cases cannot rot unnoticed.
+
+**A gate it cannot bound fails rather than guesses.** The walk names the node
+kinds it understands; a separate pass sees every attribute in the file, whatever
+owns it. A `#[cfg(test)]` that was met but not attributed — on a function
+parameter, say — stops the report with the file and line, because counting what
+it gates as production would understate the test lines silently.
