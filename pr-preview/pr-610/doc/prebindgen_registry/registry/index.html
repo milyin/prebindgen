@@ -1,0 +1,137 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Which type conversions a binding needs, and whether it has them all."><title>prebindgen_registry::registry - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_registry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0 (88d9e12ae 2026-08-18)" data-channel="1.98.0" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module registry</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../prebindgen_registry/index.html">prebindgen_<wbr>registry</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module registry</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#the-boundary" title="The boundary">The boundary</a></li><li><a href="#what-a-conversion-is" title="What a conversion is">What a conversion is</a></li><li><a href="#what-the-registry-does" title="What the registry does">What the registry does</a></li><li><a href="#in-and-out" title="In, and out">In, and out</a></li><li><a href="#using-a-registry" title="Using a registry">Using a registry</a></li></ul><h3><a href="#reexports">Module Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate prebindgen_<wbr>registry</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">prebindgen_registry</a></div><h1>Module <span>registry</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/prebindgen_registry/registry/mod.rs.html#1-411">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Which type conversions a binding needs, and whether it has them all.</p>
+<h2 id="the-boundary"><a class="doc-anchor" href="#the-boundary">§</a>The boundary</h2>
+<p><a href="../struct.Flat.html" title="struct prebindgen_registry::Flat"><code>Flat</code></a> describes the source Rust code. A binding
+puts a wrapper on each side of an FFI boundary — generated Rust that the
+destination language can call, and destination-language code shaped to match
+it (<code>#[repr(C)]</code> structs and a C header; JNI externs and Kotlin classes).</p>
+<div class="example-wrap"><pre class="language-text"><code>   source flat API              generated wrapper            destination
+   (idiomatic Rust)                                            language
+   ────────────────             ─────────────────            ────────────
+   fn ledger_filed(&amp;Ledger) ──► #[no_mangle] extern fn  ◄──►  external fun
+        -&gt; Option&lt;Report&gt;         (jlong) -&gt; jlong             fun filed(): Report?
+                                      ▲
+                                      └── the boundary: the WIRE
+                                          jlong / jint / jobject  (JNI)
+                                          *const T / size_t       (C)</code></pre></div>
+<p>The wrapper’s <strong>body</strong> speaks source Rust; its <strong>signature</strong> speaks wire. The
+translation between the two is a <em>conversion</em>, and collecting them is this
+module’s whole job.</p>
+<h2 id="what-a-conversion-is"><a class="doc-anchor" href="#what-a-conversion-is">§</a>What a conversion is</h2>
+<p>The adapter’s business. It keeps the conversion itself; what it hands back
+is an <a href="struct.Answer.html" title="struct prebindgen_registry::registry::Answer"><code>Answer</code></a>, naming the crossings this one delegates to. That is what
+reachability walks, and it is all the registry needs to know.</p>
+<p>A composite need not cross whole. <code>Option&lt;T&gt;</code> may cross as a <code>T</code> carrying a
+niche value, as a <code>(bool, T)</code> pair, or as leaves delivered separately — which,
+is the adapter’s choice, and the registry records it so the emitter can call
+it by name and the destination side can be written to match.</p>
+<p>Conversions are <strong>directional</strong>, which is why <a href="../recipe/enum.Direction.html" title="enum prebindgen_registry::recipe::Direction"><code>Direction</code></a> is half of a
+<a href="type.Crossing.html" title="type prebindgen_registry::registry::Crossing"><code>Crossing</code></a> rather than a name prefix on two tables. <code>&amp;str</code> inbound is a
+<code>jstring</code> to decode, outbound a <code>jstring</code> to allocate, and one direction may
+be convertible while the other is not. A callback flips it — <code>impl Fn(Sample)</code> is an <em>input</em> whose argument crosses <em>outbound</em>.</p>
+<h2 id="what-the-registry-does"><a class="doc-anchor" href="#what-the-registry-does">§</a>What the registry does</h2>
+<p>It <strong>derives</strong> the set, then <strong>checks it is complete</strong>.</p>
+<p>A binding names a surface: these functions, these types, these consts. Far
+more types than that must convert — parameter and return types, type
+arguments, struct fields, enum payloads, callback arguments in the flipped
+direction, and the leaves a decomposed value arrives in. Computing that
+closure is the work; completeness is meaningful precisely because the set is
+derived here rather than handed over.</p>
+<p><strong>It never writes a conversion.</strong> It cannot — only a language adapter knows
+what a <code>jlong</code> handle or a <code>*const T</code> is. The registry decides <em>which</em> are
+needed, asks the adapter for each, and fails naming any that could not be
+supplied.</p>
+<h2 id="in-and-out"><a class="doc-anchor" href="#in-and-out">§</a>In, and out</h2><div><table><thead><tr><th>in</th><th></th></tr></thead><tbody>
+<tr><td>the model</td><td><a href="../struct.Flat.html" title="struct prebindgen_registry::Flat"><code>Flat</code></a> — what the source offers</td></tr>
+<tr><td>the crossings</td><td>which <code>(direction, type)</code> pairs actually cross</td></tr>
+<tr><td>the decompositions</td><td>how a composite crosses in pieces: which leaf crossings that adds, and which whole-value crossing it removes</td></tr>
+<tr><td>a conversion builder</td><td>the <a href="../prebindgen/trait.Prebindgen.html" title="trait prebindgen_registry::prebindgen::Prebindgen"><code>Prebindgen</code></a> adapter</td></tr>
+</tbody></table>
+</div>
+<p>Out: a conversion for every type in the closure — or a failure naming the
+ones that must convert and cannot. The emitter then writes the file: the
+conversions, and the per-item wrappers that call them.</p>
+<h2 id="using-a-registry"><a class="doc-anchor" href="#using-a-registry">§</a>Using a registry</h2>
+<p><strong>Describe it, hand over the answers, read it.</strong> Two types, because those
+are two different things: a <a href="struct.RegistryBuilder.html" title="struct prebindgen_registry::registry::RegistryBuilder"><code>RegistryBuilder</code></a> is still being described,
+and a <a href="struct.Registry.html" title="struct prebindgen_registry::registry::Registry"><code>Registry</code></a> is finished and answerable.</p>
+<div class="example-wrap"><pre class="language-text"><code>  describe    builder(flat) · export · cross · decompose · depends
+     ↓
+  the demand  crossings()      → every crossing needing a conversion,
+     ↓                           sorted so each type&#39;s inners come first
+  the answers convert_with(f)  → one call per crossing, in that order
+     ↓        conversions(map) → or hand over a map you built yourself
+     ↓
+  close       build()          → fails naming any reachable crossing with
+     ↓                           no conversion
+  read        flat · exports · conversion(dir, ty) · decomposition(site) · …</code></pre></div>
+<p>Most types need no declaring: they are reached by walking a declared
+element’s signature, and deriving them per <strong>usage</strong> is what keeps an
+output-only type from being demanded as an input too. Measured: dropping the
+declaration-as-root for every type with a captured body leaves the generated
+output byte-identical.</p>
+<p>But a type with <strong>no captured item behind it</strong> — <code>ptr_class!(zenoh::KeyExpr&lt;'static&gt;)</code>
+on a re-exported foreign type — appears in no signature this model can walk,
+so nothing derives it and the declaration is the only statement that it
+crosses at all. That is what <code>cross</code> is for, and why the input cannot be
+elements alone.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>builder = Registry::builder(flat)<span class="question-mark">?</span>;
+<span class="kw">for </span>name <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.exported    { builder = builder.export(name); }
+<span class="kw">for </span>ty <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.foreign_types { builder = builder.cross(Direction::Deconstruct, ty); }
+
+<span class="kw">let </span>registry = builder
+    .decompose(<span class="self">self</span>.decompositions())
+    <span class="comment">// `built` already holds everything this crossing composes from: that is
+    // what sorted means.
+    </span>.convert_with(|crossing, built| <span class="self">self</span>.convert(crossing, built))<span class="question-mark">?
+    </span>.build()<span class="question-mark">?</span>;
+
+<span class="self">self</span>.emit(<span class="kw-2">&amp;</span>registry, out)   <span class="comment">// read-only from here</span></code></pre></div>
+<p>Prefer to drive the walk yourself? <code>crossings()</code> hands over the same list in
+the same order, and <code>conversions(map)</code> takes the result — the two compose,
+and neither is a second mechanism.</p>
+<p><strong>Nothing here calls back into the generator</strong> — not by trait hook, and not
+by a <code>next_request</code>/<code>supply</code> pull loop either, which is the same protocol
+with the arrow flipped. <code>convert_with</code> is not that: the walk finishes before
+it returns, the closure is the caller’s, and the builder chooses nothing
+about when it runs. It is <code>crossings()</code> plus a <code>for</code> loop, written once.</p>
+<p>What makes a single hand-off possible is the <strong>sort</strong>. The demand’s edges
+(<code>immediate_edges</code> — generic arguments, tuple/reference/slice targets,
+declared struct fields, and <code>impl Fn</code> arguments with the direction flipped)
+are structural, so they are known without asking anyone. Ordering
+the closure by them means a generator building <code>Option&lt;Handle&gt;</code> already holds
+<code>Handle</code>, which is why it can work from a flat list instead of being called
+back per type. It also means each crossing is offered exactly once: a
+generator’s <code>None</code> says <em>cannot</em>, never <em>not yet</em>.</p>
+<p>A <code>None</code> is not itself a failure. The scan over-approximates deliberately —
+every nested position, every declared struct in both directions — so whether
+a gap matters is reachability from the exports, which <code>build</code> decides.</p>
+<p>The structure covers almost every dependency, because an <code>Option&lt;T&gt;</code>
+visibly contains a <code>T</code>. What it cannot show is one a <em>declaration</em> creates —
+a <code>convert!</code> chaining through a helper’s parameter type, or a callback
+argument delivered as plan leaves. Those are stated with <code>depends</code>, and
+getting one wrong is not silent: the conversion that needed the missing one
+cannot be built, and <code>build</code> names it.</p>
+<p><strong>Cycles</strong> are the one place the order cannot be honoured: a self-referential
+type (<code>struct Node { next: Option&lt;Box&lt;Node&gt;&gt; }</code>) has none. <code>crossings</code> breaks
+such a cycle at its entry, so exactly one member is offered before an inner
+it contains. A generator that cannot build it omits it, and it is reported
+like any other gap.</p>
+<p>Direction is a <strong>parameter</strong>, never part of a name: <a href="../recipe/enum.Direction.html" title="enum prebindgen_registry::recipe::Direction"><code>Direction</code></a> already
+carries it, and one <code>conversion(dir, ty)</code> cannot drift the way an
+<code>input_</code>/<code>output_</code> pair can — as <code>required_output_types</code>, which never grew an
+input peer, shows.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.Direction"><code>pub use self::cell::<a class="enum" href="../recipe/enum.Direction.html" title="enum prebindgen_registry::recipe::Direction">Direction</a>;</code></dt></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Answer.html" title="struct prebindgen_registry::registry::Answer">Answer</a></dt><dd>What the registry keeps of an adapter’s answer for one crossing.</dd><dt><a class="struct" href="struct.Building.html" title="struct prebindgen_registry::registry::Building">Building</a></dt><dd>The registry mid-fill: the model, plus the conversions supplied so far.</dd><dt><a class="struct" href="struct.Decompositions.html" title="struct prebindgen_registry::registry::Decompositions">Decompositions</a></dt><dd>How a binding’s composites cross <strong>in pieces</strong> instead of whole.</dd><dt><a class="struct" href="struct.DuplicateNameError.html" title="struct prebindgen_registry::registry::DuplicateNameError">Duplicate<wbr>Name<wbr>Error</a></dt><dd>Payload of <a href="enum.ScanError.html#variant.DuplicateName" title="variant prebindgen_registry::registry::ScanError::DuplicateName"><code>ScanError::DuplicateName</code></a>, boxed to keep the error enum
+small (<code>clippy::result_large_err</code>).</dd><dt><a class="struct" href="struct.NotExpressibleEntry.html" title="struct prebindgen_registry::registry::NotExpressibleEntry">NotExpressible<wbr>Entry</a></dt><dd>One item of a <a href="enum.ScanError.html#variant.NotExpressible" title="variant prebindgen_registry::registry::ScanError::NotExpressible"><code>ScanError::NotExpressible</code></a> report.</dd><dt><a class="struct" href="struct.Registry.html" title="struct prebindgen_registry::registry::Registry">Registry</a></dt><dd>Single owner of everything parsed from the prebindgen source stream.</dd><dt><a class="struct" href="struct.RegistryBuilder.html" title="struct prebindgen_registry::registry::RegistryBuilder">Registry<wbr>Builder</a></dt><dd>A registry under construction.</dd><dt><a class="struct" href="struct.TypeKey.html" title="struct prebindgen_registry::registry::TypeKey">TypeKey</a></dt><dd>The canonical type identity, which the source model owns — re-exported
+here because the registry’s tables are keyed by it.
+Canonical type-shape key: identity is the token string of the
+<strong>normalized</strong> type. Normalization is a closed rule set — group/paren
+unwrap, a <code>crate::</code>/<code>self::</code>/source-module path reduced to its final
+segment, and a prelude path read as the bare name the language knows it
+by (<code>std::vec::Vec&lt;Foo&gt;</code> ≡ <code>Vec&lt;Foo&gt;</code>) — and any spelling it does not
+cover is kept verbatim.</dd><dt><a class="struct" href="struct.TypeKeyParseError.html" title="struct prebindgen_registry::registry::TypeKeyParseError">Type<wbr>KeyParse<wbr>Error</a></dt><dd>The canonical type identity, which the source model owns — re-exported
+here because the registry’s tables are keyed by it.
+Structured failure of <a href="../struct.TypeKey.html#method.parse" title="associated function prebindgen_registry::TypeKey::parse"><code>TypeKey::parse</code></a>: the offending input plus the
+underlying <code>syn</code> parse error.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.ScanError.html" title="enum prebindgen_registry::registry::ScanError">Scan<wbr>Error</a></dt><dd>Errors surfaced by the scan phase.</dd><dt><a class="enum" href="enum.WriteRustError.html" title="enum prebindgen_registry::registry::WriteRustError">Write<wbr>Rust<wbr>Error</a></dt><dd>Combined error surfaced by <code>RegistryBuilder::build</code> and by a generator’s
+own <code>build</code> / <code>write_rust</code>.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Conversions.html" title="trait prebindgen_registry::registry::Conversions">Conversions</a></dt><dd>What a conversion is built against: the model, and the conversions already
+available.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Crossing.html" title="type prebindgen_registry::registry::Crossing">Crossing</a></dt><dd>One <code>(direction, type)</code> pair that crosses the boundary.</dd></dl></section></div></main></body></html>
