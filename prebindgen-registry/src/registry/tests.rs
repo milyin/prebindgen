@@ -202,21 +202,9 @@ fn conversion_helpers_expose_converter_chain_contract() {
         crossing.row(crate::recipe::RecipeName::new("test")),
     );
     let converter = crate::OperationId::converter(fragment.clone());
-    let stage_rust = crate::OperationId::stage(fragment.clone(), 0);
-    let stage_wire = crate::OperationId::stage(fragment, 1);
     let entry = crate::ConverterImpl {
         destination: syn::parse_quote!(jni::sys::jlong),
         converter: converter.clone(),
-        pre_stages: vec![
-            crate::Stage {
-                converter: stage_rust.clone(),
-                metadata: (),
-            },
-            crate::Stage {
-                converter: stage_wire.clone(),
-                metadata: (),
-            },
-        ],
         subs: vec![
             TypeKey::parse("Rust").expect("test type"),
             TypeKey::parse("Mid").expect("test type"),
@@ -230,20 +218,9 @@ fn conversion_helpers_expose_converter_chain_contract() {
         TypeKey::from_type(entry.wire_type()),
         TypeKey::parse("jni::sys::jlong").expect("test type")
     );
-    assert_eq!(
-        entry
-            .output_stage_order()
-            .map(|(_, s)| s.converter.clone())
-            .collect::<Vec<_>>(),
-        vec![stage_rust.clone(), stage_wire.clone()]
-    );
-    assert_eq!(
-        entry
-            .input_stage_order()
-            .map(|(_, s)| s.converter.clone())
-            .collect::<Vec<_>>(),
-        vec![stage_wire, stage_rust]
-    );
+    // The stages this used to carry are a `ConversionChain` now: one order,
+    // stored in execution order for the fragment's direction, rather than one
+    // stored order and two readers that walked it opposite ways.
     assert_eq!(
         entry.subs.iter().map(TypeKey::as_str).collect::<Vec<_>>(),
         vec!["Rust", "Mid"]
@@ -257,8 +234,8 @@ fn conversion_helpers_expose_converter_chain_contract() {
 fn conversion_carriers_cannot_store_complete_rust_syntax() {
     let source = include_str!("../prebindgen.rs");
     let carriers = source
-        .split_once("pub struct Stage")
-        .expect("Stage declaration")
+        .split_once("pub struct ConverterImpl")
+        .expect("ConverterImpl declaration")
         .1
         .split_once("/// The single extension point")
         .expect("end of conversion carriers")
@@ -269,7 +246,11 @@ fn conversion_carriers_cannot_store_complete_rust_syntax() {
         !carriers.contains("pub converter: syn::Ident"),
         "{carriers}"
     );
-    assert_eq!(carriers.matches("pub converter: OperationId").count(), 2);
+    // One identity: the wire-facing converter. The stage identities that used
+    // to sit beside it in a `Stage` row are a `ConversionChain` now.
+    assert_eq!(carriers.matches("pub converter: OperationId").count(), 1);
+    assert!(!source.contains("pub struct Stage"), "{source}");
+    assert!(!source.contains("pre_stages"), "{source}");
 
     let chain = include_str!("../chain.rs");
     assert!(!chain.contains("Call::complete"), "{chain}");
@@ -1459,7 +1440,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             Some(ConverterImpl {
                 destination: syn::parse_quote!(()),
                 converter: crate::OperationId::converter(fragment),
-                pre_stages: vec![],
+
                 subs: vec![],
                 niches: Niches::empty(),
                 metadata: (),

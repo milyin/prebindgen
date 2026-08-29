@@ -75,13 +75,17 @@ impl ConvChain {
         );
     }
 
-    /// Read the chain off a resolved output entry.
-    fn of(entry: &prebindgen_registry::ConverterImpl<KotlinMeta>) -> Self {
+    /// Read the chain off a wire's resolved output conversion.
+    ///
+    /// `stages` comes from the wire rather than the converter: the stage order
+    /// is the fragment's conversion chain, and a `ConverterImpl` is the
+    /// wire-facing end of it alone.
+    fn of(
+        entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
+        stages: &[prebindgen_registry::generation::OperationId],
+    ) -> Self {
         ConvChain {
-            stages: entry
-                .output_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
+            stages: stages.to_vec(),
             function: entry.converter_id().clone(),
         }
     }
@@ -378,7 +382,8 @@ pub(crate) fn classify_field(
 
     let field_entry = ext.out_frag(reading)?;
     field_entry.activate();
-    let conv = ConvChain::of(&field_entry);
+    let stages = field_entry.stages();
+    let conv = ConvChain::of(&field_entry, &stages);
 
     {
         // Projection leaf (opaque handle / `ULong`).

@@ -522,7 +522,6 @@ impl Declarations {
             subs: vec![],
             destination: inner.destination.clone(),
             converter: inner.converter.clone(),
-            pre_stages: vec![],
             niches: inner.niches.clone(),
             metadata: KotlinMeta {
                 kotlin_name,
@@ -1090,7 +1089,6 @@ impl Declarations {
         // arg types' callback plans, not carried in metadata.
         let conv = ConverterImpl {
             subs: vec![],
-            pre_stages: vec![],
             converter: operation,
             destination: wire,
             niches,

@@ -103,7 +103,7 @@ pub(crate) fn optional_pair_plan_candidate(ext: &Declarations, arg: &TypeRef) ->
     JniPrim::from_wire(&inner_entry.destination).is_some()
         && inner_entry.niches.clone().carve().is_none()
         && inner_entry.metadata.projection.is_none()
-        && inner_entry.pre_stages.is_empty()
+        && inner_entry.0.chain.steps().is_empty()
 }
 
 /// Kotlin spelling of the niche consumed by the outer Optional enum layer.
@@ -182,12 +182,51 @@ pub(crate) fn optional_pair_plan(
     })
 }
 
+/// JniGen's half of the canonical generation plan.
+///
+/// Declared here so a JNI fragment can state its conversion chain in the
+/// registry's vocabulary — [`prebindgen_registry::generation::ConversionChain`]
+/// — rather than in a row of its own. #613 step 4 is what puts JNI fragments
+/// and sites into `FragmentPlan` / `SitePlan`; this states the representation
+/// those will be over, and the chain is its first live use.
+pub(crate) struct JRepresentation;
+
+impl prebindgen_registry::generation::Representation for JRepresentation {
+    /// A stage's carrier is named by the crossing it converts, which is what
+    /// JniGen already keys its fragments on.
+    type Intermediate = TypeKey;
+    /// One stage: the identity of the artifact that renders it.
+    type Step = OperationId;
+    type ConverterArtifact = crate::jni::chain::JFunction;
+    type TerminalCodec = crate::jni::chain::JFunction;
+    type ProductBridge = crate::jni::chain::JFunction;
+    type OptionalBridge = crate::jni::chain::JFunction;
+    type SequenceBridge = crate::jni::chain::JFunction;
+    type ChoiceBridge = crate::jni::chain::JFunction;
+    type CallbackBridge = crate::jni::chain::JFunction;
+    type Niche = String;
+    type Cleanup = ();
+    type FailureRoute = ();
+    type AbiLayout = JLayout;
+    type Artifact = crate::jni::generation::JFinalArtifact;
+}
+
 /// The JNI adapter's answer for one crossing.
 ///
 /// What a `ConverterImpl` was, minus the bookkeeping the table now does.
 #[derive(Clone)]
 pub(crate) struct JFrag {
     pub(crate) conv: ConverterImpl<KotlinMeta>,
+    /// The conversions between this fragment's wire value and its source
+    /// value, in **execution order for this fragment's direction** — from the
+    /// wire when constructing, from the source when deconstructing.
+    ///
+    /// The registry's chain rather than a row of this adapter's own. It
+    /// replaced `ConverterImpl::pre_stages`, which stored one order and left
+    /// each reader to reverse it for input; storing execution order means the
+    /// reversal happens once, where the chain is built and the direction is
+    /// already in hand.
+    pub(crate) chain: prebindgen_registry::generation::ConversionChain<JRepresentation>,
     pub(crate) rust: crate::jni::chain::JFunction,
     /// Frozen semantic stages beside the wire-facing converter. The
     /// compatibility ConverterImpl keeps marker functions for ordering and
@@ -687,6 +726,10 @@ pub(crate) struct Wire {
     /// the value calls it through its wire-facing function **and** whatever
     /// Rust-side stages follow, and a name says nothing about those.
     pub(crate) entry: Option<ConverterImpl<KotlinMeta>>,
+    /// This wire's fragment's conversion chain, in execution order — copied
+    /// from the fragment when the wire is built, because the Rust side that
+    /// rebuilds the value calls the wire-facing converter and then these.
+    pub(crate) stages: Vec<OperationId>,
     /// For a nested owned handle: where Kotlin finds the handle **object**, as
     /// against the `Long` this wire carries.
     ///
@@ -728,10 +771,77 @@ impl Carrier for JFrag {
     }
 }
 
+/// One stage in front of `inner`'s chain, in execution order for `direction`.
+///
+/// A stage converts between the fragment's own source value and the value the
+/// inner fragment carries, so the two endpoints are `ChainValue::Source` and
+/// the inner crossing's key. Which is `from` and which is `into` is the whole
+/// difference between the directions: constructing ends at the source value
+/// and deconstructing starts there, which is also why the inner steps run
+/// before the new one in one direction and after it in the other.
+fn staged_chain(
+    direction: Direction,
+    operation: OperationId,
+    inner_key: TypeKey,
+    inner: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+    failure: prebindgen_registry::generation::Failure,
+) -> prebindgen_registry::generation::ConversionChain<JRepresentation> {
+    use prebindgen_registry::generation::{ChainValue, Cleanup, ConversionChain, ConverterStep};
+    let (from, into) = match direction {
+        Direction::Construct => (
+            ChainValue::Intermediate(inner_key.clone()),
+            ChainValue::Source,
+        ),
+        Direction::Deconstruct => (
+            ChainValue::Source,
+            ChainValue::Intermediate(inner_key.clone()),
+        ),
+    };
+    let own = ConverterStep::new(from, into, operation, failure, Cleanup::None);
+    // `ChainValue::Source` names the source value of the fragment that OWNS
+    // the chain, so the inner fragment's steps change meaning when they are
+    // embedded in this one: what was the inner's source value is this
+    // fragment's `inner_key` carrier. Rebasing it is what keeps the steps
+    // adjacent — each step's `into` is the next step's `from` — with `Source`
+    // appearing only at the end of a construct chain and the start of a
+    // deconstruct one.
+    let rebase = |value: &ChainValue<TypeKey>| match value {
+        ChainValue::Source => ChainValue::Intermediate(inner_key.clone()),
+        ChainValue::Intermediate(key) => ChainValue::Intermediate(key.clone()),
+    };
+    let inner = inner.steps().iter().map(|step| {
+        ConverterStep::new(
+            rebase(step.from()),
+            rebase(step.into()),
+            step.operation().clone(),
+            step.failure(),
+            step.cleanup().clone(),
+        )
+    });
+    let steps: Vec<ConverterStep<JRepresentation>> = match direction {
+        Direction::Construct => inner.chain(std::iter::once(own)).collect(),
+        Direction::Deconstruct => std::iter::once(own).chain(inner).collect(),
+    };
+    ConversionChain::Steps(steps)
+}
+
 impl JFrag {
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
         let rust = crate::jni::chain::JFunction::marker(conv.converter_id().clone());
         Self::planned(at, conv, rust)
+    }
+
+    /// A fragment whose source value is reached through explicit stages.
+    fn planned_staged(
+        at: At<'_>,
+        chain: prebindgen_registry::generation::ConversionChain<JRepresentation>,
+        conv: ConverterImpl<KotlinMeta>,
+        rust: crate::jni::chain::JFunction,
+    ) -> Self {
+        Self {
+            chain,
+            ..Self::planned(at, conv, rust)
+        }
     }
 
     fn planned(
@@ -742,6 +852,7 @@ impl JFrag {
         let validity = validity_of(at.crossing.direction(), at.crossing.mode());
         Self {
             conv,
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             rust,
             rust_stages: Vec::new(),
             choice_arm: None,
@@ -768,10 +879,10 @@ impl JFrag {
         std::iter::once(self.rust.clone())
             .chain(self.rust_stages.iter().cloned())
             .chain(
-                self.conv
-                    .pre_stages
+                self.chain
+                    .steps()
                     .iter()
-                    .map(|stage| crate::jni::chain::JFunction::marker(stage.converter.clone())),
+                    .map(|step| crate::jni::chain::JFunction::marker(step.operation().clone())),
             )
             .collect()
     }
@@ -1126,7 +1237,6 @@ impl<R: Conversions> JCompile<'_, R> {
         };
         let conv = ConverterImpl {
             subs: vec![],
-            pre_stages: vec![],
             converter: operation,
             destination: wire,
             niches,
@@ -1193,7 +1303,6 @@ impl<R: Conversions> JCompile<'_, R> {
             at,
             ConverterImpl {
                 subs: Vec::new(),
-                pre_stages: Vec::new(),
                 converter: operation.clone(),
                 destination: wire,
                 niches,
@@ -1237,7 +1346,6 @@ impl<R: Conversions> JCompile<'_, R> {
             at,
             ConverterImpl {
                 subs: Vec::new(),
-                pre_stages: Vec::new(),
                 converter: operation.clone(),
                 destination: wire.clone(),
                 niches: default_niches_for_wire(&wire),
@@ -1309,7 +1417,6 @@ impl<R: Conversions> JCompile<'_, R> {
         metadata.niche_sentinels = niche_sentinels;
         let conv = ConverterImpl {
             subs: vec![],
-            pre_stages: vec![],
             converter: operation,
             destination: wire,
             niches,
@@ -1343,7 +1450,6 @@ impl<R: Conversions> JCompile<'_, R> {
         );
         let conv = ConverterImpl {
             subs: vec![],
-            pre_stages: vec![],
             converter: operation,
             destination: wire,
             niches,
@@ -1498,10 +1604,10 @@ impl<R: Conversions> JCompile<'_, R> {
                 operation,
             });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination: wire,
                 converter: operation_id,
-                pre_stages: Vec::new(),
                 niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
                 metadata,
                 subs,
@@ -1533,11 +1639,15 @@ impl<R: Conversions> JCompile<'_, R> {
         let (ok, err) = source.fallible_parts()?;
         let success = self.decls.out_frag(ok)?;
         let operation = OperationId::stage(at.fragment_id(), 0);
-        let mut pre_stages = vec![Stage {
-            converter: operation.clone(),
-            metadata: KotlinMeta::default(),
-        }];
-        pre_stages.extend(success.pre_stages.iter().cloned());
+        // Peeling a `Result` IS the failure edge: the `Err` arm is what the
+        // site has to route, which is why this stage is always fallible.
+        let chain = staged_chain(
+            at.crossing.direction(),
+            operation.clone(),
+            ok.key(),
+            &success.0.chain,
+            prebindgen_registry::generation::Failure::Fallible,
+        );
         let rust = crate::jni::chain::JFunction::result(crate::jni::chain::JResultPlan {
             operation,
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
@@ -1546,12 +1656,12 @@ impl<R: Conversions> JCompile<'_, R> {
             ok: ok.clone(),
             err: err.clone(),
         });
-        Some(JFrag::planned(
+        Some(JFrag::planned_staged(
             at,
+            chain,
             ConverterImpl {
                 destination: success.destination.clone(),
                 converter: success.converter.clone(),
-                pre_stages,
                 niches: default_niches_for_wire(&success.destination),
                 metadata: KotlinMeta {
                     kotlin_name: success.metadata.kotlin_name.clone(),
@@ -1593,16 +1703,15 @@ impl<R: Conversions> JCompile<'_, R> {
                 crate::jni::trait_impl::read_through_erased_wrappers(source, quote!(__probe))?;
             }
         }
-        let stages = match direction {
-            Direction::Construct => entry
-                .input_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-            Direction::Deconstruct => entry
-                .output_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-        };
+        // In execution order already — the chain stores it that way for the
+        // fragment's own direction, so neither arm reverses anything.
+        let stages: Vec<OperationId> = entry
+            .0
+            .chain
+            .steps()
+            .iter()
+            .map(|step| step.operation().clone())
+            .collect();
         // The outer bridge already receives the exact parameter form expected
         // by the child converter: a pointer by value, otherwise a borrowed JNI
         // object/scalar wire. Do not add the ordinary site-level borrow again.
@@ -1633,7 +1742,6 @@ impl<R: Conversions> JCompile<'_, R> {
             ConverterImpl {
                 destination: entry.destination.clone(),
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches: entry.niches.clone(),
                 metadata: entry.metadata.clone(),
                 subs: vec![stripped],
@@ -1768,6 +1876,25 @@ impl<R: Conversions> JCompile<'_, R> {
             }
         }
         let operation = OperationId::stage(at.fragment_id(), 0);
+        // A declared conversion fails when the declaration says it can: a
+        // `try_into!` trait bound, or a `fun!` whose function returns a
+        // `Result`. A domain adds a failure edge of its own, so a conversion
+        // carrying one is fallible whatever its call says.
+        let fallible = match &call {
+            crate::jni::chain::JCustomCall::Trait { fallible } => *fallible,
+            crate::jni::chain::JCustomCall::Function { error, .. } => error.is_some(),
+        } || decl.domain().is_some();
+        let chain = staged_chain(
+            direction,
+            operation.clone(),
+            representation_key.clone(),
+            &inner.0.chain,
+            if fallible {
+                prebindgen_registry::generation::Failure::Fallible
+            } else {
+                prebindgen_registry::generation::Failure::Infallible
+            },
+        );
         let plan = crate::jni::chain::JFunction::custom_conversion(
             crate::jni::chain::JCustomConversionPlan {
                 operation: operation.clone(),
@@ -1778,11 +1905,6 @@ impl<R: Conversions> JCompile<'_, R> {
                 domain: decl.domain().clone(),
             },
         );
-        let mut pre_stages = vec![Stage {
-            converter: operation,
-            metadata: KotlinMeta::default(),
-        }];
-        pre_stages.extend(inner.pre_stages.iter().cloned());
         let (niches, sentinels) = self.decls.conversion_domain_niches(
             &source.key(),
             self.registry,
@@ -1799,12 +1921,11 @@ impl<R: Conversions> JCompile<'_, R> {
         let conv = ConverterImpl {
             destination: inner.destination.clone(),
             converter: inner.converter.clone(),
-            pre_stages,
             niches,
             metadata,
             subs: vec![representation_key],
         };
-        let mut fragment = JFrag::planned(at, conv, inner.0.rust.clone());
+        let mut fragment = JFrag::planned_staged(at, chain, conv, inner.0.rust.clone());
         fragment.rust_stages.push(plan);
         Some(fragment)
     }
@@ -1822,18 +1943,12 @@ impl<R: Conversions> JCompile<'_, R> {
         mode: Mode,
         frag: &JFrag,
     ) -> crate::jni::chain::JChild {
-        let stages = match direction {
-            Direction::Construct => frag
-                .conv
-                .input_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-            Direction::Deconstruct => frag
-                .conv
-                .output_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-        };
+        let stages: Vec<OperationId> = frag
+            .chain
+            .steps()
+            .iter()
+            .map(|step| step.operation().clone())
+            .collect();
         match direction {
             Direction::Construct => crate::jni::chain::JChild::input(
                 frag.conv.converter_id().clone(),
@@ -1939,10 +2054,10 @@ impl<R: Conversions> JCompile<'_, R> {
             },
         });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination: intermediate,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta::default(),
                 subs: parts.iter().map(|(part, _)| part.ty.key()).collect(),
@@ -2103,10 +2218,10 @@ impl<R: Conversions> JCompile<'_, R> {
             },
         });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta::default(),
                 subs: parts_subs(arms),
@@ -2255,10 +2370,10 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Deconstruct => default_niches_for_wire(&destination),
         };
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches,
                 metadata: KotlinMeta {
                     kotlin_name,
@@ -2337,10 +2452,10 @@ impl<R: Conversions> JCompile<'_, R> {
                 ..projection
             });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination: wire,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta {
                     kotlin_name,
@@ -2420,18 +2535,12 @@ impl<R: Conversions> JCompile<'_, R> {
         let wrappers = composable_wrappers(at.crossing)?;
 
         let inner_wire = inner.conv.destination.clone();
-        let stages = match direction {
-            Direction::Construct => inner
-                .conv
-                .input_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-            Direction::Deconstruct => inner
-                .conv
-                .output_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-        };
+        let stages: Vec<OperationId> = inner
+            .chain
+            .steps()
+            .iter()
+            .map(|step| step.operation().clone())
+            .collect();
 
         let (bridge, child, destination, niches, nullable_kind, layout, input_by_ref) =
             match direction {
@@ -2630,10 +2739,10 @@ impl<R: Conversions> JCompile<'_, R> {
             input_by_ref,
         });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches,
                 metadata: KotlinMeta {
                     projection,
@@ -2932,6 +3041,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 // The gate reads the object itself, not through it.
                 access: Access::read(" != null"),
                 entry: None,
+                stages: Vec::new(),
                 handle_target: None,
                 handle_nullable: false,
                 absent: None,
@@ -3047,6 +3157,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         // wire reaches on from there.
                         access: w.access.clone().under(&field_kt(part)),
                         entry: w.entry.clone(),
+                        stages: w.stages.clone(),
                         handle_target: w.handle_target.as_ref().map(|t| {
                             std::iter::once(Nav {
                                 field: field_kt(part),
@@ -3076,6 +3187,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     path: part.name.clone(),
                     access: Access::read("").under(&field_kt(part)),
                     entry: None,
+                    stages: Vec::new(),
                     handle_target: Some(vec![Nav {
                         field: field_kt(part),
                         gated: false,
@@ -3523,6 +3635,17 @@ impl ComposedChain {
 pub(crate) struct Conv(std::rc::Rc<JFrag>);
 
 impl Conv {
+    /// This crossing's conversion chain, in execution order — the stage
+    /// identities a caller has to invoke around the wire-facing converter.
+    pub(crate) fn stages(&self) -> Vec<OperationId> {
+        self.0
+            .chain
+            .steps()
+            .iter()
+            .map(|step| step.operation().clone())
+            .collect()
+    }
+
     pub(crate) fn activate(&self) {
         self.0.rust.mark_reachable();
     }
@@ -3612,9 +3735,7 @@ impl Wire {
     /// build helper declines such an element rather than emit a call that does
     /// not compile.
     pub(crate) fn staged(&self) -> bool {
-        self.entry
-            .as_ref()
-            .is_some_and(|e| !e.pre_stages.is_empty())
+        !self.stages.is_empty()
     }
 
     /// Whether this value is a gate rather than something that crosses.
@@ -3645,7 +3766,6 @@ impl<R: Conversions> JCompile<'_, R> {
         ConverterImpl {
             destination: syn::parse_quote!(()),
             converter: OperationId::converter(at.fragment_id()),
-            pre_stages: Vec::new(),
             niches: Niches::empty(),
             metadata: KotlinMeta::default(),
             subs,
@@ -3748,6 +3868,12 @@ impl<R: Conversions> JCompile<'_, R> {
             path: part.name.clone(),
             access: Access::Read { walk, tail },
             entry: Some(frag.conv.clone()),
+            stages: frag
+                .chain
+                .steps()
+                .iter()
+                .map(|step| step.operation().clone())
+                .collect(),
             handle_target: None,
             handle_nullable: false,
             absent,
@@ -4009,6 +4135,12 @@ impl<R: Conversions> JCompile<'_, R> {
                 zero,
             },
             entry: Some(frag.conv.clone()),
+            stages: frag
+                .chain
+                .steps()
+                .iter()
+                .map(|step| step.operation().clone())
+                .collect(),
             handle_target: None,
             handle_nullable: false,
             absent: None,
@@ -4037,6 +4169,8 @@ impl<R: Conversions> JCompile<'_, R> {
             })
             .collect();
         let mut wires = vec![Wire {
+            // A tag converts nothing: it is read on the Rust side.
+            stages: Vec::new(),
             ty: syn::parse_quote!(jni::sys::jint),
             kt_ty: "Int".to_string(),
             path: "_tag".to_string(),
@@ -4097,7 +4231,7 @@ impl<R: Conversions> JCompile<'_, R> {
         }
         let c = &inner.conv;
         let prim = crate::jni::JniPrim::from_wire(&c.destination)?;
-        if c.niches.clone().carve().is_some() || !c.pre_stages.is_empty() {
+        if c.niches.clone().carve().is_some() || !inner.chain.steps().is_empty() {
             return None;
         }
         // An unsigned representation is the one projection that still takes the
@@ -4146,6 +4280,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 path: "present".to_string(),
                 access: Access::read(" != null"),
                 entry: None,
+                stages: Vec::new(),
                 handle_target: None,
                 handle_nullable: false,
                 absent: None,
@@ -4158,6 +4293,9 @@ impl<R: Conversions> JCompile<'_, R> {
                 path: "value".to_string(),
                 access: value_access,
                 entry: Some(c.clone()),
+                // Refused above unless the inner fragment's chain is empty, so
+                // this value crosses through its converter alone.
+                stages: Vec::new(),
                 handle_target: None,
                 handle_nullable: false,
                 absent: None,
@@ -4499,4 +4637,189 @@ fn is_choice(frag: &JFrag) -> bool {
         .as_ref()
         .and_then(|w| w.first())
         .is_some_and(|w| matches!(w.access, Access::Select { .. }))
+}
+
+#[cfg(test)]
+mod chain_tests {
+    use prebindgen_registry::generation::{ChainValue, ConversionChain, ConverterStep, Failure};
+
+    use super::*;
+
+    fn fragment_id(name: &str) -> prebindgen_registry::FragmentId {
+        let source =
+            prebindgen_registry::flat::TypeRef::scalar(prebindgen_registry::flat::ScalarKind::I64);
+        let crossing =
+            prebindgen_registry::recipe::Crossing::new(source.clone(), Direction::Construct);
+        prebindgen_registry::FragmentId::new(
+            source.key(),
+            crossing.row(prebindgen_registry::recipe::RecipeName::new(name)),
+        )
+    }
+
+    /// One inner chain, in the frame of the fragment that owns it.
+    fn inner_chain(
+        direction: Direction,
+        stage: OperationId,
+        key: &TypeKey,
+    ) -> ConversionChain<JRepresentation> {
+        let (from, into) = match direction {
+            Direction::Construct => (ChainValue::Intermediate(key.clone()), ChainValue::Source),
+            Direction::Deconstruct => (ChainValue::Source, ChainValue::Intermediate(key.clone())),
+        };
+        ConversionChain::Steps(vec![ConverterStep::<JRepresentation>::new(
+            from,
+            into,
+            stage,
+            Failure::Fallible,
+            prebindgen_registry::generation::Cleanup::None,
+        )])
+    }
+
+    /// Every step's destination is the next step's origin, and `Source`
+    /// appears once: at the END of a construct chain and the START of a
+    /// deconstruct one.
+    ///
+    /// The endpoints are what makes the chain a chain. `ChainValue::Source`
+    /// names the source value of the fragment that OWNS the chain, so an inner
+    /// fragment's steps mean something different once they are embedded in an
+    /// outer one — its source value is the outer fragment's carrier. Copying
+    /// them verbatim leaves `Source` in the middle and the steps either side of
+    /// it disconnected, which `validate_chain` rejects as a broken chain and
+    /// today's renderers miss because they read only the operation (#615
+    /// review).
+    #[test]
+    fn an_embedded_chain_is_rebased_into_the_outer_frame() {
+        for direction in [Direction::Construct, Direction::Deconstruct] {
+            let inner_key = TypeKey::parse("Label").expect("test key");
+            let deeper_key = TypeKey::parse("Deeper").expect("test key");
+            let inner_stage = OperationId::stage(fragment_id("inner"), 0);
+            let outer_stage = OperationId::stage(fragment_id("outer"), 0);
+            // The inner fragment's own chain already reaches ITS source value
+            // through a carrier of its own, so the rebase has to cross a chain
+            // that is more than one step long.
+            let inner = staged_chain(
+                direction,
+                inner_stage.clone(),
+                deeper_key,
+                &inner_chain(
+                    direction,
+                    OperationId::stage(fragment_id("deeper"), 0),
+                    &TypeKey::parse("Deepest").expect("test key"),
+                ),
+                Failure::Fallible,
+            );
+
+            let chain = staged_chain(
+                direction,
+                outer_stage.clone(),
+                inner_key.clone(),
+                &inner,
+                Failure::Fallible,
+            );
+            let steps = chain.steps();
+            assert_eq!(steps.len(), 3, "{direction:?}: every step is retained");
+
+            for pair in steps.windows(2) {
+                assert_eq!(
+                    ConverterStep::into(&pair[0]),
+                    ConverterStep::from(&pair[1]),
+                    "{direction:?}: each step's destination is the next one's origin, \
+                     in {chain:?}",
+                    chain = steps
+                        .iter()
+                        .map(|step| format!("{:?} -> {:?}", step.from(), step.into()))
+                        .collect::<Vec<_>>()
+                );
+            }
+            let sources = steps
+                .iter()
+                .filter(|step| {
+                    matches!(ConverterStep::from(step), ChainValue::Source)
+                        || matches!(ConverterStep::into(step), ChainValue::Source)
+                })
+                .count();
+            assert_eq!(sources, 1, "{direction:?}: `Source` appears once");
+            match direction {
+                Direction::Construct => assert!(
+                    matches!(ConverterStep::into(&steps[2]), ChainValue::Source),
+                    "constructing ends at the source value"
+                ),
+                Direction::Deconstruct => assert!(
+                    matches!(ConverterStep::from(&steps[0]), ChainValue::Source),
+                    "deconstructing starts at the source value"
+                ),
+            }
+        }
+    }
+
+    /// A chain is stored in EXECUTION order for its own direction, which is
+    /// the whole reason the two stage-order readers are gone.
+    ///
+    /// The stages nest outward: an outer conversion is declared over an inner
+    /// fragment that already has one. Constructing runs the inner stage first
+    /// and ends at the source value; deconstructing starts at the source value
+    /// and runs the outer stage first. `pre_stages` stored one of those and
+    /// left each reader to reverse it, which is a rule two places could
+    /// disagree about.
+    #[test]
+    fn a_chain_stores_execution_order_for_its_own_direction() {
+        let inner_key = TypeKey::parse("Inner").expect("test key");
+        let inner_stage = OperationId::stage(fragment_id("inner"), 0);
+        let inner = ConversionChain::Steps(vec![ConverterStep::<JRepresentation>::new(
+            ChainValue::Source,
+            ChainValue::Intermediate(inner_key.clone()),
+            inner_stage.clone(),
+            Failure::Fallible,
+            prebindgen_registry::generation::Cleanup::None,
+        )]);
+        let outer_stage = OperationId::stage(fragment_id("outer"), 0);
+
+        let constructing = staged_chain(
+            Direction::Construct,
+            outer_stage.clone(),
+            inner_key.clone(),
+            &inner,
+            Failure::Fallible,
+        );
+        assert_eq!(
+            constructing
+                .steps()
+                .iter()
+                .map(|step| step.operation().clone())
+                .collect::<Vec<_>>(),
+            vec![inner_stage.clone(), outer_stage.clone()],
+            "constructing ends at the source value, so the outer stage runs last"
+        );
+        assert!(
+            matches!(
+                ConverterStep::into(&constructing.steps()[1]),
+                ChainValue::Source
+            ),
+            "and the last step's destination IS the source value"
+        );
+
+        let deconstructing = staged_chain(
+            Direction::Deconstruct,
+            outer_stage.clone(),
+            inner_key,
+            &inner,
+            Failure::Fallible,
+        );
+        assert_eq!(
+            deconstructing
+                .steps()
+                .iter()
+                .map(|step| step.operation().clone())
+                .collect::<Vec<_>>(),
+            vec![outer_stage, inner_stage],
+            "deconstructing starts at the source value, so the outer stage runs first"
+        );
+        assert!(
+            matches!(
+                ConverterStep::from(&deconstructing.steps()[0]),
+                ChainValue::Source
+            ),
+            "and the first step's origin IS the source value"
+        );
+    }
 }
