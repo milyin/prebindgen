@@ -23,14 +23,19 @@
 //!   `unfold::reach_leaf_flat` that handles an optional step by emitting an
 //!   absent arm. Only what absence looks like is this adapter's.
 //!
-//! They are here because there is no delivery bridge to hand the encoding half
-//! to, so nothing could be lifted without lifting `jvalue` layout with it. See
-//! the umbrella that tracks moving them.
+//! They are still here, but the reason they had to be is gone: the encoding
+//! half now has somewhere to go. [`DeliveryBridge`] is the registry's, this
+//! module implements it for [`FrozenDelivery`], and two of its operations are
+//! live — a leaf's encode, and how a filled slot rides the call. What remains
+//! above is reaching, owning and grouping, which the steps after this one
+//! move onto the walk that already owns the hoists.
+//!
+//! [`DeliveryBridge`]: prebindgen_registry::unfold::DeliveryBridge
 
 use prebindgen_registry::{
     unfold::{
         bind_hoists, fold_steps, project_leading_fields, steps_are_movable, DecomposedLeaf,
-        PathStep,
+        DeliveryBridge, PathStep,
     },
     Conversions,
 };
@@ -380,20 +385,6 @@ pub(crate) struct Delivered<'a> {
     pub(crate) chain: Option<crate::jni::compile::ComposedChain>,
 }
 
-/// Facts the leaf renderer may consult after a delivery operation has been
-/// selected. The live implementation serves ordinary wrapper rendering; an
-/// Invoke plan freezes the same answers so callback planning does not retain a
-/// registry or obtain [`prebindgen_registry::RustWriter`].
-pub(crate) trait DeliveryContext {
-    fn qualify(&self, ident: &syn::Ident) -> syn::Path;
-    fn leaf_is_prim(&self, leaf: &crate::jni::compile::OutWire) -> bool;
-    fn leaf_wire(&self, leaf: &crate::jni::compile::OutWire) -> syn::Type;
-    fn sum(
-        &self,
-        leaf: &crate::jni::compile::OutWire,
-    ) -> (syn::Path, &prebindgen_registry::flat::Variant);
-}
-
 #[derive(Clone)]
 struct FrozenSum {
     source: syn::Path,
@@ -502,20 +493,29 @@ impl FrozenDelivery {
     }
 }
 
-impl DeliveryContext for FrozenDelivery {
+impl FrozenDelivery {
+    /// Whether this leaf crosses the typed `run` as a raw primitive rather
+    /// than as an object. JNI's own question — which jvalue member a slot
+    /// carries — so it stays off the bridge.
+    pub(crate) fn leaf_is_prim(&self, leaf: &crate::jni::compile::OutWire) -> bool {
+        frozen_leaf_is_prim(leaf)
+    }
+
+    /// The Rust type this leaf's converter produces, which is what its jvalue
+    /// member and its slot default are read from.
+    pub(crate) fn leaf_wire(&self, leaf: &crate::jni::compile::OutWire) -> syn::Type {
+        frozen_leaf_wire(leaf)
+    }
+}
+
+impl prebindgen_registry::unfold::DeliveryBridge for FrozenDelivery {
+    type Leaf = crate::jni::compile::OutWire;
+
     fn qualify(&self, ident: &syn::Ident) -> syn::Path {
         self.modules
             .get(&ident.to_string())
             .unwrap_or_else(|| panic!("frozen JNI delivery has no origin for `{ident}`"))
             .clone()
-    }
-
-    fn leaf_is_prim(&self, leaf: &crate::jni::compile::OutWire) -> bool {
-        frozen_leaf_is_prim(leaf)
-    }
-
-    fn leaf_wire(&self, leaf: &crate::jni::compile::OutWire) -> syn::Type {
-        frozen_leaf_wire(leaf)
     }
 
     fn sum(
@@ -531,6 +531,84 @@ impl DeliveryContext for FrozenDelivery {
             .get(&id.name)
             .unwrap_or_else(|| panic!("frozen JNI delivery has no sum `{}`", id.name));
         (sum.source.clone(), &sum.model)
+    }
+
+    /// A leaf's own encode: run its output converter on the reached Rust
+    /// value, then present the result the way its slot carries it. A
+    /// primitive-wire leaf is a typed `jvalue` and crosses with no JNI call at
+    /// all; every other leaf becomes a `JObject`, boxing where the typed `run`
+    /// descriptor declares an object.
+    ///
+    /// Both forms encode INSIDE `reach`, so an absent value on the way to the
+    /// leaf yields this adapter's absence — a JVM null — rather than a value
+    /// the walk invented.
+    fn encode(
+        &self,
+        leaf: &crate::jni::compile::OutWire,
+        index: usize,
+        slot: &syn::Ident,
+        reach: &prebindgen_registry::unfold::Reach<'_>,
+        fail: &dyn Fn(TokenStream) -> TokenStream,
+        emit: &prebindgen_registry::RustWriter,
+    ) -> TokenStream {
+        let pipeline = match &leaf.abi {
+            Some(crate::jni::compile::OutAbi::Value(value)) => &value.pipeline,
+            Some(crate::jni::compile::OutAbi::Tag) => {
+                unreachable!("a sum selector is encoded with its own segment")
+            }
+            None => panic!(
+                "jnigen delivery: leaf `{}` reached Rust rendering without a frozen output ABI",
+                leaf.name
+            ),
+        };
+        let wire = pipeline.wire().clone();
+        let conv_fail = fail(quote!(__e.to_string()));
+        let convert = |input: TokenStream| -> TokenStream {
+            let call = pipeline.invoke(input, emit);
+            quote! {
+                match #call {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        #conv_fail
+                    }
+                }
+            }
+        };
+        let encoded = format_ident!("__enc{}", index);
+        if self.leaf_is_prim(leaf) {
+            let letter = jni_field_access(&wire)
+                .expect("leaf_is_prim guarantees a primitive wire")
+                .1;
+            let expr = reach(&|reached| {
+                let converted = convert(quote!(#reached));
+                quote! {{
+                    let #encoded = #converted;
+                    jni::sys::jvalue { #letter: #encoded }
+                }}
+            });
+            return quote! { let #slot: jni::sys::jvalue = #expr; };
+        }
+        let cast = cast_wire_to_jobject(&encoded, &wire, fail);
+        let expr = reach(&|reached| {
+            let converted = convert(quote!(#reached));
+            quote! {{
+                let #encoded = #converted;
+                #cast
+            }}
+        });
+        quote! { let #slot: jni::objects::JObject = #expr; }
+    }
+
+    /// How a filled slot rides the typed `run` call: a primitive-wire leaf IS
+    /// its jvalue, and every other leaf's `JObject` passes its raw pointer in
+    /// the `l` slot. Matches the descriptor [`crate::jni::iface`] derives for
+    /// the same leaf.
+    fn argument(&self, leaf: &crate::jni::compile::OutWire, slot: &syn::Ident) -> TokenStream {
+        if self.leaf_is_prim(leaf) {
+            quote!(#slot)
+        } else {
+            quote!(jni::sys::jvalue { l: #slot.as_raw() })
+        }
     }
 }
 
@@ -668,7 +746,7 @@ fn reach_leaf(
 /// arm of fallible externs (whose `fail` routes an encoding failure to the
 /// binding-error channel).
 pub(crate) fn encode_plan_leaves(
-    context: &impl DeliveryContext,
+    context: &FrozenDelivery,
     site: Delivered<'_>,
     obj_idents: &[syn::Ident],
     value: &TokenStream,
@@ -688,19 +766,11 @@ pub(crate) fn encode_plan_leaves(
     let qualify = |id: &syn::Ident| -> syn::Path { context.qualify(id) };
     let n = wires.len();
 
-    // Typed `jvalue` argument expression per leaf, in leaf order: a non-null
-    // primitive-wire leaf passes its raw primitive (`__objN` IS the jvalue);
-    // every other leaf is a `JObject` local whose raw pointer rides the `l`
-    // slot. Matches the descriptor [`crate::jni::iface`]
-    // derives for the same leaf (primitive chunk vs object chunk).
+    // The argument expression per leaf, in leaf order — how a filled slot
+    // rides the call, which is the bridge's answer rather than this loop's.
     let mut arg_exprs: Vec<TokenStream> = Vec::with_capacity(n);
     for (idx, leaf) in wires.iter().enumerate() {
-        let obj_ident = &obj_idents[idx];
-        if context.leaf_is_prim(leaf) {
-            arg_exprs.push(quote!(#obj_ident));
-        } else {
-            arg_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
-        }
+        arg_exprs.push(context.argument(leaf, &obj_idents[idx]));
     }
 
     // A fixed decomposition has one Product, Optional or Choice intermediate.
@@ -977,7 +1047,6 @@ pub(crate) fn encode_plan_leaves(
             ),
         };
         let projection = frozen_projection;
-        let wire = frozen_pipeline.wire().clone();
         let conv_fail = fail(quote!(__e.to_string()));
         let conv = |input: TokenStream| -> TokenStream {
             let call = frozen_pipeline.invoke(input, emit);
@@ -1244,37 +1313,10 @@ pub(crate) fn encode_plan_leaves(
             }
         };
 
-        // A non-null primitive-wire leaf delivers its raw primitive as a typed
-        // `jvalue` — no boxing, no JNI call at all (the typed `run` descriptor
-        // declares the primitive). Everything else (object wires, and nullable
-        // leaves whose `None` arm must yield a JVM null) encodes the reached
-        // value with the leaf's output converter and casts to JObject.
-        let enc_ident = format_ident!("__enc{}", idx);
-        if context.leaf_is_prim(leaf) {
-            let letter = jni_field_access(&wire)
-                .expect("leaf_is_prim guarantees a primitive wire")
-                .1;
-            let expr = reach(&|reached| {
-                let __encoded = conv(quote!(#reached));
-                quote! {{
-                    let #enc_ident = #__encoded;
-                    jni::sys::jvalue { #letter: #enc_ident }
-                }}
-            });
-            stmts.extend(quote! {
-                let #obj_ident: jni::sys::jvalue = #expr;
-            });
-            continue;
-        }
-        let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
-        let expr = reach(&|reached| {
-            let __encoded = conv(quote!(#reached));
-            quote! {{
-                let #enc_ident = #__encoded;
-                #cast
-            }}
-        });
-        stmts.extend(bind_obj(obj_ident, expr));
+        // The encode itself is the bridge's: this loop hands it the leaf's
+        // reach and it says what the slot holds. Reaching is still decided
+        // here — which is what the steps after this one move.
+        stmts.extend(context.encode(leaf, idx, obj_ident, &reach, fail, emit));
     }
 
     // One `match` per conditional value form: the `Some` arm runs the leaves

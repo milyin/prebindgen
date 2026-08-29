@@ -318,7 +318,7 @@ impl JWrapper {
                 FnOutputPlan::Unfold(_) => unreachable!("a convert has a value output plan"),
             };
             let qualify = |id: &syn::Ident| -> syn::Path {
-                crate::jni::emit::DeliveryContext::qualify(delivery, id)
+                prebindgen_registry::unfold::DeliveryBridge::qualify(delivery, id)
             };
             // `None` when the reach is the IDENTITY of `base` and no value form had
             // to be bound — the leaf IS the value, so there is nothing to compose.
