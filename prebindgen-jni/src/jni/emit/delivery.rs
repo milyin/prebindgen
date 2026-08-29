@@ -744,15 +744,13 @@ pub(crate) fn encode_plan_leaves(
     // conditional form may carry a sum field and that segment has to land in
     // the arm too: emitted ahead of it, its `match` would reach a binding the
     // arm has not introduced yet.
-    let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = hoists
+    // Which arm a leaf belongs in is its place's answer, asked here the same
+    // way every other consumer asks it — a bucket exists exactly where some
+    // leaf reports one.
+    let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = wires
         .iter()
-        .enumerate()
-        .filter_map(|(i, _)| {
-            wires
-                .iter()
-                .any(|w| hoisted.conditional(w.reach()).is_some_and(|(j, ..)| j == i))
-                .then_some((i, TokenStream::new()))
-        })
+        .filter_map(|leaf| place(leaf).conditional)
+        .map(|i| (i, TokenStream::new()))
         .collect();
 
     for seg in &sum_segments {
