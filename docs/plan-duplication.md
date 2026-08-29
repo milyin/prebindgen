@@ -101,17 +101,22 @@ disagreement with a standing check; step 3 removes the second derivation.
 ## Size baseline
 
 Rust source lines under each crate's `src/`, from
-`python3 examples/line-report.py`. Three numbers, and every line is in exactly
-one of them: **production**, **test items** (`#[cfg(test)]` items inside
-production files), and **test files** (anything under a `tests/` directory or
-named `tests.rs` / `test_util.rs`).
+
+```
+cargo run --manifest-path tools/line-report/Cargo.toml
+```
+
+Three numbers, and every line is in exactly one of them: **production**, **test
+items** (`#[cfg(test)]` items and statements inside production files), and
+**test files** (anything under a `tests/` directory or named `tests.rs` /
+`test_util.rs`).
 
 | crate | #513 base `cecce967` | #613 base `dea7a55` | production delta |
 |---|---|---|---|
-| `prebindgen-c` | 7148 | 8755 | +1607 |
-| `prebindgen-jni` | 29120 | 30585 | +1465 |
-| `prebindgen-registry` | 12417 | 16647 | +4230 |
-| `prebindgen-flat` | 5157 | 5271 | +114 |
+| `prebindgen-c` | 7148 | 8754 | +1606 |
+| `prebindgen-jni` | 29103 | 30534 | +1431 |
+| `prebindgen-registry` | 12409 | 16639 | +4230 |
+| `prebindgen-flat` | 5157 | 5270 | +113 |
 
 #613's size gate is that the first two decrease from the `dea7a55` column.
 
@@ -122,19 +127,26 @@ counts `#[cfg(test)]` items at any indentation, so a production function moved
 into an inline test module shows up as a production deletion **and** a test-item
 addition rather than as a deletion alone.
 
-An item's end is found by tracking delimiter depth — the `}` closing the brace
-body it opened, or a `;` when it opened none — over lines whose comments and
-literals have been blanked out by a lexer that carries its state across lines.
-Both halves were needed: a gated multiline call ending in `);` ends there
-rather than at the next closing brace, and a `}` inside a multiline raw string
-or a nested block comment is text rather than the item's end.
-`python3 examples/line-report.py --self-test` pins that on a fixture built from
-the call at `prebindgen-jni/src/jni/mod.rs:909`. That item is nine lines; the
-earlier indentation-based rule ran it to line 998 and counted the 81 production
-lines in between as test support, understating the JNI baseline by that much
-(#614 review). The raw-string and block-comment cases are pinned there too,
-each from the review probe that found it.
+**The boundary is syntactic.** `syn` parses each file and the walk asks every
+`#[cfg(test)]`-attributed node — item, impl item, statement, field, variant —
+for its own span. Nothing matches braces, indentation or line shapes.
 
-Only a bare `#[cfg(test)]` counts as a test item: an item behind
-`#[cfg(any(test, feature = "testing"))]` ships to other crates under that
-feature and is production by this rule.
+Three rounds of #614 review each found another valid construct a delimiter
+heuristic could not delimit, which is why the question is put to a parser: a
+gated multiline call ending in `);` (the one at
+`prebindgen-jni/src/jni/mod.rs:909`, which an indentation rule ran to line 998,
+counting 81 production lines as test support); a `}` inside a multiline raw
+string or a nested block comment, which a line-local lexer read as a delimiter;
+and a gated `let x = if c { .. } else { .. };` or a chained `Thing { .. }
+.method();`, whose first brace pair closes in the middle of the statement.
+
+`--self-test` builds a fixture from all five and asserts the line split:
+
+```
+cargo run --manifest-path tools/line-report/Cargo.toml -- --self-test
+```
+
+The tool is deliberately outside the workspace: source locations on spans are a
+Cargo feature of `proc-macro2`, features are additive, and a `Span` that stores
+its location makes `syn::Type` large enough to trip `clippy::large_enum_variant`
+across the C adapter in any `--all-features` build.
