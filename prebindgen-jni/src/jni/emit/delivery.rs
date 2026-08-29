@@ -772,26 +772,16 @@ pub(crate) fn encode_plan_leaves(
                 // the two fill their group differently: one alternative's
                 // payload, or the child's own leaves off the value the gate
                 // unwrapped.
-                let (stmts, args) = if wires[seg.start].is_tag() {
-                    encode_sum_group(
-                        context,
-                        &wires[seg.clone()],
-                        &obj_idents[seg.clone()],
-                        matched,
-                        fail,
-                        emit,
-                    )
-                } else {
-                    crate::jni::emit::encode_presence_group(
-                        context,
-                        &wires[seg.clone()],
-                        &obj_idents[seg.clone()],
-                        matched,
-                        &qualify,
-                        fail,
-                        emit,
-                    )
-                };
+                let (stmts, args) = crate::jni::emit::encode_segment_group(
+                    context,
+                    &wires[seg.clone()],
+                    &obj_idents[seg.clone()],
+                    matched,
+                    seg.start,
+                    &qualify,
+                    fail,
+                    emit,
+                );
                 *group_args.borrow_mut() = args;
                 stmts
             },
@@ -1176,7 +1166,7 @@ mod tests {
             identity,
             nullable: false,
             source,
-            group: None,
+            groups: Vec::new(),
         }
     }
 

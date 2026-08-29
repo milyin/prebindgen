@@ -2458,12 +2458,12 @@ fn a_sealed_class_states_what_it_hands_out() {
     assert_eq!(
         composed,
         vec![
-            "tag: Reading <- tag @None",
-            "exact_v0: i64 <- Exact.v0 @Some(1)",
-            "range_low: i64 <- Range.low @Some(2)",
-            "range_high: i64 <- Range.high @Some(2)",
-            "tagged_v0: String <- Tagged.v0 @Some(3)",
-            "tagged_v1: Priority <- Tagged.v1 @Some(3)",
+            "tag: Reading <- tag @[]",
+            "exact_v0: i64 <- Exact.v0 @[1]",
+            "range_low: i64 <- Range.low @[2]",
+            "range_high: i64 <- Range.high @[2]",
+            "tagged_v0: String <- Tagged.v0 @[3]",
+            "tagged_v1: Priority <- Tagged.v1 @[3]",
         ],
         "the recipe states the tag, then one group per alternative",
     );
@@ -2560,9 +2560,9 @@ fn a_data_class_states_what_it_hands_out() {
         gen.out_lines_for_test("Wrapped")
             .expect("Wrapped states a deconstructing parts recipe"),
         vec![
-            "id: i64 <- id @None",
-            "inner__count: i64 <- inner.count @None",
-            "inner__label: String <- inner.label @None",
+            "id: i64 <- id @[]",
+            "inner__count: i64 <- inner.count @[]",
+            "inner__label: String <- inner.label @[]",
         ],
         "a nested data class contributes its own values, under its field's name",
     );
@@ -2576,9 +2576,14 @@ fn a_data_class_states_what_it_hands_out() {
             "the recipe and the leaf synthesis disagree on {short}",
         );
     }
-    assert!(
-        gen.out_lines_for_test("Guarded").is_none(),
-        "a handle field sends the whole object down the whole-value path",
+    // A handle field is an ordinary leaf: the handle crosses as the `jlong`
+    // the receiver adopts, which is what the whole-object encode has always
+    // emitted for it. Refusing it here kept such a struct off fixed-builder
+    // delivery for no reason the encode shares (#602).
+    assert_eq!(
+        gen.out_lines_for_test("Guarded")
+            .expect("a handle field decomposes like any other leaf"),
+        vec!["id: i64 <- id @[]", "held: Opaque <- held @[]"],
     );
 }
 
@@ -2632,10 +2637,10 @@ fn a_decomposed_return_is_a_site_asking_for_the_parts_row() {
     let gen = jni.build_with(registry).expect("resolve");
 
     let expected = vec![
-        "tag: Reading <- tag @None",
-        "exact_v0: i64 <- Exact.v0 @Some(1)",
-        "range_low: i64 <- Range.low @Some(2)",
-        "range_high: i64 <- Range.high @Some(2)",
+        "tag: Reading <- tag @[]",
+        "exact_v0: i64 <- Exact.v0 @[1]",
+        "range_low: i64 <- Range.low @[2]",
+        "range_high: i64 <- Range.high @[2]",
     ];
     assert_eq!(
         gen.return_site_lines_for_test("read_one")

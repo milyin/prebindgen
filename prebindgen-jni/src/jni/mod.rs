@@ -656,7 +656,7 @@ impl JniGen {
                             crate::jni::struct_plan::sum_field_prop_name(member)
                         ),
                     };
-                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.groups)
                 })
                 .collect(),
         )
@@ -685,7 +685,7 @@ impl JniGen {
                         l.name,
                         l.out_ty.key(),
                         leaf_reach(l),
-                        l.group
+                        l.groups
                     )
                 })
                 .collect(),
@@ -725,7 +725,7 @@ impl JniGen {
                             crate::jni::struct_plan::sum_field_prop_name(member)
                         ),
                     };
-                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.groups)
                 })
                 .collect(),
         )
@@ -779,7 +779,7 @@ impl JniGen {
                         l.name,
                         l.out_ty.key(),
                         leaf_reach(l),
-                        l.group
+                        l.groups
                     )
                 })
                 .collect(),

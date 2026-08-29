@@ -16,6 +16,8 @@ import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
 import io.prebindgen.covertest.TicksCallback
 import io.prebindgen.covertest.WrappedFields
+import io.prebindgen.covertest.__DossierBuilderRaw
+import io.prebindgen.covertest.__MaybeHolderBuilderRaw
 import io.prebindgen.covertest.__u64FolderRawHolder
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryBuilder
@@ -1473,6 +1475,28 @@ internal fun VerdictCallback.asRaw(): VerdictCallbackRaw =
         }
     }
 
+public fun interface AnnotatedBuilder<out R> {
+    public fun run(
+        payload__id: Long,
+        payload__seq: Int,
+        payload__value: Double,
+        payload__flag: Boolean,
+        payload__label: String?,
+        alternate__present: Boolean,
+        alternate__id: Long,
+        alternate__seq: Int,
+        alternate__value: Double,
+        alternate__flag: Boolean,
+        alternate__label: String?,
+        ttl: Long?,
+        priority: Int,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __AnnotatedBuilder: AnnotatedBuilder<Annotated> =
+AnnotatedBuilder { payload__id, payload__seq, payload__value, payload__flag, payload__label, alternate__present, alternate__id, alternate__seq, alternate__value, alternate__flag, alternate__label, ttl, priority -> Annotated.fromParts(payload__id, payload__seq, payload__value, payload__flag, payload__label, alternate__present, alternate__id, alternate__seq, alternate__value, alternate__flag, alternate__label, ttl, priority) }
+
 public fun interface ArraysBuilder<out R> {
     public fun run(
         bytes: ByteArray,
@@ -1531,6 +1555,20 @@ HoldBuilderRaw { tag, for_v0 ->
     when (tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $tag") }
 }
 
+internal fun interface HoldPolicyBuilderRaw<out R> {
+    public fun run(
+        hold__tag: Int,
+        hold__for_v0: Long,
+        grace__present: Boolean,
+        grace__tag: Int,
+        grace__for_v0: Long,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __HoldPolicyBuilderRaw: HoldPolicyBuilderRaw<HoldPolicy> =
+HoldPolicyBuilderRaw { hold__tag, hold__for_v0, grace__present, grace__tag, grace__for_v0 -> HoldPolicy.fromParts(hold__tag, hold__for_v0, grace__present, grace__tag, grace__for_v0) }
+
 internal fun interface LayeredBuilderRaw<out R> {
     public fun run(
         tag: Int,
@@ -1569,6 +1607,32 @@ internal val __MarkerBuilder: MarkerBuilder<Marker> =
 MarkerBuilder { tag, ranked_v0 ->
     when (tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(if (ranked_v0 == Int.MIN_VALUE) null else Priority.fromInt(ranked_v0)); else -> throw IllegalArgumentException("Marker: invalid tag $tag") }
 }
+
+public fun interface ObservationBuilder<out R> {
+    public fun run(
+        id: Long,
+        reading__tag: Int,
+        reading__exact_v0: Long,
+        reading__range_low: Long,
+        reading__range_high: Long,
+        reading__tagged_v0: String?,
+        reading__tagged_v1: Int,
+        reading__companion_v0: Long,
+        fallback__present: Boolean,
+        fallback__tag: Int,
+        fallback__exact_v0: Long,
+        fallback__range_low: Long,
+        fallback__range_high: Long,
+        fallback__tagged_v0: String?,
+        fallback__tagged_v1: Int,
+        fallback__companion_v0: Long,
+        note: String,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __ObservationBuilder: ObservationBuilder<Observation> =
+ObservationBuilder { id, reading__tag, reading__exact_v0, reading__range_low, reading__range_high, reading__tagged_v0, reading__tagged_v1, reading__companion_v0, fallback__present, fallback__tag, fallback__exact_v0, fallback__range_low, fallback__range_high, fallback__tagged_v0, fallback__tagged_v1, fallback__companion_v0, note -> Observation.fromParts(id, reading__tag, reading__exact_v0, reading__range_low, reading__range_high, reading__tagged_v0, reading__tagged_v1, reading__companion_v0, fallback__present, fallback__tag, fallback__exact_v0, fallback__range_low, fallback__range_high, fallback__tagged_v0, fallback__tagged_v1, fallback__companion_v0, note) }
 
 public fun interface ProbeBuilder<out R> {
     public fun run(
@@ -1938,7 +2002,10 @@ public fun labelBorrowedConcat(labels: List<String>, onError: JniErrorHandler<St
 /**
  * Assemble an [`Annotated`] (nested data-class **output** + bare
  * `Option<scalar>` / `Option<enum>` inputs).
+ *
+ * The Rust `Annotated` result is delivered decomposed: the builder callback receives (`payload__id`, `payload__seq`, `payload__value`, `payload__flag`, `payload__label`, `alternate__present`, `alternate__id`, `alternate__seq`, `alternate__value`, `alternate__flag`, `alternate__label`, `ttl`, `priority`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun annotatedNew(
     payload: Payload,
     ttl: Long?,
@@ -1955,10 +2022,11 @@ public fun annotatedNew(
         ttl != null,
         ttl ?: 0L,
         priority?.value ?: Int.MIN_VALUE,
+        __AnnotatedBuilder,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Annotated
 }
 
 /**
@@ -2071,16 +2139,19 @@ public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>)
  * Build an [`Observation`] carrying the selected alternative, optionally with
  * a `fallback` (the next alternative round-robin) — a **sum as a struct
  * field** crossing Rust → Kotlin, required and optional in one value.
+ *
+ * The Rust `Observation` result is delivered decomposed: the builder callback receives (`id`, `reading__tag`, `reading__exact_v0`, `reading__range_low`, `reading__range_high`, `reading__tagged_v0`, `reading__tagged_v1`, `reading__companion_v0`, `fallback__present`, `fallback__tag`, `fallback__exact_v0`, `fallback__range_low`, `fallback__range_high`, `fallback__tagged_v0`, `fallback__tagged_v1`, `fallback__companion_v0`, `note`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun observationNew(
     which: Int,
     withFallback: Boolean,
     onError: JniErrorHandler<Observation?>,
 ): Observation? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.observationNew(which, withFallback, __bcap)
+    val __ret = CovNative.observationNew(which, withFallback, __ObservationBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Observation
 }
 
 /**
@@ -2353,7 +2424,12 @@ public fun envelopeEach(n: Long, sink: EnvelopeCallback, onError: JniErrorHandle
     if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
-/** Build a [`Dossier`] over a fresh [`Summary`] — the two-level container. */
+/**
+ * Build a [`Dossier`] over a fresh [`Summary`] — the two-level container.
+ *
+ * The Rust `Dossier` result is delivered decomposed: the builder callback receives (`note`, `holder__tag`, `holder__summary`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun dossierNew(
     note: Long,
     tag: Long,
@@ -2362,12 +2438,17 @@ public fun dossierNew(
     onError: JniErrorHandler<Dossier?>,
 ): Dossier? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.dossierNew(note, tag, count, total, __bcap)
+    val __ret = CovNative.dossierNew(note, tag, count, total, __DossierBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Dossier
 }
 
-/** Build a [`MaybeHolder`] with the handle present or absent. */
+/**
+ * Build a [`MaybeHolder`] with the handle present or absent.
+ *
+ * The Rust `MaybeHolder` result is delivered decomposed: the builder callback receives (`tag`, `summary`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun maybeHolderNew(
     tag: Long,
     count: Long,
@@ -2376,9 +2457,16 @@ public fun maybeHolderNew(
     onError: JniErrorHandler<MaybeHolder?>,
 ): MaybeHolder? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.maybeHolderNew(tag, count, total, present, __bcap)
+    val __ret = CovNative.maybeHolderNew(
+        tag,
+        count,
+        total,
+        present,
+        __MaybeHolderBuilderRaw,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as MaybeHolder
 }
 
 /**
@@ -2842,12 +2930,17 @@ public fun holdEcho(h: Hold, onError: JniErrorHandler<Hold?>): Hold? {
     return __ret as Hold
 }
 
-/** Round-trip a data class carrying converted-payload sums. */
+/**
+ * Round-trip a data class carrying converted-payload sums.
+ *
+ * The Rust `HoldPolicy` result is delivered decomposed: the builder callback receives (`hold__tag`, `hold__for_v0`, `grace__present`, `grace__tag`, `grace__for_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.holdPolicyEcho(p.hold, p.grace, __bcap)
+    val __ret = CovNative.holdPolicyEcho(p.hold, p.grace, __HoldPolicyBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as HoldPolicy
 }
 
 /**

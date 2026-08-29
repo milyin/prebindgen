@@ -2534,8 +2534,8 @@ fn a_sum_field_decomposes_into_its_tag_and_groups() {
         "the selector is a tag, not a value read off a place"
     );
     assert_eq!(
-        wires[2].group,
-        Some(0),
+        wires[2].groups,
+        vec![0],
         "the payload joins the group its tag selects"
     );
     assert!(
@@ -2545,21 +2545,17 @@ fn a_sum_field_decomposes_into_its_tag_and_groups() {
     );
 }
 
-/// One selector may not own another: an optional nested class whose own child
-/// carries a selector stays on the whole-object path.
+/// One selector owns another: an optional nested class whose own child carries
+/// a selector decomposes, with the inner selector one arm further in.
 ///
-/// `group` is a flat `Option<i32>`, so a nested selector would have to be both
-/// a member of the outer group and a selector of its own, and `segments` would
-/// return overlapping ranges — the outer render then reaches the inner
-/// selector as if it were an ordinary payload. Refusing is a decomposition
-/// this adapter declines, not a panic during `write_rust`: the value keeps the
-/// whole-object encode, which handles the shape.
-///
-/// Nested segments are the endpoint (#602). Until then this test is what says
-/// the boundary is deliberate, and `write_rust` is what proves the refusal
-/// happens before anything renders.
+/// A leaf's group is the **path** of arms it sits inside, so a nested selector
+/// is a member of the outer group (the path it carries) and a selector of its
+/// own (the paths its members carry, one longer) without those being two
+/// meanings of one number. `segments` reads one level at a time, so the ranges
+/// it returns for a level never overlap, and the renderer that enters an arm
+/// asks again one level down (#602).
 #[test]
-fn a_selector_inside_a_gated_group_is_refused_rather_than_rendered() {
+fn a_selector_inside_a_gated_group_is_a_segment_of_its_own() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
         (
@@ -2618,17 +2614,38 @@ fn a_selector_inside_a_gated_group_is_refused_rather_than_rendered() {
         .collect();
     assert_eq!(names, ["inner__present", "inner__id"]);
 
-    // `Outer` would need a selector inside a gated group, and declines.
+    // `Outer` gates `Mid`'s own selector: two levels, and the arm paths say so.
     let outer: syn::Ident = syn::parse_quote!(Outer);
-    assert!(
-        gen.declarations()
-            .struct_out_wires_of(gen.registry(), &outer)
-            .is_none(),
-        "a selector inside a gated group is refused"
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry(), &outer)
+        .expect("a selector inside a gated group decomposes");
+    let leaves: Vec<(String, Vec<i32>)> = wires
+        .iter()
+        .map(|wire| (wire.name.clone(), wire.groups.clone()))
+        .collect();
+    assert_eq!(
+        leaves,
+        [
+            ("mid__present".to_string(), vec![]),
+            ("mid__inner__present".to_string(), vec![0]),
+            ("mid__inner__id".to_string(), vec![0, 0]),
+        ],
+        "the outer flag is unconditional, the inner one sits in the group it          gates, and the leaf sits inside both"
+    );
+    assert_eq!(
+        prebindgen_registry::unfold::segments(&wires),
+        vec![0..3],
+        "one segment at the top level — the inner selector belongs to it          rather than opening a second, overlapping one"
+    );
+    assert_eq!(
+        prebindgen_registry::unfold::segments_at(&wires, 1),
+        vec![1..3],
+        "and it is a segment of its own, one level down"
     );
 
-    // And the refusal holds through rendering: `Outer` keeps the whole-object
-    // encode rather than reaching a selector where a payload was expected.
+    // And it renders: the inner selector is met as a segment rather than as a
+    // payload where a value was expected.
     let dir = unique_test_dir("jnigen_nested_selector");
     std::fs::create_dir_all(&dir).unwrap();
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
@@ -2776,8 +2793,8 @@ fn an_optional_nested_class_decomposes_behind_its_presence() {
         "presence is synthesized, not read off a place holding a boolean"
     );
     assert_eq!(
-        wires[1].group,
-        Some(0),
+        wires[1].groups,
+        vec![0],
         "the child's leaves are the one group that flag gates"
     );
 

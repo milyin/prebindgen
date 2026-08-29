@@ -3619,7 +3619,7 @@ fn a_value_form_states_what_it_hands_out() {
     assert_eq!(
         gen.out_lines_for_test("Vault")
             .expect("Vault states a value-form recipe"),
-        vec!["seq: i64 <- seq @None", "tag: String <- label @None"],
+        vec!["seq: i64 <- seq @[]", "tag: String <- label @[]"],
         "the recipe hands out the value form's fields, named as declared",
     );
     assert_eq!(

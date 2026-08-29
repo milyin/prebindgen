@@ -55,6 +55,7 @@ Base package: `io.prebindgen.covertest`
 
 - `annotated_alternate_value` — `fun annotatedAlternateValue(a: Annotated, onError: JniErrorHandler<Double?>): Double?`
 - `annotated_new` — `fun annotatedNew(payload: Payload, ttl: Long?, priority: Priority?, onError: JniErrorHandler<Annotated?>): Annotated?`
+  - shaped by: return `Annotated` decomposed → [payload__id, payload__seq, payload__value, payload__flag, payload__label, alternate__present, alternate__id, alternate__seq, alternate__value, alternate__flag, alternate__label, ttl, priority] (Callback delivery)
 - `annotated_payload_value` — `fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double`
 - `annotated_priority` — `fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority?`
 - `annotated_ttl` — `fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long?`
@@ -83,6 +84,7 @@ Base package: `io.prebindgen.covertest`
 - `const_array_echo` — `fun constArrayEcho(value: ConstArray, onError: JniErrorHandler<ConstArray?>): ConstArray?`
   - shaped by: return `ConstArray` decomposed → [bytes] (Callback delivery)
 - `dossier_new` — `fun dossierNew(note: Long, tag: Long, count: Long, total: Double, onError: JniErrorHandler<Dossier?>): Dossier?`
+  - shaped by: return `Dossier` decomposed → [note, holder__tag, holder__summary] (Callback delivery)
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary?>): DurationBoundary?`
   - shaped by: return `DurationBoundary` decomposed → [required, delay] (Callback delivery)
 - `duration_emit` — `fun durationEmit(value: ULong, f: DurationCallback, onError: JniErrorHandler<Unit>)`
@@ -94,6 +96,7 @@ Base package: `io.prebindgen.covertest`
 - `hold_echo` — `fun holdEcho(h: Hold, onError: JniErrorHandler<Hold?>): Hold?`
   - shaped by: return `Hold` decomposed → [tag, for_v0] (Callback delivery)
 - `hold_policy_echo` — `fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy?`
+  - shaped by: return `HoldPolicy` decomposed → [hold__tag, hold__for_v0, grace__present, grace__tag, grace__for_v0] (Callback delivery)
 - `holder_tag_or` — `fun holderTagOr(h: Holder?, fallback: Long, onError: JniErrorHandler<Long>): Long`
 - `ingot_optional_grams` — `fun ingotOptionalGrams(i: Ingot?, onError: JniErrorHandler<Long>): Long`
 - `label_borrowed_concat` — `fun labelBorrowedConcat(labels: List<String>, onError: JniErrorHandler<String?>): String?`
@@ -110,8 +113,10 @@ Base package: `io.prebindgen.covertest`
 - `marker_of` — `fun markerOf(which: Int, onError: JniErrorHandler<Marker?>): Marker?`
   - shaped by: return `Marker` decomposed → [tag, ranked_v0] (Callback delivery)
 - `maybe_holder_new` — `fun maybeHolderNew(tag: Long, count: Long, total: Double, present: Boolean, onError: JniErrorHandler<MaybeHolder?>): MaybeHolder?`
+  - shaped by: return `MaybeHolder` decomposed → [tag, summary] (Callback delivery)
 - `object_boundary_value` — `fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long`
 - `observation_new` — `fun observationNew(which: Int, withFallback: Boolean, onError: JniErrorHandler<Observation?>): Observation?`
+  - shaped by: return `Observation` decomposed → [id, reading__tag, reading__exact_v0, reading__range_low, reading__range_high, reading__tagged_v0, reading__tagged_v1, reading__companion_v0, fallback__present, fallback__tag, fallback__exact_v0, fallback__range_low, fallback__range_high, fallback__tagged_v0, fallback__tagged_v1, fallback__companion_v0, note] (Callback delivery)
 - `observation_which` — `fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int`
 - `payload_priority` — `fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority?>): Priority?`
 - `percent_invalid_output` — `fun percentInvalidOutput(onError: JniErrorHandler<Int?>): Int?`

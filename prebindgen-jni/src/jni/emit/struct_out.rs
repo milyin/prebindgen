@@ -114,7 +114,7 @@ pub(crate) fn synth_value_struct_leaves(
                     crate::jni::compile::OutFrom::Present => LeafSource::Presence,
                     _ => LeafSource::Reach,
                 },
-                group: w.group,
+                groups: w.groups,
             })
             .collect(),
     )
@@ -176,7 +176,7 @@ pub(crate) fn encode_leaves(
 /// too (#616 review).
 /// The one "arm" an optional value has: present. Absence contributes no
 /// bindings of its own, only the defaults its group carries.
-const PRESENT_ARM: usize = 0;
+pub(crate) const PRESENT_ARM: i32 = 0;
 
 fn arm_local_base(tag: usize, base: &str) -> String {
     format!("arm{tag}_{base}")
@@ -355,7 +355,7 @@ fn encode_field(
                     let (child_pre, child_slots) = encode_plan(
                         child,
                         &child_access,
-                        &arm_local_base(PRESENT_ARM, base),
+                        &arm_local_base(PRESENT_ARM as usize, base),
                         depth + 1,
                         env_expr,
                         emit,
@@ -363,7 +363,7 @@ fn encode_field(
                     let flag_id = format_ident!("__{}_present", base);
                     let outer_ids: Vec<proc_macro2::Ident> = child_slots
                         .iter()
-                        .map(|slot| outer_of(PRESENT_ARM, &slot.ident))
+                        .map(|slot| outer_of(PRESENT_ARM as usize, &slot.ident))
                         .collect();
                     let outer_tys: Vec<TokenStream> =
                         child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
@@ -571,8 +571,14 @@ fn encode_field(
                             }
                         }
                     });
+                    // One level inside the struct, like the tag it gates and
+                    // like an optional nested class's own flag: it is reached
+                    // THROUGH this field. The decomposition says so by joining
+                    // the names with `__`, and this said `depth` — a
+                    // disagreement no shape reached while `Option<sum>` was
+                    // refused a decomposition to disagree with.
                     slots.push(EncSlot {
-                        depth,
+                        depth: depth + 1,
                         ident: flag_id,
                         wire_ty: quote!(jni::sys::jboolean),
                         descriptor: "Z".to_string(),
