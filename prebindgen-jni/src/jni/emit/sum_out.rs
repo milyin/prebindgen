@@ -87,7 +87,7 @@ pub(crate) struct Slot {
 }
 
 pub(crate) fn leaf_slot(
-    context: &impl DeliveryContext,
+    context: &crate::jni::emit::delivery::FrozenDelivery,
     leaf: &crate::jni::compile::OutWire,
 ) -> Slot {
     if !context.leaf_is_prim(leaf) {
@@ -139,7 +139,7 @@ pub(crate) fn is_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
 /// is that a leaf here is not an independent expression — its slot exists in
 /// every arm and only one arm computes it.
 pub(crate) fn encode_sum_group(
-    context: &impl DeliveryContext,
+    context: &crate::jni::emit::delivery::FrozenDelivery,
     leaves: &[crate::jni::compile::OutWire],
     obj_idents: &[syn::Ident],
     matched: TokenStream,
@@ -153,7 +153,7 @@ pub(crate) fn encode_sum_group(
         .iter()
         .find(|l| l.is_tag())
         .expect("a sum segment carries its selector leaf");
-    let (source, sum) = context.sum(tag_leaf);
+    let (source, sum) = prebindgen_registry::unfold::DeliveryBridge::sum(context, tag_leaf);
 
     let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(context, l)).collect();
 
@@ -285,7 +285,7 @@ pub(crate) fn encode_sum_group(
 /// payload and a struct field of the same type reach their converter the same
 /// way.
 fn encode_group_leaf(
-    context: &impl DeliveryContext,
+    context: &crate::jni::emit::delivery::FrozenDelivery,
     leaf: &crate::jni::compile::OutWire,
     obj_ident: &syn::Ident,
     prim: bool,

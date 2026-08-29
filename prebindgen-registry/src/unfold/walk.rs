@@ -44,6 +44,55 @@ pub trait DecomposedLeaf {
     }
 }
 
+/// A leaf's reach, rendered **around** an encoding body: the walk hands the
+/// body the reached Rust expression and gets back the encoded value, so an
+/// absent value short-circuits to the adapter's own absence rather than to one
+/// the walk chose. `dyn` on both halves because each side is written where it
+/// is known and neither can name the other's closure.
+pub type Reach<'a> = dyn Fn(&dyn Fn(TokenStream) -> TokenStream) -> TokenStream + 'a;
+
+/// The adapter's half of a delivery.
+///
+/// The walk in this module owns how a decomposed value is reached — which
+/// hoist a leaf sits under, what is owned, what is borrowed. What a leaf
+/// becomes in the target language, and how the delivered values are handed to
+/// the call, is the adapter's, and this is where it says so. Stated over
+/// [`DecomposedLeaf`] rather than over an adapter's own leaf type, so the walk
+/// can call it.
+pub trait DeliveryBridge {
+    /// The adapter's leaf.
+    type Leaf: DecomposedLeaf;
+
+    /// Where the source item declaring `ident` is qualified from — the one
+    /// fact about a captured path this crate cannot answer for itself.
+    fn qualify(&self, ident: &syn::Ident) -> syn::Path;
+
+    /// The sum a selector leaf names: the qualified source path of the type,
+    /// and its Flat shape.
+    fn sum(&self, leaf: &Self::Leaf) -> (syn::Path, &prebindgen_flat::flat::Variant);
+
+    /// Encode one leaf into the value the delivery call receives, and bind
+    /// that value to `slot`.
+    ///
+    /// The adapter emits the binding rather than the walk, because the slot's
+    /// type is the adapter's: one leaf may cross as a scalar and the next as a
+    /// reference. `index` is the leaf's position in the delivery, which is
+    /// what any temporary the encode needs is named from. An encoding that can
+    /// fail routes its failure through `fail`.
+    fn encode(
+        &self,
+        leaf: &Self::Leaf,
+        index: usize,
+        slot: &syn::Ident,
+        reach: &Reach<'_>,
+        fail: &dyn Fn(TokenStream) -> TokenStream,
+        emit: &crate::RustWriter,
+    ) -> TokenStream;
+
+    /// The expression that passes `slot` as one argument of the delivery call.
+    fn argument(&self, leaf: &Self::Leaf, slot: &syn::Ident) -> TokenStream;
+}
+
 /// Compose one [`PathStep`] onto the reference expression reached so far.
 /// A `Call` applies its accessor (origin-qualified); a `Field` reads the field
 /// and re-borrows, so the result is a reference either way and steps chain
