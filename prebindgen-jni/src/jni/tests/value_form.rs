@@ -180,7 +180,7 @@ fn an_optional_field_reaches_its_converter_whole() {
     );
     for field in ["stamp", "attachment"] {
         assert!(
-            rust.contains(&format!(".{field}.clone()")),
+            rust.contains(&format!(".{field}).clone()")),
             "`{field}` must be cloned whole, not matched open:\n{rust}"
         );
         assert!(
@@ -2627,8 +2627,11 @@ fn a_consuming_value_form_moves_its_fields() {
         rust.contains("__vf0.label") && rust.contains("__vf0.count"),
         "each field is read off the one hoisted local:\n{rust}"
     );
+    // Spelled the way a clone reaches a field it does not own — off the
+    // borrow, `(&__vf0.label).clone()` — since that is what would appear here
+    // if the form stopped consuming.
     assert!(
-        !rust.contains("__vf0.label.clone()") && !rust.contains("__vf0.count.clone()"),
+        !rust.contains(".label).clone()") && !rust.contains(".count).clone()"),
         "and MOVED out of it — a consuming form exists precisely to drop these \
          clones:\n{rust}"
     );
@@ -2649,7 +2652,7 @@ fn the_borrowing_value_form_still_clones() {
         "a `&T` accessor is still handed a borrow:\n{rust}"
     );
     assert!(
-        rust.contains("__vf0.label.clone()"),
+        rust.contains("(&__vf0.label).clone()"),
         "and its fields are still cloned out:\n{rust}"
     );
 }

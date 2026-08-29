@@ -401,7 +401,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_7
                     let __cb0_obj2: jni::objects::JObject = {
                         let __enc2 = match __jni_out_convert_Vec_u8_to_wire_e9499bf0a706b1a2(
                             &mut env,
-                            __vf0.seq_plain.clone(),
+                            (&__vf0.seq_plain).clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -417,7 +417,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_7
                     let __cb0_obj3: jni::objects::JObject = {
                         let __enc3 = match __jni_out_convert_Cow_static_u8_to_wire_d9a36c77f96791fc(
                             &mut env,
-                            __vf0.seq_cow.clone(),
+                            (&__vf0.seq_cow).clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -433,7 +433,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_7
                     let __cb0_obj4: jni::objects::JObject = {
                         let __enc4 = match __jni_out_convert_jni_text_codec_owned_to_wire_1b6cdff0ec9adbcb(
                             &mut env,
-                            __vf0.text_plain.clone(),
+                            (&__vf0.text_plain).clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -449,7 +449,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_7
                     let __cb0_obj5: jni::objects::JObject = {
                         let __enc5 = match __jni_out_convert_Box_String_to_wire_445d29257759cad9(
                             &mut env,
-                            __vf0.text_boxed.clone(),
+                            (&__vf0.text_boxed).clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -465,7 +465,7 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_7
                     let __cb0_obj6: jni::objects::JObject = {
                         let __enc6 = match __jni_out_convert_Cow_static_str_to_wire_1c9aa86df48df08e(
                             &mut env,
-                            __vf0.text_cow.clone(),
+                            (&__vf0.text_cow).clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {

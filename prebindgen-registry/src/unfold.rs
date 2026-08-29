@@ -1,5 +1,5 @@
 //! Output (data) expansion — the dual of constructor expansion
-//! (`api/core/expand.rs`). A function returning a rich type is *decomposed* by a
+//! ([`crate::expand`]). A function returning a rich type is *decomposed* by a
 //! **deconstructor** into a set of leaf values.
 //!
 //! A **deconstructor** (a type-level `expand_return!` `.field*` list,
@@ -35,8 +35,9 @@ use crate::{
 mod error;
 mod walk;
 pub use walk::{
-    bind_hoists, compose_step, fold_steps, project_leading_fields, reach_leaf_flat, DecomposedLeaf,
-    Hoisted,
+    bind_as_option, bind_hoists, compose_step, conditional_arm, fold_steps, project_leading_fields,
+    reach_leaf, reached_is_ours, segment, segments, DecomposedLeaf, DeliveryBridge, Hoisted,
+    LeafAt, LeafPlace, Reach, Slot,
 };
 
 mod plan;

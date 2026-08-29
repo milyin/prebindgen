@@ -3,7 +3,7 @@
 
 use prebindgen_registry::{
     types_util::result_ok_type,
-    unfold::{bind_hoists, reach_leaf_flat},
+    unfold::{bind_hoists, reach_leaf, LeafAt},
     Conversions,
 };
 
@@ -318,7 +318,7 @@ impl JWrapper {
                 FnOutputPlan::Unfold(_) => unreachable!("a convert has a value output plan"),
             };
             let qualify = |id: &syn::Ident| -> syn::Path {
-                crate::jni::emit::DeliveryContext::qualify(delivery, id)
+                prebindgen_registry::unfold::DeliveryBridge::qualify(delivery, id)
             };
             // `None` when the reach is the IDENTITY of `base` and no value form had
             // to be bound — the leaf IS the value, so there is nothing to compose.
@@ -330,24 +330,30 @@ impl JWrapper {
             let compose = |base: TokenStream, base_is_ref: bool| -> Option<TokenStream> {
                 let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
                 let stmts = &hoisted.stmts;
-                let reached = match hoisted.rebase(&leaf.path) {
-                    Some((local, rest, consuming)) => reach_leaf_flat(
-                        &qualify,
-                        &crate::jni::compile::OutWire::from_leaf(leaf),
-                        &rest,
-                        quote!(#local),
-                        false,
-                        consuming,
-                    ),
-                    None => reach_leaf_flat(
-                        &qualify,
-                        &crate::jni::compile::OutWire::from_leaf(leaf),
-                        &leaf.path,
-                        base.clone(),
-                        base_is_ref,
-                        false,
-                    ),
+                let wire = crate::jni::compile::OutWire::from_leaf(leaf);
+                let rebased = hoisted.rebase(&leaf.path);
+                let (path, from, from_is_ref, consuming) = match &rebased {
+                    Some((local, rest, consuming)) => {
+                        (rest.as_slice(), quote!(#local), false, *consuming)
+                    }
+                    None => (leaf.path.as_slice(), base.clone(), base_is_ref, false),
                 };
+                // `absent: None` — a single delivered return has no arm to put
+                // an absent value in, so an optional step on the way to this
+                // leaf is refused rather than gated.
+                let reached = reach_leaf(
+                    &qualify,
+                    LeafAt {
+                        leaf: &wire,
+                        path,
+                        base: from,
+                        base_is_ref: from_is_ref,
+                        consuming,
+                        unwrap_last: false,
+                    },
+                    None,
+                    &|reached| reached,
+                );
                 if stmts.is_empty() && reached.to_string() == base.to_string() {
                     return None;
                 }

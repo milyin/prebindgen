@@ -327,7 +327,8 @@ fn encode_field(
                     // field is optional, and how Rust spells that is the
                     // source's business (#268).
                     let obind = format_ident!("__on{}", depth);
-                    let coerce = bind_as_option(&quote!(&#value), &obind);
+                    let coerce =
+                        prebindgen_registry::unfold::bind_as_option(&quote!(&#value), &obind);
                     preludes.extend(quote! {
                         let #flag_id: jni::sys::jboolean;
                         #( let #outer_ids: #outer_tys; )*
@@ -487,7 +488,8 @@ fn encode_field(
                     // field is optional, and how Rust spells that is the
                     // source's business (#268).
                     let obind = format_ident!("__oc{}", depth);
-                    let coerce = bind_as_option(&quote!(&#value), &obind);
+                    let coerce =
+                        prebindgen_registry::unfold::bind_as_option(&quote!(&#value), &obind);
                     preludes.extend(quote! {
                         let #flag_id: jni::sys::jboolean;
                         #decls
