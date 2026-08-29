@@ -1,32 +1,22 @@
 //! Output-expansion delivery: unfold plans and leaf encoding.
 //!
-//! # What this module still walks
+//! # What this module walks
 //!
-//! The decomposition walk is the registry's: folding a path onto a base,
-//! binding the hoists, gating each optional step, deciding where a leaf's
-//! reach starts and whether what it reaches is moved, cloned or borrowed. This
-//! module supplies the target-language half through [`DeliveryBridge`] —
-//! encoding a leaf, placing it as a call argument, and what absence looks
-//! like — and keeps `jvalue` layout, local-frame sizing, cached method lookup
-//! and exception routing, which are JNI policy.
+//! Nothing. The decomposition walk is the registry's: binding the hoists,
+//! deciding where a leaf's reach starts, gating each optional step, saying
+//! what is moved and what is cloned, recognising a sum's segment and gating
+//! it, and the `match` a conditional value form's leaves share.
 //!
-//! Two rules are still here, and neither is JNI policy. Each is a fact about
-//! Rust values that any adapter decomposing a return would have to restate:
-//!
-//! * **Sum segmentation** — a decomposed sum's leaves are not independent, so
-//!   the selector and the group leaves after it are emitted as one `match`.
-//! * **Optional-sum gating** — an `Option<sum>` gates the whole segment rather
-//!   than each slot, because absence cannot be the per-leaf null an ordinary
-//!   optional field gets (#220).
-//!
-//! Both belong to the segment rather than to a leaf, which is why they outlast
-//! the reach that moved: the walk hands over one leaf at a time and a segment
-//! is several. #607's next step moves them.
+//! What is here is the target-language half — the [`DeliveryBridge`]
+//! implementation for [`FrozenDelivery`]: encoding a leaf, placing it as a
+//! call argument, what a slot holds when it is not filled, and what absence
+//! looks like — together with `jvalue` layout, local-frame sizing, cached
+//! method lookup and exception routing, which are JNI policy and stay.
 //!
 //! [`DeliveryBridge`]: prebindgen_registry::unfold::DeliveryBridge
 
 use prebindgen_registry::{
-    unfold::{bind_hoists, fold_steps, project_leading_fields, DeliveryBridge, PathStep},
+    unfold::{bind_hoists, DeliveryBridge, PathStep},
     Conversions,
 };
 
@@ -589,6 +579,17 @@ impl prebindgen_registry::unfold::DeliveryBridge for FrozenDelivery {
         quote! { let #slot: jni::objects::JObject = #expr; }
     }
 
+    /// A slot is a `jvalue` for a primitive-wire leaf and a `JObject`
+    /// otherwise, and an unfilled one carries that shape's own empty value: a
+    /// zero of the right jvalue member, or a JVM null.
+    fn slot(&self, leaf: &crate::jni::compile::OutWire) -> prebindgen_registry::unfold::Slot {
+        let slot = crate::jni::emit::sum_out::leaf_slot(self, leaf);
+        prebindgen_registry::unfold::Slot {
+            ty: slot.ty,
+            default: slot.default,
+        }
+    }
+
     /// A leaf whose value was not there delivers a JVM null. Every slot that
     /// can be absent is an object slot for exactly that reason: a primitive
     /// one has no null to carry.
@@ -625,33 +626,6 @@ impl<'a> Delivered<'a> {
             optional: plan.is_optional_base(),
         }
     }
-}
-
-/// Bind `e` so it can be destructured as an `Option` **whatever Rust
-/// representation the source used for it**.
-///
-/// `kind` says a position is optional; it deliberately does not say whether
-/// Rust spells that `Option<T>`, `Box<Option<T>>`, or something else — the flat
-/// model states the destination-language invariant, and the side interpreting
-/// it is the side that must accept any representation. Matching the reached
-/// place directly assumed one, which is `classify off kind, spell with spell()`
-/// broken in the direction nothing was watching: the classification was right
-/// and the *spelling* came from it too. `Box<Option<T>>` then produced
-/// `match &place { Some(..) => .. }` and `E0308` (#268).
-///
-/// A type-ascribed `let` is a coercion site, and deref coercion is transitive
-/// **and** a no-op when the types already match — so this one shape serves
-/// every representation, and the plain `Option<T>` case is unchanged in
-/// behaviour. The payload stays `_`: what it is, is the source's business.
-///
-/// `e` is expected to be a **reference** already — [`compose_step`] composes a
-/// field read as `&(e).f` — so nothing is borrowed here. Borrowing only: an
-/// owned position cannot be made representation-agnostic this way, because
-/// deref coercion applies to references and moving out of a wrapper is
-/// something only some of them permit (`Box` does, `Rc` cannot). A site that
-/// must MOVE the payload keeps its direct match; see `owned_place` below.
-pub(crate) fn bind_as_option(e: &TokenStream, bind: &syn::Ident) -> TokenStream {
-    quote! { let #bind: &::core::option::Option<_> = #e; }
 }
 
 /// Encode a plan's leaves off `value` (`__out`, a `Some`-bound `__inner`, a Vec
@@ -759,22 +733,9 @@ pub(crate) fn encode_plan_leaves(
     // left of its path, and whether that form gave its value away.
     let place = |leaf: &crate::jni::compile::OutWire| hoisted.place(leaf, value, by_ref);
 
-    // A decomposed **sum** is the one shape whose leaves are not independent:
-    // only one group is live per value, so its whole segment — the selector
-    // leaf plus the group leaves that follow it — is emitted as ONE `match`
-    // instead of per-leaf expressions. A plan may carry several: a sum that IS
-    // the returned value is the degenerate case of one segment covering
-    // everything, while a value form contributes one per sum-typed field.
-    let sum_segments: Vec<std::ops::Range<usize>> = (0..n)
-        .filter(|&i| wires[i].is_tag())
-        .map(|start| {
-            let end = (start + 1..n)
-                .take_while(|&i| wires[i].group.is_some())
-                .last()
-                .map_or(start + 1, |i| i + 1);
-            start..end
-        })
-        .collect();
+    // Which leaves form a segment is the plan's own answer, read by the
+    // walk: a selector plus the group leaves after it.
+    let sum_segments = prebindgen_registry::unfold::segments(&wires);
 
     // Leaves under a conditional value form are collected per hoist and emitted
     // below as ONE `match` on its `Option` local — the same treatment a sum's
@@ -795,131 +756,42 @@ pub(crate) fn encode_plan_leaves(
         .collect();
 
     for seg in &sum_segments {
-        let leaf = &wires[seg.start];
-        let at = place(leaf);
-        let at_conditional = at.conditional;
-        let (base, base_is_ref, path) = (at.base, at.base_is_ref, at.path);
-        // The value to `match` on. The selector's own path reaches the sum
-        // (empty when the sum IS the value), and a step on it MAY be optional:
-        // the refusal that used to guarantee otherwise is gone (#220), which is
-        // what the gate below exists for.
-        //
-        // A plain field chain is borrowed DIRECTLY (`&base.a.b`) rather than
-        // through the base (`&(&base).a.b`). The two are the same value, but
-        // the second borrows the base as a whole, which the borrow checker
-        // rejects once a sibling leaf has moved another field out of it — and
-        // borrowing this field while sibling fields move is exactly what a
-        // consuming value form does.
-        let (projected, lead) = project_leading_fields(&base, base_is_ref, &path);
-        // An `Option<sum>` field gates the WHOLE segment, not each slot (#220).
-        // A sum's leaves are not independent — only one group is live per value
-        // — so absence cannot be the per-leaf `null` `reach_leaf` gives an
-        // ordinary optional field. It is one tuple bind whose `None` arm carries
-        // every slot's default, which is the shape a conditional value form's
-        // hoist already emits below; this applies it to an optional step inside
-        // the segment's own path.
-        let opt_at = (lead..path.len()).find(|&i| path[i].is_optional());
-        let (matched, gate) = match opt_at {
-            None => (fold_steps(&qualify, &path[lead..], projected, false), None),
-            Some(k) => {
-                // Through the optional step INCLUSIVE, then the rest off the
-                // binding — the same split `reach_leaf` makes, so the borrow in
-                // front of it stays the ordinary rule rather than a second
-                // statement of it.
-                let opt_e = fold_steps(&qualify, &path[lead..=k], projected, false);
-                let bind = format_ident!("__sg{}", seg.start);
-                // ONE optional step is what the gate below handles. A second
-                // one in the tail would compose `match &Option<..>` against bare
-                // variant patterns — the E0308 in the consumer's crate that the
-                // deleted `builder.rs` assert used to pre-empt by name, so the
-                // named diagnostic keeps a home here.
-                //
-                // `assert!`, not `debug_assert!`: a build script inherits the
-                // consumer's profile, so a debug-only check is absent from
-                // exactly the release build where a mis-emission costs the most
-                // to diagnose. Same rule, same phrasing, as the single-return
-                // optional-step assert in `reach_leaf` above.
-                //
-                // The condition is what actually breaks, not the stronger fact
-                // that happens to hold: every sum leaf's path stops AT the sum,
-                // so the tail is empty today, but a NON-optional tail composes
-                // correctly through `fold_steps` — refusing it would refuse a
-                // shape that works.
-                assert!(
-                    !path[k + 1..].iter().any(PathStep::is_optional),
-                    "jnigen unfold: leaf `{}` reaches its sum through TWO optional \
-                     steps — the segment gate has one `None` arm, so the second \
-                     would be matched as if it were the sum itself",
-                    leaf.name,
-                );
-                // What the `match` binds, asked of the step rather than assumed:
-                // the FIELD branch scrutinizes `&Option<_>` (that is what
-                // `bind_as_option` is for), so ergonomics binds `&Sum` — a
-                // borrow. Only an owned-yielding CALL binds an owned value. The
-                // literal `true` disagreed with `reach_leaf`, which passes
-                // `false` for its analogous recursion.
-                let inner = fold_steps(
-                    &qualify,
-                    &path[k + 1..],
-                    quote!(#bind),
-                    path[k].yields_owned(),
-                );
-                (inner, Some((k, opt_e, bind)))
-            }
-        };
-        let (group_stmts, group_args) = encode_sum_group(
+        let at = place(&wires[seg.start]);
+        // The segment's own encode — which slot carries which alternative's
+        // value, and what the selector is set to — is this adapter's. Reaching
+        // the sum it is encoded from, and gating the whole segment when that
+        // reach passes through an optional step, is the walk's.
+        let group_args = std::cell::RefCell::new(Vec::new());
+        let group_stmts = prebindgen_registry::unfold::segment(
             context,
+            &qualify,
+            &at,
+            seg.start,
             &wires[seg.clone()],
             &obj_idents[seg.clone()],
-            matched,
-            fail,
-            emit,
+            &|matched| {
+                let (stmts, args) = encode_sum_group(
+                    context,
+                    &wires[seg.clone()],
+                    &obj_idents[seg.clone()],
+                    matched,
+                    fail,
+                    emit,
+                );
+                *group_args.borrow_mut() = args;
+                stmts
+            },
         );
-        let group_stmts = match gate {
-            None => group_stmts,
-            Some((k, opt_e, bind)) => {
-                let ids: Vec<&syn::Ident> = obj_idents[seg.clone()].iter().collect();
-                let slots: Vec<Slot> = wires[seg.clone()]
-                    .iter()
-                    .map(|l| leaf_slot(context, l))
-                    .collect();
-                let tys = slots.iter().map(|s| &s.ty);
-                let defaults = slots.iter().map(|s| &s.default);
-                // A FIELD step composes to a borrow, so it goes through a
-                // coercion site and the destructure stops caring which
-                // representation the source spelled the optional as (#268). A
-                // CALL yields its own owned value, whose payload downstream may
-                // move, so it keeps the direct match — the same division
-                // `reach_leaf` makes.
-                let (prelude, scrutinee) = if path[k].is_field() {
-                    let opt_bind = format_ident!("__so{}", seg.start);
-                    (bind_as_option(&opt_e, &opt_bind), quote!(#opt_bind))
-                } else {
-                    (TokenStream::new(), opt_e)
-                };
-                quote! {
-                    let (#(#ids,)*): (#(#tys,)*) = {
-                        #prelude
-                        match #scrutinee {
-                            ::core::option::Option::Some(#bind) => {
-                                #group_stmts
-                                (#(#ids,)*)
-                            }
-                            ::core::option::Option::None => (#(#defaults,)*),
-                        }
-                    };
-                }
-            }
-        };
         // The whole segment — its slot declarations and its `match` — is
         // routed like any other leaf under the same form.
-        match at_conditional {
+        match at.conditional {
             Some(i) => cond_stmts
                 .get_mut(&i)
                 .expect("a conditional leaf's hoist has a bucket")
                 .extend(group_stmts),
             None => stmts.extend(group_stmts),
         }
+        let group_args = group_args.into_inner();
         for (k, e) in group_args.into_iter().enumerate() {
             arg_exprs[seg.start + k] = e;
         }
@@ -1181,33 +1053,12 @@ pub(crate) fn encode_plan_leaves(
         stmts.extend(context.encode(leaf, idx, obj_ident, &reach, fail, emit));
     }
 
-    // One `match` per conditional value form: the `Some` arm runs the leaves
-    // that hang off it and yields their locals as a tuple; the `None` arm
-    // yields the same wire defaults an inert sum group carries. Binding the
-    // tuple outside the match is what keeps the leaves' locals in scope for the
-    // argument expressions, which are indifferent to how the slot was filled.
+    // Each conditional value form's leaves share one `match` on its `Option`
+    // local — the walk's shape, filled with this adapter's slots.
     for (i, body) in cond_stmts {
-        let local = hoisted.local(i);
-        let bind = format_ident!("__u{}", i);
-        let idxs: Vec<usize> = (0..n)
-            .filter(|&k| {
-                hoisted
-                    .conditional(wires[k].reach())
-                    .is_some_and(|(j, ..)| j == i)
-            })
-            .collect();
-        let ids: Vec<&syn::Ident> = idxs.iter().map(|&k| &obj_idents[k]).collect();
-        let tys = idxs.iter().map(|&k| leaf_slot(context, &wires[k]).ty);
-        let defaults = idxs.iter().map(|&k| leaf_slot(context, &wires[k]).default);
-        // Matched BY VALUE: the local is this arm's alone (every leaf under the
-        // hoist is in it), so a consuming value form's fields move out here
-        // exactly as they do at an unconditional one.
-        stmts.extend(quote! {
-            let (#(#ids,)*): (#(#tys,)*) = match #local {
-                ::core::option::Option::Some(#bind) => { #body (#(#ids,)*) }
-                ::core::option::Option::None => (#(#defaults,)*),
-            };
-        });
+        stmts.extend(prebindgen_registry::unfold::conditional_arm(
+            context, &hoisted, i, &wires, obj_idents, body,
+        ));
     }
     (stmts, arg_exprs, None)
 }

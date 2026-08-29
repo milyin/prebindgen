@@ -34,6 +34,15 @@ pub trait DecomposedLeaf {
     /// The reading the leaf delivers.
     fn source(&self) -> &TypeRef;
 
+    /// Whether this leaf is the synthesized **selector** — the value naming
+    /// which alternative of a decomposed sum is live. It selects between the
+    /// groups rather than joining one.
+    fn selects(&self) -> bool;
+
+    /// The alternative this leaf belongs to, when it is one of a sum's group
+    /// leaves. `None` for a leaf that is always live.
+    fn group(&self) -> Option<i32>;
+
     /// Whether the last step reaching it is a field read rather than a call.
     ///
     /// Derived from [`Self::reach`], so no implementation can disagree with
@@ -42,6 +51,16 @@ pub trait DecomposedLeaf {
     fn is_field_read(&self) -> bool {
         matches!(self.reach().last(), Some(PathStep::Field { .. }))
     }
+}
+
+/// One delivered value's slot, as the walk needs to see it: a slot exists for
+/// every leaf whether or not the value behind it does, so a gate that skips an
+/// encode still has to declare the slot and fill it.
+pub struct Slot {
+    /// The slot's type.
+    pub ty: TokenStream,
+    /// What an unfilled slot carries.
+    pub default: TokenStream,
 }
 
 /// A leaf's reach, rendered **around** an encoding body: the walk hands the
@@ -91,6 +110,11 @@ pub trait DeliveryBridge {
 
     /// The expression that passes `slot` as one argument of the delivery call.
     fn argument(&self, leaf: &Self::Leaf, slot: &syn::Ident) -> TokenStream;
+
+    /// What one leaf's slot holds when the walk fills it without running the
+    /// leaf's encode — the `None` arm of a gate, where a slot exists but the
+    /// value behind it does not.
+    fn slot(&self, leaf: &Self::Leaf) -> Slot;
 
     /// What a leaf delivers when an optional step on the way to it found
     /// nothing. [`reach_leaf`] gates on this rather than on a value of its
@@ -503,6 +527,206 @@ fn reached_place<L: DecomposedLeaf>(
         e
     }
 }
+/// The **segments** of a decomposition: each selector leaf, together with the
+/// group leaves that follow it.
+///
+/// A sum's leaves are not independent — only one alternative is live per value
+/// — so a segment is emitted as one `match` rather than as a leaf at a time.
+/// The plan already says which leaves those are: a selector says so of itself,
+/// and each of the leaves after it carries the alternative it belongs to until
+/// one does not. A decomposition may carry several segments, or none: a sum
+/// that IS the delivered value is one segment covering everything, and a value
+/// form contributes one per sum-typed field.
+///
+/// Not recognising a segment is silent rather than a compile error — the
+/// leaves are all there, and a delivery that treats them as independent reads
+/// a dead alternative's fields — which is why this is the registry's answer
+/// and not an adapter's.
+pub fn segments<L: DecomposedLeaf>(leaves: &[L]) -> Vec<std::ops::Range<usize>> {
+    let n = leaves.len();
+    (0..n)
+        .filter(|&i| leaves[i].selects())
+        .map(|start| {
+            let end = (start + 1..n)
+                .take_while(|&i| leaves[i].group().is_some())
+                .last()
+                .map_or(start + 1, |i| i + 1);
+            start..end
+        })
+        .collect()
+}
+
+/// Render one segment off `place`, gating the whole of it when the selector
+/// reaches its sum through an optional step.
+///
+/// `group` renders the segment's own encode from the expression naming the
+/// live sum — that half is the adapter's, since what a group of slots is
+/// filled with is a target-language question.
+///
+/// **An `Option<sum>` gates the segment, not each slot.** A sum's leaves are
+/// not independent, so absence cannot be the per-leaf absent value
+/// [`reach_leaf`] gives an ordinary optional field: it is one tuple bind whose
+/// `None` arm carries every slot's default. That is the same shape a
+/// conditional value form's hoist emits, applied to an optional step inside
+/// the segment's own path (#220).
+///
+/// `index` names the segment's locals, so two segments of one delivery cannot
+/// collide.
+pub fn segment<B: DeliveryBridge>(
+    bridge: &B,
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    place: &LeafPlace,
+    index: usize,
+    leaves: &[B::Leaf],
+    slots: &[syn::Ident],
+    group: &dyn Fn(TokenStream) -> TokenStream,
+) -> TokenStream {
+    let path = &place.path;
+    // A plain field chain is borrowed DIRECTLY (`&base.a.b`) rather than
+    // through the base (`&(&base).a.b`). The two are the same value, but the
+    // second borrows the base as a whole, which the borrow checker rejects
+    // once a sibling leaf has moved another field out of it — and borrowing
+    // this field while sibling fields move is exactly what a consuming value
+    // form does.
+    let (projected, lead) = project_leading_fields(&place.base, place.base_is_ref, path);
+    // The selector's own path reaches the sum (empty when the sum IS the
+    // value), and a step on it MAY be optional.
+    let Some(k) = (lead..path.len()).find(|&i| path[i].is_optional()) else {
+        return group(fold_steps(qualify, &path[lead..], projected, false));
+    };
+    // Through the optional step INCLUSIVE, then the rest off the binding — the
+    // same split [`reach_leaf`] makes, so the borrow in front of it stays the
+    // ordinary rule rather than a second statement of it.
+    let opt_e = fold_steps(qualify, &path[lead..=k], projected, false);
+    let bind = format_ident!("__sg{}", index);
+    // ONE optional step is what this gate handles. A second one in the tail
+    // would compose `match &Option<..>` against bare variant patterns — an
+    // E0308 in the consumer's crate — so the named diagnostic is raised here
+    // instead.
+    //
+    // `assert!`, not `debug_assert!`: a build script inherits the consumer's
+    // profile, so a debug-only check is absent from exactly the release build
+    // where a mis-emission costs the most to diagnose. Same rule, same
+    // phrasing, as the single-return optional-step assert in [`reach_leaf`].
+    //
+    // The condition is what actually breaks, not the stronger fact that
+    // happens to hold: every sum leaf's path stops AT the sum, so the tail is
+    // empty today, but a NON-optional tail composes correctly through
+    // [`fold_steps`] — refusing it would refuse a shape that works.
+    assert!(
+        !path[k + 1..].iter().any(PathStep::is_optional),
+        "unfold: leaf `{}` reaches its sum through TWO optional steps — the \
+         segment gate has one `None` arm, so the second would be matched as if \
+         it were the sum itself",
+        leaves
+            .first()
+            .expect("a segment has at least its selector")
+            .name(),
+    );
+    // What the `match` binds, asked of the step rather than assumed: the FIELD
+    // branch scrutinizes `&Option<_>`, so ergonomics binds `&Sum` — a borrow.
+    // Only an owned-yielding CALL binds an owned value.
+    let inner = group(fold_steps(
+        qualify,
+        &path[k + 1..],
+        quote!(#bind),
+        path[k].yields_owned(),
+    ));
+    let filled: Vec<Slot> = leaves.iter().map(|leaf| bridge.slot(leaf)).collect();
+    let tys = filled.iter().map(|slot| &slot.ty);
+    let defaults = filled.iter().map(|slot| &slot.default);
+    // A FIELD step composes to a borrow, so it goes through a coercion site
+    // and the destructure stops caring which representation the source spelled
+    // the optional as (#268). A CALL yields its own owned value, whose payload
+    // downstream may move, so it keeps the direct match — the same division
+    // [`reach_leaf`] makes.
+    let (prelude, scrutinee) = if path[k].is_field() {
+        let opt_bind = format_ident!("__so{}", index);
+        (bind_as_option(&opt_e, &opt_bind), quote!(#opt_bind))
+    } else {
+        (TokenStream::new(), opt_e)
+    };
+    quote! {
+        let (#(#slots,)*): (#(#tys,)*) = {
+            #prelude
+            match #scrutinee {
+                ::core::option::Option::Some(#bind) => {
+                    #inner
+                    (#(#slots,)*)
+                }
+                ::core::option::Option::None => (#(#defaults,)*),
+            }
+        };
+    }
+}
+
+/// The `match` a **conditional** value form's leaves share.
+///
+/// A hoist under an optional step ran only where the value was present, so its
+/// leaves cannot be independent statements: their slots exist either way, and
+/// only one arm computes them. The `Some` arm runs `body` — the statements
+/// those leaves contributed — and yields their slots as a tuple; the `None`
+/// arm yields each slot's default, the same shape [`segment`] gives an absent
+/// sum. Binding the tuple outside the `match` keeps the slots in scope for the
+/// call's argument list, which is indifferent to how a slot was filled.
+///
+/// Matched BY VALUE: the local is this arm's alone, every leaf under the hoist
+/// being in it, so a consuming value form's fields move out here exactly as
+/// they do at an unconditional one.
+pub fn conditional_arm<B: DeliveryBridge>(
+    bridge: &B,
+    hoisted: &Hoisted,
+    index: usize,
+    leaves: &[B::Leaf],
+    slots: &[syn::Ident],
+    body: TokenStream,
+) -> TokenStream {
+    let local = hoisted.local(index);
+    let bind = format_ident!("__u{}", index);
+    let under: Vec<usize> = (0..leaves.len())
+        .filter(|&k| {
+            hoisted
+                .conditional(leaves[k].reach())
+                .is_some_and(|(j, ..)| j == index)
+        })
+        .collect();
+    let ids: Vec<&syn::Ident> = under.iter().map(|&k| &slots[k]).collect();
+    let filled: Vec<Slot> = under.iter().map(|&k| bridge.slot(&leaves[k])).collect();
+    let tys = filled.iter().map(|slot| &slot.ty);
+    let defaults = filled.iter().map(|slot| &slot.default);
+    quote! {
+        let (#(#ids,)*): (#(#tys,)*) = match #local {
+            ::core::option::Option::Some(#bind) => { #body (#(#ids,)*) }
+            ::core::option::Option::None => (#(#defaults,)*),
+        };
+    }
+}
+
+/// Bind `e` so it can be destructured as an `Option` **whatever Rust
+/// representation the source used for it**.
+///
+/// The model says a position is optional; it deliberately does not say whether
+/// Rust spells that `Option<T>`, `Box<Option<T>>`, or something else — the
+/// side interpreting the classification is the side that must accept any
+/// representation. Matching the reached place directly assumed one, which is
+/// "classify off the model, spell from the model" broken in the direction
+/// nothing was watching: `Box<Option<T>>` then produced
+/// `match &place { Some(..) => .. }` and an E0308 (#268).
+///
+/// A type-ascribed `let` is a coercion site, and deref coercion is transitive
+/// **and** a no-op when the types already match — so this one shape serves
+/// every representation, and the plain `Option<T>` case is unchanged.
+///
+/// `e` is expected to be a **reference** already — [`compose_step`] composes a
+/// field read as `&(e).f` — so nothing is borrowed here. Borrowing only: an
+/// owned position cannot be made representation-agnostic this way, because
+/// deref coercion applies to references and moving out of a wrapper is
+/// something only some of them permit (`Box` does, `Rc` cannot). A site that
+/// must MOVE the payload keeps its direct match.
+pub fn bind_as_option(e: &TokenStream, bind: &syn::Ident) -> TokenStream {
+    quote! { let #bind: &::core::option::Option<_> = #e; }
+}
+
 /// Every value form on a plan, evaluated **once** and bound to a local
 /// (`__vf0`, `__vf1`, …), so a struct is built once per delivery rather than
 /// once per field. The bound prefixes come back with the statements, since

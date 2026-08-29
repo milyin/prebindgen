@@ -555,6 +555,14 @@ impl prebindgen_registry::unfold::DecomposedLeaf for OutWire {
     fn source(&self) -> &TypeRef {
         &self.out_ty
     }
+
+    fn selects(&self) -> bool {
+        self.is_tag()
+    }
+
+    fn group(&self) -> Option<i32> {
+        self.group
+    }
 }
 
 impl OutWire {
