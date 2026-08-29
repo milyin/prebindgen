@@ -1765,6 +1765,65 @@ fn reachable_fragments<R: Representation>(
     reached
 }
 
+/// Every production Rust source under `dir`, as (label, text) pairs.
+///
+/// A **production** source is one that is not test support: anything under a
+/// `tests/` directory, or named `tests.rs` or `test_util.rs`, is skipped. The
+/// label is the path relative to `dir`'s parent, which is what a fence prints
+/// when it names where it found something.
+///
+/// Discovered by walking the directory rather than by a list a test carries,
+/// because a fence over a list only fences the files someone remembered to add
+/// to it — and a new module is the most natural way to introduce the thing a
+/// fence exists to reject.
+#[cfg(any(test, feature = "testing"))]
+pub fn production_sources(dir: &std::path::Path) -> Vec<(String, String)> {
+    fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<(String, String)>) {
+        let mut entries: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+            .unwrap_or_else(|error| panic!("read source directory {}: {error}", dir.display()))
+            .map(|entry| {
+                entry
+                    .unwrap_or_else(|error| {
+                        panic!("read source entry under {}: {error}", dir.display())
+                    })
+                    .path()
+            })
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name == "tests") {
+                    continue;
+                }
+                walk(&path, root, out);
+                continue;
+            }
+            if path.extension().is_none_or(|extension| extension != "rs") {
+                continue;
+            }
+            if path
+                .file_name()
+                .is_some_and(|name| name == "tests.rs" || name == "test_util.rs")
+            {
+                continue;
+            }
+            let label = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .display()
+                .to_string();
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read source {}: {error}", path.display()));
+            out.push((label, text));
+        }
+    }
+
+    let mut out = Vec::new();
+    let root = dir.parent().unwrap_or(dir);
+    walk(dir, root, &mut out);
+    out
+}
+
 /// The names of the shape-shaped enums a set of sources declares.
 ///
 /// A **shape-shaped** enum is one whose variants name three or more of the

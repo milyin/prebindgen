@@ -100,15 +100,16 @@ disagreement with a standing check; step 3 removes the second derivation.
 
 ## Size baseline
 
-Rust source lines under each crate's `src/`, from `bash examples/line-report.sh`.
-Three numbers, and every line is in exactly one of them: **production**, **test
-items** (`#[cfg(test)]` items inside production files), and **test files**
-(anything under a `tests/` directory or named `tests.rs` / `test_util.rs`).
+Rust source lines under each crate's `src/`, from
+`python3 examples/line-report.py`. Three numbers, and every line is in exactly
+one of them: **production**, **test items** (`#[cfg(test)]` items inside
+production files), and **test files** (anything under a `tests/` directory or
+named `tests.rs` / `test_util.rs`).
 
 | crate | #513 base `cecce967` | #613 base `dea7a55` | production delta |
 |---|---|---|---|
 | `prebindgen-c` | 7148 | 8755 | +1607 |
-| `prebindgen-jni` | 29117 | 30561 | +1444 |
+| `prebindgen-jni` | 29120 | 30585 | +1465 |
 | `prebindgen-registry` | 12417 | 16647 | +4230 |
 | `prebindgen-flat` | 5157 | 5271 | +114 |
 
@@ -120,6 +121,15 @@ existed and by a different rule. The script is the definition from here on: it
 counts `#[cfg(test)]` items at any indentation, so a production function moved
 into an inline test module shows up as a production deletion **and** a test-item
 addition rather than as a deletion alone.
+
+An item's end is found by tracking delimiter depth — the `}` closing the brace
+body it opened, or a `;` when it opened none — so a gated multiline call ending
+in `);` ends there rather than at the next closing brace.
+`python3 examples/line-report.py --self-test` pins that on a fixture built from
+the call at `prebindgen-jni/src/jni/mod.rs:909`. That item is nine lines; the
+earlier indentation-based rule ran it to line 998 and counted the 81 production
+lines in between as test support, understating the JNI baseline by that much
+(#614 review).
 
 Only a bare `#[cfg(test)]` counts as a test item: an item behind
 `#[cfg(any(test, feature = "testing"))]` ships to other crates under that

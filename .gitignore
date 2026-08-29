@@ -2,4 +2,4 @@
 /**/target
 /examples/*/build/
 Cargo.lock
-.vscode/
+.vscode/__pycache__/
