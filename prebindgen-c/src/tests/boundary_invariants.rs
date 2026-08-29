@@ -739,3 +739,38 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
         "a C production path accepts the deleted generic converter carrier"
     );
 }
+
+/// The C adapter declares exactly one shape vocabulary of its own, and #613 is
+/// about removing it rather than gaining another.
+///
+/// A shape-shaped enum — one naming three or more of the registry's structural
+/// forms — is a place where the same structural question is asked a second
+/// time. Two are recorded here: `CShape`, which restates the registry's
+/// `ShapePlan` variant for variant while `CFrag::freeze` translates between
+/// them, and `CBody`, which is the rendering half of the same split. Both are
+/// deletion targets, so this list may shrink; it may not grow without a reader
+/// deciding that a third is worth having.
+///
+/// The sources are DISCOVERED, not listed: a fence over a list only fences the
+/// files someone remembered to add to it, and a new module is the most natural
+/// way to introduce a third vocabulary.
+#[test]
+fn the_c_adapter_gains_no_third_shape_vocabulary() {
+    let sources = prebindgen_registry::generation::production_sources(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+    );
+    let borrowed: Vec<(&str, &str)> = sources
+        .iter()
+        .map(|(label, text)| (label.as_str(), text.as_str()))
+        .collect();
+    let names: Vec<String> = prebindgen_registry::generation::shape_like_enums(&borrowed)
+        .iter()
+        .map(|(name, label)| format!("{name} ({label})"))
+        .collect();
+    assert_eq!(
+        names,
+        ["CBody (src/chain.rs)", "CShape (src/compile.rs)"],
+        "the C shape vocabularies changed; #613 shrinks this list, and a new \
+         entry needs an argument rather than a test update"
+    );
+}
