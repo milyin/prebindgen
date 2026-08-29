@@ -788,11 +788,36 @@ fn staged_chain(
 ) -> prebindgen_registry::generation::ConversionChain<JRepresentation> {
     use prebindgen_registry::generation::{ChainValue, Cleanup, ConversionChain, ConverterStep};
     let (from, into) = match direction {
-        Direction::Construct => (ChainValue::Intermediate(inner_key), ChainValue::Source),
-        Direction::Deconstruct => (ChainValue::Source, ChainValue::Intermediate(inner_key)),
+        Direction::Construct => (
+            ChainValue::Intermediate(inner_key.clone()),
+            ChainValue::Source,
+        ),
+        Direction::Deconstruct => (
+            ChainValue::Source,
+            ChainValue::Intermediate(inner_key.clone()),
+        ),
     };
     let own = ConverterStep::new(from, into, operation, failure, Cleanup::None);
-    let inner = inner.steps().iter().cloned();
+    // `ChainValue::Source` names the source value of the fragment that OWNS
+    // the chain, so the inner fragment's steps change meaning when they are
+    // embedded in this one: what was the inner's source value is this
+    // fragment's `inner_key` carrier. Rebasing it is what keeps the steps
+    // adjacent — each step's `into` is the next step's `from` — with `Source`
+    // appearing only at the end of a construct chain and the start of a
+    // deconstruct one.
+    let rebase = |value: &ChainValue<TypeKey>| match value {
+        ChainValue::Source => ChainValue::Intermediate(inner_key.clone()),
+        ChainValue::Intermediate(key) => ChainValue::Intermediate(key.clone()),
+    };
+    let inner = inner.steps().iter().map(|step| {
+        ConverterStep::new(
+            rebase(step.from()),
+            rebase(step.into()),
+            step.operation().clone(),
+            step.failure(),
+            step.cleanup().clone(),
+        )
+    });
     let steps: Vec<ConverterStep<JRepresentation>> = match direction {
         Direction::Construct => inner.chain(std::iter::once(own)).collect(),
         Direction::Deconstruct => std::iter::once(own).chain(inner).collect(),
@@ -4629,6 +4654,102 @@ mod chain_tests {
             source.key(),
             crossing.row(prebindgen_registry::recipe::RecipeName::new(name)),
         )
+    }
+
+    /// One inner chain, in the frame of the fragment that owns it.
+    fn inner_chain(
+        direction: Direction,
+        stage: OperationId,
+        key: &TypeKey,
+    ) -> ConversionChain<JRepresentation> {
+        let (from, into) = match direction {
+            Direction::Construct => (ChainValue::Intermediate(key.clone()), ChainValue::Source),
+            Direction::Deconstruct => (ChainValue::Source, ChainValue::Intermediate(key.clone())),
+        };
+        ConversionChain::Steps(vec![ConverterStep::<JRepresentation>::new(
+            from,
+            into,
+            stage,
+            Failure::Fallible,
+            prebindgen_registry::generation::Cleanup::None,
+        )])
+    }
+
+    /// Every step's destination is the next step's origin, and `Source`
+    /// appears once: at the END of a construct chain and the START of a
+    /// deconstruct one.
+    ///
+    /// The endpoints are what makes the chain a chain. `ChainValue::Source`
+    /// names the source value of the fragment that OWNS the chain, so an inner
+    /// fragment's steps mean something different once they are embedded in an
+    /// outer one — its source value is the outer fragment's carrier. Copying
+    /// them verbatim leaves `Source` in the middle and the steps either side of
+    /// it disconnected, which `validate_chain` rejects as a broken chain and
+    /// today's renderers miss because they read only the operation (#615
+    /// review).
+    #[test]
+    fn an_embedded_chain_is_rebased_into_the_outer_frame() {
+        for direction in [Direction::Construct, Direction::Deconstruct] {
+            let inner_key = TypeKey::parse("Label").expect("test key");
+            let deeper_key = TypeKey::parse("Deeper").expect("test key");
+            let inner_stage = OperationId::stage(fragment_id("inner"), 0);
+            let outer_stage = OperationId::stage(fragment_id("outer"), 0);
+            // The inner fragment's own chain already reaches ITS source value
+            // through a carrier of its own, so the rebase has to cross a chain
+            // that is more than one step long.
+            let inner = staged_chain(
+                direction,
+                inner_stage.clone(),
+                deeper_key,
+                &inner_chain(
+                    direction,
+                    OperationId::stage(fragment_id("deeper"), 0),
+                    &TypeKey::parse("Deepest").expect("test key"),
+                ),
+                Failure::Fallible,
+            );
+
+            let chain = staged_chain(
+                direction,
+                outer_stage.clone(),
+                inner_key.clone(),
+                &inner,
+                Failure::Fallible,
+            );
+            let steps = chain.steps();
+            assert_eq!(steps.len(), 3, "{direction:?}: every step is retained");
+
+            for pair in steps.windows(2) {
+                assert_eq!(
+                    ConverterStep::into(&pair[0]),
+                    ConverterStep::from(&pair[1]),
+                    "{direction:?}: each step's destination is the next one's origin, \
+                     in {chain:?}",
+                    chain = steps
+                        .iter()
+                        .map(|step| format!("{:?} -> {:?}", step.from(), step.into()))
+                        .collect::<Vec<_>>()
+                );
+            }
+            let sources = steps
+                .iter()
+                .filter(|step| {
+                    matches!(ConverterStep::from(step), ChainValue::Source)
+                        || matches!(ConverterStep::into(step), ChainValue::Source)
+                })
+                .count();
+            assert_eq!(sources, 1, "{direction:?}: `Source` appears once");
+            match direction {
+                Direction::Construct => assert!(
+                    matches!(ConverterStep::into(&steps[2]), ChainValue::Source),
+                    "constructing ends at the source value"
+                ),
+                Direction::Deconstruct => assert!(
+                    matches!(ConverterStep::from(&steps[0]), ChainValue::Source),
+                    "deconstructing starts at the source value"
+                ),
+            }
+        }
     }
 
     /// A chain is stored in EXECUTION order for its own direction, which is
