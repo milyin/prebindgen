@@ -1430,6 +1430,48 @@ mod tests {
         );
     }
 
+    /// An owned `Option` payload is borrowed for the accessor that follows it.
+    ///
+    /// The `Some(..)` arm of a gated step binds the step's own value, and an
+    /// accessor returning `Option<T>` binds a bare `T` there. Composing the
+    /// next accessor straight onto it hands `T` to a receiver typed `&T` —
+    /// ill-typed Rust in the consumer's crate, and invisible here until a
+    /// reach has BOTH an owned optional step and something after it. The gated
+    /// reach hardcoded "already a reference" for years because no declared
+    /// leaf had that shape (#609 review). The hoist side of the same rule is
+    /// pinned by `value_form::an_owned_optional_payload_is_borrowed_for_the_steps_after_it`.
+    #[test]
+    fn a_gated_owned_payload_is_borrowed_for_the_step_after_it() {
+        let path = vec![
+            PathStep::call(syn::parse_quote!(get_opt), true, true),
+            PathStep::call(syn::parse_quote!(next), false, false),
+        ];
+        let l = leaf(
+            syn::parse_quote!(Owned),
+            path.clone(),
+            false,
+            LeafSource::Reach,
+        );
+        let got = prebindgen_registry::unfold::reach_leaf(
+            &qualify,
+            prebindgen_registry::unfold::LeafAt {
+                leaf: &crate::jni::compile::OutWire::from_leaf(&l),
+                path: &path,
+                base: quote!(__src),
+                base_is_ref: false,
+                consuming: false,
+                unwrap_last: true,
+            },
+            Some(&|| quote!(__absent)),
+            &|reached| reached,
+        )
+        .to_string();
+        assert!(
+            got.contains("next (& __n0)"),
+            "the owned payload is borrowed for the accessor that follows it — got `{got}`"
+        );
+    }
+
     /// A `Field` leaf is cloned out of the place it reached, whatever the path
     /// shape says — its converter takes the field type as written.
     ///

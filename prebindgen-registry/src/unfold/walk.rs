@@ -300,12 +300,25 @@ fn reach_leaf_at<L: DecomposedLeaf>(
             // statement of it.
             let opt_e = fold_steps(qualify, &path[lead..=k], projected, false);
             let nested = format_ident!("__n{}", depth);
+            // What the arm binds is the step's OWN value: an owned payload is
+            // a bare `T`, so composing the next step onto it directly would
+            // hand `T` to an accessor typed for `&T`. Say it is not a
+            // reference and let `project_leading_fields` borrow it; a borrowed
+            // payload is already one and passes through. With no steps left
+            // the binding goes to `body` untouched, which is what lets an
+            // owned payload be moved rather than borrowed straight back.
+            //
+            // The same rule [`reach_optional`] states for a conditional
+            // hoist's prefix. This used to be a hardcoded `true` in the gated
+            // reach JniGen owned, where an `Option<T>` accessor followed by
+            // another accessor emitted `next(__n0)` against a `&T` receiver.
+            let rest = &path[k + 1..];
             let inner = reach_leaf_at(
                 qualify,
                 LeafAt {
-                    path: &path[k + 1..],
+                    path: rest,
                     base: quote!(#nested),
-                    base_is_ref: true,
+                    base_is_ref: rest.is_empty() || !path[k].yields_owned(),
                     ..at
                 },
                 Some(absent),
