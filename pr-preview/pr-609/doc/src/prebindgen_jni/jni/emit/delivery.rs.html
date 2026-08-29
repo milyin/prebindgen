@@ -1430,73 +1430,115 @@
 <a href=#1430 id=1430 data-nosnippet>1430</a>        </span>);
 <a href=#1431 id=1431 data-nosnippet>1431</a>    }
 <a href=#1432 id=1432 data-nosnippet>1432</a>
-<a href=#1433 id=1433 data-nosnippet>1433</a>    <span class="doccomment">/// A `Field` leaf is cloned out of the place it reached, whatever the path
-<a href=#1434 id=1434 data-nosnippet>1434</a>    /// shape says — its converter takes the field type as written.
-<a href=#1435 id=1435 data-nosnippet>1435</a>    ///
-<a href=#1436 id=1436 data-nosnippet>1436</a>    /// The counterpart of the move above, and what keeps `source` load-bearing
-<a href=#1437 id=1437 data-nosnippet>1437</a>    /// in these fixtures rather than a value they all happen to share.
-<a href=#1438 id=1438 data-nosnippet>1438</a>    </span><span class="attr">#[test]
-<a href=#1439 id=1439 data-nosnippet>1439</a>    </span><span class="kw">fn </span>a_field_leaf_is_cloned_out_of_its_place() {
-<a href=#1440 id=1440 data-nosnippet>1440</a>        <span class="kw">let </span>path = <span class="macro">vec!</span>[
-<a href=#1441 id=1441 data-nosnippet>1441</a>            PathStep::field(<span class="macro">syn::parse_quote!</span>(a), <span class="bool-val">false</span>),
-<a href=#1442 id=1442 data-nosnippet>1442</a>            PathStep::field(<span class="macro">syn::parse_quote!</span>(b), <span class="bool-val">false</span>),
-<a href=#1443 id=1443 data-nosnippet>1443</a>        ];
-<a href=#1444 id=1444 data-nosnippet>1444</a>        <span class="kw">let </span>l = leaf(
-<a href=#1445 id=1445 data-nosnippet>1445</a>            <span class="macro">syn::parse_quote!</span>(Owned),
-<a href=#1446 id=1446 data-nosnippet>1446</a>            path.clone(),
-<a href=#1447 id=1447 data-nosnippet>1447</a>            <span class="bool-val">false</span>,
-<a href=#1448 id=1448 data-nosnippet>1448</a>            LeafSource::Reach,
-<a href=#1449 id=1449 data-nosnippet>1449</a>        );
-<a href=#1450 id=1450 data-nosnippet>1450</a>        <span class="kw">let </span>got = prebindgen_registry::unfold::reach_leaf(
-<a href=#1451 id=1451 data-nosnippet>1451</a>            <span class="kw-2">&amp;</span>qualify,
-<a href=#1452 id=1452 data-nosnippet>1452</a>            prebindgen_registry::unfold::LeafAt {
-<a href=#1453 id=1453 data-nosnippet>1453</a>                leaf: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaf(<span class="kw-2">&amp;</span>l),
-<a href=#1454 id=1454 data-nosnippet>1454</a>                path: <span class="kw-2">&amp;</span>path,
-<a href=#1455 id=1455 data-nosnippet>1455</a>                base: <span class="macro">quote!</span>(__src),
-<a href=#1456 id=1456 data-nosnippet>1456</a>                base_is_ref: <span class="bool-val">false</span>,
-<a href=#1457 id=1457 data-nosnippet>1457</a>                consuming: <span class="bool-val">false</span>,
-<a href=#1458 id=1458 data-nosnippet>1458</a>                unwrap_last: <span class="bool-val">false</span>,
-<a href=#1459 id=1459 data-nosnippet>1459</a>            },
-<a href=#1460 id=1460 data-nosnippet>1460</a>            <span class="prelude-val">None</span>,
-<a href=#1461 id=1461 data-nosnippet>1461</a>            <span class="kw-2">&amp;</span>|reached| reached,
-<a href=#1462 id=1462 data-nosnippet>1462</a>        )
-<a href=#1463 id=1463 data-nosnippet>1463</a>        .to_string();
-<a href=#1464 id=1464 data-nosnippet>1464</a>        <span class="macro">assert!</span>(
-<a href=#1465 id=1465 data-nosnippet>1465</a>            got.contains(<span class="string">"clone"</span>),
-<a href=#1466 id=1466 data-nosnippet>1466</a>            <span class="string">"a non-consuming field leaf clones rather than moves — got `{got}`"
-<a href=#1467 id=1467 data-nosnippet>1467</a>        </span>);
-<a href=#1468 id=1468 data-nosnippet>1468</a>    }
-<a href=#1469 id=1469 data-nosnippet>1469</a>
-<a href=#1470 id=1470 data-nosnippet>1470</a>    <span class="doccomment">/// The optional-step guard asks the LEAF's path, not the caller's slice.
-<a href=#1471 id=1471 data-nosnippet>1471</a>    ///
-<a href=#1472 id=1472 data-nosnippet>1472</a>    /// `wrapper.rs` rebases onto a hoisted local and hands over the remaining
-<a href=#1473 id=1473 data-nosnippet>1473</a>    /// suffix, so checking the parameter would pass exactly when the hoist is
-<a href=#1474 id=1474 data-nosnippet>1474</a>    /// the conditional one — an `Option&lt;T&gt;` local with a field read hung off it,
-<a href=#1475 id=1475 data-nosnippet>1475</a>    /// which cannot compose. Passing the suffix here mimics that rebase.
-<a href=#1476 id=1476 data-nosnippet>1476</a>    </span><span class="attr">#[test]
-<a href=#1477 id=1477 data-nosnippet>1477</a>    #[should_panic(expected = <span class="string">"which has no `None` arm"</span>)]
-<a href=#1478 id=1478 data-nosnippet>1478</a>    </span><span class="kw">fn </span>an_optional_step_in_a_stripped_prefix_is_still_refused() {
-<a href=#1479 id=1479 data-nosnippet>1479</a>        <span class="kw">let </span>full = <span class="macro">vec!</span>[
-<a href=#1480 id=1480 data-nosnippet>1480</a>            PathStep::call(<span class="macro">syn::parse_quote!</span>(get_it), <span class="bool-val">true</span>, <span class="bool-val">false</span>),
-<a href=#1481 id=1481 data-nosnippet>1481</a>            PathStep::field(<span class="macro">syn::parse_quote!</span>(a), <span class="bool-val">false</span>),
-<a href=#1482 id=1482 data-nosnippet>1482</a>        ];
-<a href=#1483 id=1483 data-nosnippet>1483</a>        <span class="kw">let </span>l = leaf(<span class="macro">syn::parse_quote!</span>(Owned), full, <span class="bool-val">false</span>, LeafSource::Reach);
-<a href=#1484 id=1484 data-nosnippet>1484</a>        <span class="comment">// The suffix a rebase would hand over — the optional call is gone from
-<a href=#1485 id=1485 data-nosnippet>1485</a>        // it, and used to take the guard with it.
-<a href=#1486 id=1486 data-nosnippet>1486</a>        </span><span class="kw">let </span>rest = <span class="macro">vec!</span>[PathStep::field(<span class="macro">syn::parse_quote!</span>(a), <span class="bool-val">false</span>)];
-<a href=#1487 id=1487 data-nosnippet>1487</a>        <span class="kw">let _ </span>= prebindgen_registry::unfold::reach_leaf(
-<a href=#1488 id=1488 data-nosnippet>1488</a>            <span class="kw-2">&amp;</span>qualify,
-<a href=#1489 id=1489 data-nosnippet>1489</a>            prebindgen_registry::unfold::LeafAt {
-<a href=#1490 id=1490 data-nosnippet>1490</a>                leaf: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaf(<span class="kw-2">&amp;</span>l),
-<a href=#1491 id=1491 data-nosnippet>1491</a>                path: <span class="kw-2">&amp;</span>rest,
-<a href=#1492 id=1492 data-nosnippet>1492</a>                base: <span class="macro">quote!</span>(__vf0),
-<a href=#1493 id=1493 data-nosnippet>1493</a>                base_is_ref: <span class="bool-val">false</span>,
-<a href=#1494 id=1494 data-nosnippet>1494</a>                consuming: <span class="bool-val">false</span>,
-<a href=#1495 id=1495 data-nosnippet>1495</a>                unwrap_last: <span class="bool-val">false</span>,
-<a href=#1496 id=1496 data-nosnippet>1496</a>            },
-<a href=#1497 id=1497 data-nosnippet>1497</a>            <span class="prelude-val">None</span>,
-<a href=#1498 id=1498 data-nosnippet>1498</a>            <span class="kw-2">&amp;</span>|reached| reached,
-<a href=#1499 id=1499 data-nosnippet>1499</a>        );
-<a href=#1500 id=1500 data-nosnippet>1500</a>    }
-<a href=#1501 id=1501 data-nosnippet>1501</a>}
+<a href=#1433 id=1433 data-nosnippet>1433</a>    <span class="doccomment">/// An owned `Option` payload is borrowed for the accessor that follows it.
+<a href=#1434 id=1434 data-nosnippet>1434</a>    ///
+<a href=#1435 id=1435 data-nosnippet>1435</a>    /// The `Some(..)` arm of a gated step binds the step's own value, and an
+<a href=#1436 id=1436 data-nosnippet>1436</a>    /// accessor returning `Option&lt;T&gt;` binds a bare `T` there. Composing the
+<a href=#1437 id=1437 data-nosnippet>1437</a>    /// next accessor straight onto it hands `T` to a receiver typed `&amp;T` —
+<a href=#1438 id=1438 data-nosnippet>1438</a>    /// ill-typed Rust in the consumer's crate, and invisible here until a
+<a href=#1439 id=1439 data-nosnippet>1439</a>    /// reach has BOTH an owned optional step and something after it. The gated
+<a href=#1440 id=1440 data-nosnippet>1440</a>    /// reach hardcoded "already a reference" for years because no declared
+<a href=#1441 id=1441 data-nosnippet>1441</a>    /// leaf had that shape (#609 review). The hoist side of the same rule is
+<a href=#1442 id=1442 data-nosnippet>1442</a>    /// pinned by `value_form::an_owned_optional_payload_is_borrowed_for_the_steps_after_it`.
+<a href=#1443 id=1443 data-nosnippet>1443</a>    </span><span class="attr">#[test]
+<a href=#1444 id=1444 data-nosnippet>1444</a>    </span><span class="kw">fn </span>a_gated_owned_payload_is_borrowed_for_the_step_after_it() {
+<a href=#1445 id=1445 data-nosnippet>1445</a>        <span class="kw">let </span>path = <span class="macro">vec!</span>[
+<a href=#1446 id=1446 data-nosnippet>1446</a>            PathStep::call(<span class="macro">syn::parse_quote!</span>(get_opt), <span class="bool-val">true</span>, <span class="bool-val">true</span>),
+<a href=#1447 id=1447 data-nosnippet>1447</a>            PathStep::call(<span class="macro">syn::parse_quote!</span>(next), <span class="bool-val">false</span>, <span class="bool-val">false</span>),
+<a href=#1448 id=1448 data-nosnippet>1448</a>        ];
+<a href=#1449 id=1449 data-nosnippet>1449</a>        <span class="kw">let </span>l = leaf(
+<a href=#1450 id=1450 data-nosnippet>1450</a>            <span class="macro">syn::parse_quote!</span>(Owned),
+<a href=#1451 id=1451 data-nosnippet>1451</a>            path.clone(),
+<a href=#1452 id=1452 data-nosnippet>1452</a>            <span class="bool-val">false</span>,
+<a href=#1453 id=1453 data-nosnippet>1453</a>            LeafSource::Reach,
+<a href=#1454 id=1454 data-nosnippet>1454</a>        );
+<a href=#1455 id=1455 data-nosnippet>1455</a>        <span class="kw">let </span>got = prebindgen_registry::unfold::reach_leaf(
+<a href=#1456 id=1456 data-nosnippet>1456</a>            <span class="kw-2">&amp;</span>qualify,
+<a href=#1457 id=1457 data-nosnippet>1457</a>            prebindgen_registry::unfold::LeafAt {
+<a href=#1458 id=1458 data-nosnippet>1458</a>                leaf: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaf(<span class="kw-2">&amp;</span>l),
+<a href=#1459 id=1459 data-nosnippet>1459</a>                path: <span class="kw-2">&amp;</span>path,
+<a href=#1460 id=1460 data-nosnippet>1460</a>                base: <span class="macro">quote!</span>(__src),
+<a href=#1461 id=1461 data-nosnippet>1461</a>                base_is_ref: <span class="bool-val">false</span>,
+<a href=#1462 id=1462 data-nosnippet>1462</a>                consuming: <span class="bool-val">false</span>,
+<a href=#1463 id=1463 data-nosnippet>1463</a>                unwrap_last: <span class="bool-val">true</span>,
+<a href=#1464 id=1464 data-nosnippet>1464</a>            },
+<a href=#1465 id=1465 data-nosnippet>1465</a>            <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>|| <span class="macro">quote!</span>(__absent)),
+<a href=#1466 id=1466 data-nosnippet>1466</a>            <span class="kw-2">&amp;</span>|reached| reached,
+<a href=#1467 id=1467 data-nosnippet>1467</a>        )
+<a href=#1468 id=1468 data-nosnippet>1468</a>        .to_string();
+<a href=#1469 id=1469 data-nosnippet>1469</a>        <span class="macro">assert!</span>(
+<a href=#1470 id=1470 data-nosnippet>1470</a>            got.contains(<span class="string">"next (&amp; __n0)"</span>),
+<a href=#1471 id=1471 data-nosnippet>1471</a>            <span class="string">"the owned payload is borrowed for the accessor that follows it — got `{got}`"
+<a href=#1472 id=1472 data-nosnippet>1472</a>        </span>);
+<a href=#1473 id=1473 data-nosnippet>1473</a>    }
+<a href=#1474 id=1474 data-nosnippet>1474</a>
+<a href=#1475 id=1475 data-nosnippet>1475</a>    <span class="doccomment">/// A `Field` leaf is cloned out of the place it reached, whatever the path
+<a href=#1476 id=1476 data-nosnippet>1476</a>    /// shape says — its converter takes the field type as written.
+<a href=#1477 id=1477 data-nosnippet>1477</a>    ///
+<a href=#1478 id=1478 data-nosnippet>1478</a>    /// The counterpart of the move above, and what keeps `source` load-bearing
+<a href=#1479 id=1479 data-nosnippet>1479</a>    /// in these fixtures rather than a value they all happen to share.
+<a href=#1480 id=1480 data-nosnippet>1480</a>    </span><span class="attr">#[test]
+<a href=#1481 id=1481 data-nosnippet>1481</a>    </span><span class="kw">fn </span>a_field_leaf_is_cloned_out_of_its_place() {
+<a href=#1482 id=1482 data-nosnippet>1482</a>        <span class="kw">let </span>path = <span class="macro">vec!</span>[
+<a href=#1483 id=1483 data-nosnippet>1483</a>            PathStep::field(<span class="macro">syn::parse_quote!</span>(a), <span class="bool-val">false</span>),
+<a href=#1484 id=1484 data-nosnippet>1484</a>            PathStep::field(<span class="macro">syn::parse_quote!</span>(b), <span class="bool-val">false</span>),
+<a href=#1485 id=1485 data-nosnippet>1485</a>        ];
+<a href=#1486 id=1486 data-nosnippet>1486</a>        <span class="kw">let </span>l = leaf(
+<a href=#1487 id=1487 data-nosnippet>1487</a>            <span class="macro">syn::parse_quote!</span>(Owned),
+<a href=#1488 id=1488 data-nosnippet>1488</a>            path.clone(),
+<a href=#1489 id=1489 data-nosnippet>1489</a>            <span class="bool-val">false</span>,
+<a href=#1490 id=1490 data-nosnippet>1490</a>            LeafSource::Reach,
+<a href=#1491 id=1491 data-nosnippet>1491</a>        );
+<a href=#1492 id=1492 data-nosnippet>1492</a>        <span class="kw">let </span>got = prebindgen_registry::unfold::reach_leaf(
+<a href=#1493 id=1493 data-nosnippet>1493</a>            <span class="kw-2">&amp;</span>qualify,
+<a href=#1494 id=1494 data-nosnippet>1494</a>            prebindgen_registry::unfold::LeafAt {
+<a href=#1495 id=1495 data-nosnippet>1495</a>                leaf: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaf(<span class="kw-2">&amp;</span>l),
+<a href=#1496 id=1496 data-nosnippet>1496</a>                path: <span class="kw-2">&amp;</span>path,
+<a href=#1497 id=1497 data-nosnippet>1497</a>                base: <span class="macro">quote!</span>(__src),
+<a href=#1498 id=1498 data-nosnippet>1498</a>                base_is_ref: <span class="bool-val">false</span>,
+<a href=#1499 id=1499 data-nosnippet>1499</a>                consuming: <span class="bool-val">false</span>,
+<a href=#1500 id=1500 data-nosnippet>1500</a>                unwrap_last: <span class="bool-val">false</span>,
+<a href=#1501 id=1501 data-nosnippet>1501</a>            },
+<a href=#1502 id=1502 data-nosnippet>1502</a>            <span class="prelude-val">None</span>,
+<a href=#1503 id=1503 data-nosnippet>1503</a>            <span class="kw-2">&amp;</span>|reached| reached,
+<a href=#1504 id=1504 data-nosnippet>1504</a>        )
+<a href=#1505 id=1505 data-nosnippet>1505</a>        .to_string();
+<a href=#1506 id=1506 data-nosnippet>1506</a>        <span class="macro">assert!</span>(
+<a href=#1507 id=1507 data-nosnippet>1507</a>            got.contains(<span class="string">"clone"</span>),
+<a href=#1508 id=1508 data-nosnippet>1508</a>            <span class="string">"a non-consuming field leaf clones rather than moves — got `{got}`"
+<a href=#1509 id=1509 data-nosnippet>1509</a>        </span>);
+<a href=#1510 id=1510 data-nosnippet>1510</a>    }
+<a href=#1511 id=1511 data-nosnippet>1511</a>
+<a href=#1512 id=1512 data-nosnippet>1512</a>    <span class="doccomment">/// The optional-step guard asks the LEAF's path, not the caller's slice.
+<a href=#1513 id=1513 data-nosnippet>1513</a>    ///
+<a href=#1514 id=1514 data-nosnippet>1514</a>    /// `wrapper.rs` rebases onto a hoisted local and hands over the remaining
+<a href=#1515 id=1515 data-nosnippet>1515</a>    /// suffix, so checking the parameter would pass exactly when the hoist is
+<a href=#1516 id=1516 data-nosnippet>1516</a>    /// the conditional one — an `Option&lt;T&gt;` local with a field read hung off it,
+<a href=#1517 id=1517 data-nosnippet>1517</a>    /// which cannot compose. Passing the suffix here mimics that rebase.
+<a href=#1518 id=1518 data-nosnippet>1518</a>    </span><span class="attr">#[test]
+<a href=#1519 id=1519 data-nosnippet>1519</a>    #[should_panic(expected = <span class="string">"which has no `None` arm"</span>)]
+<a href=#1520 id=1520 data-nosnippet>1520</a>    </span><span class="kw">fn </span>an_optional_step_in_a_stripped_prefix_is_still_refused() {
+<a href=#1521 id=1521 data-nosnippet>1521</a>        <span class="kw">let </span>full = <span class="macro">vec!</span>[
+<a href=#1522 id=1522 data-nosnippet>1522</a>            PathStep::call(<span class="macro">syn::parse_quote!</span>(get_it), <span class="bool-val">true</span>, <span class="bool-val">false</span>),
+<a href=#1523 id=1523 data-nosnippet>1523</a>            PathStep::field(<span class="macro">syn::parse_quote!</span>(a), <span class="bool-val">false</span>),
+<a href=#1524 id=1524 data-nosnippet>1524</a>        ];
+<a href=#1525 id=1525 data-nosnippet>1525</a>        <span class="kw">let </span>l = leaf(<span class="macro">syn::parse_quote!</span>(Owned), full, <span class="bool-val">false</span>, LeafSource::Reach);
+<a href=#1526 id=1526 data-nosnippet>1526</a>        <span class="comment">// The suffix a rebase would hand over — the optional call is gone from
+<a href=#1527 id=1527 data-nosnippet>1527</a>        // it, and used to take the guard with it.
+<a href=#1528 id=1528 data-nosnippet>1528</a>        </span><span class="kw">let </span>rest = <span class="macro">vec!</span>[PathStep::field(<span class="macro">syn::parse_quote!</span>(a), <span class="bool-val">false</span>)];
+<a href=#1529 id=1529 data-nosnippet>1529</a>        <span class="kw">let _ </span>= prebindgen_registry::unfold::reach_leaf(
+<a href=#1530 id=1530 data-nosnippet>1530</a>            <span class="kw-2">&amp;</span>qualify,
+<a href=#1531 id=1531 data-nosnippet>1531</a>            prebindgen_registry::unfold::LeafAt {
+<a href=#1532 id=1532 data-nosnippet>1532</a>                leaf: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaf(<span class="kw-2">&amp;</span>l),
+<a href=#1533 id=1533 data-nosnippet>1533</a>                path: <span class="kw-2">&amp;</span>rest,
+<a href=#1534 id=1534 data-nosnippet>1534</a>                base: <span class="macro">quote!</span>(__vf0),
+<a href=#1535 id=1535 data-nosnippet>1535</a>                base_is_ref: <span class="bool-val">false</span>,
+<a href=#1536 id=1536 data-nosnippet>1536</a>                consuming: <span class="bool-val">false</span>,
+<a href=#1537 id=1537 data-nosnippet>1537</a>                unwrap_last: <span class="bool-val">false</span>,
+<a href=#1538 id=1538 data-nosnippet>1538</a>            },
+<a href=#1539 id=1539 data-nosnippet>1539</a>            <span class="prelude-val">None</span>,
+<a href=#1540 id=1540 data-nosnippet>1540</a>            <span class="kw-2">&amp;</span>|reached| reached,
+<a href=#1541 id=1541 data-nosnippet>1541</a>        );
+<a href=#1542 id=1542 data-nosnippet>1542</a>    }
+<a href=#1543 id=1543 data-nosnippet>1543</a>}
 </code></pre></div></section></main></body></html>
