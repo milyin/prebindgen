@@ -683,6 +683,7 @@ pub enum Failure {
 }
 
 /// When an adapter cleanup operation runs.
+#[derive(Clone)]
 pub enum Cleanup<C> {
     /// Explicitly no cleanup is required.
     None,
@@ -773,6 +774,40 @@ pub enum ConversionChain<R: Representation> {
     Direct,
     /// One or more explicit internal conversions.
     Steps(Vec<ConverterStep<R>>),
+}
+
+// Cloned where a chain travels with the fragment that owns it. Written out
+// rather than derived: `derive(Clone)` would require `R: Clone`, and `R` is a
+// marker type naming an adapter's associated types rather than a value.
+impl<R: Representation> Clone for ConversionChain<R>
+where
+    R::Intermediate: Clone,
+    R::Step: Clone,
+    R::Cleanup: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::Direct => Self::Direct,
+            Self::Steps(steps) => Self::Steps(steps.clone()),
+        }
+    }
+}
+
+impl<R: Representation> Clone for ConverterStep<R>
+where
+    R::Intermediate: Clone,
+    R::Step: Clone,
+    R::Cleanup: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            from: self.from.clone(),
+            into: self.into.clone(),
+            operation: self.operation.clone(),
+            failure: self.failure,
+            cleanup: self.cleanup.clone(),
+        }
+    }
 }
 
 impl<R: Representation> ConversionChain<R> {

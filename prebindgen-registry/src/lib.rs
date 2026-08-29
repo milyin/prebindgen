@@ -143,7 +143,7 @@ pub use self::{
         SitePlan,
     },
     niches::{NicheSlot, Niches},
-    prebindgen::{ConverterImpl, NamePredicate, Prebindgen, Stage},
+    prebindgen::{ConverterImpl, NamePredicate, Prebindgen},
     registry::{
         Answer, Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
         NotExpressibleEntry, Registry, RegistryBuilder, ScanError, TypeKey, TypeKeyParseError,

@@ -44,7 +44,7 @@ pub(crate) use prebindgen_registry::{
     flat::Origin,
     types_util::{option_inner_type, vec_inner_type},
     ArtifactId, ConverterImpl, Direction, NicheSlot, Niches, OperationId, Prebindgen, Registry,
-    ScalarValue, Stage, TypeKey,
+    ScalarValue, TypeKey,
 };
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
