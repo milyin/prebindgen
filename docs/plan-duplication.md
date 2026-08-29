@@ -123,13 +123,17 @@ into an inline test module shows up as a production deletion **and** a test-item
 addition rather than as a deletion alone.
 
 An item's end is found by tracking delimiter depth — the `}` closing the brace
-body it opened, or a `;` when it opened none — so a gated multiline call ending
-in `);` ends there rather than at the next closing brace.
+body it opened, or a `;` when it opened none — over lines whose comments and
+literals have been blanked out by a lexer that carries its state across lines.
+Both halves were needed: a gated multiline call ending in `);` ends there
+rather than at the next closing brace, and a `}` inside a multiline raw string
+or a nested block comment is text rather than the item's end.
 `python3 examples/line-report.py --self-test` pins that on a fixture built from
 the call at `prebindgen-jni/src/jni/mod.rs:909`. That item is nine lines; the
 earlier indentation-based rule ran it to line 998 and counted the 81 production
 lines in between as test support, understating the JNI baseline by that much
-(#614 review).
+(#614 review). The raw-string and block-comment cases are pinned there too,
+each from the review probe that found it.
 
 Only a bare `#[cfg(test)]` counts as a test item: an item behind
 `#[cfg(any(test, feature = "testing"))]` ships to other crates under that

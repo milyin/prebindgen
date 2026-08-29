@@ -54,7 +54,7 @@ CLOSE = ")]}"
 
 def scan(text: str) -> tuple[int, int]:
     """Return (production lines, test-item lines) for one production file."""
-    lines = text.splitlines()
+    lines = code_only(text)
     production = 0
     items = 0
     index = 0
@@ -79,6 +79,110 @@ def scan(text: str) -> tuple[int, int]:
     return production, items
 
 
+def code_only(text: str) -> list[str]:
+    """Each line with its comments and literals blanked out.
+
+    Lexical state carries ACROSS lines: a `}` inside a multiline raw string or
+    a block comment is text, not a delimiter, and a line-local scanner ends a
+    gated item on it (#614 review). Rust block comments nest, so the depth is
+    tracked rather than the first `*/` taken.
+    """
+    lines: list[str] = []
+    # None | ("block", depth) | ("str", hashes) — a raw string is a string with
+    # a hash count and no escapes.
+    state: tuple[str, int] | None = None
+    raw = False
+    for line in text.splitlines():
+        out: list[str] = []
+        position = 0
+        while position < len(line):
+            rest = line[position:]
+            if state is not None and state[0] == "block":
+                if rest.startswith("/*"):
+                    state = ("block", state[1] + 1)
+                    position += 2
+                elif rest.startswith("*/"):
+                    depth = state[1] - 1
+                    state = ("block", depth) if depth else None
+                    position += 2
+                else:
+                    position += 1
+                out.append(" ")
+                continue
+            if state is not None and state[0] == "str":
+                hashes = state[1]
+                closer = '"' + "#" * hashes
+                if not raw and rest.startswith("\\"):
+                    position += 2
+                    out.append("  ")
+                    continue
+                if rest.startswith(closer):
+                    state = None
+                    position += len(closer)
+                    out.append(" " * len(closer))
+                    continue
+                position += 1
+                out.append(" ")
+                continue
+            if rest.startswith("//"):
+                break
+            if rest.startswith("/*"):
+                state = ("block", 1)
+                position += 2
+                out.append("  ")
+                continue
+            hashes = raw_string_hashes(rest)
+            if hashes is not None:
+                raw = True
+                state = ("str", hashes)
+                opener = 1 + hashes + 1
+                position += opener
+                out.append(" " * opener)
+                continue
+            if rest.startswith('"'):
+                raw = False
+                state = ("str", 0)
+                position += 1
+                out.append(" ")
+                continue
+            if rest.startswith("'"):
+                width = char_literal_width(rest)
+                if width:
+                    position += width
+                    out.append(" " * width)
+                    continue
+            out.append(line[position])
+            position += 1
+        lines.append("".join(out))
+    return lines
+
+
+def raw_string_hashes(rest: str) -> int | None:
+    """The hash count of a raw-string opener at `rest`, or `None`."""
+    if not rest.startswith("r"):
+        return None
+    hashes = 0
+    while 1 + hashes < len(rest) and rest[1 + hashes] == "#":
+        hashes += 1
+    if 1 + hashes < len(rest) and rest[1 + hashes] == '"':
+        return hashes
+    return None
+
+
+def char_literal_width(rest: str) -> int:
+    """The width of a char literal at `rest`, or 0 when it is a lifetime.
+
+    `'a'` is a literal and `'a` is a lifetime; only the first has a closing
+    quote within a few characters, and only the second can precede a type.
+    """
+    if rest.startswith("'\\"):
+        closing = rest.find("'", 2)
+        return closing + 1 if 0 < closing <= 8 else 0
+    if len(rest) > 2 and rest[2] == "'":
+        return 3
+    return 0
+
+
 def consume(line: str, depth: int, in_body: bool) -> tuple[int, bool, bool]:
     """Track one line's delimiters. Returns (depth, in_body, item ended here).
 
@@ -86,15 +190,10 @@ def consume(line: str, depth: int, in_body: bool) -> tuple[int, bool, bool]:
     a `;` at depth 0 when it never opened one. Both halves matter: `pub(crate)
     fn f()` balances two paren pairs before its body starts, so "depth returned
     to zero" alone ends the item on its own first line.
+
+    `line` is already blanked by [`code_only`], so every delimiter here is code.
     """
-    position = 0
-    while position < len(line):
-        char = line[position]
-        if char == "/" and line[position : position + 2] == "//":
-            break
-        if char in ('"', "'"):
-            position = skip_literal(line, position)
-            continue
+    for char in line:
         if char == "{" and depth == 0:
             in_body = True
             depth = 1
@@ -106,27 +205,7 @@ def consume(line: str, depth: int, in_body: bool) -> tuple[int, bool, bool]:
                 return 0, in_body, True
         elif char == ";" and depth == 0 and not in_body:
             return 0, in_body, True
-        position += 1
     return depth, in_body, False
-
-
-def skip_literal(line: str, position: int) -> int:
-    """Index just past the literal starting at `position`, or past a lifetime."""
-    quote = line[position]
-    if quote == "'":
-        # A lifetime (`'a`) is not a literal: it has no closing quote.
-        closing = line.find("'", position + 1)
-        if closing == -1 or closing > position + 3:
-            return position + 1
-    position += 1
-    while position < len(line):
-        if line[position] == "\\":
-            position += 2
-            continue
-        if line[position] == quote:
-            return position + 1
-        position += 1
-    return position
 
 
 def classify(path: Path) -> bool:
@@ -195,6 +274,23 @@ impl Thing {
 pub fn shipped_under_a_feature() -> bool {
     true
 }
+
+#[cfg(test)]
+fn gated_with_a_raw_string() {
+    let source = r#"
+}
+"#;
+    let closing = "}";
+    check(source, closing);
+}
+
+#[cfg(test)]
+fn gated_with_a_block_comment() {
+    /* a comment that closes a block:
+    }
+    and nests: /* } */ still inside */
+    done();
+}
 '''
 
 
@@ -202,16 +298,19 @@ def self_test() -> None:
     production, items = scan(FIXTURE)
     total = len(FIXTURE.splitlines())
     assert production + items == total, "every line is counted once"
-    # Four gated items: `gated_fn` (4 lines), `mod tests;` (2),
-    # `gated_method` (4), and the multiline call (5).
+    # Six gated items: `gated_fn` (4 lines), `mod tests;` (2), `gated_method`
+    # (4), the multiline call (5), the raw-string function (8) and the
+    # block-comment function (7) — 30 lines.
     #
-    # 15 is also the regression #614's review asked for. Ending the call's item
-    # at a `}` with the attribute's indentation — the rule this replaced —
-    # would run it to `production_two`'s closing brace and count
-    # `self.second();` and `self.third();` as test support, giving 17.
-    assert items == 15, f"gated items are 15 lines, got {items}"
-    assert production == total - 15, "the statements after the gated call stay production"
-    print("self-test ok: every line counted once, gated items 15, nothing swallowed")
+    # Each of the last three is a regression from #614's reviews. Ending the
+    # call's item at a `}` with the attribute's indentation runs it to
+    # `production_two`'s closing brace and takes two production statements with
+    # it. Reading a `}` inside the raw string or inside the block comment as a
+    # delimiter ends those items early, and the lines after them — which are
+    # test support — are counted as production.
+    assert items == 30, f"gated items are 30 lines, got {items}"
+    assert production == total - 30, "nothing outside a gated item is counted as one"
+    print("self-test ok: every line counted once, gated items 30, nothing swallowed")
 
 
 def main() -> None:
