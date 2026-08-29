@@ -526,6 +526,28 @@ public data class Envelope(val id: Long, val stamp: Stamp?) {
     }
 }
 
+/** The gate over [`Window`]: one selector owning two. */
+public data class Frame(val id: Long, val window: Window?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            id: Long,
+            window__present: Boolean,
+            window_label: String?,
+            window_span__present: Boolean,
+            window_span_secs: Long,
+            window_span_nanos: Long,
+            window_reading__tag: Int,
+            window_reading_exact_v0: Long,
+            window_reading_range_low: Long,
+            window_reading_range_high: Long,
+            window_reading_tagged_v0: String?,
+            window_reading_tagged_v1: Int,
+            window_reading_companion_v0: Long,
+        ): Frame = Frame(id, if (window__present) Window.fromParts(window_label!!, window_span__present, window_span_secs, window_span_nanos, window_reading__tag, window_reading_exact_v0, window_reading_range_low, window_reading_range_high, window_reading_tagged_v0, window_reading_tagged_v1, window_reading_companion_v0) else null)
+    }
+}
+
 /**
  * A retention policy: a required converted-payload sum beside an optional one.
  *
@@ -1074,6 +1096,34 @@ public data class Verdict(val id: Long, val outcome: Lookup) : AutoCloseable {
     }
 }
 
+/**
+ * The value an optional nested class gates when that class **selects of its
+ * own** — a presence flag and a tag, one arm inside another.
+ *
+ * `span` is a second presence, `reading` a sum tag. Both sit inside the group
+ * `Frame::window`'s own flag gates, which is the shape a flat group number
+ * could not state: each of these is a member of the outer group AND a
+ * selector of its own (#602).
+ */
+public data class Window(val label: String, val span: Stamp?, val reading: Reading) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            label: String,
+            span__present: Boolean,
+            span_secs: Long,
+            span_nanos: Long,
+            reading__tag: Int,
+            reading_exact_v0: Long,
+            reading_range_low: Long,
+            reading_range_high: Long,
+            reading_tagged_v0: String?,
+            reading_tagged_v1: Int,
+            reading_companion_v0: Long,
+        ): Window = Window(label, if (span__present) Stamp.fromParts(span_secs, span_nanos) else null, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading_exact_v0); 2 -> Reading.Range(reading_range_low, reading_range_high); 3 -> Reading.Tagged(reading_tagged_v0!!, Priority.fromInt(reading_tagged_v1)); 4 -> Reading.Companion(reading_companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") })
+    }
+}
+
 /** Typed handle for a native Zenoh `Ingot`. */
 public class Ingot private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
@@ -1320,6 +1370,49 @@ internal fun EnvelopeCallback.asRaw(): EnvelopeCallbackRaw =
         )
     }
 
+public fun interface FrameCallback {
+    public fun run(frame: Frame)
+}
+
+internal fun interface FrameCallbackRaw {
+    public fun run(
+        id: Long,
+        window__present: Boolean,
+        window__label: String?,
+        window__span__present: Boolean,
+        window__span__secs: Long,
+        window__span__nanos: Long,
+        window__reading__tag: Int,
+        window__reading__exact_v0: Long,
+        window__reading__range_low: Long,
+        window__reading__range_high: Long,
+        window__reading__tagged_v0: String?,
+        window__reading__tagged_v1: Int,
+        window__reading__companion_v0: Long,
+    )
+}
+
+@JvmSynthetic
+internal fun FrameCallback.asRaw(): FrameCallbackRaw =
+    FrameCallbackRaw {
+        id,
+        window__present,
+        window__label,
+        window__span__present,
+        window__span__secs,
+        window__span__nanos,
+        window__reading__tag,
+        window__reading__exact_v0,
+        window__reading__range_low,
+        window__reading__range_high,
+        window__reading__tagged_v0,
+        window__reading__tagged_v1,
+        window__reading__companion_v0 ->
+        run(
+            Frame.fromParts(id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0)
+        )
+    }
+
 public fun interface LookupCallback {
     public fun run(lookup: Lookup)
 }
@@ -1544,6 +1637,28 @@ public fun interface EnvelopeBuilder<out R> {
 @get:JvmSynthetic
 internal val __EnvelopeBuilder: EnvelopeBuilder<Envelope> =
 EnvelopeBuilder { id, stamp__present, stamp__secs, stamp__nanos -> Envelope.fromParts(id, stamp__present, stamp__secs, stamp__nanos) }
+
+public fun interface FrameBuilder<out R> {
+    public fun run(
+        id: Long,
+        window__present: Boolean,
+        window__label: String?,
+        window__span__present: Boolean,
+        window__span__secs: Long,
+        window__span__nanos: Long,
+        window__reading__tag: Int,
+        window__reading__exact_v0: Long,
+        window__reading__range_low: Long,
+        window__reading__range_high: Long,
+        window__reading__tagged_v0: String?,
+        window__reading__tagged_v1: Int,
+        window__reading__companion_v0: Long,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __FrameBuilder: FrameBuilder<Frame> =
+FrameBuilder { id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0 -> Frame.fromParts(id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0) }
 
 internal fun interface HoldBuilderRaw<out R> {
     public fun run(tag: Int, for_v0: Long): R
@@ -2421,6 +2536,38 @@ public fun envelopeNew(id: Long, present: Boolean, onError: JniErrorHandler<Enve
 public fun envelopeEach(n: Long, sink: EnvelopeCallback, onError: JniErrorHandler<Unit>) {
     val __bcap = JniErrorHandlerCapture.acquire()
     CovNative.envelopeEach(n, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Frame`]. `window` absent, `window` present with `span` absent, and
+ * both present are the three states of the outer gate; `which` picks the
+ * alternative of the tag nested beside it.
+ *
+ * The Rust `Frame` result is delivered decomposed: the builder callback receives (`id`, `window__present`, `window__label`, `window__span__present`, `window__span__secs`, `window__span__nanos`, `window__reading__tag`, `window__reading__exact_v0`, `window__reading__range_low`, `window__reading__range_high`, `window__reading__tagged_v0`, `window__reading__tagged_v1`, `window__reading__companion_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun frameNew(
+    id: Long,
+    window: Boolean,
+    span: Boolean,
+    which: Long,
+    onError: JniErrorHandler<Frame?>,
+): Frame? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.frameNew(id, window, span, which, __FrameBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Frame
+}
+
+/**
+ * The same value handed to a callback — the route that decomposes it into
+ * leaves and reassembles them through the foreign builder, which is where a
+ * nested gate has to hold.
+ */
+public fun frameEach(n: Long, sink: FrameCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.frameEach(n, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 

@@ -2479,12 +2479,15 @@ fn a_sealed_class_states_what_it_hands_out() {
 /// A `data_class` states a recipe saying what it hands out, and a field that is
 /// itself one contributes its own values under the parent's name and chain.
 ///
-/// The recipe declines for the **whole** value rather than per field, because the
-/// emitter it feeds does: a handle, an `enum_class`, a sum, or a `data_class`
-/// behind an `Option` or a `Vec` is delivered with a transform the decoupled
-/// form does not carry, and one such field sends the whole object down the
-/// whole-value `fromParts` path. So `Wrapped` composes and `Opaque`-bearing
-/// `Guarded` does not, and both agree with the synthesis they will replace.
+/// The recipe declines for the **whole** value rather than per field, because
+/// the emitter it feeds does: one field it cannot state sends the whole object
+/// down the whole-value `fromParts` path. What is left to decline is structural
+/// — a repeated nested class, a field the model does not hold as a named one —
+/// and a handle field is not one of those: it is an ordinary leaf whose own
+/// output conversion carries it as the `jlong` the receiver adopts, which is
+/// what the whole-object encode always emitted for it (#602). So `Wrapped` and
+/// `Opaque`-bearing `Guarded` both compose, and both agree with the synthesis
+/// they will replace.
 #[test]
 fn a_data_class_states_what_it_hands_out() {
     let loc = myflat_loc();
@@ -2566,9 +2569,10 @@ fn a_data_class_states_what_it_hands_out() {
         ],
         "a nested data class contributes its own values, under its field's name",
     );
-    // Compared as options, because declining is one of the two answers: a recipe
-    // that states nothing and a synthesis that returns nothing are the same
-    // claim, and `Guarded` makes it.
+    // Compared as options, because declining is still one of the two answers:
+    // a recipe that states nothing and a synthesis that returns nothing are the
+    // same claim. No type here makes it any more — the remaining declines are
+    // structural — so what this pins is that the two agree either way.
     for short in ["Wrapped", "Inner", "Guarded"] {
         assert_eq!(
             gen.out_lines_for_test(short),

@@ -93,6 +93,9 @@ Base package: `io.prebindgen.covertest`
 - `envelope_each` — `fun envelopeEach(n: Long, sink: EnvelopeCallback, onError: JniErrorHandler<Unit>)`
 - `envelope_new` — `fun envelopeNew(id: Long, present: Boolean, onError: JniErrorHandler<Envelope?>): Envelope?`
   - shaped by: return `Envelope` decomposed → [id, stamp__present, stamp__secs, stamp__nanos] (Callback delivery)
+- `frame_each` — `fun frameEach(n: Long, sink: FrameCallback, onError: JniErrorHandler<Unit>)`
+- `frame_new` — `fun frameNew(id: Long, window: Boolean, span: Boolean, which: Long, onError: JniErrorHandler<Frame?>): Frame?`
+  - shaped by: return `Frame` decomposed → [id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0] (Callback delivery)
 - `hold_echo` — `fun holdEcho(h: Hold, onError: JniErrorHandler<Hold?>): Hold?`
   - shaped by: return `Hold` decomposed → [tag, for_v0] (Callback delivery)
 - `hold_policy_echo` — `fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy?`
@@ -250,6 +253,7 @@ Base package: `io.prebindgen.covertest`
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `Envelope`: data_class → `io.prebindgen.covertest.model.Envelope` (wire `jni :: objects :: JObject`)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
+- `Frame`: data_class → `io.prebindgen.covertest.model.Frame` (wire `jni :: objects :: JObject`)
 - `Hold`: sealed_class → `io.prebindgen.covertest.model.Hold` (wire `?`)
 - `HoldPolicy`: data_class → `io.prebindgen.covertest.model.HoldPolicy` (wire `jni :: objects :: JObject`)
 - `Holder`: data_class → `io.prebindgen.covertest.Holder` (wire `jni :: objects :: JObject`)
@@ -289,6 +293,7 @@ Base package: `io.prebindgen.covertest`
 - `Vault`: ptr_class → `io.prebindgen.covertest.model.Vault` (wire `jni :: sys :: jlong`)
 - `VaultHolder`: ptr_class → `io.prebindgen.covertest.model.VaultHolder` (wire `jni :: sys :: jlong`)
 - `Verdict`: data_class → `io.prebindgen.covertest.model.Verdict` (wire `jni :: objects :: JObject`)
+- `Window`: data_class → `io.prebindgen.covertest.model.Window` (wire `jni :: objects :: JObject`)
 - `WrappedFields`: data_class → `io.prebindgen.covertest.WrappedFields` (wire `jni :: objects :: JObject`)
 
 ## conversions

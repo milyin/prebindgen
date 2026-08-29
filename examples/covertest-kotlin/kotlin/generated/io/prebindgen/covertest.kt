@@ -1318,6 +1318,19 @@ internal object CovNative {
     external fun escape_probe_value(p: Long, errorSink: Any): Long
 
     @JvmSynthetic
+    external fun frameEach(n: Long, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun frameNew(
+        id: Long,
+        window: Boolean,
+        span: Boolean,
+        which: Long,
+        build: Any,
+        errorSink: Any,
+    ): Any?
+
+    @JvmSynthetic
     external fun holdEcho(h: Hold, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic

@@ -4326,11 +4326,25 @@ impl Declarations {
     /// that composes after it.
     ///
     /// `None` is this adapter declining, and it declines for the **whole**
-    /// value rather than per field. A handle, an `enum_class`, a sum, or a
-    /// `data_class` behind an `Option` or a `Vec` is delivered with a transform
-    /// the decoupled form does not carry, and one such field sends the whole
-    /// object down the whole-value `fromParts` path — so a recipe that decomposed
-    /// the rest of it would describe a shape nothing emits.
+    /// value rather than per field: one field it cannot state sends the whole
+    /// object down the whole-value `fromParts` path, because a recipe that
+    /// decomposed the rest of it would describe a shape nothing emits.
+    ///
+    /// What is left to decline is **structural**, not a missing transform. A
+    /// handle, an `enum_class`, a sum, an optional nested class and a selector
+    /// inside a gated group are all ordinary leaves here (#602): a fixed number
+    /// of values, laid side by side, each carrying its own conversion. The
+    /// declines are the shapes that have no such number:
+    ///
+    /// * a field the model does not hold as a named `data_class` field —
+    ///   a positional field, or a type that is not a path;
+    /// * a nested `data_class` **repeated** under a `Vec`, whose leaves would
+    ///   be as many as the value happens to hold. That is a sequence rather
+    ///   than a decomposition — and note that only a `Vec` DIRECTLY under a
+    ///   declared `data_class` reaches that arm: `Vec<Child>` keys as a
+    ///   sequence rather than a `DataStruct`, so it stays one leaf whose own
+    ///   converter is the element folder (#217);
+    /// * nesting deeper than 16, which a cyclic `data_class` would not end.
     pub(crate) fn struct_out_wires(
         &self,
         registry: &impl Conversions,

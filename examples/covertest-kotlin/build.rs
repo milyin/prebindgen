@@ -383,6 +383,8 @@ fn main() {
                 // stamp is sometimes there, and the decomposition says so with
                 // a presence flag ahead of the child's leaves.
                 .class(data_class!(Envelope))
+                .class(data_class!(Window))
+                .class(data_class!(Frame))
                 .class(
                     data_class!(Stamp)
                         .method(fun!(stamp_secs))
@@ -650,6 +652,8 @@ fn main() {
                 // The optional nested class on both delivery routes.
                 .fun(fun!(envelope_new))
                 .fun(fun!(envelope_each))
+                .fun(fun!(frame_new))
+                .fun(fun!(frame_each))
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
                 .fun(fun!(dossier_new))
