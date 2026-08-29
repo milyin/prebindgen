@@ -1764,4 +1764,118 @@
 <a href=#1764 id=1764 data-nosnippet>1764</a>    }
 <a href=#1765 id=1765 data-nosnippet>1765</a>    reached
 <a href=#1766 id=1766 data-nosnippet>1766</a>}
+<a href=#1767 id=1767 data-nosnippet>1767</a>
+<a href=#1768 id=1768 data-nosnippet>1768</a><span class="doccomment">/// Every production Rust source under `dir`, as (label, text) pairs.
+<a href=#1769 id=1769 data-nosnippet>1769</a>///
+<a href=#1770 id=1770 data-nosnippet>1770</a>/// A **production** source is one that is not test support: anything under a
+<a href=#1771 id=1771 data-nosnippet>1771</a>/// `tests/` directory, or named `tests.rs` or `test_util.rs`, is skipped. The
+<a href=#1772 id=1772 data-nosnippet>1772</a>/// label is the path relative to `dir`'s parent, which is what a fence prints
+<a href=#1773 id=1773 data-nosnippet>1773</a>/// when it names where it found something.
+<a href=#1774 id=1774 data-nosnippet>1774</a>///
+<a href=#1775 id=1775 data-nosnippet>1775</a>/// Discovered by walking the directory rather than by a list a test carries,
+<a href=#1776 id=1776 data-nosnippet>1776</a>/// because a fence over a list only fences the files someone remembered to add
+<a href=#1777 id=1777 data-nosnippet>1777</a>/// to it — and a new module is the most natural way to introduce the thing a
+<a href=#1778 id=1778 data-nosnippet>1778</a>/// fence exists to reject.
+<a href=#1779 id=1779 data-nosnippet>1779</a></span><span class="attr">#[cfg(any(test, feature = <span class="string">"testing"</span>))]
+<a href=#1780 id=1780 data-nosnippet>1780</a></span><span class="kw">pub fn </span>production_sources(dir: <span class="kw-2">&amp;</span>std::path::Path) -&gt; Vec&lt;(String, String)&gt; {
+<a href=#1781 id=1781 data-nosnippet>1781</a>    <span class="kw">fn </span>walk(dir: <span class="kw-2">&amp;</span>std::path::Path, root: <span class="kw-2">&amp;</span>std::path::Path, out: <span class="kw-2">&amp;mut </span>Vec&lt;(String, String)&gt;) {
+<a href=#1782 id=1782 data-nosnippet>1782</a>        <span class="kw">let </span><span class="kw-2">mut </span>entries: Vec&lt;std::path::PathBuf&gt; = std::fs::read_dir(dir)
+<a href=#1783 id=1783 data-nosnippet>1783</a>            .unwrap_or_else(|error| <span class="macro">panic!</span>(<span class="string">"read source directory {}: {error}"</span>, dir.display()))
+<a href=#1784 id=1784 data-nosnippet>1784</a>            .map(|entry| {
+<a href=#1785 id=1785 data-nosnippet>1785</a>                entry
+<a href=#1786 id=1786 data-nosnippet>1786</a>                    .unwrap_or_else(|error| {
+<a href=#1787 id=1787 data-nosnippet>1787</a>                        <span class="macro">panic!</span>(<span class="string">"read source entry under {}: {error}"</span>, dir.display())
+<a href=#1788 id=1788 data-nosnippet>1788</a>                    })
+<a href=#1789 id=1789 data-nosnippet>1789</a>                    .path()
+<a href=#1790 id=1790 data-nosnippet>1790</a>            })
+<a href=#1791 id=1791 data-nosnippet>1791</a>            .collect();
+<a href=#1792 id=1792 data-nosnippet>1792</a>        entries.sort();
+<a href=#1793 id=1793 data-nosnippet>1793</a>        <span class="kw">for </span>path <span class="kw">in </span>entries {
+<a href=#1794 id=1794 data-nosnippet>1794</a>            <span class="kw">if </span>path.is_dir() {
+<a href=#1795 id=1795 data-nosnippet>1795</a>                <span class="kw">if </span>path.file_name().is_some_and(|name| name == <span class="string">"tests"</span>) {
+<a href=#1796 id=1796 data-nosnippet>1796</a>                    <span class="kw">continue</span>;
+<a href=#1797 id=1797 data-nosnippet>1797</a>                }
+<a href=#1798 id=1798 data-nosnippet>1798</a>                walk(<span class="kw-2">&amp;</span>path, root, out);
+<a href=#1799 id=1799 data-nosnippet>1799</a>                <span class="kw">continue</span>;
+<a href=#1800 id=1800 data-nosnippet>1800</a>            }
+<a href=#1801 id=1801 data-nosnippet>1801</a>            <span class="kw">if </span>path.extension().is_none_or(|extension| extension != <span class="string">"rs"</span>) {
+<a href=#1802 id=1802 data-nosnippet>1802</a>                <span class="kw">continue</span>;
+<a href=#1803 id=1803 data-nosnippet>1803</a>            }
+<a href=#1804 id=1804 data-nosnippet>1804</a>            <span class="kw">if </span>path
+<a href=#1805 id=1805 data-nosnippet>1805</a>                .file_name()
+<a href=#1806 id=1806 data-nosnippet>1806</a>                .is_some_and(|name| name == <span class="string">"tests.rs" </span>|| name == <span class="string">"test_util.rs"</span>)
+<a href=#1807 id=1807 data-nosnippet>1807</a>            {
+<a href=#1808 id=1808 data-nosnippet>1808</a>                <span class="kw">continue</span>;
+<a href=#1809 id=1809 data-nosnippet>1809</a>            }
+<a href=#1810 id=1810 data-nosnippet>1810</a>            <span class="kw">let </span>label = path
+<a href=#1811 id=1811 data-nosnippet>1811</a>                .strip_prefix(root)
+<a href=#1812 id=1812 data-nosnippet>1812</a>                .unwrap_or(<span class="kw-2">&amp;</span>path)
+<a href=#1813 id=1813 data-nosnippet>1813</a>                .display()
+<a href=#1814 id=1814 data-nosnippet>1814</a>                .to_string();
+<a href=#1815 id=1815 data-nosnippet>1815</a>            <span class="kw">let </span>text = std::fs::read_to_string(<span class="kw-2">&amp;</span>path)
+<a href=#1816 id=1816 data-nosnippet>1816</a>                .unwrap_or_else(|error| <span class="macro">panic!</span>(<span class="string">"read source {}: {error}"</span>, path.display()));
+<a href=#1817 id=1817 data-nosnippet>1817</a>            out.push((label, text));
+<a href=#1818 id=1818 data-nosnippet>1818</a>        }
+<a href=#1819 id=1819 data-nosnippet>1819</a>    }
+<a href=#1820 id=1820 data-nosnippet>1820</a>
+<a href=#1821 id=1821 data-nosnippet>1821</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = Vec::new();
+<a href=#1822 id=1822 data-nosnippet>1822</a>    <span class="kw">let </span>root = dir.parent().unwrap_or(dir);
+<a href=#1823 id=1823 data-nosnippet>1823</a>    walk(dir, root, <span class="kw-2">&amp;mut </span>out);
+<a href=#1824 id=1824 data-nosnippet>1824</a>    out
+<a href=#1825 id=1825 data-nosnippet>1825</a>}
+<a href=#1826 id=1826 data-nosnippet>1826</a>
+<a href=#1827 id=1827 data-nosnippet>1827</a><span class="doccomment">/// The names of the shape-shaped enums a set of sources declares.
+<a href=#1828 id=1828 data-nosnippet>1828</a>///
+<a href=#1829 id=1829 data-nosnippet>1829</a>/// A **shape-shaped** enum is one whose variants name three or more of the
+<a href=#1830 id=1830 data-nosnippet>1830</a>/// structural forms this crate's model already has words for — `Atomic`,
+<a href=#1831 id=1831 data-nosnippet>1831</a>/// `Product`, `Optional`, `Sequence`, `Choice`, `Invoke`, `Leaf`. Each such
+<a href=#1832 id=1832 data-nosnippet>1832</a>/// enum is a place where the same structural question is asked again, and #613
+<a href=#1833 id=1833 data-nosnippet>1833</a>/// exists to reduce their number rather than let it grow: an adapter fences
+<a href=#1834 id=1834 data-nosnippet>1834</a>/// this against the list it has, so a new one fails a test and a deleted one is
+<a href=#1835 id=1835 data-nosnippet>1835</a>/// a deliberate edit to that list.
+<a href=#1836 id=1836 data-nosnippet>1836</a>///
+<a href=#1837 id=1837 data-nosnippet>1837</a>/// `sources` pairs a label — the path a reader should open — with the file's
+<a href=#1838 id=1838 data-nosnippet>1838</a>/// text, since a fence names what it found.
+<a href=#1839 id=1839 data-nosnippet>1839</a></span><span class="attr">#[cfg(any(test, feature = <span class="string">"testing"</span>))]
+<a href=#1840 id=1840 data-nosnippet>1840</a></span><span class="kw">pub fn </span>shape_like_enums(sources: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>str, <span class="kw-2">&amp;</span>str)]) -&gt; Vec&lt;(String, String)&gt; {
+<a href=#1841 id=1841 data-nosnippet>1841</a>    <span class="kw">const </span>FORMS: [<span class="kw-2">&amp;</span>str; <span class="number">7</span>] = [
+<a href=#1842 id=1842 data-nosnippet>1842</a>        <span class="string">"Atomic"</span>, <span class="string">"Product"</span>, <span class="string">"Optional"</span>, <span class="string">"Sequence"</span>, <span class="string">"Choice"</span>, <span class="string">"Invoke"</span>, <span class="string">"Leaf"</span>,
+<a href=#1843 id=1843 data-nosnippet>1843</a>    ];
+<a href=#1844 id=1844 data-nosnippet>1844</a>    <span class="kw">let </span><span class="kw-2">mut </span>found = Vec::new();
+<a href=#1845 id=1845 data-nosnippet>1845</a>    <span class="kw">for </span>(label, source) <span class="kw">in </span>sources {
+<a href=#1846 id=1846 data-nosnippet>1846</a>        <span class="kw">let </span>file: syn::File = <span class="kw">match </span>syn::parse_str(source) {
+<a href=#1847 id=1847 data-nosnippet>1847</a>            <span class="prelude-val">Ok</span>(file) =&gt; file,
+<a href=#1848 id=1848 data-nosnippet>1848</a>            <span class="comment">// A fence reports what it could not read rather than passing
+<a href=#1849 id=1849 data-nosnippet>1849</a>            // silently on a file it failed to parse.
+<a href=#1850 id=1850 data-nosnippet>1850</a>            </span><span class="prelude-val">Err</span>(error) =&gt; <span class="macro">panic!</span>(<span class="string">"shape-enum fence cannot parse {label}: {error}"</span>),
+<a href=#1851 id=1851 data-nosnippet>1851</a>        };
+<a href=#1852 id=1852 data-nosnippet>1852</a>        <span class="comment">// Inline modules too: an enum does not stop being a second shape
+<a href=#1853 id=1853 data-nosnippet>1853</a>        // vocabulary by being declared one `mod` deeper.
+<a href=#1854 id=1854 data-nosnippet>1854</a>        </span><span class="kw">fn </span>walk(items: <span class="kw-2">&amp;</span>[syn::Item], forms: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str], label: <span class="kw-2">&amp;</span>str, out: <span class="kw-2">&amp;mut </span>Vec&lt;(String, String)&gt;) {
+<a href=#1855 id=1855 data-nosnippet>1855</a>            <span class="kw">for </span>item <span class="kw">in </span>items {
+<a href=#1856 id=1856 data-nosnippet>1856</a>                <span class="kw">match </span>item {
+<a href=#1857 id=1857 data-nosnippet>1857</a>                    syn::Item::Enum(item) =&gt; {
+<a href=#1858 id=1858 data-nosnippet>1858</a>                        <span class="kw">let </span>named = item
+<a href=#1859 id=1859 data-nosnippet>1859</a>                            .variants
+<a href=#1860 id=1860 data-nosnippet>1860</a>                            .iter()
+<a href=#1861 id=1861 data-nosnippet>1861</a>                            .filter(|variant| forms.contains(<span class="kw-2">&amp;</span>variant.ident.to_string().as_str()))
+<a href=#1862 id=1862 data-nosnippet>1862</a>                            .count();
+<a href=#1863 id=1863 data-nosnippet>1863</a>                        <span class="kw">if </span>named &gt;= <span class="number">3 </span>{
+<a href=#1864 id=1864 data-nosnippet>1864</a>                            out.push((item.ident.to_string(), label.to_string()));
+<a href=#1865 id=1865 data-nosnippet>1865</a>                        }
+<a href=#1866 id=1866 data-nosnippet>1866</a>                    }
+<a href=#1867 id=1867 data-nosnippet>1867</a>                    syn::Item::Mod(module) =&gt; {
+<a href=#1868 id=1868 data-nosnippet>1868</a>                        <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, items)) = <span class="kw-2">&amp;</span>module.content {
+<a href=#1869 id=1869 data-nosnippet>1869</a>                            walk(items, forms, label, out);
+<a href=#1870 id=1870 data-nosnippet>1870</a>                        }
+<a href=#1871 id=1871 data-nosnippet>1871</a>                    }
+<a href=#1872 id=1872 data-nosnippet>1872</a>                    <span class="kw">_ </span>=&gt; {}
+<a href=#1873 id=1873 data-nosnippet>1873</a>                }
+<a href=#1874 id=1874 data-nosnippet>1874</a>            }
+<a href=#1875 id=1875 data-nosnippet>1875</a>        }
+<a href=#1876 id=1876 data-nosnippet>1876</a>        walk(<span class="kw-2">&amp;</span>file.items, <span class="kw-2">&amp;</span>FORMS, label, <span class="kw-2">&amp;mut </span>found);
+<a href=#1877 id=1877 data-nosnippet>1877</a>    }
+<a href=#1878 id=1878 data-nosnippet>1878</a>    found.sort();
+<a href=#1879 id=1879 data-nosnippet>1879</a>    found
+<a href=#1880 id=1880 data-nosnippet>1880</a>}
 </code></pre></div></section></main></body></html>
