@@ -565,14 +565,22 @@ impl Hoisted {
 
     /// Where a leaf's reach starts, once these hoists are bound.
     ///
-    /// Three cases, and the leaf's own path decides which: a leaf under a
-    /// CONDITIONAL value form reaches off the name that form's `Some` arm
-    /// binds — a borrow of the struct, so nothing moves out of it — and its
-    /// statements belong in that arm; a leaf under an ordinary value form
-    /// reaches off the local that form was bound to, with the prefix already
-    /// consumed and the form's own ownership carried along; and a leaf under
-    /// no value form at all — a sibling accessor of the delivered value —
-    /// reaches from that value.
+    /// Three cases, and the leaf's own path decides which.
+    ///
+    /// A leaf under a **conditional** value form reaches off the name that
+    /// form's `Some` arm binds. That arm matches the hoist's `Option` by
+    /// value — every leaf under the hoist is inside it, so the local is the
+    /// arm's alone — which makes the binding an owned payload: a consuming
+    /// form's fields move out of it exactly as they do at an unconditional
+    /// one, and [`LeafPlace::owned`] says so. The leaf's statements belong in
+    /// that arm, because that is where the binding exists.
+    ///
+    /// A leaf under an **ordinary** value form reaches off the local that form
+    /// was bound to, with the prefix already consumed and the form's own
+    /// ownership carried along.
+    ///
+    /// A leaf under **no** value form — a sibling accessor of the delivered
+    /// value — reaches from that value.
     pub fn place<L: DecomposedLeaf>(
         &self,
         leaf: &L,
