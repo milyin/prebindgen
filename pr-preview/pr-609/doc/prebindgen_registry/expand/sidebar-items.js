@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ExpandDeclError","ExpandError","ExpandSel","FoldArg","FoldShape","Variant"],"fn":["emit_fold"],"struct":["ConstructorDecl","ExpandDecl","Expansions","FoldBuild","FoldLeaf","FoldPlan","FoldVariant"]};
