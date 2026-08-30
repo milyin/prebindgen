@@ -904,6 +904,13 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        // Every binding a test writes also freezes each compiled fragment into
+        // its canonical plan and checks the two describe the same fragment.
+        // Nothing renders from that plan yet — #613 step 4 is what moves JNI
+        // onto it — so this is what says it is ready to.
+        #[cfg(test)]
+        self.assert_fragments_freeze();
+
         // Every binding a test writes also checks that the assembly's
         // dependency edges name every call its artifacts render — the
         // completeness the emission-time check reasons from.
@@ -924,6 +931,146 @@ impl JniGen {
                 .assembly(),
             out_path,
         )?)
+    }
+
+    /// Every compiled fragment states the same thing twice while step 4 is in
+    /// progress — as a [`JFrag`](crate::jni::compile::JFrag) and as the
+    /// `FragmentPlan` it freezes to — and this is what says the two agree.
+    ///
+    /// Identity, source and artifact presence are compared because they are
+    /// what a plan is keyed and spelled by, and what an emitter would read
+    /// instead of the fragment. A composed-only fragment renders nothing, and
+    /// the canonical plan says so by carrying no artifact at all.
+    #[cfg(test)]
+    fn assert_fragments_freeze(&self) {
+        let generation = self
+            .decls
+            .generation
+            .as_ref()
+            .expect("resolved JniGen has no frozen generation plan");
+        let mut collected = prebindgen_registry::generation::GenerationPlanBuilder::<
+            crate::jni::compile::JRepresentation,
+        >::new();
+        for fragment in generation.conversions().fragments() {
+            let plan = fragment.freeze();
+            collected.fragment(fragment.freeze());
+            assert_eq!(
+                plan.id(),
+                &fragment.id,
+                "a frozen fragment plan changed the fragment's identity"
+            );
+            assert_eq!(
+                plan.source().key(),
+                fragment.source.key(),
+                "`{}`: a frozen fragment plan changed the crossing it answers",
+                fragment.source.key()
+            );
+            assert_eq!(
+                plan.artifact().is_some(),
+                !fragment.composed_only,
+                "`{}`: a composed-only fragment renders nothing, and only such a \
+                 fragment freezes without an artifact",
+                fragment.source.key()
+            );
+            // The conversion graph, step for step. Comparing only that a chain
+            // exists would not have caught freezing every staged custom
+            // conversion as `Direct`, which is what the first version of this
+            // did (#621 review): the operations and their order ARE the
+            // contract, and a reader of the plan routes to stage artifacts
+            // through them.
+            let steps = |chain: &prebindgen_registry::generation::ConversionChain<
+                crate::jni::compile::JRepresentation,
+            >| {
+                match chain {
+                    prebindgen_registry::generation::ConversionChain::Direct => Vec::new(),
+                    prebindgen_registry::generation::ConversionChain::Steps(steps) => steps
+                        .iter()
+                        .map(|step| {
+                            format!(
+                                "{:?}:{:?}->{:?}:{:?}",
+                                step.operation(),
+                                step.from(),
+                                step.into(),
+                                step.failure()
+                            )
+                        })
+                        .collect(),
+                }
+            };
+            assert_eq!(
+                steps(plan.converter().chain()),
+                steps(&fragment.chain),
+                "`{}`: a frozen fragment plan changed the conversion graph",
+                fragment.source.key()
+            );
+            // Both niche domains: what the fragment spends on its own absence,
+            // and what it leaves for a parent. Exposing the remainder while
+            // losing the consumed slot was the other thing this check could not
+            // see.
+            // Both niche domains, by identity rather than by count. Comparing
+            // how many there are would pass a substituted sentinel, and
+            // `GenerationPlanBuilder` cannot see one either — a niche is a
+            // bit-pattern contract, so what it IS is the whole of it.
+            let niches = plan.converter().niches();
+            let key = crate::jni::compile::niche_key;
+            assert_eq!(
+                niches.consumed(),
+                fragment
+                    .consumed_niche
+                    .iter()
+                    .map(key)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                "`{}`: a frozen fragment plan changed the niche it consumed",
+                fragment.source.key()
+            );
+            assert_eq!(
+                niches.discriminants(),
+                niches.consumed().len(),
+                "`{}`: a consumed niche is what the fragment discriminates on",
+                fragment.source.key()
+            );
+            assert_eq!(
+                niches.exposed(),
+                fragment
+                    .conv
+                    .niches
+                    .slots
+                    .iter()
+                    .map(key)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                "`{}`: a frozen fragment plan changed the niches it leaves for a parent",
+                fragment.source.key()
+            );
+            // A composition's shape has to be the composition, not the
+            // placeholder every fragment starts with: `JLayout` is what JNI
+            // says today about occupying several wires, so a fragment whose
+            // layout composes must not freeze as `Atomic`.
+            if matches!(
+                fragment.layout,
+                Some(crate::jni::compile::JLayout::Product(_))
+                    | Some(crate::jni::compile::JLayout::Optional(_))
+                    | Some(crate::jni::compile::JLayout::Choice(_))
+            ) {
+                assert!(
+                    !matches!(
+                        plan.converter().shape(),
+                        prebindgen_registry::generation::ShapePlan::Atomic(_)
+                    ),
+                    "`{}`: a fragment whose layout composes froze as atomic — the \
+                     hook that composed it did not state its shape",
+                    fragment.source.key()
+                );
+            }
+        }
+        // …and the whole set as one plan. Comparing fragment against fragment
+        // cannot see a chain whose endpoints do not join up, or an edge naming
+        // a fragment nothing compiled: those are properties of the collection,
+        // and `build` is what already validates them (#621 review).
+        if let Err(errors) = collected.build() {
+            panic!("the frozen JNI fragments do not form a valid generation plan: {errors}");
+        }
     }
 
     /// The resolved registry — conversions, decompositions, and the model.

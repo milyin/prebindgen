@@ -587,6 +587,7 @@ impl FragmentUse {
 }
 
 /// An operation whose positional arity is part of its frozen contract.
+#[derive(Clone)]
 pub struct FixedArity<P> {
     arity: usize,
     payload: P,
@@ -610,6 +611,7 @@ impl<P> FixedArity<P> {
 }
 
 /// Choice bridge payload plus the exact arity of every arm.
+#[derive(Clone)]
 pub struct ChoiceArity<P> {
     arm_arities: Vec<usize>,
     payload: P,
@@ -862,6 +864,46 @@ pub enum ShapePlan<R: Representation> {
         /// Callback arguments. Their direction is opposite the callable's.
         arguments: Vec<FragmentUse>,
     },
+}
+
+// Cloned where a shape travels with the fragment that owns it — the same
+// reason, and the same shape of impl, as [`ConversionChain`]'s above:
+// `derive(Clone)` would ask `R: Clone`, and `R` names an adapter's associated
+// types rather than being a value.
+impl<R: Representation> Clone for ShapePlan<R>
+where
+    R::TerminalCodec: Clone,
+    R::ProductBridge: Clone,
+    R::OptionalBridge: Clone,
+    R::SequenceBridge: Clone,
+    R::ChoiceBridge: Clone,
+    R::CallbackBridge: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::Atomic(codec) => Self::Atomic(codec.clone()),
+            Self::Product { bridge, parts } => Self::Product {
+                bridge: bridge.clone(),
+                parts: parts.clone(),
+            },
+            Self::Optional { bridge, value } => Self::Optional {
+                bridge: bridge.clone(),
+                value: value.clone(),
+            },
+            Self::Sequence { bridge, element } => Self::Sequence {
+                bridge: bridge.clone(),
+                element: element.clone(),
+            },
+            Self::Choice { bridge, arms } => Self::Choice {
+                bridge: bridge.clone(),
+                arms: arms.clone(),
+            },
+            Self::Invoke { bridge, arguments } => Self::Invoke {
+                bridge: bridge.clone(),
+                arguments: arguments.clone(),
+            },
+        }
+    }
 }
 
 impl<R: Representation> ShapePlan<R> {
