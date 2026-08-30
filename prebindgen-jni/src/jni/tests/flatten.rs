@@ -3243,3 +3243,86 @@ fn wire_lines(gen: &crate::jni::JniGen, spelling: &str, param: &str) -> Vec<Stri
         .map(|(name, kt_ty, access, ..)| format!("{name}: {kt_ty} = {access}"))
         .collect()
 }
+
+/// A flattened leaf says which classes it must be put back through.
+///
+/// A decomposition takes a nested `data_class` apart into the parent's leaves,
+/// and the foreign side reassembles each boundary through that class's own
+/// `fromParts`. Which class that is is known only where the flattening happens.
+/// Recovering it later would mean walking the struct's fields a second time —
+/// the walk this decomposition replaces — so the leaf carries it, outermost
+/// first, the same way it carries the arms it sits inside (#619).
+#[test]
+fn a_flattened_leaf_names_the_classes_it_is_put_back_through() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct TLeaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct TMid {
+                    pub inner: TLeaf,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct TTop {
+                    pub note: i64,
+                    pub mid: TMid,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn ttop_new() -> TTop {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(TLeaf))
+                .class(crate::data_class!(TMid))
+                .class(crate::data_class!(TTop))
+                .fun(prebindgen_registry::fun!(ttop_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+    let top: syn::Ident = syn::parse_quote!(TTop);
+    let leaves: Vec<(String, Vec<String>)> = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry(), &top)
+        .expect("a nested data class decomposes")
+        .iter()
+        .map(|wire| (wire.name.clone(), wire.through.clone()))
+        .collect();
+    assert_eq!(
+        leaves,
+        [
+            ("note".to_string(), vec![]),
+            (
+                "mid__inner__id".to_string(),
+                vec![
+                    "io.test.jni.TMid".to_string(),
+                    "io.test.jni.TLeaf".to_string()
+                ],
+            ),
+        ],
+        "a field of the decomposed class itself is inside no class; a leaf two \
+         levels in names both, outermost first"
+    );
+}

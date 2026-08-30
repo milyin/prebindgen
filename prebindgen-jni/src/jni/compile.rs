@@ -496,6 +496,19 @@ pub(crate) struct OutWire {
     /// call produces, and for a selector, which carries the path it is nested
     /// in rather than the arms it chooses between.
     pub(crate) groups: Vec<i32>,
+    /// The **inlined classes** this value sits inside, outermost first, by
+    /// Kotlin FQN — empty for a leaf of the decomposed class itself.
+    ///
+    /// A decomposition flattens a nested `data_class` into the parent's leaves,
+    /// and the foreign side has to put them back: each boundary reassembles
+    /// through that class's own `fromParts`. Which class that is is known only
+    /// where the flattening happens, so it is recorded there rather than
+    /// recovered later by walking the model a second time — the walk this
+    /// decomposition exists to replace.
+    ///
+    /// Declaration-only, like the rest of this walk: a class FQN comes from the
+    /// `data_class!` that named it, not from any resolved conversion.
+    pub(crate) through: Vec<String>,
     /// How the Rust side reaches it.
     pub(crate) from: OutFrom,
     /// The steps from the crossed value down to this one.
@@ -627,6 +640,10 @@ impl OutWire {
             name: leaf.name.clone(),
             out_ty: leaf.out_ty.clone(),
             groups: leaf.groups.clone(),
+            // A registry leaf carries no class path: `from_leaf` builds a wire
+            // for a plan the registry composed, not for a data class this
+            // adapter flattened.
+            through: Vec::new(),
             from: match &leaf.source {
                 LeafSource::SumTag => OutFrom::Tag,
                 LeafSource::Presence => OutFrom::Present,
@@ -3916,6 +3933,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     name: crate::jni::struct_plan::sum_field_prop_name(&part_member(part)?),
                     out_ty: part.ty.clone(),
                     groups: Vec::new(),
+                    through: Vec::new(),
                     from: OutFrom::Payload {
                         variant: None,
                         member: part_member(part)?,
@@ -4037,6 +4055,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 name,
                 out_ty: part.ty.clone(),
                 groups: Vec::new(),
+                through: Vec::new(),
                 // The chain starts at the accessor's result, which the emitter
                 // binds once. The call itself is the site's to make, so what a
                 // wire states is the field read off it.
@@ -4383,11 +4402,9 @@ impl Declarations {
         registry: &impl Conversions,
         st: &prebindgen_registry::flat::Struct,
     ) -> Option<Vec<OutWire>> {
-        let leaves = crate::jni::emit::synth_value_struct_leaves(self, registry, st)?;
-        leaves
-            .iter()
-            .map(|leaf| {
-                let mut wire = OutWire::from_leaf(leaf);
+        self.struct_out_wires_of(registry, &st.name)?
+            .into_iter()
+            .map(|mut wire| {
                 wire.abi = Some(match &wire.from {
                     OutFrom::Tag => OutAbi::Tag,
                     OutFrom::Present => OutAbi::Present,
@@ -4497,6 +4514,7 @@ impl Declarations {
                             name: format!("{name}__{}", crate::jni::emit::PRESENT_LEAF),
                             out_ty: field.ty.clone(),
                             groups: Vec::new(),
+                            through: Vec::new(),
                             from: OutFrom::Present,
                             reach: flag_reach,
                             nullable: false,
@@ -4533,7 +4551,7 @@ impl Declarations {
                 // sequence rather than a decomposition.
                 crate::jni::classify::TypeKind::DataStruct {
                     st: _,
-                    cfg: Some(_),
+                    cfg: Some(child_cfg),
                 } => {
                     if matches!(field.ty.kind(), TypeKind::Vec(_)) {
                         return None;
@@ -4557,6 +4575,7 @@ impl Declarations {
                             name: format!("{name}__{}", crate::jni::emit::PRESENT_LEAF),
                             out_ty: field.ty.clone(),
                             groups: Vec::new(),
+                            through: Vec::new(),
                             from: OutFrom::Present,
                             reach,
                             nullable: false,
@@ -4566,6 +4585,10 @@ impl Declarations {
                     }
                     let inlined =
                         self.struct_out_wires_at(registry, &child, &field_path, &name, depth + 1)?;
+                    // Which class this boundary reassembles through, recorded
+                    // where the flattening happens. `data_class!` named it, so
+                    // this stays a declaration read like the rest of the walk.
+                    let child_fqn = child_cfg.name_spec.as_ref().map(|spec| self.fqn_of(spec))?;
                     wires.extend(inlined.into_iter().map(|wire| {
                         let mut reach = wire.reach;
                         if optional {
@@ -4590,6 +4613,9 @@ impl Declarations {
                                     .collect(),
                                 false => wire.groups.clone(),
                             },
+                            through: std::iter::once(child_fqn.clone())
+                                .chain(wire.through.iter().cloned())
+                                .collect(),
                             ..wire
                         }
                     }));
@@ -4606,6 +4632,7 @@ impl Declarations {
                 name,
                 out_ty: field.ty.clone(),
                 groups: Vec::new(),
+                through: Vec::new(),
                 from: OutFrom::Place,
                 reach: field_path.iter().map(field_step).collect(),
                 nullable: false,
@@ -4646,6 +4673,7 @@ impl Declarations {
             name: crate::jni::emit::SUM_TAG_LEAF.to_string(),
             out_ty: sum_ty.clone(),
             groups: Vec::new(),
+            through: Vec::new(),
             from: OutFrom::Tag,
             nullable: false,
             identity: false,
@@ -4663,6 +4691,7 @@ impl Declarations {
                     ),
                     out_ty: field.ty.clone(),
                     groups: vec![crate::jni::struct_plan::sum_tag(alt)],
+                    through: Vec::new(),
                     from: OutFrom::Payload {
                         variant: Some(alt.name.clone()),
                         member,
