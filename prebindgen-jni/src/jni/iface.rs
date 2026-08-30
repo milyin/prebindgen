@@ -888,7 +888,7 @@ fn subject_package(ext: &Declarations, subject: &prebindgen_registry::flat::Type
 
 /// The interface param list for a decomposition's leaves: names from
 /// [`plan_leaf_names`], typed + raw views per leaf.
-fn plan_leaf_params(
+pub(crate) fn plan_leaf_params(
     ext: &Declarations,
     leaves: &[crate::jni::compile::OutWire],
 ) -> Option<Vec<IfaceParam>> {
@@ -900,6 +900,25 @@ fn plan_leaf_params(
         out.push(plan_leaf_param(ext, name, leaf)?);
     }
     Some(out)
+}
+
+/// The JVM descriptor each of these leaves occupies, in order.
+///
+/// One derivation for both call conventions: a builder's typed `run` spells
+/// these into the interface descriptor its method id is resolved from, and a
+/// `fromParts` factory spells the same ones into its signature string. Deriving
+/// them twice is how the two could disagree about a leaf while both looked
+/// right on their own.
+pub(crate) fn leaf_descriptors(
+    ext: &Declarations,
+    leaves: &[crate::jni::compile::OutWire],
+) -> Option<Vec<String>> {
+    Some(
+        plan_leaf_params(ext, leaves)?
+            .iter()
+            .map(|param| kt_jvm_descriptor(&param.raw, &[]))
+            .collect(),
+    )
 }
 
 /// Both interface views of ONE decomposition leaf. The single entry point for a

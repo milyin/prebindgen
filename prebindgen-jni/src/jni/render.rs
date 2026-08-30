@@ -93,10 +93,12 @@ pub(crate) fn build_data_class(
     // field here is named by construction.
     let fields_named = &item_struct.fields;
 
-    // The class declaration is derived from the SAME plan the `fromParts`
-    // factory and the Rust encoder walk. Deriving it separately — a third
-    // classification with its own rules — is what let a property's type
-    // disagree with its own factory parameter (#156).
+    // The class declaration is derived from ONE classification of the fields,
+    // shared with the sealed-class emitter rather than repeated here. Deriving
+    // it separately — a classification with its own rules — is what let a
+    // property's type disagree with the parameter that fills it (#156). The
+    // parameter itself comes from the decomposition, so what these two must
+    // agree about is the value, not the slot.
     let plan = ext
         .struct_plan(registry, item_struct, 0)
         .unwrap_or_else(|| {
@@ -127,12 +129,16 @@ pub(crate) fn build_data_class(
         let owner = format!("{}.{}", item_struct.name, field_ident);
 
         // The declaration reads ONE direction — output — because that is the
-        // direction that declares the `fromParts` slots the encoder fills, and
-        // it is the direction both plans already use exclusively
-        // (`build_struct_plan` output-only, `flat_input.rs` input-only). A
-        // property whose type came from whichever direction happened to
-        // resolve, while its wire came from the other, is how the declaration
-        // drifted from the plans.
+        // direction the class hands values OUT in, and the direction
+        // `build_struct_plan` classifies exclusively (`flat_input.rs` is the
+        // input side's own). A property whose type came from whichever
+        // direction happened to resolve, while the slot carrying it came from
+        // the other, is how the declaration drifted.
+        //
+        // The property and the slot are different questions — one per field,
+        // one per leaf — and the slots are the decomposition's now. What must
+        // still agree is that they describe the same value, which is what
+        // reading one direction for both is for.
         //
         // A projection visible only on the INPUT side is exactly that drift
         // made reachable: the old walk emitted a typed handle property (plus
@@ -163,12 +169,13 @@ pub(crate) fn build_data_class(
         }
     }
 
-    // `fromParts` companion factory — recursively flattened the same way as the
-    // native `flatten_struct_encode`: nested data-class fields are inlined as
-    // their leaf wires, so native builds the whole object graph with ONE
-    // `call_static_method`. Its raw-text class references (`Child.fromParts`,
-    // `Enum.fromInt`, projection wraps) use short names; the FQNs they need are
-    // collected here and attached to the factory body `Code` below.
+    // `fromParts` companion factory, from the struct's decomposition — the
+    // same leaves the native encode fills, so nested data-class fields are
+    // inlined as their leaf wires and native builds the whole object graph with
+    // ONE `call_static_method`. Its raw-text class references
+    // (`Child.fromParts`, `Enum.fromInt`, projection wraps) use short names; the
+    // FQNs they need are collected here and attached to the factory body `Code`
+    // below.
     let mut factory_imports: BTreeSet<String> = BTreeSet::new();
     let (factory_params, factory_reconstruct, factory_mints_handle) = flatten_struct_factory(
         ext,

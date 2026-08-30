@@ -223,7 +223,7 @@ public data class Dossier(val note: Long, val holder: Holder) : AutoCloseable {
         @JvmSynthetic
         @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
-        public fun fromParts(note: Long, holder_tag: Long, holder_summary: Long): Dossier = Dossier(note, Holder.fromParts(holder_tag, holder_summary))
+        public fun fromParts(note: Long, holder__tag: Long, holder__summary: Long): Dossier = Dossier(note, Holder.fromParts(holder__tag, holder__summary))
     }
 }
 
@@ -1496,6 +1496,19 @@ internal object CovNative {
 
     @JvmSynthetic
     external fun probeNew(seq: Long, count: Long, total: Double, build: Any, errorSink: Any): Any?
+
+    @JvmSynthetic
+    external fun rackEach(n: Long, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun rackNew(
+        id: Long,
+        meter: Boolean,
+        span: Boolean,
+        which: Long,
+        build: Any,
+        errorSink: Any,
+    ): Any?
 
     @JvmSynthetic
     external fun readingEach(n: Int, sink: Any, errorSink: Any)

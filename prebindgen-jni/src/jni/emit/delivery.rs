@@ -385,6 +385,14 @@ pub(crate) struct FrozenDelivery {
     chain: Option<crate::jni::compile::ComposedChain>,
     modules: std::collections::BTreeMap<String, syn::Path>,
     sums: std::collections::BTreeMap<String, FrozenSum>,
+    /// Which call the encoded slots ride: a typed builder `run` taking
+    /// `jvalue`s, or a `fromParts` factory spelled with a signature string and
+    /// typed `JValue`s. The walk is the same either way — what differs is how a
+    /// primitive slot is held and handed over.
+    factory: bool,
+    /// Per-leaf JVM descriptors, by leaf name. Filled for the factory
+    /// convention only, from the same derivation the builder interface uses.
+    descriptors: std::collections::BTreeMap<String, String>,
 }
 
 impl FrozenDelivery {
@@ -408,9 +416,34 @@ impl FrozenDelivery {
         wires: Vec<crate::jni::compile::OutWire>,
         chain: Option<crate::jni::compile::ComposedChain>,
     ) -> Self {
+        Self::build(
+            ext,
+            registry,
+            plan.hoists.clone(),
+            plan.by_ref,
+            plan.fixed_builder,
+            plan.is_optional_base(),
+            wires,
+            chain,
+        )
+    }
+
+    /// The construction both conventions share: origin qualification for every
+    /// call step, and the sum model behind every selector. What a delivery
+    /// needs to render without asking the registry anything.
+    #[allow(clippy::too_many_arguments)]
+    fn build(
+        ext: &Declarations,
+        registry: &impl Conversions,
+        hoists: Vec<prebindgen_registry::unfold::Hoist>,
+        by_ref: bool,
+        fixed_product: bool,
+        optional: bool,
+        wires: Vec<crate::jni::compile::OutWire>,
+        chain: Option<crate::jni::compile::ComposedChain>,
+    ) -> Self {
         let mut modules = std::collections::BTreeMap::new();
-        for step in plan
-            .hoists
+        for step in hoists
             .iter()
             .flat_map(|hoist| &hoist.prefix)
             .chain(wires.iter().flat_map(|wire| wire.reach()))
@@ -447,13 +480,96 @@ impl FrozenDelivery {
         }
         Self {
             wires,
-            hoists: plan.hoists.clone(),
-            by_ref: plan.by_ref,
-            fixed_product: plan.fixed_builder,
-            optional: plan.is_optional_base(),
+            hoists,
+            by_ref,
+            fixed_product,
+            optional,
             chain,
             modules,
             sums,
+            factory: false,
+            descriptors: std::collections::BTreeMap::new(),
+        }
+    }
+
+    /// The delivery a **whole-object struct encode** renders through: the
+    /// struct's own frozen decomposition, handed to its Kotlin `fromParts`.
+    ///
+    /// No hoists and no chain — a data class's leaves are read straight off the
+    /// value, which arrives as `&Source`. What makes it a delivery at all is
+    /// that the leaves and the walk are the same ones a fixed-builder site
+    /// uses; only the call at the end differs.
+    pub(crate) fn for_value_struct(
+        ext: &Declarations,
+        registry: &impl Conversions,
+        wires: Vec<crate::jni::compile::OutWire>,
+    ) -> Option<Self> {
+        let descriptors = crate::jni::iface::leaf_descriptors(ext, &wires)?;
+        let mut frozen = Self::build(ext, registry, Vec::new(), true, true, false, wires, None);
+        frozen.factory = true;
+        frozen.descriptors = frozen
+            .wires
+            .iter()
+            .map(|wire| wire.name.clone())
+            .zip(descriptors)
+            .collect();
+        Some(frozen)
+    }
+
+    /// Whether the encoded slots ride a `fromParts` factory rather than a
+    /// builder's typed `run`.
+    pub(crate) fn is_factory(&self) -> bool {
+        self.factory
+    }
+
+    /// How a converted **primitive** sits in its slot: the value itself under
+    /// the factory convention, wrapped in the `jvalue` member the descriptor
+    /// names under the builder's.
+    pub(crate) fn hold_prim(&self, letter: &syn::Ident, value: TokenStream) -> TokenStream {
+        match self.factory {
+            true => value,
+            false => quote!(jni::sys::jvalue { #letter: #value }),
+        }
+    }
+
+    /// A **selector**'s value in the form its slot holds — a tag's alternative
+    /// number, a presence flag's `1`.
+    ///
+    /// Asked here rather than spelled by the segment emitters, which build
+    /// these two slots themselves instead of through [`DeliveryBridge::encode`]
+    /// (a selector is assigned, not converted) and so would otherwise state the
+    /// slot convention a second time.
+    pub(crate) fn selector_value(
+        &self,
+        leaf: &crate::jni::compile::OutWire,
+        value: TokenStream,
+    ) -> TokenStream {
+        if self.factory {
+            return value;
+        }
+        let letter = match leaf.is_tag() {
+            true => format_ident!("i"),
+            false => format_ident!("z"),
+        };
+        self.hold_prim(&letter, value)
+    }
+
+    /// The JVM descriptor a non-primitive leaf's slot occupies, frozen with the
+    /// leaves so rendering asks nothing. Empty for the builder convention,
+    /// which resolves its method id from the interface descriptor instead.
+    pub(crate) fn object_descriptor(&self, leaf: &crate::jni::compile::OutWire) -> String {
+        match self.factory {
+            false => String::new(),
+            true => self
+                .descriptors
+                .get(&leaf.name)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "frozen JNI factory has no descriptor for leaf `{}`",
+                        leaf.name
+                    )
+                })
+                .clone(),
         }
     }
 
@@ -470,6 +586,17 @@ impl FrozenDelivery {
 
     pub(crate) fn wire_count(&self) -> usize {
         self.wires.len()
+    }
+
+    /// The JVM signature of the `fromParts` factory these leaves feed —
+    /// each slot's descriptor in order, returning the class itself.
+    pub(crate) fn factory_signature(&self, java_class_name: &str) -> String {
+        let mut sig = String::from("(");
+        for wire in &self.wires {
+            sig.push_str(&crate::jni::emit::sum_out::leaf_slot(self, wire).descriptor);
+        }
+        sig.push_str(&format!(")L{java_class_name};"));
+        sig
     }
 }
 
@@ -559,14 +686,16 @@ impl prebindgen_registry::unfold::DeliveryBridge for FrozenDelivery {
             let letter = jni_field_access(&wire)
                 .expect("leaf_is_prim guarantees a primitive wire")
                 .1;
+            let held = self.hold_prim(&letter, quote!(#encoded));
             let expr = reach(&|reached| {
                 let converted = convert(quote!(#reached));
                 quote! {{
                     let #encoded = #converted;
-                    jni::sys::jvalue { #letter: #encoded }
+                    #held
                 }}
             });
-            return quote! { let #slot: jni::sys::jvalue = #expr; };
+            let ty = crate::jni::emit::sum_out::leaf_slot(self, leaf).ty;
+            return quote! { let #slot: #ty = #expr; };
         }
         let cast = cast_wire_to_jobject(&encoded, &wire, fail);
         let expr = reach(&|reached| {
@@ -602,10 +731,14 @@ impl prebindgen_registry::unfold::DeliveryBridge for FrozenDelivery {
     /// the `l` slot. Matches the descriptor [`crate::jni::iface`] derives for
     /// the same leaf.
     fn argument(&self, leaf: &crate::jni::compile::OutWire, slot: &syn::Ident) -> TokenStream {
-        if self.leaf_is_prim(leaf) {
-            quote!(#slot)
-        } else {
-            quote!(jni::sys::jvalue { l: #slot.as_raw() })
+        match (self.factory, self.leaf_is_prim(leaf)) {
+            // A `fromParts` call is spelled with a signature string, so its
+            // arguments are typed `JValue`s: the wire value itself for a
+            // primitive, a borrow of the object otherwise.
+            (true, true) => quote!(jni::objects::JValue::from(#slot)),
+            (true, false) => quote!(jni::objects::JValue::Object(&#slot)),
+            (false, true) => quote!(#slot),
+            (false, false) => quote!(jni::sys::jvalue { l: #slot.as_raw() }),
         }
     }
 }

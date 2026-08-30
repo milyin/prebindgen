@@ -107,6 +107,10 @@ import io.prebindgen.covertest.model.envelopeNew
 import io.prebindgen.covertest.model.Frame
 import io.prebindgen.covertest.model.frameEach
 import io.prebindgen.covertest.model.frameNew
+import io.prebindgen.covertest.model.Meter
+import io.prebindgen.covertest.model.Rack
+import io.prebindgen.covertest.model.rackEach
+import io.prebindgen.covertest.model.rackNew
 import io.prebindgen.covertest.model.verdictEach
 import io.prebindgen.covertest.model.verdictNew
 import io.prebindgen.covertest.model.dossierNew
@@ -791,6 +795,54 @@ fun main() {
                 "5:5:Companion",
             )
         ) { "got $seen" }
+    }
+
+    // A nested class whose FIRST field selects. `Meter` begins with an optional
+    // `span` and a sum `reading`, so both of its leading leaves are selectors
+    // that belong to `Meter.fromParts` — not to the parent's expression.
+    //
+    // A parent that asks "is this leaf a selector?" before "does this leaf open
+    // a class?" consumes them itself and calls the child factory without them.
+    // Kotlin compiles that (the arity is still an overload it fails to find
+    // only at the call), and `Window` cannot catch it because it begins with a
+    // plain `label`. Both ways of holding a `Meter` are here: gated, and plain.
+    section("a nested class whose first field selects") {
+        val both = rackNew(5L, true, true, 1L, boom).orThrow()
+        check(both.name == "r5")
+        check(both.meter?.span == Stamp(5L, 15L)) { "got ${both.meter?.span}" }
+        check(both.meter?.reading == Reading.Exact(7L))
+        check(both.meter?.id == 5L)
+        // The ungated sibling carries its own leading selectors independently.
+        check(both.plain.span == null) { "got ${both.plain.span}" }
+        check(both.plain.reading == Reading.Range(2L, 4L))
+        check(both.plain.id == 105L)
+
+        // The gate absent: the child's own leading selectors must not be read
+        // as the parent's when there is no child at all.
+        val none = rackNew(6L, false, false, 0L, boom).orThrow()
+        check(none.meter == null) { "got ${none.meter}" }
+        check(none.plain.span == Stamp(106L, 318L)) { "got ${none.plain.span}" }
+        check(none.plain.reading == Reading.Exact(7L))
+
+        // Every alternative of the nested leading sum, through the gate.
+        val readings = (0..4).map { rackNew(7L, true, false, it.toLong(), boom).orThrow().meter?.reading }
+        check(
+            readings == listOf(
+                Reading.Missing,
+                Reading.Exact(7L),
+                Reading.Range(2L, 4L),
+                Reading.Tagged("hot", Priority.LOW),
+                Reading.Companion(11L),
+            )
+        ) { "got $readings" }
+
+        // …and by the callback route, which fills the same slots through the
+        // builder interface rather than the factory.
+        val seen = mutableListOf<String>()
+        rackEach(4L, { rack ->
+            seen.add("${rack.meter?.id ?: "-"}:${rack.plain.id}:${rack.plain.reading::class.simpleName}")
+        }, boom).orThrow()
+        check(seen == listOf("0:100:Exact", "-:101:Range", "2:102:Tagged", "-:103:Companion")) { "got $seen" }
     }
 
     // The same data class arriving at a CALLBACK rather than as a return.

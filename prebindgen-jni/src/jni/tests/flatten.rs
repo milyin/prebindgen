@@ -2383,14 +2383,13 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
     );
 }
 
-/// A nested `data_class` inlines its leaves into its parent's `fromParts`, and
-/// the two derivations of that flattening must agree on the leaves *and* on
-/// how deep each one is.
+/// A nested `data_class` inlines its leaves into its parent's `fromParts`,
+/// under the parent's name and at the right depth.
 ///
-/// `assert_leaf_derivations_agree` runs on every binding a test writes, and
-/// before this fixture existed every struct it compared was flat — so the
-/// property it was written for, how a nested path flattens and in what order,
-/// was never reached. This is the binding that reaches it.
+/// The property is how a nested path flattens and in what order. It was written
+/// when two derivations had to agree on it and a standing check compared them
+/// (#603); one derivation renders both sides now (#620), so what this fixture
+/// pins is the flattening itself, and `write_rust` is what renders it.
 #[test]
 fn the_two_derivations_agree_on_a_nested_data_class() {
     let loc = myflat_loc();
@@ -2461,7 +2460,7 @@ fn the_two_derivations_agree_on_a_nested_data_class() {
         "the decomposition inlines both levels"
     );
 
-    // Writing the binding is what runs `assert_leaf_derivations_agree` over it.
+    // Writing the binding renders the encode from these leaves.
     let dir = unique_test_dir("jnigen_nested_agreement");
     std::fs::create_dir_all(&dir).unwrap();
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
@@ -2651,20 +2650,20 @@ fn a_selector_inside_a_gated_group_is_a_segment_of_its_own() {
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
 }
 
-/// A field whose own name contains what used to be the arm-local marker is
-/// just a name.
+/// A field whose own name contains what used to be a generated marker is just
+/// a name.
 ///
-/// The encode binds a sum's groups twice — once inside each match arm, once in
-/// the tuple those arms fill — and the two are the same leaf, so they cannot
-/// share a name. The arm-local one carries a generated `__arm{tag}_` prefix,
-/// and the outer name is recovered by stripping it at that known position. An
-/// earlier version searched the middle of the ident for a sentinel, which any
-/// source-derived component could contain (#616 review); this fixture spells
-/// that sentinel in a field name and in a variant payload beneath it.
+/// The encode once bound a sum's groups twice — inside each match arm and in
+/// the tuple those arms filled — so the two copies of one leaf carried a
+/// generated `__arm{tag}_` prefix to tell them apart, and an earlier version
+/// searched the middle of an ident for that sentinel, which any source-derived
+/// component could contain (#616 review). The double binding is gone with the
+/// second derivation (#620), and the walk names its own slots positionally, so
+/// no source name can collide with a generated one by construction.
 ///
-/// `write_rust` is what makes it a regression rather than an inspection: it
-/// renders the encode and runs `assert_leaf_derivations_agree` over the
-/// result.
+/// The fixture is kept because that is a claim about generated names, and this
+/// spells the old sentinel in a field name and in a variant payload beneath
+/// it. `write_rust` renders the encode over it.
 #[test]
 fn a_field_named_like_the_arm_marker_is_just_a_field() {
     let loc = myflat_loc();
@@ -2798,7 +2797,7 @@ fn an_optional_nested_class_decomposes_behind_its_presence() {
         "the child's leaves are the one group that flag gates"
     );
 
-    // Rendering runs the encode and `assert_leaf_derivations_agree` over it.
+    // Rendering runs the encode over these leaves.
     let dir = unique_test_dir("jnigen_optional_nested");
     std::fs::create_dir_all(&dir).unwrap();
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
@@ -3242,4 +3241,87 @@ fn wire_lines(gen: &crate::jni::JniGen, spelling: &str, param: &str) -> Vec<Stri
         .into_iter()
         .map(|(name, kt_ty, access, ..)| format!("{name}: {kt_ty} = {access}"))
         .collect()
+}
+
+/// A flattened leaf says which classes it must be put back through.
+///
+/// A decomposition takes a nested `data_class` apart into the parent's leaves,
+/// and the foreign side reassembles each boundary through that class's own
+/// `fromParts`. Which class that is is known only where the flattening happens.
+/// Recovering it later would mean walking the struct's fields a second time —
+/// the walk this decomposition replaces — so the leaf carries it, outermost
+/// first, the same way it carries the arms it sits inside (#619).
+#[test]
+fn a_flattened_leaf_names_the_classes_it_is_put_back_through() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct TLeaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct TMid {
+                    pub inner: TLeaf,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct TTop {
+                    pub note: i64,
+                    pub mid: TMid,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn ttop_new() -> TTop {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(TLeaf))
+                .class(crate::data_class!(TMid))
+                .class(crate::data_class!(TTop))
+                .fun(prebindgen_registry::fun!(ttop_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+    let top: syn::Ident = syn::parse_quote!(TTop);
+    let leaves: Vec<(String, Vec<String>)> = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry(), &top)
+        .expect("a nested data class decomposes")
+        .iter()
+        .map(|wire| (wire.name.clone(), wire.through.clone()))
+        .collect();
+    assert_eq!(
+        leaves,
+        [
+            ("note".to_string(), vec![]),
+            (
+                "mid__inner__id".to_string(),
+                vec![
+                    "io.test.jni.TMid".to_string(),
+                    "io.test.jni.TLeaf".to_string()
+                ],
+            ),
+        ],
+        "a field of the decomposed class itself is inside no class; a leaf two \
+         levels in names both, outermost first"
+    );
 }

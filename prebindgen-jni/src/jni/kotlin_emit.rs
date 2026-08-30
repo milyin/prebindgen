@@ -1483,7 +1483,7 @@ impl Declarations {
     /// object slots are non-null, which an inert group's `JObject::null()`
     /// would trip on before any code runs. The reassembly the wire needs is the
     /// same inlined `when` a sum-typed struct field already gets from
-    /// `factory_field`, so it is emitted here directly.
+    /// [`Self::sum_reconstruct`], so it is emitted here directly.
     fn sum_builder_singleton(
         &self,
         registry: &Registry,
@@ -1658,7 +1658,10 @@ impl Declarations {
     /// inside its own live arm it is re-asserted with `!!`. A payload that is
     /// *itself* optional keeps its null — there the JVM null means `None`, and
     /// `!!` would turn a legitimately absent value into an exception.
-    fn sum_ctor_arg(
+    /// One leaf's raw parameter, spelled as the value it stands for: its wrap
+    /// applied through whatever layers sit over it. Named for the sum payload
+    /// it was written for; a data class's own field is the same question.
+    pub(crate) fn sum_ctor_arg(
         &self,
         leaf: &crate::jni::compile::OutWire,
         param: &crate::jni::IfaceParam,
@@ -1763,8 +1766,8 @@ impl Declarations {
         let nullable = nullable && (depth > 0 || slot_nullable);
         // An enum payload rides its `jint` discriminant, so the interface types
         // it `Int` and the wrap has to name the enum class itself — read off the
-        // same output-converter metadata `factory_field` reads for an enum
-        // struct field.
+        // same output-converter metadata a data class's own enum property is
+        // typed from.
         if self.is_kotlin_enum_reading(ty) {
             let name = self
                 .out_frag(ty)
