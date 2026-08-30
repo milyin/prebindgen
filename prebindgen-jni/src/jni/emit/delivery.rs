@@ -77,7 +77,7 @@ pub(crate) fn emit_unfold_delivery(
     // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
     // yielding the per-leaf typed jvalue arg expressions.
     let encode_leaves = |value: &TokenStream, optional: bool| {
-        let mut delivered = Delivered::planned(plan, (*output.wires).clone(), output.chain.clone());
+        let mut delivered = Delivered::planned(plan, output.wires.clone(), output.chain.clone());
         delivered.optional = optional;
         encode_plan_leaves(context, delivered, &obj_idents, value, &fail, emit)
     };
@@ -348,7 +348,7 @@ pub(crate) fn cast_wire_to_jobject(
 /// from a recipe.
 pub(crate) struct Delivered<'a> {
     /// The values handed out, in the order the builder receives them.
-    pub(crate) wires: Vec<crate::jni::compile::OutWire>,
+    pub(crate) wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
     /// The value forms to evaluate once and bind to a local, outermost first.
     ///
     /// Per **site** rather than per value: two values reached through one
@@ -377,7 +377,10 @@ struct FrozenSum {
 /// both consumed with the writer by the final Invoke renderer.
 #[derive(Clone)]
 pub(crate) struct FrozenDelivery {
-    wires: Vec<crate::jni::compile::OutWire>,
+    /// The site's own leaves, shared with the plan that froze them rather than
+    /// copied: a delivery context may reference canonical leaves, not own a
+    /// second conversion graph over them (#622 review).
+    wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
     hoists: Vec<prebindgen_registry::unfold::Hoist>,
     by_ref: bool,
     fixed_product: bool,
@@ -399,7 +402,7 @@ impl FrozenDelivery {
     /// Every converter encoding these leaves calls: each leaf's own pipeline,
     /// and the composed converter when the delivery has one.
     pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
-        for wire in &self.wires {
+        for wire in self.wires.iter() {
             wire.calls(out);
         }
         if let Some(chain) = &self.chain {
@@ -413,7 +416,7 @@ impl FrozenDelivery {
         ext: &Declarations,
         registry: &impl Conversions,
         plan: &prebindgen_registry::unfold::UnfoldPlan,
-        wires: Vec<crate::jni::compile::OutWire>,
+        wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
         chain: Option<crate::jni::compile::ComposedChain>,
     ) -> Self {
         Self::build(
@@ -439,7 +442,7 @@ impl FrozenDelivery {
         by_ref: bool,
         fixed_product: bool,
         optional: bool,
-        wires: Vec<crate::jni::compile::OutWire>,
+        wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
         chain: Option<crate::jni::compile::ComposedChain>,
     ) -> Self {
         let mut modules = std::collections::BTreeMap::new();
@@ -505,7 +508,16 @@ impl FrozenDelivery {
         wires: Vec<crate::jni::compile::OutWire>,
     ) -> Option<Self> {
         let descriptors = crate::jni::iface::leaf_descriptors(ext, &wires)?;
-        let mut frozen = Self::build(ext, registry, Vec::new(), true, true, false, wires, None);
+        let mut frozen = Self::build(
+            ext,
+            registry,
+            Vec::new(),
+            true,
+            true,
+            false,
+            std::rc::Rc::new(wires),
+            None,
+        );
         frozen.factory = true;
         frozen.descriptors = frozen
             .wires
@@ -592,7 +604,7 @@ impl FrozenDelivery {
     /// each slot's descriptor in order, returning the class itself.
     pub(crate) fn factory_signature(&self, java_class_name: &str) -> String {
         let mut sig = String::from("(");
-        for wire in &self.wires {
+        for wire in self.wires.iter() {
             sig.push_str(&crate::jni::emit::sum_out::leaf_slot(self, wire).descriptor);
         }
         sig.push_str(&format!(")L{java_class_name};"));
@@ -747,7 +759,7 @@ impl<'a> Delivered<'a> {
     /// Delivery from a registry-compiled return, callback, or error site.
     pub(crate) fn planned(
         plan: &'a prebindgen_registry::unfold::UnfoldPlan,
-        wires: Vec<crate::jni::compile::OutWire>,
+        wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
         chain: Option<crate::jni::compile::ComposedChain>,
     ) -> Self {
         Self {

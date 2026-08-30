@@ -58,7 +58,7 @@ pub(crate) struct JniFunctionPlan {
 /// from `TypeRef` while rendering the wrapper.
 pub(crate) struct ErrorOutputPlan {
     pub unfold: prebindgen_registry::unfold::UnfoldPlan,
-    pub wires: Vec<crate::jni::compile::OutWire>,
+    pub wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
     pub chain: Option<crate::jni::compile::ComposedChain>,
     /// Origin qualification and sum shape for these leaves, frozen with them,
     /// so rendering the `Err` arm asks the registry nothing.
@@ -659,7 +659,7 @@ impl JniFunctionPlan {
             }
         }
         if let Some(error) = &self.error {
-            for wire in &error.wires {
+            for wire in error.wires.iter() {
                 wire.calls(out);
             }
             if let Some(chain) = &error.chain {
@@ -1066,12 +1066,13 @@ fn build_error_output(
     registry: &Registry,
     unfold: prebindgen_registry::unfold::UnfoldPlan,
 ) -> Result<ErrorOutputPlan, PlanError> {
-    let wires =
+    let wires = std::rc::Rc::new(
         crate::jni::compile::freeze_out_wires(ext, registry, &unfold.leaves).map_err(|_| {
             PlanError::UnresolvedOutput {
                 ty: Box::new(unfold.source.clone()),
             }
-        })?;
+        })?,
+    );
     let delivered = if unfold.by_ref {
         unfold.source.borrowed()
     } else {
@@ -1210,7 +1211,7 @@ fn build_output(
             ext,
             registry,
             plan,
-            (*wires).clone(),
+            wires.clone(),
             chain.clone(),
         );
         return Ok(FnOutputPlan::Unfold(Box::new(UnfoldOutputPlan {
@@ -1299,11 +1300,13 @@ fn build_output(
             ext,
             registry,
             unfold,
-            unfold
-                .leaves
-                .iter()
-                .map(crate::jni::compile::OutWire::from_leaf)
-                .collect(),
+            std::rc::Rc::new(
+                unfold
+                    .leaves
+                    .iter()
+                    .map(crate::jni::compile::OutWire::from_leaf)
+                    .collect(),
+            ),
             None,
         )
     });

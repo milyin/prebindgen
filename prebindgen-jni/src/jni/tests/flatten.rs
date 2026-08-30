@@ -3391,3 +3391,80 @@ fn an_expansion_leaf_is_a_place_within_the_parameter_that_expanded() {
          own source position 1 — which the flattened numbering gave away"
     );
 }
+
+/// A decomposed return's wires are the SAME allocation in the site plan and in
+/// the output plan the emitters read.
+///
+/// Sharing them was not enough on its own: `JPlan::decomposed` used to clone
+/// the `Vec` out of the shared handle, so the carrier matched a transient plan
+/// while the emitters read a copy. Nothing failed, because nothing compared the
+/// carrier with the FINAL plan (#622 review) — so this does.
+#[test]
+fn a_decomposed_return_shares_one_wire_list_with_its_site() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Pair {
+                    pub id: i64,
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn pair_new(id: i64) -> Pair {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Pair))
+                .fun(prebindgen_registry::fun!(pair_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    // The wires the site plan froze for the callback's decomposed delivery…
+    let site_wires: Vec<_> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter_map(|plan| match plan.abi().payload() {
+            crate::jni::compile::JAbiLeaves::Decomposed(wires) => Some(wires.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        !site_wires.is_empty(),
+        "the decomposed delivery must reach the site plan at all"
+    );
+    // …are the ones the FINAL plan holds, not a copy of them. Comparing
+    // against the site store alone would prove nothing: the store owns a
+    // handle, so any count is greater than one by construction.
+    let function = gen
+        .declarations()
+        .generation
+        .as_ref()
+        .expect("resolved JniGen has a frozen generation plan")
+        .function(&syn::parse_quote!(pair_new))
+        .expect("the exported function is planned");
+    let crate::jni::fn_plan::FnOutputPlan::Unfold(output) = &function.output else {
+        panic!("a decomposed return is an unfold delivery");
+    };
+    assert!(
+        site_wires
+            .iter()
+            .any(|wires| std::rc::Rc::ptr_eq(wires, &output.wires)),
+        "the plan the emitters read holds a copy of the wires rather than the \
+         list the site froze"
+    );
+}

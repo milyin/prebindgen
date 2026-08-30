@@ -453,7 +453,7 @@ pub(crate) fn callback_input(
             });
             let elem_frame = std::cmp::max(16, 2 * plan.leaves.len() + 6);
             parts.push(JInvokePart::Fold {
-                delivery: FrozenDelivery::new(ext, registry, plan, wires, chain),
+                delivery: FrozenDelivery::new(ext, registry, plan, std::rc::Rc::new(wires), chain),
                 fold_obj,
                 fold_id,
                 element_frame: syn::LitInt::new(&elem_frame.to_string(), Span::call_site()),
@@ -479,7 +479,7 @@ pub(crate) fn callback_input(
             }
             total += plan.leaves.len() + usize::from(optional);
             parts.push(JInvokePart::Decomposed {
-                delivery: FrozenDelivery::new(ext, registry, plan, wires, chain),
+                delivery: FrozenDelivery::new(ext, registry, plan, std::rc::Rc::new(wires), chain),
                 optional,
             });
             continue;
