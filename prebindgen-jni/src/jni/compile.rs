@@ -24,10 +24,10 @@ use super::*;
 /// the two — the same reason `FnOutputPlan::Value` boxes its own payload.
 pub(crate) enum JPlan {
     /// One parameter, in the seven-way wire layout the emitters branch on.
-    Param(Box<crate::jni::fn_plan::PlanLeaf>),
+    Param(std::rc::Rc<crate::jni::fn_plan::PlanLeaf>),
     /// A return that crosses as one value: what it converts through, and what
     /// the Kotlin surface declares.
-    Return(Box<crate::jni::fn_plan::ValueOutputPlan>),
+    Return(std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>),
     /// A return the binding takes apart: the values it hands out, in the order
     /// the builder receives them.
     ///
@@ -38,17 +38,17 @@ pub(crate) enum JPlan {
 
 impl JPlan {
     /// This plan as a parameter's, or `None` if it is a return's.
-    pub(crate) fn param(self) -> Option<crate::jni::fn_plan::PlanLeaf> {
+    pub(crate) fn param(self) -> Option<std::rc::Rc<crate::jni::fn_plan::PlanLeaf>> {
         match self {
-            JPlan::Param(leaf) => Some(*leaf),
+            JPlan::Param(leaf) => Some(leaf),
             _ => None,
         }
     }
 
     /// This plan as a return's, or `None` if it is a parameter's.
-    pub(crate) fn returned(self) -> Option<crate::jni::fn_plan::ValueOutputPlan> {
+    pub(crate) fn returned(self) -> Option<std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>> {
         match self {
-            JPlan::Return(plan) => Some(*plan),
+            JPlan::Return(plan) => Some(plan),
             _ => None,
         }
     }
@@ -301,13 +301,16 @@ pub(crate) struct JFrag {
 #[derive(Clone)]
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum JAbiLeaves {
-    /// A parameter's native positions — the list the Rust extern, the
-    /// `JNINative` declaration and JVM slot validation all read.
-    Params(std::rc::Rc<Vec<crate::jni::fn_plan::NativeParam>>),
+    /// A parameter: its ordered native positions AND the operations that
+    /// decode them — the Rust and Kotlin param ops and the pipeline. The whole
+    /// leaf, shared, because those are what an emitter reads and a carrier
+    /// that held only the descriptors could not replace the plan.
+    Params(std::rc::Rc<crate::jni::fn_plan::PlanLeaf>),
     /// The values a decomposed return hands out, in builder order.
     Decomposed(std::rc::Rc<Vec<OutWire>>),
-    /// One value, crossing through its own conversion.
-    Whole,
+    /// One returned value: the plan that converts it, which is the plan the
+    /// emitters read rather than the intermediate the site hook produces.
+    Whole(std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>),
 }
 
 impl JAbiLeaves {
@@ -317,9 +320,9 @@ impl JAbiLeaves {
     /// summing it here made a two-slot `long` look like two leaves.
     pub(crate) fn len(&self) -> usize {
         match self {
-            Self::Params(params) => params.len(),
+            Self::Params(leaf) => leaf.native.len(),
             Self::Decomposed(wires) => wires.len(),
-            Self::Whole => 1,
+            Self::Whole(_) => 1,
         }
     }
 }
@@ -1455,9 +1458,12 @@ impl<R: Conversions> JCompile<'_, R> {
     #[cfg(test)]
     fn freeze_site_of(&self, bound: &Bound, root: &JFrag, plan: &JPlan) {
         let leaves = match plan {
-            JPlan::Param(leaf) => JAbiLeaves::Params(leaf.native.clone()),
+            // The whole leaf, not just its descriptors: `RustParamOp`,
+            // `KotlinParamOp` and the pipeline are the site's operations, and
+            // a carrier without them could not replace the plan (#622 review).
+            JPlan::Param(leaf) => JAbiLeaves::Params(leaf.clone()),
             JPlan::Decomposed(wires) => JAbiLeaves::Decomposed(wires.clone()),
-            JPlan::Return(_) => JAbiLeaves::Whole,
+            JPlan::Return(plan) => JAbiLeaves::Whole(plan.clone()),
         };
         let frozen = root.freeze_site(bound, leaves);
         // The carrier holds the SAME list the plan does, not a copy of it.
@@ -1467,14 +1473,18 @@ impl<R: Conversions> JCompile<'_, R> {
         // the second answer (#622 review).
         match (frozen.abi().payload(), plan) {
             (JAbiLeaves::Params(frozen), JPlan::Param(leaf)) => assert!(
-                std::rc::Rc::ptr_eq(frozen, &leaf.native),
-                "the site's ABI is a copy of the plan's rather than the same list"
+                std::rc::Rc::ptr_eq(frozen, leaf),
+                "the site's ABI is a copy of the plan's rather than the same leaf"
             ),
             (JAbiLeaves::Decomposed(frozen), JPlan::Decomposed(wires)) => assert!(
                 std::rc::Rc::ptr_eq(frozen, wires),
                 "the site's ABI is a copy of the plan's rather than the same list"
             ),
-            (JAbiLeaves::Whole, JPlan::Return(_)) => {}
+            (JAbiLeaves::Whole(frozen), JPlan::Return(plan)) => assert!(
+                std::rc::Rc::ptr_eq(frozen, plan),
+                "the site's ABI is a copy of the return plan rather than the same one"
+            ),
+
             _ => panic!("a site's frozen ABI does not match the plan it was taken from"),
         }
         self.decls
@@ -3677,7 +3687,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         wires.iter().for_each(OutWire::activate);
                         JPlan::Decomposed(std::rc::Rc::new(wires.clone()))
                     }
-                    None => JPlan::Return(Box::new(self.return_plan(bound, root))),
+                    None => JPlan::Return(std::rc::Rc::new(self.return_plan(bound, root))),
                 };
                 self.freeze_site_of(bound, root, &plan);
                 return Ok(plan);
@@ -3883,7 +3893,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             }
         };
 
-        let plan = JPlan::Param(Box::new(PlanLeaf {
+        let plan = JPlan::Param(std::rc::Rc::new(PlanLeaf {
             reading: reading.clone(),
             kt_name,
             kt_public,

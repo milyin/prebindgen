@@ -731,7 +731,7 @@ fn emit_plain_decode(
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
     plan: &ExpandedParamPlan,
-    leaves: &[PlanLeaf],
+    leaves: &[std::rc::Rc<PlanLeaf>],
     orig_param: &syn::Ident,
     on_err: &TokenStream,
     emit: &prebindgen_registry::RustWriter,

@@ -107,7 +107,7 @@ impl PlanLeaf {
 /// sub-plans; the `Expanded` payload is just a `Vec` header).
 pub(crate) enum ParamForm {
     /// Ordinary parameter — one classified leaf.
-    Single(Box<PlanLeaf>),
+    Single(std::rc::Rc<PlanLeaf>),
     /// Constructor-expansion ([`FoldPlan`] declared for this `(fn, param)`):
     /// the wire form is the plan's flattened leaves, classified individually;
     /// the Rust wrapper folds them back into the built value. Leaves use the
@@ -119,7 +119,7 @@ pub(crate) enum ParamForm {
         /// beside its lowered leaves lets Rust reconstruction and Kotlin/report
         /// descriptions use the same decision after resolution.
         plan: Box<ExpandedParamPlan>,
-        leaves: Vec<PlanLeaf>,
+        leaves: Vec<std::rc::Rc<PlanLeaf>>,
     },
 }
 
@@ -394,6 +394,7 @@ pub(crate) struct ValueOutputPlan {
 /// (`render_return_surface`) maps it back to the historical
 /// `(kt_return, projection)` pair, panicking on an unregistered projection
 /// FQN exactly where `classify_return` always did (Kotlin render time).
+#[derive(Clone)]
 pub(crate) enum ReturnSurface {
     /// No Kotlin type resolvable (entry or `kotlin_name` missing): the
     /// Kotlin renderers skip the function; the Rust emitter ignores it.
@@ -765,10 +766,10 @@ impl JniFunctionPlan {
                     leaves,
                 }
             } else {
-                ParamForm::Single(Box::new(classify_leaf(
+                ParamForm::Single(classify_leaf(
                     ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident, &f.name,
                     position, 0,
-                )?))
+                )?)
             };
             params.push(PlanParam { ident, ty, form });
         }
@@ -791,10 +792,13 @@ impl JniFunctionPlan {
     /// The flattened effective-parameter view (expansion leaves inline) —
     /// the sequence the Kotlin wrapper and `external fun` declare, in order.
     pub fn leaves(&self) -> impl Iterator<Item = &PlanLeaf> {
-        self.params.iter().flat_map(|p| match &p.form {
-            ParamForm::Single(l) => std::slice::from_ref(&**l).iter(),
-            ParamForm::Expanded { leaves, .. } => leaves.iter(),
-        })
+        self.params
+            .iter()
+            .flat_map(|p| match &p.form {
+                ParamForm::Single(l) => std::slice::from_ref(l).iter(),
+                ParamForm::Expanded { leaves, .. } => leaves.iter(),
+            })
+            .map(std::rc::Rc::as_ref)
     }
 
     fn jvm_parameter_slots(&self) -> usize {
@@ -867,7 +871,7 @@ fn classify_leaf(
     owner: &syn::Ident,
     position: usize,
     leaf_index: usize,
-) -> Result<PlanLeaf, PlanError> {
+) -> Result<std::rc::Rc<PlanLeaf>, PlanError> {
     use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Site};
     // `impl Fn(args)` never reaches the compiler, for the reason
     // `JniGen::compile_crossing` gives: a callback is answered whole, because a
@@ -895,6 +899,22 @@ fn classify_leaf(
             kt_wire: entry.metadata.kotlin_name.clone(),
             jvm_slots: 1,
         }]);
+        let leaf = std::rc::Rc::new(PlanLeaf {
+            reading: reading.clone(),
+            kt_name: kt_param_name(&ident.to_string()),
+            kt_public: None,
+            optional: reading.optional_inner().is_some(),
+            as_enum_value: ext.is_kotlin_enum_reading(reading),
+            enum_niche: crate::jni::compile::option_enum_niche(
+                ext,
+                reading,
+                prebindgen_registry::recipe::Direction::Construct,
+            ),
+            native,
+            pipeline,
+            rust: RustParamOp::Pipeline { wire_ident },
+            kotlin: KotlinParamOp::Callback { iface },
+        });
         // This parameter never reaches `Compiler::site`, so nothing else
         // states it canonically — but every fact a site plan needs is here:
         // the place in the function, the crossing, and the fragment that
@@ -916,25 +936,10 @@ fn classify_leaf(
                         recipe: fragment.id.recipe().clone(),
                         origin: prebindgen_registry::recipe::Origin::Function,
                     },
-                    crate::jni::compile::JAbiLeaves::Params(native.clone()),
+                    crate::jni::compile::JAbiLeaves::Params(leaf.clone()),
                 )));
         }
-        return Ok(PlanLeaf {
-            reading: reading.clone(),
-            kt_name: kt_param_name(&ident.to_string()),
-            kt_public: None,
-            optional: reading.optional_inner().is_some(),
-            as_enum_value: ext.is_kotlin_enum_reading(reading),
-            enum_niche: crate::jni::compile::option_enum_niche(
-                ext,
-                reading,
-                prebindgen_registry::recipe::Direction::Construct,
-            ),
-            native,
-            pipeline,
-            rust: RustParamOp::Pipeline { wire_ident },
-            kotlin: KotlinParamOp::Callback { iface },
-        });
+        return Ok(leaf);
     }
     // The compiler, resumed over what the build already compiled. Every
     // fragment this site's recipe needs is in that store, so `site` finds them
@@ -1270,14 +1275,15 @@ fn build_output(
     .ok_or_else(|| PlanError::UnresolvedOutput {
         ty: Box::new(target.clone()),
     })?;
-    let ValueOutputPlan {
-        pipeline,
-        surface,
-        is_enum,
-        is_option_enum,
-        enum_niches,
-        ..
-    } = plan;
+    // Read off the shared plan: it is the site's own answer, and the plan
+    // built below adds the convert delivery to it rather than replacing it.
+    let (pipeline, surface, is_enum, is_option_enum, enum_niches) = (
+        plan.pipeline.clone(),
+        plan.surface.clone(),
+        plan.is_enum,
+        plan.is_option_enum,
+        plan.enum_niches.clone(),
+    );
     // The convert shortcut reaches the plan's single leaf itself rather than
     // through the leaf encoder, and qualifies the accessor calls on that reach
     // — so those origins are frozen here, with the leaf they belong to.
