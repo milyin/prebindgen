@@ -222,6 +222,13 @@ pub(crate) struct JFrag {
     /// rather than re-deriving them from a site that has moved on.
     pub(crate) id: prebindgen_registry::generation::FragmentId,
     pub(crate) source: TypeRef,
+    /// The niche this fragment **consumed** to encode its own absence, when it
+    /// did. An `Option` over a value whose wire has a free bit-pattern spends
+    /// one of them on `None` and exposes only the rest; the spent slot lives
+    /// on in the bridge that tests it, so without recording it here the frozen
+    /// plan could describe what a parent may still use but not what this
+    /// fragment took (#621 review).
+    pub(crate) consumed_niche: Option<prebindgen_registry::niches::NicheSlot>,
     /// The registry-composed shape of this fragment, in the canonical
     /// vocabulary. Built where the shape is known — the hook the compiler
     /// called — rather than in an adapter enum translated later, which is the
@@ -893,6 +900,7 @@ impl JFrag {
             // Atomic until a composing hook says otherwise: a fragment the
             // compiler reached through `atomic` converts one leaf, and every
             // other hook overwrites this with the shape it composed.
+            consumed_niche: None,
             shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             conv,
             chain: prebindgen_registry::generation::ConversionChain::Direct,
@@ -941,16 +949,51 @@ impl JFrag {
             )
         };
         let exposed: Vec<String> = self.conv.niches.slots.iter().map(niche_key).collect();
-        let converter = ConverterPlan::new(
+        // What this fragment SPENT, beside what it leaves for a parent. An
+        // `Option` that encodes `None` in a free bit-pattern consumes one slot
+        // and discriminates on it; the plan has to carry both domains, or it
+        // describes a contract nothing can validate and a nested `Option` layer
+        // cannot be reconstructed from it.
+        let consumed: Vec<String> = self.consumed_niche.iter().map(niche_key).collect();
+        let converter = ConverterPlan::with_chain(
             self.shape.clone(),
-            NichePlan::new(0, Vec::new(), exposed),
+            // The authoritative conversion graph, not `Direct`: a `convert!`
+            // declaration's stages, their order, and the artifacts they route
+            // to live here since #615, and freezing without them would hand a
+            // later reader a fragment with no stages at all.
+            self.chain.clone(),
+            NichePlan::new(consumed.len(), consumed, exposed),
             generation::Failure::Fallible,
             generation::Cleanup::None,
         );
+        // The **shape-adjacent** intermediate, which is not always the wire.
+        // A `convert!` declaration puts stages between the source value and the
+        // value the shape converts — `Duration -> u64 -> jlong` — so for a
+        // fragment with a chain the intermediate is the chain's own end: what
+        // it produces when deconstructing, what it starts from when
+        // constructing. Taking the destination unconditionally described a
+        // chain that ends nowhere, which is what validating the collected
+        // fragments as one plan reported (#621 review).
+        let intermediate = match (&self.chain, self.id.direction()) {
+            (generation::ConversionChain::Steps(steps), Direction::Deconstruct) => {
+                steps.last().and_then(|step| match step.into() {
+                    generation::ChainValue::Intermediate(key) => Some(key.clone()),
+                    generation::ChainValue::Source => None,
+                })
+            }
+            (generation::ConversionChain::Steps(steps), Direction::Construct) => {
+                steps.first().and_then(|step| match step.from() {
+                    generation::ChainValue::Intermediate(key) => Some(key.clone()),
+                    generation::ChainValue::Source => None,
+                })
+            }
+            (generation::ConversionChain::Direct, _) => None,
+        }
+        .unwrap_or_else(|| TypeKey::from_type(&self.conv.destination));
         let plan = FragmentPlan::new(
             self.id.clone(),
             self.source.clone(),
-            TypeKey::from_type(&self.conv.destination),
+            intermediate,
             converter,
             self.yields.clone(),
         );
@@ -1711,6 +1754,7 @@ impl<R: Conversions> JCompile<'_, R> {
             choice_arm: None,
             id: at.fragment_id(),
             source: at.crossing.spelled().clone(),
+            consumed_niche: None,
             shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
@@ -2163,6 +2207,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             id: at.fragment_id(),
             source: at.crossing.spelled().clone(),
+            consumed_niche: None,
             shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
@@ -2330,6 +2375,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             id: at.fragment_id(),
             source: at.crossing.spelled().clone(),
+            consumed_niche: None,
             shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
@@ -2490,6 +2536,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             id: at.fragment_id(),
             source: at.crossing.spelled().clone(),
+            consumed_niche: None,
             shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
@@ -2575,6 +2622,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             id: at.fragment_id(),
             source: at.crossing.spelled().clone(),
+            consumed_niche: None,
             shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
@@ -2806,6 +2854,13 @@ impl<R: Conversions> JCompile<'_, R> {
                 ),
                 ..projection
             });
+        // The slot this optional spends on `None`, when it spends one. Which
+        // slot is `carve`'s answer — the same call the bridge above made to
+        // choose the sentinel it tests — and it is recorded rather than
+        // recomputed later because `freeze` sees the fragment, not its inner.
+        let consumed_niche = (nullable_kind == NullableKind::Niche)
+            .then(|| inner.conv.niches.clone().carve().map(|(slot, _)| slot))
+            .flatten();
         let mut niche_sentinels = inner.conv.metadata.niche_sentinels.clone();
         if nullable_kind == NullableKind::Niche {
             if !niche_sentinels.is_empty() {
@@ -2864,6 +2919,7 @@ impl<R: Conversions> JCompile<'_, R> {
             },
             id: at.fragment_id(),
             source: at.crossing.spelled().clone(),
+            consumed_niche,
             shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),

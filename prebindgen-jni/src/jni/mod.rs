@@ -948,8 +948,12 @@ impl JniGen {
             .generation
             .as_ref()
             .expect("resolved JniGen has no frozen generation plan");
+        let mut collected = prebindgen_registry::generation::GenerationPlanBuilder::<
+            crate::jni::compile::JRepresentation,
+        >::new();
         for fragment in generation.conversions().fragments() {
             let plan = fragment.freeze();
+            collected.fragment(fragment.freeze());
             assert_eq!(
                 plan.id(),
                 &fragment.id,
@@ -966,6 +970,60 @@ impl JniGen {
                 !fragment.composed_only,
                 "`{}`: a composed-only fragment renders nothing, and only such a \
                  fragment freezes without an artifact",
+                fragment.source.key()
+            );
+            // The conversion graph, step for step. Comparing only that a chain
+            // exists would not have caught freezing every staged custom
+            // conversion as `Direct`, which is what the first version of this
+            // did (#621 review): the operations and their order ARE the
+            // contract, and a reader of the plan routes to stage artifacts
+            // through them.
+            let steps = |chain: &prebindgen_registry::generation::ConversionChain<
+                crate::jni::compile::JRepresentation,
+            >| {
+                match chain {
+                    prebindgen_registry::generation::ConversionChain::Direct => Vec::new(),
+                    prebindgen_registry::generation::ConversionChain::Steps(steps) => steps
+                        .iter()
+                        .map(|step| {
+                            format!(
+                                "{:?}:{:?}->{:?}:{:?}",
+                                step.operation(),
+                                step.from(),
+                                step.into(),
+                                step.failure()
+                            )
+                        })
+                        .collect(),
+                }
+            };
+            assert_eq!(
+                steps(plan.converter().chain()),
+                steps(&fragment.chain),
+                "`{}`: a frozen fragment plan changed the conversion graph",
+                fragment.source.key()
+            );
+            // Both niche domains: what the fragment spends on its own absence,
+            // and what it leaves for a parent. Exposing the remainder while
+            // losing the consumed slot was the other thing this check could not
+            // see.
+            let niches = plan.converter().niches();
+            assert_eq!(
+                niches.consumed().len(),
+                usize::from(fragment.consumed_niche.is_some()),
+                "`{}`: a frozen fragment plan changed the niche it consumed",
+                fragment.source.key()
+            );
+            assert_eq!(
+                niches.discriminants(),
+                niches.consumed().len(),
+                "`{}`: a consumed niche is what the fragment discriminates on",
+                fragment.source.key()
+            );
+            assert_eq!(
+                niches.exposed().len(),
+                fragment.conv.niches.slots.len(),
+                "`{}`: a frozen fragment plan changed the niches it leaves for a parent",
                 fragment.source.key()
             );
             // A composition's shape has to be the composition, not the
@@ -988,6 +1046,13 @@ impl JniGen {
                     fragment.source.key()
                 );
             }
+        }
+        // …and the whole set as one plan. Comparing fragment against fragment
+        // cannot see a chain whose endpoints do not join up, or an edge naming
+        // a fragment nothing compiled: those are properties of the collection,
+        // and `build` is what already validates them (#621 review).
+        if let Err(errors) = collected.build() {
+            panic!("the frozen JNI fragments do not form a valid generation plan: {errors}");
         }
     }
 
