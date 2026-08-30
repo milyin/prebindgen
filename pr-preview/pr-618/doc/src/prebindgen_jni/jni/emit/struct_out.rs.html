@@ -85,63 +85,63 @@
 <a href=#85 id=85 data-nosnippet>85</a>/// `fromParts` parameters and the recipe identically, and two walks agreeing was a
 <a href=#86 id=86 data-nosnippet>86</a>/// property nothing checked.
 <a href=#87 id=87 data-nosnippet>87</a>///
-<a href=#88 id=88 data-nosnippet>88</a>/// `None` — the type keeps the whole-value `fromParts` path — when a field needs
-<a href=#89 id=89 data-nosnippet>89</a>/// a transform this fixed builder cannot forward verbatim. See
-<a href=#90 id=90 data-nosnippet>90</a>/// [`Declarations::struct_out_wires`] for which fields those are and why one of
-<a href=#91 id=91 data-nosnippet>91</a>/// them declines the whole value.
-<a href=#92 id=92 data-nosnippet>92</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>synth_value_struct_leaves(
-<a href=#93 id=93 data-nosnippet>93</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#94 id=94 data-nosnippet>94</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#95 id=95 data-nosnippet>95</a>    s: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Struct,
-<a href=#96 id=96 data-nosnippet>96</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;prebindgen_registry::unfold::UnfoldLeaf&gt;&gt; {
-<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">use </span>prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
-<a href=#98 id=98 data-nosnippet>98</a>    <span class="prelude-val">Some</span>(
-<a href=#99 id=99 data-nosnippet>99</a>        ext.struct_out_wires_of(registry, <span class="kw-2">&amp;</span>s.name)<span class="question-mark">?
-<a href=#100 id=100 data-nosnippet>100</a>            </span>.into_iter()
-<a href=#101 id=101 data-nosnippet>101</a>            .map(|w| UnfoldLeaf {
-<a href=#102 id=102 data-nosnippet>102</a>                name: w.name,
-<a href=#103 id=103 data-nosnippet>103</a>                path: w.reach,
-<a href=#104 id=104 data-nosnippet>104</a>                out_ty: w.out_ty,
-<a href=#105 id=105 data-nosnippet>105</a>                identity: <span class="bool-val">false</span>,
-<a href=#106 id=106 data-nosnippet>106</a>                nullable: w.nullable,
-<a href=#107 id=107 data-nosnippet>107</a>                <span class="comment">// A selector is not read off a place: the emitter assigns the
-<a href=#108 id=108 data-nosnippet>108</a>                // live alternative's number in each arm of its `match`, which
-<a href=#109 id=109 data-nosnippet>109</a>                // is what `LeafSource::SumTag` says and what keeps
-<a href=#110 id=110 data-nosnippet>110</a>                // `OutWire::from_leaf` round-tripping it back to a tag rather
-<a href=#111 id=111 data-nosnippet>111</a>                // than trying to compile the sum type as a crossing.
-<a href=#112 id=112 data-nosnippet>112</a>                </span>source: <span class="kw">match </span>w.from {
-<a href=#113 id=113 data-nosnippet>113</a>                    <span class="kw">crate</span>::jni::compile::OutFrom::Tag =&gt; LeafSource::SumTag,
-<a href=#114 id=114 data-nosnippet>114</a>                    <span class="kw">crate</span>::jni::compile::OutFrom::Present =&gt; LeafSource::Presence,
-<a href=#115 id=115 data-nosnippet>115</a>                    <span class="kw">_ </span>=&gt; LeafSource::Reach,
-<a href=#116 id=116 data-nosnippet>116</a>                },
-<a href=#117 id=117 data-nosnippet>117</a>                groups: w.groups,
-<a href=#118 id=118 data-nosnippet>118</a>            })
-<a href=#119 id=119 data-nosnippet>119</a>            .collect(),
-<a href=#120 id=120 data-nosnippet>120</a>    )
-<a href=#121 id=121 data-nosnippet>121</a>}
-<a href=#122 id=122 data-nosnippet>122</a>
-<a href=#123 id=123 data-nosnippet>123</a><span class="doccomment">/// Walk a [`StructPlan`] emitting the Rust-side wire encode: per leaf a
-<a href=#124 id=124 data-nosnippet>124</a>/// prelude statement binding `__&lt;prefix&gt;_&lt;field&gt;` to the converted wire and
-<a href=#125 id=125 data-nosnippet>125</a>/// an [`EncSlot`] describing its `JValue` slot. `access` is the Rust
-<a href=#126 id=126 data-nosnippet>126</a>/// expression yielding the current struct value (`v`, `v.field`, or the
-<a href=#127 id=127 data-nosnippet>127</a>/// matched `__cN` under an Option); `prefix` namespaces the generated idents.
-<a href=#128 id=128 data-nosnippet>128</a>/// Walk the struct's fields and encode each leaf into a `fromParts` argument.
-<a href=#129 id=129 data-nosnippet>129</a>///
-<a href=#130 id=130 data-nosnippet>130</a>/// This is a source-value walk that the registry does not perform, and the
-<a href=#131 id=131 data-nosnippet>131</a>/// reason is coverage rather than ownership. The registry-facing decomposition
-<a href=#132 id=132 data-nosnippet>132</a>/// of a struct (`Declarations::struct_out_wires_at`) refuses a nested
-<a href=#133 id=133 data-nosnippet>133</a>/// `data_class` behind an `Option` or a `Vec`; this encode supports both, an
-<a href=#134 id=134 data-nosnippet>134</a>/// optional nested class as a `present` flag plus a defaulted group and a sum
-<a href=#135 id=135 data-nosnippet>135</a>/// field as a tag plus one group per variant.
-<a href=#136 id=136 data-nosnippet>136</a>///
-<a href=#137 id=137 data-nosnippet>137</a>/// Rendering this through the registry's decomposition walk would therefore
-<a href=#138 id=138 data-nosnippet>138</a>/// mean teaching that decomposition the gated shapes — which would also change
-<a href=#139 id=139 data-nosnippet>139</a>/// what a foreign builder can be delivered, a feature rather than a
-<a href=#140 id=140 data-nosnippet>140</a>/// refactoring. #596 step 5 records that decision; #602 proposes the feature.
-<a href=#141 id=141 data-nosnippet>141</a>///
-<a href=#142 id=142 data-nosnippet>142</a>/// Where both derivations do apply, they must name the same leaves in the same
-<a href=#143 id=143 data-nosnippet>143</a>/// order: `JniGen::assert_leaf_derivations_agree` checks that on every binding
-<a href=#144 id=144 data-nosnippet>144</a>/// a test writes, since that agreement is what #602 would rest on.
+<a href=#88 id=88 data-nosnippet>88</a>/// `None` — the type keeps the whole-value `fromParts` path — when a field is
+<a href=#89 id=89 data-nosnippet>89</a>/// one the decomposition cannot state at all. Those are structural: a repeated
+<a href=#90 id=90 data-nosnippet>90</a>/// nested class, a field the model does not hold as a named one, nesting past
+<a href=#91 id=91 data-nosnippet>91</a>/// 16. Not a missing transform — a handle, an `enum_class`, a sum, an optional
+<a href=#92 id=92 data-nosnippet>92</a>/// nested class and a selector inside a gated group all state fine, each
+<a href=#93 id=93 data-nosnippet>93</a>/// carrying its own conversion (#602). See [`Declarations::struct_out_wires`]
+<a href=#94 id=94 data-nosnippet>94</a>/// for the list and why one such field declines the whole value.
+<a href=#95 id=95 data-nosnippet>95</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>synth_value_struct_leaves(
+<a href=#96 id=96 data-nosnippet>96</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#97 id=97 data-nosnippet>97</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#98 id=98 data-nosnippet>98</a>    s: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Struct,
+<a href=#99 id=99 data-nosnippet>99</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;prebindgen_registry::unfold::UnfoldLeaf&gt;&gt; {
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">use </span>prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="prelude-val">Some</span>(
+<a href=#102 id=102 data-nosnippet>102</a>        ext.struct_out_wires_of(registry, <span class="kw-2">&amp;</span>s.name)<span class="question-mark">?
+<a href=#103 id=103 data-nosnippet>103</a>            </span>.into_iter()
+<a href=#104 id=104 data-nosnippet>104</a>            .map(|w| UnfoldLeaf {
+<a href=#105 id=105 data-nosnippet>105</a>                name: w.name,
+<a href=#106 id=106 data-nosnippet>106</a>                path: w.reach,
+<a href=#107 id=107 data-nosnippet>107</a>                out_ty: w.out_ty,
+<a href=#108 id=108 data-nosnippet>108</a>                identity: <span class="bool-val">false</span>,
+<a href=#109 id=109 data-nosnippet>109</a>                nullable: w.nullable,
+<a href=#110 id=110 data-nosnippet>110</a>                <span class="comment">// A selector is not read off a place: the emitter assigns the
+<a href=#111 id=111 data-nosnippet>111</a>                // live alternative's number in each arm of its `match`, which
+<a href=#112 id=112 data-nosnippet>112</a>                // is what `LeafSource::SumTag` says and what keeps
+<a href=#113 id=113 data-nosnippet>113</a>                // `OutWire::from_leaf` round-tripping it back to a tag rather
+<a href=#114 id=114 data-nosnippet>114</a>                // than trying to compile the sum type as a crossing.
+<a href=#115 id=115 data-nosnippet>115</a>                </span>source: <span class="kw">match </span>w.from {
+<a href=#116 id=116 data-nosnippet>116</a>                    <span class="kw">crate</span>::jni::compile::OutFrom::Tag =&gt; LeafSource::SumTag,
+<a href=#117 id=117 data-nosnippet>117</a>                    <span class="kw">crate</span>::jni::compile::OutFrom::Present =&gt; LeafSource::Presence,
+<a href=#118 id=118 data-nosnippet>118</a>                    <span class="kw">_ </span>=&gt; LeafSource::Reach,
+<a href=#119 id=119 data-nosnippet>119</a>                },
+<a href=#120 id=120 data-nosnippet>120</a>                groups: w.groups,
+<a href=#121 id=121 data-nosnippet>121</a>            })
+<a href=#122 id=122 data-nosnippet>122</a>            .collect(),
+<a href=#123 id=123 data-nosnippet>123</a>    )
+<a href=#124 id=124 data-nosnippet>124</a>}
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a><span class="doccomment">/// Walk a [`StructPlan`] emitting the Rust-side wire encode: per leaf a
+<a href=#127 id=127 data-nosnippet>127</a>/// prelude statement binding `__&lt;prefix&gt;_&lt;field&gt;` to the converted wire and
+<a href=#128 id=128 data-nosnippet>128</a>/// an [`EncSlot`] describing its `JValue` slot. `access` is the Rust
+<a href=#129 id=129 data-nosnippet>129</a>/// expression yielding the current struct value (`v`, `v.field`, or the
+<a href=#130 id=130 data-nosnippet>130</a>/// matched `__cN` under an Option); `prefix` namespaces the generated idents.
+<a href=#131 id=131 data-nosnippet>131</a>/// Walk the struct's fields and encode each leaf into a `fromParts` argument.
+<a href=#132 id=132 data-nosnippet>132</a>///
+<a href=#133 id=133 data-nosnippet>133</a>/// This is a source-value walk that the registry does not perform, and what
+<a href=#134 id=134 data-nosnippet>134</a>/// keeps it here is now only that nothing has moved it. The coverage reason is
+<a href=#135 id=135 data-nosnippet>135</a>/// gone: #616, #617 and #618 taught the registry-facing decomposition
+<a href=#136 id=136 data-nosnippet>136</a>/// (`Declarations::struct_out_wires_at`) every gated shape this encode
+<a href=#137 id=137 data-nosnippet>137</a>/// supports — a sum field as a tag over one group per variant, an optional
+<a href=#138 id=138 data-nosnippet>138</a>/// nested class as a presence flag over a defaulted group, and one selector
+<a href=#139 id=139 data-nosnippet>139</a>/// inside another — so the two now cover the same shapes rather than differing.
+<a href=#140 id=140 data-nosnippet>140</a>///
+<a href=#141 id=141 data-nosnippet>141</a>/// Which makes this the duplication #613 step 3 exists to remove: two walks
+<a href=#142 id=142 data-nosnippet>142</a>/// deriving one leaf list. `JniGen::assert_leaf_derivations_agree` is what says
+<a href=#143 id=143 data-nosnippet>143</a>/// they still agree, on every binding a test writes, and #619 is where this
+<a href=#144 id=144 data-nosnippet>144</a>/// walk goes and that check with it.
 <a href=#145 id=145 data-nosnippet>145</a>/// The leaves this encode emits, flattened — the `fromParts` argument list,
 <a href=#146 id=146 data-nosnippet>146</a>/// in order, each with how deeply nested the field it came from is.
 <a href=#147 id=147 data-nosnippet>147</a>///
