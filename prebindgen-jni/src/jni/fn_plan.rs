@@ -734,13 +734,10 @@ impl JniFunctionPlan {
             .map(|plan| build_error_output(ext, registry, plan))
             .transpose()?;
         let mut params = Vec::new();
-        // The native position each leaf occupies, counted across the whole
-        // signature: an expanded parameter contributes several.
-        let mut position = 0usize;
         // The element's parameters: each already a name and a `TypeRef`, so
         // there is no `FnArg`/`Pat` destructuring and no position that could
         // fail to yield a type.
-        for param in &f.params {
+        for (position, param) in f.params.iter().enumerate() {
             let ident = param.name.clone();
             let ty = param.ty.clone();
 
@@ -749,27 +746,24 @@ impl JniFunctionPlan {
                 .get(&(f.name.clone(), ident.clone()))
             {
                 let mut leaves = Vec::new();
-                for leaf in &plan.leaves {
+                for (leaf_index, leaf) in plan.leaves.iter().enumerate() {
                     // The lookup that stood here is gone: the fold leaf carries
                     // its own reading now, so there is nothing to fetch and
                     // nothing that can miss.
                     leaves.push(classify_leaf(
                         ext, registry, &leaf.name, &leaf.ty, /*expanded=*/ true, &ident,
-                        &f.name, position,
+                        &f.name, position, leaf_index,
                     )?);
-                    position += 1;
                 }
                 ParamForm::Expanded {
                     plan: Box::new(ExpandedParamPlan::new(ext, registry, plan)),
                     leaves,
                 }
             } else {
-                let leaf = ParamForm::Single(Box::new(classify_leaf(
+                ParamForm::Single(Box::new(classify_leaf(
                     ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident, &f.name,
-                    position,
-                )?));
-                position += 1;
-                leaf
+                    position, 0,
+                )?))
             };
             params.push(PlanParam { ident, ty, form });
         }
@@ -841,10 +835,12 @@ fn classify_leaf(
     reading: &TypeRef,
     expanded: bool,
     source_param: &syn::Ident,
-    // The exported function this leaf belongs to, and the position it occupies
-    // in that function's native signature.
+    // The exported function this leaf belongs to, the SOURCE parameter
+    // position it came from, and — when that parameter expanded — which of its
+    // leaves this is.
     owner: &syn::Ident,
     position: usize,
+    leaf_index: usize,
 ) -> Result<PlanLeaf, PlanError> {
     use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
     // `impl Fn(args)` never reaches the compiler, for the reason
@@ -917,13 +913,21 @@ fn classify_leaf(
     // every leaf of an expanded parameter collided with its siblings (#622
     // review).
     //
-    // The position is the leaf's own in the native signature rather than the
-    // source parameter's, because that is what is unique: an expansion
-    // contributes several leaves to the one parameter that expanded, and each
-    // crosses in a place of its own.
+    // `Role::Param`'s index is the position in the SOURCE parameter list, so
+    // an expansion's leaves cannot be numbered as parameters: doing that names
+    // positions the function does not have and attaches one parameter's site to
+    // another's crossing. They are `ExpansionLeaf`s of the parameter that
+    // expanded, which is the same question `CallbackArg` already answers for a
+    // callback's arguments (#622 review).
     let site = Site {
         owner: owner.clone(),
-        role: Role::Param { index: position },
+        role: match expanded {
+            false => Role::Param { index: position },
+            true => Role::ExpansionLeaf {
+                param: position,
+                leaf: leaf_index,
+            },
+        },
     };
     let crossing = Crossing::new(reading.clone(), Direction::Construct);
     let use_pair = crate::jni::compile::optional_pair_plan_candidate(ext, reading)
