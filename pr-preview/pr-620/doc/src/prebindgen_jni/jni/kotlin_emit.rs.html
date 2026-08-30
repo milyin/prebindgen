@@ -1483,7 +1483,7 @@
 <a href=#1483 id=1483 data-nosnippet>1483</a>    /// object slots are non-null, which an inert group's `JObject::null()`
 <a href=#1484 id=1484 data-nosnippet>1484</a>    /// would trip on before any code runs. The reassembly the wire needs is the
 <a href=#1485 id=1485 data-nosnippet>1485</a>    /// same inlined `when` a sum-typed struct field already gets from
-<a href=#1486 id=1486 data-nosnippet>1486</a>    /// `factory_field`, so it is emitted here directly.
+<a href=#1486 id=1486 data-nosnippet>1486</a>    /// [`Self::sum_reconstruct`], so it is emitted here directly.
 <a href=#1487 id=1487 data-nosnippet>1487</a>    </span><span class="kw">fn </span>sum_builder_singleton(
 <a href=#1488 id=1488 data-nosnippet>1488</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1489 id=1489 data-nosnippet>1489</a>        registry: <span class="kw-2">&amp;</span>Registry,
@@ -1766,8 +1766,8 @@
 <a href=#1766 id=1766 data-nosnippet>1766</a>        </span><span class="kw">let </span>nullable = nullable &amp;&amp; (depth &gt; <span class="number">0 </span>|| slot_nullable);
 <a href=#1767 id=1767 data-nosnippet>1767</a>        <span class="comment">// An enum payload rides its `jint` discriminant, so the interface types
 <a href=#1768 id=1768 data-nosnippet>1768</a>        // it `Int` and the wrap has to name the enum class itself — read off the
-<a href=#1769 id=1769 data-nosnippet>1769</a>        // same output-converter metadata `factory_field` reads for an enum
-<a href=#1770 id=1770 data-nosnippet>1770</a>        // struct field.
+<a href=#1769 id=1769 data-nosnippet>1769</a>        // same output-converter metadata a data class's own enum property is
+<a href=#1770 id=1770 data-nosnippet>1770</a>        // typed from.
 <a href=#1771 id=1771 data-nosnippet>1771</a>        </span><span class="kw">if </span><span class="self">self</span>.is_kotlin_enum_reading(ty) {
 <a href=#1772 id=1772 data-nosnippet>1772</a>            <span class="kw">let </span>name = <span class="self">self
 <a href=#1773 id=1773 data-nosnippet>1773</a>                </span>.out_frag(ty)
