@@ -3325,3 +3325,69 @@ fn a_flattened_leaf_names_the_classes_it_is_put_back_through() {
          levels in names both, outermost first"
     );
 }
+
+/// A site is a place in an exported function, and an expanded parameter's
+/// leaves are places within the ONE parameter that expanded.
+///
+/// `Role::Param`'s index is the position in the source parameter list, so
+/// numbering expansion leaves as parameters names positions the function does
+/// not have: for `(opts: ZOpts, tail: i64)` with a two-leaf expansion it made
+/// `Param(1)` — which denotes `tail` — carry the expansion's second leaf, and
+/// `Param(2)` denote nothing at all.
+///
+/// Uniqueness cannot catch that, and the collected `GenerationPlan` checks only
+/// uniqueness: the wrong mapping was unique too, which is why every test passed
+/// under it (#622 review). So this pins the identities themselves.
+#[test]
+fn an_expansion_leaf_is_a_place_within_the_parameter_that_expanded() {
+    use prebindgen_registry::recipe::Role;
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_opts_new(retries: i32, verbose: bool) -> ZOpts { unimplemented!() }",
+        "pub fn z_run(opts: ZOpts, tail: i64) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_run)))
+        .expand(
+            prebindgen_registry::expand_param!(ZOpts)
+                .variant(prebindgen_registry::fun!(z_opts_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let roles: Vec<String> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter(|plan| plan.id().site().owner == "z_run")
+        .map(|plan| match plan.id().site().role {
+            Role::Param { index } => format!("Param({index})"),
+            Role::ExpansionLeaf { param, leaf } => format!("ExpansionLeaf({param},{leaf})"),
+            ref other => format!("{other}"),
+        })
+        .collect();
+    assert_eq!(
+        roles,
+        [
+            // Every site of `z_run`, so the parameter places are pinned against
+            // the whole set rather than a filtered view of it.
+            "return value".to_string(),
+            "ExpansionLeaf(0,0)".to_string(),
+            "ExpansionLeaf(0,1)".to_string(),
+            "Param(1)".to_string(),
+        ],
+        "the expansion's two leaves belong to parameter 0, and `tail` keeps its \
+         own source position 1 — which the flattened numbering gave away"
+    );
+}
