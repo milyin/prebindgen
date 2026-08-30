@@ -4356,6 +4356,44 @@ impl Declarations {
         self.struct_out_wires_at(registry, &id.ident()?, &[], "", 0)
     }
 
+    /// The same values, with each leaf's **output ABI frozen** — the whole-value
+    /// encode's half of what a fixed-builder site freezes for its own leaves.
+    ///
+    /// A **lookup**, not a compile: each leaf's converter is a sub-crossing the
+    /// registry has already compiled by the time a struct's own codec is
+    /// planned, which is the lifecycle `struct_plan` has always had. `None`
+    /// while one is still unresolved, so the caller defers and retries exactly
+    /// as it does for that plan.
+    ///
+    /// The selectors carry no converter and none is looked up for them: a tag
+    /// is assigned by the emitter in each arm of its `match`, a presence flag by
+    /// the gate that unwrapped the value.
+    ///
+    /// Read only by the equivalence check for now: this is the carrier the
+    /// encode renders from once the derivation beside it goes (#619), and it is
+    /// built and checked first so that swap is a deletion.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn struct_out_frozen(
+        &self,
+        registry: &impl Conversions,
+        st: &prebindgen_registry::flat::Struct,
+    ) -> Option<Vec<OutWire>> {
+        let leaves = crate::jni::emit::synth_value_struct_leaves(self, registry, st)?;
+        leaves
+            .iter()
+            .map(|leaf| {
+                let mut wire = OutWire::from_leaf(leaf);
+                wire.abi = Some(match &wire.from {
+                    OutFrom::Tag => OutAbi::Tag,
+                    OutFrom::Present => OutAbi::Present,
+                    _ => self.out_frag(&wire.out_ty)?.output_abi(),
+                });
+                wire.activate();
+                Some(wire)
+            })
+            .collect()
+    }
+
     /// One level of [`Self::struct_out_wires`]'s walk. `path` and `name_prefix`
     /// accumulate through inlined nested classes, whose names join with the
     /// reserved `__` separator.

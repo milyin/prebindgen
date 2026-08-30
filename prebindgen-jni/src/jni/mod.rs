@@ -968,6 +968,37 @@ impl JniGen {
             let Some(plan) = self.decls.struct_plan(&self.registry, item, 0) else {
                 continue;
             };
+            // The frozen decomposition — the carrier #619 renders the encode
+            // from — must exist wherever the encode does, and name the same
+            // leaves in the same order. Checked here, beside the derivation it
+            // replaces, so the swap is a deletion rather than a rewrite.
+            let frozen = self
+                .decls
+                .struct_out_frozen(&self.registry, item)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "`{}`: the decomposition states leaves but no frozen ABI \
+                         for them",
+                        item.name
+                    )
+                });
+            assert!(
+                frozen.iter().all(|wire| wire.abi.is_some()),
+                "`{}`: a frozen leaf reached the check without an output ABI",
+                item.name
+            );
+            assert_eq!(
+                frozen
+                    .iter()
+                    .map(|wire| wire.name.clone())
+                    .collect::<Vec<_>>(),
+                wires
+                    .iter()
+                    .map(|wire| wire.name.clone())
+                    .collect::<Vec<_>>(),
+                "`{}`: freezing the decomposition changed its leaves",
+                item.name
+            );
             // The two spell a leaf for different audiences: the decomposition
             // names it as Kotlin will see it (`maybeLong`), the encode as Rust
             // wrote it (`maybe_long`), and a keyword-colliding name keeps a
