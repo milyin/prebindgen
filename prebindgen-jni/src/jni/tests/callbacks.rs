@@ -1002,3 +1002,47 @@ fn a_callback_argument_carries_its_layers() {
         "the proxy converts element by element:\n{kotlin}"
     );
 }
+
+/// A callback-valued parameter is a site, and says so canonically.
+///
+/// It never reaches `Compiler::site` — `classify_leaf` answers it whole,
+/// because a callback ARGUMENT does not always have a conversion of its own —
+/// so nothing else would state it. Leaving it out made "JNI describes its
+/// sites" false for a live path (#622 review), and the collected
+/// `GenerationPlan` could not have noticed: a site that is never frozen is not
+/// a duplicate or an invalid one, it is simply absent.
+#[test]
+fn a_callback_parameter_is_a_site_in_the_canonical_plan() {
+    use prebindgen_registry::recipe::Role;
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Fn(
+            syn::parse_str("pub fn z_each(n: i64, sink: impl Fn(i64) + Send + Sync + 'static) { unimplemented!() }")
+                .expect("parse fn"),
+        ),
+        loc.clone(),
+    )];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_each)))
+        .build_with(registry)
+        .expect("resolve");
+
+    let sites: Vec<String> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter(|plan| plan.id().site().owner == "z_each")
+        .map(|plan| match plan.id().site().role {
+            Role::Param { index } => format!("Param({index})"),
+            ref other => format!("{other}"),
+        })
+        .collect();
+    assert!(
+        sites.contains(&"Param(1)".to_string()),
+        "the callback parameter states its own site: {sites:?}"
+    );
+}

@@ -4075,6 +4075,20 @@ impl Conv {
     }
 }
 
+impl Conv {
+    /// The fragment behind this conversion.
+    ///
+    /// A callback parameter is answered whole rather than compiled as a site
+    /// (`classify_leaf` says why: a callback ARGUMENT does not always have a
+    /// conversion of its own), so it has no `Bound` from the compiler — but it
+    /// does have a fragment, and this is what lets its site be stated
+    /// canonically anyway (#622 review).
+    #[cfg(test)]
+    pub(crate) fn fragment(&self) -> &JFrag {
+        &self.0
+    }
+}
+
 impl std::ops::Deref for Conv {
     type Target = ConverterImpl<KotlinMeta>;
 

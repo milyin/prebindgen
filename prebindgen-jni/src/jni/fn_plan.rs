@@ -867,6 +867,37 @@ fn classify_leaf(
             prebindgen_registry::recipe::Mode::Owned,
         );
         let wire_ident = ident.clone();
+        let native = std::rc::Rc::new(vec![NativeParam {
+            rust_ident: wire_ident.clone(),
+            rust_wire: annotate_jobject_with_lifetime(pipeline.wire(), "a").to_token_stream(),
+            kt_name: kt_param_name(&ident.to_string()),
+            kt_wire: entry.metadata.kotlin_name.clone(),
+            jvm_slots: 1,
+        }]);
+        // This parameter never reaches `Compiler::site`, so nothing else
+        // states it canonically — but every fact a site plan needs is here:
+        // the place in the function, the crossing, and the fragment that
+        // answers it, whose own id carries the recipe that was selected.
+        // Stated here rather than left out, so the canonical site set covers
+        // this path too (#622 review).
+        #[cfg(test)]
+        {
+            let fragment = entry.fragment();
+            ext.site_plans
+                .borrow_mut()
+                .push(std::rc::Rc::new(fragment.freeze_site(
+                    &prebindgen_registry::recipe::Bound {
+                        site: Site {
+                            owner: owner.clone(),
+                            role: Role::Param { index: position },
+                        },
+                        crossing: Crossing::new(reading.clone(), Direction::Construct),
+                        recipe: fragment.id.recipe().clone(),
+                        origin: prebindgen_registry::recipe::Origin::Function,
+                    },
+                    crate::jni::compile::JAbiLeaves::Params(native.clone()),
+                )));
+        }
         return Ok(PlanLeaf {
             reading: reading.clone(),
             kt_name: kt_param_name(&ident.to_string()),
@@ -878,13 +909,7 @@ fn classify_leaf(
                 reading,
                 prebindgen_registry::recipe::Direction::Construct,
             ),
-            native: std::rc::Rc::new(vec![NativeParam {
-                rust_ident: wire_ident.clone(),
-                rust_wire: annotate_jobject_with_lifetime(pipeline.wire(), "a").to_token_stream(),
-                kt_name: kt_param_name(&ident.to_string()),
-                kt_wire: entry.metadata.kotlin_name.clone(),
-                jvm_slots: 1,
-            }]),
+            native,
             pipeline,
             rust: RustParamOp::Pipeline { wire_ident },
             kotlin: KotlinParamOp::Callback { iface },
