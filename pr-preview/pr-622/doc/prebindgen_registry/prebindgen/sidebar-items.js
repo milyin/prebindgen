@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ConverterImpl"],"trait":["Prebindgen"],"type":["NamePredicate"]};
