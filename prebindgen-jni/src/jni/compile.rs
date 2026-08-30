@@ -941,13 +941,6 @@ impl JFrag {
         use prebindgen_registry::generation::{
             ConverterPlan, FragmentPlan, NichePlan, {self as generation},
         };
-        let niche_key = |slot: &prebindgen_registry::niches::NicheSlot| {
-            format!(
-                "{}=>{}",
-                quote::ToTokens::to_token_stream(&slot.value),
-                quote::ToTokens::to_token_stream(&slot.matches),
-            )
-        };
         let exposed: Vec<String> = self.conv.niches.slots.iter().map(niche_key).collect();
         // What this fragment SPENT, beside what it leaves for a parent. An
         // `Option` that encodes `None` in a free bit-pattern consumes one slot
@@ -3083,6 +3076,20 @@ fn arm_parts(fragment: &JFrag) -> Vec<prebindgen_registry::generation::FragmentU
         prebindgen_registry::generation::ShapePlan::Product { parts, .. } => parts.clone(),
         _ => vec![fragment_use(fragment)],
     }
+}
+
+/// One niche slot's canonical identity: the value it encodes and the pattern
+/// that recognizes it.
+///
+/// The single spelling, so a plan that states a niche and a check that compares
+/// one cannot disagree about what a slot IS — comparing how many there are was
+/// the gap that let a substituted sentinel pass (#621 review).
+pub(crate) fn niche_key(slot: &prebindgen_registry::niches::NicheSlot) -> String {
+    format!(
+        "{}=>{}",
+        quote::ToTokens::to_token_stream(&slot.value),
+        quote::ToTokens::to_token_stream(&slot.matches),
+    )
 }
 
 /// The edge from a composing fragment to one of its children: which fragment,

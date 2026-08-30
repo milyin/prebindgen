@@ -1007,10 +1007,20 @@ impl JniGen {
             // and what it leaves for a parent. Exposing the remainder while
             // losing the consumed slot was the other thing this check could not
             // see.
+            // Both niche domains, by identity rather than by count. Comparing
+            // how many there are would pass a substituted sentinel, and
+            // `GenerationPlanBuilder` cannot see one either — a niche is a
+            // bit-pattern contract, so what it IS is the whole of it.
             let niches = plan.converter().niches();
+            let key = crate::jni::compile::niche_key;
             assert_eq!(
-                niches.consumed().len(),
-                usize::from(fragment.consumed_niche.is_some()),
+                niches.consumed(),
+                fragment
+                    .consumed_niche
+                    .iter()
+                    .map(key)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
                 "`{}`: a frozen fragment plan changed the niche it consumed",
                 fragment.source.key()
             );
@@ -1021,8 +1031,15 @@ impl JniGen {
                 fragment.source.key()
             );
             assert_eq!(
-                niches.exposed().len(),
-                fragment.conv.niches.slots.len(),
+                niches.exposed(),
+                fragment
+                    .conv
+                    .niches
+                    .slots
+                    .iter()
+                    .map(key)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
                 "`{}`: a frozen fragment plan changed the niches it leaves for a parent",
                 fragment.source.key()
             );
