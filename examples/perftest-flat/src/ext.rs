@@ -645,6 +645,61 @@ pub fn envelope_each(n: i64, sink: impl Fn(Envelope) + Send + Sync + 'static) {
     }
 }
 
+/// The value an optional nested class gates when that class **selects of its
+/// own** — a presence flag and a tag, one arm inside another.
+///
+/// `span` is a second presence, `reading` a sum tag. Both sit inside the group
+/// `Frame::window`'s own flag gates, which is the shape a flat group number
+/// could not state: each of these is a member of the outer group AND a
+/// selector of its own (#602).
+#[prebindgen]
+pub struct Window {
+    pub label: String,
+    pub span: Option<Stamp>,
+    pub reading: Reading,
+}
+
+/// The gate over [`Window`]: one selector owning two.
+#[prebindgen]
+pub struct Frame {
+    pub id: i64,
+    pub window: Option<Window>,
+}
+
+/// Build a [`Frame`]. `window` absent, `window` present with `span` absent, and
+/// both present are the three states of the outer gate; `which` picks the
+/// alternative of the tag nested beside it.
+#[prebindgen]
+pub fn frame_new(id: i64, window: bool, span: bool, which: i64) -> Frame {
+    Frame {
+        id,
+        window: window.then(|| Window {
+            label: format!("w{id}"),
+            span: span.then(|| Stamp {
+                secs: id,
+                nanos: id * 2,
+            }),
+            reading: match which {
+                0 => Reading::Missing,
+                1 => Reading::Exact(42),
+                2 => Reading::Range { low: 1, high: 9 },
+                3 => Reading::Labeled("warm".to_string(), Priority::High),
+                _ => Reading::Companion(5),
+            },
+        }),
+    }
+}
+
+/// The same value handed to a callback — the route that decomposes it into
+/// leaves and reassembles them through the foreign builder, which is where a
+/// nested gate has to hold.
+#[prebindgen]
+pub fn frame_each(n: i64, sink: impl Fn(Frame) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(frame_new(i, i % 3 != 0, i % 2 == 1, i));
+    }
+}
+
 /// Build a [`Stamp`] (data-class **return**).
 #[prebindgen]
 pub fn stamp_new(secs: i64, nanos: i64) -> Stamp {

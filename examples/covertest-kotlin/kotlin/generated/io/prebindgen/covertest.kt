@@ -3,15 +3,12 @@
 package io.prebindgen.covertest
 
 import io.prebindgen.covertest.analytics.Summary
-import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.BlobValue
 import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.Hold
-import io.prebindgen.covertest.model.HoldPolicy
 import io.prebindgen.covertest.model.Ingot
 import io.prebindgen.covertest.model.Lookup
 import io.prebindgen.covertest.model.ObjectBoundary
-import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
 import java.lang.ref.Cleaner
@@ -774,6 +771,14 @@ internal fun u64Callback.asRaw(): u64CallbackRaw =
         )
     }
 
+internal fun interface DossierBuilderRaw<out R> {
+    public fun run(note: Long, holder__tag: Long, holder__summary: Long): R
+}
+
+@get:JvmSynthetic
+internal val __DossierBuilderRaw: DossierBuilderRaw<Dossier> =
+DossierBuilderRaw { note, holder__tag, holder__summary -> Dossier.fromParts(note, holder__tag, holder__summary) }
+
 public fun interface LedgerBuilder<out R> {
     public fun run(
         ledgerFiled__summary__count: Long?,
@@ -862,6 +867,14 @@ internal fun <R> LedgerBuilder<R>.asRaw(): LedgerBuilderRaw<R> =
             ledgerArchived__label
         )
     }
+
+internal fun interface MaybeHolderBuilderRaw<out R> {
+    public fun run(tag: Long, summary: Long): R
+}
+
+@get:JvmSynthetic
+internal val __MaybeHolderBuilderRaw: MaybeHolderBuilderRaw<MaybeHolder> =
+MaybeHolderBuilderRaw { tag, summary -> MaybeHolder.fromParts(tag, summary) }
 
 public fun interface PayloadBuilder<out R> {
     public fun run(id: Long, seq: Int, value: Double, flag: Boolean, label: String?): R
@@ -1097,8 +1110,9 @@ internal object CovNative {
         ttlPresent: Boolean,
         ttlValue: Long,
         priority: Int,
+        build: Any,
         errorSink: Any,
-    ): Annotated
+    ): Any?
 
     @JvmSynthetic
     external fun annotatedPayloadValue(
@@ -1275,8 +1289,9 @@ internal object CovNative {
         tag: Long,
         count: Long,
         total: Double,
+        build: Any,
         errorSink: Any,
-    ): Dossier
+    ): Any?
 
     @JvmSynthetic
     external fun durationBoundaryEcho(value: DurationBoundary, build: Any, errorSink: Any): Any?
@@ -1303,14 +1318,28 @@ internal object CovNative {
     external fun escape_probe_value(p: Long, errorSink: Any): Long
 
     @JvmSynthetic
+    external fun frameEach(n: Long, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun frameNew(
+        id: Long,
+        window: Boolean,
+        span: Boolean,
+        which: Long,
+        build: Any,
+        errorSink: Any,
+    ): Any?
+
+    @JvmSynthetic
     external fun holdEcho(h: Hold, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic
     external fun holdPolicyEcho(
         pHold: Hold,
         pGrace: io.prebindgen.covertest.model.Hold?,
+        build: Any,
         errorSink: Any,
-    ): HoldPolicy
+    ): Any?
 
     @JvmSynthetic
     external fun holderTagOr(
@@ -1363,8 +1392,9 @@ internal object CovNative {
         count: Long,
         total: Double,
         present: Boolean,
+        build: Any,
         errorSink: Any,
-    ): MaybeHolder
+    ): Any?
 
     @JvmSynthetic
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
@@ -1373,7 +1403,7 @@ internal object CovNative {
     external fun objectBoundaryValue(value: ObjectBoundary, errorSink: Any): Long
 
     @JvmSynthetic
-    external fun observationNew(which: Int, withFallback: Boolean, errorSink: Any): Observation
+    external fun observationNew(which: Int, withFallback: Boolean, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic
     external fun observationWhich(

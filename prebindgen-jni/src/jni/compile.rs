@@ -492,15 +492,10 @@ pub(crate) struct OutWire {
     /// the tag carries is which alternative is live, and naming the sum is how
     /// an emitter finds the enum to match over.
     pub(crate) out_ty: TypeRef,
-    /// Which alternative produces this value, or `None` for one every call
-    /// produces — including the tag, which selects between the groups rather
-    /// than joining one.
-    ///
-    /// Composed and checked but not yet read outside the equivalence fixture:
-    /// grouping is what turns the list into a `match`, and the emitter that
-    /// writes that `match` still reads it off the leaf synthesis.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) group: Option<i32>,
+    /// The arms this value sits inside, outermost first — empty for one every
+    /// call produces, and for a selector, which carries the path it is nested
+    /// in rather than the arms it chooses between.
+    pub(crate) groups: Vec<i32>,
     /// How the Rust side reaches it.
     pub(crate) from: OutFrom,
     /// The steps from the crossed value down to this one.
@@ -608,8 +603,8 @@ impl prebindgen_registry::unfold::DecomposedLeaf for OutWire {
         matches!(self.from, OutFrom::Tag | OutFrom::Present)
     }
 
-    fn group(&self) -> Option<i32> {
-        self.group
+    fn groups(&self) -> &[i32] {
+        &self.groups
     }
 }
 
@@ -631,7 +626,7 @@ impl OutWire {
         Self {
             name: leaf.name.clone(),
             out_ty: leaf.out_ty.clone(),
-            group: leaf.group,
+            groups: leaf.groups.clone(),
             from: match &leaf.source {
                 LeafSource::SumTag => OutFrom::Tag,
                 LeafSource::Presence => OutFrom::Present,
@@ -660,7 +655,7 @@ impl OutWire {
     pub(crate) fn same_delivery(&self, other: &Self) -> bool {
         self.name == other.name
             && self.out_ty.key() == other.out_ty.key()
-            && self.group == other.group
+            && self.groups == other.groups
             && self.from == other.from
             && self.reach == other.reach
             && self.identity == other.identity
@@ -3915,7 +3910,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     // is built from.
                     name: crate::jni::struct_plan::sum_field_prop_name(&part_member(part)?),
                     out_ty: part.ty.clone(),
-                    group: None,
+                    groups: Vec::new(),
                     from: OutFrom::Payload {
                         variant: None,
                         member: part_member(part)?,
@@ -4036,7 +4031,7 @@ impl<R: Conversions> JCompile<'_, R> {
             wires.push(OutWire {
                 name,
                 out_ty: part.ty.clone(),
-                group: None,
+                groups: Vec::new(),
                 // The chain starts at the accessor's result, which the emitter
                 // binds once. The call itself is the site's to make, so what a
                 // wire states is the field read off it.
@@ -4331,11 +4326,25 @@ impl Declarations {
     /// that composes after it.
     ///
     /// `None` is this adapter declining, and it declines for the **whole**
-    /// value rather than per field. A handle, an `enum_class`, a sum, or a
-    /// `data_class` behind an `Option` or a `Vec` is delivered with a transform
-    /// the decoupled form does not carry, and one such field sends the whole
-    /// object down the whole-value `fromParts` path — so a recipe that decomposed
-    /// the rest of it would describe a shape nothing emits.
+    /// value rather than per field: one field it cannot state sends the whole
+    /// object down the whole-value `fromParts` path, because a recipe that
+    /// decomposed the rest of it would describe a shape nothing emits.
+    ///
+    /// What is left to decline is **structural**, not a missing transform. A
+    /// handle, an `enum_class`, a sum, an optional nested class and a selector
+    /// inside a gated group are all ordinary leaves here (#602): a fixed number
+    /// of values, laid side by side, each carrying its own conversion. The
+    /// declines are the shapes that have no such number:
+    ///
+    /// * a field the model does not hold as a named `data_class` field —
+    ///   a positional field, or a type that is not a path;
+    /// * a nested `data_class` **repeated** under a `Vec`, whose leaves would
+    ///   be as many as the value happens to hold. That is a sequence rather
+    ///   than a decomposition — and note that only a `Vec` DIRECTLY under a
+    ///   declared `data_class` reaches that arm: `Vec<Child>` keys as a
+    ///   sequence rather than a `DataStruct`, so it stays one leaf whose own
+    ///   converter is the element folder (#217);
+    /// * nesting deeper than 16, which a cyclic `data_class` would not end.
     pub(crate) fn struct_out_wires(
         &self,
         registry: &impl Conversions,
@@ -4394,28 +4403,58 @@ impl Declarations {
             // look through, `Vec` to decline — never a last path segment.
             let probe = field.ty.optional_inner().unwrap_or(&field.ty);
             match self.type_kind(registry, &probe.key()) {
-                crate::jni::classify::TypeKind::Handle | crate::jni::classify::TypeKind::Enum => {
-                    return None
-                }
+                // A handle or an enum_class field is an ordinary leaf: its own
+                // output conversion carries it — a `jlong` for the handle the
+                // receiver adopts, a `jint` discriminant for the enum — and
+                // the whole-object encode has always emitted exactly that.
+                crate::jni::classify::TypeKind::Handle | crate::jni::classify::TypeKind::Enum => {}
                 // A `sealed_class` field contributes what a sealed_class
                 // crossing does — a tag naming the live alternative, then one
                 // group of leaves per alternative — reached through this
                 // field. Only one group is live per value, which is what the
                 // registry's segment gate emits as a single `match`.
                 crate::jni::classify::TypeKind::Sum => {
-                    if field.ty.optional_inner().is_some() {
-                        return None;
-                    }
                     let sum_ident = match probe.unwrapped().kind() {
                         TypeKind::Named { id, .. } => id.ident()?,
                         _ => return None,
                     };
-                    let reach: Vec<prebindgen_registry::unfold::PathStep> =
+                    let optional = field.ty.optional_inner().is_some();
+                    let mut reach: Vec<prebindgen_registry::unfold::PathStep> =
                         field_path.iter().map(field_step).collect();
+                    if optional {
+                        // An OPTIONAL sum is two selectors, one owning the
+                        // other: presence says whether there is an alternative
+                        // at all, and the tag names which. The flag's reach
+                        // ends AT the optional step it tests; the sum's leaves
+                        // reach through it, and their arm paths gain the one
+                        // group presence gates.
+                        let mut flag_reach = reach.clone();
+                        flag_reach[path.len()] =
+                            prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                        wires.push(OutWire {
+                            name: format!("{name}__{}", crate::jni::emit::PRESENT_LEAF),
+                            out_ty: field.ty.clone(),
+                            groups: Vec::new(),
+                            from: OutFrom::Present,
+                            reach: flag_reach,
+                            nullable: false,
+                            identity: false,
+                            abi: None,
+                        });
+                        reach[path.len()] =
+                            prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                    }
                     for wire in self.sum_out_wires(registry, &sum_ident, probe)? {
+                        let groups = match optional {
+                            true => std::iter::once(crate::jni::emit::PRESENT_ARM)
+                                .chain(wire.groups.iter().copied())
+                                .collect(),
+                            false => wire.groups,
+                        };
                         wires.push(OutWire {
                             name: format!("{name}__{}", wire.name),
                             reach: reach.clone(),
+                            groups,
                             ..wire
                         });
                     }
@@ -4455,7 +4494,7 @@ impl Declarations {
                         wires.push(OutWire {
                             name: format!("{name}__{}", crate::jni::emit::PRESENT_LEAF),
                             out_ty: field.ty.clone(),
-                            group: None,
+                            groups: Vec::new(),
                             from: OutFrom::Present,
                             reach,
                             nullable: false,
@@ -4465,21 +4504,6 @@ impl Declarations {
                     }
                     let inlined =
                         self.struct_out_wires_at(registry, &child, &field_path, &name, depth + 1)?;
-                    // One selector may not own another yet: `group` is a flat
-                    // `Option<i32>`, so a selector inside this group would have
-                    // to be both "the group's member" and "a selector of its
-                    // own", and `segments` would return overlapping ranges.
-                    // Refused HERE, before the leaves are registered as a
-                    // `ValueDecon`, so the shape stays on the whole-object path
-                    // rather than panicking during rendering. Nested segments
-                    // are the endpoint; see #602.
-                    if optional
-                        && inlined
-                            .iter()
-                            .any(prebindgen_registry::unfold::DecomposedLeaf::selects)
-                    {
-                        return None;
-                    }
                     wires.extend(inlined.into_iter().map(|wire| {
                         let mut reach = wire.reach;
                         if optional {
@@ -4495,8 +4519,15 @@ impl Declarations {
                         OutWire {
                             reach,
                             // Under a presence flag the child's leaves are the
-                            // one group that flag gates.
-                            group: optional.then_some(0).or(wire.group),
+                            // one group that flag gates — including a selector
+                            // of the child's own, which keeps its own arms one
+                            // level further in.
+                            groups: match optional {
+                                true => std::iter::once(crate::jni::emit::PRESENT_ARM)
+                                    .chain(wire.groups.iter().copied())
+                                    .collect(),
+                                false => wire.groups.clone(),
+                            },
                             ..wire
                         }
                     }));
@@ -4512,7 +4543,7 @@ impl Declarations {
             wires.push(OutWire {
                 name,
                 out_ty: field.ty.clone(),
-                group: None,
+                groups: Vec::new(),
                 from: OutFrom::Place,
                 reach: field_path.iter().map(field_step).collect(),
                 nullable: false,
@@ -4552,7 +4583,7 @@ impl Declarations {
         let mut wires = vec![OutWire {
             name: crate::jni::emit::SUM_TAG_LEAF.to_string(),
             out_ty: sum_ty.clone(),
-            group: None,
+            groups: Vec::new(),
             from: OutFrom::Tag,
             nullable: false,
             identity: false,
@@ -4569,7 +4600,7 @@ impl Declarations {
                         &crate::jni::struct_plan::sum_field_prop_name(&member),
                     ),
                     out_ty: field.ty.clone(),
-                    group: Some(crate::jni::struct_plan::sum_tag(alt)),
+                    groups: vec![crate::jni::struct_plan::sum_tag(alt)],
                     from: OutFrom::Payload {
                         variant: Some(alt.name.clone()),
                         member,

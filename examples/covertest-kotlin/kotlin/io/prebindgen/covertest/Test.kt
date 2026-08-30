@@ -104,6 +104,9 @@ import io.prebindgen.covertest.model.layeredOf
 import io.prebindgen.covertest.model.Envelope
 import io.prebindgen.covertest.model.envelopeEach
 import io.prebindgen.covertest.model.envelopeNew
+import io.prebindgen.covertest.model.Frame
+import io.prebindgen.covertest.model.frameEach
+import io.prebindgen.covertest.model.frameNew
 import io.prebindgen.covertest.model.verdictEach
 import io.prebindgen.covertest.model.verdictNew
 import io.prebindgen.covertest.model.dossierNew
@@ -725,6 +728,69 @@ fun main() {
             seen.add("${envelope.id}:${envelope.stamp?.secs ?: "-"}")
         }, boom).orThrow()
         check(seen == listOf("0:-", "1:1", "2:-", "3:3")) { "got $seen" }
+    }
+
+    // A gate INSIDE a gate: `Frame.window` is optional, and the `Window` it
+    // gates selects twice of its own — a second presence (`span`) and a sum tag
+    // (`reading`). A flat group number could not state that, since each inner
+    // selector is a member of the outer group AND a selector of its own; the
+    // arm PATH can, and `segments` reads one level at a time.
+    //
+    // `REPORT.md` records that this takes fixed-builder delivery: `Frame`
+    // decomposed into thirteen leaves, `window__present` gating
+    // `window__span__present` and `window__reading__tag` and everything under
+    // them. What is checked here is that the leaves reassemble to the value
+    // they came from — through the class's own factory on the return route and
+    // through its builder interface on the callback route.
+    section("a gate inside a gate (nested selectors under one presence flag)") {
+        // Outer absent: every inner slot carries a wire default, and neither
+        // inner selector may be read as if it had chosen something.
+        val none = frameNew(1L, false, true, 2L, boom).orThrow()
+        check(none.id == 1L)
+        check(none.window == null) { "got ${none.window}" }
+
+        // Outer present, inner presence absent — the two flags are independent
+        // facts, and the inner one must survive the outer arm defaulting.
+        val noSpan = frameNew(2L, true, false, 1L, boom).orThrow()
+        check(noSpan.window?.span == null) { "got ${noSpan.window?.span}" }
+        check(noSpan.window?.reading == Reading.Exact(42L))
+        check(noSpan.window?.label == "w2")
+
+        // Both present, with the nested tag live beside the nested flag.
+        val both = frameNew(3L, true, true, 2L, boom).orThrow()
+        check(both.window?.span == Stamp(3L, 6L)) { "got ${both.window?.span}" }
+        check(both.window?.reading == Reading.Range(1L, 9L))
+
+        // Every alternative of the nested tag, under a live outer gate: an
+        // inner group is selected from inside an arm the outer flag opened.
+        val readings = (0..4).map { frameNew(4L, true, true, it.toLong(), boom).orThrow().window?.reading }
+        check(
+            readings == listOf(
+                Reading.Missing,
+                Reading.Exact(42L),
+                Reading.Range(1L, 9L),
+                Reading.Tagged("warm", Priority.HIGH),
+                Reading.Companion(5L),
+            )
+        ) { "got $readings" }
+
+        // …and the same values by the other route, which fills the gated slots
+        // through the builder interface rather than the factory.
+        val seen = mutableListOf<String>()
+        frameEach(6L, { frame ->
+            val w = frame.window
+            seen.add("${frame.id}:${w?.span?.secs ?: "-"}:${w?.reading?.let { it::class.simpleName } ?: "-"}")
+        }, boom).orThrow()
+        check(
+            seen == listOf(
+                "0:-:-",
+                "1:1:Exact",
+                "2:-:Range",
+                "3:-:-",
+                "4:-:Companion",
+                "5:5:Companion",
+            )
+        ) { "got $seen" }
     }
 
     // The same data class arriving at a CALLBACK rather than as a return.

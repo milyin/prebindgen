@@ -528,7 +528,16 @@ do not count.
 | **D** | [#149](https://github.com/milyin/prebindgen/issues/149) | jnigen: tag-gated groups on both flatten paths — `FlatFieldNode::Sum`, the struct-or-sum root, the `kt_access` expression-template refactor, `PlanFieldKind::Sum`. Unblocks flat #31 + #11, and flat #30 in its struct-field form (`ReplyStruct { result: ReplyResult, … }`). | C |
 | **E** | [#150](https://github.com/milyin/prebindgen/issues/150) | core + jnigen: sum-typed returns and callback arguments — the unfold selector. Needed when a function's **own** return (or a callback argument) is the sum, e.g. a `reply_get_result(&Reply) -> ReplyResult` accessor mirroring base's `Reply::result()`. | D |
 
-A sum nested as a **data-class field** keeps the whole-value `fromParts` path (stage D's
-`PlanFieldKind::Sum`); the fixed-builder leaf synthesis for value structs still declines a sum
-field. Flattening that too is a wire-width/allocation optimization of an already-correct path, not
-a capability, so it is deliberately not part of stage E.
+A sum nested as a **data-class field** was written here as keeping the whole-value `fromParts`
+path (stage D's `PlanFieldKind::Sum`), because the fixed-builder leaf synthesis for value structs
+declined a sum field. That flattening was called a wire-width/allocation optimization of an
+already-correct path rather than a capability, and so deliberately left out of stage E.
+
+It has since been done, under #613 step 3: [#616](https://github.com/milyin/prebindgen/pull/616)
+taught the registry-facing decomposition a sum field — a tag naming the live alternative, then one
+group of leaves per alternative — and [#618](https://github.com/milyin/prebindgen/pull/618) let one
+selector own another, so an `Option<sum>` field and a gated class that selects of its own decompose
+too. A sum-typed field now keeps its parent on the **fixed-builder** path: it crosses as leaves and
+no JVM object is built for the sum. The whole-value encode remains for the shapes the decomposition
+declines structurally, and [#619](https://github.com/milyin/prebindgen/issues/619) is where the
+second leaf derivation behind it goes.

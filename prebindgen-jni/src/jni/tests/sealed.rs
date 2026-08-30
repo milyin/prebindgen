@@ -1420,10 +1420,11 @@ fn sum_return_group_can_own_a_handle() {
 ///   makes the two spellings agree is that `Lookup` is itself `AutoCloseable`
 ///   — the `when` over the alternatives lives in the sum, so the container
 ///   emits the same one-line cascade either way.
-/// * A sum field takes its parent off the fixed-builder path onto the
-///   whole-value `fromParts` bridge (`synth_value_struct_leaves` declines
-///   `TypeKind::Sum`), so the value costs a JVM object — a slower shape, not a
-///   broken one.
+/// * A sum field keeps its parent on the fixed-builder path: since #616 the
+///   decomposition states it as a tag over one group per alternative, so the
+///   value crosses as leaves and no JVM object is built for it. It used to
+///   decline, which cost the parent an object — a slower shape, not a broken
+///   one — and this test passed either way, since what it pins is the cascade.
 #[test]
 fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
     let loc = myflat_loc();
@@ -2458,12 +2459,12 @@ fn a_sealed_class_states_what_it_hands_out() {
     assert_eq!(
         composed,
         vec![
-            "tag: Reading <- tag @None",
-            "exact_v0: i64 <- Exact.v0 @Some(1)",
-            "range_low: i64 <- Range.low @Some(2)",
-            "range_high: i64 <- Range.high @Some(2)",
-            "tagged_v0: String <- Tagged.v0 @Some(3)",
-            "tagged_v1: Priority <- Tagged.v1 @Some(3)",
+            "tag: Reading <- tag @[]",
+            "exact_v0: i64 <- Exact.v0 @[1]",
+            "range_low: i64 <- Range.low @[2]",
+            "range_high: i64 <- Range.high @[2]",
+            "tagged_v0: String <- Tagged.v0 @[3]",
+            "tagged_v1: Priority <- Tagged.v1 @[3]",
         ],
         "the recipe states the tag, then one group per alternative",
     );
@@ -2479,12 +2480,15 @@ fn a_sealed_class_states_what_it_hands_out() {
 /// A `data_class` states a recipe saying what it hands out, and a field that is
 /// itself one contributes its own values under the parent's name and chain.
 ///
-/// The recipe declines for the **whole** value rather than per field, because the
-/// emitter it feeds does: a handle, an `enum_class`, a sum, or a `data_class`
-/// behind an `Option` or a `Vec` is delivered with a transform the decoupled
-/// form does not carry, and one such field sends the whole object down the
-/// whole-value `fromParts` path. So `Wrapped` composes and `Opaque`-bearing
-/// `Guarded` does not, and both agree with the synthesis they will replace.
+/// The recipe declines for the **whole** value rather than per field, because
+/// the emitter it feeds does: one field it cannot state sends the whole object
+/// down the whole-value `fromParts` path. What is left to decline is structural
+/// — a repeated nested class, a field the model does not hold as a named one —
+/// and a handle field is not one of those: it is an ordinary leaf whose own
+/// output conversion carries it as the `jlong` the receiver adopts, which is
+/// what the whole-object encode always emitted for it (#602). So `Wrapped` and
+/// `Opaque`-bearing `Guarded` both compose, and both agree with the synthesis
+/// they will replace.
 #[test]
 fn a_data_class_states_what_it_hands_out() {
     let loc = myflat_loc();
@@ -2560,15 +2564,16 @@ fn a_data_class_states_what_it_hands_out() {
         gen.out_lines_for_test("Wrapped")
             .expect("Wrapped states a deconstructing parts recipe"),
         vec![
-            "id: i64 <- id @None",
-            "inner__count: i64 <- inner.count @None",
-            "inner__label: String <- inner.label @None",
+            "id: i64 <- id @[]",
+            "inner__count: i64 <- inner.count @[]",
+            "inner__label: String <- inner.label @[]",
         ],
         "a nested data class contributes its own values, under its field's name",
     );
-    // Compared as options, because declining is one of the two answers: a recipe
-    // that states nothing and a synthesis that returns nothing are the same
-    // claim, and `Guarded` makes it.
+    // Compared as options, because declining is still one of the two answers:
+    // a recipe that states nothing and a synthesis that returns nothing are the
+    // same claim. No type here makes it any more — the remaining declines are
+    // structural — so what this pins is that the two agree either way.
     for short in ["Wrapped", "Inner", "Guarded"] {
         assert_eq!(
             gen.out_lines_for_test(short),
@@ -2576,9 +2581,14 @@ fn a_data_class_states_what_it_hands_out() {
             "the recipe and the leaf synthesis disagree on {short}",
         );
     }
-    assert!(
-        gen.out_lines_for_test("Guarded").is_none(),
-        "a handle field sends the whole object down the whole-value path",
+    // A handle field is an ordinary leaf: the handle crosses as the `jlong`
+    // the receiver adopts, which is what the whole-object encode has always
+    // emitted for it. Refusing it here kept such a struct off fixed-builder
+    // delivery for no reason the encode shares (#602).
+    assert_eq!(
+        gen.out_lines_for_test("Guarded")
+            .expect("a handle field decomposes like any other leaf"),
+        vec!["id: i64 <- id @[]", "held: Opaque <- held @[]"],
     );
 }
 
@@ -2632,10 +2642,10 @@ fn a_decomposed_return_is_a_site_asking_for_the_parts_row() {
     let gen = jni.build_with(registry).expect("resolve");
 
     let expected = vec![
-        "tag: Reading <- tag @None",
-        "exact_v0: i64 <- Exact.v0 @Some(1)",
-        "range_low: i64 <- Range.low @Some(2)",
-        "range_high: i64 <- Range.high @Some(2)",
+        "tag: Reading <- tag @[]",
+        "exact_v0: i64 <- Exact.v0 @[1]",
+        "range_low: i64 <- Range.low @[2]",
+        "range_high: i64 <- Range.high @[2]",
     ];
     assert_eq!(
         gen.return_site_lines_for_test("read_one")

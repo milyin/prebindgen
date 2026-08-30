@@ -36,22 +36,22 @@ pub trait DecomposedLeaf {
 
     /// Whether this leaf is a synthesized **selector** — a value naming which
     /// group of the leaves after it is live. It chooses between groups rather
-    /// than joining one, so its own [`Self::group`] is `None`.
+    /// than joining one, so its own [`Self::groups`] is the path it sits in,
+    /// not one of the arms it chooses.
     ///
     /// Two kinds select: a sum's tag, which names the live alternative, and an
     /// optional value's presence, which says whether its one group carries
     /// anything.
     fn selects(&self) -> bool;
 
-    /// The group this leaf belongs to — an alternative's tag, or `0` for the
-    /// one group a presence flag gates. `None` for a leaf that is always live,
-    /// and for a selector.
+    /// The arms this leaf sits inside, outermost first — empty for a leaf that
+    /// is always live. A selector carries the path it is nested in, and its own
+    /// members extend that path by one.
     ///
-    /// A group's leaves may not include a selector: see
-    /// [`UnfoldLeaf::group`](crate::unfold::UnfoldLeaf::group) for why one
-    /// `Option<i32>` cannot express nesting, and what a decomposition does
-    /// instead.
-    fn group(&self) -> Option<i32>;
+    /// See [`UnfoldLeaf::groups`](crate::unfold::UnfoldLeaf::groups) for what
+    /// an arm number means and why the path is what lets one selector own
+    /// another.
+    fn groups(&self) -> &[i32];
 
     /// Whether the last step reaching it is a field read rather than a call.
     ///
@@ -546,24 +546,42 @@ fn reached_place<L: DecomposedLeaf>(
 /// already says which leaves those are: a selector says so of itself, and each
 /// of the leaves after it carries the group it belongs to until one does not.
 ///
-/// Segments do not nest: a group's leaves may not include a selector, or these
-/// ranges would overlap. [`UnfoldLeaf::group`](crate::unfold::UnfoldLeaf::group)
-/// states that invariant and what a decomposition does with a shape that would
-/// need it. A decomposition may carry several segments, or none: a sum
-/// that IS the delivered value is one segment covering everything, and a value
-/// form contributes one per sum-typed field.
+/// **One nesting level at a time.** A group's leaves may themselves include a
+/// selector — an optional nested class whose own fields choose, an `Option` of
+/// a sum — and the ranges returned here would overlap if such an inner selector
+/// opened a segment of its own. So this answers for one level: at `depth`, the
+/// selectors whose arm path is exactly that deep, each with everything nested
+/// under it. A renderer that has entered an arm asks again one level down, and
+/// the inner selectors become the segments of that answer.
+///
+/// A decomposition may carry several segments, or none: a sum that IS the
+/// delivered value is one segment covering everything, and a value form
+/// contributes one per sum-typed field.
 ///
 /// Not recognising a segment is silent rather than a compile error — the
 /// leaves are all there, and a delivery that treats them as independent reads
 /// a dead alternative's fields — which is why this is the registry's answer
 /// and not an adapter's.
 pub fn segments<L: DecomposedLeaf>(leaves: &[L]) -> Vec<std::ops::Range<usize>> {
+    segments_at(leaves, 0)
+}
+
+/// [`segments`] one nesting level down: the selectors whose arm path is exactly
+/// `depth` long, with the leaves nested under each.
+///
+/// `depth` is how many arms the caller has already entered, so a leaf deeper
+/// than that belongs to the segment it follows rather than opening one.
+pub fn segments_at<L: DecomposedLeaf>(leaves: &[L], depth: usize) -> Vec<std::ops::Range<usize>> {
     let n = leaves.len();
+    let nested = |i: usize| leaves[i].groups().len() > depth;
+    // Exactly this deep, not "no deeper": a selector shallower than `depth`
+    // encloses the level being asked about rather than sitting on it, and
+    // answering with it would return the enclosing segment a second time.
     (0..n)
-        .filter(|&i| leaves[i].selects())
+        .filter(|&i| leaves[i].selects() && leaves[i].groups().len() == depth)
         .map(|start| {
             let end = (start + 1..n)
-                .take_while(|&i| leaves[i].group().is_some())
+                .take_while(|&i| nested(i))
                 .last()
                 .map_or(start + 1, |i| i + 1);
             start..end

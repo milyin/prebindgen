@@ -1100,7 +1100,7 @@ fn value_struct_vec_is_fixed_iterable_fold() {
         identity: false,
         nullable: false,
         source: LeafSource::Reach,
-        group: None,
+        groups: Vec::new(),
     };
     let vd = ValueDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Payload)),
@@ -1154,7 +1154,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
         identity: false,
         nullable: false,
         source: LeafSource::Reach,
-        group: None,
+        groups: Vec::new(),
     };
     let vd = ValueDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Payload)),
@@ -1718,7 +1718,7 @@ fn reading_sum_decon() -> SumDecon {
         identity: false,
         nullable: false,
         source: LeafSource::SumTag,
-        group: None,
+        groups: Vec::new(),
     };
     let field = |name: &str, variant: &str, idx: u32, ty: syn::Type, group: i32| UnfoldLeaf {
         name: name.to_string(),
@@ -1730,7 +1730,7 @@ fn reading_sum_decon() -> SumDecon {
             variant: ident(variant),
             member: syn::Member::Unnamed(syn::Index::from(idx as usize)),
         },
-        group: Some(group),
+        groups: vec![group],
     };
     SumDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Reading)),
@@ -1763,10 +1763,13 @@ fn sum_return_is_a_fixed_builder_plan() {
     assert!(!plan.by_ref);
     assert_eq!(plan.leaves.len(), 2, "the tag plus one group leaf");
     assert_eq!(plan.leaves[0].source, LeafSource::SumTag);
-    assert_eq!(plan.leaves[0].group, None, "the selector joins no group");
+    assert!(
+        plan.leaves[0].groups.is_empty(),
+        "the selector joins no group"
+    );
     assert_eq!(
-        plan.leaves[1].group,
-        Some(1),
+        plan.leaves[1].groups,
+        vec![1],
         "the group is its variant's tag"
     );
     assert!(matches!(
@@ -1918,7 +1921,7 @@ fn a_vec_of_optionals_installs_no_fixed_fold() {
         identity: false,
         nullable: false,
         source: LeafSource::Reach,
-        group: None,
+        groups: Vec::new(),
     };
     let vd = ValueDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Payload)),

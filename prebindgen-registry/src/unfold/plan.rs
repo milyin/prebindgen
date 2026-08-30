@@ -205,7 +205,7 @@ pub enum LeafSource {
     /// A payload field of ONE alternative of a decomposed sum, reached through
     /// a **variant pattern** rather than a path: the emitter binds `member`
     /// inside `variant`'s `match` arm. The leaf is live only when
-    /// [`UnfoldLeaf::group`] equals the value's tag; in every other arm its
+    /// [`UnfoldLeaf::groups`] ends in the value's tag; in every other arm its
     /// slot carries the wire default.
     ///
     /// This is the selector [`Reach`](Self::Reach) deliberately lacks — a
@@ -354,32 +354,33 @@ pub struct UnfoldLeaf {
     /// pattern binding (decomposed sum), or one of the two synthesized
     /// selectors, which are assigned rather than reached.
     pub source: LeafSource,
-    /// **Group membership**: `Some(n)` marks the leaf as belonging to the
-    /// group a **selector** chooses — live only when that selector says so,
-    /// wire-defaulted otherwise. `None` for an unconditional leaf, and for a
-    /// selector itself, which chooses between groups rather than joining one.
+    /// **Group membership**, as the path of arms this leaf sits inside —
+    /// outermost first. Empty for a leaf that is always live. A non-empty path
+    /// marks the leaf as belonging to the group a **selector** chooses: live
+    /// only when that selector says so, wire-defaulted otherwise.
     ///
-    /// There are two selectors, and `n` means what each of them selects on:
+    /// Each element is one arm, and what an arm number means is the selector's
+    /// own answer:
     ///
-    /// * a [`SumTag`](LeafSource::SumTag) chooses among alternatives, and `n`
-    ///   is the alternative's tag;
+    /// * a [`SumTag`](LeafSource::SumTag) chooses among alternatives, and its
+    ///   arm is the alternative's tag;
     /// * a [`Presence`](LeafSource::Presence) chooses between "the value is
-    ///   there" and "it is not", and `n` is `0` — the one group a presence
+    ///   there" and "it is not", and its arm is `0` — the one group a presence
     ///   flag gates, carried by the leaves of the value it speaks for.
     ///
     /// Grouping is what turns a leaf list into a `match`: leaves sharing a
     /// group are emitted together in one arm instead of as independent
     /// per-leaf expressions.
     ///
-    /// **One selector may not own another.** A group's leaves may not include
-    /// a selector, because this field cannot say both "member of the outer
-    /// group" and "selector of an inner one" at once —
-    /// [`segments`](crate::unfold::segments) would return overlapping ranges
-    /// and the outer render would meet a selector where a value was expected.
-    /// A decomposition that would need it declines instead, leaving the value
-    /// to whatever whole-value encode the adapter has. Nesting is the
-    /// endpoint; the representation it needs is not this one.
-    pub group: Option<i32>,
+    /// **A selector carries the path it is nested in, not its own arms.** An
+    /// unconditional selector's path is empty; one inside a group carries that
+    /// group's path, the same as any other member — which is what lets a
+    /// selector own another. Its own members extend that path by one, so
+    /// "member of the outer group" and "selector of an inner one" are two
+    /// different lengths of the same path rather than two meanings of one
+    /// number, and [`segments`](crate::unfold::segments) reads one nesting
+    /// level at a time (#602).
+    pub groups: Vec<i32>,
 }
 
 impl UnfoldLeaf {

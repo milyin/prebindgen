@@ -4,7 +4,7 @@
 //! A sum is the one decomposition that is not a deterministic product: only
 //! ONE alternative's leaves are live per value. Core models that with a
 //! synthesized [`LeafSource::SumTag`] selector plus per-leaf
-//! [`UnfoldLeaf::group`] membership
+//! [`UnfoldLeaf::groups`] membership
 //! ([`apply_sum_returns`](prebindgen_registry::unfold::apply_sum_returns)); this
 //! module is the JNI adapter's two ends of it — [`synth_sum_leaves`] builds the
 //! leaf list before `resolve`, [`encode_sum_leaves`] emits the single `match`
@@ -32,7 +32,7 @@ pub(crate) const PRESENT_LEAF: &str = "present";
 /// The leaves of one `sealed_class`-declared sum, as the expansion plans want
 /// them: the [`LeafSource::SumTag`] selector followed by one
 /// [`LeafSource::VariantField`] leaf per payload field, in tag order, each
-/// carrying its variant's tag as its [`group`](UnfoldLeaf::group).
+/// carrying its variant's tag as its [`group`](UnfoldLeaf::groups).
 ///
 /// The list is `Declarations::sum_out_wires`', mapped. Runs BEFORE `resolve`,
 /// which is exactly why it shares that composition rather than walking the
@@ -70,7 +70,7 @@ pub(crate) fn synth_sum_leaves(
                 crate::jni::compile::OutFrom::Place => LeafSource::Reach,
                 crate::jni::compile::OutFrom::Present => LeafSource::Presence,
             },
-            group: w.group,
+            groups: w.groups.clone(),
         })
         .collect()
 }
@@ -202,6 +202,9 @@ pub(crate) fn encode_sum_group(
         .position(|l| l.is_tag())
         .expect("a sum plan carries its selector leaf");
     let tag_id = &obj_idents[tag_idx];
+    // How deep this segment sits is its own selector's answer — see
+    // `sum_reconstruct`, which reads the same fact for the Kotlin half.
+    let depth = leaves[tag_idx].groups.len();
     let arms: Vec<TokenStream> = sum
         .alternatives
         .iter()
@@ -210,7 +213,7 @@ pub(crate) fn encode_sum_group(
             let group: Vec<usize> = leaves
                 .iter()
                 .enumerate()
-                .filter(|(_, l)| l.group == Some(tag))
+                .filter(|(_, l)| l.groups.get(depth) == Some(&tag))
                 .map(|(i, _)| i)
                 .collect();
             let binds: Vec<syn::Ident> = group
@@ -346,6 +349,34 @@ fn encode_group_leaf(
     }
 }
 
+/// The encode of ONE segment's group, from the value the walk has unwrapped for
+/// it — the tag twin or the presence twin, chosen by the segment's own
+/// selector.
+///
+/// The two are told apart in one place because a group may contain a segment of
+/// its own: an optional nested class whose fields select, an `Option` of a sum.
+/// [`encode_presence_group`] meets those in its own leaves and asks here again,
+/// which is the same question its caller asked — so the answer is one function
+/// rather than a copy of the dispatch inside the recursion.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn encode_segment_group(
+    context: &crate::jni::emit::delivery::FrozenDelivery,
+    leaves: &[crate::jni::compile::OutWire],
+    obj_idents: &[syn::Ident],
+    matched: TokenStream,
+    index: usize,
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    fail: &dyn Fn(TokenStream) -> TokenStream,
+    emit: &prebindgen_registry::RustWriter,
+) -> (TokenStream, Vec<TokenStream>) {
+    match leaves[0].is_tag() {
+        true => encode_sum_group(context, leaves, obj_idents, matched, fail, emit),
+        false => encode_presence_group(
+            context, leaves, obj_idents, matched, index, qualify, fail, emit,
+        ),
+    }
+}
+
 /// The encode of a **presence** segment: an optional nested value's flag and
 /// the leaves it gates, from the value the walk has already unwrapped.
 ///
@@ -354,11 +385,13 @@ fn encode_group_leaf(
 /// present arm, so what is here is the flag and the child's own leaves read
 /// off the unwrapped value. The sum twin next to it answers the same shape
 /// with alternatives in place of presence.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn encode_presence_group(
     context: &crate::jni::emit::delivery::FrozenDelivery,
     leaves: &[crate::jni::compile::OutWire],
     obj_idents: &[syn::Ident],
     matched: TokenStream,
+    index: usize,
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
     fail: &dyn Fn(TokenStream) -> TokenStream,
     emit: &prebindgen_registry::RustWriter,
@@ -369,12 +402,65 @@ pub(crate) fn encode_presence_group(
     let flag_slot = leaf_slot(context, &leaves[0]);
     let flag_ty = &flag_slot.ty;
     let mut stmts = quote! { let #flag: #flag_ty = jni::sys::jvalue { z: 1u8 }; };
-    let mut args: Vec<TokenStream> = vec![quote!(#flag)];
+    // Filled by leaf position rather than appended: a nested segment fills a
+    // run of them at once, so the order they are produced in is not the order
+    // they are read in.
+    let mut args: Vec<TokenStream> = vec![TokenStream::new(); leaves.len()];
+    args[0] = quote!(#flag);
 
     // The prefix the presence flag reaches is already consumed: the walk bound
     // what it found there, so each gated leaf reaches on from that binding.
     let consumed = leaves[0].reach.len();
+    // A gated leaf may itself be a selector — the value this flag speaks for
+    // has a sum-typed field, or is an `Option<sum>` — and a segment's leaves
+    // are not independent, so those are emitted as their own gated `match`
+    // rather than one at a time. One level down from this flag's own, which is
+    // what [`segments_at`] reads.
+    let inner = prebindgen_registry::unfold::segments_at(leaves, leaves[0].groups.len() + 1);
+    let tail_of =
+        |leaf: &crate::jni::compile::OutWire| -> Vec<prebindgen_registry::unfold::PathStep> {
+            leaf.reach.iter().skip(consumed).cloned().collect()
+        };
+    for seg in &inner {
+        let seg_args = std::cell::RefCell::new(Vec::new());
+        let place = prebindgen_registry::unfold::LeafPlace {
+            base: matched.clone(),
+            base_is_ref: true,
+            path: tail_of(&leaves[seg.start]),
+            consuming: false,
+            conditional: None,
+        };
+        let seg_stmts = prebindgen_registry::unfold::segment(
+            context,
+            qualify,
+            &place,
+            index + seg.start,
+            &leaves[seg.clone()],
+            &obj_idents[seg.clone()],
+            &|m| {
+                let (stmts, args) = encode_segment_group(
+                    context,
+                    &leaves[seg.clone()],
+                    &obj_idents[seg.clone()],
+                    m,
+                    index + seg.start,
+                    qualify,
+                    fail,
+                    emit,
+                );
+                *seg_args.borrow_mut() = args;
+                stmts
+            },
+        );
+        stmts.extend(seg_stmts);
+        for (k, e) in seg_args.into_inner().into_iter().enumerate() {
+            args[seg.start + k] = e;
+        }
+    }
     for (index, leaf) in leaves.iter().enumerate().skip(1) {
+        if inner.iter().any(|s| s.contains(&index)) {
+            continue;
+        }
         let slot = &obj_idents[index];
         let tail: Vec<prebindgen_registry::unfold::PathStep> =
             leaf.reach.iter().skip(consumed).cloned().collect();
@@ -395,7 +481,7 @@ pub(crate) fn encode_presence_group(
             )
         };
         stmts.extend(context.encode(leaf, index, slot, &reach, fail, emit));
-        args.push(context.argument(leaf, slot));
+        args[index] = context.argument(leaf, slot);
     }
     (stmts, args)
 }

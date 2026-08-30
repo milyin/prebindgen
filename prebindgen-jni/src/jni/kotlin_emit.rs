@@ -1601,6 +1601,11 @@ impl Declarations {
             .sum()
             .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
         let tag = &names[0];
+        // How deep this segment sits is its own selector's answer: a sum field
+        // of a struct is at the top, an `Option<sum>`'s tag one arm inside the
+        // presence flag that gates it. Its alternatives extend that path by
+        // one, so that is where their tag is read.
+        let depth = leaves[0].groups.len();
 
         let mut arms: Vec<String> = Vec::new();
         for alt in &sum.alternatives {
@@ -1610,7 +1615,7 @@ impl Declarations {
                 .iter()
                 .zip(params)
                 .zip(names)
-                .filter(|((l, _), _)| l.group == Some(group))
+                .filter(|((l, _), _)| l.groups.get(depth) == Some(&group))
                 .map(|((l, p), n)| self.sum_ctor_arg(l, p, n, imports))
                 .collect();
             // Kotlin has no `B()` / `B {}` distinction to keep: a payload-less

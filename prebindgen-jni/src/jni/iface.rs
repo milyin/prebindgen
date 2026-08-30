@@ -935,7 +935,7 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(ext, &leaf.out_ty);
+    let inert_nullable = !leaf.groups.is_empty() && !leaf_ty_is_prim(ext, &leaf.out_ty);
     leaf_iface_param(
         ext,
         name,
@@ -1494,7 +1494,7 @@ pub(crate) fn callback_iface_spec(
                     // `encode_plan_leaves` walks, asked the same way.
                     let seg = if leaf.is_tag() {
                         (k + 1..wires.len())
-                            .take_while(|&j| wires[j].group.is_some())
+                            .take_while(|&j| !wires[j].groups.is_empty())
                             .last()
                             .map_or(k + 1, |j| j + 1)
                     } else {

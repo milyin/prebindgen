@@ -16,6 +16,8 @@ import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
 import io.prebindgen.covertest.TicksCallback
 import io.prebindgen.covertest.WrappedFields
+import io.prebindgen.covertest.__DossierBuilderRaw
+import io.prebindgen.covertest.__MaybeHolderBuilderRaw
 import io.prebindgen.covertest.__u64FolderRawHolder
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryBuilder
@@ -521,6 +523,28 @@ public data class Envelope(val id: Long, val stamp: Stamp?) {
             stamp_secs: Long,
             stamp_nanos: Long,
         ): Envelope = Envelope(id, if (stamp__present) Stamp.fromParts(stamp_secs, stamp_nanos) else null)
+    }
+}
+
+/** The gate over [`Window`]: one selector owning two. */
+public data class Frame(val id: Long, val window: Window?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            id: Long,
+            window__present: Boolean,
+            window_label: String?,
+            window_span__present: Boolean,
+            window_span_secs: Long,
+            window_span_nanos: Long,
+            window_reading__tag: Int,
+            window_reading_exact_v0: Long,
+            window_reading_range_low: Long,
+            window_reading_range_high: Long,
+            window_reading_tagged_v0: String?,
+            window_reading_tagged_v1: Int,
+            window_reading_companion_v0: Long,
+        ): Frame = Frame(id, if (window__present) Window.fromParts(window_label!!, window_span__present, window_span_secs, window_span_nanos, window_reading__tag, window_reading_exact_v0, window_reading_range_low, window_reading_range_high, window_reading_tagged_v0, window_reading_tagged_v1, window_reading_companion_v0) else null)
     }
 }
 
@@ -1072,6 +1096,34 @@ public data class Verdict(val id: Long, val outcome: Lookup) : AutoCloseable {
     }
 }
 
+/**
+ * The value an optional nested class gates when that class **selects of its
+ * own** — a presence flag and a tag, one arm inside another.
+ *
+ * `span` is a second presence, `reading` a sum tag. Both sit inside the group
+ * `Frame::window`'s own flag gates, which is the shape a flat group number
+ * could not state: each of these is a member of the outer group AND a
+ * selector of its own (#602).
+ */
+public data class Window(val label: String, val span: Stamp?, val reading: Reading) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            label: String,
+            span__present: Boolean,
+            span_secs: Long,
+            span_nanos: Long,
+            reading__tag: Int,
+            reading_exact_v0: Long,
+            reading_range_low: Long,
+            reading_range_high: Long,
+            reading_tagged_v0: String?,
+            reading_tagged_v1: Int,
+            reading_companion_v0: Long,
+        ): Window = Window(label, if (span__present) Stamp.fromParts(span_secs, span_nanos) else null, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading_exact_v0); 2 -> Reading.Range(reading_range_low, reading_range_high); 3 -> Reading.Tagged(reading_tagged_v0!!, Priority.fromInt(reading_tagged_v1)); 4 -> Reading.Companion(reading_companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") })
+    }
+}
+
 /** Typed handle for a native Zenoh `Ingot`. */
 public class Ingot private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
@@ -1318,6 +1370,49 @@ internal fun EnvelopeCallback.asRaw(): EnvelopeCallbackRaw =
         )
     }
 
+public fun interface FrameCallback {
+    public fun run(frame: Frame)
+}
+
+internal fun interface FrameCallbackRaw {
+    public fun run(
+        id: Long,
+        window__present: Boolean,
+        window__label: String?,
+        window__span__present: Boolean,
+        window__span__secs: Long,
+        window__span__nanos: Long,
+        window__reading__tag: Int,
+        window__reading__exact_v0: Long,
+        window__reading__range_low: Long,
+        window__reading__range_high: Long,
+        window__reading__tagged_v0: String?,
+        window__reading__tagged_v1: Int,
+        window__reading__companion_v0: Long,
+    )
+}
+
+@JvmSynthetic
+internal fun FrameCallback.asRaw(): FrameCallbackRaw =
+    FrameCallbackRaw {
+        id,
+        window__present,
+        window__label,
+        window__span__present,
+        window__span__secs,
+        window__span__nanos,
+        window__reading__tag,
+        window__reading__exact_v0,
+        window__reading__range_low,
+        window__reading__range_high,
+        window__reading__tagged_v0,
+        window__reading__tagged_v1,
+        window__reading__companion_v0 ->
+        run(
+            Frame.fromParts(id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0)
+        )
+    }
+
 public fun interface LookupCallback {
     public fun run(lookup: Lookup)
 }
@@ -1473,6 +1568,28 @@ internal fun VerdictCallback.asRaw(): VerdictCallbackRaw =
         }
     }
 
+public fun interface AnnotatedBuilder<out R> {
+    public fun run(
+        payload__id: Long,
+        payload__seq: Int,
+        payload__value: Double,
+        payload__flag: Boolean,
+        payload__label: String?,
+        alternate__present: Boolean,
+        alternate__id: Long,
+        alternate__seq: Int,
+        alternate__value: Double,
+        alternate__flag: Boolean,
+        alternate__label: String?,
+        ttl: Long?,
+        priority: Int,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __AnnotatedBuilder: AnnotatedBuilder<Annotated> =
+AnnotatedBuilder { payload__id, payload__seq, payload__value, payload__flag, payload__label, alternate__present, alternate__id, alternate__seq, alternate__value, alternate__flag, alternate__label, ttl, priority -> Annotated.fromParts(payload__id, payload__seq, payload__value, payload__flag, payload__label, alternate__present, alternate__id, alternate__seq, alternate__value, alternate__flag, alternate__label, ttl, priority) }
+
 public fun interface ArraysBuilder<out R> {
     public fun run(
         bytes: ByteArray,
@@ -1521,6 +1638,28 @@ public fun interface EnvelopeBuilder<out R> {
 internal val __EnvelopeBuilder: EnvelopeBuilder<Envelope> =
 EnvelopeBuilder { id, stamp__present, stamp__secs, stamp__nanos -> Envelope.fromParts(id, stamp__present, stamp__secs, stamp__nanos) }
 
+public fun interface FrameBuilder<out R> {
+    public fun run(
+        id: Long,
+        window__present: Boolean,
+        window__label: String?,
+        window__span__present: Boolean,
+        window__span__secs: Long,
+        window__span__nanos: Long,
+        window__reading__tag: Int,
+        window__reading__exact_v0: Long,
+        window__reading__range_low: Long,
+        window__reading__range_high: Long,
+        window__reading__tagged_v0: String?,
+        window__reading__tagged_v1: Int,
+        window__reading__companion_v0: Long,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __FrameBuilder: FrameBuilder<Frame> =
+FrameBuilder { id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0 -> Frame.fromParts(id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0) }
+
 internal fun interface HoldBuilderRaw<out R> {
     public fun run(tag: Int, for_v0: Long): R
 }
@@ -1530,6 +1669,20 @@ internal val __HoldBuilderRaw: HoldBuilderRaw<Hold> =
 HoldBuilderRaw { tag, for_v0 ->
     when (tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $tag") }
 }
+
+internal fun interface HoldPolicyBuilderRaw<out R> {
+    public fun run(
+        hold__tag: Int,
+        hold__for_v0: Long,
+        grace__present: Boolean,
+        grace__tag: Int,
+        grace__for_v0: Long,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __HoldPolicyBuilderRaw: HoldPolicyBuilderRaw<HoldPolicy> =
+HoldPolicyBuilderRaw { hold__tag, hold__for_v0, grace__present, grace__tag, grace__for_v0 -> HoldPolicy.fromParts(hold__tag, hold__for_v0, grace__present, grace__tag, grace__for_v0) }
 
 internal fun interface LayeredBuilderRaw<out R> {
     public fun run(
@@ -1569,6 +1722,32 @@ internal val __MarkerBuilder: MarkerBuilder<Marker> =
 MarkerBuilder { tag, ranked_v0 ->
     when (tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(if (ranked_v0 == Int.MIN_VALUE) null else Priority.fromInt(ranked_v0)); else -> throw IllegalArgumentException("Marker: invalid tag $tag") }
 }
+
+public fun interface ObservationBuilder<out R> {
+    public fun run(
+        id: Long,
+        reading__tag: Int,
+        reading__exact_v0: Long,
+        reading__range_low: Long,
+        reading__range_high: Long,
+        reading__tagged_v0: String?,
+        reading__tagged_v1: Int,
+        reading__companion_v0: Long,
+        fallback__present: Boolean,
+        fallback__tag: Int,
+        fallback__exact_v0: Long,
+        fallback__range_low: Long,
+        fallback__range_high: Long,
+        fallback__tagged_v0: String?,
+        fallback__tagged_v1: Int,
+        fallback__companion_v0: Long,
+        note: String,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __ObservationBuilder: ObservationBuilder<Observation> =
+ObservationBuilder { id, reading__tag, reading__exact_v0, reading__range_low, reading__range_high, reading__tagged_v0, reading__tagged_v1, reading__companion_v0, fallback__present, fallback__tag, fallback__exact_v0, fallback__range_low, fallback__range_high, fallback__tagged_v0, fallback__tagged_v1, fallback__companion_v0, note -> Observation.fromParts(id, reading__tag, reading__exact_v0, reading__range_low, reading__range_high, reading__tagged_v0, reading__tagged_v1, reading__companion_v0, fallback__present, fallback__tag, fallback__exact_v0, fallback__range_low, fallback__range_high, fallback__tagged_v0, fallback__tagged_v1, fallback__companion_v0, note) }
 
 public fun interface ProbeBuilder<out R> {
     public fun run(
@@ -1938,7 +2117,10 @@ public fun labelBorrowedConcat(labels: List<String>, onError: JniErrorHandler<St
 /**
  * Assemble an [`Annotated`] (nested data-class **output** + bare
  * `Option<scalar>` / `Option<enum>` inputs).
+ *
+ * The Rust `Annotated` result is delivered decomposed: the builder callback receives (`payload__id`, `payload__seq`, `payload__value`, `payload__flag`, `payload__label`, `alternate__present`, `alternate__id`, `alternate__seq`, `alternate__value`, `alternate__flag`, `alternate__label`, `ttl`, `priority`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun annotatedNew(
     payload: Payload,
     ttl: Long?,
@@ -1955,10 +2137,11 @@ public fun annotatedNew(
         ttl != null,
         ttl ?: 0L,
         priority?.value ?: Int.MIN_VALUE,
+        __AnnotatedBuilder,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Annotated
 }
 
 /**
@@ -2071,16 +2254,19 @@ public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>)
  * Build an [`Observation`] carrying the selected alternative, optionally with
  * a `fallback` (the next alternative round-robin) — a **sum as a struct
  * field** crossing Rust → Kotlin, required and optional in one value.
+ *
+ * The Rust `Observation` result is delivered decomposed: the builder callback receives (`id`, `reading__tag`, `reading__exact_v0`, `reading__range_low`, `reading__range_high`, `reading__tagged_v0`, `reading__tagged_v1`, `reading__companion_v0`, `fallback__present`, `fallback__tag`, `fallback__exact_v0`, `fallback__range_low`, `fallback__range_high`, `fallback__tagged_v0`, `fallback__tagged_v1`, `fallback__companion_v0`, `note`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun observationNew(
     which: Int,
     withFallback: Boolean,
     onError: JniErrorHandler<Observation?>,
 ): Observation? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.observationNew(which, withFallback, __bcap)
+    val __ret = CovNative.observationNew(which, withFallback, __ObservationBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Observation
 }
 
 /**
@@ -2353,7 +2539,44 @@ public fun envelopeEach(n: Long, sink: EnvelopeCallback, onError: JniErrorHandle
     if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
-/** Build a [`Dossier`] over a fresh [`Summary`] — the two-level container. */
+/**
+ * Build a [`Frame`]. `window` absent, `window` present with `span` absent, and
+ * both present are the three states of the outer gate; `which` picks the
+ * alternative of the tag nested beside it.
+ *
+ * The Rust `Frame` result is delivered decomposed: the builder callback receives (`id`, `window__present`, `window__label`, `window__span__present`, `window__span__secs`, `window__span__nanos`, `window__reading__tag`, `window__reading__exact_v0`, `window__reading__range_low`, `window__reading__range_high`, `window__reading__tagged_v0`, `window__reading__tagged_v1`, `window__reading__companion_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun frameNew(
+    id: Long,
+    window: Boolean,
+    span: Boolean,
+    which: Long,
+    onError: JniErrorHandler<Frame?>,
+): Frame? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.frameNew(id, window, span, which, __FrameBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Frame
+}
+
+/**
+ * The same value handed to a callback — the route that decomposes it into
+ * leaves and reassembles them through the foreign builder, which is where a
+ * nested gate has to hold.
+ */
+public fun frameEach(n: Long, sink: FrameCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.frameEach(n, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Dossier`] over a fresh [`Summary`] — the two-level container.
+ *
+ * The Rust `Dossier` result is delivered decomposed: the builder callback receives (`note`, `holder__tag`, `holder__summary`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun dossierNew(
     note: Long,
     tag: Long,
@@ -2362,12 +2585,17 @@ public fun dossierNew(
     onError: JniErrorHandler<Dossier?>,
 ): Dossier? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.dossierNew(note, tag, count, total, __bcap)
+    val __ret = CovNative.dossierNew(note, tag, count, total, __DossierBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Dossier
 }
 
-/** Build a [`MaybeHolder`] with the handle present or absent. */
+/**
+ * Build a [`MaybeHolder`] with the handle present or absent.
+ *
+ * The Rust `MaybeHolder` result is delivered decomposed: the builder callback receives (`tag`, `summary`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun maybeHolderNew(
     tag: Long,
     count: Long,
@@ -2376,9 +2604,16 @@ public fun maybeHolderNew(
     onError: JniErrorHandler<MaybeHolder?>,
 ): MaybeHolder? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.maybeHolderNew(tag, count, total, present, __bcap)
+    val __ret = CovNative.maybeHolderNew(
+        tag,
+        count,
+        total,
+        present,
+        __MaybeHolderBuilderRaw,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as MaybeHolder
 }
 
 /**
@@ -2842,12 +3077,17 @@ public fun holdEcho(h: Hold, onError: JniErrorHandler<Hold?>): Hold? {
     return __ret as Hold
 }
 
-/** Round-trip a data class carrying converted-payload sums. */
+/**
+ * Round-trip a data class carrying converted-payload sums.
+ *
+ * The Rust `HoldPolicy` result is delivered decomposed: the builder callback receives (`hold__tag`, `hold__for_v0`, `grace__present`, `grace__tag`, `grace__for_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.holdPolicyEcho(p.hold, p.grace, __bcap)
+    val __ret = CovNative.holdPolicyEcho(p.hold, p.grace, __HoldPolicyBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as HoldPolicy
 }
 
 /**

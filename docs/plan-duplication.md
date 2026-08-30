@@ -93,10 +93,23 @@ of those is what `GenerationPlan<R>` is for; the rest is the sidecar #613 keeps.
 
 ### Data-class decomposition
 
-A data class is decomposed twice, by `struct_out_wires_at` and by `StructPlan`,
-with different coverage — the registry-facing one refuses a nested data class
-behind `Option` or `Vec`. #602 carries the missing support and #603 pinned the
-disagreement with a standing check; step 3 removes the second derivation.
+A data class is decomposed twice, by `struct_out_wires_at` and by `StructPlan`.
+
+They had different coverage when this baseline was taken — the registry-facing
+one refused a sum field, a nested data class behind an `Option`, a handle and an
+`enum_class` field — which is why #602 carried the missing support and #603
+pinned the agreement, where both applied, with a standing check.
+
+That coverage gap is closed. #616 taught the walk a sum field, #617 an optional
+nested class behind its presence flag, and #618 one selector inside another
+(which also unrefused handle and `enum_class` fields, and with them `Option<sum>`
+and a gated class that selects of its own). What is left to decline is
+structural: a repeated nested class under a `Vec`, a field the model does not
+hold as a named one, nesting past 16 — none of which `StructPlan` serves either.
+
+So the two walks no longer differ in coverage; they duplicate one leaf
+derivation, and `assert_leaf_derivations_agree` is what says so. #619 is the
+paired child that deletes the second one, and step 3 stays open until it lands.
 
 ## Size baseline
 
