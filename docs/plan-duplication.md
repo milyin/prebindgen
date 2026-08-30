@@ -107,9 +107,17 @@ and a gated class that selects of its own). What is left to decline is
 structural: a repeated nested class under a `Vec`, a field the model does not
 hold as a named one, nesting past 16 — none of which `StructPlan` serves either.
 
-So the two walks no longer differ in coverage; they duplicate one leaf
-derivation, and `assert_leaf_derivations_agree` is what says so. #619 is the
-paired child that deletes the second one, and step 3 stays open until it lands.
+**Resolved.** With the coverage gap closed the two walks duplicated one leaf
+derivation, and #620 deleted the second: both the Rust whole-object encode and
+the Kotlin `fromParts` factory now render from the decomposition, so
+`assert_leaf_derivations_agree` — which existed to say they agreed — has nothing
+left to compare and is gone with them. `StructPlan` remains, reduced to a data
+class's own Kotlin **property** declarations, which is a different question from
+the leaf list.
+
+This row is kept rather than removed because the table above it is the #613
+baseline: what it records is what was true at `dea7a55`, and this paragraph is
+what became of it.
 
 ## Size baseline
 
@@ -132,6 +140,10 @@ items** (`#[cfg(test)]` items and statements inside production files), and
 | `prebindgen-flat` | 5157 | 5270 | +113 |
 
 #613's size gate is that the first two decrease from the `dea7a55` column.
+
+Step 3's four children (#616, #617, #618, #620) leave `prebindgen-jni` at
+**30,408** — below its baseline, so that half of the gate is met. `prebindgen-c`
+is untouched so far; step 6 is where it moves.
 
 These numbers are smaller than the ones quoted in #613's own description
 (C 7,240 → 8,931, JNI 30,228 → 32,115), which were counted before this script

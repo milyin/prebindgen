@@ -2387,10 +2387,10 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
 /// the two derivations of that flattening must agree on the leaves *and* on
 /// how deep each one is.
 ///
-/// `assert_leaf_derivations_agree` runs on every binding a test writes, and
-/// before this fixture existed every struct it compared was flat — so the
-/// property it was written for, how a nested path flattens and in what order,
-/// was never reached. This is the binding that reaches it.
+/// The property is how a nested path flattens and in what order. It was written
+/// when two derivations had to agree on it and a standing check compared them
+/// (#603); one derivation renders both sides now (#620), so what this fixture
+/// pins is the flattening itself, and `write_rust` is what renders it.
 #[test]
 fn the_two_derivations_agree_on_a_nested_data_class() {
     let loc = myflat_loc();
@@ -2461,7 +2461,7 @@ fn the_two_derivations_agree_on_a_nested_data_class() {
         "the decomposition inlines both levels"
     );
 
-    // Writing the binding is what runs `assert_leaf_derivations_agree` over it.
+    // Writing the binding renders the encode from these leaves.
     let dir = unique_test_dir("jnigen_nested_agreement");
     std::fs::create_dir_all(&dir).unwrap();
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
@@ -2651,20 +2651,20 @@ fn a_selector_inside_a_gated_group_is_a_segment_of_its_own() {
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
 }
 
-/// A field whose own name contains what used to be the arm-local marker is
-/// just a name.
+/// A field whose own name contains what used to be a generated marker is just
+/// a name.
 ///
-/// The encode binds a sum's groups twice — once inside each match arm, once in
-/// the tuple those arms fill — and the two are the same leaf, so they cannot
-/// share a name. The arm-local one carries a generated `__arm{tag}_` prefix,
-/// and the outer name is recovered by stripping it at that known position. An
-/// earlier version searched the middle of the ident for a sentinel, which any
-/// source-derived component could contain (#616 review); this fixture spells
-/// that sentinel in a field name and in a variant payload beneath it.
+/// The encode once bound a sum's groups twice — inside each match arm and in
+/// the tuple those arms filled — so the two copies of one leaf carried a
+/// generated `__arm{tag}_` prefix to tell them apart, and an earlier version
+/// searched the middle of an ident for that sentinel, which any source-derived
+/// component could contain (#616 review). The double binding is gone with the
+/// second derivation (#620), and the walk names its own slots positionally, so
+/// no source name can collide with a generated one by construction.
 ///
-/// `write_rust` is what makes it a regression rather than an inspection: it
-/// renders the encode and runs `assert_leaf_derivations_agree` over the
-/// result.
+/// The fixture is kept because that is a claim about generated names, and this
+/// spells the old sentinel in a field name and in a variant payload beneath
+/// it. `write_rust` renders the encode over it.
 #[test]
 fn a_field_named_like_the_arm_marker_is_just_a_field() {
     let loc = myflat_loc();
@@ -2798,7 +2798,7 @@ fn an_optional_nested_class_decomposes_behind_its_presence() {
         "the child's leaves are the one group that flag gates"
     );
 
-    // Rendering runs the encode and `assert_leaf_derivations_agree` over it.
+    // Rendering runs the encode over these leaves.
     let dir = unique_test_dir("jnigen_optional_nested");
     std::fs::create_dir_all(&dir).unwrap();
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
