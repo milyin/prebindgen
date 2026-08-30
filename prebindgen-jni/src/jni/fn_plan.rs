@@ -832,6 +832,27 @@ pub(crate) fn kotlin_jvm_slots(ty: &str) -> usize {
 /// Classify one effective parameter. `expanded` disables only the Vec-build
 /// collection helper; recursive data-class leaves are valid in constructor
 /// expansions and reuse the same Rust/Kotlin lowering as ordinary parameters.
+/// Which place in the exported function this leaf is.
+///
+/// One answer for every caller: the callback shortcut below also runs for an
+/// expansion leaf, and hardcoding `Role::Param` there labelled an expanded
+/// callback leaf as a parameter — undoing the rule the ordinary path states
+/// (#622 review).
+fn leaf_role(
+    expanded: bool,
+    position: usize,
+    leaf_index: usize,
+) -> prebindgen_registry::recipe::Role {
+    use prebindgen_registry::recipe::Role;
+    match expanded {
+        false => Role::Param { index: position },
+        true => Role::ExpansionLeaf {
+            param: position,
+            leaf: leaf_index,
+        },
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn classify_leaf(
     ext: &Declarations,
@@ -847,7 +868,7 @@ fn classify_leaf(
     position: usize,
     leaf_index: usize,
 ) -> Result<PlanLeaf, PlanError> {
-    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
+    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Site};
     // `impl Fn(args)` never reaches the compiler, for the reason
     // `JniGen::compile_crossing` gives: a callback is answered whole, because a
     // JniGen callback ARGUMENT does not always have a conversion of its own —
@@ -889,7 +910,7 @@ fn classify_leaf(
                     &prebindgen_registry::recipe::Bound {
                         site: Site {
                             owner: owner.clone(),
-                            role: Role::Param { index: position },
+                            role: leaf_role(expanded, position, leaf_index),
                         },
                         crossing: Crossing::new(reading.clone(), Direction::Construct),
                         recipe: fragment.id.recipe().clone(),
@@ -951,13 +972,7 @@ fn classify_leaf(
     // callback's arguments (#622 review).
     let site = Site {
         owner: owner.clone(),
-        role: match expanded {
-            false => Role::Param { index: position },
-            true => Role::ExpansionLeaf {
-                param: position,
-                leaf: leaf_index,
-            },
-        },
+        role: leaf_role(expanded, position, leaf_index),
     };
     let crossing = Crossing::new(reading.clone(), Direction::Construct);
     let use_pair = crate::jni::compile::optional_pair_plan_candidate(ext, reading)

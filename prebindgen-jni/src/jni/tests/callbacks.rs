@@ -1046,3 +1046,61 @@ fn a_callback_parameter_is_a_site_in_the_canonical_plan() {
         "the callback parameter states its own site: {sites:?}"
     );
 }
+
+/// An **expanded** parameter's callback leaf is still a leaf of that
+/// parameter.
+///
+/// The callback shortcut in `classify_leaf` runs for expansion leaves too, and
+/// naming it `Role::Param` there would undo the identity rule the ordinary
+/// path states — an expanded callback leaf would claim a source position the
+/// function does not have (#622 review). One role selection answers for both.
+#[test]
+fn an_expanded_callback_leaf_keeps_its_expansion_identity() {
+    use prebindgen_registry::recipe::Role;
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_opts_new(retries: i32, on_tick: impl Fn(i64) + Send + Sync + 'static) -> ZOpts { unimplemented!() }",
+        "pub fn z_go(opts: ZOpts, tail: i64) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_go)))
+        .expand(
+            prebindgen_registry::expand_param!(ZOpts)
+                .variant(prebindgen_registry::fun!(z_opts_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let roles: Vec<String> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter(|plan| plan.id().site().owner == "z_go")
+        .map(|plan| match plan.id().site().role {
+            Role::Param { index } => format!("Param({index})"),
+            Role::ExpansionLeaf { param, leaf } => format!("ExpansionLeaf({param},{leaf})"),
+            ref other => format!("{other}"),
+        })
+        .collect();
+    assert_eq!(
+        roles,
+        [
+            "return value".to_string(),
+            "ExpansionLeaf(0,0)".to_string(),
+            "ExpansionLeaf(0,1)".to_string(),
+            "Param(1)".to_string(),
+        ],
+        "the callback leaf is the expansion's second leaf, not a parameter: {roles:?}"
+    );
+}
