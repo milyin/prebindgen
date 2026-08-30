@@ -54,9 +54,9 @@ impl JPlan {
     }
 
     /// The values a decomposed return hands out, or `None` if it is not one.
-    pub(crate) fn decomposed(self) -> Option<Vec<OutWire>> {
+    pub(crate) fn decomposed(self) -> Option<std::rc::Rc<Vec<OutWire>>> {
         match self {
-            JPlan::Decomposed(wires) => Some((*wires).clone()),
+            JPlan::Decomposed(wires) => Some(wires),
             _ => None,
         }
     }

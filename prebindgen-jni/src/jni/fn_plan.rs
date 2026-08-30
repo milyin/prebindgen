@@ -320,7 +320,10 @@ pub(crate) struct UnfoldOutputPlan {
     /// Registry-composed values the return site hands to its builder/folder,
     /// with each target ABI and output pipeline frozen. Empty only for a
     /// whole-element iterable fold.
-    pub wires: Vec<crate::jni::compile::OutWire>,
+    /// Shared with the site plan that froze them, so the values a decomposed
+    /// return hands out have one owner rather than a plan and a carrier that
+    /// have to agree (#622 review).
+    pub wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
     /// Exact composed converter for a fixed Product/Optional/Choice return.
     pub chain: Option<crate::jni::compile::ComposedChain>,
     /// Whole-element iterable conversion, when `wires` is empty because the
@@ -642,7 +645,7 @@ impl JniFunctionPlan {
         match &self.output {
             FnOutputPlan::Value(value) => value.pipeline.calls(out),
             FnOutputPlan::Unfold(unfold) => {
-                for wire in &unfold.wires {
+                for wire in unfold.wires.iter() {
                     wire.calls(out);
                 }
                 if let Some(chain) = &unfold.chain {
@@ -1153,7 +1156,7 @@ fn build_output(
                 .map_err(|_| PlanError::UnresolvedOutput {
                     ty: Box::new(element.clone()),
                 })?;
-            (Vec::new(), None, Some(pipeline))
+            (std::rc::Rc::new(Vec::new()), None, Some(pipeline))
         } else {
             let expected = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
             let delivered = if plan.by_ref {
@@ -1181,10 +1184,13 @@ fn build_output(
                 });
             let wires = match composed {
                 Some(wires) => wires,
-                None => crate::jni::compile::freeze_out_wires(ext, registry, &plan.leaves)
-                    .map_err(|_| PlanError::UnresolvedOutput {
-                        ty: Box::new(plan.source.clone()),
-                    })?,
+                None => std::rc::Rc::new(
+                    crate::jni::compile::freeze_out_wires(ext, registry, &plan.leaves).map_err(
+                        |_| PlanError::UnresolvedOutput {
+                            ty: Box::new(plan.source.clone()),
+                        },
+                    )?,
+                ),
             };
             // Chain availability depends on the exact value the delivery owns,
             // including borrow and outer Optional mode. Freeze that answer now;
@@ -1204,7 +1210,7 @@ fn build_output(
             ext,
             registry,
             plan,
-            wires.clone(),
+            (*wires).clone(),
             chain.clone(),
         );
         return Ok(FnOutputPlan::Unfold(Box::new(UnfoldOutputPlan {

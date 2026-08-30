@@ -77,7 +77,7 @@ pub(crate) fn emit_unfold_delivery(
     // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
     // yielding the per-leaf typed jvalue arg expressions.
     let encode_leaves = |value: &TokenStream, optional: bool| {
-        let mut delivered = Delivered::planned(plan, output.wires.clone(), output.chain.clone());
+        let mut delivered = Delivered::planned(plan, (*output.wires).clone(), output.chain.clone());
         delivered.optional = optional;
         encode_plan_leaves(context, delivered, &obj_idents, value, &fail, emit)
     };
