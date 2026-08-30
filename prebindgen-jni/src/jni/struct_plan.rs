@@ -1,19 +1,20 @@
-//! The shared recursive leaf plan of the data-class `fromParts` bridge.
+//! A data class's own Kotlin **property** declarations: each field's property
+//! type, and whether holding it makes the class destructible.
 //!
-//! A whole-value struct crossing Rust→Kotlin is flattened into leaf wire
-//! slots: the Rust side encodes them and makes ONE
-//! `call_static_method("fromParts", …)`
-//! ([`flatten_struct_encode`](super::flatten_struct_encode)); the Kotlin side
-//! declares the matching `fromParts` factory that reassembles the object in
-//! bytecode ([`flatten_struct_factory`](super::flatten_struct_factory)). Both
-//! sides must enumerate the same leaves, in the same order, with matching
-//! wire slots and JVM descriptors.
+//! Not the leaf list. This module was the second derivation of that — both
+//! emitters walked the [`StructPlan`] to enumerate the slots of the
+//! `fromParts` bridge, and a standing check said the walk agreed with the
+//! registry-facing decomposition. #620 deleted it: the Rust encode and the
+//! Kotlin factory both render from the decomposition now, so the leaves have
+//! one derivation and nothing needs to agree with anything.
 //!
-//! This module holds that agreement: [`build_struct_plan`] classifies every
-//! field ONCE, in one fixed priority order (projection → enum →
-//! `Option<enum>` → nested data-class → simple leaf), and both emitters walk
-//! the resulting [`StructPlan`] — so the two sides agree by construction
-//! instead of by hand-synchronized parallel walks.
+//! What is left is a different question, and one plan answering it is not
+//! duplication: a property is per FIELD, where a leaf is per slot, and a field
+//! whose type is a nested class or a sum is one property over many slots.
+//! [`build_struct_plan`] classifies every field once, in one fixed priority
+//! order (projection → enum → `Option<enum>` → nested data-class → simple
+//! leaf), and [`crate::jni::render`] reads the property type and destructor
+//! off the result.
 
 use kotlin_codegen::KtType;
 use prebindgen_registry::Conversions;
@@ -93,10 +94,10 @@ pub(crate) struct SumPlanField {
     pub kind: PlanFieldKind,
 }
 
-/// Classify `s`'s fields into the shared bridge plan. `None` aborts the
-/// whole-value bridge (an unresolved field converter or a missing Kotlin
-/// name) — consistently for BOTH sides, where the former parallel walks
-/// could silently diverge on such edge cases.
+/// Classify `s`'s fields into their Kotlin property declarations. `None` aborts
+/// the whole-value bridge — an unresolved field converter, or a missing Kotlin
+/// name — which is the same answer the decomposition gives for such a field,
+/// so the class and its leaves decline together.
 pub(crate) fn build_struct_plan(
     ext: &Declarations,
     registry: &impl Conversions,
@@ -291,12 +292,11 @@ impl PlanFieldKind {
     /// The Kotlin type of the `data class` **constructor property** this field
     /// becomes.
     ///
-    /// The class declaration, the `fromParts` factory and the Rust encoder are
-    /// three views of one classification, so all three read it from here — the
-    /// module docs' "agree by construction instead of by hand-synchronized
-    /// parallel walks" applied to the declaration too (#156). Deriving it
-    /// separately is what let a property's type disagree with its own
-    /// factory parameter.
+    /// The class declaration reads it from here, and the `fromParts` factory
+    /// and the Rust encoder read the matching leaf types from the
+    /// decomposition — one derivation each, for two different questions. #156
+    /// is why the declaration is not a third: deriving a property's type
+    /// separately is what let it disagree with its own factory parameter.
     ///
     /// `owner` is the dotted path used in diagnostics.
     pub(crate) fn property_type(&self, owner: &str) -> KtType {

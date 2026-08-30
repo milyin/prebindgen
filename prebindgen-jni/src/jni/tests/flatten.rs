@@ -2383,9 +2383,8 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
     );
 }
 
-/// A nested `data_class` inlines its leaves into its parent's `fromParts`, and
-/// the two derivations of that flattening must agree on the leaves *and* on
-/// how deep each one is.
+/// A nested `data_class` inlines its leaves into its parent's `fromParts`,
+/// under the parent's name and at the right depth.
 ///
 /// The property is how a nested path flattens and in what order. It was written
 /// when two derivations had to agree on it and a standing check compared them

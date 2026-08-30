@@ -82,22 +82,23 @@ pub(crate) fn projection_wrap_expr(kind: &ProjectionKind, short: &str, raw: &str
 /// [`flatten_struct_factory`], whose returned tuple this names.
 pub(crate) type StructFactory = (Vec<(String, KtType)>, String, bool);
 
-/// Recursively build the Kotlin `fromParts` factory for a data class — the
-/// mirror of the native `flatten_struct_encode` (in the [`jni`](super)
-/// module). Both walk the same [`build_struct_plan`], so the leaf order and
-/// slot types agree by construction.
+/// Build the Kotlin `fromParts` factory for a data class, from the struct's
+/// **decomposition** — the one leaf list, which the Rust encode renders from
+/// and a builder interface declares. Not a mirror of a second walk: there is
+/// no second walk (#620).
+///
 /// Returns `(params, reconstruct, mints_handle)`:
-/// * `params` — the flattened `(name, kotlin_type)` list (one per transitive
-///   leaf wire; nested data-class fields are inlined, `Option<nested>` prepends
-///   a `…__present: Boolean` flag). Order/types match the native call's JVM
-///   descriptor positionally.
+/// * `params` — the flattened `(name, kotlin_type)` list, one per leaf; nested
+///   data-class fields are inlined and `Option<nested>` prepends a
+///   `…__present: Boolean` flag. Order and types match the native call's JVM
+///   descriptor positionally, because both come from
+///   [`plan_leaf_params`](crate::jni::iface::plan_leaf_params).
 /// * `reconstruct` — the Kotlin expression building this struct:
 ///   `Class(<part per constructor field>)`, where a nested field reconstructs
 ///   via `Child.fromParts(<child param names>)` (`if (present) … else null` when
 ///   optional) and a leaf reconstructs with its wrap.
-/// * `mints_handle` — whether any transitive leaf is an opaque handle, i.e.
-///   whether this factory takes a raw native pointer and so needs the
-///   raw-pointer guard (see [`plan_mints_handle`]).
+/// * `mints_handle` — whether any leaf is an opaque handle, i.e. whether this
+///   factory takes a raw native pointer and so needs the raw-pointer guard.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flatten_struct_factory(
     ext: &Declarations,

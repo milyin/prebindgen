@@ -1483,7 +1483,7 @@ impl Declarations {
     /// object slots are non-null, which an inert group's `JObject::null()`
     /// would trip on before any code runs. The reassembly the wire needs is the
     /// same inlined `when` a sum-typed struct field already gets from
-    /// `factory_field`, so it is emitted here directly.
+    /// [`Self::sum_reconstruct`], so it is emitted here directly.
     fn sum_builder_singleton(
         &self,
         registry: &Registry,
@@ -1766,8 +1766,8 @@ impl Declarations {
         let nullable = nullable && (depth > 0 || slot_nullable);
         // An enum payload rides its `jint` discriminant, so the interface types
         // it `Int` and the wrap has to name the enum class itself — read off the
-        // same output-converter metadata `factory_field` reads for an enum
-        // struct field.
+        // same output-converter metadata a data class's own enum property is
+        // typed from.
         if self.is_kotlin_enum_reading(ty) {
             let name = self
                 .out_frag(ty)

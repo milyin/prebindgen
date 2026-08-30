@@ -163,12 +163,13 @@ pub(crate) fn build_data_class(
         }
     }
 
-    // `fromParts` companion factory — recursively flattened the same way as the
-    // native `flatten_struct_encode`: nested data-class fields are inlined as
-    // their leaf wires, so native builds the whole object graph with ONE
-    // `call_static_method`. Its raw-text class references (`Child.fromParts`,
-    // `Enum.fromInt`, projection wraps) use short names; the FQNs they need are
-    // collected here and attached to the factory body `Code` below.
+    // `fromParts` companion factory, from the struct's decomposition — the
+    // same leaves the native encode fills, so nested data-class fields are
+    // inlined as their leaf wires and native builds the whole object graph with
+    // ONE `call_static_method`. Its raw-text class references
+    // (`Child.fromParts`, `Enum.fromInt`, projection wraps) use short names; the
+    // FQNs they need are collected here and attached to the factory body `Code`
+    // below.
     let mut factory_imports: BTreeSet<String> = BTreeSet::new();
     let (factory_params, factory_reconstruct, factory_mints_handle) = flatten_struct_factory(
         ext,
