@@ -888,7 +888,7 @@ fn subject_package(ext: &Declarations, subject: &prebindgen_registry::flat::Type
 
 /// The interface param list for a decomposition's leaves: names from
 /// [`plan_leaf_names`], typed + raw views per leaf.
-fn plan_leaf_params(
+pub(crate) fn plan_leaf_params(
     ext: &Declarations,
     leaves: &[crate::jni::compile::OutWire],
 ) -> Option<Vec<IfaceParam>> {

@@ -1609,7 +1609,7 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
         kc.contains("if(mode==Int.MIN_VALUE)nullelseLevel.fromInt(mode)"),
         "{kotlin}"
     );
-    assert!(kc.contains("Inner.fromParts(inner_id)"), "{kotlin}");
+    assert!(kc.contains("Inner.fromParts(inner__id)"), "{kotlin}");
 
     // INPUT (`job_mode`): the native method receives the recursively flattened
     // leaves. The registry-composed Optional and Product chains reconstruct
@@ -3083,7 +3083,7 @@ fn data_class_properties_match_their_from_parts_params() {
     // child is inlined as its own leaves, the handle arrives as a raw pointer
     // and the enum as its discriminant, then each is rebuilt.
     assert!(kc.contains("Bag(Handle.fromRawPtr(handle)"), "{kotlin}");
-    assert!(kc.contains("Child.fromParts(child_n)"), "{kotlin}");
+    assert!(kc.contains("Child.fromParts(child__n)"), "{kotlin}");
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
 
     // …and the raw-pointer guard follows that same plan, factory by factory

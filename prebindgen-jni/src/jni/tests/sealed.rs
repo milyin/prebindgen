@@ -1489,14 +1489,16 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
         .collect::<Vec<_>>()
         .join("\n");
 
-    // The tag keeps the `__` marker; a group slot is prefixed with its field
-    // by the single-underscore nesting convention (`mode_periodicQueries_period`).
+    // Both the tag and a group slot are reached THROUGH the field, and the
+    // decomposition joins every such step with `__` — one naming for the
+    // factory and the builder interfaces alike, now that both read the same
+    // leaves (#619).
     assert!(
-        kotlin.contains("outcome__tag: Int") && kotlin.contains("outcome_found_v0: Long"),
+        kotlin.contains("outcome__tag: Int") && kotlin.contains("outcome__found_v0: Long"),
         "the selector plus a raw-pointer group slot, both prefixed by the field:\n{kotlin}"
     );
     assert!(
-        kotlin.contains("Lookup.Found(Probe.fromRawPtr(outcome_found_v0))"),
+        kotlin.contains("Lookup.Found(Probe.fromRawPtr(outcome__found_v0))"),
         "the parent's fromParts inlines the `when` and wraps the pointer:\n{kotlin}"
     );
     assert!(

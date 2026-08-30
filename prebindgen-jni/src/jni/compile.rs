@@ -3668,17 +3668,6 @@ impl ComposedChain {
 pub(crate) struct Conv(std::rc::Rc<JFrag>);
 
 impl Conv {
-    /// This crossing's conversion chain, in execution order — the stage
-    /// identities a caller has to invoke around the wire-facing converter.
-    pub(crate) fn stages(&self) -> Vec<OperationId> {
-        self.0
-            .chain
-            .steps()
-            .iter()
-            .map(|step| step.operation().clone())
-            .collect()
-    }
-
     pub(crate) fn activate(&self) {
         self.0.rust.mark_reachable();
     }

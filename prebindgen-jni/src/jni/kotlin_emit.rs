@@ -1658,7 +1658,10 @@ impl Declarations {
     /// inside its own live arm it is re-asserted with `!!`. A payload that is
     /// *itself* optional keeps its null — there the JVM null means `None`, and
     /// `!!` would turn a legitimately absent value into an exception.
-    fn sum_ctor_arg(
+    /// One leaf's raw parameter, spelled as the value it stands for: its wrap
+    /// applied through whatever layers sit over it. Named for the sum payload
+    /// it was written for; a data class's own field is the same question.
+    pub(crate) fn sum_ctor_arg(
         &self,
         leaf: &crate::jni::compile::OutWire,
         param: &crate::jni::IfaceParam,

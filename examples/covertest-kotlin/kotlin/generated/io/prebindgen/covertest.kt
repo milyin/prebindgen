@@ -223,7 +223,7 @@ public data class Dossier(val note: Long, val holder: Holder) : AutoCloseable {
         @JvmSynthetic
         @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
-        public fun fromParts(note: Long, holder_tag: Long, holder_summary: Long): Dossier = Dossier(note, Holder.fromParts(holder_tag, holder_summary))
+        public fun fromParts(note: Long, holder__tag: Long, holder__summary: Long): Dossier = Dossier(note, Holder.fromParts(holder__tag, holder__summary))
     }
 }
 
