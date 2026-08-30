@@ -405,8 +405,21 @@ impl Declarations {
         // The source is the plan's own owned core, so a plan keyed under `&T`
         // and one keyed under `T` state one row; a type that already declared
         // `parts` — a `data_class`, a `sealed_class`, a value form — keeps it.
+        //
+        // A **whole-element fold** is not one of these and must not earn a row.
+        // `apply_leaf_vec_folds` files a plan for `impl Fn(&[T])` under `&[T]`
+        // whose `source` is the ELEMENT and whose `decon` is `None`: nothing is
+        // taken apart, each element crosses whole through its own converter.
+        // Declaring `parts` off it would state a decomposition of `T` that does
+        // not exist — and, worse, a scalar `T` argument elsewhere in the same
+        // model would then bind to that row and name a fragment compiled under
+        // a different recipe (#623 review). `decon` is the gate the model
+        // already carries for this: `None` only for the whole-element arm.
         let mut decomposed: BTreeMap<TypeKey, TypeRef> = BTreeMap::new();
         for plan in registry.callback_arg_plans().values() {
+            if plan.decon.is_none() {
+                continue;
+            }
             let key = plan.source.stripped_key();
             if parts_out.contains(&key) {
                 continue;

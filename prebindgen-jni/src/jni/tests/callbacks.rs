@@ -1322,6 +1322,81 @@ fn a_whole_delivered_argument_shares_the_trampolines_abi() {
     );
 }
 
+/// A whole-element fold earns no decomposition row, and a scalar of the same
+/// element type is not dragged onto one.
+///
+/// `apply_leaf_vec_folds` files a plan for `impl Fn(&[T])` keyed under `&[T]`
+/// whose `source` is the ELEMENT and whose `decon` is `None`: nothing is taken
+/// apart, each element crosses whole through its own converter. A row declared
+/// off that plan would state a decomposition of `T` that does not exist — and
+/// the `T` argument beside it would bind to that row and name a fragment
+/// compiled under a different recipe (#623 review).
+///
+/// Both arguments in one callback, which is the shape that makes the collision
+/// observable rather than theoretical.
+#[test]
+fn a_whole_element_fold_states_no_decomposition_row() {
+    use prebindgen::SourceLocation;
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_handle_id(h: &ZHandle) -> i64 { unimplemented!() }",
+        "pub fn z_stream(cb: impl Fn(&[ZHandle], ZHandle) + Send + Sync + 'static) { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("stream")
+                .class(
+                    crate::ptr_class!(ZHandle)
+                        .method(prebindgen_registry::fun!(z_handle_id).name("id")),
+                )
+                .fun(prebindgen_registry::fun!(z_stream)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let decls = gen.declarations();
+    let element = param_reading(&gen, "z_handle_id", 0);
+    let crossing = prebindgen_registry::recipe::Crossing::new(
+        element.borrow_target().unwrap_or(&element).clone(),
+        prebindgen_registry::recipe::Direction::Deconstruct,
+    );
+    assert!(
+        decls
+            .recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::parts())
+            .is_none(),
+        "a whole-element fold declared a decomposition row for its element: {:?}",
+        decls.recipe_table().names_of(&crossing.key())
+    );
+
+    let plans = decls.site_plans.borrow();
+    let role_of = |arg: usize| {
+        plans
+            .iter()
+            .find(|plan| {
+                plan.id().site().owner == "z_stream"
+                    && plan.id().site().role
+                        == prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg }
+            })
+            .map(|plan| plan.bound().recipe.name().as_str().to_string())
+    };
+    // Both delivered values state a site, and neither took a decomposition row:
+    // the slice is folded element by element, the handle crosses whole.
+    assert!(role_of(0).is_some(), "the folded slice states no site");
+    assert_ne!(role_of(0).as_deref(), Some("parts"));
+    assert_eq!(role_of(1).as_deref(), Some("whole"));
+}
+
 /// One captured function's parameter reading, by name and position.
 #[cfg(test)]
 fn param_reading(
