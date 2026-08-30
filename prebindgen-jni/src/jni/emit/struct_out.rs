@@ -85,10 +85,13 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// `fromParts` parameters and the recipe identically, and two walks agreeing was a
 /// property nothing checked.
 ///
-/// `None` — the type keeps the whole-value `fromParts` path — when a field needs
-/// a transform this fixed builder cannot forward verbatim. See
-/// [`Declarations::struct_out_wires`] for which fields those are and why one of
-/// them declines the whole value.
+/// `None` — the type keeps the whole-value `fromParts` path — when a field is
+/// one the decomposition cannot state at all. Those are structural: a repeated
+/// nested class, a field the model does not hold as a named one, nesting past
+/// 16. Not a missing transform — a handle, an `enum_class`, a sum, an optional
+/// nested class and a selector inside a gated group all state fine, each
+/// carrying its own conversion (#602). See [`Declarations::struct_out_wires`]
+/// for the list and why one such field declines the whole value.
 pub(crate) fn synth_value_struct_leaves(
     ext: &Declarations,
     registry: &impl Conversions,
@@ -127,21 +130,18 @@ pub(crate) fn synth_value_struct_leaves(
 /// matched `__cN` under an Option); `prefix` namespaces the generated idents.
 /// Walk the struct's fields and encode each leaf into a `fromParts` argument.
 ///
-/// This is a source-value walk that the registry does not perform, and the
-/// reason is coverage rather than ownership. The registry-facing decomposition
-/// of a struct (`Declarations::struct_out_wires_at`) refuses a nested
-/// `data_class` behind an `Option` or a `Vec`; this encode supports both, an
-/// optional nested class as a `present` flag plus a defaulted group and a sum
-/// field as a tag plus one group per variant.
+/// This is a source-value walk that the registry does not perform, and what
+/// keeps it here is now only that nothing has moved it. The coverage reason is
+/// gone: #616, #617 and #618 taught the registry-facing decomposition
+/// (`Declarations::struct_out_wires_at`) every gated shape this encode
+/// supports — a sum field as a tag over one group per variant, an optional
+/// nested class as a presence flag over a defaulted group, and one selector
+/// inside another — so the two now cover the same shapes rather than differing.
 ///
-/// Rendering this through the registry's decomposition walk would therefore
-/// mean teaching that decomposition the gated shapes — which would also change
-/// what a foreign builder can be delivered, a feature rather than a
-/// refactoring. #596 step 5 records that decision; #602 proposes the feature.
-///
-/// Where both derivations do apply, they must name the same leaves in the same
-/// order: `JniGen::assert_leaf_derivations_agree` checks that on every binding
-/// a test writes, since that agreement is what #602 would rest on.
+/// Which makes this the duplication #613 step 3 exists to remove: two walks
+/// deriving one leaf list. `JniGen::assert_leaf_derivations_agree` is what says
+/// they still agree, on every binding a test writes, and #619 is where this
+/// walk goes and that check with it.
 /// The leaves this encode emits, flattened — the `fromParts` argument list,
 /// in order, each with how deeply nested the field it came from is.
 ///

@@ -1420,10 +1420,11 @@ fn sum_return_group_can_own_a_handle() {
 ///   makes the two spellings agree is that `Lookup` is itself `AutoCloseable`
 ///   — the `when` over the alternatives lives in the sum, so the container
 ///   emits the same one-line cascade either way.
-/// * A sum field takes its parent off the fixed-builder path onto the
-///   whole-value `fromParts` bridge (`synth_value_struct_leaves` declines
-///   `TypeKind::Sum`), so the value costs a JVM object — a slower shape, not a
-///   broken one.
+/// * A sum field keeps its parent on the fixed-builder path: since #616 the
+///   decomposition states it as a tag over one group per alternative, so the
+///   value crosses as leaves and no JVM object is built for it. It used to
+///   decline, which cost the parent an object — a slower shape, not a broken
+///   one — and this test passed either way, since what it pins is the cascade.
 #[test]
 fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
     let loc = myflat_loc();
