@@ -951,6 +951,44 @@ fn classify_leaf(
                     crate::jni::compile::JAbiLeaves::Params(leaf.clone()),
                 )));
         }
+        // The values the trampoline delivers OUT through this callback. Each is
+        // a boundary site by the registry's own model — `Role::CallbackArg`
+        // names it — and none was stated, because the callback is answered
+        // whole and its arguments never reach `Compiler::site` (#622 review).
+        //
+        // The delivered shape is read off the arg's expansion plan rather than
+        // compiled here: freezing wires would activate their converters, and a
+        // site plan nothing reads yet must not change what the binding emits.
+        #[cfg(test)]
+        for (index, arg) in args.iter().enumerate() {
+            let Some(conv) = ext.out_frag(arg) else {
+                // An argument with no conversion of its own — the carve-out's
+                // own reason. It has no fragment to name, so there is nothing
+                // canonical to state until callbacks compose from their arms.
+                continue;
+            };
+            let leaves =
+                crate::jni::iface::effective_callback_plan(ext, registry, arg).map(|plan| {
+                    std::rc::Rc::new(crate::jni::compile::OutWire::from_leaves(&plan.leaves))
+                });
+            ext.site_plans
+                .borrow_mut()
+                .push(std::rc::Rc::new(conv.fragment().freeze_site(
+                    &prebindgen_registry::recipe::Bound {
+                        site: Site {
+                            owner: owner.clone(),
+                            role: prebindgen_registry::recipe::Role::CallbackArg {
+                                param: position,
+                                arg: index,
+                            },
+                        },
+                        crossing: Crossing::new(arg.clone(), Direction::Deconstruct),
+                        recipe: conv.fragment().id.recipe().clone(),
+                        origin: prebindgen_registry::recipe::Origin::Function,
+                    },
+                    crate::jni::compile::JAbiLeaves::Delivered(leaves),
+                )));
+        }
         return Ok(leaf);
     }
     // The compiler, resumed over what the build already compiled. Every

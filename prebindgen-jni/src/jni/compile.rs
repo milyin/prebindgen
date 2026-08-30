@@ -311,6 +311,13 @@ pub(crate) enum JAbiLeaves {
     /// One returned value: the plan that converts it, which is the plan the
     /// emitters read rather than the intermediate the site hook produces.
     Whole(std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>),
+    /// One value delivered OUT through a callback: the leaves it hands over
+    /// when it decomposes, or none when it crosses whole.
+    ///
+    /// Its own variant because a delivered argument is neither a parameter nor
+    /// a return — it sits in a parameter list but travels in the other
+    /// direction, which is what `Role::CallbackArg` says.
+    Delivered(Option<std::rc::Rc<Vec<OutWire>>>),
 }
 
 impl JAbiLeaves {
@@ -323,6 +330,7 @@ impl JAbiLeaves {
             Self::Params(leaf) => leaf.native.len(),
             Self::Decomposed(wires) => wires.len(),
             Self::Whole(_) => 1,
+            Self::Delivered(leaves) => leaves.as_ref().map_or(1, |leaves| leaves.len()),
         }
     }
 }
