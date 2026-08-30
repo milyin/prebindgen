@@ -194,6 +194,44 @@ fn factory_part(
     ungated: Option<&[crate::jni::IfaceParam]>,
     imports: &mut BTreeSet<String>,
 ) -> Option<String> {
+    // The class boundary is asked FIRST. A nested child may itself begin with
+    // a selector — an `Option<Mid>` whose `Mid` starts with an optional field,
+    // or with a sum — and that selector belongs to the CHILD's signature, not
+    // to this one. Reading `from` before `through` consumed it here and called
+    // the child factory without it, which is a `fromParts` arity mismatch the
+    // JVM only reports at the call (#620 review).
+    // A nested class: its leaves are the parent's, put back through the class
+    // the decomposition recorded when it flattened them. A gated one receives
+    // wire defaults when absent, so its object slots are nullable in the
+    // parent's signature and re-asserted inside the guard the flag opened.
+    if let Some(fqn) = leaves[0].through.first() {
+        let short = register_fqn(fqn, imports);
+        // Re-asserted only where the NULL came from the gate, never where the
+        // value is legitimately absent: a leaf whose own type is optional is
+        // nullable on its own account, and `!!` there would throw on a value
+        // the class is meant to hold. The same distinction `sum_ctor_arg`
+        // makes for an inert group's payload.
+        let forwarded: Vec<String> = names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                // Re-asserted only where the null is the GATE's doing: the
+                // parent declares the slot nullable so the encoder can default
+                // it when absent, while the class itself declares it non-null.
+                // A slot the class already declares nullable — its own type is
+                // optional, or it belongs to a sum group that is inert whenever
+                // another alternative is live — is forwarded untouched, because
+                // `!!` there would throw on a value the class is meant to hold.
+                let gate_added = params[i].raw.is_nullable()
+                    && !ungated.is_none_or(|own| own[i].raw.is_nullable());
+                match gate_added {
+                    true => format!("{name}!!"),
+                    false => name.clone(),
+                }
+            })
+            .collect();
+        return Some(format!("{short}.fromParts({})", forwarded.join(", ")));
+    }
     // A presence flag gates everything after it, and contributes no value of
     // its own: the field is what its group rebuilds, or null.
     if matches!(leaves[0].from, crate::jni::compile::OutFrom::Present) {
@@ -234,38 +272,6 @@ fn factory_part(
             imports,
         );
         return Some(when);
-    }
-    // A nested class: its leaves are the parent's, put back through the class
-    // the decomposition recorded when it flattened them. A gated one receives
-    // wire defaults when absent, so its object slots are nullable in the
-    // parent's signature and re-asserted inside the guard the flag opened.
-    if let Some(fqn) = leaves[0].through.first() {
-        let short = register_fqn(fqn, imports);
-        // Re-asserted only where the NULL came from the gate, never where the
-        // value is legitimately absent: a leaf whose own type is optional is
-        // nullable on its own account, and `!!` there would throw on a value
-        // the class is meant to hold. The same distinction `sum_ctor_arg`
-        // makes for an inert group's payload.
-        let forwarded: Vec<String> = names
-            .iter()
-            .enumerate()
-            .map(|(i, name)| {
-                // Re-asserted only where the null is the GATE's doing: the
-                // parent declares the slot nullable so the encoder can default
-                // it when absent, while the class itself declares it non-null.
-                // A slot the class already declares nullable — its own type is
-                // optional, or it belongs to a sum group that is inert whenever
-                // another alternative is live — is forwarded untouched, because
-                // `!!` there would throw on a value the class is meant to hold.
-                let gate_added = params[i].raw.is_nullable()
-                    && !ungated.is_none_or(|own| own[i].raw.is_nullable());
-                match gate_added {
-                    true => format!("{name}!!"),
-                    false => name.clone(),
-                }
-            })
-            .collect();
-        return Some(format!("{short}.fromParts({})", forwarded.join(", ")));
     }
     debug_assert_eq!(
         leaves.len(),

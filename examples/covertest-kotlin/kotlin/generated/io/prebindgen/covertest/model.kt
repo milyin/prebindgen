@@ -569,6 +569,35 @@ public data class HoldPolicy(val hold: Hold, val grace: Hold?) {
 }
 
 /**
+ * A nested class whose **first** field selects: an optional one, then a sum.
+ *
+ * The order matters. A child's leading selector belongs to the child's own
+ * `fromParts` signature, and a parent that reads "is this leaf a selector?"
+ * before "does this leaf open a class?" consumes it at the parent level and
+ * calls the child factory without it — an arity mismatch the JVM reports only
+ * at the call (#620 review). `Window` cannot show that, because it begins with
+ * a plain `label`.
+ */
+public data class Meter(val span: Stamp?, val reading: Reading, val id: Long) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            span__present: Boolean,
+            span__secs: Long,
+            span__nanos: Long,
+            reading__tag: Int,
+            reading__exact_v0: Long,
+            reading__range_low: Long,
+            reading__range_high: Long,
+            reading__tagged_v0: String?,
+            reading__tagged_v1: Int,
+            reading__companion_v0: Long,
+            id: Long,
+        ): Meter = Meter(if (span__present) Stamp.fromParts(span__secs, span__nanos) else null, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading__exact_v0); 2 -> Reading.Range(reading__range_low, reading__range_high); 3 -> Reading.Tagged(reading__tagged_v0!!, Priority.fromInt(reading__tagged_v1)); 4 -> Reading.Companion(reading__companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") }, id)
+    }
+}
+
+/**
  * Deliberate object-boundary fixture for `data_class!(T).jobject_input()`.
  *
  * Its [`ObjectBoundary64`] and [`ObjectBoundary63`] children recursively
@@ -998,6 +1027,43 @@ public data class Observation(val id: Long, val reading: Reading, val fallback: 
             fallback__companion_v0: Long,
             note: String,
         ): Observation = Observation(id, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading__exact_v0); 2 -> Reading.Range(reading__range_low, reading__range_high); 3 -> Reading.Tagged(reading__tagged_v0!!, Priority.fromInt(reading__tagged_v1)); 4 -> Reading.Companion(reading__companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") }, if (fallback__present) when (fallback__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(fallback__exact_v0); 2 -> Reading.Range(fallback__range_low, fallback__range_high); 3 -> Reading.Tagged(fallback__tagged_v0!!, Priority.fromInt(fallback__tagged_v1)); 4 -> Reading.Companion(fallback__companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $fallback__tag") } else null, note)
+    }
+}
+
+/**
+ * Both ways of holding a [`Meter`]: gated, so the child's leading selector
+ * sits under a presence flag of its own, and plain, so it is the first thing
+ * the parent meets.
+ */
+public data class Rack(val meter: Meter?, val plain: Meter, val name: String) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            meter__present: Boolean,
+            meter__span__present: Boolean,
+            meter__span__secs: Long,
+            meter__span__nanos: Long,
+            meter__reading__tag: Int,
+            meter__reading__exact_v0: Long,
+            meter__reading__range_low: Long,
+            meter__reading__range_high: Long,
+            meter__reading__tagged_v0: String?,
+            meter__reading__tagged_v1: Int,
+            meter__reading__companion_v0: Long,
+            meter__id: Long,
+            plain__span__present: Boolean,
+            plain__span__secs: Long,
+            plain__span__nanos: Long,
+            plain__reading__tag: Int,
+            plain__reading__exact_v0: Long,
+            plain__reading__range_low: Long,
+            plain__reading__range_high: Long,
+            plain__reading__tagged_v0: String?,
+            plain__reading__tagged_v1: Int,
+            plain__reading__companion_v0: Long,
+            plain__id: Long,
+            name: String,
+        ): Rack = Rack(if (meter__present) Meter.fromParts(meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id) else null, Meter.fromParts(plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id), name)
     }
 }
 
@@ -1463,6 +1529,71 @@ internal fun ProbeCallback.asRaw(): ProbeCallbackRaw =
         }
     }
 
+public fun interface RackCallback {
+    public fun run(rack: Rack)
+}
+
+internal fun interface RackCallbackRaw {
+    public fun run(
+        meter__present: Boolean,
+        meter__span__present: Boolean,
+        meter__span__secs: Long,
+        meter__span__nanos: Long,
+        meter__reading__tag: Int,
+        meter__reading__exact_v0: Long,
+        meter__reading__range_low: Long,
+        meter__reading__range_high: Long,
+        meter__reading__tagged_v0: String?,
+        meter__reading__tagged_v1: Int,
+        meter__reading__companion_v0: Long,
+        meter__id: Long,
+        plain__span__present: Boolean,
+        plain__span__secs: Long,
+        plain__span__nanos: Long,
+        plain__reading__tag: Int,
+        plain__reading__exact_v0: Long,
+        plain__reading__range_low: Long,
+        plain__reading__range_high: Long,
+        plain__reading__tagged_v0: String?,
+        plain__reading__tagged_v1: Int,
+        plain__reading__companion_v0: Long,
+        plain__id: Long,
+        name: String,
+    )
+}
+
+@JvmSynthetic
+internal fun RackCallback.asRaw(): RackCallbackRaw =
+    RackCallbackRaw {
+        meter__present,
+        meter__span__present,
+        meter__span__secs,
+        meter__span__nanos,
+        meter__reading__tag,
+        meter__reading__exact_v0,
+        meter__reading__range_low,
+        meter__reading__range_high,
+        meter__reading__tagged_v0,
+        meter__reading__tagged_v1,
+        meter__reading__companion_v0,
+        meter__id,
+        plain__span__present,
+        plain__span__secs,
+        plain__span__nanos,
+        plain__reading__tag,
+        plain__reading__exact_v0,
+        plain__reading__range_low,
+        plain__reading__range_high,
+        plain__reading__tagged_v0,
+        plain__reading__tagged_v1,
+        plain__reading__companion_v0,
+        plain__id,
+        name ->
+        run(
+            Rack.fromParts(meter__present, meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id, plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id, name)
+        )
+    }
+
 public fun interface ReadingCallback {
     public fun run(reading: Reading)
 }
@@ -1781,6 +1912,39 @@ internal fun <R> ProbeBuilder<R>.asRaw(): ProbeBuilderRaw<R> =
             outcome__failed_v0
         )
     }
+
+public fun interface RackBuilder<out R> {
+    public fun run(
+        meter__present: Boolean,
+        meter__span__present: Boolean,
+        meter__span__secs: Long,
+        meter__span__nanos: Long,
+        meter__reading__tag: Int,
+        meter__reading__exact_v0: Long,
+        meter__reading__range_low: Long,
+        meter__reading__range_high: Long,
+        meter__reading__tagged_v0: String?,
+        meter__reading__tagged_v1: Int,
+        meter__reading__companion_v0: Long,
+        meter__id: Long,
+        plain__span__present: Boolean,
+        plain__span__secs: Long,
+        plain__span__nanos: Long,
+        plain__reading__tag: Int,
+        plain__reading__exact_v0: Long,
+        plain__reading__range_low: Long,
+        plain__reading__range_high: Long,
+        plain__reading__tagged_v0: String?,
+        plain__reading__tagged_v1: Int,
+        plain__reading__companion_v0: Long,
+        plain__id: Long,
+        name: String,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __RackBuilder: RackBuilder<Rack> =
+RackBuilder { meter__present, meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id, plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id, name -> Rack.fromParts(meter__present, meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id, plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id, name) }
 
 public fun interface ReadingBuilder<out R> {
     public fun run(
@@ -2568,6 +2732,32 @@ public fun frameNew(
 public fun frameEach(n: Long, sink: FrameCallback, onError: JniErrorHandler<Unit>) {
     val __bcap = JniErrorHandlerCapture.acquire()
     CovNative.frameEach(n, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Rack`].
+ *
+ * The Rust `Rack` result is delivered decomposed: the builder callback receives (`meter__present`, `meter__span__present`, `meter__span__secs`, `meter__span__nanos`, `meter__reading__tag`, `meter__reading__exact_v0`, `meter__reading__range_low`, `meter__reading__range_high`, `meter__reading__tagged_v0`, `meter__reading__tagged_v1`, `meter__reading__companion_v0`, `meter__id`, `plain__span__present`, `plain__span__secs`, `plain__span__nanos`, `plain__reading__tag`, `plain__reading__exact_v0`, `plain__reading__range_low`, `plain__reading__range_high`, `plain__reading__tagged_v0`, `plain__reading__tagged_v1`, `plain__reading__companion_v0`, `plain__id`, `name`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun rackNew(
+    id: Long,
+    meter: Boolean,
+    span: Boolean,
+    which: Long,
+    onError: JniErrorHandler<Rack?>,
+): Rack? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.rackNew(id, meter, span, which, __RackBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Rack
+}
+
+/** The same value through a callback, which reassembles it by the other route. */
+public fun rackEach(n: Long, sink: RackCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.rackEach(n, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 

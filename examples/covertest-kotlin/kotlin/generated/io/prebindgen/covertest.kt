@@ -1498,6 +1498,19 @@ internal object CovNative {
     external fun probeNew(seq: Long, count: Long, total: Double, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic
+    external fun rackEach(n: Long, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun rackNew(
+        id: Long,
+        meter: Boolean,
+        span: Boolean,
+        which: Long,
+        build: Any,
+        errorSink: Any,
+    ): Any?
+
+    @JvmSynthetic
     external fun readingEach(n: Int, sink: Any, errorSink: Any)
 
     @JvmSynthetic

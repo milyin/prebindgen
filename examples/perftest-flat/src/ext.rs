@@ -700,6 +700,66 @@ pub fn frame_each(n: i64, sink: impl Fn(Frame) + Send + Sync + 'static) {
     }
 }
 
+/// A nested class whose **first** field selects: an optional one, then a sum.
+///
+/// The order matters. A child's leading selector belongs to the child's own
+/// `fromParts` signature, and a parent that reads "is this leaf a selector?"
+/// before "does this leaf open a class?" consumes it at the parent level and
+/// calls the child factory without it — an arity mismatch the JVM reports only
+/// at the call (#620 review). `Window` cannot show that, because it begins with
+/// a plain `label`.
+#[prebindgen]
+pub struct Meter {
+    pub span: Option<Stamp>,
+    pub reading: Reading,
+    pub id: i64,
+}
+
+/// Both ways of holding a [`Meter`]: gated, so the child's leading selector
+/// sits under a presence flag of its own, and plain, so it is the first thing
+/// the parent meets.
+#[prebindgen]
+pub struct Rack {
+    pub meter: Option<Meter>,
+    pub plain: Meter,
+    pub name: String,
+}
+
+fn meter_of(id: i64, span: bool, which: i64) -> Meter {
+    Meter {
+        span: span.then(|| Stamp {
+            secs: id,
+            nanos: id * 3,
+        }),
+        reading: match which {
+            0 => Reading::Missing,
+            1 => Reading::Exact(7),
+            2 => Reading::Range { low: 2, high: 4 },
+            3 => Reading::Labeled("hot".to_string(), Priority::Low),
+            _ => Reading::Companion(11),
+        },
+        id,
+    }
+}
+
+/// Build a [`Rack`].
+#[prebindgen]
+pub fn rack_new(id: i64, meter: bool, span: bool, which: i64) -> Rack {
+    Rack {
+        meter: meter.then(|| meter_of(id, span, which)),
+        plain: meter_of(id + 100, !span, (which + 1) % 5),
+        name: format!("r{id}"),
+    }
+}
+
+/// The same value through a callback, which reassembles it by the other route.
+#[prebindgen]
+pub fn rack_each(n: i64, sink: impl Fn(Rack) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(rack_new(i, i % 2 == 0, i % 3 == 0, i));
+    }
+}
+
 /// Build a [`Stamp`] (data-class **return**).
 #[prebindgen]
 pub fn stamp_new(secs: i64, nanos: i64) -> Stamp {

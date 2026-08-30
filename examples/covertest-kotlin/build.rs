@@ -385,6 +385,8 @@ fn main() {
                 .class(data_class!(Envelope))
                 .class(data_class!(Window))
                 .class(data_class!(Frame))
+                .class(data_class!(Meter))
+                .class(data_class!(Rack))
                 .class(
                     data_class!(Stamp)
                         .method(fun!(stamp_secs))
@@ -654,6 +656,8 @@ fn main() {
                 .fun(fun!(envelope_each))
                 .fun(fun!(frame_new))
                 .fun(fun!(frame_each))
+                .fun(fun!(rack_new))
+                .fun(fun!(rack_each))
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
                 .fun(fun!(dossier_new))

@@ -133,6 +133,9 @@ Base package: `io.prebindgen.covertest`
 - `probe_each` — `fun probeEach(n: Long, total: Double, sink: ProbeCallback, onError: JniErrorHandler<Unit>)`
 - `probe_new` — `fun <R> probeNew(seq: Long, count: Long, total: Double, onError: JniErrorHandler<R?>, build: ProbeBuilder<R>): R?`
   - shaped by: return `Probe` decomposed → [seq, outcome__tag, outcome__found_v0, outcome__failed_v0] (Callback delivery)
+- `rack_each` — `fun rackEach(n: Long, sink: RackCallback, onError: JniErrorHandler<Unit>)`
+- `rack_new` — `fun rackNew(id: Long, meter: Boolean, span: Boolean, which: Long, onError: JniErrorHandler<Rack?>): Rack?`
+  - shaped by: return `Rack` decomposed → [meter__present, meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id, plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id, name] (Callback delivery)
 - `reading_each` — `fun readingEach(n: Int, sink: ReadingCallback, onError: JniErrorHandler<Unit>)`
 - `reading_maybe` — `fun readingMaybe(which: Int, onError: JniErrorHandler<Reading?>): Reading?`
   - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
@@ -262,6 +265,7 @@ Base package: `io.prebindgen.covertest`
 - `Lookup`: sealed_class → `io.prebindgen.covertest.model.Lookup` (wire `?`)
 - `Marker`: sealed_class → `io.prebindgen.covertest.model.Marker` (wire `?`)
 - `MaybeHolder`: data_class → `io.prebindgen.covertest.MaybeHolder` (wire `jni :: objects :: JObject`)
+- `Meter`: data_class → `io.prebindgen.covertest.model.Meter` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `ObjectBoundary16`: data_class → `io.prebindgen.covertest.model.ObjectBoundary16` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary2`: data_class → `io.prebindgen.covertest.model.ObjectBoundary2` (wire `jni :: objects :: JObject`)
@@ -277,6 +281,7 @@ Base package: `io.prebindgen.covertest`
 - `PayloadVecHandler`: ptr_class → `io.prebindgen.covertest.PayloadVecHandler` (wire `jni :: sys :: jlong`)
 - `Priority`: enum_class → `io.prebindgen.covertest.model.Priority` (wire `jni :: sys :: jint`)
 - `Probe`: ptr_class → `io.prebindgen.covertest.model.Probe` (wire `jni :: sys :: jlong`)
+- `Rack`: data_class → `io.prebindgen.covertest.model.Rack` (wire `jni :: objects :: JObject`)
 - `Reading`: sealed_class → `io.prebindgen.covertest.model.Reading` (wire `?`)
 - `RepliesConfig`: data_class → `io.prebindgen.covertest.model.RepliesConfig` (wire `jni :: objects :: JObject`)
 - `Report`: ptr_class → `io.prebindgen.covertest.model.Report` (wire `jni :: sys :: jlong`)
