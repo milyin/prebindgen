@@ -1276,7 +1276,12 @@ impl<R: Conversions> JCompile<'_, R> {
                 crate::jni::emit::build_jobject_struct_input_plan(self.decls, st, self.registry)?,
             )),
             Direction::Deconstruct => {
-                let plan = self.decls.struct_plan(self.registry, st, 0)?;
+                let wires = self.decls.struct_out_frozen(self.registry, st)?;
+                let delivery = crate::jni::emit::FrozenDelivery::for_value_struct(
+                    self.decls,
+                    self.registry,
+                    wires,
+                )?;
                 let registered = self
                     .decls
                     .types
@@ -1295,7 +1300,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     |fqn| fqn.replace('.', "/"),
                 );
                 crate::jni::chain::JStructCodecBody::Output {
-                    plan,
+                    delivery: Box::new(delivery),
                     java_class_name,
                 }
             }
@@ -4440,6 +4445,25 @@ impl Declarations {
             // The layer questions off the field's own reading — `Optional` to
             // look through, `Vec` to decline — never a last path segment.
             let probe = field.ty.optional_inner().unwrap_or(&field.ty);
+            // A `Vec` of tag-gated groups has variable arity, and a
+            // decomposition is fixed-layout by construction: there is no
+            // number of slots to lay a sum's alternatives in per element.
+            // Loud rather than a silent decline, because the whole-value path
+            // cannot carry it either — a sum has no converter of its own to
+            // fall through to, so declining would surface as a missing
+            // converter for `Vec<T>` far from the field that caused it.
+            if let Some(elem) = probe.sequence_elem() {
+                if matches!(
+                    self.type_kind(registry, &elem.key()),
+                    crate::jni::classify::TypeKind::Sum
+                ) {
+                    panic!(
+                        "fromParts bridge: `Vec<{elem}>` sealed-class field \
+                         (`{}.{fname}`) is not supported (variable arity)",
+                        st.name,
+                    );
+                }
+            }
             match self.type_kind(registry, &probe.key()) {
                 // A handle or an enum_class field is an ordinary leaf: its own
                 // output conversion carries it — a `jlong` for the handle the

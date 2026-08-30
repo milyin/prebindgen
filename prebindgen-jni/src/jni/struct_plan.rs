@@ -63,18 +63,6 @@ pub(crate) struct ConvChain {
 }
 
 impl ConvChain {
-    /// The artifacts this chain calls: its stages, then the wire-facing
-    /// converter.
-    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
-        out.extend(
-            self.stages
-                .iter()
-                .chain([&self.function])
-                .cloned()
-                .map(prebindgen_registry::write::ArtifactKey::Operation),
-        );
-    }
-
     /// Read the chain off a wire's resolved output conversion.
     ///
     /// `stages` comes from the wire rather than the converter: the stage order
@@ -181,33 +169,6 @@ pub(crate) enum PlanFieldKind {
         /// Kotlin-side `?` (an `Option` field whose wire is object-shaped).
         nullable: bool,
     },
-}
-
-impl StructPlan {
-    /// Every converter the encoder calls, field by field and through every
-    /// nested layout.
-    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
-        for field in &self.fields {
-            field.kind.calls(out);
-        }
-    }
-}
-
-impl PlanFieldKind {
-    fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
-        match self {
-            Self::Projection { conv, .. }
-            | Self::Enum { conv, .. }
-            | Self::OptionEnum { conv, .. }
-            | Self::Leaf { conv, .. } => conv.calls(out),
-            Self::Nested { plan, .. } => plan.calls(out),
-            Self::Sum { variants, .. } => {
-                for field in variants.iter().flat_map(|variant| &variant.fields) {
-                    field.kind.calls(out);
-                }
-            }
-        }
-    }
 }
 
 /// One alternative of a [`PlanFieldKind::Sum`].

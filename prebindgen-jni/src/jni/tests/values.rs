@@ -799,8 +799,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
          answer through rather than wrap it:\n{rust}"
     );
     assert!(
-        rc.contains("let___delay:jni::sys::jlong=__jni_out_convert_")
-            && rc.contains("\"(J)Lio/test/jni/Timed;\""),
+        rc.contains("let__obj0:jni::sys::jlong=") && rc.contains("\"(J)Lio/test/jni/Timed;\""),
         "whole-struct output must pass the niche as primitive jlong:\n{rust}"
     );
     assert!(!rc.contains("let___delay:jni::objects::JObject"), "{rust}");

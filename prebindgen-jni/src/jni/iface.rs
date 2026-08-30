@@ -902,6 +902,25 @@ fn plan_leaf_params(
     Some(out)
 }
 
+/// The JVM descriptor each of these leaves occupies, in order.
+///
+/// One derivation for both call conventions: a builder's typed `run` spells
+/// these into the interface descriptor its method id is resolved from, and a
+/// `fromParts` factory spells the same ones into its signature string. Deriving
+/// them twice is how the two could disagree about a leaf while both looked
+/// right on their own.
+pub(crate) fn leaf_descriptors(
+    ext: &Declarations,
+    leaves: &[crate::jni::compile::OutWire],
+) -> Option<Vec<String>> {
+    Some(
+        plan_leaf_params(ext, leaves)?
+            .iter()
+            .map(|param| kt_jvm_descriptor(&param.raw, &[]))
+            .collect(),
+    )
+}
+
 /// Both interface views of ONE decomposition leaf. The single entry point for a
 /// plan leaf, so the builder/folder/handler signatures and a callback's
 /// flattened `run` params classify it identically — the tag slot and the

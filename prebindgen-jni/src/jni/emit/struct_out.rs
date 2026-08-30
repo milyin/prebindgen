@@ -148,7 +148,13 @@ pub(crate) fn synth_value_struct_leaves(
 /// Test support: the registry-facing decomposition of the same struct must
 /// agree with this wherever it exists, and #603 recorded that agreement as
 /// measured rather than checked. `JniGen::write_rust` checks it now.
-#[cfg(test)]
+/// Kept, and kept out of the encode, for one reason: the Kotlin `fromParts`
+/// signature is still derived from [`StructPlan`], and this is what says that
+/// derivation still agrees with the decomposition the Rust side now renders
+/// from. It goes when the Kotlin half moves too — with
+/// `JniGen::assert_leaf_derivations_agree`, `encode_plan`, `encode_field` and
+/// the conversion half of `StructPlan` that nothing else reads (#619).
+#[allow(dead_code)]
 pub(crate) fn encode_leaves(
     plan: &StructPlan,
     emit: &prebindgen_registry::RustWriter,
@@ -668,32 +674,42 @@ fn encode_field(
 /// into the final converter body; it performs no registry or declaration
 /// lookup and cannot rediscover source-type facts.
 pub(crate) fn render_struct_output_body(
-    plan: &StructPlan,
+    delivery: &crate::jni::emit::FrozenDelivery,
     java_class_name: &str,
     emit: &prebindgen_registry::RustWriter,
 ) -> syn::Expr {
-    // Recursively flatten the whole object graph into leaf wires, then build it
-    // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI
-    // crossing. The Kotlin `fromParts` factory (recursively flattened the same
-    // way in `render_data_class_source`) reassembles the graph in bytecode.
-    let access = quote!(v);
-    let (preludes, slots) = encode_plan(plan, &access, "", 0, &quote!(env), emit);
-
-    let mut sig = String::from("(");
-    let mut args: Vec<TokenStream> = Vec::new();
-    for sl in &slots {
-        sig.push_str(&sl.descriptor);
-        let id = &sl.ident;
-        if sl.is_object {
-            args.push(quote!(jni::objects::JValue::Object(&#id)));
-        } else {
-            args.push(quote!(jni::objects::JValue::from(#id)));
+    // The whole object graph flattened into leaf wires, then built with ONE
+    // `call_static_method("fromParts", …)` — no per-nested-struct JNI crossing.
+    // The Kotlin `fromParts` factory reassembles the graph in bytecode.
+    //
+    // The flattening is the registry's walk, the same one a fixed-builder site
+    // delivers through: `v` is borrowed and each leaf cloned out of it, which
+    // is what `is_field_read` decides, and a gated group is one `match` the
+    // walk emits rather than an arm this module builds.
+    let n = delivery.wire_count();
+    let obj_idents: Vec<syn::Ident> = (0..n).map(|i| format_ident!("__obj{}", i)).collect();
+    // A converter returns its failure; there is no error sink at this site.
+    let fail = |msg: TokenStream| -> TokenStream {
+        quote! {
+            return ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<String>>::from(#msg),
+            );
         }
-    }
-    sig.push_str(&format!(")L{};", java_class_name));
-    let factory_sig_lit = syn::LitStr::new(&sig, Span::call_site());
+    };
+    let (preludes, args, _) = crate::jni::emit::encode_plan_leaves(
+        delivery,
+        delivery.delivered(),
+        &obj_idents,
+        &quote!(&v),
+        &fail,
+        emit,
+    );
+    let factory_sig_lit = syn::LitStr::new(
+        &delivery.factory_signature(java_class_name),
+        Span::call_site(),
+    );
 
-    let body: syn::Expr = syn::parse_quote!({
+    syn::parse_quote!({
         #preludes
         let __obj = env.call_static_method(
             #java_class_name,
@@ -704,8 +720,7 @@ pub(crate) fn render_struct_output_body(
         .and_then(|__v| __v.l())
         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("encode struct via fromParts: {}", e)))?;
         __obj
-    });
-    body
+    })
 }
 
 pub(crate) fn struct_module_path(

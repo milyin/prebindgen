@@ -89,6 +89,11 @@ pub(crate) struct Slot {
     pub(crate) prim: bool,
     pub(crate) ty: TokenStream,
     pub(crate) default: TokenStream,
+    /// The JVM descriptor of the slot's own type, which the **factory**
+    /// convention spells into its `fromParts` signature. The builder
+    /// convention resolves its method id from the interface's descriptor
+    /// instead and never reads this.
+    pub(crate) descriptor: String,
 }
 
 pub(crate) fn leaf_slot(
@@ -100,6 +105,7 @@ pub(crate) fn leaf_slot(
             prim: false,
             ty: quote!(jni::objects::JObject),
             default: quote!(jni::objects::JObject::null()),
+            descriptor: context.object_descriptor(leaf),
         };
     }
     // The tag is synthesized, so it has no converter to read a wire from — it
@@ -113,10 +119,31 @@ pub(crate) fn leaf_slot(
         (sig, letter)
     };
     let zero = primitive_default_for_descriptor(sig);
+    // The two conventions carry a primitive differently. A builder's typed
+    // `run` takes a `jvalue` union and reads the member the descriptor names; a
+    // `fromParts` call is spelled with a signature string and typed `JValue`s,
+    // so its slot holds the wire value itself. Both hold a `JObject` the same
+    // way, which is why only this branch splits.
+    if context.is_factory() {
+        let wire = match leaf.is_tag() {
+            true => quote!(jni::sys::jint),
+            false => {
+                let wire = context.leaf_wire(leaf);
+                quote!(#wire)
+            }
+        };
+        return Slot {
+            prim: true,
+            ty: wire,
+            default: zero,
+            descriptor: sig.to_string(),
+        };
+    }
     Slot {
         prim: true,
         ty: quote!(jni::sys::jvalue),
         default: quote!(jni::sys::jvalue { #letter: #zero }),
+        descriptor: sig.to_string(),
     }
 }
 
@@ -170,16 +197,14 @@ pub(crate) fn encode_sum_group(
 
     let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(context, l)).collect();
 
+    // How a filled slot rides the call is the convention's answer, not this
+    // emitter's: a builder takes `jvalue`s, a `fromParts` factory typed
+    // `JValue`s.
     let arg_exprs: Vec<TokenStream> = leaves
         .iter()
         .enumerate()
-        .map(|(idx, _)| {
-            let id = &obj_idents[idx];
-            if slots[idx].prim {
-                quote!(#id)
-            } else {
-                quote!(jni::sys::jvalue { l: #id.as_raw() })
-            }
+        .map(|(idx, leaf)| {
+            prebindgen_registry::unfold::DeliveryBridge::argument(context, leaf, &obj_idents[idx])
         })
         .collect();
 
@@ -267,7 +292,8 @@ pub(crate) fn encode_sum_group(
             // null, which a raw `jint` has no room for), so the live tag boxes
             // like any other nullable primitive leaf.
             let set_tag = if slots[tag_idx].prim {
-                quote! { #tag_id = jni::sys::jvalue { i: #tag_lit }; }
+                let held = context.selector_value(&leaves[tag_idx], quote!(#tag_lit));
+                quote! { #tag_id = #held; }
             } else {
                 let box_fail = fail(quote!(__e));
                 quote! {
@@ -336,9 +362,10 @@ fn encode_group_leaf(
         let letter = jni_field_access(&wire)
             .expect("leaf_is_prim guarantees a primitive wire")
             .1;
+        let held = context.hold_prim(&letter, quote!(#enc));
         quote! {
             #encode
-            #obj_ident = jni::sys::jvalue { #letter: #enc };
+            #obj_ident = #held;
         }
     } else {
         let cast = cast_wire_to_jobject(&enc, &wire, fail);
@@ -401,12 +428,13 @@ pub(crate) fn encode_presence_group(
     let flag = &obj_idents[0];
     let flag_slot = leaf_slot(context, &leaves[0]);
     let flag_ty = &flag_slot.ty;
-    let mut stmts = quote! { let #flag: #flag_ty = jni::sys::jvalue { z: 1u8 }; };
+    let present = context.selector_value(&leaves[0], quote!(1u8));
+    let mut stmts = quote! { let #flag: #flag_ty = #present; };
     // Filled by leaf position rather than appended: a nested segment fills a
     // run of them at once, so the order they are produced in is not the order
     // they are read in.
     let mut args: Vec<TokenStream> = vec![TokenStream::new(); leaves.len()];
-    args[0] = quote!(#flag);
+    args[0] = context.argument(&leaves[0], flag);
 
     // The prefix the presence flag reaches is already consumed: the walk bound
     // what it found there, so each gated leaf reaches on from that binding.
