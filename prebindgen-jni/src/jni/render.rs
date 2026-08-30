@@ -93,10 +93,12 @@ pub(crate) fn build_data_class(
     // field here is named by construction.
     let fields_named = &item_struct.fields;
 
-    // The class declaration is derived from the SAME plan the `fromParts`
-    // factory and the Rust encoder walk. Deriving it separately — a third
-    // classification with its own rules — is what let a property's type
-    // disagree with its own factory parameter (#156).
+    // The class declaration is derived from ONE classification of the fields,
+    // shared with the sealed-class emitter rather than repeated here. Deriving
+    // it separately — a classification with its own rules — is what let a
+    // property's type disagree with the parameter that fills it (#156). The
+    // parameter itself comes from the decomposition, so what these two must
+    // agree about is the value, not the slot.
     let plan = ext
         .struct_plan(registry, item_struct, 0)
         .unwrap_or_else(|| {

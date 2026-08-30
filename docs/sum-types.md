@@ -199,8 +199,9 @@ let (mode__present, mode__tag, mode_periodic_queries_period) = match &v.mode {
 ```
 
 The slots then ride the parent's single `call_static_method("fromParts", …)`. No JVM object is built
-for the sum, and both sides enumerate the same slots in the same order because both walk one
-`StructPlan` — the invariant that module already exists to hold.
+for the sum, and both sides enumerate the same slots in the same order because both read one leaf
+list — the struct's decomposition (#620). `StructPlan` no longer carries slots at all; it answers
+what Kotlin **property** each field declares, which is a question per field rather than per slot.
 
 **`Option<sum>` gates the same way in both output paths, by two different means** (#220). On the
 `fromParts` bridge it is the separate `<field>__present` flag above; on a **value form**'s leaf list

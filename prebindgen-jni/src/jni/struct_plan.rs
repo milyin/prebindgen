@@ -21,58 +21,50 @@ use prebindgen_registry::Conversions;
 
 use super::*;
 
-/// The flattened `fromParts` bridge plan of one struct.
+/// One struct's Kotlin **property** declarations, field by field.
 pub(crate) struct StructPlan {
     pub fields: Vec<PlanField>,
 }
 
-/// One classified field of a [`StructPlan`] — what the Kotlin **property**
-/// for it is, which is all this plan still answers: the leaves both sides
-/// exchange are the decomposition's (#619).
+/// One classified field of a [`StructPlan`]: what the Kotlin property for it
+/// is. The slots that carry it across are the decomposition's (#620).
 pub(crate) struct PlanField {
     pub kind: PlanFieldKind,
 }
 
+/// What kind of Kotlin property a field declares. Each variant carries only
+/// what naming that property needs — how the value CROSSES is the
+/// decomposition's answer, not this one.
 pub(crate) enum PlanFieldKind {
-    /// Projection leaf (opaque handle / `ULong`). Wire slot: `jlong` (`"J"`);
-    /// the factory rebuilds the typed value from `fqn`.
+    /// Opaque handle / `ULong`: the property is the typed class `fqn` names,
+    /// and holding it is what can make the class destructible.
     Projection { proj: Projection, fqn: String },
-    /// Bare enum → `jint` discriminant (`"I"`); factory calls `fromInt`.
+    /// Bare `enum_class`: the property is the Kotlin enum.
     Enum { kotlin: KtType },
-    /// `Option<enum>` → primitive discriminant when the enum contributes a
-    /// niche, boxed `Integer` otherwise. The frozen Kotlin sentinel is the
-    /// same slot the registry-composed converter carved.
+    /// `Option<enum_class>`: the same enum, nullable.
     OptionEnum { kotlin: KtType },
-    /// Nested plain data-class: its leaves inline here. `optional` prepends
-    /// a `present: Boolean` flag (`"Z"`) and defaults the child slots in the
-    /// `None` arm; the factory guards `Child.fromParts(…)` on the flag.
+    /// Nested plain data-class: the property is the child class. `optional`
+    /// makes it nullable, and `plan` is the child's own properties, which the
+    /// emitter needs to know whether holding it is destructible.
     Nested {
         optional: bool,
-        /// The child's registered Kotlin FQN (its `fromParts` owner). `None`
-        /// for an undeclared struct: the Rust encode can still inline it,
-        /// but the Kotlin factory (which must name the child class) aborts.
+        /// The child's registered Kotlin FQN. `None` for an undeclared struct,
+        /// which has no class to name and so no property to declare.
         child_fqn: Option<String>,
         plan: StructPlan,
     },
-    /// Data-carrying enum (`sealed_class`): an `Int` **tag** slot naming the
-    /// live alternative, followed by one **leaf group per variant** laid side
-    /// by side. Exactly one group is live; the rest are wire-defaulted and
-    /// the tag tells both sides which to read.
-    ///
-    /// This is [`Self::Nested`]'s `optional` gating with `N` groups instead
-    /// of one and an `Int` tag instead of a `Boolean` flag — a unit-only
-    /// enum would degenerate to "just a tag", which is why `enum_class`
-    /// keeps its own simpler path.
+    /// Data-carrying enum (`sealed_class`): the property is the sealed
+    /// interface, nullable when `optional`. `variants` are its alternatives'
+    /// own properties, for the same destructibility question.
     Sum {
-        /// Kotlin FQN of the sealed interface, for the factory's `when`.
+        /// Kotlin FQN of the sealed interface.
         kotlin_fqn: String,
-        /// `Option<E>` keeps its own `present` flag ahead of the tag; the tag
-        /// domain is never overloaded with an "absent" value.
         optional: bool,
-        /// Variants in declaration order; index == tag.
+        /// Variants in declaration order.
         variants: Vec<SumPlanVariant>,
     },
-    /// Simple leaf with its own output converter.
+    /// Anything else: the property is the Kotlin type its output conversion
+    /// names.
     Leaf {
         kotlin: KtType,
         /// Kotlin-side `?` (an `Option` field whose wire is object-shaped).
@@ -89,7 +81,7 @@ pub(crate) struct SumPlanVariant {
 
 /// One payload field of a [`SumPlanVariant`]. Classified by exactly the same
 /// [`classify_field`] a struct field goes through, so a payload and a struct
-/// field of the same Rust type get the same slot, wire and Kotlin type.
+/// field of the same Rust type declare the same Kotlin property type.
 pub(crate) struct SumPlanField {
     pub kind: PlanFieldKind,
 }
@@ -147,10 +139,9 @@ impl Declarations {
 }
 
 /// Classify ONE value position — a struct field or a sum's variant payload —
-/// into its bridge slot. Both callers go through here so a payload and a
-/// struct field of the same Rust type get the same slot, wire, descriptor and
-/// Kotlin type; the alternative (a second classification walk) is exactly the
-/// drift `StructPlan` exists to prevent.
+/// into the Kotlin property it declares. Both callers go through here so a
+/// payload and a struct field of the same Rust type declare the same type; a
+/// second classification walk beside it is the drift this exists to prevent.
 ///
 /// `owner` is the dotted path used in diagnostics (`Config.mode`,
 /// `Reading::Exact.v0`).
@@ -581,8 +572,10 @@ fn sum_plan_kind(
         .types
         .get(&key)
         .unwrap_or_else(|| panic!("fromParts bridge: `{ident}` is not declared"));
-    let sum_cfg = cfg
-        .sum()
+    // Asked for the diagnostic, not for a value: a `sealed_class!` declaration
+    // is what makes the alternatives' properties meaningful, and a field typed
+    // by an enum that has none is a build error rather than a silent decline.
+    cfg.sum()
         .unwrap_or_else(|| panic!("fromParts bridge: `{ident}` is not a sealed class"));
     let kotlin_fqn = cfg
         .name_spec
@@ -592,17 +585,14 @@ fn sum_plan_kind(
 
     let mut variants: Vec<SumPlanVariant> = Vec::new();
     for alt in &sum.alternatives {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
         let mut fields: Vec<SumPlanField> = Vec::new();
         for field in &alt.fields {
             let member = field.member();
             let prop = sum_field_prop_name(&member);
-            let slot = sum_slot_fragment(&kotlin_name, &prop);
             let owner = format!("{ident}::{}.{prop}", alt.name);
             // `?` — a payload whose converter has not resolved yet defers the
             // whole plan to the next iteration, it does not fail the build.
             let kind = classify_field(ext, registry, &field.ty, &owner, depth + 1)?;
-            let _ = (&member, &slot);
             fields.push(SumPlanField { kind });
         }
         variants.push(SumPlanVariant { fields });
