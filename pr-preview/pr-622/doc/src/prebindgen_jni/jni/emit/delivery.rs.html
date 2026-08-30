@@ -77,7 +77,7 @@
 <a href=#77 id=77 data-nosnippet>77</a>    // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
 <a href=#78 id=78 data-nosnippet>78</a>    // yielding the per-leaf typed jvalue arg expressions.
 <a href=#79 id=79 data-nosnippet>79</a>    </span><span class="kw">let </span>encode_leaves = |value: <span class="kw-2">&amp;</span>TokenStream, optional: bool| {
-<a href=#80 id=80 data-nosnippet>80</a>        <span class="kw">let </span><span class="kw-2">mut </span>delivered = Delivered::planned(plan, output.wires.clone(), output.chain.clone());
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="kw">let </span><span class="kw-2">mut </span>delivered = Delivered::planned(plan, (<span class="kw-2">*</span>output.wires).clone(), output.chain.clone());
 <a href=#81 id=81 data-nosnippet>81</a>        delivered.optional = optional;
 <a href=#82 id=82 data-nosnippet>82</a>        encode_plan_leaves(context, delivered, <span class="kw-2">&amp;</span>obj_idents, value, <span class="kw-2">&amp;</span>fail, emit)
 <a href=#83 id=83 data-nosnippet>83</a>    };
