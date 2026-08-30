@@ -1,0 +1,780 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `prebindgen-jni/src/jni/recipes.rs`."><title>recipes.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="prebindgen_jni" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0 (88d9e12ae 2026-08-18)" data-channel="1.98.0" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">prebindgen_jni/jni/</div>recipes.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! JniGen's Kotlin class declarations, lowered into the registry's recipe
+<a href=#2 id=2 data-nosnippet>2</a>//! vocabulary.
+<a href=#3 id=3 data-nosnippet>3</a>//!
+<a href=#4 id=4 data-nosnippet>4</a>//! A build script writes `ptr_class!`, `data_class!`, `enum_class!` or
+<a href=#5 id=5 data-nosnippet>5</a>//! `sealed_class!`, each naming the Kotlin type one Rust type becomes, and
+<a href=#6 id=6 data-nosnippet>6</a>//! `convert!` for a conversion the binding supplies itself. This turns those
+<a href=#7 id=7 data-nosnippet>7</a>//! into recipes in a [`Recipes`] table: the shared statement of **which parts** a
+<a href=#8 id=8 data-nosnippet>8</a>//! value gets across in, with nothing about the JNI wire in it.
+<a href=#9 id=9 data-nosnippet>9</a>//!
+<a href=#10 id=10 data-nosnippet>10</a>//! One recipe per declared type and direction, and every crossing nobody declared
+<a href=#11 id=11 data-nosnippet>11</a>//! takes
+<a href=#12 id=12 data-nosnippet>12</a>//! the recipe the registry derives from its kind. The chain of guesses this
+<a href=#13 id=13 data-nosnippet>13</a>//! replaced — try a terminal, then a `Result`, then an optional, then a run,
+<a href=#14 id=14 data-nosnippet>14</a>//! then a borrow, then a transparent bridge — is a lookup for the declared
+<a href=#15 id=15 data-nosnippet>15</a>//! half, and the derived half is the registry's.
+<a href=#16 id=16 data-nosnippet>16</a>
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">use </span>std::collections::BTreeMap;
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>prebindgen_registry::{
+<a href=#20 id=20 data-nosnippet>20</a>    flat::{Flat, TypeRef},
+<a href=#21 id=21 data-nosnippet>21</a>    recipe::{
+<a href=#22 id=22 data-nosnippet>22</a>        Arm, Construct, Constructing, Deconstruct, Deconstructing, Reach, RecipeError, RecipeName,
+<a href=#23 id=23 data-nosnippet>23</a>        Recipes,
+<a href=#24 id=24 data-nosnippet>24</a>    },
+<a href=#25 id=25 data-nosnippet>25</a>};
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a><span class="doccomment">/// Every type one captured item names, so a reading nested inside it can be
+<a href=#30 id=30 data-nosnippet>30</a>/// found without the caller knowing which kind of item it came from.
+<a href=#31 id=31 data-nosnippet>31</a></span><span class="kw">fn </span>element_types(element: <span class="kw-2">&amp;</span>prebindgen_registry::Element) -&gt; Vec&lt;<span class="kw-2">&amp;</span>TypeRef&gt; {
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">use </span>prebindgen_registry::flat::Type;
+<a href=#33 id=33 data-nosnippet>33</a>    <span class="kw">match </span>element {
+<a href=#34 id=34 data-nosnippet>34</a>        prebindgen_registry::Element::Function(f) =&gt; f
+<a href=#35 id=35 data-nosnippet>35</a>            .params
+<a href=#36 id=36 data-nosnippet>36</a>            .iter()
+<a href=#37 id=37 data-nosnippet>37</a>            .map(|p| <span class="kw-2">&amp;</span>p.ty)
+<a href=#38 id=38 data-nosnippet>38</a>            .chain(std::iter::once(<span class="kw-2">&amp;</span>f.ret))
+<a href=#39 id=39 data-nosnippet>39</a>            .collect(),
+<a href=#40 id=40 data-nosnippet>40</a>        prebindgen_registry::Element::Type(Type::Struct(s)) =&gt; {
+<a href=#41 id=41 data-nosnippet>41</a>            s.fields.iter().map(|f| <span class="kw-2">&amp;</span>f.ty).collect()
+<a href=#42 id=42 data-nosnippet>42</a>        }
+<a href=#43 id=43 data-nosnippet>43</a>        prebindgen_registry::Element::Type(Type::Variant(v)) =&gt; v
+<a href=#44 id=44 data-nosnippet>44</a>            .alternatives
+<a href=#45 id=45 data-nosnippet>45</a>            .iter()
+<a href=#46 id=46 data-nosnippet>46</a>            .flat_map(|a| a.fields.iter().map(|f| <span class="kw-2">&amp;</span>f.ty))
+<a href=#47 id=47 data-nosnippet>47</a>            .collect(),
+<a href=#48 id=48 data-nosnippet>48</a>        prebindgen_registry::Element::Constant(c) =&gt; <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>c.ty],
+<a href=#49 id=49 data-nosnippet>49</a>        <span class="kw">_ </span>=&gt; Vec::new(),
+<a href=#50 id=50 data-nosnippet>50</a>    }
+<a href=#51 id=51 data-nosnippet>51</a>}
+<a href=#52 id=52 data-nosnippet>52</a>
+<a href=#53 id=53 data-nosnippet>53</a><span class="doccomment">/// One arm per alternative of a declared sum, each assembled from its own
+<a href=#54 id=54 data-nosnippet>54</a>/// payload fields.
+<a href=#55 id=55 data-nosnippet>55</a>///
+<a href=#56 id=56 data-nosnippet>56</a>/// Empty for anything the model does not hold as a data-carrying enum, which
+<a href=#57 id=57 data-nosnippet>57</a>/// includes a `sealed_class!` declared over a type the scan dropped — the scan
+<a href=#58 id=58 data-nosnippet>58</a>/// reports that, and a recipe over no arms would report it a second time.
+<a href=#59 id=59 data-nosnippet>59</a></span><span class="kw">fn </span>alternatives(model: <span class="kw-2">&amp;</span>Flat, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Vec&lt;Arm&lt;Construct&gt;&gt; {
+<a href=#60 id=60 data-nosnippet>60</a>    <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() <span class="kw">else </span>{
+<a href=#61 id=61 data-nosnippet>61</a>        <span class="kw">return </span>Vec::new();
+<a href=#62 id=62 data-nosnippet>62</a>    };
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(prebindgen_registry::flat::Type::Variant(v)) =
+<a href=#64 id=64 data-nosnippet>64</a>        id.ident().and_then(|ident| model.declared_type(<span class="kw-2">&amp;</span>ident))
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="kw">else </span>{
+<a href=#66 id=66 data-nosnippet>66</a>        <span class="kw">return </span>Vec::new();
+<a href=#67 id=67 data-nosnippet>67</a>    };
+<a href=#68 id=68 data-nosnippet>68</a>    v.alternatives
+<a href=#69 id=69 data-nosnippet>69</a>        .iter()
+<a href=#70 id=70 data-nosnippet>70</a>        .map(|alt| Arm {
+<a href=#71 id=71 data-nosnippet>71</a>            alternative: alt.index,
+<a href=#72 id=72 data-nosnippet>72</a>            op: Construct::Fields,
+<a href=#73 id=73 data-nosnippet>73</a>        })
+<a href=#74 id=74 data-nosnippet>74</a>        .collect()
+<a href=#75 id=75 data-nosnippet>75</a>}
+<a href=#76 id=76 data-nosnippet>76</a>
+<a href=#77 id=77 data-nosnippet>77</a><span class="doccomment">/// One arm per alternative of a declared sum, each taken apart into its own
+<a href=#78 id=78 data-nosnippet>78</a>/// payload fields.
+<a href=#79 id=79 data-nosnippet>79</a>///
+<a href=#80 id=80 data-nosnippet>80</a>/// The deconstructing twin of [`alternatives`]. Separate because the two directions
+<a href=#81 id=81 data-nosnippet>81</a>/// name different operations — building an alternative is `Construct::Fields`,
+<a href=#82 id=82 data-nosnippet>82</a>/// reading one is `Deconstruct::Fields` over the reaches that get there — and
+<a href=#83 id=83 data-nosnippet>83</a>/// a shared helper would have to be generic over an operation neither side
+<a href=#84 id=84 data-nosnippet>84</a>/// chooses.
+<a href=#85 id=85 data-nosnippet>85</a></span><span class="kw">fn </span>out_alternatives(model: <span class="kw-2">&amp;</span>Flat, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Vec&lt;Arm&lt;Deconstruct&gt;&gt; {
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() <span class="kw">else </span>{
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">return </span>Vec::new();
+<a href=#88 id=88 data-nosnippet>88</a>    };
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(prebindgen_registry::flat::Type::Variant(v)) =
+<a href=#90 id=90 data-nosnippet>90</a>        id.ident().and_then(|ident| model.declared_type(<span class="kw-2">&amp;</span>ident))
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">else </span>{
+<a href=#92 id=92 data-nosnippet>92</a>        <span class="kw">return </span>Vec::new();
+<a href=#93 id=93 data-nosnippet>93</a>    };
+<a href=#94 id=94 data-nosnippet>94</a>    v.alternatives
+<a href=#95 id=95 data-nosnippet>95</a>        .iter()
+<a href=#96 id=96 data-nosnippet>96</a>        .map(|alt| Arm {
+<a href=#97 id=97 data-nosnippet>97</a>            alternative: alt.index,
+<a href=#98 id=98 data-nosnippet>98</a>            op: Deconstruct::Fields((<span class="number">0</span>..alt.fields.len()).map(Reach::Field).collect()),
+<a href=#99 id=99 data-nosnippet>99</a>        })
+<a href=#100 id=100 data-nosnippet>100</a>        .collect()
+<a href=#101 id=101 data-nosnippet>101</a>}
+<a href=#102 id=102 data-nosnippet>102</a>
+<a href=#103 id=103 data-nosnippet>103</a><span class="kw">impl </span>Declarations {
+<a href=#104 id=104 data-nosnippet>104</a>    <span class="doccomment">/// How many values this type hands out, or 0 if it hands out none.
+<a href=#105 id=105 data-nosnippet>105</a>    ///
+<a href=#106 id=106 data-nosnippet>106</a>    /// Model and declaration only, like the compositions it asks — so a
+<a href=#107 id=107 data-nosnippet>107</a>    /// declaration-time caller may ask it, which is what binding a return site
+<a href=#108 id=108 data-nosnippet>108</a>    /// needs.
+<a href=#109 id=109 data-nosnippet>109</a>    </span><span class="kw">fn </span>out_wire_count(
+<a href=#110 id=110 data-nosnippet>110</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#111 id=111 data-nosnippet>111</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#112 id=112 data-nosnippet>112</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#113 id=113 data-nosnippet>113</a>    ) -&gt; usize {
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() <span class="kw">else </span>{
+<a href=#115 id=115 data-nosnippet>115</a>            <span class="kw">return </span><span class="number">0</span>;
+<a href=#116 id=116 data-nosnippet>116</a>        };
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(ident) = id.ident() <span class="kw">else </span>{ <span class="kw">return </span><span class="number">0 </span>};
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw">match </span>registry.flat().declared_type(<span class="kw-2">&amp;</span>ident) {
+<a href=#119 id=119 data-nosnippet>119</a>            <span class="prelude-val">Some</span>(prebindgen_registry::flat::Type::Variant(<span class="kw">_</span>)) =&gt; <span class="self">self
+<a href=#120 id=120 data-nosnippet>120</a>                </span>.sum_out_wires(registry, <span class="kw-2">&amp;</span>ident, ty)
+<a href=#121 id=121 data-nosnippet>121</a>                .map_or(<span class="number">0</span>, |w| w.len()),
+<a href=#122 id=122 data-nosnippet>122</a>            <span class="prelude-val">Some</span>(prebindgen_registry::flat::Type::Struct(<span class="kw">_</span>)) =&gt; {
+<a href=#123 id=123 data-nosnippet>123</a>                <span class="self">self</span>.struct_out_wires(registry, ty).map_or(<span class="number">0</span>, |w| w.len())
+<a href=#124 id=124 data-nosnippet>124</a>            }
+<a href=#125 id=125 data-nosnippet>125</a>            <span class="kw">_ </span>=&gt; <span class="number">0</span>,
+<a href=#126 id=126 data-nosnippet>126</a>        }
+<a href=#127 id=127 data-nosnippet>127</a>    }
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="doccomment">/// The accessor a type's value form names, and one reach per field of the
+<a href=#130 id=130 data-nosnippet>130</a>    /// struct it returns.
+<a href=#131 id=131 data-nosnippet>131</a>    ///
+<a href=#132 id=132 data-nosnippet>132</a>    /// `None` unless the declaration is exactly one `.fields(fields!(f))` whose
+<a href=#133 id=133 data-nosnippet>133</a>    /// every field is a plain leaf. A record that states its own decomposition
+<a href=#134 id=134 data-nosnippet>134</a>    /// — a per-field `expand_return!` override, an inlined nested class, a sum
+<a href=#135 id=135 data-nosnippet>135</a>    /// laid out as a selector and its groups — is a shape this recipe does not
+<a href=#136 id=136 data-nosnippet>136</a>    /// state yet, and stating half of one would describe a boundary nothing
+<a href=#137 id=137 data-nosnippet>137</a>    /// emits.
+<a href=#138 id=138 data-nosnippet>138</a>    </span><span class="kw">fn </span>value_form_of(
+<a href=#139 id=139 data-nosnippet>139</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#140 id=140 data-nosnippet>140</a>        model: <span class="kw-2">&amp;</span>Flat,
+<a href=#141 id=141 data-nosnippet>141</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#142 id=142 data-nosnippet>142</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#143 id=143 data-nosnippet>143</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;(syn::Ident, Vec&lt;Reach&gt;)&gt; {
+<a href=#144 id=144 data-nosnippet>144</a>        <span class="kw">use </span>prebindgen_registry::unfold::{FieldDecon, FieldRecord};
+<a href=#145 id=145 data-nosnippet>145</a>        <span class="kw">let </span>decl = <span class="self">self
+<a href=#146 id=146 data-nosnippet>146</a>            </span>.return_expand_decls
+<a href=#147 id=147 data-nosnippet>147</a>            .iter()
+<a href=#148 id=148 data-nosnippet>148</a>            .find(|d| <span class="kw-2">*</span>d.key() == ty.stripped_key())<span class="question-mark">?</span>;
+<a href=#149 id=149 data-nosnippet>149</a>        <span class="kw">let </span>[<span class="kw">crate</span>::jni::LocalField::Fields(fields)] = decl.field_list() <span class="kw">else </span>{
+<a href=#150 id=150 data-nosnippet>150</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#151 id=151 data-nosnippet>151</a>        };
+<a href=#152 id=152 data-nosnippet>152</a>        <span class="kw">let </span>records: Vec&lt;FieldRecord&gt; = <span class="self">self</span>.lower_value_form(registry, decl.key(), fields);
+<a href=#153 id=153 data-nosnippet>153</a>        <span class="kw">let </span>ret = model.function(fields.func())<span class="question-mark">?</span>.ret.clone();
+<a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">let </span>ret = ret.borrow_target().unwrap_or(<span class="kw-2">&amp;</span>ret);
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Named { id, .. } = ret.unwrapped().kind() <span class="kw">else </span>{
+<a href=#156 id=156 data-nosnippet>156</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#157 id=157 data-nosnippet>157</a>        };
+<a href=#158 id=158 data-nosnippet>158</a>        <span class="kw">let </span>prebindgen_registry::flat::Type::Struct(st) =
+<a href=#159 id=159 data-nosnippet>159</a>            id.ident().and_then(|i| model.declared_type(<span class="kw-2">&amp;</span>i))<span class="question-mark">?
+<a href=#160 id=160 data-nosnippet>160</a>        </span><span class="kw">else </span>{
+<a href=#161 id=161 data-nosnippet>161</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#162 id=162 data-nosnippet>162</a>        };
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">let </span><span class="kw-2">mut </span>reaches = Vec::new();
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">for </span>record <span class="kw">in </span><span class="kw-2">&amp;</span>records {
+<a href=#165 id=165 data-nosnippet>165</a>            <span class="kw">if </span>!<span class="macro">matches!</span>(record.decon, FieldDecon::Default) {
+<a href=#166 id=166 data-nosnippet>166</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#167 id=167 data-nosnippet>167</a>            }
+<a href=#168 id=168 data-nosnippet>168</a>            <span class="kw">let </span>[member] = record.members.as_slice() <span class="kw">else </span>{
+<a href=#169 id=169 data-nosnippet>169</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#170 id=170 data-nosnippet>170</a>            };
+<a href=#171 id=171 data-nosnippet>171</a>            <span class="kw">let </span>index = st
+<a href=#172 id=172 data-nosnippet>172</a>                .fields
+<a href=#173 id=173 data-nosnippet>173</a>                .iter()
+<a href=#174 id=174 data-nosnippet>174</a>                .position(|f| f.name.as_ref() == <span class="prelude-val">Some</span>(member))<span class="question-mark">?</span>;
+<a href=#175 id=175 data-nosnippet>175</a>            <span class="comment">// A field that reaches the type being taken apart. The leaf
+<a href=#176 id=176 data-nosnippet>176</a>            // synthesis treats `Box&lt;T&gt;` as a spelling of its own and stops
+<a href=#177 id=177 data-nosnippet>177</a>            // there; a recipe keys a crossing by the value that crosses, so
+<a href=#178 id=178 data-nosnippet>178</a>            // `Box&lt;ZSample&gt;` inside `ZSample`'s own value form is that recipe
+<a href=#179 id=179 data-nosnippet>179</a>            // reaching itself. Refused here rather than by `Recipes::build`,
+<a href=#180 id=180 data-nosnippet>180</a>            // which would refuse the whole binding over a shape the leaf
+<a href=#181 id=181 data-nosnippet>181</a>            // synthesis handles.
+<a href=#182 id=182 data-nosnippet>182</a>            </span><span class="kw">if </span>st.fields[index].ty.stripped_key() == ty.stripped_key() {
+<a href=#183 id=183 data-nosnippet>183</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#184 id=184 data-nosnippet>184</a>            }
+<a href=#185 id=185 data-nosnippet>185</a>            reaches.push(Reach::Field(index));
+<a href=#186 id=186 data-nosnippet>186</a>        }
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="prelude-val">Some</span>((fields.func().clone(), reaches))
+<a href=#188 id=188 data-nosnippet>188</a>    }
+<a href=#189 id=189 data-nosnippet>189</a>}
+<a href=#190 id=190 data-nosnippet>190</a>
+<a href=#191 id=191 data-nosnippet>191</a><span class="kw">impl </span>Declarations {
+<a href=#192 id=192 data-nosnippet>192</a>    <span class="doccomment">/// What a value form calls each of its fields, by the Rust field ident.
+<a href=#193 id=193 data-nosnippet>193</a>    ///
+<a href=#194 id=194 data-nosnippet>194</a>    /// The declaration's answer, so a `.name(..)` rename carries through to the
+<a href=#195 id=195 data-nosnippet>195</a>    /// builder parameter. `None` for a type with no value form, or one whose
+<a href=#196 id=196 data-nosnippet>196</a>    /// records this recipe does not state — the same test [`Self::value_form_of`]
+<a href=#197 id=197 data-nosnippet>197</a>    /// makes when it declares the recipe.
+<a href=#198 id=198 data-nosnippet>198</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>value_form_names(
+<a href=#199 id=199 data-nosnippet>199</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#200 id=200 data-nosnippet>200</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#201 id=201 data-nosnippet>201</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#202 id=202 data-nosnippet>202</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;std::collections::HashMap&lt;String, String&gt;&gt; {
+<a href=#203 id=203 data-nosnippet>203</a>        <span class="kw">use </span>prebindgen_registry::unfold::FieldDecon;
+<a href=#204 id=204 data-nosnippet>204</a>        <span class="kw">let </span>decl = <span class="self">self
+<a href=#205 id=205 data-nosnippet>205</a>            </span>.return_expand_decls
+<a href=#206 id=206 data-nosnippet>206</a>            .iter()
+<a href=#207 id=207 data-nosnippet>207</a>            .find(|d| <span class="kw-2">*</span>d.key() == ty.stripped_key())<span class="question-mark">?</span>;
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">let </span>[<span class="kw">crate</span>::jni::LocalField::Fields(fields)] = decl.field_list() <span class="kw">else </span>{
+<a href=#209 id=209 data-nosnippet>209</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#210 id=210 data-nosnippet>210</a>        };
+<a href=#211 id=211 data-nosnippet>211</a>        <span class="self">self</span>.lower_value_form(registry, decl.key(), fields)
+<a href=#212 id=212 data-nosnippet>212</a>            .into_iter()
+<a href=#213 id=213 data-nosnippet>213</a>            .map(|r| <span class="kw">match </span>(r.members.as_slice(), <span class="kw-2">&amp;</span>r.decon) {
+<a href=#214 id=214 data-nosnippet>214</a>                ([member], FieldDecon::Default) =&gt; <span class="prelude-val">Some</span>((member.to_string(), r.name)),
+<a href=#215 id=215 data-nosnippet>215</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#216 id=216 data-nosnippet>216</a>            })
+<a href=#217 id=217 data-nosnippet>217</a>            .collect()
+<a href=#218 id=218 data-nosnippet>218</a>    }
+<a href=#219 id=219 data-nosnippet>219</a>}
+<a href=#220 id=220 data-nosnippet>220</a>
+<a href=#221 id=221 data-nosnippet>221</a><span class="doccomment">/// One reach per field of a declared struct, in the model's order.
+<a href=#222 id=222 data-nosnippet>222</a>///
+<a href=#223 id=223 data-nosnippet>223</a>/// Empty for anything the model does not hold as a struct, which includes a
+<a href=#224 id=224 data-nosnippet>224</a>/// `data_class!` over a type the scan dropped — the scan reports that, and a
+<a href=#225 id=225 data-nosnippet>225</a>/// recipe over no fields would report it a second time.
+<a href=#226 id=226 data-nosnippet>226</a></span><span class="kw">fn </span>out_fields(model: <span class="kw-2">&amp;</span>Flat, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Vec&lt;Reach&gt; {
+<a href=#227 id=227 data-nosnippet>227</a>    (<span class="number">0</span>..fields_of(model, ty).len()).map(Reach::Field).collect()
+<a href=#228 id=228 data-nosnippet>228</a>}
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a><span class="doccomment">/// The fields of a declared struct, or none for anything the model does not
+<a href=#231 id=231 data-nosnippet>231</a>/// hold as one.
+<a href=#232 id=232 data-nosnippet>232</a></span><span class="kw">fn </span>fields_of&lt;<span class="lifetime">'a</span>&gt;(model: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Flat, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[prebindgen_registry::flat::Field] {
+<a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() <span class="kw">else </span>{
+<a href=#234 id=234 data-nosnippet>234</a>        <span class="kw">return </span><span class="kw-2">&amp;</span>[];
+<a href=#235 id=235 data-nosnippet>235</a>    };
+<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">match </span>id.ident().and_then(|ident| model.declared_type(<span class="kw-2">&amp;</span>ident)) {
+<a href=#237 id=237 data-nosnippet>237</a>        <span class="prelude-val">Some</span>(prebindgen_registry::flat::Type::Struct(s)) =&gt; <span class="kw-2">&amp;</span>s.fields,
+<a href=#238 id=238 data-nosnippet>238</a>        <span class="kw">_ </span>=&gt; <span class="kw-2">&amp;</span>[],
+<a href=#239 id=239 data-nosnippet>239</a>    }
+<a href=#240 id=240 data-nosnippet>240</a>}
+<a href=#241 id=241 data-nosnippet>241</a>
+<a href=#242 id=242 data-nosnippet>242</a><span class="doccomment">/// The recipe a type with no parts takes: the adapter emits the conversion itself.
+<a href=#243 id=243 data-nosnippet>243</a></span><span class="kw">fn </span>whole() -&gt; RecipeName {
+<a href=#244 id=244 data-nosnippet>244</a>    RecipeName::new(<span class="string">"whole"</span>)
+<a href=#245 id=245 data-nosnippet>245</a>}
+<a href=#246 id=246 data-nosnippet>246</a>
+<a href=#247 id=247 data-nosnippet>247</a><span class="doccomment">/// The recipe a `data_class` takes when it crosses **as its fields**.
+<a href=#248 id=248 data-nosnippet>248</a>///
+<a href=#249 id=249 data-nosnippet>249</a>/// Not the default yet. `whole()` still answers for every site, and this one is
+<a href=#250 id=250 data-nosnippet>250</a>/// compiled only where something asks for it by name — which is what lets the
+<a href=#251 id=251 data-nosnippet>251</a>/// composed wire list be checked against the walk it will replace before
+<a href=#252 id=252 data-nosnippet>252</a>/// anything depends on it.
+<a href=#253 id=253 data-nosnippet>253</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>parts() -&gt; RecipeName {
+<a href=#254 id=254 data-nosnippet>254</a>    RecipeName::new(<span class="string">"parts"</span>)
+<a href=#255 id=255 data-nosnippet>255</a>}
+<a href=#256 id=256 data-nosnippet>256</a>
+<a href=#257 id=257 data-nosnippet>257</a><span class="doccomment">/// The allocation-free `(present, value)` input row for an Optional whose
+<a href=#258 id=258 data-nosnippet>258</a>/// destination payload is a JNI primitive.
+<a href=#259 id=259 data-nosnippet>259</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>pair() -&gt; RecipeName {
+<a href=#260 id=260 data-nosnippet>260</a>    RecipeName::new(<span class="string">"pair"</span>)
+<a href=#261 id=261 data-nosnippet>261</a>}
+<a href=#262 id=262 data-nosnippet>262</a>
+<a href=#263 id=263 data-nosnippet>263</a><span class="kw">impl </span>Declarations {
+<a href=#264 id=264 data-nosnippet>264</a>    <span class="doccomment">/// Every recipe this binding's declarations state.
+<a href=#265 id=265 data-nosnippet>265</a>    ///
+<a href=#266 id=266 data-nosnippet>266</a>    /// A type declared but absent from the model is skipped rather than
+<a href=#267 id=267 data-nosnippet>267</a>    /// refused: the scan already reports it, and reporting it twice in
+<a href=#268 id=268 data-nosnippet>268</a>    /// different words helps nobody.
+<a href=#269 id=269 data-nosnippet>269</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>recipes(
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#271 id=271 data-nosnippet>271</a>        model: <span class="kw-2">&amp;</span>Flat,
+<a href=#272 id=272 data-nosnippet>272</a>        expansion_leaves: <span class="kw-2">&amp;</span>[TypeRef],
+<a href=#273 id=273 data-nosnippet>273</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#274 id=274 data-nosnippet>274</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Recipes, Vec&lt;RecipeError&gt;&gt; {
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">let </span><span class="kw-2">mut </span>recipes = Recipes::builder();
+<a href=#276 id=276 data-nosnippet>276</a>        <span class="comment">// Which crossings already state a deconstructing `parts` row, so the
+<a href=#277 id=277 data-nosnippet>277</a>        // decomposition block below adds one only where none was declared.
+<a href=#278 id=278 data-nosnippet>278</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>parts_out: std::collections::HashSet&lt;TypeKey&gt; = std::collections::HashSet::new();
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="comment">// Every Kotlin class declaration, and every `convert!`-declared
+<a href=#280 id=280 data-nosnippet>280</a>        // conversion. The second matters as much as the first: a conversion may
+<a href=#281 id=281 data-nosnippet>281</a>        // be declared on a type the registry would otherwise read as an arity
+<a href=#282 id=282 data-nosnippet>282</a>        // layer, and `convert!(Option&lt;Duration&gt; =&gt; ..)` means the adapter emits
+<a href=#283 id=283 data-nosnippet>283</a>        // that optional's conversion itself rather than wrapping `Duration`'s.
+<a href=#284 id=284 data-nosnippet>284</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>declared: Vec&lt;(TypeKey, Origin&lt;syn::Type&gt;)&gt; = <span class="self">self
+<a href=#285 id=285 data-nosnippet>285</a>            </span>.declared_types()
+<a href=#286 id=286 data-nosnippet>286</a>            .into_iter()
+<a href=#287 id=287 data-nosnippet>287</a>            .chain(
+<a href=#288 id=288 data-nosnippet>288</a>                <span class="self">self</span>.convert_decls
+<a href=#289 id=289 data-nosnippet>289</a>                    .iter()
+<a href=#290 id=290 data-nosnippet>290</a>                    .map(|d| (d.key().clone(), d.rust_type().clone())),
+<a href=#291 id=291 data-nosnippet>291</a>            )
+<a href=#292 id=292 data-nosnippet>292</a>            .collect();
+<a href=#293 id=293 data-nosnippet>293</a>        declared.sort_by(|a, b| a.<span class="number">0</span>.as_str().cmp(b.<span class="number">0</span>.as_str()));
+<a href=#294 id=294 data-nosnippet>294</a>        declared.dedup_by(|a, b| a.<span class="number">0 </span>== b.<span class="number">0</span>);
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a>        <span class="kw">for </span>(_key, origin) <span class="kw">in </span>declared {
+<a href=#297 id=297 data-nosnippet>297</a>            <span class="comment">// The declarator's own tokens, re-parsed: a declared type may be an
+<a href=#298 id=298 data-nosnippet>298</a>            // alias the model holds as an `Extern`, which carries no reading of
+<a href=#299 id=299 data-nosnippet>299</a>            // its own to borrow.
+<a href=#300 id=300 data-nosnippet>300</a>            </span><span class="kw">let </span><span class="prelude-val">Ok</span>(spelled) = syn::parse2::&lt;syn::Type&gt;(origin.declared_spelling()) <span class="kw">else </span>{
+<a href=#301 id=301 data-nosnippet>301</a>                <span class="kw">continue</span>;
+<a href=#302 id=302 data-nosnippet>302</a>            };
+<a href=#303 id=303 data-nosnippet>303</a>            <span class="kw">let </span><span class="prelude-val">Ok</span>(ty) = model.classify(<span class="kw-2">&amp;</span>spelled) <span class="kw">else </span>{
+<a href=#304 id=304 data-nosnippet>304</a>                <span class="kw">continue</span>;
+<a href=#305 id=305 data-nosnippet>305</a>            };
+<a href=#306 id=306 data-nosnippet>306</a>            <span class="comment">// Every declared Kotlin shape is one recipe with no parts today,
+<a href=#307 id=307 data-nosnippet>307</a>            // including the two that plainly have some: a `data_class` arrives
+<a href=#308 id=308 data-nosnippet>308</a>            // as separate JNI parameters and is rebuilt inside one generated
+<a href=#309 id=309 data-nosnippet>309</a>            // function, and a `sealed_class` is a selector plus the live arm's
+<a href=#310 id=310 data-nosnippet>310</a>            // slots inside another. `Atomic` is what a recipe says about that —
+<a href=#311 id=311 data-nosnippet>311</a>            // the adapter emits the conversion itself, and how many wire values
+<a href=#312 id=312 data-nosnippet>312</a>            // that costs is its own business — so it describes the adapter as it
+<a href=#313 id=313 data-nosnippet>313</a>            // stands rather than as it will be.
+<a href=#314 id=314 data-nosnippet>314</a>            // A `sealed_class` hands its value out as a tag plus every
+<a href=#315 id=315 data-nosnippet>315</a>            // alternative's payloads, laid side by side — the deconstructing
+<a href=#316 id=316 data-nosnippet>316</a>            // twin of the constructing recipe below, and the direction that
+<a href=#317 id=317 data-nosnippet>317</a>            // actually has no alternative: a sum has no whole-value output
+<a href=#318 id=318 data-nosnippet>318</a>            // conversion, because a tag plus groups is not one wire.
+<a href=#319 id=319 data-nosnippet>319</a>            </span><span class="kw">match </span><span class="self">self</span>.types.get(<span class="kw-2">&amp;</span>ty.key()).map(|c| <span class="kw-2">&amp;</span>c.kind) {
+<a href=#320 id=320 data-nosnippet>320</a>                <span class="prelude-val">Some</span>(DeclaredKind::Sealed(<span class="kw">_</span>)) =&gt; {
+<a href=#321 id=321 data-nosnippet>321</a>                    <span class="kw">let </span>arms = out_alternatives(model, <span class="kw-2">&amp;</span>ty);
+<a href=#322 id=322 data-nosnippet>322</a>                    recipes.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+<a href=#323 id=323 data-nosnippet>323</a>                    <span class="kw">if </span>!arms.is_empty() {
+<a href=#324 id=324 data-nosnippet>324</a>                        recipes.declare(ty.clone(), parts(), Deconstructing::Choice { arms });
+<a href=#325 id=325 data-nosnippet>325</a>                        parts_out.insert(ty.stripped_key());
+<a href=#326 id=326 data-nosnippet>326</a>                    }
+<a href=#327 id=327 data-nosnippet>327</a>                }
+<a href=#328 id=328 data-nosnippet>328</a>                <span class="comment">// A `data_class` hands its value out as its fields too, so the
+<a href=#329 id=329 data-nosnippet>329</a>                // foreign side reassembles the object and nothing builds one on
+<a href=#330 id=330 data-nosnippet>330</a>                // the Rust side.
+<a href=#331 id=331 data-nosnippet>331</a>                </span><span class="prelude-val">Some</span>(DeclaredKind::Data) =&gt; {
+<a href=#332 id=332 data-nosnippet>332</a>                    <span class="kw">let </span>reaches = out_fields(model, <span class="kw-2">&amp;</span>ty);
+<a href=#333 id=333 data-nosnippet>333</a>                    recipes.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+<a href=#334 id=334 data-nosnippet>334</a>                    <span class="kw">if </span>!reaches.is_empty() {
+<a href=#335 id=335 data-nosnippet>335</a>                        recipes.declare(
+<a href=#336 id=336 data-nosnippet>336</a>                            ty.clone(),
+<a href=#337 id=337 data-nosnippet>337</a>                            parts(),
+<a href=#338 id=338 data-nosnippet>338</a>                            Deconstructing::Product(Deconstruct::Fields(reaches)),
+<a href=#339 id=339 data-nosnippet>339</a>                        );
+<a href=#340 id=340 data-nosnippet>340</a>                        parts_out.insert(ty.stripped_key());
+<a href=#341 id=341 data-nosnippet>341</a>                    }
+<a href=#342 id=342 data-nosnippet>342</a>                }
+<a href=#343 id=343 data-nosnippet>343</a>                <span class="kw">_ </span>=&gt; {
+<a href=#344 id=344 data-nosnippet>344</a>                    recipes.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
+<a href=#345 id=345 data-nosnippet>345</a>                }
+<a href=#346 id=346 data-nosnippet>346</a>            }
+<a href=#347 id=347 data-nosnippet>347</a>            <span class="comment">// A value form: `expand_return!(T).fields(fields!(f))` calls `f`
+<a href=#348 id=348 data-nosnippet>348</a>            // once and hands out the fields of the struct it returns. The one
+<a href=#349 id=349 data-nosnippet>349</a>            // declaration shape that names its own accessor, and the reason
+<a href=#350 id=350 data-nosnippet>350</a>            // `Deconstruct::ValueForm` exists.
+<a href=#351 id=351 data-nosnippet>351</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>((func, reaches)) = <span class="self">self</span>.value_form_of(model, registry, <span class="kw-2">&amp;</span>ty) {
+<a href=#352 id=352 data-nosnippet>352</a>                recipes.declare(
+<a href=#353 id=353 data-nosnippet>353</a>                    ty.clone(),
+<a href=#354 id=354 data-nosnippet>354</a>                    parts(),
+<a href=#355 id=355 data-nosnippet>355</a>                    Deconstructing::Product(Deconstruct::ValueForm {
+<a href=#356 id=356 data-nosnippet>356</a>                        func,
+<a href=#357 id=357 data-nosnippet>357</a>                        parts: reaches,
+<a href=#358 id=358 data-nosnippet>358</a>                    }),
+<a href=#359 id=359 data-nosnippet>359</a>                );
+<a href=#360 id=360 data-nosnippet>360</a>                parts_out.insert(ty.stripped_key());
+<a href=#361 id=361 data-nosnippet>361</a>            }
+<a href=#362 id=362 data-nosnippet>362</a>            <span class="comment">// A `data_class` also has a recipe that says what it is made of, so
+<a href=#363 id=363 data-nosnippet>363</a>            // its constructing side names which of the two a site takes by
+<a href=#364 id=364 data-nosnippet>364</a>            // default. See [`parts`] for why that is still `whole`.
+<a href=#365 id=365 data-nosnippet>365</a>            </span><span class="kw">match </span><span class="self">self</span>.types.get(<span class="kw-2">&amp;</span>ty.key()).map(|c| <span class="kw-2">&amp;</span>c.kind) {
+<a href=#366 id=366 data-nosnippet>366</a>                <span class="comment">// A struct with no fields is nothing to be made of, so it
+<a href=#367 id=367 data-nosnippet>367</a>                // states no `parts` recipe — the same condition the deconstructing
+<a href=#368 id=368 data-nosnippet>368</a>                // side applies, and the reason `recipe_of` may be asked for the
+<a href=#369 id=369 data-nosnippet>369</a>                // recipe by name.
+<a href=#370 id=370 data-nosnippet>370</a>                </span><span class="prelude-val">Some</span>(DeclaredKind::Data) <span class="kw">if </span>!fields_of(model, <span class="kw-2">&amp;</span>ty).is_empty() =&gt; {
+<a href=#371 id=371 data-nosnippet>371</a>                    recipes
+<a href=#372 id=372 data-nosnippet>372</a>                        .declare_default(ty.clone(), whole(), Constructing::Atomic)
+<a href=#373 id=373 data-nosnippet>373</a>                        .declare(ty, parts(), Constructing::Product(Construct::Fields));
+<a href=#374 id=374 data-nosnippet>374</a>                }
+<a href=#375 id=375 data-nosnippet>375</a>                <span class="comment">// A `sealed_class` has one too, and it is a choice rather than
+<a href=#376 id=376 data-nosnippet>376</a>                // a product: exactly one alternative is live, every one of them
+<a href=#377 id=377 data-nosnippet>377</a>                // still crosses, and the tag says which. The arms are the
+<a href=#378 id=378 data-nosnippet>378</a>                // model's — a recipe states which parts, never what they are.
+<a href=#379 id=379 data-nosnippet>379</a>                </span><span class="prelude-val">Some</span>(DeclaredKind::Sealed(<span class="kw">_</span>)) =&gt; {
+<a href=#380 id=380 data-nosnippet>380</a>                    <span class="kw">let </span>arms = alternatives(model, <span class="kw-2">&amp;</span>ty);
+<a href=#381 id=381 data-nosnippet>381</a>                    recipes.declare_default(ty.clone(), whole(), Constructing::Atomic);
+<a href=#382 id=382 data-nosnippet>382</a>                    <span class="kw">if </span>!arms.is_empty() {
+<a href=#383 id=383 data-nosnippet>383</a>                        recipes.declare(ty, parts(), Constructing::Choice { arms });
+<a href=#384 id=384 data-nosnippet>384</a>                    }
+<a href=#385 id=385 data-nosnippet>385</a>                }
+<a href=#386 id=386 data-nosnippet>386</a>                <span class="kw">_ </span>=&gt; {
+<a href=#387 id=387 data-nosnippet>387</a>                    recipes.declare(ty, whole(), Constructing::Atomic);
+<a href=#388 id=388 data-nosnippet>388</a>                }
+<a href=#389 id=389 data-nosnippet>389</a>            }
+<a href=#390 id=390 data-nosnippet>390</a>        }
+<a href=#391 id=391 data-nosnippet>391</a>
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="comment">// A type a callback delivers by taking it apart states that as a row,
+<a href=#393 id=393 data-nosnippet>393</a>        // so the argument's site has a recipe to name. Without one the site
+<a href=#394 id=394 data-nosnippet>394</a>        // could only be fabricated — a `Bound` no binding answered — which is
+<a href=#395 id=395 data-nosnippet>395</a>        // what #622's first two attempts produced and why they were withdrawn.
+<a href=#396 id=396 data-nosnippet>396</a>        //
+<a href=#397 id=397 data-nosnippet>397</a>        // `Atomic` for the reason the declared-type loop above gives for the
+<a href=#398 id=398 data-nosnippet>398</a>        // two shapes that plainly have parts: the adapter emits this
+<a href=#399 id=399 data-nosnippet>399</a>        // conversion itself, and how many wire values that costs is its own
+<a href=#400 id=400 data-nosnippet>400</a>        // business. The parts are stated by the deconstructor declaration the
+<a href=#401 id=401 data-nosnippet>401</a>        // registry already resolved into an `UnfoldPlan`, which this row does
+<a href=#402 id=402 data-nosnippet>402</a>        // not restate — it names the crossing that plan decomposes. Deleting
+<a href=#403 id=403 data-nosnippet>403</a>        // that second statement is #613 step 5b's, not this row's.
+<a href=#404 id=404 data-nosnippet>404</a>        //
+<a href=#405 id=405 data-nosnippet>405</a>        // The source is the plan's own owned core, so a plan keyed under `&amp;T`
+<a href=#406 id=406 data-nosnippet>406</a>        // and one keyed under `T` state one row; a type that already declared
+<a href=#407 id=407 data-nosnippet>407</a>        // `parts` — a `data_class`, a `sealed_class`, a value form — keeps it.
+<a href=#408 id=408 data-nosnippet>408</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>decomposed: BTreeMap&lt;TypeKey, TypeRef&gt; = BTreeMap::new();
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="kw">for </span>plan <span class="kw">in </span>registry.callback_arg_plans().values() {
+<a href=#410 id=410 data-nosnippet>410</a>            <span class="kw">let </span>key = plan.source.stripped_key();
+<a href=#411 id=411 data-nosnippet>411</a>            <span class="kw">if </span>parts_out.contains(<span class="kw-2">&amp;</span>key) {
+<a href=#412 id=412 data-nosnippet>412</a>                <span class="kw">continue</span>;
+<a href=#413 id=413 data-nosnippet>413</a>            }
+<a href=#414 id=414 data-nosnippet>414</a>            decomposed.entry(key).or_insert_with(|| plan.source.clone());
+<a href=#415 id=415 data-nosnippet>415</a>        }
+<a href=#416 id=416 data-nosnippet>416</a>        <span class="kw">for </span>ty <span class="kw">in </span>decomposed.into_values() {
+<a href=#417 id=417 data-nosnippet>417</a>            recipes.declare(ty, parts(), Deconstructing::Atomic);
+<a href=#418 id=418 data-nosnippet>418</a>        }
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>        <span class="comment">// Every implicit Optional keeps its established whole/default input
+<a href=#421 id=421 data-nosnippet>421</a>        // row and also offers the allocation-free primitive `pair` row. A
+<a href=#422 id=422 data-nosnippet>422</a>        // parameter site selects `pair` only after the compiled payload proves
+<a href=#423 id=423 data-nosnippet>423</a>        // that it is one JNI primitive with no niche, projection, or stage.
+<a href=#424 id=424 data-nosnippet>424</a>        //
+<a href=#425 id=425 data-nosnippet>425</a>        // Product-shaped payloads additionally offer `parts`; that row is
+<a href=#426 id=426 data-nosnippet>426</a>        // selected by the existing flattening bindings below.
+<a href=#427 id=427 data-nosnippet>427</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>implicit: BTreeMap&lt;TypeKey, (TypeRef, TypeRef)&gt; = <span class="self">self
+<a href=#428 id=428 data-nosnippet>428</a>            </span>.implicit_optionals(model)
+<a href=#429 id=429 data-nosnippet>429</a>            .into_iter()
+<a href=#430 id=430 data-nosnippet>430</a>            .map(|(key, (outer, inner))| (key, (outer.clone(), inner.clone())))
+<a href=#431 id=431 data-nosnippet>431</a>            .collect();
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="comment">// A combined constructor expansion represents an inactive arm by
+<a href=#433 id=433 data-nosnippet>433</a>        // Option-wrapping each required leaf. Those readings are synthesized
+<a href=#434 id=434 data-nosnippet>434</a>        // after the Flat model was built, so a model walk cannot discover
+<a href=#435 id=435 data-nosnippet>435</a>        // them. File them in the same table as source-written implicit
+<a href=#436 id=436 data-nosnippet>436</a>        // Optionals: otherwise a nullable primitive leaf falls back to a boxed
+<a href=#437 id=437 data-nosnippet>437</a>        // JObject and Rust has to call `intValue()`/`longValue()` across JNI.
+<a href=#438 id=438 data-nosnippet>438</a>        </span><span class="kw">for </span>leaf <span class="kw">in </span>expansion_leaves {
+<a href=#439 id=439 data-nosnippet>439</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(inner) = leaf.optional_inner() <span class="kw">else </span>{
+<a href=#440 id=440 data-nosnippet>440</a>                <span class="kw">continue</span>;
+<a href=#441 id=441 data-nosnippet>441</a>            };
+<a href=#442 id=442 data-nosnippet>442</a>            <span class="kw">if </span>!<span class="self">self</span>.explicitly_declares(leaf) {
+<a href=#443 id=443 data-nosnippet>443</a>                implicit
+<a href=#444 id=444 data-nosnippet>444</a>                    .entry(leaf.stripped_key())
+<a href=#445 id=445 data-nosnippet>445</a>                    .or_insert_with(|| (leaf.clone(), inner.clone()));
+<a href=#446 id=446 data-nosnippet>446</a>            }
+<a href=#447 id=447 data-nosnippet>447</a>        }
+<a href=#448 id=448 data-nosnippet>448</a>        <span class="kw">for </span>(outer, <span class="kw">_</span>) <span class="kw">in </span>implicit.values() {
+<a href=#449 id=449 data-nosnippet>449</a>            recipes
+<a href=#450 id=450 data-nosnippet>450</a>                .declare_default(outer.clone(), whole(), Constructing::Optional)
+<a href=#451 id=451 data-nosnippet>451</a>                .declare(outer.clone(), pair(), Constructing::Optional)
+<a href=#452 id=452 data-nosnippet>452</a>                .declare(outer.clone(), parts(), Constructing::Optional);
+<a href=#453 id=453 data-nosnippet>453</a>        }
+<a href=#454 id=454 data-nosnippet>454</a>        <span class="kw">for </span>(outer, <span class="kw">_</span>) <span class="kw">in </span>implicit.into_values() {
+<a href=#455 id=455 data-nosnippet>455</a>            recipes
+<a href=#456 id=456 data-nosnippet>456</a>                .declare_default(outer.clone(), whole(), Deconstructing::Optional)
+<a href=#457 id=457 data-nosnippet>457</a>                .declare(outer.clone(), parts(), Deconstructing::Optional);
+<a href=#458 id=458 data-nosnippet>458</a>        }
+<a href=#459 id=459 data-nosnippet>459</a>
+<a href=#460 id=460 data-nosnippet>460</a>        <span class="comment">// A fixed-size array of JNI primitives is one Kotlin `ByteArray` or
+<a href=#461 id=461 data-nosnippet>461</a>        // `LongArray`, bulk-copied with nothing boxed — one wire value, not a
+<a href=#462 id=462 data-nosnippet>462</a>        // run this adapter walks. The registry reads `[T; N]` as a run unless
+<a href=#463 id=463 data-nosnippet>463</a>        // something says otherwise, and this is JniGen saying otherwise for
+<a href=#464 id=464 data-nosnippet>464</a>        // every array the model holds. Nothing is enumerated twice: a recipe for
+<a href=#465 id=465 data-nosnippet>465</a>        // a crossing nobody uses is inert.
+<a href=#466 id=466 data-nosnippet>466</a>        // Keyed by identity in a `BTreeMap`, so each array type is keyed once
+<a href=#467 id=467 data-nosnippet>467</a>        // and the declaration order is the key order — no sort, no second pass
+<a href=#468 id=468 data-nosnippet>468</a>        // rebuilding a key it already has, and nothing cloned before the entry
+<a href=#469 id=469 data-nosnippet>469</a>        // turns out to be new.
+<a href=#470 id=470 data-nosnippet>470</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>arrays: BTreeMap&lt;TypeKey, <span class="kw-2">&amp;</span>TypeRef&gt; = BTreeMap::new();
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">for </span>ty <span class="kw">in </span>model
+<a href=#472 id=472 data-nosnippet>472</a>            .elements()
+<a href=#473 id=473 data-nosnippet>473</a>            .flat_map(element_types)
+<a href=#474 id=474 data-nosnippet>474</a>            .flat_map(|ty| ty.walk())
+<a href=#475 id=475 data-nosnippet>475</a>            .filter(|ty| <span class="macro">matches!</span>(ty.kind(), prebindgen_registry::flat::TypeKind::Array { .. }))
+<a href=#476 id=476 data-nosnippet>476</a>        {
+<a href=#477 id=477 data-nosnippet>477</a>            arrays.entry(ty.key()).or_insert(ty);
+<a href=#478 id=478 data-nosnippet>478</a>        }
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw">for </span>ty <span class="kw">in </span>arrays.into_values() {
+<a href=#480 id=480 data-nosnippet>480</a>            recipes
+<a href=#481 id=481 data-nosnippet>481</a>                .declare(ty.clone(), whole(), Deconstructing::Atomic)
+<a href=#482 id=482 data-nosnippet>482</a>                .declare(ty.clone(), whole(), Constructing::Atomic);
+<a href=#483 id=483 data-nosnippet>483</a>        }
+<a href=#484 id=484 data-nosnippet>484</a>
+<a href=#485 id=485 data-nosnippet>485</a>        recipes.build(model)
+<a href=#486 id=486 data-nosnippet>486</a>    }
+<a href=#487 id=487 data-nosnippet>487</a>}
+<a href=#488 id=488 data-nosnippet>488</a>
+<a href=#489 id=489 data-nosnippet>489</a><span class="kw">impl </span>Declarations {
+<a href=#490 id=490 data-nosnippet>490</a>    <span class="doccomment">/// Which recipe each part of a `data_class` takes.
+<a href=#491 id=491 data-nosnippet>491</a>    ///
+<a href=#492 id=492 data-nosnippet>492</a>    /// A field that is itself a `data_class` crosses as **its** fields too, so
+<a href=#493 id=493 data-nosnippet>493</a>    /// the part site asks for [`parts`] rather than letting the field take its
+<a href=#494 id=494 data-nosnippet>494</a>    /// own default. That is the one thing a site can say that a recipe cannot: the
+<a href=#495 id=495 data-nosnippet>495</a>    /// same crossing is read one way on its own and another inside a product.
+<a href=#496 id=496 data-nosnippet>496</a>    ///
+<a href=#497 id=497 data-nosnippet>497</a>    /// Without it a nested class contributes a single wire and the flattening
+<a href=#498 id=498 data-nosnippet>498</a>    /// stops one layer down.
+<a href=#499 id=499 data-nosnippet>499</a>    /// Whether a `data_class` field is itself flattened, or stays one value.
+<a href=#500 id=500 data-nosnippet>500</a>    ///
+<a href=#501 id=501 data-nosnippet>501</a>    /// A `data_class` declared `.jobject_input()` crosses Kotlin → Rust as a
+<a href=#502 id=502 data-nosnippet>502</a>    /// single `JObject` — that is the whole point of the opt-in — so binding
+<a href=#503 id=503 data-nosnippet>503</a>    /// its parts would flatten a boundary the declaration drew.
+<a href=#504 id=504 data-nosnippet>504</a>    </span><span class="kw">fn </span>field_crosses_as_its_fields(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; bool {
+<a href=#505 id=505 data-nosnippet>505</a>        <span class="comment">// The field's own key, not the stripped one: a `Box&lt;Leaf&gt;` field
+<a href=#506 id=506 data-nosnippet>506</a>        // crosses as one value through `Box&lt;Leaf&gt;`'s conversion, and only a
+<a href=#507 id=507 data-nosnippet>507</a>        // parameter spelled that way is peeled back to the class. Binding the
+<a href=#508 id=508 data-nosnippet>508</a>        // stripped key here would flatten a field the rebuild has no node for.
+<a href=#509 id=509 data-nosnippet>509</a>        </span><span class="self">self</span>.types.get(<span class="kw-2">&amp;</span>ty.key()).is_some_and(|c| <span class="kw">match </span>c.kind {
+<a href=#510 id=510 data-nosnippet>510</a>            DeclaredKind::Data =&gt; !c.jobject_input,
+<a href=#511 id=511 data-nosnippet>511</a>            <span class="comment">// A `sealed_class` field crosses as a tag plus every alternative's
+<a href=#512 id=512 data-nosnippet>512</a>            // slots. Whether it *can* is the adapter's answer at compile time,
+<a href=#513 id=513 data-nosnippet>513</a>            // not a declaration: a payload with no slot form leaves the sum
+<a href=#514 id=514 data-nosnippet>514</a>            // object-shaped, which is the fragment `Compile::choice` hands
+<a href=#515 id=515 data-nosnippet>515</a>            // back. So the site asks, and the recipe answers.
+<a href=#516 id=516 data-nosnippet>516</a>            </span>DeclaredKind::Sealed(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+<a href=#517 id=517 data-nosnippet>517</a>            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+<a href=#518 id=518 data-nosnippet>518</a>        })
+<a href=#519 id=519 data-nosnippet>519</a>    }
+<a href=#520 id=520 data-nosnippet>520</a>
+<a href=#521 id=521 data-nosnippet>521</a>    <span class="doccomment">/// Optional crossings whose payload can use the shared `parts` recipe.
+<a href=#522 id=522 data-nosnippet>522</a>    ///
+<a href=#523 id=523 data-nosnippet>523</a>    /// Explicit declarations keep full control of the outer crossing: a
+<a href=#524 id=524 data-nosnippet>524</a>    /// `convert!(Option&lt;T&gt; =&gt; ..)` is an atomic recipe, not an implicit request
+<a href=#525 id=525 data-nosnippet>525</a>    /// to flatten `T`.
+<a href=#526 id=526 data-nosnippet>526</a>    </span><span class="kw">fn </span>implicit_optionals&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#527 id=527 data-nosnippet>527</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#528 id=528 data-nosnippet>528</a>        model: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Flat,
+<a href=#529 id=529 data-nosnippet>529</a>    ) -&gt; BTreeMap&lt;TypeKey, (<span class="kw-2">&amp;</span><span class="lifetime">'a </span>TypeRef, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>TypeRef)&gt; {
+<a href=#530 id=530 data-nosnippet>530</a>        <span class="kw">let </span><span class="kw-2">mut </span>optionals = BTreeMap::new();
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw">for </span>ty <span class="kw">in </span>model
+<a href=#532 id=532 data-nosnippet>532</a>            .elements()
+<a href=#533 id=533 data-nosnippet>533</a>            .flat_map(element_types)
+<a href=#534 id=534 data-nosnippet>534</a>            .flat_map(|ty| ty.walk())
+<a href=#535 id=535 data-nosnippet>535</a>        {
+<a href=#536 id=536 data-nosnippet>536</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(inner) = ty.optional_inner() <span class="kw">else </span>{
+<a href=#537 id=537 data-nosnippet>537</a>                <span class="kw">continue</span>;
+<a href=#538 id=538 data-nosnippet>538</a>            };
+<a href=#539 id=539 data-nosnippet>539</a>            <span class="kw">if </span>!<span class="self">self</span>.explicitly_declares(ty) {
+<a href=#540 id=540 data-nosnippet>540</a>                optionals.entry(ty.stripped_key()).or_insert((ty, inner));
+<a href=#541 id=541 data-nosnippet>541</a>            }
+<a href=#542 id=542 data-nosnippet>542</a>        }
+<a href=#543 id=543 data-nosnippet>543</a>        optionals
+<a href=#544 id=544 data-nosnippet>544</a>    }
+<a href=#545 id=545 data-nosnippet>545</a>
+<a href=#546 id=546 data-nosnippet>546</a>    <span class="kw">fn </span>explicitly_declares(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; bool {
+<a href=#547 id=547 data-nosnippet>547</a>        <span class="self">self</span>.types.contains_key(<span class="kw-2">&amp;</span>ty.key())
+<a href=#548 id=548 data-nosnippet>548</a>            || <span class="self">self
+<a href=#549 id=549 data-nosnippet>549</a>                </span>.convert_decls
+<a href=#550 id=550 data-nosnippet>550</a>                .iter()
+<a href=#551 id=551 data-nosnippet>551</a>                .any(|decl| decl.key() == <span class="kw-2">&amp;</span>ty.key() || decl.key() == <span class="kw-2">&amp;</span>ty.stripped_key())
+<a href=#552 id=552 data-nosnippet>552</a>    }
+<a href=#553 id=553 data-nosnippet>553</a>
+<a href=#554 id=554 data-nosnippet>554</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>bindings(
+<a href=#555 id=555 data-nosnippet>555</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#556 id=556 data-nosnippet>556</a>        model: <span class="kw-2">&amp;</span>Flat,
+<a href=#557 id=557 data-nosnippet>557</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#558 id=558 data-nosnippet>558</a>        recipes: <span class="kw-2">&amp;</span>prebindgen_registry::recipe::Recipes,
+<a href=#559 id=559 data-nosnippet>559</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;prebindgen_registry::recipe::Bindings, Vec&lt;RecipeError&gt;&gt; {
+<a href=#560 id=560 data-nosnippet>560</a>        <span class="kw">use </span>prebindgen_registry::recipe::{
+<a href=#561 id=561 data-nosnippet>561</a>            Ask, Bindings, Crossing, Direction, Origin, RecipeName, Site,
+<a href=#562 id=562 data-nosnippet>562</a>        };
+<a href=#563 id=563 data-nosnippet>563</a>
+<a href=#564 id=564 data-nosnippet>564</a>        <span class="kw">let </span><span class="kw-2">mut </span>bound = Bindings::builder();
+<a href=#565 id=565 data-nosnippet>565</a>        <span class="kw">let </span><span class="kw-2">mut </span>declared: Vec&lt;TypeKey&gt; = <span class="self">self
+<a href=#566 id=566 data-nosnippet>566</a>            </span>.types
+<a href=#567 id=567 data-nosnippet>567</a>            .iter()
+<a href=#568 id=568 data-nosnippet>568</a>            .filter(|(<span class="kw">_</span>, c)| <span class="macro">matches!</span>(c.kind, DeclaredKind::Data))
+<a href=#569 id=569 data-nosnippet>569</a>            .map(|(k, <span class="kw">_</span>)| k.clone())
+<a href=#570 id=570 data-nosnippet>570</a>            .collect();
+<a href=#571 id=571 data-nosnippet>571</a>        declared.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+<a href=#572 id=572 data-nosnippet>572</a>
+<a href=#573 id=573 data-nosnippet>573</a>        <span class="comment">// The named Optional row is the representation suitable inside another
+<a href=#574 id=574 data-nosnippet>574</a>        // composed shape. Where its child has a Product row it delegates to that
+<a href=#575 id=575 data-nosnippet>575</a>        // row; a scalar child stays on its default row and lets the JNI compiler
+<a href=#576 id=576 data-nosnippet>576</a>        // choose a niche or a `(present, value)` intermediate from the compiled
+<a href=#577 id=577 data-nosnippet>577</a>        // child facts. The whole/default Optional row remains untouched.
+<a href=#578 id=578 data-nosnippet>578</a>        //
+<a href=#579 id=579 data-nosnippet>579</a>        // Bind both directions: function inputs construct the Rust optional,
+<a href=#580 id=580 data-nosnippet>580</a>        // while returns and callback arguments deconstruct it.
+<a href=#581 id=581 data-nosnippet>581</a>        </span><span class="kw">for </span>(outer, inner) <span class="kw">in </span><span class="self">self</span>.implicit_optionals(model).into_values() {
+<a href=#582 id=582 data-nosnippet>582</a>            <span class="kw">for </span>direction <span class="kw">in </span>[Direction::Construct, Direction::Deconstruct] {
+<a href=#583 id=583 data-nosnippet>583</a>                <span class="kw">let </span>outer = Crossing::new(outer.clone(), direction);
+<a href=#584 id=584 data-nosnippet>584</a>                <span class="kw">let </span>row = outer.row(parts());
+<a href=#585 id=585 data-nosnippet>585</a>                <span class="kw">let </span>inner = Crossing::new(inner.clone(), direction);
+<a href=#586 id=586 data-nosnippet>586</a>                bound.bind(
+<a href=#587 id=587 data-nosnippet>587</a>                    Site::part(<span class="kw-2">&amp;</span>row, <span class="number">0</span>),
+<a href=#588 id=588 data-nosnippet>588</a>                    inner.clone(),
+<a href=#589 id=589 data-nosnippet>589</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>inner.key(), <span class="kw-2">&amp;</span>parts()).is_some() {
+<a href=#590 id=590 data-nosnippet>590</a>                        Ask::Recipe(parts())
+<a href=#591 id=591 data-nosnippet>591</a>                    } <span class="kw">else </span>{
+<a href=#592 id=592 data-nosnippet>592</a>                        Ask::Default
+<a href=#593 id=593 data-nosnippet>593</a>                    },
+<a href=#594 id=594 data-nosnippet>594</a>                    Origin::Part,
+<a href=#595 id=595 data-nosnippet>595</a>                );
+<a href=#596 id=596 data-nosnippet>596</a>            }
+<a href=#597 id=597 data-nosnippet>597</a>        }
+<a href=#598 id=598 data-nosnippet>598</a>
+<a href=#599 id=599 data-nosnippet>599</a>        <span class="kw">for </span>key <span class="kw">in </span>declared {
+<a href=#600 id=600 data-nosnippet>600</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(ident) = key.ident() <span class="kw">else </span>{ <span class="kw">continue </span>};
+<a href=#601 id=601 data-nosnippet>601</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(prebindgen_registry::flat::Type::Struct(s)) = model.declared_type(<span class="kw-2">&amp;</span>ident)
+<a href=#602 id=602 data-nosnippet>602</a>            <span class="kw">else </span>{
+<a href=#603 id=603 data-nosnippet>603</a>                <span class="kw">continue</span>;
+<a href=#604 id=604 data-nosnippet>604</a>            };
+<a href=#605 id=605 data-nosnippet>605</a>            <span class="kw">let </span><span class="prelude-val">Ok</span>(ty) = model.classify(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(#ident)) <span class="kw">else </span>{
+<a href=#606 id=606 data-nosnippet>606</a>                <span class="kw">continue</span>;
+<a href=#607 id=607 data-nosnippet>607</a>            };
+<a href=#608 id=608 data-nosnippet>608</a>            <span class="kw">let </span>building = Crossing::new(ty.clone(), Direction::Construct);
+<a href=#609 id=609 data-nosnippet>609</a>            <span class="kw">let </span>handing_out = Crossing::new(ty, Direction::Deconstruct);
+<a href=#610 id=610 data-nosnippet>610</a>            <span class="kw">for </span>(index, field) <span class="kw">in </span>s.fields.iter().enumerate() {
+<a href=#611 id=611 data-nosnippet>611</a>                <span class="comment">// A field selects `parts` exactly when its crossing declares
+<a href=#612 id=612 data-nosnippet>612</a>                // that row AND the declaration says this occurrence decomposes.
+<a href=#613 id=613 data-nosnippet>613</a>                // Direct classes retain the existing `.jobject_input()` and
+<a href=#614 id=614 data-nosnippet>614</a>                // erased-wrapper boundaries; every implicit Optional selects its
+<a href=#615 id=615 data-nosnippet>615</a>                // part representation, which decides whether the child is
+<a href=#616 id=616 data-nosnippet>616</a>                // another composition or one scalar intermediate.
+<a href=#617 id=617 data-nosnippet>617</a>                </span><span class="kw">if </span>field.ty.optional_inner().is_none()
+<a href=#618 id=618 data-nosnippet>618</a>                    &amp;&amp; !<span class="self">self</span>.field_crosses_as_its_fields(<span class="kw-2">&amp;</span>field.ty)
+<a href=#619 id=619 data-nosnippet>619</a>                {
+<a href=#620 id=620 data-nosnippet>620</a>                    <span class="kw">continue</span>;
+<a href=#621 id=621 data-nosnippet>621</a>                }
+<a href=#622 id=622 data-nosnippet>622</a>                <span class="kw">for </span>(of, direction) <span class="kw">in </span>[
+<a href=#623 id=623 data-nosnippet>623</a>                    (<span class="kw-2">&amp;</span>building, Direction::Construct),
+<a href=#624 id=624 data-nosnippet>624</a>                    (<span class="kw-2">&amp;</span>handing_out, Direction::Deconstruct),
+<a href=#625 id=625 data-nosnippet>625</a>                ] {
+<a href=#626 id=626 data-nosnippet>626</a>                    <span class="kw">let </span>row = of.row(parts());
+<a href=#627 id=627 data-nosnippet>627</a>                    <span class="kw">let </span>field_crossing = Crossing::new(field.ty.clone(), direction);
+<a href=#628 id=628 data-nosnippet>628</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>field_crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#629 id=629 data-nosnippet>629</a>                        <span class="kw">continue</span>;
+<a href=#630 id=630 data-nosnippet>630</a>                    }
+<a href=#631 id=631 data-nosnippet>631</a>                    bound.bind(
+<a href=#632 id=632 data-nosnippet>632</a>                        Site::part(<span class="kw-2">&amp;</span>row, index),
+<a href=#633 id=633 data-nosnippet>633</a>                        field_crossing,
+<a href=#634 id=634 data-nosnippet>634</a>                        Ask::Recipe(parts()),
+<a href=#635 id=635 data-nosnippet>635</a>                        Origin::Part,
+<a href=#636 id=636 data-nosnippet>636</a>                    );
+<a href=#637 id=637 data-nosnippet>637</a>                }
+<a href=#638 id=638 data-nosnippet>638</a>            }
+<a href=#639 id=639 data-nosnippet>639</a>        }
+<a href=#640 id=640 data-nosnippet>640</a>        <span class="comment">// Every function whose return the binding takes apart, bound to the
+<a href=#641 id=641 data-nosnippet>641</a>        // `parts` recipe of its return type.
+<a href=#642 id=642 data-nosnippet>642</a>        //
+<a href=#643 id=643 data-nosnippet>643</a>        // This is what a site naming several values is: `Ask::Recipe` already
+<a href=#644 id=644 data-nosnippet>644</a>        // lets a site pick a recipe, and a `parts` fragment already occupies
+<a href=#645 id=645 data-nosnippet>645</a>        // several wires — the two facts stages 3 and 4 established, meeting.
+<a href=#646 id=646 data-nosnippet>646</a>        // The registry needs nothing new to express a decomposed return.
+<a href=#647 id=647 data-nosnippet>647</a>        </span><span class="kw">for </span>f <span class="kw">in </span>model.functions() {
+<a href=#648 id=648 data-nosnippet>648</a>            <span class="comment">// The value that crosses, through the layers a decomposition looks
+<a href=#649 id=649 data-nosnippet>649</a>            // through: a `&amp;T` return decomposes T, and so does an `Option&lt;T&gt;`
+<a href=#650 id=650 data-nosnippet>650</a>            // or a `Vec&lt;T&gt;` — the shape rides the delivery, not the recipe.
+<a href=#651 id=651 data-nosnippet>651</a>            </span><span class="kw">let </span>ret = f.ret.borrow_target().unwrap_or(<span class="kw-2">&amp;</span>f.ret);
+<a href=#652 id=652 data-nosnippet>652</a>            <span class="kw">let </span>ret = ret.optional_inner().unwrap_or(ret);
+<a href=#653 id=653 data-nosnippet>653</a>            <span class="kw">let </span>ret = ret.sequence_elem().unwrap_or(ret);
+<a href=#654 id=654 data-nosnippet>654</a>            <span class="kw">let </span>ret = ret.borrow_target().unwrap_or(ret);
+<a href=#655 id=655 data-nosnippet>655</a>            <span class="kw">let </span>crossing = Crossing::new(ret.clone(), Direction::Deconstruct);
+<a href=#656 id=656 data-nosnippet>656</a>            <span class="comment">// Only where the type states one. A `sealed_class` always does; a
+<a href=#657 id=657 data-nosnippet>657</a>            // `data_class` states one unless a field of it declines, and a
+<a href=#658 id=658 data-nosnippet>658</a>            // return whose type states none crosses whole.
+<a href=#659 id=659 data-nosnippet>659</a>            </span><span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#660 id=660 data-nosnippet>660</a>                <span class="kw">continue</span>;
+<a href=#661 id=661 data-nosnippet>661</a>            }
+<a href=#662 id=662 data-nosnippet>662</a>            <span class="comment">// And only where it is genuinely several. A decomposition that
+<a href=#663 id=663 data-nosnippet>663</a>            // yields ONE value takes `Delivery::Return`: the wrapper hands that
+<a href=#664 id=664 data-nosnippet>664</a>            // value back through its own conversion rather than through a
+<a href=#665 id=665 data-nosnippet>665</a>            // builder, so the return site's crossing is the value's, not this
+<a href=#666 id=666 data-nosnippet>666</a>            // type's. Asked of the composition, which is model and declaration
+<a href=#667 id=667 data-nosnippet>667</a>            // only and so answerable here — the same property that let one
+<a href=#668 id=668 data-nosnippet>668</a>            // composition serve both sides of `resolve`.
+<a href=#669 id=669 data-nosnippet>669</a>            </span><span class="kw">if </span><span class="self">self</span>.out_wire_count(registry, ret) &lt; <span class="number">2 </span>{
+<a href=#670 id=670 data-nosnippet>670</a>                <span class="kw">continue</span>;
+<a href=#671 id=671 data-nosnippet>671</a>            }
+<a href=#672 id=672 data-nosnippet>672</a>            bound.bind(
+<a href=#673 id=673 data-nosnippet>673</a>                Site {
+<a href=#674 id=674 data-nosnippet>674</a>                    owner: f.name.clone(),
+<a href=#675 id=675 data-nosnippet>675</a>                    role: prebindgen_registry::recipe::Role::Return,
+<a href=#676 id=676 data-nosnippet>676</a>                },
+<a href=#677 id=677 data-nosnippet>677</a>                crossing,
+<a href=#678 id=678 data-nosnippet>678</a>                Ask::Recipe(parts()),
+<a href=#679 id=679 data-nosnippet>679</a>                Origin::Adapter,
+<a href=#680 id=680 data-nosnippet>680</a>            );
+<a href=#681 id=681 data-nosnippet>681</a>        }
+<a href=#682 id=682 data-nosnippet>682</a>
+<a href=#683 id=683 data-nosnippet>683</a>        <span class="comment">// A callback's `Invoke` recipe owns its argument conversions. Bind a
+<a href=#684 id=684 data-nosnippet>684</a>        // model-derived data-class argument to `parts` so the Product fragment
+<a href=#685 id=685 data-nosnippet>685</a>        // reaches `Compile::callback` before the trampoline is rendered.
+<a href=#686 id=686 data-nosnippet>686</a>        </span><span class="kw">for </span>f <span class="kw">in </span>model.functions() {
+<a href=#687 id=687 data-nosnippet>687</a>            <span class="kw">for </span>param <span class="kw">in </span><span class="kw-2">&amp;</span>f.params {
+<a href=#688 id=688 data-nosnippet>688</a>                <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Callback { args } =
+<a href=#689 id=689 data-nosnippet>689</a>                    param.ty.unwrapped().kind()
+<a href=#690 id=690 data-nosnippet>690</a>                <span class="kw">else </span>{
+<a href=#691 id=691 data-nosnippet>691</a>                    <span class="kw">continue</span>;
+<a href=#692 id=692 data-nosnippet>692</a>                };
+<a href=#693 id=693 data-nosnippet>693</a>                <span class="kw">let </span>callback = Crossing::new(param.ty.clone(), Direction::Construct);
+<a href=#694 id=694 data-nosnippet>694</a>                <span class="kw">let </span>row = callback.row(RecipeName::derived());
+<a href=#695 id=695 data-nosnippet>695</a>                <span class="kw">for </span>(index, arg) <span class="kw">in </span>args.iter().enumerate() {
+<a href=#696 id=696 data-nosnippet>696</a>                    <span class="kw">let </span>crossed = arg.borrow_target().unwrap_or(arg);
+<a href=#697 id=697 data-nosnippet>697</a>                    <span class="kw">let </span>core = crossed.optional_inner().unwrap_or(crossed);
+<a href=#698 id=698 data-nosnippet>698</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(element) = core.sequence_elem() {
+<a href=#699 id=699 data-nosnippet>699</a>                        <span class="kw">let </span>element = element.borrow_target().unwrap_or(element);
+<a href=#700 id=700 data-nosnippet>700</a>                        <span class="kw">if </span>!<span class="self">self</span>.field_crosses_as_its_fields(element) {
+<a href=#701 id=701 data-nosnippet>701</a>                            <span class="kw">continue</span>;
+<a href=#702 id=702 data-nosnippet>702</a>                        }
+<a href=#703 id=703 data-nosnippet>703</a>                        <span class="kw">let </span>sequence = Crossing::new(arg.clone(), Direction::Deconstruct);
+<a href=#704 id=704 data-nosnippet>704</a>                        <span class="kw">let </span>element_crossing =
+<a href=#705 id=705 data-nosnippet>705</a>                            Crossing::new(element.borrowed(), Direction::Deconstruct);
+<a href=#706 id=706 data-nosnippet>706</a>                        <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>element_crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#707 id=707 data-nosnippet>707</a>                            <span class="kw">continue</span>;
+<a href=#708 id=708 data-nosnippet>708</a>                        }
+<a href=#709 id=709 data-nosnippet>709</a>                        bound.bind(
+<a href=#710 id=710 data-nosnippet>710</a>                            Site::part(<span class="kw-2">&amp;</span>sequence.row(RecipeName::derived()), <span class="number">0</span>),
+<a href=#711 id=711 data-nosnippet>711</a>                            element_crossing,
+<a href=#712 id=712 data-nosnippet>712</a>                            Ask::Recipe(parts()),
+<a href=#713 id=713 data-nosnippet>713</a>                            Origin::Adapter,
+<a href=#714 id=714 data-nosnippet>714</a>                        );
+<a href=#715 id=715 data-nosnippet>715</a>                        <span class="kw">continue</span>;
+<a href=#716 id=716 data-nosnippet>716</a>                    }
+<a href=#717 id=717 data-nosnippet>717</a>                    <span class="comment">// A model-derived data class, or a type whose deconstructor
+<a href=#718 id=718 data-nosnippet>718</a>                    // declaration earned the `parts` row above. Both take that
+<a href=#719 id=719 data-nosnippet>719</a>                    // row here, so the fragment the trampoline delivers and the
+<a href=#720 id=720 data-nosnippet>720</a>                    // one the argument's own `Role::CallbackArg` site names are
+<a href=#721 id=721 data-nosnippet>721</a>                    // one fragment rather than two rows over one crossing.
+<a href=#722 id=722 data-nosnippet>722</a>                    </span><span class="kw">if </span>!<span class="self">self</span>.field_crosses_as_its_fields(core)
+<a href=#723 id=723 data-nosnippet>723</a>                        &amp;&amp; registry.callback_arg_plan(<span class="kw-2">&amp;</span>arg.key()).is_none()
+<a href=#724 id=724 data-nosnippet>724</a>                    {
+<a href=#725 id=725 data-nosnippet>725</a>                        <span class="kw">continue</span>;
+<a href=#726 id=726 data-nosnippet>726</a>                    }
+<a href=#727 id=727 data-nosnippet>727</a>                    <span class="kw">let </span>crossing = Crossing::new(arg.clone(), Direction::Deconstruct);
+<a href=#728 id=728 data-nosnippet>728</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#729 id=729 data-nosnippet>729</a>                        <span class="kw">continue</span>;
+<a href=#730 id=730 data-nosnippet>730</a>                    }
+<a href=#731 id=731 data-nosnippet>731</a>                    bound.bind(
+<a href=#732 id=732 data-nosnippet>732</a>                        Site::part(<span class="kw-2">&amp;</span>row, index),
+<a href=#733 id=733 data-nosnippet>733</a>                        crossing,
+<a href=#734 id=734 data-nosnippet>734</a>                        Ask::Recipe(parts()),
+<a href=#735 id=735 data-nosnippet>735</a>                        Origin::Adapter,
+<a href=#736 id=736 data-nosnippet>736</a>                    );
+<a href=#737 id=737 data-nosnippet>737</a>                }
+<a href=#738 id=738 data-nosnippet>738</a>            }
+<a href=#739 id=739 data-nosnippet>739</a>        }
+<a href=#740 id=740 data-nosnippet>740</a>
+<a href=#741 id=741 data-nosnippet>741</a>        <span class="comment">// Each value a callback delivers is a root site of its own — the
+<a href=#742 id=742 data-nosnippet>742</a>        // function-unique `Role::CallbackArg` the registry names, not the
+<a href=#743 id=743 data-nosnippet>743</a>        // `Role::Part` above, which is keyed by the callback recipe every
+<a href=#744 id=744 data-nosnippet>744</a>        // function with that signature shares.
+<a href=#745 id=745 data-nosnippet>745</a>        //
+<a href=#746 id=746 data-nosnippet>746</a>        // Bound to `parts` exactly where the argument's crossing states that
+<a href=#747 id=747 data-nosnippet>747</a>        // row, which is now every argument the trampoline takes apart: a
+<a href=#748 id=748 data-nosnippet>748</a>        // `data_class`, a `sealed_class`, an implicit Optional over one of
+<a href=#749 id=749 data-nosnippet>749</a>        // those, or a type whose deconstructor declaration earned the row
+<a href=#750 id=750 data-nosnippet>750</a>        // declared above. An argument that crosses whole names nothing here and
+<a href=#751 id=751 data-nosnippet>751</a>        // takes its crossing's default, attributed to the adapter.
+<a href=#752 id=752 data-nosnippet>752</a>        </span><span class="kw">for </span>f <span class="kw">in </span>model.functions() {
+<a href=#753 id=753 data-nosnippet>753</a>            <span class="kw">for </span>(param, p) <span class="kw">in </span>f.params.iter().enumerate() {
+<a href=#754 id=754 data-nosnippet>754</a>                <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Callback { args } =
+<a href=#755 id=755 data-nosnippet>755</a>                    p.ty.unwrapped().kind()
+<a href=#756 id=756 data-nosnippet>756</a>                <span class="kw">else </span>{
+<a href=#757 id=757 data-nosnippet>757</a>                    <span class="kw">continue</span>;
+<a href=#758 id=758 data-nosnippet>758</a>                };
+<a href=#759 id=759 data-nosnippet>759</a>                <span class="kw">for </span>(arg, ty) <span class="kw">in </span>args.iter().enumerate() {
+<a href=#760 id=760 data-nosnippet>760</a>                    <span class="kw">let </span>crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
+<a href=#761 id=761 data-nosnippet>761</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#762 id=762 data-nosnippet>762</a>                        <span class="kw">continue</span>;
+<a href=#763 id=763 data-nosnippet>763</a>                    }
+<a href=#764 id=764 data-nosnippet>764</a>                    bound.bind(
+<a href=#765 id=765 data-nosnippet>765</a>                        Site {
+<a href=#766 id=766 data-nosnippet>766</a>                            owner: f.name.clone(),
+<a href=#767 id=767 data-nosnippet>767</a>                            role: prebindgen_registry::recipe::Role::CallbackArg { param, arg },
+<a href=#768 id=768 data-nosnippet>768</a>                        },
+<a href=#769 id=769 data-nosnippet>769</a>                        crossing,
+<a href=#770 id=770 data-nosnippet>770</a>                        Ask::Recipe(parts()),
+<a href=#771 id=771 data-nosnippet>771</a>                        Origin::Adapter,
+<a href=#772 id=772 data-nosnippet>772</a>                    );
+<a href=#773 id=773 data-nosnippet>773</a>                }
+<a href=#774 id=774 data-nosnippet>774</a>            }
+<a href=#775 id=775 data-nosnippet>775</a>        }
+<a href=#776 id=776 data-nosnippet>776</a>
+<a href=#777 id=777 data-nosnippet>777</a>        bound.build(recipes)
+<a href=#778 id=778 data-nosnippet>778</a>    }
+<a href=#779 id=779 data-nosnippet>779</a>}
+</code></pre></div></section></main></body></html>
