@@ -85,63 +85,63 @@
 <a href=#85 id=85 data-nosnippet>85</a>/// `fromParts` parameters and the recipe identically, and two walks agreeing was a
 <a href=#86 id=86 data-nosnippet>86</a>/// property nothing checked.
 <a href=#87 id=87 data-nosnippet>87</a>///
-<a href=#88 id=88 data-nosnippet>88</a>/// `None` — the type keeps the whole-value `fromParts` path — when a field needs
-<a href=#89 id=89 data-nosnippet>89</a>/// a transform this fixed builder cannot forward verbatim. See
-<a href=#90 id=90 data-nosnippet>90</a>/// [`Declarations::struct_out_wires`] for which fields those are and why one of
-<a href=#91 id=91 data-nosnippet>91</a>/// them declines the whole value.
-<a href=#92 id=92 data-nosnippet>92</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>synth_value_struct_leaves(
-<a href=#93 id=93 data-nosnippet>93</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#94 id=94 data-nosnippet>94</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#95 id=95 data-nosnippet>95</a>    s: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Struct,
-<a href=#96 id=96 data-nosnippet>96</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;prebindgen_registry::unfold::UnfoldLeaf&gt;&gt; {
-<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">use </span>prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
-<a href=#98 id=98 data-nosnippet>98</a>    <span class="prelude-val">Some</span>(
-<a href=#99 id=99 data-nosnippet>99</a>        ext.struct_out_wires_of(registry, <span class="kw-2">&amp;</span>s.name)<span class="question-mark">?
-<a href=#100 id=100 data-nosnippet>100</a>            </span>.into_iter()
-<a href=#101 id=101 data-nosnippet>101</a>            .map(|w| UnfoldLeaf {
-<a href=#102 id=102 data-nosnippet>102</a>                name: w.name,
-<a href=#103 id=103 data-nosnippet>103</a>                path: w.reach,
-<a href=#104 id=104 data-nosnippet>104</a>                out_ty: w.out_ty,
-<a href=#105 id=105 data-nosnippet>105</a>                identity: <span class="bool-val">false</span>,
-<a href=#106 id=106 data-nosnippet>106</a>                nullable: w.nullable,
-<a href=#107 id=107 data-nosnippet>107</a>                <span class="comment">// A selector is not read off a place: the emitter assigns the
-<a href=#108 id=108 data-nosnippet>108</a>                // live alternative's number in each arm of its `match`, which
-<a href=#109 id=109 data-nosnippet>109</a>                // is what `LeafSource::SumTag` says and what keeps
-<a href=#110 id=110 data-nosnippet>110</a>                // `OutWire::from_leaf` round-tripping it back to a tag rather
-<a href=#111 id=111 data-nosnippet>111</a>                // than trying to compile the sum type as a crossing.
-<a href=#112 id=112 data-nosnippet>112</a>                </span>source: <span class="kw">match </span>w.from {
-<a href=#113 id=113 data-nosnippet>113</a>                    <span class="kw">crate</span>::jni::compile::OutFrom::Tag =&gt; LeafSource::SumTag,
-<a href=#114 id=114 data-nosnippet>114</a>                    <span class="kw">crate</span>::jni::compile::OutFrom::Present =&gt; LeafSource::Presence,
-<a href=#115 id=115 data-nosnippet>115</a>                    <span class="kw">_ </span>=&gt; LeafSource::Reach,
-<a href=#116 id=116 data-nosnippet>116</a>                },
-<a href=#117 id=117 data-nosnippet>117</a>                group: w.group,
-<a href=#118 id=118 data-nosnippet>118</a>            })
-<a href=#119 id=119 data-nosnippet>119</a>            .collect(),
-<a href=#120 id=120 data-nosnippet>120</a>    )
-<a href=#121 id=121 data-nosnippet>121</a>}
-<a href=#122 id=122 data-nosnippet>122</a>
-<a href=#123 id=123 data-nosnippet>123</a><span class="doccomment">/// Walk a [`StructPlan`] emitting the Rust-side wire encode: per leaf a
-<a href=#124 id=124 data-nosnippet>124</a>/// prelude statement binding `__&lt;prefix&gt;_&lt;field&gt;` to the converted wire and
-<a href=#125 id=125 data-nosnippet>125</a>/// an [`EncSlot`] describing its `JValue` slot. `access` is the Rust
-<a href=#126 id=126 data-nosnippet>126</a>/// expression yielding the current struct value (`v`, `v.field`, or the
-<a href=#127 id=127 data-nosnippet>127</a>/// matched `__cN` under an Option); `prefix` namespaces the generated idents.
-<a href=#128 id=128 data-nosnippet>128</a>/// Walk the struct's fields and encode each leaf into a `fromParts` argument.
-<a href=#129 id=129 data-nosnippet>129</a>///
-<a href=#130 id=130 data-nosnippet>130</a>/// This is a source-value walk that the registry does not perform, and the
-<a href=#131 id=131 data-nosnippet>131</a>/// reason is coverage rather than ownership. The registry-facing decomposition
-<a href=#132 id=132 data-nosnippet>132</a>/// of a struct (`Declarations::struct_out_wires_at`) refuses a nested
-<a href=#133 id=133 data-nosnippet>133</a>/// `data_class` behind an `Option` or a `Vec`; this encode supports both, an
-<a href=#134 id=134 data-nosnippet>134</a>/// optional nested class as a `present` flag plus a defaulted group and a sum
-<a href=#135 id=135 data-nosnippet>135</a>/// field as a tag plus one group per variant.
-<a href=#136 id=136 data-nosnippet>136</a>///
-<a href=#137 id=137 data-nosnippet>137</a>/// Rendering this through the registry's decomposition walk would therefore
-<a href=#138 id=138 data-nosnippet>138</a>/// mean teaching that decomposition the gated shapes — which would also change
-<a href=#139 id=139 data-nosnippet>139</a>/// what a foreign builder can be delivered, a feature rather than a
-<a href=#140 id=140 data-nosnippet>140</a>/// refactoring. #596 step 5 records that decision; #602 proposes the feature.
-<a href=#141 id=141 data-nosnippet>141</a>///
-<a href=#142 id=142 data-nosnippet>142</a>/// Where both derivations do apply, they must name the same leaves in the same
-<a href=#143 id=143 data-nosnippet>143</a>/// order: `JniGen::assert_leaf_derivations_agree` checks that on every binding
-<a href=#144 id=144 data-nosnippet>144</a>/// a test writes, since that agreement is what #602 would rest on.
+<a href=#88 id=88 data-nosnippet>88</a>/// `None` — the type keeps the whole-value `fromParts` path — when a field is
+<a href=#89 id=89 data-nosnippet>89</a>/// one the decomposition cannot state at all. Those are structural: a repeated
+<a href=#90 id=90 data-nosnippet>90</a>/// nested class, a field the model does not hold as a named one, nesting past
+<a href=#91 id=91 data-nosnippet>91</a>/// 16. Not a missing transform — a handle, an `enum_class`, a sum, an optional
+<a href=#92 id=92 data-nosnippet>92</a>/// nested class and a selector inside a gated group all state fine, each
+<a href=#93 id=93 data-nosnippet>93</a>/// carrying its own conversion (#602). See [`Declarations::struct_out_wires`]
+<a href=#94 id=94 data-nosnippet>94</a>/// for the list and why one such field declines the whole value.
+<a href=#95 id=95 data-nosnippet>95</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>synth_value_struct_leaves(
+<a href=#96 id=96 data-nosnippet>96</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#97 id=97 data-nosnippet>97</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#98 id=98 data-nosnippet>98</a>    s: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Struct,
+<a href=#99 id=99 data-nosnippet>99</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;prebindgen_registry::unfold::UnfoldLeaf&gt;&gt; {
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">use </span>prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="prelude-val">Some</span>(
+<a href=#102 id=102 data-nosnippet>102</a>        ext.struct_out_wires_of(registry, <span class="kw-2">&amp;</span>s.name)<span class="question-mark">?
+<a href=#103 id=103 data-nosnippet>103</a>            </span>.into_iter()
+<a href=#104 id=104 data-nosnippet>104</a>            .map(|w| UnfoldLeaf {
+<a href=#105 id=105 data-nosnippet>105</a>                name: w.name,
+<a href=#106 id=106 data-nosnippet>106</a>                path: w.reach,
+<a href=#107 id=107 data-nosnippet>107</a>                out_ty: w.out_ty,
+<a href=#108 id=108 data-nosnippet>108</a>                identity: <span class="bool-val">false</span>,
+<a href=#109 id=109 data-nosnippet>109</a>                nullable: w.nullable,
+<a href=#110 id=110 data-nosnippet>110</a>                <span class="comment">// A selector is not read off a place: the emitter assigns the
+<a href=#111 id=111 data-nosnippet>111</a>                // live alternative's number in each arm of its `match`, which
+<a href=#112 id=112 data-nosnippet>112</a>                // is what `LeafSource::SumTag` says and what keeps
+<a href=#113 id=113 data-nosnippet>113</a>                // `OutWire::from_leaf` round-tripping it back to a tag rather
+<a href=#114 id=114 data-nosnippet>114</a>                // than trying to compile the sum type as a crossing.
+<a href=#115 id=115 data-nosnippet>115</a>                </span>source: <span class="kw">match </span>w.from {
+<a href=#116 id=116 data-nosnippet>116</a>                    <span class="kw">crate</span>::jni::compile::OutFrom::Tag =&gt; LeafSource::SumTag,
+<a href=#117 id=117 data-nosnippet>117</a>                    <span class="kw">crate</span>::jni::compile::OutFrom::Present =&gt; LeafSource::Presence,
+<a href=#118 id=118 data-nosnippet>118</a>                    <span class="kw">_ </span>=&gt; LeafSource::Reach,
+<a href=#119 id=119 data-nosnippet>119</a>                },
+<a href=#120 id=120 data-nosnippet>120</a>                groups: w.groups,
+<a href=#121 id=121 data-nosnippet>121</a>            })
+<a href=#122 id=122 data-nosnippet>122</a>            .collect(),
+<a href=#123 id=123 data-nosnippet>123</a>    )
+<a href=#124 id=124 data-nosnippet>124</a>}
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a><span class="doccomment">/// Walk a [`StructPlan`] emitting the Rust-side wire encode: per leaf a
+<a href=#127 id=127 data-nosnippet>127</a>/// prelude statement binding `__&lt;prefix&gt;_&lt;field&gt;` to the converted wire and
+<a href=#128 id=128 data-nosnippet>128</a>/// an [`EncSlot`] describing its `JValue` slot. `access` is the Rust
+<a href=#129 id=129 data-nosnippet>129</a>/// expression yielding the current struct value (`v`, `v.field`, or the
+<a href=#130 id=130 data-nosnippet>130</a>/// matched `__cN` under an Option); `prefix` namespaces the generated idents.
+<a href=#131 id=131 data-nosnippet>131</a>/// Walk the struct's fields and encode each leaf into a `fromParts` argument.
+<a href=#132 id=132 data-nosnippet>132</a>///
+<a href=#133 id=133 data-nosnippet>133</a>/// This is a source-value walk that the registry does not perform, and what
+<a href=#134 id=134 data-nosnippet>134</a>/// keeps it here is now only that nothing has moved it. The coverage reason is
+<a href=#135 id=135 data-nosnippet>135</a>/// gone: #616, #617 and #618 taught the registry-facing decomposition
+<a href=#136 id=136 data-nosnippet>136</a>/// (`Declarations::struct_out_wires_at`) every gated shape this encode
+<a href=#137 id=137 data-nosnippet>137</a>/// supports — a sum field as a tag over one group per variant, an optional
+<a href=#138 id=138 data-nosnippet>138</a>/// nested class as a presence flag over a defaulted group, and one selector
+<a href=#139 id=139 data-nosnippet>139</a>/// inside another — so the two now cover the same shapes rather than differing.
+<a href=#140 id=140 data-nosnippet>140</a>///
+<a href=#141 id=141 data-nosnippet>141</a>/// Which makes this the duplication #613 step 3 exists to remove: two walks
+<a href=#142 id=142 data-nosnippet>142</a>/// deriving one leaf list. `JniGen::assert_leaf_derivations_agree` is what says
+<a href=#143 id=143 data-nosnippet>143</a>/// they still agree, on every binding a test writes, and #619 is where this
+<a href=#144 id=144 data-nosnippet>144</a>/// walk goes and that check with it.
 <a href=#145 id=145 data-nosnippet>145</a>/// The leaves this encode emits, flattened — the `fromParts` argument list,
 <a href=#146 id=146 data-nosnippet>146</a>/// in order, each with how deeply nested the field it came from is.
 <a href=#147 id=147 data-nosnippet>147</a>///
@@ -176,7 +176,7 @@
 <a href=#176 id=176 data-nosnippet>176</a>/// too (#616 review).
 <a href=#177 id=177 data-nosnippet>177</a>/// The one "arm" an optional value has: present. Absence contributes no
 <a href=#178 id=178 data-nosnippet>178</a>/// bindings of its own, only the defaults its group carries.
-<a href=#179 id=179 data-nosnippet>179</a></span><span class="kw">const </span>PRESENT_ARM: usize = <span class="number">0</span>;
+<a href=#179 id=179 data-nosnippet>179</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>PRESENT_ARM: i32 = <span class="number">0</span>;
 <a href=#180 id=180 data-nosnippet>180</a>
 <a href=#181 id=181 data-nosnippet>181</a><span class="kw">fn </span>arm_local_base(tag: usize, base: <span class="kw-2">&amp;</span>str) -&gt; String {
 <a href=#182 id=182 data-nosnippet>182</a>    <span class="macro">format!</span>(<span class="string">"arm{tag}_{base}"</span>)
@@ -355,7 +355,7 @@
 <a href=#355 id=355 data-nosnippet>355</a>                    </span><span class="kw">let </span>(child_pre, child_slots) = encode_plan(
 <a href=#356 id=356 data-nosnippet>356</a>                        child,
 <a href=#357 id=357 data-nosnippet>357</a>                        <span class="kw-2">&amp;</span>child_access,
-<a href=#358 id=358 data-nosnippet>358</a>                        <span class="kw-2">&amp;</span>arm_local_base(PRESENT_ARM, base),
+<a href=#358 id=358 data-nosnippet>358</a>                        <span class="kw-2">&amp;</span>arm_local_base(PRESENT_ARM <span class="kw">as </span>usize, base),
 <a href=#359 id=359 data-nosnippet>359</a>                        depth + <span class="number">1</span>,
 <a href=#360 id=360 data-nosnippet>360</a>                        env_expr,
 <a href=#361 id=361 data-nosnippet>361</a>                        emit,
@@ -363,7 +363,7 @@
 <a href=#363 id=363 data-nosnippet>363</a>                    <span class="kw">let </span>flag_id = <span class="macro">format_ident!</span>(<span class="string">"__{}_present"</span>, base);
 <a href=#364 id=364 data-nosnippet>364</a>                    <span class="kw">let </span>outer_ids: Vec&lt;proc_macro2::Ident&gt; = child_slots
 <a href=#365 id=365 data-nosnippet>365</a>                        .iter()
-<a href=#366 id=366 data-nosnippet>366</a>                        .map(|slot| outer_of(PRESENT_ARM, <span class="kw-2">&amp;</span>slot.ident))
+<a href=#366 id=366 data-nosnippet>366</a>                        .map(|slot| outer_of(PRESENT_ARM <span class="kw">as </span>usize, <span class="kw-2">&amp;</span>slot.ident))
 <a href=#367 id=367 data-nosnippet>367</a>                        .collect();
 <a href=#368 id=368 data-nosnippet>368</a>                    <span class="kw">let </span>outer_tys: Vec&lt;TokenStream&gt; =
 <a href=#369 id=369 data-nosnippet>369</a>                        child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
@@ -571,150 +571,156 @@
 <a href=#571 id=571 data-nosnippet>571</a>                            }
 <a href=#572 id=572 data-nosnippet>572</a>                        }
 <a href=#573 id=573 data-nosnippet>573</a>                    });
-<a href=#574 id=574 data-nosnippet>574</a>                    slots.push(EncSlot {
-<a href=#575 id=575 data-nosnippet>575</a>                        depth,
-<a href=#576 id=576 data-nosnippet>576</a>                        ident: flag_id,
-<a href=#577 id=577 data-nosnippet>577</a>                        wire_ty: <span class="macro">quote!</span>(jni::sys::jboolean),
-<a href=#578 id=578 data-nosnippet>578</a>                        descriptor: <span class="string">"Z"</span>.to_string(),
-<a href=#579 id=579 data-nosnippet>579</a>                        is_object: <span class="bool-val">false</span>,
-<a href=#580 id=580 data-nosnippet>580</a>                        default: <span class="macro">quote!</span>(<span class="number">0u8</span>),
-<a href=#581 id=581 data-nosnippet>581</a>                    });
-<a href=#582 id=582 data-nosnippet>582</a>                }
-<a href=#583 id=583 data-nosnippet>583</a>                <span class="comment">// A sum field's slots sit one level inside the struct, the
-<a href=#584 id=584 data-nosnippet>584</a>                // same as an inlined nested class's: the tag and the groups
-<a href=#585 id=585 data-nosnippet>585</a>                // are reached THROUGH the field. The decomposition says so by
-<a href=#586 id=586 data-nosnippet>586</a>                // joining the names with `__`, and depth is that count.
-<a href=#587 id=587 data-nosnippet>587</a>                </span>slots.push(EncSlot {
-<a href=#588 id=588 data-nosnippet>588</a>                    depth: depth + <span class="number">1</span>,
-<a href=#589 id=589 data-nosnippet>589</a>                    ident: tag_id,
-<a href=#590 id=590 data-nosnippet>590</a>                    wire_ty: <span class="macro">quote!</span>(jni::sys::jint),
-<a href=#591 id=591 data-nosnippet>591</a>                    descriptor: <span class="string">"I"</span>.to_string(),
-<a href=#592 id=592 data-nosnippet>592</a>                    is_object: <span class="bool-val">false</span>,
-<a href=#593 id=593 data-nosnippet>593</a>                    default: <span class="macro">quote!</span>(<span class="number">0i32</span>),
-<a href=#594 id=594 data-nosnippet>594</a>                });
-<a href=#595 id=595 data-nosnippet>595</a>                <span class="kw">for </span>(i, sl) <span class="kw">in </span>all.iter().enumerate() {
-<a href=#596 id=596 data-nosnippet>596</a>                    slots.push(EncSlot {
-<a href=#597 id=597 data-nosnippet>597</a>                        depth: sl.depth,
-<a href=#598 id=598 data-nosnippet>598</a>                        ident: outer_ids[i].clone(),
-<a href=#599 id=599 data-nosnippet>599</a>                        wire_ty: sl.wire_ty.clone(),
-<a href=#600 id=600 data-nosnippet>600</a>                        descriptor: sl.descriptor.clone(),
-<a href=#601 id=601 data-nosnippet>601</a>                        is_object: sl.is_object,
-<a href=#602 id=602 data-nosnippet>602</a>                        default: sl.default.clone(),
-<a href=#603 id=603 data-nosnippet>603</a>                    });
-<a href=#604 id=604 data-nosnippet>604</a>                }
-<a href=#605 id=605 data-nosnippet>605</a>            }
-<a href=#606 id=606 data-nosnippet>606</a>            <span class="comment">// Simple leaf: bind per the plan's wire form.
-<a href=#607 id=607 data-nosnippet>607</a>            </span>PlanFieldKind::Leaf {
-<a href=#608 id=608 data-nosnippet>608</a>                conv,
-<a href=#609 id=609 data-nosnippet>609</a>                wire,
-<a href=#610 id=610 data-nosnippet>610</a>                form,
-<a href=#611 id=611 data-nosnippet>611</a>                descriptor,
-<a href=#612 id=612 data-nosnippet>612</a>                ..
-<a href=#613 id=613 data-nosnippet>613</a>            } =&gt; {
-<a href=#614 id=614 data-nosnippet>614</a>                <span class="kw">let </span>value_expr = conv_value(conv);
-<a href=#615 id=615 data-nosnippet>615</a>                <span class="kw">match </span>form {
-<a href=#616 id=616 data-nosnippet>616</a>                    LeafForm::Prim =&gt; {
-<a href=#617 id=617 data-nosnippet>617</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: #wire = #value_expr; });
-<a href=#618 id=618 data-nosnippet>618</a>                        slots.push(EncSlot {
-<a href=#619 id=619 data-nosnippet>619</a>                            depth,
-<a href=#620 id=620 data-nosnippet>620</a>                            ident: id,
-<a href=#621 id=621 data-nosnippet>621</a>                            wire_ty: <span class="macro">quote!</span>(#wire),
-<a href=#622 id=622 data-nosnippet>622</a>                            descriptor: descriptor.clone(),
-<a href=#623 id=623 data-nosnippet>623</a>                            is_object: <span class="bool-val">false</span>,
-<a href=#624 id=624 data-nosnippet>624</a>                            default: primitive_default_for_descriptor(descriptor),
-<a href=#625 id=625 data-nosnippet>625</a>                        });
-<a href=#626 id=626 data-nosnippet>626</a>                    }
-<a href=#627 id=627 data-nosnippet>627</a>                    LeafForm::IntoObject =&gt; {
-<a href=#628 id=628 data-nosnippet>628</a>                        preludes.extend(
-<a href=#629 id=629 data-nosnippet>629</a>                            <span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr.into(); },
-<a href=#630 id=630 data-nosnippet>630</a>                        );
-<a href=#631 id=631 data-nosnippet>631</a>                        slots.push(EncSlot {
-<a href=#632 id=632 data-nosnippet>632</a>                            depth,
-<a href=#633 id=633 data-nosnippet>633</a>                            ident: id,
-<a href=#634 id=634 data-nosnippet>634</a>                            wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
-<a href=#635 id=635 data-nosnippet>635</a>                            descriptor: descriptor.clone(),
-<a href=#636 id=636 data-nosnippet>636</a>                            is_object: <span class="bool-val">true</span>,
-<a href=#637 id=637 data-nosnippet>637</a>                            default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
-<a href=#638 id=638 data-nosnippet>638</a>                        });
-<a href=#639 id=639 data-nosnippet>639</a>                    }
-<a href=#640 id=640 data-nosnippet>640</a>                    LeafForm::Object =&gt; {
-<a href=#641 id=641 data-nosnippet>641</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr; });
-<a href=#642 id=642 data-nosnippet>642</a>                        slots.push(EncSlot {
-<a href=#643 id=643 data-nosnippet>643</a>                            depth,
-<a href=#644 id=644 data-nosnippet>644</a>                            ident: id,
-<a href=#645 id=645 data-nosnippet>645</a>                            wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
-<a href=#646 id=646 data-nosnippet>646</a>                            descriptor: descriptor.clone(),
-<a href=#647 id=647 data-nosnippet>647</a>                            is_object: <span class="bool-val">true</span>,
-<a href=#648 id=648 data-nosnippet>648</a>                            default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
-<a href=#649 id=649 data-nosnippet>649</a>                        });
-<a href=#650 id=650 data-nosnippet>650</a>                    }
-<a href=#651 id=651 data-nosnippet>651</a>                }
-<a href=#652 id=652 data-nosnippet>652</a>            }
-<a href=#653 id=653 data-nosnippet>653</a>        }
-<a href=#654 id=654 data-nosnippet>654</a>    }
-<a href=#655 id=655 data-nosnippet>655</a>    (preludes, slots)
-<a href=#656 id=656 data-nosnippet>656</a>}
-<a href=#657 id=657 data-nosnippet>657</a>
-<a href=#658 id=658 data-nosnippet>658</a><span class="doccomment">/// Assemble the Rust→JVM half of a frozen whole-struct codec.
-<a href=#659 id=659 data-nosnippet>659</a>///
-<a href=#660 id=660 data-nosnippet>660</a>/// Classification, child selection, JVM descriptors, and the target Kotlin
-<a href=#661 id=661 data-nosnippet>661</a>/// class are all frozen before this point. This function only turns that plan
-<a href=#662 id=662 data-nosnippet>662</a>/// into the final converter body; it performs no registry or declaration
-<a href=#663 id=663 data-nosnippet>663</a>/// lookup and cannot rediscover source-type facts.
-<a href=#664 id=664 data-nosnippet>664</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render_struct_output_body(
-<a href=#665 id=665 data-nosnippet>665</a>    plan: <span class="kw-2">&amp;</span>StructPlan,
-<a href=#666 id=666 data-nosnippet>666</a>    java_class_name: <span class="kw-2">&amp;</span>str,
-<a href=#667 id=667 data-nosnippet>667</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
-<a href=#668 id=668 data-nosnippet>668</a>) -&gt; syn::Expr {
-<a href=#669 id=669 data-nosnippet>669</a>    <span class="comment">// Recursively flatten the whole object graph into leaf wires, then build it
-<a href=#670 id=670 data-nosnippet>670</a>    // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI
-<a href=#671 id=671 data-nosnippet>671</a>    // crossing. The Kotlin `fromParts` factory (recursively flattened the same
-<a href=#672 id=672 data-nosnippet>672</a>    // way in `render_data_class_source`) reassembles the graph in bytecode.
-<a href=#673 id=673 data-nosnippet>673</a>    </span><span class="kw">let </span>access = <span class="macro">quote!</span>(v);
-<a href=#674 id=674 data-nosnippet>674</a>    <span class="kw">let </span>(preludes, slots) = encode_plan(plan, <span class="kw-2">&amp;</span>access, <span class="string">""</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span><span class="macro">quote!</span>(env), emit);
-<a href=#675 id=675 data-nosnippet>675</a>
-<a href=#676 id=676 data-nosnippet>676</a>    <span class="kw">let </span><span class="kw-2">mut </span>sig = String::from(<span class="string">"("</span>);
-<a href=#677 id=677 data-nosnippet>677</a>    <span class="kw">let </span><span class="kw-2">mut </span>args: Vec&lt;TokenStream&gt; = Vec::new();
-<a href=#678 id=678 data-nosnippet>678</a>    <span class="kw">for </span>sl <span class="kw">in </span><span class="kw-2">&amp;</span>slots {
-<a href=#679 id=679 data-nosnippet>679</a>        sig.push_str(<span class="kw-2">&amp;</span>sl.descriptor);
-<a href=#680 id=680 data-nosnippet>680</a>        <span class="kw">let </span>id = <span class="kw-2">&amp;</span>sl.ident;
-<a href=#681 id=681 data-nosnippet>681</a>        <span class="kw">if </span>sl.is_object {
-<a href=#682 id=682 data-nosnippet>682</a>            args.push(<span class="macro">quote!</span>(jni::objects::JValue::Object(<span class="kw-2">&amp;</span>#id)));
-<a href=#683 id=683 data-nosnippet>683</a>        } <span class="kw">else </span>{
-<a href=#684 id=684 data-nosnippet>684</a>            args.push(<span class="macro">quote!</span>(jni::objects::JValue::from(#id)));
-<a href=#685 id=685 data-nosnippet>685</a>        }
-<a href=#686 id=686 data-nosnippet>686</a>    }
-<a href=#687 id=687 data-nosnippet>687</a>    sig.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">")L{};"</span>, java_class_name));
-<a href=#688 id=688 data-nosnippet>688</a>    <span class="kw">let </span>factory_sig_lit = syn::LitStr::new(<span class="kw-2">&amp;</span>sig, Span::call_site());
-<a href=#689 id=689 data-nosnippet>689</a>
-<a href=#690 id=690 data-nosnippet>690</a>    <span class="kw">let </span>body: syn::Expr = <span class="macro">syn::parse_quote!</span>({
-<a href=#691 id=691 data-nosnippet>691</a>        #preludes
-<a href=#692 id=692 data-nosnippet>692</a>        <span class="kw">let </span>__obj = env.call_static_method(
-<a href=#693 id=693 data-nosnippet>693</a>            #java_class_name,
-<a href=#694 id=694 data-nosnippet>694</a>            <span class="string">"fromParts"</span>,
-<a href=#695 id=695 data-nosnippet>695</a>            #factory_sig_lit,
-<a href=#696 id=696 data-nosnippet>696</a>            <span class="kw-2">&amp;</span>[#(#args),<span class="kw-2">*</span>],
-<a href=#697 id=697 data-nosnippet>697</a>        )
-<a href=#698 id=698 data-nosnippet>698</a>        .and_then(|__v| __v.l())
-<a href=#699 id=699 data-nosnippet>699</a>        .map_err(|e| &lt;__JniErr <span class="kw">as </span>::core::convert::From&lt;String&gt;&gt;::from(<span class="macro">format!</span>(<span class="string">"encode struct via fromParts: {}"</span>, e)))<span class="question-mark">?</span>;
-<a href=#700 id=700 data-nosnippet>700</a>        __obj
-<a href=#701 id=701 data-nosnippet>701</a>    });
-<a href=#702 id=702 data-nosnippet>702</a>    body
-<a href=#703 id=703 data-nosnippet>703</a>}
-<a href=#704 id=704 data-nosnippet>704</a>
-<a href=#705 id=705 data-nosnippet>705</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>struct_module_path(
-<a href=#706 id=706 data-nosnippet>706</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#707 id=707 data-nosnippet>707</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#708 id=708 data-nosnippet>708</a>    name: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#709 id=709 data-nosnippet>709</a>) -&gt; syn::Path {
-<a href=#710 id=710 data-nosnippet>710</a>    <span class="comment">// The module the struct is reachable under from the generated file: its
-<a href=#711 id=711 data-nosnippet>711</a>    // origin crate (multi-source registries) or the default module. Takes the
-<a href=#712 id=712 data-nosnippet>712</a>    // NAME, which is all it needs — so it serves a caller holding the element
-<a href=#713 id=713 data-nosnippet>713</a>    // and one still holding the item.
-<a href=#714 id=714 data-nosnippet>714</a>    </span>ext.fn_module(registry, name)
-<a href=#715 id=715 data-nosnippet>715</a>}
-<a href=#716 id=716 data-nosnippet>716</a>
-<a href=#717 id=717 data-nosnippet>717</a><span class="comment">// ──────────────────────────────────────────────────────────────────────
-<a href=#718 id=718 data-nosnippet>718</a>// Enum rank-0 bodies
-<a href=#719 id=719 data-nosnippet>719</a>// ──────────────────────────────────────────────────────────────────────
+<a href=#574 id=574 data-nosnippet>574</a>                    <span class="comment">// One level inside the struct, like the tag it gates and
+<a href=#575 id=575 data-nosnippet>575</a>                    // like an optional nested class's own flag: it is reached
+<a href=#576 id=576 data-nosnippet>576</a>                    // THROUGH this field. The decomposition says so by joining
+<a href=#577 id=577 data-nosnippet>577</a>                    // the names with `__`, and this said `depth` — a
+<a href=#578 id=578 data-nosnippet>578</a>                    // disagreement no shape reached while `Option&lt;sum&gt;` was
+<a href=#579 id=579 data-nosnippet>579</a>                    // refused a decomposition to disagree with.
+<a href=#580 id=580 data-nosnippet>580</a>                    </span>slots.push(EncSlot {
+<a href=#581 id=581 data-nosnippet>581</a>                        depth: depth + <span class="number">1</span>,
+<a href=#582 id=582 data-nosnippet>582</a>                        ident: flag_id,
+<a href=#583 id=583 data-nosnippet>583</a>                        wire_ty: <span class="macro">quote!</span>(jni::sys::jboolean),
+<a href=#584 id=584 data-nosnippet>584</a>                        descriptor: <span class="string">"Z"</span>.to_string(),
+<a href=#585 id=585 data-nosnippet>585</a>                        is_object: <span class="bool-val">false</span>,
+<a href=#586 id=586 data-nosnippet>586</a>                        default: <span class="macro">quote!</span>(<span class="number">0u8</span>),
+<a href=#587 id=587 data-nosnippet>587</a>                    });
+<a href=#588 id=588 data-nosnippet>588</a>                }
+<a href=#589 id=589 data-nosnippet>589</a>                <span class="comment">// A sum field's slots sit one level inside the struct, the
+<a href=#590 id=590 data-nosnippet>590</a>                // same as an inlined nested class's: the tag and the groups
+<a href=#591 id=591 data-nosnippet>591</a>                // are reached THROUGH the field. The decomposition says so by
+<a href=#592 id=592 data-nosnippet>592</a>                // joining the names with `__`, and depth is that count.
+<a href=#593 id=593 data-nosnippet>593</a>                </span>slots.push(EncSlot {
+<a href=#594 id=594 data-nosnippet>594</a>                    depth: depth + <span class="number">1</span>,
+<a href=#595 id=595 data-nosnippet>595</a>                    ident: tag_id,
+<a href=#596 id=596 data-nosnippet>596</a>                    wire_ty: <span class="macro">quote!</span>(jni::sys::jint),
+<a href=#597 id=597 data-nosnippet>597</a>                    descriptor: <span class="string">"I"</span>.to_string(),
+<a href=#598 id=598 data-nosnippet>598</a>                    is_object: <span class="bool-val">false</span>,
+<a href=#599 id=599 data-nosnippet>599</a>                    default: <span class="macro">quote!</span>(<span class="number">0i32</span>),
+<a href=#600 id=600 data-nosnippet>600</a>                });
+<a href=#601 id=601 data-nosnippet>601</a>                <span class="kw">for </span>(i, sl) <span class="kw">in </span>all.iter().enumerate() {
+<a href=#602 id=602 data-nosnippet>602</a>                    slots.push(EncSlot {
+<a href=#603 id=603 data-nosnippet>603</a>                        depth: sl.depth,
+<a href=#604 id=604 data-nosnippet>604</a>                        ident: outer_ids[i].clone(),
+<a href=#605 id=605 data-nosnippet>605</a>                        wire_ty: sl.wire_ty.clone(),
+<a href=#606 id=606 data-nosnippet>606</a>                        descriptor: sl.descriptor.clone(),
+<a href=#607 id=607 data-nosnippet>607</a>                        is_object: sl.is_object,
+<a href=#608 id=608 data-nosnippet>608</a>                        default: sl.default.clone(),
+<a href=#609 id=609 data-nosnippet>609</a>                    });
+<a href=#610 id=610 data-nosnippet>610</a>                }
+<a href=#611 id=611 data-nosnippet>611</a>            }
+<a href=#612 id=612 data-nosnippet>612</a>            <span class="comment">// Simple leaf: bind per the plan's wire form.
+<a href=#613 id=613 data-nosnippet>613</a>            </span>PlanFieldKind::Leaf {
+<a href=#614 id=614 data-nosnippet>614</a>                conv,
+<a href=#615 id=615 data-nosnippet>615</a>                wire,
+<a href=#616 id=616 data-nosnippet>616</a>                form,
+<a href=#617 id=617 data-nosnippet>617</a>                descriptor,
+<a href=#618 id=618 data-nosnippet>618</a>                ..
+<a href=#619 id=619 data-nosnippet>619</a>            } =&gt; {
+<a href=#620 id=620 data-nosnippet>620</a>                <span class="kw">let </span>value_expr = conv_value(conv);
+<a href=#621 id=621 data-nosnippet>621</a>                <span class="kw">match </span>form {
+<a href=#622 id=622 data-nosnippet>622</a>                    LeafForm::Prim =&gt; {
+<a href=#623 id=623 data-nosnippet>623</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: #wire = #value_expr; });
+<a href=#624 id=624 data-nosnippet>624</a>                        slots.push(EncSlot {
+<a href=#625 id=625 data-nosnippet>625</a>                            depth,
+<a href=#626 id=626 data-nosnippet>626</a>                            ident: id,
+<a href=#627 id=627 data-nosnippet>627</a>                            wire_ty: <span class="macro">quote!</span>(#wire),
+<a href=#628 id=628 data-nosnippet>628</a>                            descriptor: descriptor.clone(),
+<a href=#629 id=629 data-nosnippet>629</a>                            is_object: <span class="bool-val">false</span>,
+<a href=#630 id=630 data-nosnippet>630</a>                            default: primitive_default_for_descriptor(descriptor),
+<a href=#631 id=631 data-nosnippet>631</a>                        });
+<a href=#632 id=632 data-nosnippet>632</a>                    }
+<a href=#633 id=633 data-nosnippet>633</a>                    LeafForm::IntoObject =&gt; {
+<a href=#634 id=634 data-nosnippet>634</a>                        preludes.extend(
+<a href=#635 id=635 data-nosnippet>635</a>                            <span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr.into(); },
+<a href=#636 id=636 data-nosnippet>636</a>                        );
+<a href=#637 id=637 data-nosnippet>637</a>                        slots.push(EncSlot {
+<a href=#638 id=638 data-nosnippet>638</a>                            depth,
+<a href=#639 id=639 data-nosnippet>639</a>                            ident: id,
+<a href=#640 id=640 data-nosnippet>640</a>                            wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
+<a href=#641 id=641 data-nosnippet>641</a>                            descriptor: descriptor.clone(),
+<a href=#642 id=642 data-nosnippet>642</a>                            is_object: <span class="bool-val">true</span>,
+<a href=#643 id=643 data-nosnippet>643</a>                            default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
+<a href=#644 id=644 data-nosnippet>644</a>                        });
+<a href=#645 id=645 data-nosnippet>645</a>                    }
+<a href=#646 id=646 data-nosnippet>646</a>                    LeafForm::Object =&gt; {
+<a href=#647 id=647 data-nosnippet>647</a>                        preludes.extend(<span class="macro">quote!</span> { <span class="kw">let </span>#id: jni::objects::JObject = #value_expr; });
+<a href=#648 id=648 data-nosnippet>648</a>                        slots.push(EncSlot {
+<a href=#649 id=649 data-nosnippet>649</a>                            depth,
+<a href=#650 id=650 data-nosnippet>650</a>                            ident: id,
+<a href=#651 id=651 data-nosnippet>651</a>                            wire_ty: <span class="macro">quote!</span>(jni::objects::JObject),
+<a href=#652 id=652 data-nosnippet>652</a>                            descriptor: descriptor.clone(),
+<a href=#653 id=653 data-nosnippet>653</a>                            is_object: <span class="bool-val">true</span>,
+<a href=#654 id=654 data-nosnippet>654</a>                            default: <span class="macro">quote!</span>(jni::objects::JObject::null()),
+<a href=#655 id=655 data-nosnippet>655</a>                        });
+<a href=#656 id=656 data-nosnippet>656</a>                    }
+<a href=#657 id=657 data-nosnippet>657</a>                }
+<a href=#658 id=658 data-nosnippet>658</a>            }
+<a href=#659 id=659 data-nosnippet>659</a>        }
+<a href=#660 id=660 data-nosnippet>660</a>    }
+<a href=#661 id=661 data-nosnippet>661</a>    (preludes, slots)
+<a href=#662 id=662 data-nosnippet>662</a>}
+<a href=#663 id=663 data-nosnippet>663</a>
+<a href=#664 id=664 data-nosnippet>664</a><span class="doccomment">/// Assemble the Rust→JVM half of a frozen whole-struct codec.
+<a href=#665 id=665 data-nosnippet>665</a>///
+<a href=#666 id=666 data-nosnippet>666</a>/// Classification, child selection, JVM descriptors, and the target Kotlin
+<a href=#667 id=667 data-nosnippet>667</a>/// class are all frozen before this point. This function only turns that plan
+<a href=#668 id=668 data-nosnippet>668</a>/// into the final converter body; it performs no registry or declaration
+<a href=#669 id=669 data-nosnippet>669</a>/// lookup and cannot rediscover source-type facts.
+<a href=#670 id=670 data-nosnippet>670</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render_struct_output_body(
+<a href=#671 id=671 data-nosnippet>671</a>    plan: <span class="kw-2">&amp;</span>StructPlan,
+<a href=#672 id=672 data-nosnippet>672</a>    java_class_name: <span class="kw-2">&amp;</span>str,
+<a href=#673 id=673 data-nosnippet>673</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
+<a href=#674 id=674 data-nosnippet>674</a>) -&gt; syn::Expr {
+<a href=#675 id=675 data-nosnippet>675</a>    <span class="comment">// Recursively flatten the whole object graph into leaf wires, then build it
+<a href=#676 id=676 data-nosnippet>676</a>    // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI
+<a href=#677 id=677 data-nosnippet>677</a>    // crossing. The Kotlin `fromParts` factory (recursively flattened the same
+<a href=#678 id=678 data-nosnippet>678</a>    // way in `render_data_class_source`) reassembles the graph in bytecode.
+<a href=#679 id=679 data-nosnippet>679</a>    </span><span class="kw">let </span>access = <span class="macro">quote!</span>(v);
+<a href=#680 id=680 data-nosnippet>680</a>    <span class="kw">let </span>(preludes, slots) = encode_plan(plan, <span class="kw-2">&amp;</span>access, <span class="string">""</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span><span class="macro">quote!</span>(env), emit);
+<a href=#681 id=681 data-nosnippet>681</a>
+<a href=#682 id=682 data-nosnippet>682</a>    <span class="kw">let </span><span class="kw-2">mut </span>sig = String::from(<span class="string">"("</span>);
+<a href=#683 id=683 data-nosnippet>683</a>    <span class="kw">let </span><span class="kw-2">mut </span>args: Vec&lt;TokenStream&gt; = Vec::new();
+<a href=#684 id=684 data-nosnippet>684</a>    <span class="kw">for </span>sl <span class="kw">in </span><span class="kw-2">&amp;</span>slots {
+<a href=#685 id=685 data-nosnippet>685</a>        sig.push_str(<span class="kw-2">&amp;</span>sl.descriptor);
+<a href=#686 id=686 data-nosnippet>686</a>        <span class="kw">let </span>id = <span class="kw-2">&amp;</span>sl.ident;
+<a href=#687 id=687 data-nosnippet>687</a>        <span class="kw">if </span>sl.is_object {
+<a href=#688 id=688 data-nosnippet>688</a>            args.push(<span class="macro">quote!</span>(jni::objects::JValue::Object(<span class="kw-2">&amp;</span>#id)));
+<a href=#689 id=689 data-nosnippet>689</a>        } <span class="kw">else </span>{
+<a href=#690 id=690 data-nosnippet>690</a>            args.push(<span class="macro">quote!</span>(jni::objects::JValue::from(#id)));
+<a href=#691 id=691 data-nosnippet>691</a>        }
+<a href=#692 id=692 data-nosnippet>692</a>    }
+<a href=#693 id=693 data-nosnippet>693</a>    sig.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">")L{};"</span>, java_class_name));
+<a href=#694 id=694 data-nosnippet>694</a>    <span class="kw">let </span>factory_sig_lit = syn::LitStr::new(<span class="kw-2">&amp;</span>sig, Span::call_site());
+<a href=#695 id=695 data-nosnippet>695</a>
+<a href=#696 id=696 data-nosnippet>696</a>    <span class="kw">let </span>body: syn::Expr = <span class="macro">syn::parse_quote!</span>({
+<a href=#697 id=697 data-nosnippet>697</a>        #preludes
+<a href=#698 id=698 data-nosnippet>698</a>        <span class="kw">let </span>__obj = env.call_static_method(
+<a href=#699 id=699 data-nosnippet>699</a>            #java_class_name,
+<a href=#700 id=700 data-nosnippet>700</a>            <span class="string">"fromParts"</span>,
+<a href=#701 id=701 data-nosnippet>701</a>            #factory_sig_lit,
+<a href=#702 id=702 data-nosnippet>702</a>            <span class="kw-2">&amp;</span>[#(#args),<span class="kw-2">*</span>],
+<a href=#703 id=703 data-nosnippet>703</a>        )
+<a href=#704 id=704 data-nosnippet>704</a>        .and_then(|__v| __v.l())
+<a href=#705 id=705 data-nosnippet>705</a>        .map_err(|e| &lt;__JniErr <span class="kw">as </span>::core::convert::From&lt;String&gt;&gt;::from(<span class="macro">format!</span>(<span class="string">"encode struct via fromParts: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#706 id=706 data-nosnippet>706</a>        __obj
+<a href=#707 id=707 data-nosnippet>707</a>    });
+<a href=#708 id=708 data-nosnippet>708</a>    body
+<a href=#709 id=709 data-nosnippet>709</a>}
+<a href=#710 id=710 data-nosnippet>710</a>
+<a href=#711 id=711 data-nosnippet>711</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>struct_module_path(
+<a href=#712 id=712 data-nosnippet>712</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#713 id=713 data-nosnippet>713</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#714 id=714 data-nosnippet>714</a>    name: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#715 id=715 data-nosnippet>715</a>) -&gt; syn::Path {
+<a href=#716 id=716 data-nosnippet>716</a>    <span class="comment">// The module the struct is reachable under from the generated file: its
+<a href=#717 id=717 data-nosnippet>717</a>    // origin crate (multi-source registries) or the default module. Takes the
+<a href=#718 id=718 data-nosnippet>718</a>    // NAME, which is all it needs — so it serves a caller holding the element
+<a href=#719 id=719 data-nosnippet>719</a>    // and one still holding the item.
+<a href=#720 id=720 data-nosnippet>720</a>    </span>ext.fn_module(registry, name)
+<a href=#721 id=721 data-nosnippet>721</a>}
+<a href=#722 id=722 data-nosnippet>722</a>
+<a href=#723 id=723 data-nosnippet>723</a><span class="comment">// ──────────────────────────────────────────────────────────────────────
+<a href=#724 id=724 data-nosnippet>724</a>// Enum rank-0 bodies
+<a href=#725 id=725 data-nosnippet>725</a>// ──────────────────────────────────────────────────────────────────────
 </span></code></pre></div></section></main></body></html>

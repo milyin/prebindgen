@@ -935,7 +935,7 @@
 <a href=#935 id=935 data-nosnippet>935</a>    // here and re-asserted (`!!`) inside its own live arm — the same rule
 <a href=#936 id=936 data-nosnippet>936</a>    // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
 <a href=#937 id=937 data-nosnippet>937</a>    // slots take their `0`/`false` default and stay unboxed.
-<a href=#938 id=938 data-nosnippet>938</a>    </span><span class="kw">let </span>inert_nullable = leaf.group.is_some() &amp;&amp; !leaf_ty_is_prim(ext, <span class="kw-2">&amp;</span>leaf.out_ty);
+<a href=#938 id=938 data-nosnippet>938</a>    </span><span class="kw">let </span>inert_nullable = !leaf.groups.is_empty() &amp;&amp; !leaf_ty_is_prim(ext, <span class="kw-2">&amp;</span>leaf.out_ty);
 <a href=#939 id=939 data-nosnippet>939</a>    leaf_iface_param(
 <a href=#940 id=940 data-nosnippet>940</a>        ext,
 <a href=#941 id=941 data-nosnippet>941</a>        name,
@@ -1494,7 +1494,7 @@
 <a href=#1494 id=1494 data-nosnippet>1494</a>                    // `encode_plan_leaves` walks, asked the same way.
 <a href=#1495 id=1495 data-nosnippet>1495</a>                    </span><span class="kw">let </span>seg = <span class="kw">if </span>leaf.is_tag() {
 <a href=#1496 id=1496 data-nosnippet>1496</a>                        (k + <span class="number">1</span>..wires.len())
-<a href=#1497 id=1497 data-nosnippet>1497</a>                            .take_while(|<span class="kw-2">&amp;</span>j| wires[j].group.is_some())
+<a href=#1497 id=1497 data-nosnippet>1497</a>                            .take_while(|<span class="kw-2">&amp;</span>j| !wires[j].groups.is_empty())
 <a href=#1498 id=1498 data-nosnippet>1498</a>                            .last()
 <a href=#1499 id=1499 data-nosnippet>1499</a>                            .map_or(k + <span class="number">1</span>, |j| j + <span class="number">1</span>)
 <a href=#1500 id=1500 data-nosnippet>1500</a>                    } <span class="kw">else </span>{

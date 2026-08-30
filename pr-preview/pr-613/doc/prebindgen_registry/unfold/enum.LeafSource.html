@@ -31,7 +31,7 @@ the declaration — <a href="../flat/struct.Variant.html#method.type_ref" title=
 </div><section id="variant.VariantField" class="variant"><a href="#variant.VariantField" class="anchor">§</a><h3 class="code-header">VariantField</h3></section><div class="docblock"><p>A payload field of ONE alternative of a decomposed sum, reached through
 a <strong>variant pattern</strong> rather than a path: the emitter binds <code>member</code>
 inside <code>variant</code>’s <code>match</code> arm. The leaf is live only when
-<a href="struct.UnfoldLeaf.html#structfield.group" title="field prebindgen_registry::unfold::UnfoldLeaf::group"><code>UnfoldLeaf::group</code></a> equals the value’s tag; in every other arm its
+<a href="struct.UnfoldLeaf.html#structfield.groups" title="field prebindgen_registry::unfold::UnfoldLeaf::groups"><code>UnfoldLeaf::groups</code></a> ends in the value’s tag; in every other arm its
 slot carries the wire default.</p>
 <p>This is the selector <a href="enum.LeafSource.html#variant.Reach" title="variant prebindgen_registry::unfold::LeafSource::Reach"><code>Reach</code></a> deliberately lacks — a
 reached value is a deterministic product, every one of them
