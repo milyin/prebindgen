@@ -4382,10 +4382,9 @@ impl Declarations {
     /// is assigned by the emitter in each arm of its `match`, a presence flag by
     /// the gate that unwrapped the value.
     ///
-    /// Read only by the equivalence check for now: this is the carrier the
-    /// encode renders from once the derivation beside it goes (#619), and it is
-    /// built and checked first so that swap is a deletion.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// The carrier both whole-value emitters read: the Rust encode renders
+    /// through these leaves, and the Kotlin `fromParts` factory declares its
+    /// parameters from them.
     pub(crate) fn struct_out_frozen(
         &self,
         registry: &impl Conversions,

@@ -184,10 +184,11 @@ public data class RecoveryConfig(val mode: RecoveryMode?, val retentionPeriod: L
 
 ### 4.3 Output path (Rust → Kotlin)
 
-`PlanFieldKind::Sum { tag_slot, variants }` joins the shared bridge plan
-(`prebindgen-jni/src/jni/struct_plan.rs`). The Rust encoder emits **one `match`**
-binding the tag and every slot, inert slots filled by the existing
-`primitive_default_for_descriptor` (`prebindgen-jni/src/jni/emit/struct_out.rs`):
+A sum-typed field decomposes into a tag and one group of leaves per
+alternative, and both emitters read that decomposition — see #616 and #620. The
+Rust encoder emits **one `match`** binding the tag and every slot, inert slots
+filled by `primitive_default_for_descriptor`
+(`prebindgen-jni/src/jni/emit/sum_out.rs`):
 
 ```rust
 let (mode__present, mode__tag, mode_periodic_queries_period) = match &v.mode {

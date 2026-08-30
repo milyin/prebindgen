@@ -122,9 +122,10 @@ pub(crate) fn build_struct_plan(
 }
 
 impl Declarations {
-    /// The one whole-value struct layout used by Rust encoding and Kotlin
-    /// declaration/factory emission. During resolution it is memoized; after
-    /// resolution the lookup is served exclusively by
+    /// One data class's Kotlin property declarations, for the class emitter —
+    /// the only production reader left, now that the encode and the factory
+    /// take their leaves from the decomposition. During resolution it is
+    /// memoized; after resolution the lookup is served exclusively by
     /// [`crate::jni::generation::JniGenerationPlan`].
     pub(crate) fn struct_plan(
         &self,

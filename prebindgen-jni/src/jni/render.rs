@@ -127,12 +127,16 @@ pub(crate) fn build_data_class(
         let owner = format!("{}.{}", item_struct.name, field_ident);
 
         // The declaration reads ONE direction — output — because that is the
-        // direction that declares the `fromParts` slots the encoder fills, and
-        // it is the direction both plans already use exclusively
-        // (`build_struct_plan` output-only, `flat_input.rs` input-only). A
-        // property whose type came from whichever direction happened to
-        // resolve, while its wire came from the other, is how the declaration
-        // drifted from the plans.
+        // direction the class hands values OUT in, and the direction
+        // `build_struct_plan` classifies exclusively (`flat_input.rs` is the
+        // input side's own). A property whose type came from whichever
+        // direction happened to resolve, while the slot carrying it came from
+        // the other, is how the declaration drifted.
+        //
+        // The property and the slot are different questions — one per field,
+        // one per leaf — and the slots are the decomposition's now. What must
+        // still agree is that they describe the same value, which is what
+        // reading one direction for both is for.
         //
         // A projection visible only on the INPUT side is exactly that drift
         // made reachable: the old walk emitted a typed handle property (plus

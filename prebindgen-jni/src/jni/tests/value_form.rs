@@ -771,16 +771,16 @@ fn a_bare_sum_field_takes_no_gate() {
 /// **field** — with its elements folded from raw leaves either way (#217).
 ///
 /// #217 reported the field position as a hard panic ("variable arity"), on the
-/// reasoning that the `fromParts` bridge is fixed-layout: `encode_plan`,
-/// `flatten_struct_factory` and `build_data_class` enumerate identical slots in
-/// identical order, and a runtime length breaks that agreement. That was true,
+/// reasoning that the `fromParts` bridge is fixed-layout: the encode, the
+/// factory and `build_data_class` occupy identical slots in identical order,
+/// and a runtime length breaks that. That was true,
 /// and the resolution was not the array codegen the issue anticipated — it is
 /// that the field never needs to enter the fixed layout at all. It stays **one**
 /// slot whose own converter is the element's leaf-vec fold, so the slot count is
 /// still fixed and the elements still cross as raw leaves.
 ///
-/// So the guard the issue names is now unreachable: it sits inside
-/// `classify_field`'s `TypeKind::DataStruct` branch, and `type_kind` answers
+/// So the guard the issue names is now unreachable: it sits inside the
+/// decomposition's `TypeKind::DataStruct` branch, and `type_kind` answers
 /// `DataStruct` only for a key that is a single identifier — which a `Vec<_>`
 /// key never is. The `Vec<sum>` guard beside it is a different question and
 /// stays live (see
