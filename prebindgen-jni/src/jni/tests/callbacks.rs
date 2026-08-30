@@ -1099,8 +1099,167 @@ fn an_expanded_callback_leaf_keeps_its_expansion_identity() {
             "return value".to_string(),
             "ExpansionLeaf(0,0)".to_string(),
             "ExpansionLeaf(0,1)".to_string(),
+            // The value that leaf's callback delivers: a place in `z_go`, and
+            // `param` is the SOURCE parameter the callback came out of — the
+            // same position `ExpansionLeaf` names.
+            "argument 0 of the callback in parameter 0".to_string(),
             "Param(1)".to_string(),
         ],
         "the callback leaf is the expansion's second leaf, not a parameter: {roles:?}"
     );
+}
+
+/// A value a callback delivers by taking it apart states its own site, and
+/// that site names the row the delivery took.
+///
+/// `ZReply` is the case #622's first two attempts dead-ended on: its
+/// decomposition is a deconstructor declaration, not a value form, so before
+/// this the crossing had no `parts` row at all and a site could only be
+/// fabricated — asking for `parts` answered `NoSuchRecipe` and asking for the
+/// default answered a whole-value conversion the boundary does not have.
+///
+/// What the site says is not derived here. The ABI is the same allocation the
+/// trampoline's `JInvokePart` holds — asserted by identity rather than by
+/// comparing two lists, because a copy that happens to match today is the
+/// second answer this umbrella exists to delete.
+#[test]
+fn a_delivered_argument_names_the_row_it_crossed_on() {
+    use prebindgen::SourceLocation;
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_reply_zid(r: &ZReply) -> Option<ZId> { unimplemented!() }",
+        "pub fn z_reply_is_ok(r: &ZReply) -> bool { unimplemented!() }",
+        "pub fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { unimplemented!() }",
+        "pub fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { unimplemented!() }",
+        "pub fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    items.push((
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZId {
+                pub hi: i64,
+                pub lo: i64,
+            }
+        )),
+        loc.clone(),
+    ));
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_get(cb: impl Fn(ZReply) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    ));
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("query")
+                .class(crate::data_class!(ZId))
+                .class(
+                    crate::ptr_class!(ZKeyExpr)
+                        .method(prebindgen_registry::fun!(z_keyexpr_as_str).name("asStr")),
+                )
+                .class(
+                    crate::ptr_class!(ZSample)
+                        .method(prebindgen_registry::fun!(z_sample_key_expr).name("keyExpr")),
+                )
+                .class(
+                    crate::ptr_class!(ZReply)
+                        .method(prebindgen_registry::fun!(z_reply_zid).name("zid"))
+                        .method(prebindgen_registry::fun!(z_reply_is_ok).name("isOk"))
+                        .method(prebindgen_registry::fun!(z_reply_sample).name("sample")),
+                )
+                .fun(prebindgen_registry::fun!(z_get)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZKeyExpr)
+                .field_self()
+                .field(prebindgen_registry::fun!(z_keyexpr_as_str)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZSample)
+                .field(prebindgen_registry::fun!(z_sample_key_expr)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZReply)
+                .field(prebindgen_registry::fun!(z_reply_zid))
+                .field(prebindgen_registry::fun!(z_reply_is_ok))
+                .field(prebindgen_registry::fun!(z_reply_sample)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let decls = gen.declarations();
+    let plans = decls.site_plans.borrow();
+    let site = plans
+        .iter()
+        .find(|plan| {
+            plan.id().site().owner == "z_get"
+                && matches!(
+                    plan.id().site().role,
+                    prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg: 0 }
+                )
+        })
+        .expect("the delivered ZReply states a site");
+
+    // The row is `site_bindings`' answer, and it is the decomposing one — not
+    // the whole-value default, which for this crossing is a conversion that
+    // does not exist.
+    assert_eq!(
+        site.bound().recipe.name(),
+        &crate::jni::recipes::parts(),
+        "a delivered ZReply crosses on its `parts` row"
+    );
+    assert_eq!(
+        site.bound().crossing.direction(),
+        prebindgen_registry::recipe::Direction::Deconstruct
+    );
+
+    // The ABI is several leaves, and it is the trampoline's own list rather
+    // than a second one derived beside it.
+    let crate::jni::compile::JAbiLeaves::Decomposed(stated) = site.abi().payload() else {
+        panic!("a decomposed delivery does not occupy one whole leaf");
+    };
+    assert!(stated.len() > 1, "ZReply is delivered as several leaves");
+    assert_eq!(site.abi().slots(), stated.len());
+
+    let callback = decls
+        .in_frag(&z_get_callback_reading(&gen))
+        .expect("the callback parameter compiled");
+    let crate::jni::compile::JAbiLeaves::Decomposed(delivered) = callback
+        .fragment()
+        .rust
+        .invoke_plan()
+        .expect("the callback conversion is an Invoke")
+        .arg_abi(0)
+        .expect("its first argument has a delivery")
+    else {
+        panic!("the trampoline delivers ZReply whole");
+    };
+    assert!(
+        std::rc::Rc::ptr_eq(stated, &delivered),
+        "the site's ABI is a copy of the delivery's rather than the same leaves"
+    );
+}
+
+/// The `impl Fn(ZReply)` reading of `z_get`'s only parameter.
+#[cfg(test)]
+fn z_get_callback_reading(gen: &crate::JniGen) -> prebindgen_registry::flat::TypeRef {
+    gen.registry()
+        .flat()
+        .function(&syn::Ident::new("z_get", proc_macro2::Span::call_site()))
+        .expect("z_get is captured")
+        .params[0]
+        .ty
+        .clone()
 }
