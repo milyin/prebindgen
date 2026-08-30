@@ -245,6 +245,15 @@ impl<'ast> syn::visit::Visit<'ast> for Walk<'_> {
         syn::visit::visit_field(self, field);
     }
 
+    /// A field's VALUE in a struct expression — `Thing { #[cfg(test)] x: y }`
+    /// — which is a different node from the field's declaration and was the
+    /// one this walk did not know (#622 review). A test-only store is declared
+    /// on one and initialized on the other, so gating it hits both.
+    fn visit_field_value(&mut self, field: &'ast syn::FieldValue) {
+        self.record(&field.attrs, field);
+        syn::visit::visit_field_value(self, field);
+    }
+
     fn visit_variant(&mut self, variant: &'ast syn::Variant) {
         self.record(&variant.attrs, variant);
         syn::visit::visit_variant(self, variant);
@@ -448,17 +457,33 @@ fn production_three(value: u8) -> u8 {
 pub fn shipped_under_a_feature() -> bool {
     true
 }
+
+struct Store {
+    #[cfg(test)]
+    gated_field: u8,
+    kept: u8,
+}
+
+fn production_four() -> Store {
+    Store {
+        #[cfg(test)]
+        gated_field: 0,
+        kept: 1,
+    }
+}
 "####;
     let (production, items) = count(fixture, "self-test fixture");
     let total = fixture.lines().count();
     assert_eq!(production + items, total, "every line is counted once");
     // `mod tests;` 2, `gated_method` 4, the call 5, the `if`/`else` 6, the
     // chained initializer 5, the two nested functions 7 each, the foreign fn 2
-    // and the match arm 2 — 40 lines. The statements between them,
-    // `self.second();` among them, are production.
-    assert_eq!(items, 40, "the gated constructs are 40 lines");
+    // and the match arm 2 — 40 lines. Then a gated struct FIELD and a gated
+    // field VALUE, 2 each: two different nodes for one test-only store, and
+    // the second is the one this walk did not know (#622 review). The
+    // statements between them, `self.second();` among them, are production.
+    assert_eq!(items, 44, "the gated constructs are 44 lines");
     assert!(
-        production > 0 && production == total - 40,
+        production > 0 && production == total - 44,
         "nothing outside a gated construct is counted as one"
     );
     println!("self-test ok: {total} lines, {items} gated, {production} production");
