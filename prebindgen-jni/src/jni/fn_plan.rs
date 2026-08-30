@@ -734,6 +734,9 @@ impl JniFunctionPlan {
             .map(|plan| build_error_output(ext, registry, plan))
             .transpose()?;
         let mut params = Vec::new();
+        // The native position each leaf occupies, counted across the whole
+        // signature: an expanded parameter contributes several.
+        let mut position = 0usize;
         // The element's parameters: each already a name and a `TypeRef`, so
         // there is no `FnArg`/`Pat` destructuring and no position that could
         // fail to yield a type.
@@ -752,16 +755,21 @@ impl JniFunctionPlan {
                     // nothing that can miss.
                     leaves.push(classify_leaf(
                         ext, registry, &leaf.name, &leaf.ty, /*expanded=*/ true, &ident,
+                        &f.name, position,
                     )?);
+                    position += 1;
                 }
                 ParamForm::Expanded {
                     plan: Box::new(ExpandedParamPlan::new(ext, registry, plan)),
                     leaves,
                 }
             } else {
-                ParamForm::Single(Box::new(classify_leaf(
-                    ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident,
-                )?))
+                let leaf = ParamForm::Single(Box::new(classify_leaf(
+                    ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident, &f.name,
+                    position,
+                )?));
+                position += 1;
+                leaf
             };
             params.push(PlanParam { ident, ty, form });
         }
@@ -825,6 +833,7 @@ pub(crate) fn kotlin_jvm_slots(ty: &str) -> usize {
 /// Classify one effective parameter. `expanded` disables only the Vec-build
 /// collection helper; recursive data-class leaves are valid in constructor
 /// expansions and reuse the same Rust/Kotlin lowering as ordinary parameters.
+#[allow(clippy::too_many_arguments)]
 fn classify_leaf(
     ext: &Declarations,
     registry: &Registry,
@@ -832,6 +841,10 @@ fn classify_leaf(
     reading: &TypeRef,
     expanded: bool,
     source_param: &syn::Ident,
+    // The exported function this leaf belongs to, and the position it occupies
+    // in that function's native signature.
+    owner: &syn::Ident,
+    position: usize,
 ) -> Result<PlanLeaf, PlanError> {
     use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
     // `impl Fn(args)` never reaches the compiler, for the reason
@@ -897,13 +910,20 @@ fn classify_leaf(
             },
         )),
     };
-    // The site names the parameter it is, and the position is the source
-    // parameter's rather than a running count: a constructor expansion
-    // contributes leaves the signature does not name, and they all belong to
-    // the one parameter that expanded.
+    // A site is a place in an exported function, which is what the registry's
+    // `Site` means: `owner` is the function and `role` names the position in
+    // it. This named the PARAMETER as owner and always index 0, so two
+    // functions with a parameter of the same name froze the same identity, and
+    // every leaf of an expanded parameter collided with its siblings (#622
+    // review).
+    //
+    // The position is the leaf's own in the native signature rather than the
+    // source parameter's, because that is what is unique: an expansion
+    // contributes several leaves to the one parameter that expanded, and each
+    // crosses in a place of its own.
     let site = Site {
-        owner: source_param.clone(),
-        role: Role::Param { index: 0 },
+        owner: owner.clone(),
+        role: Role::Param { index: position },
     };
     let crossing = Crossing::new(reading.clone(), Direction::Construct);
     let use_pair = crate::jni::compile::optional_pair_plan_candidate(ext, reading)

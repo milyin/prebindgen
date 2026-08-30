@@ -1068,8 +1068,15 @@ impl JniGen {
         // cannot see a chain whose endpoints do not join up, or an edge naming
         // a fragment nothing compiled: those are properties of the collection,
         // and `build` is what already validates them (#621 review).
+        // Sites too, in the same plan. A site validated against the JFrag it
+        // came from cannot show a duplicate identity or a failure route that
+        // does not match its fragment's fallibility — both are properties of
+        // the whole set, which is what `build` checks (#622 review).
+        for site in self.decls.site_plans.borrow().iter() {
+            collected.site((**site).clone());
+        }
         if let Err(errors) = collected.build() {
-            panic!("the frozen JNI fragments do not form a valid generation plan: {errors}");
+            panic!("the frozen JNI plan is not valid: {errors}");
         }
     }
 
@@ -1301,6 +1308,18 @@ pub struct Declarations {
     /// Whole-value struct layouts accumulated during resolution. The frozen
     /// generation plan drains this store together with the function and
     /// interface memos, so Rust and Kotlin cannot rebuild the layout apart.
+    /// Every site frozen into the canonical plan while compiling, so the whole
+    /// set can be validated as one — which is where a duplicate site identity
+    /// or a missing failure route shows up, neither being visible in a site
+    /// compared against itself (#622 review).
+    #[cfg(test)]
+    pub(crate) site_plans: std::cell::RefCell<
+        Vec<
+            std::rc::Rc<
+                prebindgen_registry::generation::SitePlan<crate::jni::compile::JRepresentation>,
+            >,
+        >,
+    >,
     pub(crate) struct_plans: std::cell::RefCell<HashMap<TypeKey, Option<std::rc::Rc<StructPlan>>>>,
 
     /// Sealed-class payload/ownership layouts accumulated during resolution.

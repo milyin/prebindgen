@@ -1010,10 +1010,13 @@ impl JFrag {
     /// already carries exactly that pair: how many ordered leaves, and the
     /// adapter's own layout of them.
     ///
-    /// Failure is not routed per site here. JNI reports a conversion failure
-    /// through the error sink the wrapper already holds, which is a property of
-    /// the binding rather than of the site, so the route is `None` and the
-    /// representation types it as `()`.
+    /// Failure IS routed at every site, and `Some(())` is how JNI says so. The
+    /// route carries no payload — a conversion failure goes to the error sink
+    /// the wrapper already holds, so there is nothing to choose between, where
+    /// a C site chooses an out-param or a panic. But presence is the semantic
+    /// edge the canonical plan validates: a fallible fragment used by a site
+    /// with no route is `MissingFailureRoute`, and freezing `None` made every
+    /// JNI site that (#622 review).
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn freeze_site(
         &self,
@@ -1035,7 +1038,7 @@ impl JFrag {
             self.id.clone(),
             self.yields.clone(),
             AbiLayout::new(slots, self.layout.clone()),
-            None,
+            Some(()),
             prebindgen_registry::generation::Cleanup::None,
         )
     }
@@ -3610,6 +3613,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 occupied.unwrap_or(1),
                 "a frozen site plan disagrees with the wires the site occupies"
             );
+            self.decls.site_plans.borrow_mut().push(std::rc::Rc::new(
+                root.freeze_site(bound, bound.crossing.direction()),
+            ));
             assert_eq!(
                 plan.fragment(),
                 &root.id,
