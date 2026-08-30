@@ -207,7 +207,11 @@ impl prebindgen_registry::generation::Representation for JRepresentation {
     type Niche = String;
     type Cleanup = ();
     type FailureRoute = ();
-    type AbiLayout = JLayout;
+    /// A site's ordered leaves, and how they nest — `None` where they do not:
+    /// a decoupled `(present, value)` pair occupies two leaves with no single
+    /// intermediate over them, and saying `Leaf` there would invent a nesting
+    /// the fragment does not have.
+    type AbiLayout = Option<JLayout>;
     type Artifact = crate::jni::generation::JFinalArtifact;
 }
 
@@ -994,6 +998,46 @@ impl JFrag {
             true => plan,
             false => plan.with_artifact(self.rust.clone()),
         }
+    }
+
+    /// This fragment as the plan for one **site** that uses it.
+    ///
+    /// The multi-slot ABI is what JNI demonstrates and C does not need: a C
+    /// site's value occupies the slots its own `CValue` states, while a JNI
+    /// site may occupy several ordered leaves — a `data_class` parameter
+    /// crossing as its fields, an optional as a presence flag ahead of its
+    /// value — and `JLayout` is how their nesting is spelled. `AbiLayout`
+    /// already carries exactly that pair: how many ordered leaves, and the
+    /// adapter's own layout of them.
+    ///
+    /// Failure is not routed per site here. JNI reports a conversion failure
+    /// through the error sink the wrapper already holds, which is a property of
+    /// the binding rather than of the site, so the route is `None` and the
+    /// representation types it as `()`.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn freeze_site(
+        &self,
+        bound: &prebindgen_registry::recipe::Bound,
+        direction: Direction,
+    ) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+        use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+        // How many ordered ABI leaves this site occupies. A decomposed
+        // crossing states them itself; anything else is the one value its
+        // conversion names.
+        let slots = match direction {
+            Direction::Construct => self.wires.as_ref().map(Vec::len),
+            Direction::Deconstruct => self.out_wires.as_ref().map(Vec::len),
+        }
+        .unwrap_or(1);
+        SitePlan::new(
+            SiteId::new(bound.site.clone()),
+            bound.clone(),
+            self.id.clone(),
+            self.yields.clone(),
+            AbiLayout::new(slots, self.layout.clone()),
+            None,
+            prebindgen_registry::generation::Cleanup::None,
+        )
     }
 
     /// Every private Rust artifact carried by this registry fragment.
@@ -3549,6 +3593,59 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     /// leaf, and the diagnostic for an unresolved leaf names the parameter that
     /// expanded.
     fn plan(&mut self, _cx: &mut Cx<'_>, bound: &Bound, root: &JFrag) -> Result<JPlan, JErr> {
+        // Every site states itself twice while step 4 is in progress — as the
+        // `JPlan` the emitters read and as the `SitePlan` that will replace it
+        // — and this is what says the two agree about the ABI. Checked here
+        // rather than stored, because the site's own answer is right here and
+        // nothing reads the canonical one yet.
+        #[cfg(test)]
+        {
+            let plan = root.freeze_site(bound, bound.crossing.direction());
+            let occupied = match bound.crossing.direction() {
+                Direction::Construct => root.wires.as_ref().map(Vec::len),
+                Direction::Deconstruct => root.out_wires.as_ref().map(Vec::len),
+            };
+            assert_eq!(
+                plan.abi().slots(),
+                occupied.unwrap_or(1),
+                "a frozen site plan disagrees with the wires the site occupies"
+            );
+            assert_eq!(
+                plan.fragment(),
+                &root.id,
+                "a frozen site plan names a fragment the site does not use"
+            );
+            // The contract the site requires of that fragment. Type, ownership
+            // and validity together — a site that asked for a borrow where the
+            // fragment yields an owned value is a different site, and #621
+            // found three losses that a check comparing less could not see.
+            assert_eq!(
+                (
+                    &plan.required().ty,
+                    plan.required().mode,
+                    plan.required().validity
+                ),
+                (&root.yields.ty, root.yields.mode, root.yields.validity),
+                "a frozen site plan changed what the site requires of its fragment"
+            );
+            assert_eq!(
+                plan.id(),
+                &prebindgen_registry::generation::SiteId::new(bound.site.clone()),
+                "a frozen site plan changed which site it is"
+            );
+            // The layout and the slot count are two statements about the same
+            // ABI, so they have to agree: a composed layout spells the nesting
+            // of exactly the leaves the site occupies.
+            if let Some(layout) = plan.abi().payload() {
+                assert_eq!(
+                    layout.leaf_count(),
+                    plan.abi().slots(),
+                    "a frozen site plan's layout nests a different number of leaves \
+                     than the site occupies"
+                );
+            }
+        }
+
         use crate::jni::fn_plan::{
             kotlin_jvm_slots, plan_error, KotlinParamOp, NativeParam, PlanLeaf, RustParamOp,
         };
