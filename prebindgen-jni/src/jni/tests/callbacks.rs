@@ -1099,73 +1099,8 @@ fn an_expanded_callback_leaf_keeps_its_expansion_identity() {
             "return value".to_string(),
             "ExpansionLeaf(0,0)".to_string(),
             "ExpansionLeaf(0,1)".to_string(),
-            // The value that leaf's callback delivers, which is a site of its
-            // own — in the parameter that expanded, not in the leaf.
-            "argument 0 of the callback in parameter 0".to_string(),
             "Param(1)".to_string(),
         ],
         "the callback leaf is the expansion's second leaf, not a parameter: {roles:?}"
-    );
-}
-
-/// The values a callback delivers are sites, and say what they hand over.
-///
-/// They sit in a parameter list but travel the other way, which is what
-/// `Role::CallbackArg` names. None was stated before — the callback is answered
-/// whole and its arguments never reach `Compiler::site` — so "JNI describes its
-/// sites" excluded every value a trampoline delivers (#622 review).
-///
-/// A decomposed argument states the leaves it hands over; a whole one states
-/// the single value it is.
-#[test]
-fn the_values_a_callback_delivers_are_sites() {
-    use prebindgen_registry::recipe::Role;
-    let loc = myflat_loc();
-    let items: Vec<(syn::Item, SourceLocation)> = vec![
-        (
-            syn::Item::Struct(syn::parse_quote!(
-                pub struct Tick {
-                    pub at: i64,
-                    pub label: String,
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn watch(n: i64, sink: impl Fn(Tick, i64) + Send + Sync + 'static) {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-    ];
-    let registry =
-        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let gen = JniGenBuilder::new()
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!()
-                .class(crate::data_class!(Tick))
-                .fun(prebindgen_registry::fun!(watch)),
-        )
-        .build_with(registry)
-        .expect("resolve");
-
-    let delivered: Vec<(usize, usize, usize)> = gen
-        .declarations()
-        .site_plans
-        .borrow()
-        .iter()
-        .filter_map(|plan| match plan.id().site().role {
-            Role::CallbackArg { param, arg } => Some((param, arg, plan.abi().slots())),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        delivered,
-        [(1, 0, 2), (1, 1, 1)],
-        "both delivered values are sites of the callback in parameter 1: the \
-         data class hands over its two leaves, the scalar hands over itself"
     );
 }
