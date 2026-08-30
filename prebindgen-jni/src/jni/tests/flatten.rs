@@ -3470,8 +3470,15 @@ fn a_decomposed_return_shares_one_wire_list_with_its_site() {
 }
 
 /// A whole return's canonical site holds the plan the emitters read — the one
-/// with the convert delivery attached, not the intermediate the site hook
+/// with the **convert delivery** attached, not the intermediate the site hook
 /// produced.
+///
+/// The fixture is a single-leaf `expand_return`, deliberately: an ordinary
+/// scalar return has `convert_delivery: None` before and after finalization, so
+/// it cannot tell the two objects apart and a change that finalized plain
+/// values while dropping the convert branch would pass (#622 review). This one
+/// asserts the three facts together — the return IS a convert, it HAS a
+/// delivery, and the site holds that same object.
 ///
 /// `return_plan` answers before `build_output` attaches `convert_delivery`, so
 /// freezing the hook's object made the carrier authoritative for something no
@@ -3480,18 +3487,44 @@ fn a_decomposed_return_shares_one_wire_list_with_its_site() {
 #[test]
 fn a_whole_return_site_holds_the_plan_the_emitters_read() {
     let loc = myflat_loc();
-    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![(
-        syn::Item::Fn(syn::parse_quote!(
-            pub fn z_count(n: i64) -> i64 {
-                unimplemented!()
-            }
-        )),
-        loc.clone(),
-    )];
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOneStruct {
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_to_struct(o: &ZOne) -> ZOneStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_make(n: i64) -> ZOne {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
     let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
     let gen = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_count)))
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOne))
+                .fun(prebindgen_registry::fun!(z_one_make)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZOne)
+                .fields(prebindgen_registry::fields!(z_one_to_struct)),
+        )
         .build_with(registry)
         .expect("resolve");
 
@@ -3500,11 +3533,18 @@ fn a_whole_return_site_holds_the_plan_the_emitters_read() {
         .generation
         .as_ref()
         .expect("resolved JniGen has a frozen generation plan")
-        .function(&syn::parse_quote!(z_count))
+        .function(&syn::parse_quote!(z_one_make))
         .expect("the exported function is planned");
     let crate::jni::fn_plan::FnOutputPlan::Value(output) = &function.output else {
-        panic!("a scalar return is a value delivery");
+        panic!("a single-leaf value form takes the Return delivery");
     };
+    // The three facts together: without the first two, identity alone would
+    // hold for a plain value whose delivery is `None` either way.
+    assert!(output.is_convert, "the return is a convert");
+    assert!(
+        output.convert_delivery.is_some(),
+        "the convert delivery is attached to the plan the emitters read"
+    );
     let frozen: Vec<_> = gen
         .declarations()
         .site_plans
