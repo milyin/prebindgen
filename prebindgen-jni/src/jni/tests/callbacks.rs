@@ -1234,7 +1234,7 @@ fn a_delivered_argument_names_the_row_it_crossed_on() {
     assert_eq!(site.abi().slots(), stated.len());
 
     let callback = decls
-        .in_frag(&z_get_callback_reading(&gen))
+        .in_frag(&param_reading(&gen, "z_get", 0))
         .expect("the callback parameter compiled");
     let crate::jni::compile::JAbiLeaves::Decomposed(delivered) = callback
         .fragment()
@@ -1252,14 +1252,88 @@ fn a_delivered_argument_names_the_row_it_crossed_on() {
     );
 }
 
-/// The `impl Fn(ZReply)` reading of `z_get`'s only parameter.
+/// A value a callback delivers **whole** states its site over the delivery too.
+///
+/// The other half of the row above: a scalar argument has no decomposition, so
+/// it names no `parts` row and takes its crossing's default — and its site's
+/// ABI is still the trampoline's own, not a second one derived beside it.
+#[test]
+fn a_whole_delivered_argument_shares_the_trampolines_abi() {
+    use prebindgen::SourceLocation;
+    let loc = myflat_loc();
+    let fns: &[&str] =
+        &["pub fn z_watch(on_tick: impl Fn(i64) + Send + Sync + 'static) { unimplemented!() }"];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_watch)))
+        .build_with(registry)
+        .expect("resolve");
+
+    let decls = gen.declarations();
+    let plans = decls.site_plans.borrow();
+    let site = plans
+        .iter()
+        .find(|plan| {
+            plan.id().site().owner == "z_watch"
+                && matches!(
+                    plan.id().site().role,
+                    prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg: 0 }
+                )
+        })
+        .expect("the delivered i64 states a site");
+
+    // No decomposition and no declaration, so there is no row to name at all:
+    // the site takes the recipe the registry derives from the type's kind,
+    // attributed to the adapter because nothing bound it.
+    assert_eq!(site.bound().recipe.name().as_str(), "derived");
+    assert_eq!(
+        site.bound().origin,
+        prebindgen_registry::recipe::Origin::Adapter
+    );
+    assert_eq!(site.abi().slots(), 1);
+
+    let crate::jni::compile::JAbiLeaves::Invoked(stated) = site.abi().payload() else {
+        panic!("a whole delivery is not several leaves");
+    };
+    let crate::jni::compile::JAbiLeaves::Invoked(delivered) = decls
+        .in_frag(&param_reading(&gen, "z_watch", 0))
+        .expect("the callback parameter compiled")
+        .fragment()
+        .rust
+        .invoke_plan()
+        .expect("the callback conversion is an Invoke")
+        .arg_abi(0)
+        .expect("its first argument has a delivery")
+    else {
+        panic!("the trampoline decomposes an i64");
+    };
+    assert!(
+        std::rc::Rc::ptr_eq(stated, &delivered),
+        "the site's ABI is a copy of the delivery's rather than the same plan"
+    );
+}
+
+/// One captured function's parameter reading, by name and position.
 #[cfg(test)]
-fn z_get_callback_reading(gen: &crate::JniGen) -> prebindgen_registry::flat::TypeRef {
+fn param_reading(
+    gen: &crate::JniGen,
+    func: &str,
+    index: usize,
+) -> prebindgen_registry::flat::TypeRef {
     gen.registry()
         .flat()
-        .function(&syn::Ident::new("z_get", proc_macro2::Span::call_site()))
-        .expect("z_get is captured")
-        .params[0]
+        .function(&syn::Ident::new(func, proc_macro2::Span::call_site()))
+        .unwrap_or_else(|| panic!("{func} is captured"))
+        .params[index]
         .ty
         .clone()
 }
