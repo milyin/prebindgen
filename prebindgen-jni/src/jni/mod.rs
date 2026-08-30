@@ -904,6 +904,13 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        // Every binding a test writes also freezes each compiled fragment into
+        // its canonical plan and checks the two describe the same fragment.
+        // Nothing renders from that plan yet — #613 step 4 is what moves JNI
+        // onto it — so this is what says it is ready to.
+        #[cfg(test)]
+        self.assert_fragments_freeze();
+
         // Every binding a test writes also checks that the assembly's
         // dependency edges name every call its artifacts render — the
         // completeness the emission-time check reasons from.
@@ -924,6 +931,44 @@ impl JniGen {
                 .assembly(),
             out_path,
         )?)
+    }
+
+    /// Every compiled fragment states the same thing twice while step 4 is in
+    /// progress — as a [`JFrag`](crate::jni::compile::JFrag) and as the
+    /// `FragmentPlan` it freezes to — and this is what says the two agree.
+    ///
+    /// Identity, source and artifact presence are compared because they are
+    /// what a plan is keyed and spelled by, and what an emitter would read
+    /// instead of the fragment. A composed-only fragment renders nothing, and
+    /// the canonical plan says so by carrying no artifact at all.
+    #[cfg(test)]
+    fn assert_fragments_freeze(&self) {
+        let generation = self
+            .decls
+            .generation
+            .as_ref()
+            .expect("resolved JniGen has no frozen generation plan");
+        for fragment in generation.conversions().fragments() {
+            let plan = fragment.freeze();
+            assert_eq!(
+                plan.id(),
+                &fragment.id,
+                "a frozen fragment plan changed the fragment's identity"
+            );
+            assert_eq!(
+                plan.source().key(),
+                fragment.source.key(),
+                "`{}`: a frozen fragment plan changed the crossing it answers",
+                fragment.source.key()
+            );
+            assert_eq!(
+                plan.artifact().is_some(),
+                !fragment.composed_only,
+                "`{}`: a composed-only fragment renders nothing, and only such a \
+                 fragment freezes without an artifact",
+                fragment.source.key()
+            );
+        }
     }
 
     /// The resolved registry — conversions, decompositions, and the model.

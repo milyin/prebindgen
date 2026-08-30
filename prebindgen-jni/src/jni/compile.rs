@@ -216,6 +216,17 @@ impl prebindgen_registry::generation::Representation for JRepresentation {
 /// What a `ConverterImpl` was, minus the bookkeeping the table now does.
 #[derive(Clone)]
 pub(crate) struct JFrag {
+    /// This fragment's canonical identity and the crossing it answers — what
+    /// [`FragmentPlan`](prebindgen_registry::generation::FragmentPlan) is keyed
+    /// and spelled by. Carried here so freezing reads them off the fragment
+    /// rather than re-deriving them from a site that has moved on.
+    pub(crate) id: prebindgen_registry::generation::FragmentId,
+    pub(crate) source: TypeRef,
+    /// The registry-composed shape of this fragment, in the canonical
+    /// vocabulary. Built where the shape is known — the hook the compiler
+    /// called — rather than in an adapter enum translated later, which is the
+    /// duplication #613 step 6 removes on the C side.
+    pub(crate) shape: prebindgen_registry::generation::ShapePlan<JRepresentation>,
     pub(crate) conv: ConverterImpl<KotlinMeta>,
     /// The conversions between this fragment's wire value and its source
     /// value, in **execution order for this fragment's direction** — from the
@@ -877,6 +888,12 @@ impl JFrag {
     ) -> Self {
         let validity = validity_of(at.crossing.direction(), at.crossing.mode());
         Self {
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            // Atomic until a composing hook says otherwise: a fragment the
+            // compiler reached through `atomic` converts one leaf, and every
+            // other hook overwrites this with the shape it composed.
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             conv,
             chain: prebindgen_registry::generation::ConversionChain::Direct,
             rust,
@@ -892,6 +909,54 @@ impl JFrag {
                 mode: at.crossing.mode(),
                 validity,
             },
+        }
+    }
+
+    /// This fragment as a [`FragmentPlan`] — the canonical description, in the
+    /// registry's own vocabulary rather than this adapter's.
+    ///
+    /// Nothing renders from it yet: #613 step 4 is putting JNI fragments and
+    /// sites into the canonical plan, and this is the first half, built beside
+    /// the fields it will replace so that the swap is a deletion rather than a
+    /// rewrite — the shape #620 used for the same kind of move. Its only reader
+    /// so far is the check that says the two describe the same fragment, which
+    /// is why it carries a `dead_code` exemption outside tests; the exemption
+    /// goes when the generation plan holds these instead of `JFrag`.
+    ///
+    /// A **composed-only** fragment freezes without an artifact. That is the
+    /// canonical plan's existing answer for a fragment that emits nothing
+    /// (`FragmentPlan::artifact` is already an `Option`), not a JNI concept:
+    /// the `parts` recipe of a `data_class` occupies wires and states a
+    /// composition, and has no converter of its own to render.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn freeze(&self) -> prebindgen_registry::generation::FragmentPlan<JRepresentation> {
+        use prebindgen_registry::generation::{
+            ConverterPlan, FragmentPlan, NichePlan, {self as generation},
+        };
+        let niche_key = |slot: &prebindgen_registry::niches::NicheSlot| {
+            format!(
+                "{}=>{}",
+                quote::ToTokens::to_token_stream(&slot.value),
+                quote::ToTokens::to_token_stream(&slot.matches),
+            )
+        };
+        let exposed: Vec<String> = self.conv.niches.slots.iter().map(niche_key).collect();
+        let converter = ConverterPlan::new(
+            self.shape.clone(),
+            NichePlan::new(0, Vec::new(), exposed),
+            generation::Failure::Fallible,
+            generation::Cleanup::None,
+        );
+        let plan = FragmentPlan::new(
+            self.id.clone(),
+            self.source.clone(),
+            TypeKey::from_type(&self.conv.destination),
+            converter,
+            self.yields.clone(),
+        );
+        match self.composed_only {
+            true => plan,
+            false => plan.with_artifact(self.rust.clone()),
         }
     }
 
@@ -1644,6 +1709,9 @@ impl<R: Conversions> JCompile<'_, R> {
                 subs,
             },
             choice_arm: None,
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Leaf),
@@ -2093,6 +2161,9 @@ impl<R: Conversions> JCompile<'_, R> {
                 metadata: KotlinMeta::default(),
                 subs: parts.iter().map(|(part, _)| part.ty.key()).collect(),
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Product(layouts)),
@@ -2257,6 +2328,9 @@ impl<R: Conversions> JCompile<'_, R> {
                 metadata: KotlinMeta::default(),
                 subs: parts_subs(arms),
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Choice(layouts)),
@@ -2414,6 +2488,9 @@ impl<R: Conversions> JCompile<'_, R> {
                 },
                 subs: vec![element.key()],
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Leaf),
@@ -2496,6 +2573,9 @@ impl<R: Conversions> JCompile<'_, R> {
                 },
                 subs: vec![target.key()],
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Leaf),
@@ -2782,6 +2862,9 @@ impl<R: Conversions> JCompile<'_, R> {
                 },
                 subs: vec![element.key()],
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(layout),
