@@ -194,315 +194,321 @@
 <a href=#194 id=194 data-nosnippet>194</a>    </span>ungated: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::IfaceParam]&gt;,
 <a href=#195 id=195 data-nosnippet>195</a>    imports: <span class="kw-2">&amp;mut </span>BTreeSet&lt;String&gt;,
 <a href=#196 id=196 data-nosnippet>196</a>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
-<a href=#197 id=197 data-nosnippet>197</a>    <span class="comment">// A presence flag gates everything after it, and contributes no value of
-<a href=#198 id=198 data-nosnippet>198</a>    // its own: the field is what its group rebuilds, or null.
-<a href=#199 id=199 data-nosnippet>199</a>    </span><span class="kw">if </span><span class="macro">matches!</span>(leaves[<span class="number">0</span>].from, <span class="kw">crate</span>::jni::compile::OutFrom::Present) {
-<a href=#200 id=200 data-nosnippet>200</a>        <span class="comment">// Inside the guard the gate's own arm is no longer in question, so the
-<a href=#201 id=201 data-nosnippet>201</a>        // group it opened is stripped: what is left is the value as its own
-<a href=#202 id=202 data-nosnippet>202</a>        // class declares it, which is what says whether a null here is this
-<a href=#203 id=203 data-nosnippet>203</a>        // gate's doing or the value's own.
-<a href=#204 id=204 data-nosnippet>204</a>        </span><span class="kw">let </span>inner: Vec&lt;<span class="kw">crate</span>::jni::compile::OutWire&gt; = leaves[<span class="number">1</span>..]
-<a href=#205 id=205 data-nosnippet>205</a>            .iter()
-<a href=#206 id=206 data-nosnippet>206</a>            .map(|leaf| {
-<a href=#207 id=207 data-nosnippet>207</a>                <span class="kw">let </span><span class="kw-2">mut </span>leaf = leaf.clone();
-<a href=#208 id=208 data-nosnippet>208</a>                leaf.groups = leaf
-<a href=#209 id=209 data-nosnippet>209</a>                    .groups
-<a href=#210 id=210 data-nosnippet>210</a>                    .split_first()
-<a href=#211 id=211 data-nosnippet>211</a>                    .map_or_else(Vec::new, |(<span class="kw">_</span>, rest)| rest.to_vec());
-<a href=#212 id=212 data-nosnippet>212</a>                leaf
-<a href=#213 id=213 data-nosnippet>213</a>            })
-<a href=#214 id=214 data-nosnippet>214</a>            .collect();
-<a href=#215 id=215 data-nosnippet>215</a>        <span class="kw">let </span>inner_params = <span class="kw">crate</span>::jni::iface::plan_leaf_params(ext, <span class="kw-2">&amp;</span>inner)<span class="question-mark">?</span>;
-<a href=#216 id=216 data-nosnippet>216</a>        <span class="kw">let </span>gated = factory_part(
-<a href=#217 id=217 data-nosnippet>217</a>            ext,
-<a href=#218 id=218 data-nosnippet>218</a>            registry,
-<a href=#219 id=219 data-nosnippet>219</a>            <span class="kw-2">&amp;</span>leaves[<span class="number">1</span>..],
-<a href=#220 id=220 data-nosnippet>220</a>            <span class="kw-2">&amp;</span>params[<span class="number">1</span>..],
-<a href=#221 id=221 data-nosnippet>221</a>            <span class="kw-2">&amp;</span>names[<span class="number">1</span>..],
-<a href=#222 id=222 data-nosnippet>222</a>            <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>inner_params),
-<a href=#223 id=223 data-nosnippet>223</a>            imports,
-<a href=#224 id=224 data-nosnippet>224</a>        )<span class="question-mark">?</span>;
-<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">"if ({}) {gated} else null"</span>, names[<span class="number">0</span>]));
-<a href=#226 id=226 data-nosnippet>226</a>    }
-<a href=#227 id=227 data-nosnippet>227</a>    <span class="kw">if </span>leaves[<span class="number">0</span>].is_tag() {
-<a href=#228 id=228 data-nosnippet>228</a>        <span class="kw">let </span>(<span class="kw">_</span>, when) = ext.sum_reconstruct(
-<a href=#229 id=229 data-nosnippet>229</a>            registry,
-<a href=#230 id=230 data-nosnippet>230</a>            <span class="kw-2">&amp;</span>leaves[<span class="number">0</span>].out_ty.unwrapped().key(),
-<a href=#231 id=231 data-nosnippet>231</a>            leaves,
-<a href=#232 id=232 data-nosnippet>232</a>            params,
-<a href=#233 id=233 data-nosnippet>233</a>            names,
-<a href=#234 id=234 data-nosnippet>234</a>            imports,
-<a href=#235 id=235 data-nosnippet>235</a>        );
-<a href=#236 id=236 data-nosnippet>236</a>        <span class="kw">return </span><span class="prelude-val">Some</span>(when);
-<a href=#237 id=237 data-nosnippet>237</a>    }
-<a href=#238 id=238 data-nosnippet>238</a>    <span class="comment">// A nested class: its leaves are the parent's, put back through the class
-<a href=#239 id=239 data-nosnippet>239</a>    // the decomposition recorded when it flattened them. A gated one receives
-<a href=#240 id=240 data-nosnippet>240</a>    // wire defaults when absent, so its object slots are nullable in the
-<a href=#241 id=241 data-nosnippet>241</a>    // parent's signature and re-asserted inside the guard the flag opened.
-<a href=#242 id=242 data-nosnippet>242</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(fqn) = leaves[<span class="number">0</span>].through.first() {
-<a href=#243 id=243 data-nosnippet>243</a>        <span class="kw">let </span>short = register_fqn(fqn, imports);
-<a href=#244 id=244 data-nosnippet>244</a>        <span class="comment">// Re-asserted only where the NULL came from the gate, never where the
-<a href=#245 id=245 data-nosnippet>245</a>        // value is legitimately absent: a leaf whose own type is optional is
-<a href=#246 id=246 data-nosnippet>246</a>        // nullable on its own account, and `!!` there would throw on a value
-<a href=#247 id=247 data-nosnippet>247</a>        // the class is meant to hold. The same distinction `sum_ctor_arg`
-<a href=#248 id=248 data-nosnippet>248</a>        // makes for an inert group's payload.
-<a href=#249 id=249 data-nosnippet>249</a>        </span><span class="kw">let </span>forwarded: Vec&lt;String&gt; = names
-<a href=#250 id=250 data-nosnippet>250</a>            .iter()
-<a href=#251 id=251 data-nosnippet>251</a>            .enumerate()
-<a href=#252 id=252 data-nosnippet>252</a>            .map(|(i, name)| {
-<a href=#253 id=253 data-nosnippet>253</a>                <span class="comment">// Re-asserted only where the null is the GATE's doing: the
-<a href=#254 id=254 data-nosnippet>254</a>                // parent declares the slot nullable so the encoder can default
-<a href=#255 id=255 data-nosnippet>255</a>                // it when absent, while the class itself declares it non-null.
-<a href=#256 id=256 data-nosnippet>256</a>                // A slot the class already declares nullable — its own type is
-<a href=#257 id=257 data-nosnippet>257</a>                // optional, or it belongs to a sum group that is inert whenever
-<a href=#258 id=258 data-nosnippet>258</a>                // another alternative is live — is forwarded untouched, because
-<a href=#259 id=259 data-nosnippet>259</a>                // `!!` there would throw on a value the class is meant to hold.
-<a href=#260 id=260 data-nosnippet>260</a>                </span><span class="kw">let </span>gate_added = params[i].raw.is_nullable()
-<a href=#261 id=261 data-nosnippet>261</a>                    &amp;&amp; !ungated.is_none_or(|own| own[i].raw.is_nullable());
-<a href=#262 id=262 data-nosnippet>262</a>                <span class="kw">match </span>gate_added {
-<a href=#263 id=263 data-nosnippet>263</a>                    <span class="bool-val">true </span>=&gt; <span class="macro">format!</span>(<span class="string">"{name}!!"</span>),
-<a href=#264 id=264 data-nosnippet>264</a>                    <span class="bool-val">false </span>=&gt; name.clone(),
-<a href=#265 id=265 data-nosnippet>265</a>                }
-<a href=#266 id=266 data-nosnippet>266</a>            })
-<a href=#267 id=267 data-nosnippet>267</a>            .collect();
-<a href=#268 id=268 data-nosnippet>268</a>        <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">"{short}.fromParts({})"</span>, forwarded.join(<span class="string">", "</span>)));
-<a href=#269 id=269 data-nosnippet>269</a>    }
-<a href=#270 id=270 data-nosnippet>270</a>    <span class="macro">debug_assert_eq!</span>(
-<a href=#271 id=271 data-nosnippet>271</a>        leaves.len(),
-<a href=#272 id=272 data-nosnippet>272</a>        <span class="number">1</span>,
-<a href=#273 id=273 data-nosnippet>273</a>        <span class="string">"an unselected field with no class path is one leaf"
-<a href=#274 id=274 data-nosnippet>274</a>    </span>);
-<a href=#275 id=275 data-nosnippet>275</a>    <span class="prelude-val">Some</span>(ext.sum_ctor_arg(<span class="kw-2">&amp;</span>leaves[<span class="number">0</span>], <span class="kw-2">&amp;</span>params[<span class="number">0</span>], <span class="kw-2">&amp;</span>names[<span class="number">0</span>], imports))
-<a href=#276 id=276 data-nosnippet>276</a>}
-<a href=#277 id=277 data-nosnippet>277</a>
-<a href=#278 id=278 data-nosnippet>278</a><span class="doccomment">/// Render the Kotlin `close()` expression for a handle `receiver` through
-<a href=#279 id=279 data-nosnippet>279</a>/// the folded [`FoldStrategy`] layers. Fresh lambda variable per nesting
-<a href=#280 id=280 data-nosnippet>280</a>/// level avoids `it` shadowing; the common single-layer cases are
-<a href=#281 id=281 data-nosnippet>281</a>/// special-cased for readable output (`x?.close()`, `x.forEach { it.close() }`).
-<a href=#282 id=282 data-nosnippet>282</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render_handle_close(strategy: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::FoldStrategy, receiver: <span class="kw-2">&amp;</span>str) -&gt; String {
-<a href=#283 id=283 data-nosnippet>283</a>    <span class="kw">use </span>prebindgen_registry::shape::Shape::<span class="kw-2">*</span>;
-<a href=#284 id=284 data-nosnippet>284</a>    <span class="kw">fn </span>go(strategy: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::FoldStrategy, receiver: <span class="kw-2">&amp;</span>str, depth: usize) -&gt; String {
-<a href=#285 id=285 data-nosnippet>285</a>        <span class="kw">match </span>strategy {
-<a href=#286 id=286 data-nosnippet>286</a>            Base =&gt; <span class="macro">format!</span>(<span class="string">"{receiver}.close()"</span>),
-<a href=#287 id=287 data-nosnippet>287</a>            <span class="comment">// The Kotlin-side receiver is already nullable (`handle_kt_type`
-<a href=#288 id=288 data-nosnippet>288</a>            // emits `T?` for both niche and boxed kinds), so `?.close()` covers
-<a href=#289 id=289 data-nosnippet>289</a>            // both wire representations.
-<a href=#290 id=290 data-nosnippet>290</a>            </span>Optional(<span class="kw">_</span>, inner) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>inner {
-<a href=#291 id=291 data-nosnippet>291</a>                Base =&gt; <span class="macro">format!</span>(<span class="string">"{receiver}?.close()"</span>),
-<a href=#292 id=292 data-nosnippet>292</a>                <span class="kw">_ </span>=&gt; {
-<a href=#293 id=293 data-nosnippet>293</a>                    <span class="kw">let </span>v = <span class="macro">format!</span>(<span class="string">"e{depth}"</span>);
-<a href=#294 id=294 data-nosnippet>294</a>                    <span class="macro">format!</span>(<span class="string">"{receiver}?.let {{ {v} -&gt; {} }}"</span>, go(inner, <span class="kw-2">&amp;</span>v, depth + <span class="number">1</span>))
-<a href=#295 id=295 data-nosnippet>295</a>                }
-<a href=#296 id=296 data-nosnippet>296</a>            },
-<a href=#297 id=297 data-nosnippet>297</a>            Iterable(inner) =&gt; {
-<a href=#298 id=298 data-nosnippet>298</a>                <span class="kw">let </span>v = <span class="macro">format!</span>(<span class="string">"e{depth}"</span>);
-<a href=#299 id=299 data-nosnippet>299</a>                <span class="macro">format!</span>(
-<a href=#300 id=300 data-nosnippet>300</a>                    <span class="string">"{receiver}.forEach {{ {v} -&gt; {} }}"</span>,
-<a href=#301 id=301 data-nosnippet>301</a>                    go(inner, <span class="kw-2">&amp;</span>v, depth + <span class="number">1</span>)
-<a href=#302 id=302 data-nosnippet>302</a>                )
-<a href=#303 id=303 data-nosnippet>303</a>            }
-<a href=#304 id=304 data-nosnippet>304</a>        }
-<a href=#305 id=305 data-nosnippet>305</a>    }
-<a href=#306 id=306 data-nosnippet>306</a>    go(strategy, receiver, <span class="number">0</span>)
-<a href=#307 id=307 data-nosnippet>307</a>}
-<a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a><span class="doccomment">/// Fold the projection wrap call `W(receiver)` through the
-<a href=#310 id=310 data-nosnippet>310</a>/// [`FoldStrategy`] layers:
-<a href=#311 id=311 data-nosnippet>311</a>/// * `Direct`         → `W(x)`
-<a href=#312 id=312 data-nosnippet>312</a>/// * `Nullable{Boxed}` → `x?.let { W(it) }` (JVM-null at the wire)
-<a href=#313 id=313 data-nosnippet>313</a>/// * `Nullable{Niche}` over a primitive wire (e.g. `jlong`) →
-<a href=#314 id=314 data-nosnippet>314</a>///   `x.let { if (it == &lt;sentinel&gt;) null else W(it) }`
-<a href=#315 id=315 data-nosnippet>315</a>/// * `Nullable{Niche}` over an object wire (e.g. `JByteArray`) →
-<a href=#316 id=316 data-nosnippet>316</a>///   `x?.let { W(it) }` (the wire is already a nullable reference)
-<a href=#317 id=317 data-nosnippet>317</a>/// * `Iterable`       → `x.map { W(it) }`
-<a href=#318 id=318 data-nosnippet>318</a>///
-<a href=#319 id=319 data-nosnippet>319</a>/// `niche_sentinel` is the Kotlin literal to compare against for the
-<a href=#320 id=320 data-nosnippet>320</a>/// `Niche+primitive` arm (e.g. `"0L"` for `jlong`-wired handles). When the
-<a href=#321 id=321 data-nosnippet>321</a>/// wire is object-shaped the sentinel is unused — `null` is the wire-level
-<a href=#322 id=322 data-nosnippet>322</a>/// representation and `?.let` is a no-cost null check.
-<a href=#323 id=323 data-nosnippet>323</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fold_projection_wrap(
-<a href=#324 id=324 data-nosnippet>324</a>    strategy: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::FoldStrategy,
-<a href=#325 id=325 data-nosnippet>325</a>    receiver: <span class="kw-2">&amp;</span>str,
-<a href=#326 id=326 data-nosnippet>326</a>    kind: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::ProjectionKind,
-<a href=#327 id=327 data-nosnippet>327</a>    wrap_class: <span class="kw-2">&amp;</span>str,
-<a href=#328 id=328 data-nosnippet>328</a>    niche_sentinel: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
-<a href=#329 id=329 data-nosnippet>329</a>) -&gt; String {
-<a href=#330 id=330 data-nosnippet>330</a>    <span class="kw">use </span>prebindgen_registry::shape::Shape::<span class="kw-2">*</span>;
-<a href=#331 id=331 data-nosnippet>331</a>
-<a href=#332 id=332 data-nosnippet>332</a>    <span class="kw">use </span><span class="kw">crate</span>::jni::NullableKind;
-<a href=#333 id=333 data-nosnippet>333</a>    <span class="kw">fn </span>go(
-<a href=#334 id=334 data-nosnippet>334</a>        s: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::FoldStrategy,
-<a href=#335 id=335 data-nosnippet>335</a>        r: <span class="kw-2">&amp;</span>str,
-<a href=#336 id=336 data-nosnippet>336</a>        kind: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::ProjectionKind,
-<a href=#337 id=337 data-nosnippet>337</a>        w: <span class="kw-2">&amp;</span>str,
-<a href=#338 id=338 data-nosnippet>338</a>        sentinel: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
-<a href=#339 id=339 data-nosnippet>339</a>        depth: usize,
-<a href=#340 id=340 data-nosnippet>340</a>    ) -&gt; String {
-<a href=#341 id=341 data-nosnippet>341</a>        <span class="kw">match </span>s {
-<a href=#342 id=342 data-nosnippet>342</a>            Base =&gt; projection_wrap_expr(kind, w, r),
-<a href=#343 id=343 data-nosnippet>343</a>            Optional(nullable_kind, inner) =&gt; <span class="kw">match </span>(nullable_kind, <span class="kw-2">&amp;**</span>inner) {
-<a href=#344 id=344 data-nosnippet>344</a>                <span class="comment">// Primitive-wired niche → can't carry null on the wire, so
-<a href=#345 id=345 data-nosnippet>345</a>                // compare against the sentinel and synthesize null on the
-<a href=#346 id=346 data-nosnippet>346</a>                // Kotlin side.
-<a href=#347 id=347 data-nosnippet>347</a>                </span>(NullableKind::Niche, Base) <span class="kw">if </span>sentinel.is_some() =&gt; {
-<a href=#348 id=348 data-nosnippet>348</a>                    <span class="kw">let </span>s = sentinel.unwrap();
-<a href=#349 id=349 data-nosnippet>349</a>                    <span class="kw">let </span>wrapped = projection_wrap_expr(kind, w, <span class="string">"it"</span>);
-<a href=#350 id=350 data-nosnippet>350</a>                    <span class="macro">format!</span>(<span class="string">"{r}.let {{ if (it == {s}) null else {wrapped} }}"</span>)
-<a href=#351 id=351 data-nosnippet>351</a>                }
-<a href=#352 id=352 data-nosnippet>352</a>                <span class="comment">// Object-wired niche or fully boxed Nullable → `?.let { W(it) }`.
-<a href=#353 id=353 data-nosnippet>353</a>                </span>(<span class="kw">_</span>, Base) =&gt; {
-<a href=#354 id=354 data-nosnippet>354</a>                    <span class="kw">let </span>wrapped = projection_wrap_expr(kind, w, <span class="string">"it"</span>);
-<a href=#355 id=355 data-nosnippet>355</a>                    <span class="macro">format!</span>(<span class="string">"{r}?.let {{ {wrapped} }}"</span>)
-<a href=#356 id=356 data-nosnippet>356</a>                }
-<a href=#357 id=357 data-nosnippet>357</a>                <span class="comment">// Deeper nesting. The niche/boxed distinction is only
-<a href=#358 id=358 data-nosnippet>358</a>                // observable at the outermost layer covering a `Direct`
-<a href=#359 id=359 data-nosnippet>359</a>                // leaf; intermediate layers (nullable-of-iterable etc.)
-<a href=#360 id=360 data-nosnippet>360</a>                // can keep the simple form because Kotlin's `?.` chain
-<a href=#361 id=361 data-nosnippet>361</a>                // already represents the layered null.
-<a href=#362 id=362 data-nosnippet>362</a>                </span><span class="kw">_ </span>=&gt; {
-<a href=#363 id=363 data-nosnippet>363</a>                    <span class="kw">let </span>v = <span class="macro">format!</span>(<span class="string">"e{depth}"</span>);
-<a href=#364 id=364 data-nosnippet>364</a>                    <span class="macro">format!</span>(
-<a href=#365 id=365 data-nosnippet>365</a>                        <span class="string">"{r}?.let {{ {v} -&gt; {} }}"</span>,
-<a href=#366 id=366 data-nosnippet>366</a>                        go(inner, <span class="kw-2">&amp;</span>v, kind, w, sentinel, depth + <span class="number">1</span>)
-<a href=#367 id=367 data-nosnippet>367</a>                    )
-<a href=#368 id=368 data-nosnippet>368</a>                }
-<a href=#369 id=369 data-nosnippet>369</a>            },
-<a href=#370 id=370 data-nosnippet>370</a>            Iterable(inner) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>inner {
-<a href=#371 id=371 data-nosnippet>371</a>                Base =&gt; {
-<a href=#372 id=372 data-nosnippet>372</a>                    <span class="kw">let </span>wrapped = projection_wrap_expr(kind, w, <span class="string">"it"</span>);
-<a href=#373 id=373 data-nosnippet>373</a>                    <span class="macro">format!</span>(<span class="string">"{r}.map {{ {wrapped} }}"</span>)
+<a href=#197 id=197 data-nosnippet>197</a>    <span class="comment">// The class boundary is asked FIRST. A nested child may itself begin with
+<a href=#198 id=198 data-nosnippet>198</a>    // a selector — an `Option&lt;Mid&gt;` whose `Mid` starts with an optional field,
+<a href=#199 id=199 data-nosnippet>199</a>    // or with a sum — and that selector belongs to the CHILD's signature, not
+<a href=#200 id=200 data-nosnippet>200</a>    // to this one. Reading `from` before `through` consumed it here and called
+<a href=#201 id=201 data-nosnippet>201</a>    // the child factory without it, which is a `fromParts` arity mismatch the
+<a href=#202 id=202 data-nosnippet>202</a>    // JVM only reports at the call (#620 review).
+<a href=#203 id=203 data-nosnippet>203</a>    // A nested class: its leaves are the parent's, put back through the class
+<a href=#204 id=204 data-nosnippet>204</a>    // the decomposition recorded when it flattened them. A gated one receives
+<a href=#205 id=205 data-nosnippet>205</a>    // wire defaults when absent, so its object slots are nullable in the
+<a href=#206 id=206 data-nosnippet>206</a>    // parent's signature and re-asserted inside the guard the flag opened.
+<a href=#207 id=207 data-nosnippet>207</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(fqn) = leaves[<span class="number">0</span>].through.first() {
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">let </span>short = register_fqn(fqn, imports);
+<a href=#209 id=209 data-nosnippet>209</a>        <span class="comment">// Re-asserted only where the NULL came from the gate, never where the
+<a href=#210 id=210 data-nosnippet>210</a>        // value is legitimately absent: a leaf whose own type is optional is
+<a href=#211 id=211 data-nosnippet>211</a>        // nullable on its own account, and `!!` there would throw on a value
+<a href=#212 id=212 data-nosnippet>212</a>        // the class is meant to hold. The same distinction `sum_ctor_arg`
+<a href=#213 id=213 data-nosnippet>213</a>        // makes for an inert group's payload.
+<a href=#214 id=214 data-nosnippet>214</a>        </span><span class="kw">let </span>forwarded: Vec&lt;String&gt; = names
+<a href=#215 id=215 data-nosnippet>215</a>            .iter()
+<a href=#216 id=216 data-nosnippet>216</a>            .enumerate()
+<a href=#217 id=217 data-nosnippet>217</a>            .map(|(i, name)| {
+<a href=#218 id=218 data-nosnippet>218</a>                <span class="comment">// Re-asserted only where the null is the GATE's doing: the
+<a href=#219 id=219 data-nosnippet>219</a>                // parent declares the slot nullable so the encoder can default
+<a href=#220 id=220 data-nosnippet>220</a>                // it when absent, while the class itself declares it non-null.
+<a href=#221 id=221 data-nosnippet>221</a>                // A slot the class already declares nullable — its own type is
+<a href=#222 id=222 data-nosnippet>222</a>                // optional, or it belongs to a sum group that is inert whenever
+<a href=#223 id=223 data-nosnippet>223</a>                // another alternative is live — is forwarded untouched, because
+<a href=#224 id=224 data-nosnippet>224</a>                // `!!` there would throw on a value the class is meant to hold.
+<a href=#225 id=225 data-nosnippet>225</a>                </span><span class="kw">let </span>gate_added = params[i].raw.is_nullable()
+<a href=#226 id=226 data-nosnippet>226</a>                    &amp;&amp; !ungated.is_none_or(|own| own[i].raw.is_nullable());
+<a href=#227 id=227 data-nosnippet>227</a>                <span class="kw">match </span>gate_added {
+<a href=#228 id=228 data-nosnippet>228</a>                    <span class="bool-val">true </span>=&gt; <span class="macro">format!</span>(<span class="string">"{name}!!"</span>),
+<a href=#229 id=229 data-nosnippet>229</a>                    <span class="bool-val">false </span>=&gt; name.clone(),
+<a href=#230 id=230 data-nosnippet>230</a>                }
+<a href=#231 id=231 data-nosnippet>231</a>            })
+<a href=#232 id=232 data-nosnippet>232</a>            .collect();
+<a href=#233 id=233 data-nosnippet>233</a>        <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">"{short}.fromParts({})"</span>, forwarded.join(<span class="string">", "</span>)));
+<a href=#234 id=234 data-nosnippet>234</a>    }
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="comment">// A presence flag gates everything after it, and contributes no value of
+<a href=#236 id=236 data-nosnippet>236</a>    // its own: the field is what its group rebuilds, or null.
+<a href=#237 id=237 data-nosnippet>237</a>    </span><span class="kw">if </span><span class="macro">matches!</span>(leaves[<span class="number">0</span>].from, <span class="kw">crate</span>::jni::compile::OutFrom::Present) {
+<a href=#238 id=238 data-nosnippet>238</a>        <span class="comment">// Inside the guard the gate's own arm is no longer in question, so the
+<a href=#239 id=239 data-nosnippet>239</a>        // group it opened is stripped: what is left is the value as its own
+<a href=#240 id=240 data-nosnippet>240</a>        // class declares it, which is what says whether a null here is this
+<a href=#241 id=241 data-nosnippet>241</a>        // gate's doing or the value's own.
+<a href=#242 id=242 data-nosnippet>242</a>        </span><span class="kw">let </span>inner: Vec&lt;<span class="kw">crate</span>::jni::compile::OutWire&gt; = leaves[<span class="number">1</span>..]
+<a href=#243 id=243 data-nosnippet>243</a>            .iter()
+<a href=#244 id=244 data-nosnippet>244</a>            .map(|leaf| {
+<a href=#245 id=245 data-nosnippet>245</a>                <span class="kw">let </span><span class="kw-2">mut </span>leaf = leaf.clone();
+<a href=#246 id=246 data-nosnippet>246</a>                leaf.groups = leaf
+<a href=#247 id=247 data-nosnippet>247</a>                    .groups
+<a href=#248 id=248 data-nosnippet>248</a>                    .split_first()
+<a href=#249 id=249 data-nosnippet>249</a>                    .map_or_else(Vec::new, |(<span class="kw">_</span>, rest)| rest.to_vec());
+<a href=#250 id=250 data-nosnippet>250</a>                leaf
+<a href=#251 id=251 data-nosnippet>251</a>            })
+<a href=#252 id=252 data-nosnippet>252</a>            .collect();
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="kw">let </span>inner_params = <span class="kw">crate</span>::jni::iface::plan_leaf_params(ext, <span class="kw-2">&amp;</span>inner)<span class="question-mark">?</span>;
+<a href=#254 id=254 data-nosnippet>254</a>        <span class="kw">let </span>gated = factory_part(
+<a href=#255 id=255 data-nosnippet>255</a>            ext,
+<a href=#256 id=256 data-nosnippet>256</a>            registry,
+<a href=#257 id=257 data-nosnippet>257</a>            <span class="kw-2">&amp;</span>leaves[<span class="number">1</span>..],
+<a href=#258 id=258 data-nosnippet>258</a>            <span class="kw-2">&amp;</span>params[<span class="number">1</span>..],
+<a href=#259 id=259 data-nosnippet>259</a>            <span class="kw-2">&amp;</span>names[<span class="number">1</span>..],
+<a href=#260 id=260 data-nosnippet>260</a>            <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>inner_params),
+<a href=#261 id=261 data-nosnippet>261</a>            imports,
+<a href=#262 id=262 data-nosnippet>262</a>        )<span class="question-mark">?</span>;
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">"if ({}) {gated} else null"</span>, names[<span class="number">0</span>]));
+<a href=#264 id=264 data-nosnippet>264</a>    }
+<a href=#265 id=265 data-nosnippet>265</a>    <span class="kw">if </span>leaves[<span class="number">0</span>].is_tag() {
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span>(<span class="kw">_</span>, when) = ext.sum_reconstruct(
+<a href=#267 id=267 data-nosnippet>267</a>            registry,
+<a href=#268 id=268 data-nosnippet>268</a>            <span class="kw-2">&amp;</span>leaves[<span class="number">0</span>].out_ty.unwrapped().key(),
+<a href=#269 id=269 data-nosnippet>269</a>            leaves,
+<a href=#270 id=270 data-nosnippet>270</a>            params,
+<a href=#271 id=271 data-nosnippet>271</a>            names,
+<a href=#272 id=272 data-nosnippet>272</a>            imports,
+<a href=#273 id=273 data-nosnippet>273</a>        );
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="kw">return </span><span class="prelude-val">Some</span>(when);
+<a href=#275 id=275 data-nosnippet>275</a>    }
+<a href=#276 id=276 data-nosnippet>276</a>    <span class="macro">debug_assert_eq!</span>(
+<a href=#277 id=277 data-nosnippet>277</a>        leaves.len(),
+<a href=#278 id=278 data-nosnippet>278</a>        <span class="number">1</span>,
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="string">"an unselected field with no class path is one leaf"
+<a href=#280 id=280 data-nosnippet>280</a>    </span>);
+<a href=#281 id=281 data-nosnippet>281</a>    <span class="prelude-val">Some</span>(ext.sum_ctor_arg(<span class="kw-2">&amp;</span>leaves[<span class="number">0</span>], <span class="kw-2">&amp;</span>params[<span class="number">0</span>], <span class="kw-2">&amp;</span>names[<span class="number">0</span>], imports))
+<a href=#282 id=282 data-nosnippet>282</a>}
+<a href=#283 id=283 data-nosnippet>283</a>
+<a href=#284 id=284 data-nosnippet>284</a><span class="doccomment">/// Render the Kotlin `close()` expression for a handle `receiver` through
+<a href=#285 id=285 data-nosnippet>285</a>/// the folded [`FoldStrategy`] layers. Fresh lambda variable per nesting
+<a href=#286 id=286 data-nosnippet>286</a>/// level avoids `it` shadowing; the common single-layer cases are
+<a href=#287 id=287 data-nosnippet>287</a>/// special-cased for readable output (`x?.close()`, `x.forEach { it.close() }`).
+<a href=#288 id=288 data-nosnippet>288</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>render_handle_close(strategy: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::FoldStrategy, receiver: <span class="kw-2">&amp;</span>str) -&gt; String {
+<a href=#289 id=289 data-nosnippet>289</a>    <span class="kw">use </span>prebindgen_registry::shape::Shape::<span class="kw-2">*</span>;
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">fn </span>go(strategy: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::FoldStrategy, receiver: <span class="kw-2">&amp;</span>str, depth: usize) -&gt; String {
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="kw">match </span>strategy {
+<a href=#292 id=292 data-nosnippet>292</a>            Base =&gt; <span class="macro">format!</span>(<span class="string">"{receiver}.close()"</span>),
+<a href=#293 id=293 data-nosnippet>293</a>            <span class="comment">// The Kotlin-side receiver is already nullable (`handle_kt_type`
+<a href=#294 id=294 data-nosnippet>294</a>            // emits `T?` for both niche and boxed kinds), so `?.close()` covers
+<a href=#295 id=295 data-nosnippet>295</a>            // both wire representations.
+<a href=#296 id=296 data-nosnippet>296</a>            </span>Optional(<span class="kw">_</span>, inner) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>inner {
+<a href=#297 id=297 data-nosnippet>297</a>                Base =&gt; <span class="macro">format!</span>(<span class="string">"{receiver}?.close()"</span>),
+<a href=#298 id=298 data-nosnippet>298</a>                <span class="kw">_ </span>=&gt; {
+<a href=#299 id=299 data-nosnippet>299</a>                    <span class="kw">let </span>v = <span class="macro">format!</span>(<span class="string">"e{depth}"</span>);
+<a href=#300 id=300 data-nosnippet>300</a>                    <span class="macro">format!</span>(<span class="string">"{receiver}?.let {{ {v} -&gt; {} }}"</span>, go(inner, <span class="kw-2">&amp;</span>v, depth + <span class="number">1</span>))
+<a href=#301 id=301 data-nosnippet>301</a>                }
+<a href=#302 id=302 data-nosnippet>302</a>            },
+<a href=#303 id=303 data-nosnippet>303</a>            Iterable(inner) =&gt; {
+<a href=#304 id=304 data-nosnippet>304</a>                <span class="kw">let </span>v = <span class="macro">format!</span>(<span class="string">"e{depth}"</span>);
+<a href=#305 id=305 data-nosnippet>305</a>                <span class="macro">format!</span>(
+<a href=#306 id=306 data-nosnippet>306</a>                    <span class="string">"{receiver}.forEach {{ {v} -&gt; {} }}"</span>,
+<a href=#307 id=307 data-nosnippet>307</a>                    go(inner, <span class="kw-2">&amp;</span>v, depth + <span class="number">1</span>)
+<a href=#308 id=308 data-nosnippet>308</a>                )
+<a href=#309 id=309 data-nosnippet>309</a>            }
+<a href=#310 id=310 data-nosnippet>310</a>        }
+<a href=#311 id=311 data-nosnippet>311</a>    }
+<a href=#312 id=312 data-nosnippet>312</a>    go(strategy, receiver, <span class="number">0</span>)
+<a href=#313 id=313 data-nosnippet>313</a>}
+<a href=#314 id=314 data-nosnippet>314</a>
+<a href=#315 id=315 data-nosnippet>315</a><span class="doccomment">/// Fold the projection wrap call `W(receiver)` through the
+<a href=#316 id=316 data-nosnippet>316</a>/// [`FoldStrategy`] layers:
+<a href=#317 id=317 data-nosnippet>317</a>/// * `Direct`         → `W(x)`
+<a href=#318 id=318 data-nosnippet>318</a>/// * `Nullable{Boxed}` → `x?.let { W(it) }` (JVM-null at the wire)
+<a href=#319 id=319 data-nosnippet>319</a>/// * `Nullable{Niche}` over a primitive wire (e.g. `jlong`) →
+<a href=#320 id=320 data-nosnippet>320</a>///   `x.let { if (it == &lt;sentinel&gt;) null else W(it) }`
+<a href=#321 id=321 data-nosnippet>321</a>/// * `Nullable{Niche}` over an object wire (e.g. `JByteArray`) →
+<a href=#322 id=322 data-nosnippet>322</a>///   `x?.let { W(it) }` (the wire is already a nullable reference)
+<a href=#323 id=323 data-nosnippet>323</a>/// * `Iterable`       → `x.map { W(it) }`
+<a href=#324 id=324 data-nosnippet>324</a>///
+<a href=#325 id=325 data-nosnippet>325</a>/// `niche_sentinel` is the Kotlin literal to compare against for the
+<a href=#326 id=326 data-nosnippet>326</a>/// `Niche+primitive` arm (e.g. `"0L"` for `jlong`-wired handles). When the
+<a href=#327 id=327 data-nosnippet>327</a>/// wire is object-shaped the sentinel is unused — `null` is the wire-level
+<a href=#328 id=328 data-nosnippet>328</a>/// representation and `?.let` is a no-cost null check.
+<a href=#329 id=329 data-nosnippet>329</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fold_projection_wrap(
+<a href=#330 id=330 data-nosnippet>330</a>    strategy: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::FoldStrategy,
+<a href=#331 id=331 data-nosnippet>331</a>    receiver: <span class="kw-2">&amp;</span>str,
+<a href=#332 id=332 data-nosnippet>332</a>    kind: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::ProjectionKind,
+<a href=#333 id=333 data-nosnippet>333</a>    wrap_class: <span class="kw-2">&amp;</span>str,
+<a href=#334 id=334 data-nosnippet>334</a>    niche_sentinel: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
+<a href=#335 id=335 data-nosnippet>335</a>) -&gt; String {
+<a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">use </span>prebindgen_registry::shape::Shape::<span class="kw-2">*</span>;
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">use </span><span class="kw">crate</span>::jni::NullableKind;
+<a href=#339 id=339 data-nosnippet>339</a>    <span class="kw">fn </span>go(
+<a href=#340 id=340 data-nosnippet>340</a>        s: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::FoldStrategy,
+<a href=#341 id=341 data-nosnippet>341</a>        r: <span class="kw-2">&amp;</span>str,
+<a href=#342 id=342 data-nosnippet>342</a>        kind: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::ProjectionKind,
+<a href=#343 id=343 data-nosnippet>343</a>        w: <span class="kw-2">&amp;</span>str,
+<a href=#344 id=344 data-nosnippet>344</a>        sentinel: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
+<a href=#345 id=345 data-nosnippet>345</a>        depth: usize,
+<a href=#346 id=346 data-nosnippet>346</a>    ) -&gt; String {
+<a href=#347 id=347 data-nosnippet>347</a>        <span class="kw">match </span>s {
+<a href=#348 id=348 data-nosnippet>348</a>            Base =&gt; projection_wrap_expr(kind, w, r),
+<a href=#349 id=349 data-nosnippet>349</a>            Optional(nullable_kind, inner) =&gt; <span class="kw">match </span>(nullable_kind, <span class="kw-2">&amp;**</span>inner) {
+<a href=#350 id=350 data-nosnippet>350</a>                <span class="comment">// Primitive-wired niche → can't carry null on the wire, so
+<a href=#351 id=351 data-nosnippet>351</a>                // compare against the sentinel and synthesize null on the
+<a href=#352 id=352 data-nosnippet>352</a>                // Kotlin side.
+<a href=#353 id=353 data-nosnippet>353</a>                </span>(NullableKind::Niche, Base) <span class="kw">if </span>sentinel.is_some() =&gt; {
+<a href=#354 id=354 data-nosnippet>354</a>                    <span class="kw">let </span>s = sentinel.unwrap();
+<a href=#355 id=355 data-nosnippet>355</a>                    <span class="kw">let </span>wrapped = projection_wrap_expr(kind, w, <span class="string">"it"</span>);
+<a href=#356 id=356 data-nosnippet>356</a>                    <span class="macro">format!</span>(<span class="string">"{r}.let {{ if (it == {s}) null else {wrapped} }}"</span>)
+<a href=#357 id=357 data-nosnippet>357</a>                }
+<a href=#358 id=358 data-nosnippet>358</a>                <span class="comment">// Object-wired niche or fully boxed Nullable → `?.let { W(it) }`.
+<a href=#359 id=359 data-nosnippet>359</a>                </span>(<span class="kw">_</span>, Base) =&gt; {
+<a href=#360 id=360 data-nosnippet>360</a>                    <span class="kw">let </span>wrapped = projection_wrap_expr(kind, w, <span class="string">"it"</span>);
+<a href=#361 id=361 data-nosnippet>361</a>                    <span class="macro">format!</span>(<span class="string">"{r}?.let {{ {wrapped} }}"</span>)
+<a href=#362 id=362 data-nosnippet>362</a>                }
+<a href=#363 id=363 data-nosnippet>363</a>                <span class="comment">// Deeper nesting. The niche/boxed distinction is only
+<a href=#364 id=364 data-nosnippet>364</a>                // observable at the outermost layer covering a `Direct`
+<a href=#365 id=365 data-nosnippet>365</a>                // leaf; intermediate layers (nullable-of-iterable etc.)
+<a href=#366 id=366 data-nosnippet>366</a>                // can keep the simple form because Kotlin's `?.` chain
+<a href=#367 id=367 data-nosnippet>367</a>                // already represents the layered null.
+<a href=#368 id=368 data-nosnippet>368</a>                </span><span class="kw">_ </span>=&gt; {
+<a href=#369 id=369 data-nosnippet>369</a>                    <span class="kw">let </span>v = <span class="macro">format!</span>(<span class="string">"e{depth}"</span>);
+<a href=#370 id=370 data-nosnippet>370</a>                    <span class="macro">format!</span>(
+<a href=#371 id=371 data-nosnippet>371</a>                        <span class="string">"{r}?.let {{ {v} -&gt; {} }}"</span>,
+<a href=#372 id=372 data-nosnippet>372</a>                        go(inner, <span class="kw-2">&amp;</span>v, kind, w, sentinel, depth + <span class="number">1</span>)
+<a href=#373 id=373 data-nosnippet>373</a>                    )
 <a href=#374 id=374 data-nosnippet>374</a>                }
-<a href=#375 id=375 data-nosnippet>375</a>                <span class="kw">_ </span>=&gt; {
-<a href=#376 id=376 data-nosnippet>376</a>                    <span class="kw">let </span>v = <span class="macro">format!</span>(<span class="string">"e{depth}"</span>);
-<a href=#377 id=377 data-nosnippet>377</a>                    <span class="macro">format!</span>(
-<a href=#378 id=378 data-nosnippet>378</a>                        <span class="string">"{r}.map {{ {v} -&gt; {} }}"</span>,
-<a href=#379 id=379 data-nosnippet>379</a>                        go(inner, <span class="kw-2">&amp;</span>v, kind, w, sentinel, depth + <span class="number">1</span>)
-<a href=#380 id=380 data-nosnippet>380</a>                    )
-<a href=#381 id=381 data-nosnippet>381</a>                }
-<a href=#382 id=382 data-nosnippet>382</a>            },
-<a href=#383 id=383 data-nosnippet>383</a>        }
-<a href=#384 id=384 data-nosnippet>384</a>    }
-<a href=#385 id=385 data-nosnippet>385</a>    go(strategy, receiver, kind, wrap_class, niche_sentinel, <span class="number">0</span>)
-<a href=#386 id=386 data-nosnippet>386</a>}
-<a href=#387 id=387 data-nosnippet>387</a>
-<a href=#388 id=388 data-nosnippet>388</a><span class="doccomment">/// JNI extern's declared Kotlin wire-return for a projection. The leaf wire
-<a href=#389 id=389 data-nosnippet>389</a>/// is the inner converter's destination Kotlin name — `Long` for both
-<a href=#390 id=390 data-nosnippet>390</a>/// projection kinds (a handle's pointer, a `ULong`'s raw bit pattern). The
-<a href=#391 id=391 data-nosnippet>391</a>/// fold honours
-<a href=#392 id=392 data-nosnippet>392</a>/// [`NullableKind`] so the declared wire matches the runtime ABI:
-<a href=#393 id=393 data-nosnippet>393</a>/// `Niche+primitive` keeps the layer non-nullable on the wire (the sentinel
-<a href=#394 id=394 data-nosnippet>394</a>/// represents null); `Niche+object` and `Boxed` add `?`.
-<a href=#395 id=395 data-nosnippet>395</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>projection_wire_return(proj: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::Projection) -&gt; KtType {
-<a href=#396 id=396 data-nosnippet>396</a>    <span class="kw">use </span><span class="kw">crate</span>::jni::{FoldStrategy, NullableKind, ProjectionKind};
-<a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">let </span>(inner_wire, inner_is_primitive) = <span class="kw">match </span>proj.kind {
-<a href=#398 id=398 data-nosnippet>398</a>        ProjectionKind::Handle =&gt; (KtType::long(), <span class="bool-val">true</span>),
-<a href=#399 id=399 data-nosnippet>399</a>        ProjectionKind::Unsigned64 =&gt; (KtType::long(), <span class="bool-val">true</span>),
-<a href=#400 id=400 data-nosnippet>400</a>    };
-<a href=#401 id=401 data-nosnippet>401</a>    fold_shape(
-<a href=#402 id=402 data-nosnippet>402</a>        <span class="kw-2">&amp;</span>proj.strategy,
-<a href=#403 id=403 data-nosnippet>403</a>        <span class="kw-2">&amp;</span>|| inner_wire.clone(),
-<a href=#404 id=404 data-nosnippet>404</a>        <span class="kw-2">&amp;</span>|inner, kind, inner_strategy| {
-<a href=#405 id=405 data-nosnippet>405</a>            <span class="comment">// A niche layer over a primitive wire keeps the wire non-nullable —
-<a href=#406 id=406 data-nosnippet>406</a>            // the sentinel value is the null representation. Object-wired niches
-<a href=#407 id=407 data-nosnippet>407</a>            // and full-boxed Nullables both add `?` (JVM null on the reference).
-<a href=#408 id=408 data-nosnippet>408</a>            </span><span class="kw">match </span>(kind, inner_strategy) {
-<a href=#409 id=409 data-nosnippet>409</a>                (NullableKind::Niche, FoldStrategy::Base) <span class="kw">if </span>inner_is_primitive =&gt; inner,
-<a href=#410 id=410 data-nosnippet>410</a>                <span class="kw">_ </span>=&gt; inner.nullable(),
-<a href=#411 id=411 data-nosnippet>411</a>            }
-<a href=#412 id=412 data-nosnippet>412</a>        },
-<a href=#413 id=413 data-nosnippet>413</a>        <span class="kw-2">&amp;</span>|inner| KtType::generic(<span class="string">"List"</span>, [inner]),
-<a href=#414 id=414 data-nosnippet>414</a>    )
-<a href=#415 id=415 data-nosnippet>415</a>}
-<a href=#416 id=416 data-nosnippet>416</a>
-<a href=#417 id=417 data-nosnippet>417</a><span class="doccomment">/// Kotlin null-sentinel literal for the *leaf wire* of a projection. Read
-<a href=#418 id=418 data-nosnippet>418</a>/// at the wrapper-body call site and forwarded to [`fold_projection_wrap`];
-<a href=#419 id=419 data-nosnippet>419</a>/// `None` when the leaf wire has no primitive null sentinel, where
-<a href=#420 id=420 data-nosnippet>420</a>/// `?.let { }` covers the JVM-null case directly.
-<a href=#421 id=421 data-nosnippet>421</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>projection_leaf_sentinel(proj: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::Projection) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
-<a href=#422 id=422 data-nosnippet>422</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(sentinel) = proj.niche_sentinels.first() {
-<a href=#423 id=423 data-nosnippet>423</a>        <span class="kw">return </span><span class="prelude-val">Some</span>(sentinel.clone());
-<a href=#424 id=424 data-nosnippet>424</a>    }
-<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">use </span><span class="kw">crate</span>::jni::ProjectionKind;
-<a href=#426 id=426 data-nosnippet>426</a>    <span class="kw">let </span>leaf_wire: syn::Type = <span class="kw">match </span>proj.kind {
-<a href=#427 id=427 data-nosnippet>427</a>        ProjectionKind::Handle =&gt; <span class="macro">syn::parse_quote!</span>(jni::sys::jlong),
-<a href=#428 id=428 data-nosnippet>428</a>        <span class="comment">// No niche exists for `u64`; `Option&lt;u64&gt;` uses the boxed path, so a
-<a href=#429 id=429 data-nosnippet>429</a>        // primitive sentinel must never be synthesized.
-<a href=#430 id=430 data-nosnippet>430</a>        </span>ProjectionKind::Unsigned64 =&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-<a href=#431 id=431 data-nosnippet>431</a>    };
-<a href=#432 id=432 data-nosnippet>432</a>    kotlin_null_sentinel(<span class="kw-2">&amp;</span>leaf_wire).map(|s| s.to_string())
-<a href=#433 id=433 data-nosnippet>433</a>}
-<a href=#434 id=434 data-nosnippet>434</a>
-<a href=#435 id=435 data-nosnippet>435</a><span class="doccomment">/// The sentinel a **wrap** should test, given the projection and whether an
-<a href=#436 id=436 data-nosnippet>436</a>/// ancestor makes the leaf nullable — the one rule both derivations of that
-<a href=#437 id=437 data-nosnippet>437</a>/// wrap read (`unfold_leaf_kt` in `render.rs`, `leaf_iface_param` in
-<a href=#438 id=438 data-nosnippet>438</a>/// `iface.rs`), so it cannot drift between them again (#142).
-<a href=#439 id=439 data-nosnippet>439</a>///
-<a href=#440 id=440 data-nosnippet>440</a>/// A sentinel is the leaf's **own** `None` representation, so it belongs to the
-<a href=#441 id=441 data-nosnippet>441</a>/// leaf's own type and to nothing above it. Two independent facts meet here and
-<a href=#442 id=442 data-nosnippet>442</a>/// only the first one answers:
-<a href=#443 id=443 data-nosnippet>443</a>///
-<a href=#444 id=444 data-nosnippet>444</a>/// * the leaf's type carries a niche — `Option&lt;Duration&gt;` over a bounded
-<a href=#445 id=445 data-nosnippet>445</a>///   `convert!`, whose strategy is `Optional(Niche, _)`. Its `None` IS the
-<a href=#446 id=446 data-nosnippet>446</a>///   sentinel, and the test stays whatever the ancestor does.
-<a href=#447 id=447 data-nosnippet>447</a>/// * an **ancestor** can be absent (a conditional value form, an
-<a href=#448 id=448 data-nosnippet>448</a>///   `Option&lt;sum&gt;`/`Option&lt;nested&gt;` field). That widens the wire — the Rust
-<a href=#449 id=449 data-nosnippet>449</a>///   side boxes any nullable leaf, see
-<a href=#450 id=450 data-nosnippet>450</a>///   [`leaf_is_prim`](crate::jni::emit::leaf_is_prim) — and `?.` alone carries
-<a href=#451 id=451 data-nosnippet>451</a>///   it. It grants no sentinel.
-<a href=#452 id=452 data-nosnippet>452</a>///
-<a href=#453 id=453 data-nosnippet>453</a>/// [`projection_leaf_sentinel`] answers off `niche_sentinels`, which
-<a href=#454 id=454 data-nosnippet>454</a>/// `attach_domain_sentinels` puts on the **bare** type's converter as well as
-<a href=#455 id=455 data-nosnippet>455</a>/// the `Option` one. Asking it without the `Base` check therefore handed a
-<a href=#456 id=456 data-nosnippet>456</a>/// sentinel to a leaf that has no niche encoding at all, splicing
-<a href=#457 id=457 data-nosnippet>457</a>/// `?.let { if (it == -1L) … }` into a wrap whose own encoder can never emit
-<a href=#458 id=458 data-nosnippet>458</a>/// `-1`. Harmless at runtime — the value is outside the declared range — and
-<a href=#459 id=459 data-nosnippet>459</a>/// wrong on its face.
-<a href=#460 id=460 data-nosnippet>460</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>wrap_sentinel(proj: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::Projection, nullable: bool) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
-<a href=#461 id=461 data-nosnippet>461</a>    <span class="comment">// `Base` means the leaf has no `Option` of its own: whatever absence it can
-<a href=#462 id=462 data-nosnippet>462</a>    // express is the ancestor's, and `?.` already expresses that.
-<a href=#463 id=463 data-nosnippet>463</a>    </span><span class="kw">if </span>nullable &amp;&amp; <span class="macro">matches!</span>(proj.strategy, <span class="kw">crate</span>::jni::FoldStrategy::Base) {
-<a href=#464 id=464 data-nosnippet>464</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#465 id=465 data-nosnippet>465</a>    }
-<a href=#466 id=466 data-nosnippet>466</a>    projection_leaf_sentinel(proj)
-<a href=#467 id=467 data-nosnippet>467</a>}
-<a href=#468 id=468 data-nosnippet>468</a>
-<a href=#469 id=469 data-nosnippet>469</a><span class="doccomment">/// Kotlin literal for the null-sentinel of a primitive wire — used by
-<a href=#470 id=470 data-nosnippet>470</a>/// [`fold_projection_wrap`] when a `Niche` layer covers a primitive wire and
-<a href=#471 id=471 data-nosnippet>471</a>/// can't carry JVM null. Mirrors `jni_field_access`'s primitive descriptors.
-<a href=#472 id=472 data-nosnippet>472</a>/// Returns `None` for object-shaped wires (where JVM null *is* the null
-<a href=#473 id=473 data-nosnippet>473</a>/// representation and `?.let` is the right pattern).
-<a href=#474 id=474 data-nosnippet>474</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>kotlin_null_sentinel(wire: <span class="kw-2">&amp;</span>syn::Type) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
-<a href=#475 id=475 data-nosnippet>475</a>    <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, is_object) = <span class="kw">crate</span>::jni::wire_access::jni_field_access(wire)<span class="question-mark">?</span>;
-<a href=#476 id=476 data-nosnippet>476</a>    <span class="kw">if </span>is_object {
-<a href=#477 id=477 data-nosnippet>477</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#478 id=478 data-nosnippet>478</a>    }
-<a href=#479 id=479 data-nosnippet>479</a>    <span class="kw">let </span>syn::Type::Path(tp) = wire <span class="kw">else </span>{
-<a href=#480 id=480 data-nosnippet>480</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#481 id=481 data-nosnippet>481</a>    };
-<a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">let </span>last = tp.path.segments.last()<span class="question-mark">?</span>;
-<a href=#483 id=483 data-nosnippet>483</a>    <span class="prelude-val">Some</span>(<span class="kw">match </span>last.ident.to_string().as_str() {
-<a href=#484 id=484 data-nosnippet>484</a>        <span class="string">"jlong" </span>=&gt; <span class="string">"0L"</span>,
-<a href=#485 id=485 data-nosnippet>485</a>        <span class="string">"jint" </span>| <span class="string">"jshort" </span>| <span class="string">"jbyte" </span>| <span class="string">"jchar" </span>=&gt; <span class="string">"0"</span>,
-<a href=#486 id=486 data-nosnippet>486</a>        <span class="string">"jfloat" </span>=&gt; <span class="string">"0.0f"</span>,
-<a href=#487 id=487 data-nosnippet>487</a>        <span class="string">"jdouble" </span>=&gt; <span class="string">"0.0"</span>,
-<a href=#488 id=488 data-nosnippet>488</a>        <span class="string">"jboolean" </span>=&gt; <span class="string">"false"</span>,
-<a href=#489 id=489 data-nosnippet>489</a>        <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-<a href=#490 id=490 data-nosnippet>490</a>    })
-<a href=#491 id=491 data-nosnippet>491</a>}
-<a href=#492 id=492 data-nosnippet>492</a>
-<a href=#493 id=493 data-nosnippet>493</a><span class="doccomment">/// Shorten a class FQN to its simple name for use in **raw body text** (a
-<a href=#494 id=494 data-nosnippet>494</a>/// `fromParts` reconstruct fragment: `Child.fromParts(…)`, `Enum.fromInt(…)`,
-<a href=#495 id=495 data-nosnippet>495</a>/// `ZenohId(bytes)`), registering the FQN into `used` — the body `Code`'s own
-<a href=#496 id=496 data-nosnippet>496</a>/// import list. A non-dotted name (a Kotlin builtin like `String`) needs no
-<a href=#497 id=497 data-nosnippet>497</a>/// import and passes through. Signature types are NOT shortened this way —
-<a href=#498 id=498 data-nosnippet>498</a>/// those are full-FQN `KtType`s in the AST, shortened + imported by the
-<a href=#499 id=499 data-nosnippet>499</a>/// render-time `ImportSet`.
-<a href=#500 id=500 data-nosnippet>500</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>register_fqn(fqn: <span class="kw-2">&amp;</span>str, used: <span class="kw-2">&amp;mut </span>BTreeSet&lt;String&gt;) -&gt; String {
-<a href=#501 id=501 data-nosnippet>501</a>    <span class="kw">if </span>fqn.contains(<span class="string">'.'</span>) {
-<a href=#502 id=502 data-nosnippet>502</a>        used.insert(fqn.to_string());
-<a href=#503 id=503 data-nosnippet>503</a>        fqn.rsplit(<span class="string">'.'</span>).next().unwrap_or(fqn).to_string()
-<a href=#504 id=504 data-nosnippet>504</a>    } <span class="kw">else </span>{
-<a href=#505 id=505 data-nosnippet>505</a>        fqn.to_string()
-<a href=#506 id=506 data-nosnippet>506</a>    }
-<a href=#507 id=507 data-nosnippet>507</a>}
+<a href=#375 id=375 data-nosnippet>375</a>            },
+<a href=#376 id=376 data-nosnippet>376</a>            Iterable(inner) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>inner {
+<a href=#377 id=377 data-nosnippet>377</a>                Base =&gt; {
+<a href=#378 id=378 data-nosnippet>378</a>                    <span class="kw">let </span>wrapped = projection_wrap_expr(kind, w, <span class="string">"it"</span>);
+<a href=#379 id=379 data-nosnippet>379</a>                    <span class="macro">format!</span>(<span class="string">"{r}.map {{ {wrapped} }}"</span>)
+<a href=#380 id=380 data-nosnippet>380</a>                }
+<a href=#381 id=381 data-nosnippet>381</a>                <span class="kw">_ </span>=&gt; {
+<a href=#382 id=382 data-nosnippet>382</a>                    <span class="kw">let </span>v = <span class="macro">format!</span>(<span class="string">"e{depth}"</span>);
+<a href=#383 id=383 data-nosnippet>383</a>                    <span class="macro">format!</span>(
+<a href=#384 id=384 data-nosnippet>384</a>                        <span class="string">"{r}.map {{ {v} -&gt; {} }}"</span>,
+<a href=#385 id=385 data-nosnippet>385</a>                        go(inner, <span class="kw-2">&amp;</span>v, kind, w, sentinel, depth + <span class="number">1</span>)
+<a href=#386 id=386 data-nosnippet>386</a>                    )
+<a href=#387 id=387 data-nosnippet>387</a>                }
+<a href=#388 id=388 data-nosnippet>388</a>            },
+<a href=#389 id=389 data-nosnippet>389</a>        }
+<a href=#390 id=390 data-nosnippet>390</a>    }
+<a href=#391 id=391 data-nosnippet>391</a>    go(strategy, receiver, kind, wrap_class, niche_sentinel, <span class="number">0</span>)
+<a href=#392 id=392 data-nosnippet>392</a>}
+<a href=#393 id=393 data-nosnippet>393</a>
+<a href=#394 id=394 data-nosnippet>394</a><span class="doccomment">/// JNI extern's declared Kotlin wire-return for a projection. The leaf wire
+<a href=#395 id=395 data-nosnippet>395</a>/// is the inner converter's destination Kotlin name — `Long` for both
+<a href=#396 id=396 data-nosnippet>396</a>/// projection kinds (a handle's pointer, a `ULong`'s raw bit pattern). The
+<a href=#397 id=397 data-nosnippet>397</a>/// fold honours
+<a href=#398 id=398 data-nosnippet>398</a>/// [`NullableKind`] so the declared wire matches the runtime ABI:
+<a href=#399 id=399 data-nosnippet>399</a>/// `Niche+primitive` keeps the layer non-nullable on the wire (the sentinel
+<a href=#400 id=400 data-nosnippet>400</a>/// represents null); `Niche+object` and `Boxed` add `?`.
+<a href=#401 id=401 data-nosnippet>401</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>projection_wire_return(proj: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::Projection) -&gt; KtType {
+<a href=#402 id=402 data-nosnippet>402</a>    <span class="kw">use </span><span class="kw">crate</span>::jni::{FoldStrategy, NullableKind, ProjectionKind};
+<a href=#403 id=403 data-nosnippet>403</a>    <span class="kw">let </span>(inner_wire, inner_is_primitive) = <span class="kw">match </span>proj.kind {
+<a href=#404 id=404 data-nosnippet>404</a>        ProjectionKind::Handle =&gt; (KtType::long(), <span class="bool-val">true</span>),
+<a href=#405 id=405 data-nosnippet>405</a>        ProjectionKind::Unsigned64 =&gt; (KtType::long(), <span class="bool-val">true</span>),
+<a href=#406 id=406 data-nosnippet>406</a>    };
+<a href=#407 id=407 data-nosnippet>407</a>    fold_shape(
+<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw-2">&amp;</span>proj.strategy,
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="kw-2">&amp;</span>|| inner_wire.clone(),
+<a href=#410 id=410 data-nosnippet>410</a>        <span class="kw-2">&amp;</span>|inner, kind, inner_strategy| {
+<a href=#411 id=411 data-nosnippet>411</a>            <span class="comment">// A niche layer over a primitive wire keeps the wire non-nullable —
+<a href=#412 id=412 data-nosnippet>412</a>            // the sentinel value is the null representation. Object-wired niches
+<a href=#413 id=413 data-nosnippet>413</a>            // and full-boxed Nullables both add `?` (JVM null on the reference).
+<a href=#414 id=414 data-nosnippet>414</a>            </span><span class="kw">match </span>(kind, inner_strategy) {
+<a href=#415 id=415 data-nosnippet>415</a>                (NullableKind::Niche, FoldStrategy::Base) <span class="kw">if </span>inner_is_primitive =&gt; inner,
+<a href=#416 id=416 data-nosnippet>416</a>                <span class="kw">_ </span>=&gt; inner.nullable(),
+<a href=#417 id=417 data-nosnippet>417</a>            }
+<a href=#418 id=418 data-nosnippet>418</a>        },
+<a href=#419 id=419 data-nosnippet>419</a>        <span class="kw-2">&amp;</span>|inner| KtType::generic(<span class="string">"List"</span>, [inner]),
+<a href=#420 id=420 data-nosnippet>420</a>    )
+<a href=#421 id=421 data-nosnippet>421</a>}
+<a href=#422 id=422 data-nosnippet>422</a>
+<a href=#423 id=423 data-nosnippet>423</a><span class="doccomment">/// Kotlin null-sentinel literal for the *leaf wire* of a projection. Read
+<a href=#424 id=424 data-nosnippet>424</a>/// at the wrapper-body call site and forwarded to [`fold_projection_wrap`];
+<a href=#425 id=425 data-nosnippet>425</a>/// `None` when the leaf wire has no primitive null sentinel, where
+<a href=#426 id=426 data-nosnippet>426</a>/// `?.let { }` covers the JVM-null case directly.
+<a href=#427 id=427 data-nosnippet>427</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>projection_leaf_sentinel(proj: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::Projection) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+<a href=#428 id=428 data-nosnippet>428</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(sentinel) = proj.niche_sentinels.first() {
+<a href=#429 id=429 data-nosnippet>429</a>        <span class="kw">return </span><span class="prelude-val">Some</span>(sentinel.clone());
+<a href=#430 id=430 data-nosnippet>430</a>    }
+<a href=#431 id=431 data-nosnippet>431</a>    <span class="kw">use </span><span class="kw">crate</span>::jni::ProjectionKind;
+<a href=#432 id=432 data-nosnippet>432</a>    <span class="kw">let </span>leaf_wire: syn::Type = <span class="kw">match </span>proj.kind {
+<a href=#433 id=433 data-nosnippet>433</a>        ProjectionKind::Handle =&gt; <span class="macro">syn::parse_quote!</span>(jni::sys::jlong),
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="comment">// No niche exists for `u64`; `Option&lt;u64&gt;` uses the boxed path, so a
+<a href=#435 id=435 data-nosnippet>435</a>        // primitive sentinel must never be synthesized.
+<a href=#436 id=436 data-nosnippet>436</a>        </span>ProjectionKind::Unsigned64 =&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+<a href=#437 id=437 data-nosnippet>437</a>    };
+<a href=#438 id=438 data-nosnippet>438</a>    kotlin_null_sentinel(<span class="kw-2">&amp;</span>leaf_wire).map(|s| s.to_string())
+<a href=#439 id=439 data-nosnippet>439</a>}
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a><span class="doccomment">/// The sentinel a **wrap** should test, given the projection and whether an
+<a href=#442 id=442 data-nosnippet>442</a>/// ancestor makes the leaf nullable — the one rule both derivations of that
+<a href=#443 id=443 data-nosnippet>443</a>/// wrap read (`unfold_leaf_kt` in `render.rs`, `leaf_iface_param` in
+<a href=#444 id=444 data-nosnippet>444</a>/// `iface.rs`), so it cannot drift between them again (#142).
+<a href=#445 id=445 data-nosnippet>445</a>///
+<a href=#446 id=446 data-nosnippet>446</a>/// A sentinel is the leaf's **own** `None` representation, so it belongs to the
+<a href=#447 id=447 data-nosnippet>447</a>/// leaf's own type and to nothing above it. Two independent facts meet here and
+<a href=#448 id=448 data-nosnippet>448</a>/// only the first one answers:
+<a href=#449 id=449 data-nosnippet>449</a>///
+<a href=#450 id=450 data-nosnippet>450</a>/// * the leaf's type carries a niche — `Option&lt;Duration&gt;` over a bounded
+<a href=#451 id=451 data-nosnippet>451</a>///   `convert!`, whose strategy is `Optional(Niche, _)`. Its `None` IS the
+<a href=#452 id=452 data-nosnippet>452</a>///   sentinel, and the test stays whatever the ancestor does.
+<a href=#453 id=453 data-nosnippet>453</a>/// * an **ancestor** can be absent (a conditional value form, an
+<a href=#454 id=454 data-nosnippet>454</a>///   `Option&lt;sum&gt;`/`Option&lt;nested&gt;` field). That widens the wire — the Rust
+<a href=#455 id=455 data-nosnippet>455</a>///   side boxes any nullable leaf, see
+<a href=#456 id=456 data-nosnippet>456</a>///   [`leaf_is_prim`](crate::jni::emit::leaf_is_prim) — and `?.` alone carries
+<a href=#457 id=457 data-nosnippet>457</a>///   it. It grants no sentinel.
+<a href=#458 id=458 data-nosnippet>458</a>///
+<a href=#459 id=459 data-nosnippet>459</a>/// [`projection_leaf_sentinel`] answers off `niche_sentinels`, which
+<a href=#460 id=460 data-nosnippet>460</a>/// `attach_domain_sentinels` puts on the **bare** type's converter as well as
+<a href=#461 id=461 data-nosnippet>461</a>/// the `Option` one. Asking it without the `Base` check therefore handed a
+<a href=#462 id=462 data-nosnippet>462</a>/// sentinel to a leaf that has no niche encoding at all, splicing
+<a href=#463 id=463 data-nosnippet>463</a>/// `?.let { if (it == -1L) … }` into a wrap whose own encoder can never emit
+<a href=#464 id=464 data-nosnippet>464</a>/// `-1`. Harmless at runtime — the value is outside the declared range — and
+<a href=#465 id=465 data-nosnippet>465</a>/// wrong on its face.
+<a href=#466 id=466 data-nosnippet>466</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>wrap_sentinel(proj: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::Projection, nullable: bool) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+<a href=#467 id=467 data-nosnippet>467</a>    <span class="comment">// `Base` means the leaf has no `Option` of its own: whatever absence it can
+<a href=#468 id=468 data-nosnippet>468</a>    // express is the ancestor's, and `?.` already expresses that.
+<a href=#469 id=469 data-nosnippet>469</a>    </span><span class="kw">if </span>nullable &amp;&amp; <span class="macro">matches!</span>(proj.strategy, <span class="kw">crate</span>::jni::FoldStrategy::Base) {
+<a href=#470 id=470 data-nosnippet>470</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#471 id=471 data-nosnippet>471</a>    }
+<a href=#472 id=472 data-nosnippet>472</a>    projection_leaf_sentinel(proj)
+<a href=#473 id=473 data-nosnippet>473</a>}
+<a href=#474 id=474 data-nosnippet>474</a>
+<a href=#475 id=475 data-nosnippet>475</a><span class="doccomment">/// Kotlin literal for the null-sentinel of a primitive wire — used by
+<a href=#476 id=476 data-nosnippet>476</a>/// [`fold_projection_wrap`] when a `Niche` layer covers a primitive wire and
+<a href=#477 id=477 data-nosnippet>477</a>/// can't carry JVM null. Mirrors `jni_field_access`'s primitive descriptors.
+<a href=#478 id=478 data-nosnippet>478</a>/// Returns `None` for object-shaped wires (where JVM null *is* the null
+<a href=#479 id=479 data-nosnippet>479</a>/// representation and `?.let` is the right pattern).
+<a href=#480 id=480 data-nosnippet>480</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>kotlin_null_sentinel(wire: <span class="kw-2">&amp;</span>syn::Type) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+<a href=#481 id=481 data-nosnippet>481</a>    <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, is_object) = <span class="kw">crate</span>::jni::wire_access::jni_field_access(wire)<span class="question-mark">?</span>;
+<a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">if </span>is_object {
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#484 id=484 data-nosnippet>484</a>    }
+<a href=#485 id=485 data-nosnippet>485</a>    <span class="kw">let </span>syn::Type::Path(tp) = wire <span class="kw">else </span>{
+<a href=#486 id=486 data-nosnippet>486</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#487 id=487 data-nosnippet>487</a>    };
+<a href=#488 id=488 data-nosnippet>488</a>    <span class="kw">let </span>last = tp.path.segments.last()<span class="question-mark">?</span>;
+<a href=#489 id=489 data-nosnippet>489</a>    <span class="prelude-val">Some</span>(<span class="kw">match </span>last.ident.to_string().as_str() {
+<a href=#490 id=490 data-nosnippet>490</a>        <span class="string">"jlong" </span>=&gt; <span class="string">"0L"</span>,
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="string">"jint" </span>| <span class="string">"jshort" </span>| <span class="string">"jbyte" </span>| <span class="string">"jchar" </span>=&gt; <span class="string">"0"</span>,
+<a href=#492 id=492 data-nosnippet>492</a>        <span class="string">"jfloat" </span>=&gt; <span class="string">"0.0f"</span>,
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="string">"jdouble" </span>=&gt; <span class="string">"0.0"</span>,
+<a href=#494 id=494 data-nosnippet>494</a>        <span class="string">"jboolean" </span>=&gt; <span class="string">"false"</span>,
+<a href=#495 id=495 data-nosnippet>495</a>        <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+<a href=#496 id=496 data-nosnippet>496</a>    })
+<a href=#497 id=497 data-nosnippet>497</a>}
+<a href=#498 id=498 data-nosnippet>498</a>
+<a href=#499 id=499 data-nosnippet>499</a><span class="doccomment">/// Shorten a class FQN to its simple name for use in **raw body text** (a
+<a href=#500 id=500 data-nosnippet>500</a>/// `fromParts` reconstruct fragment: `Child.fromParts(…)`, `Enum.fromInt(…)`,
+<a href=#501 id=501 data-nosnippet>501</a>/// `ZenohId(bytes)`), registering the FQN into `used` — the body `Code`'s own
+<a href=#502 id=502 data-nosnippet>502</a>/// import list. A non-dotted name (a Kotlin builtin like `String`) needs no
+<a href=#503 id=503 data-nosnippet>503</a>/// import and passes through. Signature types are NOT shortened this way —
+<a href=#504 id=504 data-nosnippet>504</a>/// those are full-FQN `KtType`s in the AST, shortened + imported by the
+<a href=#505 id=505 data-nosnippet>505</a>/// render-time `ImportSet`.
+<a href=#506 id=506 data-nosnippet>506</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>register_fqn(fqn: <span class="kw-2">&amp;</span>str, used: <span class="kw-2">&amp;mut </span>BTreeSet&lt;String&gt;) -&gt; String {
+<a href=#507 id=507 data-nosnippet>507</a>    <span class="kw">if </span>fqn.contains(<span class="string">'.'</span>) {
+<a href=#508 id=508 data-nosnippet>508</a>        used.insert(fqn.to_string());
+<a href=#509 id=509 data-nosnippet>509</a>        fqn.rsplit(<span class="string">'.'</span>).next().unwrap_or(fqn).to_string()
+<a href=#510 id=510 data-nosnippet>510</a>    } <span class="kw">else </span>{
+<a href=#511 id=511 data-nosnippet>511</a>        fqn.to_string()
+<a href=#512 id=512 data-nosnippet>512</a>    }
+<a href=#513 id=513 data-nosnippet>513</a>}
 </code></pre></div></section></main></body></html>
