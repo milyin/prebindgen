@@ -327,6 +327,30 @@ impl JAbiLeaves {
     }
 }
 
+/// The canonical site of a whole return, frozen from the plan the emitters read
+/// rather than the intermediate the site hook produced.
+#[cfg(test)]
+pub(crate) fn whole_return_site(
+    bound: &prebindgen_registry::recipe::Bound,
+    fragment: &prebindgen_registry::generation::FragmentId,
+    plan: std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>,
+) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+    use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+    SitePlan::new(
+        SiteId::new(bound.site.clone()),
+        bound.clone(),
+        fragment.clone(),
+        Yield {
+            ty: bound.crossing.value().stripped_key(),
+            mode: bound.crossing.mode(),
+            validity: Validity::SelfSufficient,
+        },
+        AbiLayout::new(1, JAbiLeaves::Whole(plan)),
+        Some(()),
+        prebindgen_registry::generation::Cleanup::None,
+    )
+}
+
 /// Structural JNI intermediate layout. Leaves are ABI values; Products nest
 /// them into the one tuple type consumed or produced by the registry chain.
 #[derive(Clone)]
@@ -1463,7 +1487,11 @@ impl<R: Conversions> JCompile<'_, R> {
             // a carrier without them could not replace the plan (#622 review).
             JPlan::Param(leaf) => JAbiLeaves::Params(leaf.clone()),
             JPlan::Decomposed(wires) => JAbiLeaves::Decomposed(wires.clone()),
-            JPlan::Return(plan) => JAbiLeaves::Whole(plan.clone()),
+            // A whole return is frozen where its FINAL plan is built, with the
+            // convert delivery attached — the hook's is an intermediate, and
+            // freezing it made the carrier authoritative for something no
+            // emitter reads (#622 review).
+            JPlan::Return(_) => return,
         };
         let frozen = root.freeze_site(bound, leaves);
         // The carrier holds the SAME list the plan does, not a copy of it.
@@ -1479,10 +1507,6 @@ impl<R: Conversions> JCompile<'_, R> {
             (JAbiLeaves::Decomposed(frozen), JPlan::Decomposed(wires)) => assert!(
                 std::rc::Rc::ptr_eq(frozen, wires),
                 "the site's ABI is a copy of the plan's rather than the same list"
-            ),
-            (JAbiLeaves::Whole(frozen), JPlan::Return(plan)) => assert!(
-                std::rc::Rc::ptr_eq(frozen, plan),
-                "the site's ABI is a copy of the return plan rather than the same one"
             ),
 
             _ => panic!("a site's frozen ABI does not match the plan it was taken from"),
@@ -4323,6 +4347,8 @@ impl<R: Conversions> JCompile<'_, R> {
             .unwrap_or_else(|| bound.crossing.spelled());
         let (surface, enums) = crate::jni::fn_plan::ReturnSurface::classify(self.decls, declared);
         crate::jni::fn_plan::ValueOutputPlan {
+            #[cfg(test)]
+            site: Some((bound.clone(), root.id.clone())),
             is_convert: self.declared_return.is_some(),
             pipeline: Self::planned_pipeline(Direction::Deconstruct, bound.crossing.mode(), root),
             surface,

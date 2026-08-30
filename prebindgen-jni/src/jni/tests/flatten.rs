@@ -3468,3 +3468,57 @@ fn a_decomposed_return_shares_one_wire_list_with_its_site() {
          list the site froze"
     );
 }
+
+/// A whole return's canonical site holds the plan the emitters read — the one
+/// with the convert delivery attached, not the intermediate the site hook
+/// produced.
+///
+/// `return_plan` answers before `build_output` attaches `convert_delivery`, so
+/// freezing the hook's object made the carrier authoritative for something no
+/// emitter consumes (#622 review). Identity is the check: the site's plan must
+/// be the same allocation `FnOutputPlan::Value` holds.
+#[test]
+fn a_whole_return_site_holds_the_plan_the_emitters_read() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_count(n: i64) -> i64 {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_count)))
+        .build_with(registry)
+        .expect("resolve");
+
+    let function = gen
+        .declarations()
+        .generation
+        .as_ref()
+        .expect("resolved JniGen has a frozen generation plan")
+        .function(&syn::parse_quote!(z_count))
+        .expect("the exported function is planned");
+    let crate::jni::fn_plan::FnOutputPlan::Value(output) = &function.output else {
+        panic!("a scalar return is a value delivery");
+    };
+    let frozen: Vec<_> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter_map(|plan| match plan.abi().payload() {
+            crate::jni::compile::JAbiLeaves::Whole(value) => Some(value.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        frozen
+            .iter()
+            .any(|value| std::rc::Rc::ptr_eq(value, output)),
+        "the whole-return site holds a plan the emitters do not read"
+    );
+}

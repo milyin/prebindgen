@@ -310,7 +310,7 @@ pub(crate) enum HandleMode {
 /// `Value` = everything else, including the `Return`-delivery convert.
 pub(crate) enum FnOutputPlan {
     Unfold(Box<UnfoldOutputPlan>),
-    Value(Box<ValueOutputPlan>),
+    Value(std::rc::Rc<ValueOutputPlan>),
 }
 
 /// Callback-delivery shape facts, read off the fn's `UnfoldPlan` once so the
@@ -366,6 +366,15 @@ pub(crate) struct UnfoldOutputPlan {
 /// Value-return facts: the resolved conversion target and wire on the Rust
 /// side, the declared-surface classification on the Kotlin side.
 pub(crate) struct ValueOutputPlan {
+    /// Where this return crosses and which fragment answers it, carried from
+    /// the site hook so the plan the emitters actually read — the one with the
+    /// convert delivery attached — is the one frozen into the canonical site,
+    /// rather than the intermediate the hook produced (#622 review).
+    #[cfg(test)]
+    pub site: Option<(
+        prebindgen_registry::recipe::Bound,
+        prebindgen_registry::generation::FragmentId,
+    )>,
     /// `Return`-delivery convert (`convert_output`) — the wrapper returns the
     /// single deconstructed value through its ordinary output converter.
     pub is_convert: bool,
@@ -1310,7 +1319,13 @@ fn build_output(
             None,
         )
     });
-    Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
+    // The plan the emitters read: the site's answer with the convert delivery
+    // attached. This is the one frozen into the canonical site, because it is
+    // the authoritative one — freezing the hook's intermediate carried a
+    // `convert_delivery` of `None` while this object owned the real one.
+    let final_plan = std::rc::Rc::new(ValueOutputPlan {
+        #[cfg(test)]
+        site: plan.site.clone(),
         is_convert,
         pipeline,
         surface,
@@ -1318,7 +1333,18 @@ fn build_output(
         is_option_enum,
         enum_niches,
         convert_delivery,
-    })))
+    });
+    #[cfg(test)]
+    if let Some((bound, fragment)) = &final_plan.site {
+        ext.site_plans
+            .borrow_mut()
+            .push(std::rc::Rc::new(crate::jni::compile::whole_return_site(
+                bound,
+                fragment,
+                final_plan.clone(),
+            )));
+    }
+    Ok(FnOutputPlan::Value(final_plan))
 }
 
 /// Whether a return surfaces as a Kotlin enum class, and whether an optional
