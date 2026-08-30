@@ -968,6 +968,26 @@ impl JniGen {
                  fragment freezes without an artifact",
                 fragment.source.key()
             );
+            // A composition's shape has to be the composition, not the
+            // placeholder every fragment starts with: `JLayout` is what JNI
+            // says today about occupying several wires, so a fragment whose
+            // layout composes must not freeze as `Atomic`.
+            if matches!(
+                fragment.layout,
+                Some(crate::jni::compile::JLayout::Product(_))
+                    | Some(crate::jni::compile::JLayout::Optional(_))
+                    | Some(crate::jni::compile::JLayout::Choice(_))
+            ) {
+                assert!(
+                    !matches!(
+                        plan.converter().shape(),
+                        prebindgen_registry::generation::ShapePlan::Atomic(_)
+                    ),
+                    "`{}`: a fragment whose layout composes froze as atomic — the \
+                     hook that composed it did not state its shape",
+                    fragment.source.key()
+                );
+            }
         }
     }
 
