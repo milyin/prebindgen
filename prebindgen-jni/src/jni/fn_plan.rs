@@ -229,7 +229,12 @@ pub(crate) struct PlanLeaf {
     pub pipeline: crate::jni::chain::JPipeline,
     /// Exact ordered parameters shared by the Rust extern, `JNINative`
     /// declaration, and JVM descriptor-slot validation.
-    pub native: Vec<NativeParam>,
+    ///
+    /// Shared, not copied: the site's `AbiLayout` holds this same list, so
+    /// there is ONE ordered ABI rather than a carrier that has to be kept
+    /// equal to it. That is what lets step 5 delete this side without
+    /// re-deriving anything (#622 review).
+    pub native: std::rc::Rc<Vec<NativeParam>>,
     /// How the Rust wrapper obtains this leaf's source value from `native`.
     pub rust: RustParamOp,
     /// How the typed Kotlin wrapper supplies `native`, including handle
@@ -873,13 +878,13 @@ fn classify_leaf(
                 reading,
                 prebindgen_registry::recipe::Direction::Construct,
             ),
-            native: vec![NativeParam {
+            native: std::rc::Rc::new(vec![NativeParam {
                 rust_ident: wire_ident.clone(),
                 rust_wire: annotate_jobject_with_lifetime(pipeline.wire(), "a").to_token_stream(),
                 kt_name: kt_param_name(&ident.to_string()),
                 kt_wire: entry.metadata.kotlin_name.clone(),
                 jvm_slots: 1,
-            }],
+            }]),
             pipeline,
             rust: RustParamOp::Pipeline { wire_ident },
             kotlin: KotlinParamOp::Callback { iface },

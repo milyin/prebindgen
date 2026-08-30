@@ -1073,6 +1073,15 @@ impl JniGen {
         // does not match its fragment's fallibility — both are properties of
         // the whole set, which is what `build` checks (#622 review).
         for site in self.decls.site_plans.borrow().iter() {
+            // The slot count is what the ABI itself says it is, so the two
+            // cannot drift: `slots` is taken from the leaves rather than
+            // counted beside them.
+            assert_eq!(
+                site.abi().slots(),
+                site.abi().payload().len(),
+                "site {}: the slot count and the ABI disagree",
+                site.id().site()
+            );
             collected.site((**site).clone());
         }
         if let Err(errors) = collected.build() {

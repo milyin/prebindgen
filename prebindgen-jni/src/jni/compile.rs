@@ -33,7 +33,7 @@ pub(crate) enum JPlan {
     ///
     /// Consumed by ordinary decomposed-return delivery. Callback delivery
     /// takes the same result in the following Invoke stage.
-    Decomposed(Vec<OutWire>),
+    Decomposed(std::rc::Rc<Vec<OutWire>>),
 }
 
 impl JPlan {
@@ -56,7 +56,7 @@ impl JPlan {
     /// The values a decomposed return hands out, or `None` if it is not one.
     pub(crate) fn decomposed(self) -> Option<Vec<OutWire>> {
         match self {
-            JPlan::Decomposed(wires) => Some(wires),
+            JPlan::Decomposed(wires) => Some((*wires).clone()),
             _ => None,
         }
     }
@@ -207,11 +207,8 @@ impl prebindgen_registry::generation::Representation for JRepresentation {
     type Niche = String;
     type Cleanup = ();
     type FailureRoute = ();
-    /// A site's ordered leaves, and how they nest — `None` where they do not:
-    /// a decoupled `(present, value)` pair occupies two leaves with no single
-    /// intermediate over them, and saying `Leaf` there would invent a nesting
-    /// the fragment does not have.
-    type AbiLayout = Option<JLayout>;
+    /// A site's ordered ABI: the leaves that cross, in order.
+    type AbiLayout = JAbiLeaves;
     type Artifact = crate::jni::generation::JFinalArtifact;
 }
 
@@ -291,6 +288,40 @@ pub(crate) struct JFrag {
     /// own conversion to emit, so "has wires" is the wrong test for what to
     /// leave out of the file.
     pub(crate) composed_only: bool,
+}
+
+/// A site's ordered ABI is the leaves that cross, and nothing else.
+///
+/// Not the fragment's `JLayout`: that is how the fragment's own intermediate
+/// nests, which is a different fact and a different count — a `data_class`
+/// parameter is one intermediate over two native parameters. Cross-checking
+/// them by count asserted they were the same thing, and they are not.
+/// What a site's ordered leaves are, which depends on which side of the
+/// boundary the site sits on.
+#[derive(Clone)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) enum JAbiLeaves {
+    /// A parameter's native positions — the list the Rust extern, the
+    /// `JNINative` declaration and JVM slot validation all read.
+    Params(std::rc::Rc<Vec<crate::jni::fn_plan::NativeParam>>),
+    /// The values a decomposed return hands out, in builder order.
+    Decomposed(std::rc::Rc<Vec<OutWire>>),
+    /// One value, crossing through its own conversion.
+    Whole,
+}
+
+impl JAbiLeaves {
+    /// How many ordered ABI **leaves** these are — not how many JVM descriptor
+    /// slots they occupy. One native parameter is one leaf; `jvm_slots` says
+    /// how wide that leaf is in a descriptor, which is a different count and
+    /// summing it here made a two-slot `long` look like two leaves.
+    pub(crate) fn len(&self) -> usize {
+        match self {
+            Self::Params(params) => params.len(),
+            Self::Decomposed(wires) => wires.len(),
+            Self::Whole => 1,
+        }
+    }
 }
 
 /// Structural JNI intermediate layout. Leaves are ABI values; Products nest
@@ -1021,23 +1052,19 @@ impl JFrag {
     pub(crate) fn freeze_site(
         &self,
         bound: &prebindgen_registry::recipe::Bound,
-        direction: Direction,
+        leaves: JAbiLeaves,
     ) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
         use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
-        // How many ordered ABI leaves this site occupies. A decomposed
-        // crossing states them itself; anything else is the one value its
-        // conversion names.
-        let slots = match direction {
-            Direction::Construct => self.wires.as_ref().map(Vec::len),
-            Direction::Deconstruct => self.out_wires.as_ref().map(Vec::len),
-        }
-        .unwrap_or(1);
+        // The leaves come from the plan that produced them — this does not
+        // derive them a second time, which is the whole point: a carrier
+        // derived beside the thing it carries is another parallel answer.
+        let slots = leaves.len();
         SitePlan::new(
             SiteId::new(bound.site.clone()),
             bound.clone(),
             self.id.clone(),
             self.yields.clone(),
-            AbiLayout::new(slots, self.layout.clone()),
+            AbiLayout::new(slots, leaves),
             Some(()),
             prebindgen_registry::generation::Cleanup::None,
         )
@@ -1422,6 +1449,42 @@ impl<R: Conversions> JCompile<'_, R> {
             crate::jni::chain::JFunction::value_codec(plan),
         ))
     }
+
+    /// Freeze this site into the canonical plan, taking its ordered ABI from
+    /// the plan just built rather than deriving it again.
+    #[cfg(test)]
+    fn freeze_site_of(&self, bound: &Bound, root: &JFrag, plan: &JPlan) {
+        let leaves = match plan {
+            JPlan::Param(leaf) => JAbiLeaves::Params(leaf.native.clone()),
+            JPlan::Decomposed(wires) => JAbiLeaves::Decomposed(wires.clone()),
+            JPlan::Return(_) => JAbiLeaves::Whole,
+        };
+        let frozen = root.freeze_site(bound, leaves);
+        // The carrier holds the SAME list the plan does, not a copy of it.
+        // That is the property that makes it a replacement: a copy could only
+        // be checked to match today, while one allocation has nothing to
+        // match. Guarded here so a later `clone()` cannot quietly reintroduce
+        // the second answer (#622 review).
+        match (frozen.abi().payload(), plan) {
+            (JAbiLeaves::Params(frozen), JPlan::Param(leaf)) => assert!(
+                std::rc::Rc::ptr_eq(frozen, &leaf.native),
+                "the site's ABI is a copy of the plan's rather than the same list"
+            ),
+            (JAbiLeaves::Decomposed(frozen), JPlan::Decomposed(wires)) => assert!(
+                std::rc::Rc::ptr_eq(frozen, wires),
+                "the site's ABI is a copy of the plan's rather than the same list"
+            ),
+            (JAbiLeaves::Whole, JPlan::Return(_)) => {}
+            _ => panic!("a site's frozen ABI does not match the plan it was taken from"),
+        }
+        self.decls
+            .site_plans
+            .borrow_mut()
+            .push(std::rc::Rc::new(frozen));
+    }
+
+    #[cfg(not(test))]
+    fn freeze_site_of(&self, _bound: &Bound, _root: &JFrag, _plan: &JPlan) {}
 
     /// Freeze a whole-object struct terminal from the Flat declaration and
     /// already-selected child chains. No source type is spelled and no Rust
@@ -3596,65 +3659,6 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     /// leaf, and the diagnostic for an unresolved leaf names the parameter that
     /// expanded.
     fn plan(&mut self, _cx: &mut Cx<'_>, bound: &Bound, root: &JFrag) -> Result<JPlan, JErr> {
-        // Every site states itself twice while step 4 is in progress — as the
-        // `JPlan` the emitters read and as the `SitePlan` that will replace it
-        // — and this is what says the two agree about the ABI. Checked here
-        // rather than stored, because the site's own answer is right here and
-        // nothing reads the canonical one yet.
-        #[cfg(test)]
-        {
-            let plan = root.freeze_site(bound, bound.crossing.direction());
-            let occupied = match bound.crossing.direction() {
-                Direction::Construct => root.wires.as_ref().map(Vec::len),
-                Direction::Deconstruct => root.out_wires.as_ref().map(Vec::len),
-            };
-            assert_eq!(
-                plan.abi().slots(),
-                occupied.unwrap_or(1),
-                "a frozen site plan disagrees with the wires the site occupies"
-            );
-            self.decls.site_plans.borrow_mut().push(std::rc::Rc::new(
-                root.freeze_site(bound, bound.crossing.direction()),
-            ));
-            assert_eq!(
-                plan.fragment(),
-                &root.id,
-                "a frozen site plan names a fragment the site does not use"
-            );
-            // The contract the site requires of that fragment. Type, ownership
-            // and validity together — a site that asked for a borrow where the
-            // fragment yields an owned value is a different site, and #621
-            // found three losses that a check comparing less could not see.
-            assert_eq!(
-                (
-                    &plan.required().ty,
-                    plan.required().mode,
-                    plan.required().validity
-                ),
-                (&root.yields.ty, root.yields.mode, root.yields.validity),
-                "a frozen site plan changed what the site requires of its fragment"
-            );
-            assert_eq!(
-                plan.id(),
-                &prebindgen_registry::generation::SiteId::new(bound.site.clone()),
-                "a frozen site plan changed which site it is"
-            );
-            // The layout and the slot count are two statements about the same
-            // ABI, so they have to agree: a composed layout spells the nesting
-            // of exactly the leaves the site occupies.
-            if let Some(layout) = plan.abi().payload() {
-                assert_eq!(
-                    layout.leaf_count(),
-                    plan.abi().slots(),
-                    "a frozen site plan's layout nests a different number of leaves \
-                     than the site occupies"
-                );
-            }
-        }
-
-        use crate::jni::fn_plan::{
-            kotlin_jvm_slots, plan_error, KotlinParamOp, NativeParam, PlanLeaf, RustParamOp,
-        };
         let site = self
             .site
             .as_ref()
@@ -3668,13 +3672,15 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 // return: the site asked for the `parts` recipe and got what that
                 // recipe states. Nothing else distinguishes the two cases, and
                 // nothing needs to.
-                return Ok(match &root.out_wires {
+                let plan = match &root.out_wires {
                     Some(wires) => {
                         wires.iter().for_each(OutWire::activate);
-                        JPlan::Decomposed(wires.clone())
+                        JPlan::Decomposed(std::rc::Rc::new(wires.clone()))
                     }
                     None => JPlan::Return(Box::new(self.return_plan(bound, root))),
-                });
+                };
+                self.freeze_site_of(bound, root, &plan);
+                return Ok(plan);
             }
             PlanSite::Param(site) => site,
         };
@@ -3877,7 +3883,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             }
         };
 
-        Ok(JPlan::Param(Box::new(PlanLeaf {
+        let plan = JPlan::Param(Box::new(PlanLeaf {
             reading: reading.clone(),
             kt_name,
             kt_public,
@@ -3885,10 +3891,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             as_enum_value,
             enum_niche,
             pipeline,
-            native,
+            native: std::rc::Rc::new(native),
             rust,
             kotlin,
-        })))
+        }));
+        self.freeze_site_of(bound, root, &plan);
+        Ok(plan)
     }
 }
 
