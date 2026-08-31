@@ -113,27 +113,12 @@ impl At<'_> {
 /// [`Carrier::yields`].
 pub struct Cx<'a> {
     model: &'a Flat,
-    recipes: &'a Recipes,
 }
 
 impl Cx<'_> {
     /// The model every structural fact is read off.
     pub fn model(&self) -> &Flat {
         self.model
-    }
-
-    /// The table, for asking about a crossing without demanding it.
-    pub fn table(&self) -> &Recipes {
-        self.recipes
-    }
-
-    /// Which reusable recipe names are declared under a crossing key.
-    ///
-    /// Demands nothing, so an adapter may ask about an alternative it will not
-    /// take. Empty for a crossing nobody declared, which still has a derived
-    /// recipe.
-    pub fn recipe_names(&self, crossing: &Crossing) -> Vec<&RecipeName> {
-        self.recipes.names_of(&crossing.key())
     }
 }
 
@@ -531,10 +516,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
             .into());
         }
-        let mut cx = Cx {
-            model: self.model,
-            recipes: self.recipes,
-        };
+        let mut cx = Cx { model: self.model };
         adapter
             .plan(&mut cx, &bound, &root)
             .map(Some)
@@ -877,10 +859,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         }
         let paired: Vec<(Part<'p>, &C::Fragment)> =
             parts.into_iter().zip(built.iter().map(|f| &**f)).collect();
-        let mut cx = Cx {
-            model: self.model,
-            recipes: self.recipes,
-        };
+        let mut cx = Cx { model: self.model };
         match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
             ProductKind::Fields => adapter.fields(&mut cx, at, &paired),
@@ -896,10 +875,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         arms: Vec<(&'a Alternative, C::Fragment)>,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
         let paired: Vec<(&Alternative, &C::Fragment)> = arms.iter().map(|(a, f)| (*a, f)).collect();
-        let mut cx = Cx {
-            model: self.model,
-            recipes: self.recipes,
-        };
+        let mut cx = Cx { model: self.model };
         adapter
             .choice(&mut cx, at, &paired)
             .map_err(CompileError::Adapter)
@@ -908,10 +884,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
     // ── Reading the parts off the model ───────────────────────────────────
 
     fn cx(&mut self) -> Cx<'_> {
-        Cx {
-            model: self.model,
-            recipes: self.recipes,
-        }
+        Cx { model: self.model }
     }
 
     fn construct_parts(
