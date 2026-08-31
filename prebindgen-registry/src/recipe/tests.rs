@@ -1451,6 +1451,89 @@ fn a_path_reach_past_the_end_is_refused() {
     );
 }
 
+/// A field taken apart HERE, by a shape the row carries, rather than by the
+/// row its own type has.
+///
+/// The form a sum-typed field needs: a `sealed_class` has no deconstructing
+/// whole-value crossing, so such a field cannot be a whole part at all, and
+/// `Fields(Vec<Reach>)` cannot hold the `Choice` its leaves need (#613 step 10).
+#[test]
+fn a_nested_shape_takes_a_field_apart_in_place() {
+    let model = model(&[
+        SAMPLE,
+        "pub struct Outer { pub inner: Sample, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Outer"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![
+            Reach::Nested {
+                index: 0,
+                shape: Box::new(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
+            },
+            Reach::Field(1),
+        ])),
+    );
+    let recipes = builder.build(&model).expect("a nested shape validates");
+    let mut adapter = Recorder::default();
+
+    let plan = compile_one(
+        &model,
+        &recipes,
+        &mut adapter,
+        Site {
+            owner: ident("z_get"),
+            role: Role::Return,
+        },
+        "Outer",
+        Direction::Deconstruct,
+    );
+    // The nested shape contributes ITS parts, not one part for the field.
+    assert!(
+        plan.contains("key="),
+        "the nested shape's first part:\n{plan}"
+    );
+    assert!(
+        plan.contains("payload="),
+        "the nested shape's second part:\n{plan}"
+    );
+    assert!(
+        plan.contains("tag="),
+        "the plain field is unaffected:\n{plan}"
+    );
+}
+
+/// A nested shape over a field index past the end is refused.
+#[test]
+fn a_nested_shape_past_the_end_is_refused() {
+    let model = model(&[
+        SAMPLE,
+        "pub struct Outer { pub inner: Sample, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Outer"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Nested {
+            index: 9,
+            shape: Box::new(Deconstruct::Fields(vec![Reach::Field(0)])),
+        }])),
+    );
+    let errors = builder.build(&model).expect_err("index 9 is past the end");
+    assert!(
+        matches!(
+            errors.as_slice(),
+            [RecipeError::OutOfRange {
+                index: 9,
+                len: 2,
+                ..
+            }]
+        ),
+        "{errors:?}"
+    );
+}
+
 #[test]
 fn an_omitted_reach_contributes_no_part() {
     let model = model(&[SAMPLE]);
