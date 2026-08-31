@@ -2446,7 +2446,7 @@ fn the_two_derivations_agree_on_a_nested_data_class() {
     let page: syn::Ident = syn::parse_quote!(Page);
     let wires = gen
         .declarations()
-        .struct_out_wires_of(gen.registry(), &page)
+        .struct_out_wires_of(gen.registry().flat(), &page)
         .expect("a nested data class decomposes");
     let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
     assert_eq!(
@@ -2519,7 +2519,7 @@ fn a_sum_field_decomposes_into_its_tag_and_groups() {
     let holder: syn::Ident = syn::parse_quote!(Holder);
     let wires = gen
         .declarations()
-        .struct_out_wires_of(gen.registry(), &holder)
+        .struct_out_wires_of(gen.registry().flat(), &holder)
         .expect("a sum field no longer refuses the decomposition");
     let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
     assert_eq!(
@@ -2606,7 +2606,7 @@ fn a_selector_inside_a_gated_group_is_a_segment_of_its_own() {
     let mid: syn::Ident = syn::parse_quote!(Mid);
     let names: Vec<String> = gen
         .declarations()
-        .struct_out_wires_of(gen.registry(), &mid)
+        .struct_out_wires_of(gen.registry().flat(), &mid)
         .expect("one level of gating decomposes")
         .iter()
         .map(|wire| wire.name.clone())
@@ -2617,7 +2617,7 @@ fn a_selector_inside_a_gated_group_is_a_segment_of_its_own() {
     let outer: syn::Ident = syn::parse_quote!(Outer);
     let wires = gen
         .declarations()
-        .struct_out_wires_of(gen.registry(), &outer)
+        .struct_out_wires_of(gen.registry().flat(), &outer)
         .expect("a selector inside a gated group decomposes");
     let leaves: Vec<(String, Vec<i32>)> = wires
         .iter()
@@ -2709,7 +2709,7 @@ fn a_field_named_like_the_arm_marker_is_just_a_field() {
     let holder: syn::Ident = syn::parse_quote!(Holder);
     let wires = gen
         .declarations()
-        .struct_out_wires_of(gen.registry(), &holder)
+        .struct_out_wires_of(gen.registry().flat(), &holder)
         .expect("a sum field decomposes whatever its name spells");
     let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
     assert_eq!(
@@ -2779,7 +2779,7 @@ fn an_optional_nested_class_decomposes_behind_its_presence() {
     let holder: syn::Ident = syn::parse_quote!(Holder);
     let wires = gen
         .declarations()
-        .struct_out_wires_of(gen.registry(), &holder)
+        .struct_out_wires_of(gen.registry().flat(), &holder)
         .expect("an optional nested data class no longer refuses the decomposition");
     let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
     assert_eq!(
@@ -3304,7 +3304,7 @@ fn a_flattened_leaf_names_the_classes_it_is_put_back_through() {
     let top: syn::Ident = syn::parse_quote!(TTop);
     let leaves: Vec<(String, Vec<String>)> = gen
         .declarations()
-        .struct_out_wires_of(gen.registry(), &top)
+        .struct_out_wires_of(gen.registry().flat(), &top)
         .expect("a nested data class decomposes")
         .iter()
         .map(|wire| (wire.name.clone(), wire.through.clone()))

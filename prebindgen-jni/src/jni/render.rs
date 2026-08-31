@@ -179,7 +179,7 @@ pub(crate) fn build_data_class(
     let mut factory_imports: BTreeSet<String> = BTreeSet::new();
     let (factory_params, factory_reconstruct, factory_mints_handle) = flatten_struct_factory(
         ext,
-        registry,
+        registry.flat(),
         item_struct,
         "",
         class_name,

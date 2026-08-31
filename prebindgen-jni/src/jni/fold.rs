@@ -22,7 +22,7 @@ use super::*;
 ///
 /// Borrowing rather than composing is not a shortcut: every layer of a reading
 /// already holds the next as a `TypeRef` of its own, so there is nothing to
-/// mint — which is also why this needs no registry. What it returns spells
+/// mint — which is also why this needs no flat. What it returns spells
 /// itself (`spell()`) and classifies itself (`kind`), and the two cannot
 /// disagree.
 pub(crate) fn enum_probe(reading: &TypeRef) -> &TypeRef {
@@ -102,7 +102,7 @@ pub(crate) type StructFactory = (Vec<(String, KtType)>, String, bool);
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flatten_struct_factory(
     ext: &Declarations,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
     s: &prebindgen_registry::flat::Struct,
     prefix: &str,
     class_name: &str,
@@ -110,8 +110,8 @@ pub(crate) fn flatten_struct_factory(
     depth: usize,
 ) -> Option<StructFactory> {
     let _ = (prefix, depth);
-    let leaves = ext.struct_out_frozen(registry, s)?;
-    let (params, reconstruct) = factory_from_leaves(ext, registry, &leaves, class_name, imports)?;
+    let leaves = ext.struct_out_frozen(flat, s)?;
+    let (params, reconstruct) = factory_from_leaves(ext, flat, &leaves, class_name, imports)?;
     // Whether this factory takes a raw native pointer, and so needs the
     // raw-pointer guard: asked of the same leaves, through the wrap that says
     // a slot is a handle.
@@ -134,7 +134,7 @@ pub(crate) fn flatten_struct_factory(
 /// `Class(<one part per constructor field>)`.
 fn factory_from_leaves(
     ext: &Declarations,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
     leaves: &[crate::jni::compile::OutWire],
     class_name: &str,
     imports: &mut BTreeSet<String>,
@@ -166,7 +166,7 @@ fn factory_from_leaves(
             .map_or(i + 1, |j| j + 1);
         parts.push(factory_part(
             ext,
-            registry,
+            flat,
             &leaves[i..end],
             &params[i..end],
             &names[i..end],
@@ -185,7 +185,7 @@ fn factory_from_leaves(
 #[allow(clippy::too_many_arguments)]
 fn factory_part(
     ext: &Declarations,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
     leaves: &[crate::jni::compile::OutWire],
     params: &[crate::jni::IfaceParam],
     names: &[String],
@@ -254,7 +254,7 @@ fn factory_part(
         let inner_params = crate::jni::iface::plan_leaf_params(ext, &inner)?;
         let gated = factory_part(
             ext,
-            registry,
+            flat,
             &leaves[1..],
             &params[1..],
             &names[1..],
@@ -265,7 +265,7 @@ fn factory_part(
     }
     if leaves[0].is_tag() {
         let (_, when) = ext.sum_reconstruct(
-            registry,
+            flat,
             &leaves[0].out_ty.unwrapped().key(),
             leaves,
             params,

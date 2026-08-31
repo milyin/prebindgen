@@ -76,7 +76,7 @@ pub(crate) fn synth_value_struct_leaves(
 ) -> Option<Vec<prebindgen_registry::unfold::UnfoldLeaf>> {
     use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
     Some(
-        ext.struct_out_wires_of(registry, &s.name)?
+        ext.struct_out_wires_of(registry.flat(), &s.name)?
             .into_iter()
             .map(|w| UnfoldLeaf {
                 name: w.name,
