@@ -293,6 +293,22 @@ fn an_accessor_reached_through_a_borrow_is_accepted() {
 }
 
 #[test]
+fn an_identity_reach_needs_no_accessor_and_yields_the_value_itself() {
+    // The form `DeconRecord::Identity` states: a handle leaf is the whole
+    // value, with no field to index and no accessor to call. A table that
+    // could not spell it is why #622's callback-argument rows are placeholders
+    // (#613 step 10).
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Sample"),
+        recipe_name("handle"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Identity])),
+    );
+    builder.build(&model).expect("an identity reach validates");
+}
+
+#[test]
 fn a_field_index_past_the_end_is_refused() {
     let model = model(&[SAMPLE]);
     let mut builder = Recipes::builder();
@@ -994,6 +1010,7 @@ fn part_names<C: Compile>(parts: Parts<'_, C>) -> String {
                 PartSource::Argument { index } => format!("arg{index}"),
                 PartSource::Field { index, .. } => format!("field{index}"),
                 PartSource::Accessor { func } => format!("via {}", func.name),
+                PartSource::Identity => "self".to_string(),
             };
             format!("{}={source}/{}", p.name, p.mode)
         })
