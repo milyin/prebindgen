@@ -521,12 +521,11 @@ pub(crate) fn is_iterable_fold(shape: &prebindgen_registry::unfold::UnfoldShape)
 pub(crate) fn render_extern_decl(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
 ) -> Option<KtFun> {
     // The name and wire params come straight off the lowered plan — the
     // same classification the Rust extern and the Kotlin call site consume,
     // so the three sites agree on arity, types, and symbol by construction.
-    let fplan = ext.fn_plan(registry, f).ok()?;
+    let fplan = ext.fn_plan_frozen(f)?;
     let jni_call = &fplan.jni_method;
     let mut params: Vec<KtParam> = Vec::new();
     for leaf in fplan.leaves() {

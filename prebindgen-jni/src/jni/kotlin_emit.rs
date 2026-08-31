@@ -1957,7 +1957,7 @@ impl Declarations {
             if !declared.contains(&f.name) {
                 continue;
             }
-            if let Some(fun) = render_extern_decl(self, f, registry) {
+            if let Some(fun) = render_extern_decl(self, f) {
                 externs.push(fun);
             }
         }
@@ -1977,7 +1977,7 @@ impl Declarations {
                 continue; // missing decl already warned by the scan
             };
             let getter = crate::jni::const_getter_fn(item_const);
-            if let Some(fun) = render_extern_decl(self, &getter, registry) {
+            if let Some(fun) = render_extern_decl(self, &getter) {
                 externs.push(fun);
             }
         }
@@ -1992,7 +1992,7 @@ impl Declarations {
         expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
         for decl in expr_decls {
             let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
-            if let Some(fun) = render_extern_decl(self, &getter, registry) {
+            if let Some(fun) = render_extern_decl(self, &getter) {
                 externs.push(fun);
             }
         }
