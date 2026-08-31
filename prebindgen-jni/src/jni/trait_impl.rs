@@ -752,7 +752,7 @@ impl JniGenBuilder {
             }
             .into());
         }
-        let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry);
+        let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry)?;
         decls.generation = Some(std::rc::Rc::new(generation));
         Ok(JniGen { decls, registry })
     }

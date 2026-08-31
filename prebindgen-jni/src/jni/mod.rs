@@ -551,7 +551,7 @@ impl JniGen {
             self.registry.flat(),
             self.decls.recipe_table(),
             self.decls.site_bindings(),
-            self.generation_plan().conversions().clone(),
+            self.decls.compiled.borrow().clone(),
         );
         let mut adapter = crate::jni::compile::JCompile {
             decls: &self.decls,
@@ -632,8 +632,9 @@ impl JniGen {
             prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Deconstruct)
                 .row(crate::jni::recipes::parts());
         let wires = self
-            .generation_plan()
-            .conversions()
+            .decls
+            .compiled
+            .borrow()
             .recipe_fragment(&reading.key(), &row)?
             .out_wires
             .clone()?;
@@ -804,8 +805,9 @@ impl JniGen {
             direction,
         }
         .row(crate::jni::recipes::parts());
-        self.generation_plan()
-            .conversions()
+        self.decls
+            .compiled
+            .borrow()
             .recipe_fragment(&TypeKey::from_ident(&ident), &row)
             .is_some()
     }
@@ -821,7 +823,7 @@ impl JniGen {
         let key = reading.key();
         let row = prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Construct)
             .row(crate::jni::recipes::parts());
-        let compiled = self.generation_plan().conversions();
+        let compiled = self.decls.compiled.borrow();
         // A declared class states its composition under `parts`; an optional
         // over one has no recipe of its own and composes on the recipe the registry
         // derived, which is the crossing's default.
@@ -844,7 +846,9 @@ impl JniGen {
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let fragment = self
-            .generation_plan()
+            .decls
+            .compiled
+            .borrow()
             .fragment(&reading.key(), Direction::Construct)?;
         Some(fragment.rust.is_borrowed_optional_handle())
     }
@@ -857,7 +861,9 @@ impl JniGen {
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let fragment = self
-            .generation_plan()
+            .decls
+            .compiled
+            .borrow()
             .fragment(&reading.key(), Direction::Construct)?;
         Some(fragment.rust.is_optional())
     }
@@ -871,7 +877,9 @@ impl JniGen {
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let key = reading.key();
         let fragment = self
-            .generation_plan()
+            .decls
+            .compiled
+            .borrow()
             .fragment(&key, Direction::Construct)?;
         let rendered = fragment
             .rust
@@ -933,14 +941,22 @@ impl JniGen {
         )?)
     }
 
-    /// Every compiled fragment states the same thing twice while step 4 is in
+    /// Every compiled fragment states the same thing twice while step 5 is in
     /// progress — as a [`JFrag`](crate::jni::compile::JFrag) and as the
-    /// `FragmentPlan` it freezes to — and this is what says the two agree.
+    /// `FragmentPlan` the canonical plan holds — and this is what says the two
+    /// agree.
     ///
     /// Identity, source and artifact presence are compared because they are
     /// what a plan is keyed and spelled by, and what an emitter would read
     /// instead of the fragment. A composed-only fragment renders nothing, and
     /// the canonical plan says so by carrying no artifact at all.
+    ///
+    /// The plan itself is **not** rebuilt here. Since 5a it is built and
+    /// validated in `JniGenerationPlan::freeze`, so a set-level defect — a
+    /// chain whose endpoints do not join up, an edge naming a fragment nothing
+    /// compiled, a duplicate site identity — fails the binding rather than one
+    /// test. What is left for this check is the per-fragment agreement that
+    /// only survives while `JFrag` still exists; 5c deletes both.
     #[cfg(test)]
     fn assert_fragments_freeze(&self) {
         let generation = self
@@ -948,12 +964,22 @@ impl JniGen {
             .generation
             .as_ref()
             .expect("resolved JniGen has no frozen generation plan");
-        let mut collected = prebindgen_registry::generation::GenerationPlanBuilder::<
-            crate::jni::compile::JRepresentation,
-        >::new();
-        for fragment in generation.conversions().fragments() {
-            let plan = fragment.freeze();
-            collected.fragment(fragment.freeze());
+        // Driven from the PLAN, not from the compiled store. `build` keeps the
+        // fragments reachable from a site and prunes the rest, so the store is
+        // a superset — a converter the assembly still reaches on its own is in
+        // it and not in the plan. Closing that is step 8's, where artifact
+        // ordering moves onto the plan; until then the plan's own fragments are
+        // what there is to agree about.
+        let compiled = self.decls.compiled.borrow();
+        for plan in generation.plan().fragments() {
+            let fragment = compiled
+                .recipe_fragment(plan.id().spelling(), plan.id().recipe())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "`{}`: the canonical plan holds a fragment nothing compiled",
+                        plan.id().spelling()
+                    )
+                });
             assert_eq!(
                 plan.id(),
                 &fragment.id,
@@ -1064,15 +1090,19 @@ impl JniGen {
                 );
             }
         }
-        // …and the whole set as one plan. Comparing fragment against fragment
-        // cannot see a chain whose endpoints do not join up, or an edge naming
-        // a fragment nothing compiled: those are properties of the collection,
-        // and `build` is what already validates them (#621 review).
-        // Sites too, in the same plan. A site validated against the JFrag it
-        // came from cannot show a duplicate identity or a failure route that
-        // does not match its fragment's fallibility — both are properties of
-        // the whole set, which is what `build` checks (#622 review).
-        for site in self.decls.site_plans.borrow().iter() {
+        // Every site the compilation stated reached the stored plan. The
+        // set-level properties — a duplicate identity, a failure route that
+        // does not match its fragment's fallibility, an edge naming a fragment
+        // nothing compiled — are `build`'s, and `build` now runs in `freeze`,
+        // so reaching here at all means it passed. What this adds is that
+        // nothing was dropped between stating a site and storing it.
+        let stated = self.decls.site_plans.borrow();
+        assert_eq!(
+            stated.len(),
+            generation.plan().sites().len(),
+            "the canonical plan holds a different number of sites than were stated"
+        );
+        for site in stated.iter() {
             // The slot count is what the ABI itself says it is, so the two
             // cannot drift: `slots` is taken from the leaves rather than
             // counted beside them.
@@ -1082,10 +1112,11 @@ impl JniGen {
                 "site {}: the slot count and the ABI disagree",
                 site.id().site()
             );
-            collected.site((**site).clone());
-        }
-        if let Err(errors) = collected.build() {
-            panic!("the frozen JNI plan is not valid: {errors}");
+            assert!(
+                generation.plan().site(site.id()).is_some(),
+                "site {} was stated but is not in the canonical plan",
+                site.id().site()
+            );
         }
     }
 
@@ -1321,7 +1352,6 @@ pub struct Declarations {
     /// set can be validated as one — which is where a duplicate site identity
     /// or a missing failure route shows up, neither being visible in a site
     /// compared against itself (#622 review).
-    #[cfg(test)]
     pub(crate) site_plans: std::cell::RefCell<
         Vec<
             std::rc::Rc<

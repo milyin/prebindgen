@@ -248,9 +248,6 @@ impl JInvokePlan {
     /// it. What a `Role::CallbackArg` site names: the same allocation the
     /// rendered part holds, so the site states the delivery rather than a
     /// second derivation of it.
-    /// Test-gated with the site carriers it serves: until step 5 the frozen
-    /// sites are a check, not something an emitter reads.
-    #[cfg(test)]
     pub(crate) fn arg_abi(&self, index: usize) -> Option<crate::jni::compile::JAbiLeaves> {
         Some(match self.chain.parts.get(index)? {
             JInvokePart::Fold { delivery, .. } | JInvokePart::Decomposed { delivery, .. } => {

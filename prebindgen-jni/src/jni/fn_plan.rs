@@ -370,7 +370,6 @@ pub(crate) struct ValueOutputPlan {
     /// the site hook so the plan the emitters actually read — the one with the
     /// convert delivery attached — is the one frozen into the canonical site,
     /// rather than the intermediate the hook produced (#622 review).
-    #[cfg(test)]
     pub site: Option<(
         prebindgen_registry::recipe::Bound,
         prebindgen_registry::generation::FragmentId,
@@ -933,7 +932,6 @@ fn classify_leaf(
         // answers it, whose own id carries the recipe that was selected.
         // Stated here rather than left out, so the canonical site set covers
         // this path too (#622 review).
-        #[cfg(test)]
         {
             let fragment = entry.fragment();
             ext.site_plans
@@ -1365,7 +1363,6 @@ fn build_output(
     // the authoritative one — freezing the hook's intermediate carried a
     // `convert_delivery` of `None` while this object owned the real one.
     let final_plan = std::rc::Rc::new(ValueOutputPlan {
-        #[cfg(test)]
         site: plan.site.clone(),
         is_convert,
         pipeline,
@@ -1375,7 +1372,6 @@ fn build_output(
         enum_niches,
         convert_delivery,
     });
-    #[cfg(test)]
     if let Some((bound, fragment)) = &final_plan.site {
         ext.site_plans
             .borrow_mut()

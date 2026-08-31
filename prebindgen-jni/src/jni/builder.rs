@@ -129,7 +129,6 @@ impl Default for Declarations {
         Self {
             tables: None,
             compiled: Default::default(),
-            #[cfg(test)]
             site_plans: Default::default(),
             package: String::new(),
             fun_name_mangle: None,
