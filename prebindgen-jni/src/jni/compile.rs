@@ -3422,14 +3422,19 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // named the `parts` row a decomposed callback argument states. The
         // second is how a `Role::CallbackArg` site reaches the same plan the
         // trampoline delivers, instead of a fragment fabricated beside it.
-        let asks_parts = *at.recipe.name() == crate::jni::recipes::parts();
+        // A `parts` row used to be named here as a second way in. It is not
+        // one: a `parts` row is `Deconstructing::Atomic`, so this hook is where
+        // its crossing lands anyway, and the condition below already admits it
+        // — `conv` is `None` for a type with no whole JNI representation, which
+        // is what a callback argument declared for decomposition is. Disabling
+        // the `asks_parts` arm moves no generated output and fails no test
+        // (#613 step 10).
         if at.crossing.direction() == Direction::Deconstruct
-            && (asks_parts
-                || (conv.is_none()
-                    && !self
-                        .decls
-                        .types
-                        .contains_key(&at.crossing.value().stripped_key())))
+            && conv.is_none()
+            && !self
+                .decls
+                .types
+                .contains_key(&at.crossing.value().stripped_key())
         {
             // A type-level output expansion is already a registry-owned
             // deconstruction plan. Some deliberately Rust-only types have no
