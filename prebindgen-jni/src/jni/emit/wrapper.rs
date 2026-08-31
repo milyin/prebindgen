@@ -11,6 +11,7 @@ use super::*;
 use crate::jni::trait_impl::read_through_erased_wrappers;
 
 /// What the extern calls once its inputs are decoded.
+#[derive(Clone)]
 pub(crate) enum JCallee {
     /// The `#[prebindgen]` function itself, under the module it comes from.
     Source(syn::Path),
@@ -25,6 +26,7 @@ pub(crate) enum JCallee {
 /// Everything the extern needs is here: the frozen function plan, the model
 /// element it exports, and what it calls. Nothing is looked up in a live
 /// registry while the file is assembled.
+#[derive(Clone)]
 pub(crate) struct JWrapper {
     /// This function's frozen JNI plan — symbol, inputs, output delivery,
     /// error channels.
