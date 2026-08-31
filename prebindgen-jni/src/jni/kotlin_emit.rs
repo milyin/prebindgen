@@ -29,7 +29,6 @@ use kotlin_codegen::{
     KtClass, KtClassKind, KtClassModifier, KtCode, KtCompanion, KtCtorParam, KtDecl, KtFile, KtFun,
     KtParam, KtProperty, KtType, KtVis,
 };
-use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -1519,7 +1518,7 @@ impl Declarations {
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
-            registry,
+            registry.flat(),
             &plan.source.key(),
             &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
             &spec.params,
@@ -1561,7 +1560,7 @@ impl Declarations {
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
-            registry,
+            registry.flat(),
             &plan.source.key(),
             &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
             &spec.params[1..],
@@ -1601,7 +1600,7 @@ impl Declarations {
     /// its variant-constructor argument by [`Self::sum_ctor_arg`].
     pub(crate) fn sum_reconstruct(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         // The sum's **identity**: every use of `source` here was
         // `TypeKey::from_type` or `bare_path_ident`, and a key that is one
         // identifier IS the ident — the same reduction `type_kind` made.
@@ -1618,9 +1617,7 @@ impl Declarations {
         let ident = key
             .ident()
             .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
-        let Some(prebindgen_registry::flat::Type::Variant(sum)) =
-            registry.flat().declared_type(&ident)
-        else {
+        let Some(prebindgen_registry::flat::Type::Variant(sum)) = flat.declared_type(&ident) else {
             panic!("sum builder: `{ident}` is not an indexed sum")
         };
         let sum_cfg = self.types[key]

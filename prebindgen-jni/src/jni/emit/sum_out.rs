@@ -46,7 +46,7 @@ pub(crate) fn synth_sum_leaves(
     sum: &prebindgen_registry::flat::Variant,
 ) -> Vec<prebindgen_registry::unfold::UnfoldLeaf> {
     use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
-    ext.sum_out_wires(registry, ident, sum.type_ref())
+    ext.sum_out_wires(registry.flat(), ident, sum.type_ref())
         .unwrap_or_default()
         .into_iter()
         .map(|w| UnfoldLeaf {

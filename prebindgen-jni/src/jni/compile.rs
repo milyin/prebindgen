@@ -1655,7 +1655,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 crate::jni::emit::build_jobject_struct_input_plan(self.decls, st, self.registry)?,
             )),
             Direction::Deconstruct => {
-                let wires = self.decls.struct_out_frozen(self.registry, st)?;
+                let wires = self.decls.struct_out_frozen(self.registry.flat(), st)?;
                 let delivery = crate::jni::emit::FrozenDelivery::for_value_struct(
                     self.decls,
                     self.registry,
@@ -4644,7 +4644,7 @@ impl<R: Conversions> JCompile<'_, R> {
         // splice their already-frozen payload ABIs into that shared layout.
         let mut wires = self
             .decls
-            .sum_out_wires(self.registry, &ident, at.crossing.value())
+            .sum_out_wires(self.registry.flat(), &ident, at.crossing.value())
             .ok_or_else(|| refuse(at, "a choice recipe over an undeclared sum"))?;
         let abis: Vec<OutAbi> = std::iter::once(OutAbi::Tag)
             .chain(arms.iter().flat_map(|(_, arm)| {
@@ -4921,7 +4921,7 @@ impl Declarations {
         let TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
             return None;
         };
-        self.struct_out_wires_at(registry, &id.ident()?, &[], "", 0)
+        self.struct_out_wires_at(registry.flat(), &id.ident()?, &[], "", 0)
     }
 
     /// The same values, with each leaf's **output ABI frozen** — the whole-value
@@ -4942,10 +4942,10 @@ impl Declarations {
     /// parameters from them.
     pub(crate) fn struct_out_frozen(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         st: &prebindgen_registry::flat::Struct,
     ) -> Option<Vec<OutWire>> {
-        self.struct_out_wires_of(registry, &st.name)?
+        self.struct_out_wires_of(flat, &st.name)?
             .into_iter()
             .map(|mut wire| {
                 wire.abi = Some(match &wire.from {
@@ -4966,15 +4966,15 @@ impl Declarations {
     /// has the element rather than a reading of it.
     pub(crate) fn struct_out_wires_of(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         ident: &syn::Ident,
     ) -> Option<Vec<OutWire>> {
-        self.struct_out_wires_at(registry, ident, &[], "", 0)
+        self.struct_out_wires_at(flat, ident, &[], "", 0)
     }
 
     fn struct_out_wires_at(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         ident: &syn::Ident,
         path: &[syn::Ident],
         name_prefix: &str,
@@ -4983,8 +4983,7 @@ impl Declarations {
         if depth > 16 {
             return None;
         }
-        let prebindgen_registry::flat::Type::Struct(st) = registry.flat().declared_type(ident)?
-        else {
+        let prebindgen_registry::flat::Type::Struct(st) = flat.declared_type(ident)? else {
             return None;
         };
         let mut wires = Vec::new();
@@ -5014,7 +5013,7 @@ impl Declarations {
             // converter for `Vec<T>` far from the field that caused it.
             if let Some(elem) = probe.sequence_elem() {
                 if matches!(
-                    self.type_kind(registry.flat(), &elem.key()),
+                    self.type_kind(flat, &elem.key()),
                     crate::jni::classify::TypeKind::Sum
                 ) {
                     panic!(
@@ -5024,7 +5023,7 @@ impl Declarations {
                     );
                 }
             }
-            match self.type_kind(registry.flat(), &probe.key()) {
+            match self.type_kind(flat, &probe.key()) {
                 // A handle or an enum_class field is an ordinary leaf: its own
                 // output conversion carries it — a `jlong` for the handle the
                 // receiver adopts, a `jint` discriminant for the enum — and
@@ -5067,7 +5066,7 @@ impl Declarations {
                         reach[path.len()] =
                             prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
                     }
-                    for wire in self.sum_out_wires(registry, &sum_ident, probe)? {
+                    for wire in self.sum_out_wires(flat, &sum_ident, probe)? {
                         let groups = match optional {
                             true => std::iter::once(crate::jni::emit::PRESENT_ARM)
                                 .chain(wire.groups.iter().copied())
@@ -5127,7 +5126,7 @@ impl Declarations {
                         });
                     }
                     let inlined =
-                        self.struct_out_wires_at(registry, &child, &field_path, &name, depth + 1)?;
+                        self.struct_out_wires_at(flat, &child, &field_path, &name, depth + 1)?;
                     // Which class this boundary reassembles through, recorded
                     // where the flattening happens. `data_class!` named it, so
                     // this stays a declaration read like the rest of the walk.
@@ -5198,12 +5197,11 @@ impl Declarations {
     /// one no `sealed_class!` declares — neither has a decomposition to state.
     pub(crate) fn sum_out_wires(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         ident: &syn::Ident,
         sum_ty: &TypeRef,
     ) -> Option<Vec<OutWire>> {
-        let prebindgen_registry::flat::Type::Variant(sum) = registry.flat().declared_type(ident)?
-        else {
+        let prebindgen_registry::flat::Type::Variant(sum) = flat.declared_type(ident)? else {
             return None;
         };
         let cfg = self.types.get(&TypeKey::from_ident(ident))?.sum()?;

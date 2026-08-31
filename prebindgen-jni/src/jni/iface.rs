@@ -1366,7 +1366,14 @@ fn sum_segment_reassembly(
         .collect();
     let params = plan_leaf_params(ext, wires).unwrap_or_default();
     let mut imports: BTreeSet<String> = BTreeSet::new();
-    let (_, when) = ext.sum_reconstruct(registry, source, wires, &params, &slots, &mut imports);
+    let (_, when) = ext.sum_reconstruct(
+        registry.flat(),
+        source,
+        wires,
+        &params,
+        &slots,
+        &mut imports,
+    );
     (when, imports.into_iter().collect())
 }
 

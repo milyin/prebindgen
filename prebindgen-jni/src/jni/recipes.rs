@@ -117,7 +117,7 @@ impl Declarations {
         let Some(ident) = id.ident() else { return 0 };
         match registry.flat().declared_type(&ident) {
             Some(prebindgen_registry::flat::Type::Variant(_)) => self
-                .sum_out_wires(registry, &ident, ty)
+                .sum_out_wires(registry.flat(), &ident, ty)
                 .map_or(0, |w| w.len()),
             Some(prebindgen_registry::flat::Type::Struct(_)) => {
                 self.struct_out_wires(registry, ty).map_or(0, |w| w.len())
