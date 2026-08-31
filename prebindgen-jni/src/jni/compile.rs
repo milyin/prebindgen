@@ -4183,8 +4183,11 @@ impl Conv {
         self.0.pipeline(direction, mode)
     }
 
+    /// The JNI wire this conversion produces or consumes, from the artifact —
+    /// the same value `ConverterImpl::destination` held, reached through what
+    /// the plan carries (#626 review).
     pub(crate) fn destination(&self) -> &syn::Type {
-        &self.0.conv.destination
+        &self.1.wire
     }
 
     pub(crate) fn projection(&self) -> Option<Projection> {
@@ -4195,8 +4198,8 @@ impl Conv {
     /// through a `Deref` to `ConverterImpl`. The one door left open onto the
     /// converter, and closing it is what lets a reader hold a plan instead of a
     /// fragment (#613 step 5c).
-    pub(crate) fn metadata(&self) -> KotlinMeta {
-        self.0.artifact().metadata
+    pub(crate) fn metadata(&self) -> &KotlinMeta {
+        &self.1.metadata
     }
 
     /// Freeze this exact compiled fragment as one outgoing ABI operation.
