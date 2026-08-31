@@ -347,6 +347,9 @@ pub(crate) struct JFrag {
 /// What a site's ordered leaves are, which depends on which side of the
 /// boundary the site sits on.
 #[derive(Clone)]
+// `Whole` and `Invoked` carry the plan a site converts through, and until step
+// 5b's readers move onto the canonical plan nothing in production reads it back
+// — the site set is a check today. The other two variants are read by `len`.
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum JAbiLeaves {
     /// A parameter: its ordered native positions AND the operations that
@@ -1075,7 +1078,6 @@ impl JFrag {
     /// (`FragmentPlan::artifact` is already an `Option`), not a JNI concept:
     /// the `parts` recipe of a `data_class` occupies wires and states a
     /// composition, and has no converter of its own to render.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn freeze(&self) -> prebindgen_registry::generation::FragmentPlan<JRepresentation> {
         use prebindgen_registry::generation::{
             ConverterPlan, FragmentPlan, NichePlan, {self as generation},
@@ -1152,7 +1154,6 @@ impl JFrag {
     /// edge the canonical plan validates: a fallible fragment used by a site
     /// with no route is `MissingFailureRoute`, and freezing `None` made every
     /// JNI site that (#622 review).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn freeze_site(
         &self,
         bound: &prebindgen_registry::recipe::Bound,
