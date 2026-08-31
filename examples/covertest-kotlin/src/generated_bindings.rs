@@ -13355,34 +13355,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Meter_jni_optional_intermed
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_out_convert_Option_Meter_jni_optional_intermediate_output_niche_to_wire_fd659e13ac5520c0<
-    'a,
->(
-    env: &mut jni::JNIEnv<'a>,
-    v: ::core::option::Option<perftest_flat::Meter>,
-) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    ::core::result::Result::Ok({
-        match v {
-            ::core::option::Option::Some(__value) => {
-                __jni_out_convert_Meter_to_wire_1c76612ba18ce8f2(env, __value)?
-            }
-            ::core::option::Option::None => jni::objects::JObject::null().into(),
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Option_Priority_jni_optional_intermediate_input_niche_134c24fa12ec734a<
     'env,
     'v,
@@ -13566,34 +13538,6 @@ pub(crate) unsafe fn __jni_out_convert_Option_Payload_jni_optional_intermediate_
                     ),
                 )
             }
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_out_convert_Option_Payload_jni_optional_intermediate_output_niche_to_wire_b4f22090d46109c1<
-    'a,
->(
-    env: &mut jni::JNIEnv<'a>,
-    v: ::core::option::Option<perftest_flat::Payload>,
-) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    ::core::result::Result::Ok({
-        match v {
-            ::core::option::Option::Some(__value) => {
-                __jni_out_convert_Payload_to_wire_69366211464f4172(env, __value)?
-            }
-            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -14202,34 +14146,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_Option_Window_jni_optional_interme
             ::core::option::Option::Some(
                 __jni_in_convert_wire_to_Window_62b0b918ad538b95(env, __present)?,
             )
-        }
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_out_convert_Option_Window_jni_optional_intermediate_output_niche_to_wire_734a4b66dfe1279b<
-    'a,
->(
-    env: &mut jni::JNIEnv<'a>,
-    v: ::core::option::Option<perftest_flat::Window>,
-) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
-    ::core::result::Result::Ok({
-        match v {
-            ::core::option::Option::Some(__value) => {
-                __jni_out_convert_Window_to_wire_fb0337c2cf374fa2(env, __value)?
-            }
-            ::core::option::Option::None => jni::objects::JObject::null().into(),
         }
     })
 }

@@ -528,25 +528,6 @@ pub(crate) unsafe fn __jni_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_7
         })
     })
 }
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_out_convert_u8_to_wire_f0684b615e87c922<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: u8,
-) -> ::core::result::Result<jni::sys::jint, __JniErr> {
-    Ok(v as jni::sys::jint)
-}
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_emitcheck_JNINative_zSampleSub<'a>(
