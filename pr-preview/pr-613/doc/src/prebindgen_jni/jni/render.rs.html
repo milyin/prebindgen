@@ -100,7 +100,7 @@
 <a href=#100 id=100 data-nosnippet>100</a>    // parameter itself comes from the decomposition, so what these two must
 <a href=#101 id=101 data-nosnippet>101</a>    // agree about is the value, not the slot.
 <a href=#102 id=102 data-nosnippet>102</a>    </span><span class="kw">let </span>plan = ext
-<a href=#103 id=103 data-nosnippet>103</a>        .struct_plan(registry, item_struct, <span class="number">0</span>)
+<a href=#103 id=103 data-nosnippet>103</a>        .struct_plan(registry.flat(), item_struct, <span class="number">0</span>)
 <a href=#104 id=104 data-nosnippet>104</a>        .unwrap_or_else(|| {
 <a href=#105 id=105 data-nosnippet>105</a>            <span class="macro">panic!</span>(
 <a href=#106 id=106 data-nosnippet>106</a>                <span class="string">"data class `{}`: could not classify every field for the fromParts bridge. Each \

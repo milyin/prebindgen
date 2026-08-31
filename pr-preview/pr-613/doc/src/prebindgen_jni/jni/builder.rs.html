@@ -911,7 +911,7 @@
 <a href=#911 id=911 data-nosnippet>911</a>             value form returns the struct holding this type's fields"</span>,
 <a href=#912 id=912 data-nosnippet>912</a>            key.as_str(),
 <a href=#913 id=913 data-nosnippet>913</a>        );
-<a href=#914 id=914 data-nosnippet>914</a>        <span class="kw">let </span>TypeKind::DataStruct { st, .. } = <span class="self">self</span>.type_kind(registry, <span class="kw-2">&amp;</span>ret.key()) <span class="kw">else </span>{
+<a href=#914 id=914 data-nosnippet>914</a>        <span class="kw">let </span>TypeKind::DataStruct { st, .. } = <span class="self">self</span>.type_kind(registry.flat(), <span class="kw-2">&amp;</span>ret.key()) <span class="kw">else </span>{
 <a href=#915 id=915 data-nosnippet>915</a>            <span class="macro">panic!</span>(
 <a href=#916 id=916 data-nosnippet>916</a>                <span class="string">"expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
 <a href=#917 id=917 data-nosnippet>917</a>                 not a struct — a value form returns a struct whose fields become the leaves"</span>,
@@ -1059,7 +1059,7 @@
 <a href=#1059 id=1059 data-nosnippet>1059</a>            // must decompose into its selector and groups wherever it appears.
 <a href=#1060 id=1060 data-nosnippet>1060</a>            </span><span class="kw">let </span>bare = field.ty.optional_inner().unwrap_or(<span class="kw-2">&amp;</span>field.ty);
 <a href=#1061 id=1061 data-nosnippet>1061</a>            <span class="kw">let </span>probe = bare.sequence_elem().unwrap_or(bare);
-<a href=#1062 id=1062 data-nosnippet>1062</a>            <span class="kw">match </span><span class="self">self</span>.type_kind(registry, <span class="kw-2">&amp;</span>probe.key()) {
+<a href=#1062 id=1062 data-nosnippet>1062</a>            <span class="kw">match </span><span class="self">self</span>.type_kind(registry.flat(), <span class="kw-2">&amp;</span>probe.key()) {
 <a href=#1063 id=1063 data-nosnippet>1063</a>                TypeKind::DataStruct { st, cfg: <span class="prelude-val">Some</span>(<span class="kw">_</span>) }
 <a href=#1064 id=1064 data-nosnippet>1064</a>                    <span class="kw">if </span>field.ty.optional_inner().is_none()
 <a href=#1065 id=1065 data-nosnippet>1065</a>                        &amp;&amp; field.ty.sequence_elem().is_none() =&gt;

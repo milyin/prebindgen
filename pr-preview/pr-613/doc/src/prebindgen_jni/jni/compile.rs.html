@@ -2952,7 +2952,7 @@
 <a href=#2952 id=2952 data-nosnippet>2952</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
 <a href=#2953 id=2953 data-nosnippet>2953</a>                }
 <a href=#2954 id=2954 data-nosnippet>2954</a>                <span class="macro">matches!</span>(
-<a href=#2955 id=2955 data-nosnippet>2955</a>                    <span class="self">self</span>.decls.type_kind(<span class="self">self</span>.registry, <span class="kw-2">&amp;</span>target.stripped_key()),
+<a href=#2955 id=2955 data-nosnippet>2955</a>                    <span class="self">self</span>.decls.type_kind(<span class="self">self</span>.registry.flat(), <span class="kw-2">&amp;</span>target.stripped_key()),
 <a href=#2956 id=2956 data-nosnippet>2956</a>                    <span class="kw">crate</span>::jni::classify::TypeKind::DataStruct { cfg: <span class="prelude-val">Some</span>(cfg), .. }
 <a href=#2957 id=2957 data-nosnippet>2957</a>                        <span class="kw">if </span>cfg.name_spec.is_some()
 <a href=#2958 id=2958 data-nosnippet>2958</a>                )
@@ -5014,7 +5014,7 @@
 <a href=#5014 id=5014 data-nosnippet>5014</a>            // converter for `Vec&lt;T&gt;` far from the field that caused it.
 <a href=#5015 id=5015 data-nosnippet>5015</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(elem) = probe.sequence_elem() {
 <a href=#5016 id=5016 data-nosnippet>5016</a>                <span class="kw">if </span><span class="macro">matches!</span>(
-<a href=#5017 id=5017 data-nosnippet>5017</a>                    <span class="self">self</span>.type_kind(registry, <span class="kw-2">&amp;</span>elem.key()),
+<a href=#5017 id=5017 data-nosnippet>5017</a>                    <span class="self">self</span>.type_kind(registry.flat(), <span class="kw-2">&amp;</span>elem.key()),
 <a href=#5018 id=5018 data-nosnippet>5018</a>                    <span class="kw">crate</span>::jni::classify::TypeKind::Sum
 <a href=#5019 id=5019 data-nosnippet>5019</a>                ) {
 <a href=#5020 id=5020 data-nosnippet>5020</a>                    <span class="macro">panic!</span>(
@@ -5024,7 +5024,7 @@
 <a href=#5024 id=5024 data-nosnippet>5024</a>                    );
 <a href=#5025 id=5025 data-nosnippet>5025</a>                }
 <a href=#5026 id=5026 data-nosnippet>5026</a>            }
-<a href=#5027 id=5027 data-nosnippet>5027</a>            <span class="kw">match </span><span class="self">self</span>.type_kind(registry, <span class="kw-2">&amp;</span>probe.key()) {
+<a href=#5027 id=5027 data-nosnippet>5027</a>            <span class="kw">match </span><span class="self">self</span>.type_kind(registry.flat(), <span class="kw-2">&amp;</span>probe.key()) {
 <a href=#5028 id=5028 data-nosnippet>5028</a>                <span class="comment">// A handle or an enum_class field is an ordinary leaf: its own
 <a href=#5029 id=5029 data-nosnippet>5029</a>                // output conversion carries it — a `jlong` for the handle the
 <a href=#5030 id=5030 data-nosnippet>5030</a>                // receiver adopts, a `jint` discriminant for the enum — and
