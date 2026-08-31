@@ -925,7 +925,7 @@ impl Declarations {
             // A `data_class` is a registered type that is neither an opaque
             // handle nor an enum.
             let is_data_class = matches!(
-                self.type_kind(registry, &reading.key()),
+                self.type_kind(registry.flat(), &reading.key()),
                 TypeKind::DataStruct { cfg: Some(c), .. } if c.name_spec.is_some()
             );
             if !is_data_class {
@@ -1195,7 +1195,7 @@ impl Prebindgen for Declarations {
             if let Some((ok, _)) = func.ret.fallible_parts() {
                 {
                     let core = crate::util::head_type(ok);
-                    if matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding.flat(), &core.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
                              supported in the success position of a fallible return. A sum \
@@ -1232,7 +1232,9 @@ impl Prebindgen for Declarations {
                         .return_expand_decls
                         .iter()
                         .any(|d| *d.key() == err_ty.key());
-                    if !declared && matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
+                    if !declared
+                        && matches!(self.type_kind(binding.flat(), &core.key()), TypeKind::Sum)
+                    {
                         return Err(format!(
                             "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \
                              but nothing decomposes it in the error position, so it would be \
@@ -1277,7 +1279,7 @@ impl Prebindgen for Declarations {
                         continue;
                     };
                     let elem = peel_one_borrow(elem);
-                    if matches!(self.type_kind(binding, &elem.key()), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding.flat(), &elem.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `impl Fn(&[{}])` — a slice of a sealed_class value \
                              is not supported as a callback argument. A sum crosses as a tag \

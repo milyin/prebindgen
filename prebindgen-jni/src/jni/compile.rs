@@ -2952,7 +2952,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     return None;
                 }
                 matches!(
-                    self.decls.type_kind(self.registry, &target.stripped_key()),
+                    self.decls.type_kind(self.registry.flat(), &target.stripped_key()),
                     crate::jni::classify::TypeKind::DataStruct { cfg: Some(cfg), .. }
                         if cfg.name_spec.is_some()
                 )
@@ -5014,7 +5014,7 @@ impl Declarations {
             // converter for `Vec<T>` far from the field that caused it.
             if let Some(elem) = probe.sequence_elem() {
                 if matches!(
-                    self.type_kind(registry, &elem.key()),
+                    self.type_kind(registry.flat(), &elem.key()),
                     crate::jni::classify::TypeKind::Sum
                 ) {
                     panic!(
@@ -5024,7 +5024,7 @@ impl Declarations {
                     );
                 }
             }
-            match self.type_kind(registry, &probe.key()) {
+            match self.type_kind(registry.flat(), &probe.key()) {
                 // A handle or an enum_class field is an ordinary leaf: its own
                 // output conversion carries it — a `jlong` for the handle the
                 // receiver adopts, a `jint` discriminant for the enum — and

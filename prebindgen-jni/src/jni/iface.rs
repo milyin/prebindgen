@@ -1496,7 +1496,12 @@ pub(crate) fn callback_iface_spec(
                     reassemble: Some(reassemble),
                     imports,
                     leaf_count: wires.len() + usize::from(optional),
-                    close: crate::jni::struct_plan::type_close_strategy(ext, registry, close_ty, 0),
+                    close: crate::jni::struct_plan::type_close_strategy(
+                        ext,
+                        registry.flat(),
+                        close_ty,
+                        0,
+                    ),
                 });
             } else {
                 // Accessor-plan arg: each leaf is its own passthrough group, so
@@ -1554,7 +1559,7 @@ pub(crate) fn callback_iface_spec(
                             leaf_count: seg - k,
                             close: crate::jni::struct_plan::type_close_strategy(
                                 ext,
-                                registry,
+                                registry.flat(),
                                 &leaf.out_ty,
                                 0,
                             ),
@@ -1835,7 +1840,12 @@ pub(crate) fn fixed_folder_typed_groups(
             // projection carries `owned: false`, so the element reaches nothing
             // to release and the per-iteration close that would double-free is
             // not emitted.
-            close: crate::jni::struct_plan::type_close_strategy(ext, registry, &spec.source, 0),
+            close: crate::jni::struct_plan::type_close_strategy(
+                ext,
+                registry.flat(),
+                &spec.source,
+                0,
+            ),
         },
     ])
 }
