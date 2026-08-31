@@ -165,13 +165,33 @@ impl Declarations {
             if !matches!(record.decon, FieldDecon::Default) {
                 return None;
             }
-            let [member] = record.members.as_slice() else {
-                return None;
+            // A record with several members is an INLINED nested class: each
+            // member is one hop of a field-access chain. `Reach::Path` states
+            // that; before it existed this row declined and fell back to a
+            // placeholder (#613 step 10).
+            let mut here = st;
+            let mut indices = Vec::with_capacity(record.members.len());
+            for member in &record.members {
+                let hop = here
+                    .fields
+                    .iter()
+                    .position(|f| f.name.as_ref() == Some(member))?;
+                indices.push(hop);
+                if indices.len() < record.members.len() {
+                    let next = here.fields[hop].ty.stripped_key().ident()?;
+                    let prebindgen_registry::flat::Type::Struct(next) =
+                        model.declared_type(&next)?
+                    else {
+                        return None;
+                    };
+                    here = next;
+                }
+            }
+            let [index] = indices.as_slice() else {
+                reaches.push(Reach::Path(indices));
+                continue;
             };
-            let index = st
-                .fields
-                .iter()
-                .position(|f| f.name.as_ref() == Some(member))?;
+            let index = *index;
             // A field that reaches the type being taken apart. The leaf
             // synthesis treats `Box<T>` as a spelling of its own and stops
             // there; a recipe keys a crossing by the value that crosses, so
