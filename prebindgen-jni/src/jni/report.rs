@@ -201,7 +201,7 @@ impl super::JniGen {
         let Some(item_fn) = registry.flat().function(&rust_ident) else {
             return;
         };
-        let Some(f) = render_wrapper_fn(ext, item_fn, registry, kotlin_name, receiver_key) else {
+        let Some(f) = render_wrapper_fn(ext, item_fn, kotlin_name, receiver_key) else {
             return;
         };
         let fplan = ext
