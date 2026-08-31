@@ -1302,6 +1302,79 @@ fn a_self_defaulting_identity_row_is_refused_as_a_cycle() {
     assert!(format!("{err:?}").contains("Cycle"), "{err:?}");
 }
 
+/// A borrowed identity part is lent, not owned — the coverage #635's review
+/// asked for, now that an identity row beside a default one compiles.
+///
+/// `Crossing::value()` strips `&`/`&mut`, so deriving the mode from it would
+/// record a `&Sample` identity row as owned, losing the clone-for-borrow /
+/// move-for-owned distinction the form exists to carry.
+#[test]
+fn an_identity_part_through_a_borrow_is_lent_not_owned() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    let sample = ty(&model, "Sample");
+    builder
+        .declare_default(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
+        .declare(
+            sample.clone(),
+            recipe_name("handle"),
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Identity])),
+        );
+    let recipes = builder.build(&model).expect("table");
+
+    let crossing = Crossing::new(ty(&model, "&Sample"), Direction::Deconstruct);
+    let mut bind = Bindings::builder();
+    bind.bind(
+        site("z_get", 0),
+        crossing.clone(),
+        Ask::Recipe(recipe_name("handle")),
+        Origin::Function,
+    );
+    let bindings = bind.build(&recipes).expect("bindings");
+
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    let plan = compiler
+        .site(&mut adapter, site("z_get", 0), crossing)
+        .expect("compile")
+        .expect("not omitted");
+    assert!(plan.contains("self=self/&"), "{plan}");
+}
+
+/// The owned half: the same row reached without a borrow moves its value.
+#[test]
+fn an_owned_identity_part_is_moved() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    let sample = ty(&model, "Sample");
+    builder
+        .declare_default(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
+        .declare(
+            sample.clone(),
+            recipe_name("handle"),
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Identity])),
+        );
+    let recipes = builder.build(&model).expect("table");
+
+    let crossing = Crossing::new(sample, Direction::Deconstruct);
+    let mut bind = Bindings::builder();
+    bind.bind(
+        site("z_get", 0),
+        crossing.clone(),
+        Ask::Recipe(recipe_name("handle")),
+        Origin::Function,
+    );
+    let bindings = bind.build(&recipes).expect("bindings");
+
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    let plan = compiler
+        .site(&mut adapter, site("z_get", 0), crossing)
+        .expect("compile")
+        .expect("not omitted");
+    assert!(plan.contains("self=self/owned"), "{plan}");
+}
+
 #[test]
 fn an_omitted_reach_contributes_no_part() {
     let model = model(&[SAMPLE]);

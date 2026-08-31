@@ -102,7 +102,11 @@ last segment, and by resolution time such a record "read[s] exactly like
 for naming the function a row reaches through, so `Reach::Accessor` already
 covers it.
 
-So the vocabulary gap is one form, not two. Until it exists a `parts` row cannot
+So the vocabulary gap is one form, not two — and it is now closed:
+`Reach::Identity` exists, resolves through the crossing's default row, and
+carries the borrow's mode. An identity row works beside a default row rather
+than instead of one; a type whose only row is the identity one is circular and
+refused. Until it exists a `parts` row cannot
 say what a deconstructor says, which is why #622 declared its callback-argument
 rows as `Deconstructing::Atomic` placeholders — rows that exist so a site can
 select them and state no structure at all. Those placeholders are the visible
