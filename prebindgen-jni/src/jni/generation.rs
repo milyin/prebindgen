@@ -551,7 +551,10 @@ impl JniGenerationPlan {
                 conversions
                     .fragments()
                     .into_iter()
-                    .filter(|fragment| !fragment.composed_only)
+                    // This roots the plan, so it cannot ask the plan. It asks
+                    // the same statement the plan is built from: a fragment
+                    // that freezes without an artifact renders nothing.
+                    .filter(|fragment| fragment.freeze().artifact().is_some())
                     .flat_map(crate::jni::compile::JFrag::converter_artifacts)
                     .map(|converter| JFinalArtifact::Converter(Box::new(converter))),
             )
@@ -611,12 +614,20 @@ impl JniGenerationPlan {
         for getter in constant_exprs {
             assembly.artifact(JFinalArtifact::ConstantExpr(Box::new(getter)));
         }
-        let reached: std::collections::HashSet<_> =
-            plan.fragments().map(|f| f.id().clone()).collect();
+        // "Reached, and renders something" — both from the plan. A fragment
+        // that freezes without an artifact is the canonical statement of
+        // composed-only, and `JniGenerationPlan::freeze` already asserts the
+        // two agree, so asking the plan removes the second source rather than
+        // trusting it (#613 step 5c).
+        let renders: std::collections::HashSet<_> = plan
+            .fragments()
+            .filter(|fragment| fragment.artifact().is_some())
+            .map(|fragment| fragment.id().clone())
+            .collect();
         for converter in conversions
             .fragments()
             .into_iter()
-            .filter(|fragment| !fragment.composed_only && reached.contains(&fragment.id))
+            .filter(|fragment| renders.contains(&fragment.id))
             .flat_map(crate::jni::compile::JFrag::converter_artifacts)
         {
             assembly.artifact(JFinalArtifact::Converter(Box::new(converter)));
