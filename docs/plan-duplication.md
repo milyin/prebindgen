@@ -27,8 +27,9 @@ Measured at `dea7a55` — #513's head, and #613's base.
 
 ### Shape
 
-Eight enums name three or more of the six structural forms. Each is a place the
-same structural question is asked again.
+Seven enums name three or more of the six structural forms. Each is a place the
+same structural question is asked again. `CShape` was the eighth and is **gone**
+(#627).
 
 | enum | crate | what it is |
 |---|---|---|
@@ -36,15 +37,16 @@ same structural question is asked again.
 | `DerivedKind` | registry `recipe.rs` | how a derived recipe was obtained |
 | `ShapePlan<R>` | registry `generation.rs` | the canonical frozen shape, with the adapter's bridge in each variant |
 | `ComposedShape` | registry `generation.rs` | the composed-fragment subset |
-| `CShape` | `prebindgen-c/src/compile.rs` | C's copy of the frozen shape, without bridges |
 | `CBody` | `prebindgen-c/src/chain.rs` | the rendering half of the same split |
 | `JLayout` | `prebindgen-jni/src/jni/compile.rs` | the shape of JNI's single intermediate over flattened ABI leaves |
 | `JBody` | `prebindgen-jni/src/jni/chain.rs` | the rendering half of the same split |
 
-`CShape` is the clearest case: `CFrag::freeze` translates it into `ShapePlan`
-variant for variant, so the C compiler states the shape twice and neither
-statement is derived from the other. Two fences pin the adapter half of this
-census — `the_c_adapter_gains_no_third_shape_vocabulary` and
+`CShape` **was** the clearest case: `CFrag::freeze` translated it into
+`ShapePlan` variant for variant, so the C compiler stated the shape twice and
+neither statement was derived from the other. #627 deleted it — a `CFrag` now
+carries its `ShapePlan` directly, built at the hook that composed it, and
+`freeze` clones it. What remains of that split is `CBody`, the rendering half.
+Two fences pin the adapter half of this census — `the_c_adapter_gains_no_third_shape_vocabulary` and
 `jnigen_gains_no_third_shape_vocabulary` — so the list can shrink as #613
 proceeds but cannot grow unnoticed.
 
@@ -58,12 +60,14 @@ proceeds but cannot grow unnoticed.
 | `CFrag::yields`, `JFrag::yields` | both | `FragmentPlan::yields` |
 | `CFrag::niches`, `ConverterImpl::niches` | C, shared | the converter plan's niche contract |
 | `CFrag::subs`, `ConverterImpl::subs` | C, shared | `FragmentUse` edges inside `ShapePlan` |
-| `CFrag::shape` | C | `FragmentPlan`'s `ShapePlan` |
 | `CFrag::function`, `CFrag::value` | C | `FragmentPlan::artifact` plus the shape's bridges |
 | `JFrag::layout` | JNI | `ShapePlan` — the same nesting, over ABI leaves |
-| `JFrag::rust`, `JFrag::rust_stages` | JNI | `FragmentPlan::artifact` and the conversion chain |
+| `JFrag::rust`, `JFrag::rust_stages` | JNI | `JConverterArtifact::rust` / `::stages` — **carried on the artifact since #629**, so a fragment's whole converter list is derivable from a `FragmentPlan` |
 | `JFrag::choice_arm` | JNI | `ShapePlan::Choice`'s arms |
 | `JFrag::composed_only` | JNI | a fragment with no artifact |
+
+`CFrag::shape` is no longer a row: it **is** a `ShapePlan<CRepresentation>`
+since #627, not a copy of one.
 
 `JFrag` also carries `wires` / `out_wires`, the several ABI values one crossing
 occupies. The canonical plan has no multi-slot layout yet; #613 step 4 names
@@ -120,6 +124,33 @@ detail the canonical plan would keep in `R`.
 `JniGenerationPlan` holds `Compiled<JFrag>` plus the foreign-artifact sidecars
 (functions, interfaces, structs, sums, vec builds) and an `Assembly`. The first
 of those is what `GenerationPlan<R>` is for; the rest is the sidecar #613 keeps.
+
+### Reachability
+
+Not a vocabulary but a computation, stated twice over one fragment set, and the
+two disagree by construction.
+
+`GenerationPlanBuilder::build` keeps the fragments reachable from its roots and
+prunes the rest. `Assembly` reaches converters from the artifacts it renders.
+Until #630 the JNI plan registered no artifacts at all, so it rooted at sites
+alone while the file emitted every fragment the compiler stored — the plan was a
+strict subset and nothing noticed, because emitting a converter nothing calls is
+invisible and `write_rust` only checks the other direction.
+
+#630 gave the JNI plan the same roots C has: every rendered artifact, with the
+converter fragments its `calls()` name. Measured after that, the remaining
+disagreement is small and specific. Driving emission from `plan.fragments()`
+compiles, passes covertest, and drops ~11k lines of converters nothing calls —
+but two fixtures lose a converter they do call:
+
+```
+PROBE-SITE  FragmentId { spelling: "& Timed", recipe: "whole" }
+PROBE-DROP  converter of fragment `Timed` using recipe `whole`
+```
+
+The site names the borrowed fragment; the emitted converter is the owned one;
+no edge connects them. Making that delegation an edge is what is left before the
+two computations can become one.
 
 ### Data-class decomposition
 
