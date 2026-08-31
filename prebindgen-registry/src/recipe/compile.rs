@@ -139,12 +139,24 @@ pub struct Part<'a> {
 }
 
 /// Where one part comes from.
-#[derive(Copy, Clone, Debug)]
+/// `Clone` and not `Copy`: `Path` carries its access chain, and a derived
+/// recipe is owned and dropped inside the compile, so the chain cannot be
+/// borrowed from it (#613 step 10).
+#[derive(Clone, Debug)]
 pub enum PartSource<'a> {
     /// Parameter `index` of the constructor being called.
     Argument {
         /// Position in the constructor's parameter list.
         index: usize,
+    },
+    /// A chain of field accesses, outermost first — an inlined nested class's
+    /// leaf. The one-hop case is [`Self::Field`] (#613 step 10).
+    Path {
+        /// Each hop's position in the struct it indexes. Borrowed from the
+        /// recipe row, which outlives the compile.
+        indices: Vec<usize>,
+        /// The field the chain arrives at.
+        field: &'a Field,
     },
     /// Field `index` of the value, read directly.
     Field {
@@ -984,6 +996,38 @@ impl<'a, C: Compile> Compiler<'a, C> {
         for reach in reaches {
             match reach {
                 Reach::Omit => {}
+                Reach::Path(indices) => {
+                    // Walk the chain against the model, as validation did.
+                    let mut here: &[Field] = fields;
+                    let mut field: Option<&Field> = None;
+                    for index in indices {
+                        let hop = here.get(*index).ok_or_else(|| {
+                            CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                                recipe: at.recipe.clone(),
+                                index: *index,
+                                len: here.len(),
+                            }))
+                        })?;
+                        field = Some(hop);
+                        here = self.fields_of(&hop.ty);
+                    }
+                    let field = field.ok_or_else(|| {
+                        CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                            recipe: at.recipe.clone(),
+                            index: 0,
+                            len: 0,
+                        }))
+                    })?;
+                    parts.push(Part {
+                        from: PartSource::Path {
+                            indices: indices.clone(),
+                            field,
+                        },
+                        mode: mode_of(&field.ty),
+                        ty: field.ty.clone(),
+                        name: field_name(field, *indices.last().unwrap_or(&0)),
+                    });
+                }
                 Reach::Field(index) => {
                     let field = fields.get(*index).ok_or_else(|| {
                         CompileError::Recipe(Box::new(RecipeError::OutOfRange {
