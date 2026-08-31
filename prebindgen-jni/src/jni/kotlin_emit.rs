@@ -168,12 +168,36 @@ impl Declarations {
     /// Resolve or look up the one sealed-class plan. Before the freeze this
     /// classifies payload types and close ownership once; afterwards it can
     /// only read the immutable generation plan.
+    /// The frozen sealed-class plan, for a render caller.
+    ///
+    /// Panics if the generation is not installed — which is the same failure a
+    /// renderer would hit trying to lower without one, said earlier and by
+    /// name.
+    pub(crate) fn sealed_class_plan_frozen(
+        &self,
+        sum: &prebindgen_registry::flat::Variant,
+    ) -> std::rc::Rc<SealedClassPlan> {
+        let key = sum.type_ref().key();
+        self.generation
+            .as_deref()
+            .unwrap_or_else(|| {
+                panic!(
+                    "`{}`: its frozen JNI generation plan is unavailable",
+                    sum.name
+                )
+            })
+            .sealed_class_plan(&key)
+    }
+
     pub(crate) fn sealed_class_plan(
         &self,
         registry: &Registry,
         sum: &prebindgen_registry::flat::Variant,
     ) -> std::rc::Rc<SealedClassPlan> {
         let key = sum.type_ref().key();
+        // Frozen first: after `freeze` the generation owns every sealed-class
+        // plan, so a render caller never reaches the lowering below and never
+        // needs the registry it would take (#613 step 7).
         if let Some(generation) = &self.generation {
             return generation.sealed_class_plan(&key);
         }
@@ -790,7 +814,7 @@ impl Declarations {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            let plan = self.sealed_class_plan(registry, sum);
+            let plan = self.sealed_class_plan_frozen(sum);
             let mut class = self.build_sealed_class(&class_name, sum, sum_cfg, &plan);
             let mut file = KtFile::new(package);
             if let Some(iface) =
