@@ -4,7 +4,7 @@ property of the language, not of the call site. What it carries is <strong>what 
 parse</strong>: feed the inputs, then <a href="struct.FlatBuilder.html#method.build" title="method prebindgen_flat::flat::FlatBuilder::build"><code>build</code></a> once.</p>
 <h2 id="reading-a-source-directory"><a class="doc-anchor" href="#reading-a-source-directory">§</a>Reading a source directory</h2>
 <p>A build script’s whole job, in one expression — the
-<a href="prebindgen::Source"><code>Source</code></a> step included. Pass
+<a href="../../prebindgen/api/source/struct.Source.html" title="struct prebindgen::api::source::Source"><code>Source</code></a> step included. Pass
 <code>&lt;source_crate&gt;::PREBINDGEN_OUT_DIR</code>:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_flat::Flat;
@@ -13,7 +13,7 @@ parse</strong>: feed the inputs, then <a href="struct.FlatBuilder.html#method.bu
 <span class="macro">assert!</span>(flat.function(<span class="string">"test_function"</span>).is_some());
 <span class="macro">assert!</span>(flat.declared_type(<span class="string">"TestStruct"</span>).is_some());</code></pre></div><h2 id="reading-a-stream"><a class="doc-anchor" href="#reading-a-stream">§</a>Reading a stream</h2>
 <p><a href="struct.FlatBuilder.html#method.items" title="method prebindgen_flat::flat::FlatBuilder::items"><code>Self::items</code></a> takes any <code>(syn::Item, SourceLocation)</code> iterator, so
-everything a <a href="prebindgen::Source"><code>Source</code></a> can express still composes — a group
+everything a <a href="../../prebindgen/api/source/struct.Source.html" title="struct prebindgen::api::source::Source"><code>Source</code></a> can express still composes — a group
 selection, a renamed dependency, several sources at once. The feeders
 accumulate, so mix them freely:</p>
 
@@ -33,12 +33,12 @@ reach into, one set of source modules to normalize paths against, and every
 type reference resolving against every declaration. None can be
 decided per input, so every input is in hand before any of it is classified.</p>
 </div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-FlatBuilder" class="impl"><a class="src rightside" href="../../src/prebindgen_flat/flat/mod.rs.html#276-440">Source</a><a href="#impl-FlatBuilder" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.FlatBuilder.html" title="struct prebindgen_flat::flat::FlatBuilder">FlatBuilder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.source" class="method"><a class="src rightside" href="../../src/prebindgen_flat/flat/mod.rs.html#297-300">Source</a><h4 class="code-header">pub fn <a href="#method.source" class="fn">source</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.98.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>&gt;&gt;(self, dir: P) -&gt; Self</h4></section></summary><div class="docblock"><p>Every <code>#[prebindgen]</code> item captured in <code>dir</code>.</p>
-<p>Sugar for <a href="struct.FlatBuilder.html#method.items" title="method prebindgen_flat::flat::FlatBuilder::items"><code>Self::items</code></a> over <a href="prebindgen::Source::items_all"><code>Source::items_all</code></a>,
+<p>Sugar for <a href="struct.FlatBuilder.html#method.items" title="method prebindgen_flat::flat::FlatBuilder::items"><code>Self::items</code></a> over <a href="../../prebindgen/api/source/struct.Source.html#method.items_all" title="method prebindgen::api::source::Source::items_all"><code>Source::items_all</code></a>,
 which is the whole of what a build script normally needs — pass
 <code>&lt;source_crate&gt;::PREBINDGEN_OUT_DIR</code>. Reach for a
-<a href="prebindgen::Source"><code>Source</code></a> directly, and feed it through <a href="struct.FlatBuilder.html#method.items" title="method prebindgen_flat::flat::FlatBuilder::items"><code>Self::items</code></a>,
+<a href="../../prebindgen/api/source/struct.Source.html" title="struct prebindgen::api::source::Source"><code>Source</code></a> directly, and feed it through <a href="struct.FlatBuilder.html#method.items" title="method prebindgen_flat::flat::FlatBuilder::items"><code>Self::items</code></a>,
 only when it needs configuring.</p>
-<p>Panics the way <a href="prebindgen::Source::new"><code>Source::new</code></a> does if <code>dir</code> is not
+<p>Panics the way <a href="../../prebindgen/api/source/struct.Source.html#method.new" title="associated function prebindgen::api::source::Source::new"><code>Source::new</code></a> does if <code>dir</code> is not
 readable prebindgen output: a build script has nothing to recover with.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_flat::Flat;
