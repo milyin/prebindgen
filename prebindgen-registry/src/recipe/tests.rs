@@ -1006,11 +1006,12 @@ fn part_names<C: Compile>(parts: Parts<'_, C>) -> String {
     parts
         .iter()
         .map(|(p, _)| {
-            let source = match p.from {
+            let source = match &p.from {
                 PartSource::Argument { index } => format!("arg{index}"),
                 PartSource::Field { index, .. } => format!("field{index}"),
                 PartSource::Accessor { func } => format!("via {}", func.name),
                 PartSource::Identity => "self".to_string(),
+                PartSource::Path { indices, .. } => format!("path{indices:?}"),
             };
             format!("{}={source}/{}", p.name, p.mode)
         })
@@ -1373,6 +1374,81 @@ fn an_owned_identity_part_is_moved() {
         .expect("compile")
         .expect("not omitted");
     assert!(plan.contains("self=self/owned"), "{plan}");
+}
+
+/// A path reaches a field of a field — what an inlined nested class needs.
+///
+/// `FieldRecord::members` is exactly this chain, and before `Reach::Path` a
+/// `parts` row for a value form that inlines a nested declared class could not
+/// be spelled: `value_form_of` declined any record with several members, which
+/// is why two of #638's three rows still fall back to `Atomic` (#613 step 10).
+#[test]
+fn a_path_reach_resolves_a_field_of_a_field() {
+    let model = model(&[
+        SAMPLE,
+        "pub struct Outer { pub inner: Sample, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Outer"),
+        recipe_name("fields"),
+        // `inner.payload`, then `tag` — a chain beside a plain field.
+        Deconstructing::Product(Deconstruct::Fields(vec![
+            Reach::Path(vec![0, 1]),
+            Reach::Field(1),
+        ])),
+    );
+    let recipes = builder.build(&model).expect("a path over declared structs");
+    let mut adapter = Recorder::default();
+
+    let plan = compile_one(
+        &model,
+        &recipes,
+        &mut adapter,
+        Site {
+            owner: ident("z_get"),
+            role: Role::Return,
+        },
+        "Outer",
+        Direction::Deconstruct,
+    );
+    assert!(
+        plan.contains("payload="),
+        "the path reaches the nested field:\n{plan}"
+    );
+    assert!(
+        plan.contains("tag="),
+        "the plain field is unaffected:\n{plan}"
+    );
+}
+
+/// A path whose hop is past the end is refused, like a one-hop `Field`.
+#[test]
+fn a_path_reach_past_the_end_is_refused() {
+    let model = model(&[
+        SAMPLE,
+        "pub struct Outer { pub inner: Sample, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Outer"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Path(vec![0, 7])])),
+    );
+    let errors = builder
+        .build(&model)
+        .expect_err("the second hop is out of range");
+    assert!(
+        matches!(
+            errors.as_slice(),
+            [RecipeError::OutOfRange {
+                index: 7,
+                len: 2,
+                ..
+            }]
+        ),
+        "{errors:?}"
+    );
 }
 
 #[test]

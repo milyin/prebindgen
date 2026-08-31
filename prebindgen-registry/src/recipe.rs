@@ -177,6 +177,14 @@ pub enum Reach {
     Accessor(syn::Ident),
     /// This position contributes nothing.
     Omit,
+    /// A field of a field: the access chain an inlined nested class needs,
+    /// outermost first. `Field(i)` is the one-element case, kept separate
+    /// because it is the overwhelming majority and reads better.
+    ///
+    /// The form a spliced `FieldRecord` states: its `members` is exactly this
+    /// chain, and without it a `parts` row for a value form that inlines a
+    /// nested declared class cannot be spelled at all (#613 step 10).
+    Path(Vec<usize>),
     /// The value itself, as one part — cloned from a borrow, moved from an
     /// owned receiver. The form `DeconRecord::Identity` states and no reach
     /// could: `Field` indexes into a product and `Accessor` calls out of one,
@@ -999,6 +1007,30 @@ impl<'a> Check<'a, '_> {
                         });
                     }
                     out.push(ret);
+                }
+                // Each hop resolves against the previous field's type, so a
+                // chain is validated exactly as the accesses it renders.
+                Reach::Path(indices) => {
+                    let mut at: TypeRef = ty.clone();
+                    let mut ok = true;
+                    for index in indices {
+                        let Some(fields) = self.fields(&at) else {
+                            self.not_a_product();
+                            ok = false;
+                            break;
+                        };
+                        match fields.get(*index) {
+                            Some(field) => at = field.ty.clone(),
+                            None => {
+                                self.out_of_range(*index, fields.len());
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                    if ok {
+                        out.push(at);
+                    }
                 }
                 Reach::Field(index) => {
                     let Some(fields) = self.fields(ty) else {
