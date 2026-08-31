@@ -1053,7 +1053,7 @@
 <a href=#1053 id=1053 data-nosnippet>1053</a>    registry: <span class="kw-2">&amp;</span>Registry,
 <a href=#1054 id=1054 data-nosnippet>1054</a>    imports: <span class="kw-2">&amp;mut </span>BTreeSet&lt;String&gt;,
 <a href=#1055 id=1055 data-nosnippet>1055</a>) -&gt; <span class="prelude-ty">Option</span>&lt;(KtFun, KtProperty)&gt; {
-<a href=#1056 id=1056 data-nosnippet>1056</a>    <span class="kw">let </span>getter = const_expr_getter_fn(<span class="kw-2">&amp;</span>decl.kotlin_name, <span class="kw-2">&amp;</span>decl.ty, registry);
+<a href=#1056 id=1056 data-nosnippet>1056</a>    <span class="kw">let </span>getter = const_expr_getter_fn(<span class="kw-2">&amp;</span>decl.kotlin_name, <span class="kw-2">&amp;</span>decl.ty, ext);
 <a href=#1057 id=1057 data-nosnippet>1057</a>    <span class="kw">let </span>fplan = ext.fn_plan_frozen(<span class="kw-2">&amp;</span>getter)<span class="question-mark">?</span>;
 <a href=#1058 id=1058 data-nosnippet>1058</a>    <span class="kw">let </span>default = kt_snake_to_camel(<span class="kw-2">&amp;</span>getter.name.to_string());
 <a href=#1059 id=1059 data-nosnippet>1059</a>    <span class="kw">let </span>helper_name = ext.mangle_fun(package, <span class="kw-2">&amp;</span>default);
