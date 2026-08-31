@@ -94,7 +94,6 @@ impl Declarations {
         key
     }
 
-    /// The reading behind an `IfaceParam`'s identity text.
     /// Freeze the reading for a **type**, keyed by its spelling.
     ///
     /// The `constant_expr` path names a type in a build script, so no element
@@ -124,6 +123,7 @@ impl Declarations {
             .cloned()
     }
 
+    /// The reading behind an `IfaceParam`'s identity text.
     pub(crate) fn frozen_reading(&self, text: &str) -> Option<prebindgen_registry::flat::TypeRef> {
         self.frozen_readings.borrow().get(text).cloned()
     }
