@@ -106,11 +106,14 @@ So the vocabulary gap is one form, not two — and it is now closed:
 `Reach::Identity` exists, resolves through the crossing's default row, and
 carries the borrow's mode. An identity row works beside a default row rather
 than instead of one; a type whose only row is the identity one is circular and
-refused. Until it exists a `parts` row cannot
-say what a deconstructor says, which is why #622 declared its callback-argument
-rows as `Deconstructing::Atomic` placeholders — rows that exist so a site can
-select them and state no structure at all. Those placeholders are the visible
-cost of the gap, and step 10 deletes them by closing it.
+refused.
+
+Before it existed, a `parts` row could not say what a deconstructor says, which
+is why #622 declared its callback-argument rows as `Deconstructing::Atomic`
+placeholders — rows that exist so a site can select them and state no structure
+at all. Those placeholders were the visible cost of the gap. The vocabulary they
+were waiting on is here now; replacing them with real rows is what remains of
+step 10.
 
 The bridge between the two is `prebindgen-jni`'s `value_form_of`, which mirrors
 a declaration into a `Deconstruct::ValueForm` row and refuses three cases
