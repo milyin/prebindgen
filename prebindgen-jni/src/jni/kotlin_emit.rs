@@ -1324,7 +1324,7 @@ impl Declarations {
                         // class (an enum's `fromInt`), so it registers imports
                         // like every other emitter here.
                         let mut proxy_imports: BTreeSet<String> = BTreeSet::new();
-                        let proxy = s.to_as_raw_fun(self, registry, &mut proxy_imports);
+                        let proxy = s.to_as_raw_fun(self, &mut proxy_imports);
                         for fqn in proxy_imports {
                             file = file.import(fqn);
                         }
