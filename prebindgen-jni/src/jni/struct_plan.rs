@@ -273,7 +273,7 @@ pub(crate) fn classify_field(
         // an object-shaped wire makes that property nullable. The slot's own
         // descriptor and binding form are the encoder's, and the encoder reads
         // them off the decomposition now (#619).
-        let wire = field_entry.destination.clone();
+        let wire = field_entry.wire.clone();
         let kotlin = field_entry.metadata.kotlin_name.clone()?;
         let nullable = optional_inner.is_some() && !is_jni_primitive(&wire);
         Some(PlanFieldKind::Leaf { kotlin, nullable })

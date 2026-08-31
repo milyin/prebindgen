@@ -100,7 +100,7 @@ pub(crate) fn optional_pair_plan_candidate(ext: &Declarations, arg: &TypeRef) ->
     let Some(inner_entry) = ext.in_frag(inner) else {
         return false;
     };
-    JniPrim::from_wire(&inner_entry.destination).is_some()
+    JniPrim::from_wire(&inner_entry.wire).is_some()
         && inner_entry.niches.clone().carve().is_none()
         && inner_entry.metadata.projection.is_none()
         && inner_entry.0.chain.steps().is_empty()
@@ -161,7 +161,7 @@ pub(crate) fn optional_pair_plan(
     optional_pair_plan_candidate(ext, arg).then_some(())?;
     let inner = arg.optional_inner()?;
     let inner_entry = ext.in_frag(inner)?;
-    let value_wire = inner_entry.destination.clone();
+    let value_wire = inner_entry.wire.clone();
     let prim = JniPrim::from_wire(&value_wire)?;
     let is_enum = ext.is_kotlin_enum_reading(inner);
     let chain = root.composed_chain()?;
@@ -211,6 +211,17 @@ pub(crate) struct JConverterArtifact {
     pub(crate) wire: syn::Type,
     /// This fragment's own nesting over its ABI leaves, when it composes.
     pub(crate) layout: Option<JLayout>,
+    /// The Kotlin-facing extras this conversion carries: the class name a
+    /// value surfaces as, the reading an error peel rides, the handle or
+    /// unsigned projection, and any niche sentinels. Adapter payload, which is
+    /// what an artifact is for — and the last thing `Conv` reaches for through
+    /// `ConverterImpl` rather than through the plan (#613 step 5c).
+    pub(crate) metadata: KotlinMeta,
+    /// Bit-patterns this fragment's wire can hold but its converter never
+    /// produces and rejects on input.
+    pub(crate) niches: prebindgen_registry::Niches,
+    /// The wire-facing conversion's identity.
+    pub(crate) converter: OperationId,
 }
 
 impl JConverterArtifact {
@@ -1189,6 +1200,9 @@ impl JFrag {
             rust: self.rust.clone(),
             wire: self.conv.destination.clone(),
             layout: self.layout.clone(),
+            metadata: self.conv.metadata.clone(),
+            niches: self.conv.niches.clone(),
+            converter: self.conv.converter_id().clone(),
         }
     }
 
@@ -2032,9 +2046,9 @@ impl<R: Conversions> JCompile<'_, R> {
             at,
             chain,
             ConverterImpl {
-                destination: success.destination.clone(),
+                destination: success.wire.clone(),
                 converter: success.converter.clone(),
-                niches: default_niches_for_wire(&success.destination),
+                niches: default_niches_for_wire(&success.wire),
                 metadata: KotlinMeta {
                     kotlin_name: success.metadata.kotlin_name.clone(),
                     value_reading: Some(ok.clone()),
@@ -2089,12 +2103,12 @@ impl<R: Conversions> JCompile<'_, R> {
         // object/scalar wire. Do not add the ordinary site-level borrow again.
         let child = match direction {
             Direction::Construct => crate::jni::chain::JChild::input(
-                entry.converter_id().clone(),
+                entry.converter.clone(),
                 stages,
                 crate::jni::chain::JValueUse::Direct,
             ),
             Direction::Deconstruct => crate::jni::chain::JChild::output(
-                entry.converter_id().clone(),
+                entry.converter.clone(),
                 stages,
                 crate::jni::chain::JValueUse::Direct,
             ),
@@ -2105,14 +2119,14 @@ impl<R: Conversions> JCompile<'_, R> {
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             inner: entry.0.rust.clone(),
             source: source.clone(),
-            wire: entry.destination.clone(),
+            wire: entry.wire.clone(),
             direction,
             child,
         });
         Some(JFrag::planned(
             at,
             ConverterImpl {
-                destination: entry.destination.clone(),
+                destination: entry.wire.clone(),
                 converter: operation,
                 niches: entry.niches.clone(),
                 metadata: entry.metadata.clone(),
@@ -2281,7 +2295,7 @@ impl<R: Conversions> JCompile<'_, R> {
             &source.key(),
             self.registry,
             direction,
-            &inner.destination,
+            &inner.wire,
         );
         let mut metadata = KotlinMeta {
             kotlin_name: inner.metadata.kotlin_name.clone(),
@@ -2291,7 +2305,7 @@ impl<R: Conversions> JCompile<'_, R> {
         };
         Declarations::attach_domain_sentinels(&mut metadata, sentinels);
         let conv = ConverterImpl {
-            destination: inner.destination.clone(),
+            destination: inner.wire.clone(),
             converter: inner.converter.clone(),
             niches,
             metadata,
@@ -3754,7 +3768,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         .decls
                         .in_frag(at.crossing.spelled())
                         .ok_or_else(|| refuse(at, "no JNI representation for this sum"))?;
-                    Ok(JFrag::new(at, (*conv).clone()))
+                    Ok(JFrag::new(at, conv.converter_impl().clone()))
                 }
             },
             Direction::Deconstruct => {
@@ -4075,7 +4089,8 @@ impl crate::jni::Declarations {
     /// differently (#613 step 5a).
     pub(crate) fn frag(&self, ty: &TypeRef, direction: Direction) -> Option<Conv> {
         let fragment = self.compiled.borrow().fragment(&ty.key(), direction)?;
-        Some(Conv(fragment))
+        let artifact = fragment.artifact();
+        Some(Conv(fragment, artifact))
     }
 
     pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<Conv> {
@@ -4152,7 +4167,7 @@ impl ComposedChain {
 /// cannot hold a borrow into it; sharing the fragment's `Rc` and reaching the
 /// conversion through it costs a refcount instead of a whole `syn::ItemFn` per
 /// lookup.
-pub(crate) struct Conv(std::rc::Rc<JFrag>);
+pub(crate) struct Conv(std::rc::Rc<JFrag>, JConverterArtifact);
 
 impl Conv {
     pub(crate) fn activate(&self) {
@@ -4168,12 +4183,23 @@ impl Conv {
         self.0.pipeline(direction, mode)
     }
 
+    /// The JNI wire this conversion produces or consumes, from the artifact —
+    /// the same value `ConverterImpl::destination` held, reached through what
+    /// the plan carries (#626 review).
     pub(crate) fn destination(&self) -> &syn::Type {
-        &self.0.conv.destination
+        &self.1.wire
     }
 
     pub(crate) fn projection(&self) -> Option<Projection> {
-        self.0.conv.metadata.projection.clone()
+        self.metadata().projection.clone()
+    }
+
+    /// The Kotlin-facing extras, read off this fragment's artifact rather than
+    /// through a `Deref` to `ConverterImpl`. The one door left open onto the
+    /// converter, and closing it is what lets a reader hold a plan instead of a
+    /// fragment (#613 step 5c).
+    pub(crate) fn metadata(&self) -> &KotlinMeta {
+        &self.1.metadata
     }
 
     /// Freeze this exact compiled fragment as one outgoing ABI operation.
@@ -4231,13 +4257,30 @@ impl Conv {
     pub(crate) fn fragment(&self) -> &JFrag {
         &self.0
     }
+
+    /// The registry-facing conversion this fragment was compiled with.
+    ///
+    /// The one reader left that needs the `ConverterImpl` rather than the
+    /// artifact: a sealed class with no decomposition is re-answered as a whole
+    /// fragment, which means building a new one from this conversion. It goes
+    /// when `JFrag` does.
+    pub(crate) fn converter_impl(&self) -> &ConverterImpl<KotlinMeta> {
+        &self.0.conv
+    }
 }
 
+/// A conversion's adapter payload, reached through the fragment's **artifact**
+/// rather than its `ConverterImpl`.
+///
+/// This is the door every emitter reads the Kotlin name, the niches and the
+/// converter identity through — 37 sites across 12 files. Pointing it at the
+/// artifact moves all of them onto what the canonical plan carries, without
+/// touching one of them (#613 step 5c).
 impl std::ops::Deref for Conv {
-    type Target = ConverterImpl<KotlinMeta>;
+    type Target = JConverterArtifact;
 
     fn deref(&self) -> &Self::Target {
-        &self.0.conv
+        &self.1
     }
 }
 

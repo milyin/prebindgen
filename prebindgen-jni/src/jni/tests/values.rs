@@ -85,12 +85,12 @@ fn opaque_handles_retain_late_plans_for_all_ownership_operations() {
             .decls
             .in_frag(&shared)
             .expect("shared input")
-            .converter_id(),
+            .converter,
         generation
             .decls
             .in_frag(&exclusive)
             .expect("exclusive input")
-            .converter_id(),
+            .converter,
         "both borrow crossings must retain one semantic handle operation"
     );
 }
@@ -376,13 +376,11 @@ fn unsized_str_retains_semantic_text_codec_plans() {
         "both output crossings must retain the semantic borrowed-text plan"
     );
     assert_eq!(
-        input.converter_id(),
-        string_input.converter_id(),
+        input.converter, string_input.converter,
         "bare str input and String must share the owned-text decoder"
     );
     assert_eq!(
-        bare_output.converter_id(),
-        ref_output.converter_id(),
+        bare_output.converter, ref_output.converter,
         "rank-0 str and rank-1 &str must share one normalized converter"
     );
 }
@@ -504,7 +502,7 @@ fn cow_byte_slices_retain_a_late_value_codec() {
     );
     assert!(
         output
-            .converter_id()
+            .converter
             .fragment()
             .is_some_and(|fragment| fragment.spelling() == &reading.key()),
         "the late codec identity must preserve the crossing's lifetime"
