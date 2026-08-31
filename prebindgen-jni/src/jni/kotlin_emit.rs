@@ -1089,18 +1089,8 @@ impl Declarations {
                         Some(self.effective_method_name(key, m).as_str()),
                         Some(key),
                     ) {
-                        for ov in crate::jni::param_overloads_of(
-                            self,
-                            item_fn,
-                            &self.fn_plan_frozen(item_fn).unwrap_or_else(|| {
-                                panic!(
-                                    "fun!({}): its frozen JNI generation plan is unavailable",
-                                    item_fn.name
-                                )
-                            }),
-                            registry.flat(),
-                            &f,
-                        ) {
+                        for ov in crate::jni::param_overloads_of(self, item_fn, registry.flat(), &f)
+                        {
                             class = class.member(ov);
                         }
                         class = class.member(f);
@@ -1127,18 +1117,9 @@ impl Declarations {
                             Some(self.effective_method_name(key, m).as_str()),
                             None,
                         ) {
-                            for ov in crate::jni::param_overloads_of(
-                                self,
-                                item_fn,
-                                &self.fn_plan_frozen(item_fn).unwrap_or_else(|| {
-                                    panic!(
-                                        "fun!({}): its frozen JNI generation plan is unavailable",
-                                        item_fn.name
-                                    )
-                                }),
-                                registry.flat(),
-                                &f,
-                            ) {
+                            for ov in
+                                crate::jni::param_overloads_of(self, item_fn, registry.flat(), &f)
+                            {
                                 companion = companion.member(ov);
                             }
                             companion = companion.member(f);
@@ -1868,18 +1849,7 @@ impl Declarations {
             if let Some(f) = render_wrapper_fn(self, item_fn, Some(&kotlin_name), None) {
                 // #52: idiomatic typed overloads for `.split_on_param`
                 // parameters, delegating to this selector wrapper.
-                for ov in crate::jni::param_overloads_of(
-                    self,
-                    item_fn,
-                    &self.fn_plan_frozen(item_fn).unwrap_or_else(|| {
-                        panic!(
-                            "fun!({}): its frozen JNI generation plan is unavailable",
-                            item_fn.name
-                        )
-                    }),
-                    registry.flat(),
-                    &f,
-                ) {
+                for ov in crate::jni::param_overloads_of(self, item_fn, registry.flat(), &f) {
                     file = file.decl(ov);
                 }
                 file = file.decl(f);

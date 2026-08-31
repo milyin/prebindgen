@@ -373,18 +373,7 @@ pub(crate) fn build_typed_handle(
                 Some(ext.effective_method_name(key, m).as_str()),
                 None,
             ) {
-                for ov in crate::jni::param_overloads_of(
-                    ext,
-                    item_fn,
-                    &ext.fn_plan_frozen(item_fn).unwrap_or_else(|| {
-                        panic!(
-                            "fun!({}): its frozen JNI generation plan is unavailable",
-                            item_fn.name
-                        )
-                    }),
-                    registry.flat(),
-                    &f,
-                ) {
+                for ov in crate::jni::param_overloads_of(ext, item_fn, registry.flat(), &f) {
                     companion = companion.member(ov);
                 }
                 companion = companion.member(f);
@@ -499,18 +488,7 @@ pub(crate) fn build_typed_handle(
                 Some(ext.effective_method_name(key, m).as_str()),
                 Some(key),
             ) {
-                for ov in crate::jni::param_overloads_of(
-                    ext,
-                    item_fn,
-                    &ext.fn_plan_frozen(item_fn).unwrap_or_else(|| {
-                        panic!(
-                            "fun!({}): its frozen JNI generation plan is unavailable",
-                            item_fn.name
-                        )
-                    }),
-                    registry.flat(),
-                    &f,
-                ) {
+                for ov in crate::jni::param_overloads_of(ext, item_fn, registry.flat(), &f) {
                     class = class.member(ov);
                 }
                 class = class.member(f);

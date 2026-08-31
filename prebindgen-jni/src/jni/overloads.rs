@@ -433,7 +433,7 @@ pub(crate) fn render_param_overloads(
             f.name
         )
     });
-    param_overloads_of(ext, f, &fplan, registry.flat(), sel_fun)
+    param_overloads_with(ext, f, &fplan, registry.flat(), sel_fun)
 }
 
 /// The same overloads, from a plan the caller already holds.
@@ -441,6 +441,24 @@ pub(crate) fn render_param_overloads(
 /// For a **render** caller, which has the frozen generation and must not
 /// re-lower (#613 step 7).
 pub(crate) fn param_overloads_of(
+    ext: &Declarations,
+    f: &prebindgen_registry::flat::Function,
+    flat: &prebindgen_registry::flat::Flat,
+    sel_fun: &KtFun,
+) -> Vec<KtFun> {
+    // The lookup and its failure policy live here, not at each caller: five
+    // render sites share one contract, and repeating it is the duplication
+    // this umbrella exists to remove (#648 review).
+    let fplan = ext.fn_plan_frozen(f).unwrap_or_else(|| {
+        panic!(
+            "fun!({}): its frozen JNI generation plan is unavailable",
+            f.name
+        )
+    });
+    param_overloads_with(ext, f, &fplan, flat, sel_fun)
+}
+
+fn param_overloads_with(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
     fplan: &std::rc::Rc<crate::jni::fn_plan::JniFunctionPlan>,
