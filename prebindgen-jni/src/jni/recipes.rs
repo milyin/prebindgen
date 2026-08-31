@@ -266,6 +266,57 @@ impl Declarations {
     /// A type declared but absent from the model is skipped rather than
     /// refused: the scan already reports it, and reporting it twice in
     /// different words helps nobody.
+    /// This type's `parts` decomposition, read off its `expand_return!`
+    /// declaration in the recipe table's own vocabulary.
+    ///
+    /// `None` when the declaration states a shape a `Deconstruct` cannot hold —
+    /// a value-form record mixed with others, since `ValueForm` is the whole
+    /// row while `LocalField::Fields` is one record among many. No declaration
+    /// in this workspace has that shape (measured: every `Fields` record stands
+    /// alone), so the caller's `Atomic` fallback is a guard rather than a path
+    /// anything takes.
+    fn parts_deconstruct(
+        &self,
+        model: &Flat,
+        registry: &impl prebindgen_registry::Conversions,
+        ty: &TypeRef,
+    ) -> Option<Deconstruct> {
+        let decl = self
+            .return_expand_decls
+            .iter()
+            .find(|d| *d.key() == ty.stripped_key())?;
+        let fields = decl.field_list();
+        if matches!(fields, [crate::jni::LocalField::Fields(_)]) {
+            // `ValueForm` means "call this accessor, then read these parts off
+            // its result" — the parts are how the compiler reaches the returned
+            // struct's fields, so an empty list is a decomposition with nothing
+            // in it rather than one of everything (#638 review).
+            //
+            // `value_form_of` already computes exactly that mapping, and it is
+            // not a count: `lower_value_form` returns FLATTENED records, one of
+            // which can splice a child's fields, so `Report` yields six records
+            // over a five-field struct. It maps each record back to the struct
+            // field it names and declines the shapes a row cannot hold.
+            let (func, parts) = self.value_form_of(model, registry, ty)?;
+            return Some(Deconstruct::ValueForm { func, parts });
+        }
+        let mut reaches = Vec::with_capacity(fields.len());
+        for field in fields {
+            reaches.push(match field {
+                crate::jni::LocalField::Named(func, _) => Reach::Accessor(func.clone()),
+                // The handle itself — the leaf `Reach::Identity` was added for.
+                crate::jni::LocalField::SelfField => Reach::Identity,
+                // A binding-local accessor resolves by its path's last segment:
+                // `local_functions()` registers it under exactly that ident.
+                crate::jni::LocalField::Local { path, .. } => {
+                    Reach::Accessor(path.segments.last()?.ident.clone())
+                }
+                crate::jni::LocalField::Fields(_) => return None,
+            });
+        }
+        Some(Deconstruct::Fields(reaches))
+    }
+
     pub(crate) fn recipes(
         &self,
         model: &Flat,
@@ -427,7 +478,18 @@ impl Declarations {
             decomposed.entry(key).or_insert_with(|| plan.source.clone());
         }
         for ty in decomposed.into_values() {
-            recipes.declare(ty, parts(), Deconstructing::Atomic);
+            // A real row where the declaration can state one. #622 wrote
+            // `Atomic` here because `Reach` could not spell an identity leaf;
+            // it can now (#635), so the row says how the value comes apart
+            // instead of only existing to be selected (#613 step 10).
+            match self.parts_deconstruct(model, registry, &ty) {
+                Some(deconstruct) => {
+                    recipes.declare(ty, parts(), Deconstructing::Product(deconstruct));
+                }
+                None => {
+                    recipes.declare(ty, parts(), Deconstructing::Atomic);
+                }
+            }
         }
 
         // Every implicit Optional keeps its established whole/default input
