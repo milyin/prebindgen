@@ -335,8 +335,13 @@ fn assert_report_agrees(report: &str, kotlin: &BTreeMap<String, String>) {
         // agreement is with whichever declaration has the report's arity, and
         // the assertion is that one exists (#654 review).
         let marker = format!("fun{name}(");
+        // Only the WRAPPER counts. The same name is also declared as a
+        // `JNINative external fun` over ABI leaves, and accepting that one
+        // means a drifted wrapper passes whenever the extern happens to share
+        // its arity — the common one-wire-per-parameter case (#654 review).
         let arities: Vec<usize> = compact
             .match_indices(&marker)
+            .filter(|(i, _)| !compact[..*i].ends_with("externalfun"))
             .map(|(i, _)| {
                 let o = i + marker.len();
                 param_arity(&compact[o..matching_paren(&compact, o)])
@@ -345,8 +350,8 @@ fn assert_report_agrees(report: &str, kotlin: &BTreeMap<String, String>) {
         assert!(
             !arities.is_empty(),
             "the report names `{name}`, which the emitted Kotlin does not \
-             declare — the report drifted from the wrappers it claims to \
-             render through"
+             declare as a wrapper — the report drifted from the wrappers it \
+             claims to render through"
         );
         let report_arity = param_arity(&sig[open + 1..sig.rfind(')').unwrap_or(sig.len())]);
         assert!(
