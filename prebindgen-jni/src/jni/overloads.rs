@@ -75,7 +75,15 @@ impl Declarations {
                     (
                         ctor.map(|c| c.to_string())
                             .unwrap_or_else(|| "variant_self()".to_string()),
-                        arm_erased_sig(self, registry, &target, ctor),
+                        {
+                            // Validation sees every target and holds the model;
+                            // freezing the reading here is what lets the render
+                            // path answer without one (#613 step 7).
+                            if let Some(reading) = registry.reading(&target) {
+                                self.freeze_reading(&reading);
+                            }
+                            arm_erased_sig(self, registry.flat(), &target, ctor)
+                        },
                     )
                 })
                 .collect();
@@ -110,12 +118,12 @@ impl Declarations {
 /// ambiguity check and the whole-artifact overload table agree on erasure.
 fn arm_erased_sig(
     ext: &Declarations,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
     target: &TypeKey,
     ctor: Option<&syn::Ident>,
 ) -> Vec<ErasedJvmType> {
     match ctor {
-        Some(cf) => match registry.flat().function(&cf) {
+        Some(cf) => match flat.function(&cf) {
             Some(f) => f
                 .params
                 .iter()
@@ -129,7 +137,11 @@ fn arm_erased_sig(
         // it did, the reading answers as before; where it did not, the erased
         // form is the identity's own canonical spelling — which is all a
         // declaration has to be told apart by.
-        None => vec![match registry.reading(target) {
+        // The reading, frozen where validation saw it — the render path has no
+        // model to ask (#613 step 7). A target the freeze never reached falls
+        // back to the identity's own canonical spelling, which is the same
+        // answer `reading` gave for an un-interned declaration.
+        None => vec![match ext.frozen_reading(target.as_str()) {
             Some(reading) => rust_type_erased(ext, &reading),
             None => ErasedJvmType::raw(target.as_str().to_string()),
         }],
@@ -464,7 +476,7 @@ pub(crate) fn render_param_overloads(
                 .zip(combo)
                 .flat_map(|(s, &ai)| {
                     let ctor = s.plan.variants[s.arms[ai].0].ctor.as_ref();
-                    arm_erased_sig(ext, registry, &s.plan.target.key(), ctor)
+                    arm_erased_sig(ext, registry.flat(), &s.plan.target.key(), ctor)
                 })
                 .collect()
         })
