@@ -1895,7 +1895,6 @@ impl Declarations {
                 self,
                 &package,
                 item_const,
-                registry,
                 &mut imports,
                 entry.kotlin_name_override.as_deref(),
             ) {
@@ -1923,7 +1922,6 @@ impl Declarations {
                 self,
                 &package,
                 item_fn,
-                registry,
                 &mut imports,
                 entry.kotlin_name_override.as_deref(),
             ) {
@@ -1936,8 +1934,7 @@ impl Declarations {
         // evaluated Rust-side (`prerequisites`).
         for decl in &pkg_cfg.constant_exprs {
             validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
-            if let Some((helper, prop)) =
-                render_const_expr_val(self, &package, decl, registry, &mut imports)
+            if let Some((helper, prop)) = render_const_expr_val(self, &package, decl, &mut imports)
             {
                 file = file.decl(helper).decl(prop);
             }
