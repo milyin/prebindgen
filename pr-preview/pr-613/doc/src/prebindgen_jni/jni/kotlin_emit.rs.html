@@ -1957,7 +1957,7 @@
 <a href=#1957 id=1957 data-nosnippet>1957</a>            <span class="kw">if </span>!declared.contains(<span class="kw-2">&amp;</span>f.name) {
 <a href=#1958 id=1958 data-nosnippet>1958</a>                <span class="kw">continue</span>;
 <a href=#1959 id=1959 data-nosnippet>1959</a>            }
-<a href=#1960 id=1960 data-nosnippet>1960</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(fun) = render_extern_decl(<span class="self">self</span>, f, registry) {
+<a href=#1960 id=1960 data-nosnippet>1960</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(fun) = render_extern_decl(<span class="self">self</span>, f) {
 <a href=#1961 id=1961 data-nosnippet>1961</a>                externs.push(fun);
 <a href=#1962 id=1962 data-nosnippet>1962</a>            }
 <a href=#1963 id=1963 data-nosnippet>1963</a>        }
@@ -1977,7 +1977,7 @@
 <a href=#1977 id=1977 data-nosnippet>1977</a>                <span class="kw">continue</span>; <span class="comment">// missing decl already warned by the scan
 <a href=#1978 id=1978 data-nosnippet>1978</a>            </span>};
 <a href=#1979 id=1979 data-nosnippet>1979</a>            <span class="kw">let </span>getter = <span class="kw">crate</span>::jni::const_getter_fn(item_const);
-<a href=#1980 id=1980 data-nosnippet>1980</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(fun) = render_extern_decl(<span class="self">self</span>, <span class="kw-2">&amp;</span>getter, registry) {
+<a href=#1980 id=1980 data-nosnippet>1980</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(fun) = render_extern_decl(<span class="self">self</span>, <span class="kw-2">&amp;</span>getter) {
 <a href=#1981 id=1981 data-nosnippet>1981</a>                externs.push(fun);
 <a href=#1982 id=1982 data-nosnippet>1982</a>            }
 <a href=#1983 id=1983 data-nosnippet>1983</a>        }
@@ -1992,7 +1992,7 @@
 <a href=#1992 id=1992 data-nosnippet>1992</a>        expr_decls.sort_by(|a, b| a.kotlin_name.cmp(<span class="kw-2">&amp;</span>b.kotlin_name));
 <a href=#1993 id=1993 data-nosnippet>1993</a>        <span class="kw">for </span>decl <span class="kw">in </span>expr_decls {
 <a href=#1994 id=1994 data-nosnippet>1994</a>            <span class="kw">let </span>getter = const_expr_getter_fn(<span class="kw-2">&amp;</span>decl.kotlin_name, <span class="kw-2">&amp;</span>decl.ty, registry);
-<a href=#1995 id=1995 data-nosnippet>1995</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(fun) = render_extern_decl(<span class="self">self</span>, <span class="kw-2">&amp;</span>getter, registry) {
+<a href=#1995 id=1995 data-nosnippet>1995</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(fun) = render_extern_decl(<span class="self">self</span>, <span class="kw-2">&amp;</span>getter) {
 <a href=#1996 id=1996 data-nosnippet>1996</a>                externs.push(fun);
 <a href=#1997 id=1997 data-nosnippet>1997</a>            }
 <a href=#1998 id=1998 data-nosnippet>1998</a>        }
