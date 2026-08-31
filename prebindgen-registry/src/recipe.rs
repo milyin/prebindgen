@@ -182,6 +182,15 @@ pub enum Reach {
     /// could: `Field` indexes into a product and `Accessor` calls out of one,
     /// while a handle leaf is the whole value with nothing between (#613 step
     /// 10).
+    ///
+    /// **Validates but does not yet compile.** The part's type is the receiver,
+    /// so a compiler that resolves a part by compiling its type re-enters the
+    /// same crossing and recurses without bound — a declared identity row
+    /// overflows the stack rather than erroring. Validation is safe because
+    /// this reach reports no reached type at all. Making the row compilable
+    /// means saying which recipe the part resolves through — its value's
+    /// `whole` row, not the one being compiled — which is the next slice of
+    /// step 10 and the reason no row declares `Identity` yet.
     Identity,
 }
 

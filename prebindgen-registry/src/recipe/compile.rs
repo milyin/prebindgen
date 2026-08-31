@@ -987,7 +987,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 }
                 Reach::Identity => parts.push(Part {
                     from: PartSource::Identity,
-                    mode: mode_of(&at.crossing.value().clone()),
+                    // From the SPELLED crossing, not `value()`: the latter
+                    // strips `&`/`&mut`, which would record a borrowed
+                    // identity row as `Owned` and lose the clone-for-borrow /
+                    // move-for-owned distinction this form exists to carry
+                    // (#635 review).
+                    mode: at.crossing.mode(),
                     ty: at.crossing.value().clone(),
                     name: "self".to_string(),
                 }),
