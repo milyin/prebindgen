@@ -1504,6 +1504,36 @@ fn a_nested_shape_takes_a_field_apart_in_place() {
     );
 }
 
+/// A nested shape over a SUM-typed field is refused, not silently empty.
+///
+/// `Deconstruct` reads parts off a product, and a variant has no fields to
+/// read, so this reach would contribute nothing at all — dropping the sum's
+/// leaves without a word. Reaching those leaves needs a `Choice`, which lives
+/// on `Shape` and not on `Deconstruct` (#658 review).
+#[test]
+fn a_nested_shape_over_a_sum_field_is_refused() {
+    let model = model(&[
+        "pub enum Pick { A { x: u32 }, B { y: u64 } }",
+        "pub struct Holder { pub pick: Pick, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Holder"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Nested {
+            index: 0,
+            shape: Box::new(Deconstruct::Fields(vec![Reach::Field(0)])),
+        }])),
+    );
+    let errors = builder
+        .build(&model)
+        .expect_err("a sum field cannot be read as a product");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::NotAProduct { .. }]),
+        "{errors:?}"
+    );
+}
+
 /// A nested shape over a field index past the end is refused.
 #[test]
 fn a_nested_shape_past_the_end_is_refused() {

@@ -188,12 +188,19 @@ pub enum Reach {
     /// Field `index`, taken apart **here** by `shape` rather than by whatever
     /// row its own type has.
     ///
-    /// The form a sum-typed field needs. A `sealed_class` has no deconstructing
-    /// whole-value crossing (`prebindgen-jni` states that contract), so such a
-    /// field cannot be reached as a whole part at all — its leaves are what
-    /// cross, and reaching them is a `Choice` inside a `Product`, which
-    /// `Fields(Vec<Reach>)` cannot hold. This carries the nested shape instead
-    /// of naming a row that does not exist (#613 step 10).
+    /// **A STRUCT-shaped field only.** `shape` is a [`Deconstruct`], which is
+    /// `Fields` or `ValueForm` — both read parts off a product — so the field
+    /// must be one. A sum-typed field is refused rather than silently
+    /// contributing nothing, which is what an empty field list would otherwise
+    /// do (#658 review).
+    ///
+    /// It does NOT yet serve the case #613 step 10 ends at. A `sealed_class`
+    /// has no deconstructing whole-value crossing (`prebindgen-jni` states that
+    /// contract), so a sum-typed field's LEAVES are what cross, and reaching
+    /// them is a `Choice` — which lives on [`Shape`], not on `Deconstruct`.
+    /// Carrying one means this reach holding a `Shape<Deconstruct>` and the
+    /// compiler composing a nested choice into a part, neither of which exists
+    /// here.
     Nested {
         /// Position of the field in the struct being taken apart.
         index: usize,
@@ -1035,6 +1042,11 @@ impl<'a> Check<'a, '_> {
                     match fields.get(*index) {
                         Some(field) => {
                             let inner = field.ty.clone();
+                            // A `Deconstruct` reads parts off a product. A
+                            // field that is not one contributes nothing at all
+                            // through this reach, so it is refused here rather
+                            // than silently dropping its leaves (#658 review).
+
                             match shape.as_ref() {
                                 Deconstruct::Fields(inner_reaches) => {
                                     out.extend(self.reaches(&inner, inner_reaches));
