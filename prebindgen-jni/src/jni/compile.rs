@@ -334,7 +334,6 @@ impl JAbiLeaves {
 
 /// The canonical site of a whole return, frozen from the plan the emitters read
 /// rather than the intermediate the site hook produced.
-#[cfg(test)]
 pub(crate) fn whole_return_site(
     bound: &prebindgen_registry::recipe::Bound,
     fragment: &prebindgen_registry::generation::FragmentId,
@@ -363,7 +362,6 @@ pub(crate) fn whole_return_site(
 /// trampoline finalized, which it shares rather than copies. Neither half is
 /// derived here, which is what keeps this a carrier rather than a second
 /// answer beside the delivery (#622 review).
-#[cfg(test)]
 pub(crate) fn callback_arg_site(
     bound: &prebindgen_registry::recipe::Bound,
     edge: &prebindgen_registry::generation::FragmentUse,
@@ -1510,7 +1508,6 @@ impl<R: Conversions> JCompile<'_, R> {
 
     /// Freeze this site into the canonical plan, taking its ordered ABI from
     /// the plan just built rather than deriving it again.
-    #[cfg(test)]
     fn freeze_site_of(&self, bound: &Bound, root: &JFrag, plan: &JPlan) {
         let leaves = match plan {
             // The whole leaf, not just its descriptors: `RustParamOp`,
@@ -1547,9 +1544,6 @@ impl<R: Conversions> JCompile<'_, R> {
             .borrow_mut()
             .push(std::rc::Rc::new(frozen));
     }
-
-    #[cfg(not(test))]
-    fn freeze_site_of(&self, _bound: &Bound, _root: &JFrag, _plan: &JPlan) {}
 
     /// Freeze a whole-object struct terminal from the Flat declaration and
     /// already-selected child chains. No source type is spelled and no Rust
@@ -3987,12 +3981,11 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
 impl crate::jni::Declarations {
     /// The conversion for `ty` in the given direction, from the fragments
     /// compiled so far.
+    /// One store, both phases. The frozen plan no longer drains this one, so
+    /// there is nothing to decide between and no way for the two to answer
+    /// differently (#613 step 5a).
     pub(crate) fn frag(&self, ty: &TypeRef, direction: Direction) -> Option<Conv> {
-        let key = ty.key();
-        let fragment = match &self.generation {
-            Some(generation) => generation.fragment(&key, direction),
-            None => self.compiled.borrow().fragment(&key, direction),
-        }?;
+        let fragment = self.compiled.borrow().fragment(&ty.key(), direction)?;
         Some(Conv(fragment))
     }
 
@@ -4017,17 +4010,10 @@ impl crate::jni::Declarations {
             .recipe_table()
             .key_of(&crossing.key(), &crate::jni::recipes::parts())
             .cloned();
-        let fragment = match &self.generation {
-            Some(generation) => parts
-                .and_then(|parts| generation.recipe_fragment(&key, &parts))
-                .or_else(|| generation.fragment(&key, Direction::Construct)),
-            None => {
-                let compiled = self.compiled.borrow();
-                parts
-                    .and_then(|parts| compiled.recipe_fragment(&key, &parts))
-                    .or_else(|| compiled.fragment(&key, Direction::Construct))
-            }
-        }?;
+        let compiled = self.compiled.borrow();
+        let fragment = parts
+            .and_then(|parts| compiled.recipe_fragment(&key, &parts))
+            .or_else(|| compiled.fragment(&key, Direction::Construct))?;
         fragment.wires.clone()
     }
 
@@ -4048,11 +4034,10 @@ impl crate::jni::Declarations {
             .key_of(&crossing.key(), &crate::jni::recipes::parts())
             .cloned();
         let key = ty.key();
-        let frag = match (&self.generation, row) {
-            (Some(generation), Some(row)) => generation.recipe_fragment(&key, &row)?,
-            (Some(generation), None) => generation.fragment(&key, direction)?,
-            (None, Some(row)) => self.compiled.borrow().recipe_fragment(&key, &row)?,
-            (None, None) => self.compiled.borrow().fragment(&key, direction)?,
+        let compiled = self.compiled.borrow();
+        let frag = match row {
+            Some(row) => compiled.recipe_fragment(&key, &row)?,
+            None => compiled.fragment(&key, direction)?,
         };
         frag.composed_chain()
     }
@@ -4154,7 +4139,6 @@ impl Conv {
     /// conversion of its own), so it has no `Bound` from the compiler — but it
     /// does have a fragment, and this is what lets its site be stated
     /// canonically anyway (#622 review).
-    #[cfg(test)]
     pub(crate) fn fragment(&self) -> &JFrag {
         &self.0
     }
@@ -4384,7 +4368,6 @@ impl<R: Conversions> JCompile<'_, R> {
             .unwrap_or_else(|| bound.crossing.spelled());
         let (surface, enums) = crate::jni::fn_plan::ReturnSurface::classify(self.decls, declared);
         crate::jni::fn_plan::ValueOutputPlan {
-            #[cfg(test)]
             site: Some((bound.clone(), root.id.clone())),
             is_convert: self.declared_return.is_some(),
             pipeline: Self::planned_pipeline(Direction::Deconstruct, bound.crossing.mode(), root),

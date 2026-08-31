@@ -764,8 +764,9 @@ fn generation_plan_freezes_and_drains_derivations() {
                 .class(crate::sealed_class!(Outcome))
                 .fun(prebindgen_registry::fun!(z_do_thing)),
         );
-    // Resolve runs validation, builds every function plan, then freezes and
-    // drains the mutable planning memos before returning the generator.
+    // Resolve runs validation, builds every function plan, then freezes: the
+    // derived memos are drained into the generation plan, and the recipe
+    // compiler's own store is left where it is as the single fragment lookup.
     let gen = jni.build_with(registry).expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
     let f = registry.flat().function("z_do_thing").expect("indexed");
@@ -775,15 +776,19 @@ fn generation_plan_freezes_and_drains_derivations() {
     assert!(ext.struct_plans.borrow().is_empty());
     assert!(ext.sum_plans.borrow().is_empty());
     assert!(ext.vec_build_plans.borrow().is_empty());
+    // The recipe-compiler store is NOT drained, and that is the point of 5a:
+    // draining it is what forced every fragment lookup to decide first whether
+    // the plan had been frozen, and two stores are what let the two answers
+    // differ. One store now serves both phases.
     assert!(
-        ext.compiled.borrow().is_empty(),
-        "the mutable recipe compiler store is drained at freeze"
+        !ext.compiled.borrow().is_empty(),
+        "one store serves both phases, so freeze leaves it where the compiler did"
     );
-    let (conversions, functions, interfaces, structs, sums, vec_builds) =
+    let (fragments, functions, interfaces, structs, sums, vec_builds) =
         gen.generation_plan().counts();
     assert!(
-        conversions >= 1,
-        "registry fragments are frozen for emission"
+        fragments >= 1,
+        "the canonical plan holds the fragments its sites reach"
     );
     assert_eq!(functions, 1);
     assert!(interfaces >= 1, "the binding error interface is frozen");

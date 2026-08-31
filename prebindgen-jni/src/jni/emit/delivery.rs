@@ -604,7 +604,6 @@ impl FrozenDelivery {
     /// the same allocation rather than a copy of it, which is what makes the
     /// site's ABI a replacement for the delivery's rather than a second
     /// answer to compare against (#622 review).
-    #[cfg(test)]
     pub(crate) fn wires(&self) -> std::rc::Rc<Vec<crate::jni::compile::OutWire>> {
         self.wires.clone()
     }

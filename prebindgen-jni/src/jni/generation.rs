@@ -13,11 +13,22 @@ use super::*;
 
 /// All cross-artifact JNI decisions frozen at the end of resolution.
 pub(crate) struct JniGenerationPlan {
-    /// Registry-compiled recipe fragments, frozen after the last site has been
-    /// planned. This is the sole post-resolution source of private converter
-    /// artifacts and fragment lookups; the mutable planning store is drained
-    /// when this plan is built.
-    conversions: prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>,
+    /// The canonical plan: every reached fragment and every site of every
+    /// exported function, validated as one set and frozen in dependency order.
+    ///
+    /// Building it is the production gate: `build` is the only thing that can
+    /// see a chain whose endpoints do not join up, an edge naming a fragment
+    /// nothing compiled, a duplicate site identity, or a failure route that
+    /// does not match its fragment's fallibility — and an invalid plan now
+    /// fails the binding rather than one test.
+    ///
+    /// **Retained only where something reads it.** Keeping a carrier no
+    /// emitter consults would be exactly the parallel answer this umbrella
+    /// deletes, so today it is held for the freeze check alone; step 5b ungates
+    /// it with the first reader that needs it. Fragment lookups stay on
+    /// `Declarations::compiled` until then, and 5c deletes that one.
+    #[cfg(test)]
+    plan: prebindgen_registry::generation::GenerationPlan<crate::jni::compile::JRepresentation>,
     functions: HashMap<syn::Ident, Rc<JniFunctionPlan>>,
     interfaces: BTreeMap<SpecKey, Arc<IfaceSpec>>,
     /// Every declared data class is recorded, including an explicit `None` for
@@ -302,7 +313,10 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
 
 impl JniGenerationPlan {
     /// Finish planning and take ownership of every derived memo.
-    pub(crate) fn freeze(decls: &mut Declarations, registry: &Registry) -> Self {
+    pub(crate) fn freeze(
+        decls: &mut Declarations,
+        registry: &Registry,
+    ) -> Result<Self, prebindgen_registry::WriteRustError> {
         assert!(
             decls.generation.is_none(),
             "JNI generation plan may be frozen only once"
@@ -393,7 +407,11 @@ impl JniGenerationPlan {
         let vec_builds = crate::jni::emit::plan_vec_build_helpers(decls);
         let constant_exprs = crate::jni::trait_impl::plan_constant_expressions(decls, registry);
 
-        let conversions = std::mem::take(&mut *decls.compiled.borrow_mut());
+        // Borrowed, not drained. The planning store stays where the compiler
+        // left it so one lookup path serves both phases — the branch on
+        // "already frozen?" that used to decide between them was the thing two
+        // stores made necessary (#613 step 5a).
+        let conversions = decls.compiled.borrow();
         let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
         assembly.artifact(JFinalArtifact::Prelude);
         for destructor in destructors {
@@ -422,38 +440,43 @@ impl JniGenerationPlan {
         // JniGen qualifies each source reference by the item's own origin
         // module, so it declares no single one for the writer to fall back on.
         let assembly = assembly.build(registry, None);
-        Self {
-            conversions,
+        // The canonical plan, validated as one set. Every fragment the
+        // compilation reached and every site the exported functions state.
+        let mut collected = prebindgen_registry::generation::GenerationPlanBuilder::<
+            crate::jni::compile::JRepresentation,
+        >::new();
+        for fragment in conversions.fragments() {
+            collected.fragment(fragment.freeze());
+        }
+        for site in decls.site_plans.borrow().iter() {
+            collected.site((**site).clone());
+        }
+        #[cfg_attr(not(test), allow(unused_variables))]
+        let plan = collected.build().map_err(|errors| {
+            prebindgen_registry::ScanError::AdapterInvariant {
+                message: format!("the JNI generation plan is not valid: {errors}"),
+            }
+        })?;
+        drop(conversions);
+        Ok(Self {
+            #[cfg(test)]
+            plan,
             assembly,
             functions: std::mem::take(decls.fn_plans.get_mut()),
             interfaces: std::mem::take(decls.iface_specs.get_mut()),
             structs: std::mem::take(decls.struct_plans.get_mut()),
             sums: std::mem::take(decls.sum_plans.get_mut()),
             vec_builds: std::mem::take(decls.vec_build_plans.get_mut()),
-        }
+        })
     }
 
-    pub(crate) fn fragment(
-        &self,
-        ty: &TypeKey,
-        direction: prebindgen_registry::recipe::Direction,
-    ) -> Option<Rc<crate::jni::compile::JFrag>> {
-        self.conversions.fragment(ty, direction)
-    }
-
-    pub(crate) fn recipe_fragment(
-        &self,
-        ty: &TypeKey,
-        recipe: &prebindgen_registry::recipe::RecipeKey,
-    ) -> Option<Rc<crate::jni::compile::JFrag>> {
-        self.conversions.recipe_fragment(ty, recipe)
-    }
-
+    /// The canonical plan every fragment and site was validated into.
     #[cfg(test)]
-    pub(crate) fn conversions(
+    pub(crate) fn plan(
         &self,
-    ) -> &prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag> {
-        &self.conversions
+    ) -> &prebindgen_registry::generation::GenerationPlan<crate::jni::compile::JRepresentation>
+    {
+        &self.plan
     }
 
     /// The frozen assembly the generated Rust file is written from.
@@ -501,7 +524,7 @@ impl JniGenerationPlan {
     #[cfg(test)]
     pub(crate) fn counts(&self) -> (usize, usize, usize, usize, usize, usize) {
         (
-            self.conversions.len(),
+            self.plan.fragments().len(),
             self.functions.len(),
             self.interfaces.len(),
             self.structs.len(),
