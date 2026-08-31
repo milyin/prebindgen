@@ -22,19 +22,8 @@ fn write(cbindgen: CbindgenBuilder, registry: RegistryBuilder, tag: &str) -> Str
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join(format!("{tag}.rs"));
     let gen = cbindgen.build_with(registry).expect("resolve");
-    assert_converter_calls_retain_their_operation(&gen);
     let path = gen.write_rust(&out).expect("write_rust");
     std::fs::read_to_string(&path).unwrap()
-}
-
-fn assert_converter_calls_retain_their_operation(gen: &Cbindgen) {
-    for function in gen.gen.converter_functions() {
-        let (function, call) = function.operation_and_call_identity();
-        assert_eq!(
-            function, call,
-            "a C converter call must target its own operation"
-        );
-    }
 }
 
 /// Whether a final registry-owned operation whose name starts with `stem`

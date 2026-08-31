@@ -54,7 +54,6 @@ impl chain::Child for CCall {
 /// A typed converter plan waiting for final rendering.
 #[derive(Clone)]
 pub(crate) struct CFunction {
-    operation: prebindgen_registry::OperationId,
     call: CCall,
     body: CBody,
 }
@@ -85,7 +84,6 @@ impl CFunction {
             plan.direction == Direction::Construct,
         ));
         Self {
-            operation,
             call,
             body: CBody::Product(plan),
         }
@@ -98,7 +96,6 @@ impl CFunction {
             false,
         ));
         Self {
-            operation,
             call,
             body: CBody::Custom(plan),
         }
@@ -110,7 +107,6 @@ impl CFunction {
     ) -> Self {
         let call = CCall(chain::Call::operation(operation.clone(), false, false));
         Self {
-            operation,
             call,
             body: CBody::OutputTerminal(plan),
         }
@@ -126,7 +122,6 @@ impl CFunction {
             plan.operation.unsafe_(),
         ));
         Self {
-            operation,
             call,
             body: CBody::InputTerminal(plan),
         }
@@ -139,7 +134,6 @@ impl CFunction {
             plan.direction == Direction::Construct,
         ));
         Self {
-            operation,
             call,
             body: CBody::Payload(plan),
         }
@@ -152,7 +146,6 @@ impl CFunction {
             true,
         ));
         Self {
-            operation,
             call,
             body: CBody::Borrow(plan),
         }
@@ -164,7 +157,6 @@ impl CFunction {
     ) -> Self {
         let call = CCall(chain::Call::operation(operation.clone(), false, false));
         Self {
-            operation,
             call,
             body: CBody::SliceInput(plan),
         }
@@ -173,7 +165,6 @@ impl CFunction {
     pub(crate) fn marker(operation: prebindgen_registry::OperationId, plan: MarkerPlan) -> Self {
         let call = CCall(chain::Call::operation(operation.clone(), false, false));
         Self {
-            operation,
             call,
             body: CBody::Marker(plan),
         }
@@ -189,7 +180,6 @@ impl CFunction {
             true,
         ));
         Self {
-            operation,
             call,
             body: CBody::Optional(plan),
         }
@@ -205,7 +195,6 @@ impl CFunction {
             plan.child.unsafe_(),
         ));
         Self {
-            operation,
             call,
             body: CBody::Sequence(plan),
         }
@@ -224,7 +213,6 @@ impl CFunction {
             plan.direction == Direction::Construct,
         ));
         Self {
-            operation,
             call,
             body: CBody::Choice(plan),
         }
@@ -232,8 +220,7 @@ impl CFunction {
 
     pub(crate) fn deferred_invoke(operation: prebindgen_registry::OperationId) -> Self {
         Self {
-            call: CCall(chain::Call::operation(operation.clone(), false, true)),
-            operation,
+            call: CCall(chain::Call::operation(operation, false, true)),
             body: CBody::DeferredInvoke,
         }
     }
@@ -243,15 +230,6 @@ impl CFunction {
     }
 
     #[cfg(test)]
-    pub(crate) fn operation_and_call_identity(
-        &self,
-    ) -> (
-        &prebindgen_registry::OperationId,
-        &prebindgen_registry::OperationId,
-    ) {
-        (&self.operation, self.call.0.operation_id())
-    }
-
     #[cfg(test)]
     pub(crate) fn is_custom(&self) -> bool {
         matches!(self.body, CBody::Custom(_))
@@ -325,7 +303,7 @@ impl CFunction {
 
 impl RustArtifact for CFunction {
     fn key(&self) -> ArtifactKey {
-        ArtifactKey::Operation(self.operation.clone())
+        ArtifactKey::Operation(self.call.0.operation_id().clone())
     }
 
     fn calls(&self) -> Vec<ArtifactKey> {
@@ -371,7 +349,7 @@ impl RustArtifact for CFunction {
 
 impl CFunction {
     fn render_fn(&self, emit: &RustWriter) -> syn::ItemFn {
-        let name = emit.operation_ident("c", &self.operation);
+        let name = emit.operation_ident("c", self.call.0.operation_id());
         match &self.body {
             CBody::Custom(plan) => plan.render(emit, &name),
             CBody::InputTerminal(plan) => plan.render(emit, &name),
