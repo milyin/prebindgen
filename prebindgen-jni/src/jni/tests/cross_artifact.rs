@@ -256,11 +256,57 @@ fn assert_cross_artifact(rust_src: &str, kotlin: &BTreeMap<String, String>) {
 }
 
 /// Run a full pipeline and return both artifacts.
+/// The report's signatures against the Kotlin wrappers' — the fourth consumer
+/// #613 step 7 names, beside the Rust externs, the Kotlin declarations and the
+/// callback interfaces the tests above already cross-check.
+///
+/// `report.rs` documents that it renders "through the same `render_wrapper_fn`
+/// the emitters use, so it cannot drift from the real output". That is a
+/// structural argument, and this is the check that keeps it true: every
+/// function the report names must appear in the emitted Kotlin with the same
+/// parameter arity.
+fn assert_report_agrees(report: &str, kotlin: &BTreeMap<String, String>) {
+    let all: String = kotlin.values().flat_map(|s| s.chars()).collect();
+    let compact: String = all.split_whitespace().collect();
+    let mut checked = 0;
+    for line in report.lines() {
+        // `- `rust_ident` — `fun name(a: A, b: B): R``
+        let Some(rest) = line.strip_prefix("- `") else {
+            continue;
+        };
+        let Some((_ident, sig)) = rest.split_once("` — `") else {
+            continue;
+        };
+        let Some(sig) = sig.strip_suffix('`') else {
+            continue;
+        };
+        let Some(open) = sig.find('(') else { continue };
+        let Some(name) = sig[..open].rsplit(' ').next() else {
+            continue;
+        };
+        if name.is_empty() {
+            continue;
+        }
+        assert!(
+            compact.contains(&format!("fun{name}(")),
+            "the report names `{name}`, which the emitted Kotlin does not \
+             declare — the report drifted from the wrappers it claims to \
+             render through"
+        );
+        checked += 1;
+    }
+    assert!(
+        checked > 0,
+        "fixture's report names at least one function; it named none, so this \
+         check proved nothing"
+    );
+}
+
 fn run_pipeline(
     tag: &str,
     items: Vec<(syn::Item, prebindgen::SourceLocation)>,
     jni: JniGenBuilder,
-) -> (String, BTreeMap<String, String>) {
+) -> (String, BTreeMap<String, String>, String) {
     let registry =
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let dir = unique_test_dir(tag);
@@ -269,13 +315,14 @@ fn run_pipeline(
     let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let report = gen.report();
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let mut kotlin = BTreeMap::new();
     for p in &paths {
         let name = p.file_name().unwrap().to_string_lossy().to_string();
         kotlin.insert(name, std::fs::read_to_string(p).unwrap());
     }
-    (rust, kotlin)
+    (rust, kotlin, report)
 }
 
 /// Handles, fallible constructor, enum params/returns, `Option<&T>` borrow,
@@ -368,8 +415,9 @@ fn cross_artifact_representative_shapes_agree() {
                 .fun(prebindgen_registry::fun!(z_paint))
                 .constant(crate::constant!(MAX_LEN)),
         );
-    let (rust, kotlin) = run_pipeline("jnigen_xart_repr", items, jni);
+    let (rust, kotlin, report) = run_pipeline("jnigen_xart_repr", items, jni);
     assert_cross_artifact(&rust, &kotlin);
+    assert_report_agrees(&report, &kotlin);
 }
 
 /// Optional enum niches are primitive JNI wires at every reserved nesting
@@ -415,9 +463,10 @@ fn optional_enum_nesting_keeps_rust_and_kotlin_return_wires_equal() {
                 .fun(prebindgen_registry::fun!(priority_optional))
                 .fun(prebindgen_registry::fun!(priority_nested_optional)),
         );
-    let (rust, kotlin) = run_pipeline("jnigen_xart_optional_enum", items, jni);
+    let (rust, kotlin, report) = run_pipeline("jnigen_xart_optional_enum", items, jni);
 
     assert_cross_artifact(&rust, &kotlin);
+    assert_report_agrees(&report, &kotlin);
 
     let rust: String = rust.split_whitespace().collect();
     let kotlin: String = kotlin
@@ -531,8 +580,9 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
                 .field_self()
                 .field(prebindgen_registry::fun!(z_thing_name)),
         );
-    let (rust, kotlin) = run_pipeline("jnigen_xart_shapes", items, jni);
+    let (rust, kotlin, report) = run_pipeline("jnigen_xart_shapes", items, jni);
     assert_cross_artifact(&rust, &kotlin);
+    assert_report_agrees(&report, &kotlin);
     let compact: String = rust.split_whitespace().collect();
     assert!(
         compact.contains("Box::new(move|__cb_arg0:&myflat::Payload|")
@@ -596,8 +646,9 @@ fn cross_artifact_optional_iterable_fold_agrees() {
                 .field_self()
                 .field(prebindgen_registry::fun!(z_thing_name)),
         );
-    let (rust, kotlin) = run_pipeline("jnigen_xart_opt_fold", items, jni);
+    let (rust, kotlin, report) = run_pipeline("jnigen_xart_opt_fold", items, jni);
     assert_cross_artifact(&rust, &kotlin);
+    assert_report_agrees(&report, &kotlin);
 
     // Both externs take the fold pair on the Rust side…
     let rc: String = rust.chars().filter(|c| !c.is_whitespace()).collect();
