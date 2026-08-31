@@ -1192,6 +1192,25 @@ impl JFrag {
         }
     }
 
+    /// This fragment's pipeline, for a caller that still holds the fragment.
+    ///
+    /// The fragment-side convenience over the plan-shaped
+    /// `planned_pipeline`: it supplies the three things a plan would, so the
+    /// two callers cannot diverge while both exist.
+    pub(crate) fn pipeline(
+        &self,
+        direction: Direction,
+        mode: Mode,
+    ) -> crate::jni::chain::JPipeline {
+        JCompile::<Registry>::planned_pipeline(
+            direction,
+            mode,
+            &self.artifact(),
+            &self.chain,
+            self.conv.converter_id(),
+        )
+    }
+
     pub(crate) fn composed_chain(&self) -> Option<ComposedChain> {
         if !self.composed_only {
             // Built from the one statement of converter, wire and layout, so
@@ -1212,11 +1231,7 @@ impl JFrag {
     /// Exact Rust-value-to-JNI operation selected for this fragment.
     pub(crate) fn output_abi(&self) -> OutAbi {
         OutAbi::Value(Box::new(OutValueAbi {
-            pipeline: JCompile::<Registry>::planned_pipeline(
-                Direction::Deconstruct,
-                Mode::Owned,
-                self,
-            ),
+            pipeline: self.pipeline(Direction::Deconstruct, Mode::Owned),
             projection: self.conv.metadata.projection.clone(),
             dependency: self.rust.clone(),
         }))
@@ -2292,24 +2307,35 @@ impl<R: Conversions> JCompile<'_, R> {
         part: &Part<'_>,
         frag: &JFrag,
     ) -> crate::jni::chain::JChild {
-        Self::planned_child_mode(direction, part.mode, frag)
+        Self::planned_child_mode(
+            direction,
+            part.mode,
+            &frag.artifact(),
+            &frag.chain,
+            frag.conv.converter_id(),
+        )
     }
 
+    /// Takes the three things a **plan** holds — the artifact, the conversion
+    /// chain and the converter's identity — rather than a `JFrag`. Nothing
+    /// about a child's value use is read off the fragment any more, which is
+    /// what lets a reader holding a `FragmentPlan` produce the same answer
+    /// (#613 step 5b).
     fn planned_child_mode(
         direction: Direction,
         mode: Mode,
-        frag: &JFrag,
+        artifact: &JConverterArtifact,
+        chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+        converter: &OperationId,
     ) -> crate::jni::chain::JChild {
-        let artifact = frag.artifact();
-        let stages: Vec<OperationId> = frag
-            .chain
+        let stages: Vec<OperationId> = chain
             .steps()
             .iter()
             .map(|step| step.operation().clone())
             .collect();
         match direction {
             Direction::Construct => crate::jni::chain::JChild::input(
-                frag.conv.converter_id().clone(),
+                converter.clone(),
                 stages,
                 if artifact.wire_is_pointer() || artifact.layout_is_composed() {
                     crate::jni::chain::JValueUse::Direct
@@ -2318,7 +2344,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 },
             ),
             Direction::Deconstruct => crate::jni::chain::JChild::output(
-                frag.conv.converter_id().clone(),
+                converter.clone(),
                 stages,
                 match mode {
                     Mode::Owned => crate::jni::chain::JValueUse::Direct,
@@ -2328,10 +2354,17 @@ impl<R: Conversions> JCompile<'_, R> {
         }
     }
 
+    /// The plan-shaped twin of [`Self::planned_child_mode`]: what a fragment's
+    /// value crosses through, built from the artifact, the chain and the
+    /// converter's identity alone. A `JFrag` is no longer one of its inputs,
+    /// so a reader holding a `FragmentPlan` builds the same pipeline (#613
+    /// step 5b).
     fn planned_pipeline(
         direction: Direction,
         mode: Mode,
-        frag: &JFrag,
+        artifact: &JConverterArtifact,
+        chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+        converter: &OperationId,
     ) -> crate::jni::chain::JPipeline {
         // A root output is already the source call's exact return spelling.
         // Child composition may need to clone a borrowed projection before an
@@ -2340,14 +2373,9 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Construct => mode,
             Direction::Deconstruct => Mode::Owned,
         };
-        // Read through the fragment's one statement of converter, wire and
-        // layout rather than reaching for `conv`, `rust` and `layout` apart.
-        // This is the whole of what a plan reader needs, which is why the
-        // artifact is what carries it (#613 step 5b).
-        let artifact = frag.artifact();
         crate::jni::chain::JPipeline::new(
             artifact.wire.clone(),
-            Self::planned_child_mode(direction, mode, frag),
+            Self::planned_child_mode(direction, mode, artifact, chain, converter),
             direction == Direction::Construct && artifact.rust.is_borrowed_optional_value(),
         )
     }
@@ -2698,7 +2726,13 @@ impl<R: Conversions> JCompile<'_, R> {
         if direction == Direction::Construct {
             reject_vec_of_handle(&inner.conv.metadata.projection, &element);
         }
-        let child = Self::planned_child_mode(direction, elements, inner);
+        let child = Self::planned_child_mode(
+            direction,
+            elements,
+            &inner.artifact(),
+            &inner.chain,
+            inner.conv.converter_id(),
+        );
         let destination: syn::Type = syn::parse_quote!(jni::objects::JObject);
         // A shared slice input and an owned vector input both materialize the
         // same `Vec<T>` carrier. Give that produced model type to the plan,
@@ -3899,9 +3933,8 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Some(p) => crate::jni::projection_leaf_kt(ext, p),
             None => kt_meta.clone(),
         };
-        let pipeline = site_pipeline.unwrap_or_else(|| {
-            Self::planned_pipeline(Direction::Construct, bound.crossing.mode(), root)
-        });
+        let pipeline = site_pipeline
+            .unwrap_or_else(|| root.pipeline(Direction::Construct, bound.crossing.mode()));
 
         // Freeze the exact native ABI independently from both target-side
         // operations. The declaration and slot validator consume only this
@@ -4132,7 +4165,7 @@ impl Conv {
         mode: Mode,
     ) -> crate::jni::chain::JPipeline {
         self.activate();
-        JCompile::<Registry>::planned_pipeline(direction, mode, &self.0)
+        self.0.pipeline(direction, mode)
     }
 
     pub(crate) fn destination(&self) -> &syn::Type {
@@ -4426,7 +4459,7 @@ impl<R: Conversions> JCompile<'_, R> {
         crate::jni::fn_plan::ValueOutputPlan {
             site: Some((bound.clone(), root.id.clone())),
             is_convert: self.declared_return.is_some(),
-            pipeline: Self::planned_pipeline(Direction::Deconstruct, bound.crossing.mode(), root),
+            pipeline: root.pipeline(Direction::Deconstruct, bound.crossing.mode()),
             surface,
             is_enum: enums.is_enum,
             is_option_enum: enums.is_option_enum,
