@@ -88,6 +88,23 @@ jobs no recipe does: lowering `expand_return!` declarations, registering each
 leaf's `out_ty` so the resolver emits its converter, and generating the reach
 code (`walk.rs`). Only the middle job is duplicated.
 
+The seam is not symmetric, which is why closing it is #613 step 10 rather than a
+deletion. `Reach` cannot currently express two things `DeconRecord` states:
+
+- **the identity leaf.** `DeconRecord::Identity` names the value itself — cloned
+  for a `&T` return, moved for an owned one — and `Reach` has `Field`,
+  `Accessor` and `Omit`, none of which is "this position is the whole value".
+- **a locally-defined accessor.** `DeconRecord::LocalAcc` carries a `syn::Path`
+  to any callable in the binding crate, with a stated return type and no
+  `#[prebindgen]` item behind it. `Reach::Accessor` holds a `syn::Ident`, which
+  cannot spell a path.
+
+Until both exist, a `parts` row cannot say what a deconstructor says, which is
+why #622 declared its callback-argument rows as
+`Deconstructing::Atomic` placeholders — rows that exist so a site can select
+them and state no structure at all. Those placeholders are the visible cost of
+the gap, and step 10 deletes them by closing it.
+
 The bridge between the two is `prebindgen-jni`'s `value_form_of`, which mirrors
 a declaration into a `Deconstruct::ValueForm` row and refuses three cases
 outright — a nested override, a multi-hop member chain, a self-reach. What it
