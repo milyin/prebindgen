@@ -748,9 +748,15 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
 /// time. Two were recorded here. `CShape` — which restated the registry's
 /// `ShapePlan` variant for variant while `CFrag::freeze` translated between
 /// them — **is gone**: a `CFrag` now carries its `ShapePlan` directly, built at
-/// the hook that composed it. What is left is `CBody`, the rendering half of
-/// the same split, which is a deletion target too. This list may shrink; it may
-/// not grow without a reader deciding that a third is worth having.
+/// the hook that composed it.
+///
+/// What is left is `CBody`, and it is **not** a deletion target the way `CShape`
+/// was. Its variants mirror `ShapePlan`'s, but they carry what rendering needs
+/// and the registry does not model — a `ProductField`'s binding name, mode and
+/// uninit-holding against a `FragmentUse`'s identity and yield. It is the
+/// converter artifact's payload (`ConverterArtifact = CFunction`), not a
+/// vocabulary beside the shape. This fence exists so a THIRD vocabulary cannot
+/// appear unnoticed; it is no longer waiting for this list to reach one.
 ///
 /// The sources are DISCOVERED, not listed: a fence over a list only fences the
 /// files someone remembered to add to it, and a new module is the most natural
@@ -771,7 +777,7 @@ fn the_c_adapter_gains_no_third_shape_vocabulary() {
     assert_eq!(
         names,
         ["CBody (src/chain.rs)"],
-        "the C shape vocabularies changed; #613 shrinks this list, and a new \
-         entry needs an argument rather than a test update"
+        "the C shape vocabularies changed; a new entry needs an argument \
+         rather than a test update"
     );
 }
