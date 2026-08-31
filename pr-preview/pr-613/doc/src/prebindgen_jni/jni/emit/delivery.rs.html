@@ -1285,7 +1285,7 @@
 <a href=#1285 id=1285 data-nosnippet>1285</a>        <span class="prelude-val">None </span>=&gt; <span class="bool-val">true</span>,
 <a href=#1286 id=1286 data-nosnippet>1286</a>        <span class="prelude-val">Some</span>(p) =&gt; <span class="macro">matches!</span>(p.kind, ProjectionKind::Handle | ProjectionKind::Unsigned64),
 <a href=#1287 id=1287 data-nosnippet>1287</a>    };
-<a href=#1288 id=1288 data-nosnippet>1288</a>    proj_ok &amp;&amp; <span class="macro">matches!</span>(jni_field_access(<span class="kw-2">&amp;</span>entry.destination), <span class="prelude-val">Some</span>((<span class="kw">_</span>, <span class="kw">_</span>, <span class="bool-val">false</span>)))
+<a href=#1288 id=1288 data-nosnippet>1288</a>    proj_ok &amp;&amp; <span class="macro">matches!</span>(jni_field_access(<span class="kw-2">&amp;</span>entry.wire), <span class="prelude-val">Some</span>((<span class="kw">_</span>, <span class="kw">_</span>, <span class="bool-val">false</span>)))
 <a href=#1289 id=1289 data-nosnippet>1289</a>}
 <a href=#1290 id=1290 data-nosnippet>1290</a>
 <a href=#1291 id=1291 data-nosnippet>1291</a><span class="attr">#[cfg(test)]
