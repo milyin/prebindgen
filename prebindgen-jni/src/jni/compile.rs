@@ -4182,7 +4182,7 @@ pub(crate) struct Conv(std::rc::Rc<JFrag>, JConverterArtifact);
 
 impl Conv {
     pub(crate) fn activate(&self) {
-        self.0.rust.mark_reachable();
+        self.1.rust.mark_reachable();
     }
 
     pub(crate) fn pipeline(
@@ -4220,22 +4220,22 @@ impl Conv {
 
     #[cfg(test)]
     pub(crate) fn is_value_codec_plan(&self) -> bool {
-        self.0.rust.is_value_codec()
+        self.1.rust.is_value_codec()
     }
 
     #[cfg(test)]
     pub(crate) fn is_handle_codec_plan(&self) -> bool {
-        self.0.rust.is_handle_codec()
+        self.1.rust.is_handle_codec()
     }
 
     #[cfg(test)]
     pub(crate) fn is_struct_codec_plan(&self) -> bool {
-        self.0.rust.is_struct_codec()
+        self.1.rust.is_struct_codec()
     }
 
     #[cfg(test)]
     pub(crate) fn is_sum_codec_plan(&self) -> bool {
-        self.0.rust.is_sum_codec()
+        self.1.rust.is_sum_codec()
     }
 
     #[cfg(test)]
@@ -4248,12 +4248,12 @@ impl Conv {
 
     #[cfg(test)]
     pub(crate) fn is_result_plan(&self) -> bool {
-        self.0.rust.is_result()
+        self.1.rust.is_result()
     }
 
     #[cfg(test)]
     pub(crate) fn is_transparent_plan(&self) -> bool {
-        self.0.rust.is_transparent()
+        self.1.rust.is_transparent()
     }
 }
 
