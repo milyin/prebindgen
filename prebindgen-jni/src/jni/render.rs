@@ -87,7 +87,7 @@ pub(crate) fn build_data_class(
     ext: &Declarations,
     class_name: &str,
     item_struct: &prebindgen_registry::flat::Struct,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
 ) -> KtClass {
     // A tuple struct is an `Extern` in the model, never a `Struct`, so every
     // field here is named by construction.
@@ -99,17 +99,15 @@ pub(crate) fn build_data_class(
     // property's type disagree with the parameter that fills it (#156). The
     // parameter itself comes from the decomposition, so what these two must
     // agree about is the value, not the slot.
-    let plan = ext
-        .struct_plan(registry.flat(), item_struct, 0)
-        .unwrap_or_else(|| {
-            panic!(
-                "data class `{}`: could not classify every field for the fromParts bridge. Each \
+    let plan = ext.struct_plan(flat, item_struct, 0).unwrap_or_else(|| {
+        panic!(
+            "data class `{}`: could not classify every field for the fromParts bridge. Each \
              field needs a resolved OUTPUT converter (that direction declares the slot the \
              encoder fills) AND the Kotlin metadata that converter carries — a `kotlin_name`, \
              or a registered class for a projection leaf",
-                item_struct.name
-            )
-        });
+            item_struct.name
+        )
+    });
 
     let mut ctor_params: Vec<KtCtorParam> = Vec::new();
     // Property (name, type) pairs, for the content-equality members an
@@ -179,7 +177,7 @@ pub(crate) fn build_data_class(
     let mut factory_imports: BTreeSet<String> = BTreeSet::new();
     let (factory_params, factory_reconstruct, factory_mints_handle) = flatten_struct_factory(
         ext,
-        registry.flat(),
+        flat,
         item_struct,
         "",
         class_name,
@@ -287,7 +285,7 @@ pub(crate) fn build_data_class(
 /// extern on the Rust side (the auto-generated destructor).
 pub(crate) fn build_typed_handle(
     ext: &Declarations,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
     class_name: &str,
     rust_doc_name: &str,
     key: &TypeKey,
@@ -366,14 +364,14 @@ pub(crate) fn build_typed_handle(
                 .expr_body(KtCode::new().line(format!("{class_name}(initialPtr)"))),
         );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
-        if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
+        if let Some(item_fn) = flat.function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
                 Some(ext.effective_method_name(key, m).as_str()),
                 None,
             ) {
-                for ov in crate::jni::param_overloads_of(ext, item_fn, registry.flat(), &f) {
+                for ov in crate::jni::param_overloads_of(ext, item_fn, flat, &f) {
                     companion = companion.member(ov);
                 }
                 companion = companion.member(f);
@@ -383,7 +381,7 @@ pub(crate) fn build_typed_handle(
 
     // KDoc: the Rust struct's `///` prose first, framework line after.
     let framework_line = format!("Typed handle for a native Zenoh `{rust_doc_name}`.");
-    let class_kdoc = source_item_doc(registry, key)
+    let class_kdoc = source_item_doc(flat, key)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     // Consumer interfaces (`.implements`) and the generated `<Name>Api`
@@ -481,14 +479,14 @@ pub(crate) fn build_typed_handle(
     // (receiver bound to `this`), delegating to the same centralized
     // `JNINative` extern as a free wrapper would.
     for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-        if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
+        if let Some(item_fn) = flat.function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
                 Some(ext.effective_method_name(key, m).as_str()),
                 Some(key),
             ) {
-                for ov in crate::jni::param_overloads_of(ext, item_fn, registry.flat(), &f) {
+                for ov in crate::jni::param_overloads_of(ext, item_fn, flat, &f) {
                     class = class.member(ov);
                 }
                 class = class.member(f);
@@ -787,7 +785,7 @@ fn nullable_recovery_type(declared: KtType, generics: &[String]) -> KtType {
 
 /// Build the [`WrapperSurface`]: everything [`render_wrapper_fn`] does up to
 /// (but not including) the body render — the single surface-signature
-/// derivation. **Pure** over `(ext, f, registry, name, receiver)`: signature
+/// derivation. **Pure** over `(ext, f, flat, name, receiver)`: signature
 /// types are full-FQN `KtType`s and any body-import FQNs are returned in
 /// [`WrapperSurface::body_imports`], so nothing is registered into a caller's
 /// import set. Validation calls this directly and skips the body work
@@ -795,10 +793,13 @@ fn nullable_recovery_type(declared: KtType, generics: &[String]) -> KtType {
 pub(crate) fn build_wrapper_surface(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
+    registry: &prebindgen_registry::Registry,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<WrapperSurface> {
+    // The one validating entry in this file. `symbols.rs` is its only caller
+    // and it LOWERS a plan rather than reading one, so it keeps the registry
+    // every other function here has given up (#613 step 7).
     let fplan = ext.fn_plan(registry, f).ok()?;
     build_wrapper_surface_with_recovery(
         ext,
@@ -2418,10 +2419,13 @@ fn shape_notes(fplan: &JniFunctionPlan) -> Option<String> {
 
 /// The `///` doc of the `#[prebindgen]` struct/enum behind a declared type
 /// key, when the item is indexed (a re-exported foreign type has none).
-pub(crate) fn source_item_doc(registry: &Registry, key: &TypeKey) -> Option<String> {
+pub(crate) fn source_item_doc(
+    flat: &prebindgen_registry::flat::Flat,
+    key: &TypeKey,
+) -> Option<String> {
     // Whichever of the three shapes the name declares — the docs are the
     // element's answer, so there is no `attrs` slice to unify across them.
-    match registry.flat().declared_type(&key.ident()?)? {
+    match flat.declared_type(&key.ident()?)? {
         prebindgen_registry::flat::Type::Struct(s) => s.docs(),
         prebindgen_registry::flat::Type::Enum(e) => e.docs(),
         prebindgen_registry::flat::Type::Variant(v) => v.docs(),
