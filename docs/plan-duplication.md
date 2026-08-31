@@ -37,7 +37,7 @@ same structural question is asked again. `CShape` was the eighth and is **gone**
 | `DerivedKind` | registry `recipe.rs` | how a derived recipe was obtained |
 | `ShapePlan<R>` | registry `generation.rs` | the canonical frozen shape, with the adapter's bridge in each variant |
 | `ComposedShape` | registry `generation.rs` | the composed-fragment subset |
-| `CBody` | `prebindgen-c/src/chain.rs` | the rendering half of the same split |
+| `CBody` | `prebindgen-c/src/chain.rs` | the converter artifact's payload — mirrors the shape's variants, but holds what rendering needs and the shape does not |
 | `JLayout` | `prebindgen-jni/src/jni/compile.rs` | the shape of JNI's single intermediate over flattened ABI leaves |
 | `JBody` | `prebindgen-jni/src/jni/chain.rs` | the rendering half of the same split |
 
@@ -45,7 +45,25 @@ same structural question is asked again. `CShape` was the eighth and is **gone**
 `ShapePlan` variant for variant, so the C compiler stated the shape twice and
 neither statement was derived from the other. #627 deleted it — a `CFrag` now
 carries its `ShapePlan` directly, built at the hook that composed it, and
-`freeze` clones it. What remains of that split is `CBody`, the rendering half.
+`freeze` clones it.
+
+What remains is `CBody`, and it is **not** a second statement of the shape —
+which was worth establishing before anyone tries to delete it as one. Its
+variants mirror `ShapePlan`'s, but they hold what rendering needs and the
+registry deliberately does not model: `CBody::Product`'s `ProductField` carries
+the binding's `name`, its `mode`, and whether the slot is `hold_uninit`, where
+`ShapePlan::Product`'s `FragmentUse` carries a fragment identity and a required
+yield. Neither is derivable from the other.
+
+Two routes out were tried and both are closed. Making
+`CRepresentation::ProductBridge` the `ProductPlan` itself is not total: a marker
+fragment carries a Product shape with no `ProductPlan` behind it. And "move the
+payload onto the converter artifact" is already the case —
+`CRepresentation::ConverterArtifact` **is** `CFunction`, which is what holds
+`CBody`. So collapsing the mirroring means rendering each shape from
+`ShapePlan` plus a per-variant payload: a redesign of the C renderer, not a
+deletion, and one that returns no lines by itself.
+
 Two fences pin the adapter half of this census — `the_c_adapter_gains_no_third_shape_vocabulary` and
 `jnigen_gains_no_third_shape_vocabulary` — so the list can shrink as #613
 proceeds but cannot grow unnoticed.
