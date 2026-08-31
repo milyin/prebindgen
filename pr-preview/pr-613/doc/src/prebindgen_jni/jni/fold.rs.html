@@ -22,7 +22,7 @@
 <a href=#22 id=22 data-nosnippet>22</a>///
 <a href=#23 id=23 data-nosnippet>23</a>/// Borrowing rather than composing is not a shortcut: every layer of a reading
 <a href=#24 id=24 data-nosnippet>24</a>/// already holds the next as a `TypeRef` of its own, so there is nothing to
-<a href=#25 id=25 data-nosnippet>25</a>/// mint — which is also why this needs no registry. What it returns spells
+<a href=#25 id=25 data-nosnippet>25</a>/// mint — which is also why this needs no flat. What it returns spells
 <a href=#26 id=26 data-nosnippet>26</a>/// itself (`spell()`) and classifies itself (`kind`), and the two cannot
 <a href=#27 id=27 data-nosnippet>27</a>/// disagree.
 <a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>enum_probe(reading: <span class="kw-2">&amp;</span>TypeRef) -&gt; <span class="kw-2">&amp;</span>TypeRef {
@@ -102,7 +102,7 @@
 <a href=#102 id=102 data-nosnippet>102</a></span><span class="attr">#[allow(clippy::too_many_arguments)]
 <a href=#103 id=103 data-nosnippet>103</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>flatten_struct_factory(
 <a href=#104 id=104 data-nosnippet>104</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#105 id=105 data-nosnippet>105</a>    registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#105 id=105 data-nosnippet>105</a>    flat: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Flat,
 <a href=#106 id=106 data-nosnippet>106</a>    s: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Struct,
 <a href=#107 id=107 data-nosnippet>107</a>    prefix: <span class="kw-2">&amp;</span>str,
 <a href=#108 id=108 data-nosnippet>108</a>    class_name: <span class="kw-2">&amp;</span>str,
@@ -110,8 +110,8 @@
 <a href=#110 id=110 data-nosnippet>110</a>    depth: usize,
 <a href=#111 id=111 data-nosnippet>111</a>) -&gt; <span class="prelude-ty">Option</span>&lt;StructFactory&gt; {
 <a href=#112 id=112 data-nosnippet>112</a>    <span class="kw">let _ </span>= (prefix, depth);
-<a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">let </span>leaves = ext.struct_out_frozen(registry, s)<span class="question-mark">?</span>;
-<a href=#114 id=114 data-nosnippet>114</a>    <span class="kw">let </span>(params, reconstruct) = factory_from_leaves(ext, registry, <span class="kw-2">&amp;</span>leaves, class_name, imports)<span class="question-mark">?</span>;
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">let </span>leaves = ext.struct_out_frozen(flat, s)<span class="question-mark">?</span>;
+<a href=#114 id=114 data-nosnippet>114</a>    <span class="kw">let </span>(params, reconstruct) = factory_from_leaves(ext, flat, <span class="kw-2">&amp;</span>leaves, class_name, imports)<span class="question-mark">?</span>;
 <a href=#115 id=115 data-nosnippet>115</a>    <span class="comment">// Whether this factory takes a raw native pointer, and so needs the
 <a href=#116 id=116 data-nosnippet>116</a>    // raw-pointer guard: asked of the same leaves, through the wrap that says
 <a href=#117 id=117 data-nosnippet>117</a>    // a slot is a handle.
@@ -134,7 +134,7 @@
 <a href=#134 id=134 data-nosnippet>134</a>/// `Class(&lt;one part per constructor field&gt;)`.
 <a href=#135 id=135 data-nosnippet>135</a></span><span class="kw">fn </span>factory_from_leaves(
 <a href=#136 id=136 data-nosnippet>136</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#137 id=137 data-nosnippet>137</a>    registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#137 id=137 data-nosnippet>137</a>    flat: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Flat,
 <a href=#138 id=138 data-nosnippet>138</a>    leaves: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::compile::OutWire],
 <a href=#139 id=139 data-nosnippet>139</a>    class_name: <span class="kw-2">&amp;</span>str,
 <a href=#140 id=140 data-nosnippet>140</a>    imports: <span class="kw-2">&amp;mut </span>BTreeSet&lt;String&gt;,
@@ -166,7 +166,7 @@
 <a href=#166 id=166 data-nosnippet>166</a>            .map_or(i + <span class="number">1</span>, |j| j + <span class="number">1</span>);
 <a href=#167 id=167 data-nosnippet>167</a>        parts.push(factory_part(
 <a href=#168 id=168 data-nosnippet>168</a>            ext,
-<a href=#169 id=169 data-nosnippet>169</a>            registry,
+<a href=#169 id=169 data-nosnippet>169</a>            flat,
 <a href=#170 id=170 data-nosnippet>170</a>            <span class="kw-2">&amp;</span>leaves[i..end],
 <a href=#171 id=171 data-nosnippet>171</a>            <span class="kw-2">&amp;</span>params[i..end],
 <a href=#172 id=172 data-nosnippet>172</a>            <span class="kw-2">&amp;</span>names[i..end],
@@ -185,7 +185,7 @@
 <a href=#185 id=185 data-nosnippet>185</a></span><span class="attr">#[allow(clippy::too_many_arguments)]
 <a href=#186 id=186 data-nosnippet>186</a></span><span class="kw">fn </span>factory_part(
 <a href=#187 id=187 data-nosnippet>187</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#188 id=188 data-nosnippet>188</a>    registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#188 id=188 data-nosnippet>188</a>    flat: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Flat,
 <a href=#189 id=189 data-nosnippet>189</a>    leaves: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::compile::OutWire],
 <a href=#190 id=190 data-nosnippet>190</a>    params: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::IfaceParam],
 <a href=#191 id=191 data-nosnippet>191</a>    names: <span class="kw-2">&amp;</span>[String],
@@ -254,7 +254,7 @@
 <a href=#254 id=254 data-nosnippet>254</a>        <span class="kw">let </span>inner_params = <span class="kw">crate</span>::jni::iface::plan_leaf_params(ext, <span class="kw-2">&amp;</span>inner)<span class="question-mark">?</span>;
 <a href=#255 id=255 data-nosnippet>255</a>        <span class="kw">let </span>gated = factory_part(
 <a href=#256 id=256 data-nosnippet>256</a>            ext,
-<a href=#257 id=257 data-nosnippet>257</a>            registry,
+<a href=#257 id=257 data-nosnippet>257</a>            flat,
 <a href=#258 id=258 data-nosnippet>258</a>            <span class="kw-2">&amp;</span>leaves[<span class="number">1</span>..],
 <a href=#259 id=259 data-nosnippet>259</a>            <span class="kw-2">&amp;</span>params[<span class="number">1</span>..],
 <a href=#260 id=260 data-nosnippet>260</a>            <span class="kw-2">&amp;</span>names[<span class="number">1</span>..],
@@ -265,7 +265,7 @@
 <a href=#265 id=265 data-nosnippet>265</a>    }
 <a href=#266 id=266 data-nosnippet>266</a>    <span class="kw">if </span>leaves[<span class="number">0</span>].is_tag() {
 <a href=#267 id=267 data-nosnippet>267</a>        <span class="kw">let </span>(<span class="kw">_</span>, when) = ext.sum_reconstruct(
-<a href=#268 id=268 data-nosnippet>268</a>            registry,
+<a href=#268 id=268 data-nosnippet>268</a>            flat,
 <a href=#269 id=269 data-nosnippet>269</a>            <span class="kw-2">&amp;</span>leaves[<span class="number">0</span>].out_ty.unwrapped().key(),
 <a href=#270 id=270 data-nosnippet>270</a>            leaves,
 <a href=#271 id=271 data-nosnippet>271</a>            params,

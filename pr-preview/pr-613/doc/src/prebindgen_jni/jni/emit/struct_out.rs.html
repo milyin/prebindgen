@@ -76,7 +76,7 @@
 <a href=#76 id=76 data-nosnippet>76</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;prebindgen_registry::unfold::UnfoldLeaf&gt;&gt; {
 <a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">use </span>prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
 <a href=#78 id=78 data-nosnippet>78</a>    <span class="prelude-val">Some</span>(
-<a href=#79 id=79 data-nosnippet>79</a>        ext.struct_out_wires_of(registry, <span class="kw-2">&amp;</span>s.name)<span class="question-mark">?
+<a href=#79 id=79 data-nosnippet>79</a>        ext.struct_out_wires_of(registry.flat(), <span class="kw-2">&amp;</span>s.name)<span class="question-mark">?
 <a href=#80 id=80 data-nosnippet>80</a>            </span>.into_iter()
 <a href=#81 id=81 data-nosnippet>81</a>            .map(|w| UnfoldLeaf {
 <a href=#82 id=82 data-nosnippet>82</a>                name: w.name,
