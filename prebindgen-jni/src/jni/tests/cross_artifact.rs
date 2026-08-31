@@ -263,8 +263,50 @@ fn assert_cross_artifact(rust_src: &str, kotlin: &BTreeMap<String, String>) {
 /// `report.rs` documents that it renders "through the same `render_wrapper_fn`
 /// the emitters use, so it cannot drift from the real output". That is a
 /// structural argument, and this is the check that keeps it true: every
-/// function the report names must appear in the emitted Kotlin with the same
-/// parameter arity.
+/// function the report names must appear in the emitted Kotlin, with a
+/// declaration of that name whose parameter arity matches the report's.
+/// Parameters in one Kotlin parameter list, counted by their `name:` bindings.
+///
+/// A trailing lambda's own `(A) -> B` arrow contains no `:`, so nested types do
+/// not inflate the count.
+fn param_arity(list: &str) -> usize {
+    let mut depth = 0usize;
+    let mut count = 0usize;
+    for (i, c) in list.char_indices() {
+        match c {
+            '(' | '<' => depth += 1,
+            ')' | '>' => depth = depth.saturating_sub(1),
+            ':' if depth == 0 => {
+                // `::` is a path, not a binding.
+                if list[i + 1..].starts_with(':') || list[..i].ends_with(':') {
+                    continue;
+                }
+                count += 1;
+            }
+            _ => {}
+        }
+    }
+    count
+}
+
+/// The index of the `)` closing the `(` that `open` points just past.
+fn matching_paren(s: &str, open: usize) -> usize {
+    let mut depth = 1usize;
+    for (i, c) in s[open..].char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return open + i;
+                }
+            }
+            _ => {}
+        }
+    }
+    s.len()
+}
+
 fn assert_report_agrees(report: &str, kotlin: &BTreeMap<String, String>) {
     let all: String = kotlin.values().flat_map(|s| s.chars()).collect();
     let compact: String = all.split_whitespace().collect();
@@ -287,11 +329,32 @@ fn assert_report_agrees(report: &str, kotlin: &BTreeMap<String, String>) {
         if name.is_empty() {
             continue;
         }
+        // A name can be declared twice — once as the JNINative extern over ABI
+        // leaves, once as the Kotlin wrapper over the surface types. The report
+        // mirrors the WRAPPER (it renders through `render_wrapper_fn`), so the
+        // agreement is with whichever declaration has the report's arity, and
+        // the assertion is that one exists (#654 review).
+        let marker = format!("fun{name}(");
+        let arities: Vec<usize> = compact
+            .match_indices(&marker)
+            .map(|(i, _)| {
+                let o = i + marker.len();
+                param_arity(&compact[o..matching_paren(&compact, o)])
+            })
+            .collect();
         assert!(
-            compact.contains(&format!("fun{name}(")),
+            !arities.is_empty(),
             "the report names `{name}`, which the emitted Kotlin does not \
              declare — the report drifted from the wrappers it claims to \
              render through"
+        );
+        let report_arity = param_arity(&sig[open + 1..sig.rfind(')').unwrap_or(sig.len())]);
+        assert!(
+            arities.contains(&report_arity),
+            "`{name}`: the report declares {report_arity} parameter(s) and no \
+             emitted Kotlin declaration of that name has that many (found \
+             {arities:?}) — the report drifted from the wrapper it renders \
+             through"
         );
         checked += 1;
     }
