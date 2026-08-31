@@ -370,7 +370,6 @@ pub(crate) fn build_typed_handle(
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
-                registry,
                 Some(ext.effective_method_name(key, m).as_str()),
                 None,
             ) {
@@ -486,7 +485,6 @@ pub(crate) fn build_typed_handle(
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
-                registry,
                 Some(ext.effective_method_name(key, m).as_str()),
                 Some(key),
             ) {
@@ -890,11 +888,10 @@ fn build_wrapper_surface_with_recovery(
 pub(crate) fn render_wrapper_fn(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<KtFun> {
-    let fplan = ext.fn_plan(registry, f).ok()?;
+    let fplan = ext.fn_plan_frozen(f)?;
     render_wrapper_fn_with_recovery(
         ext,
         f,
