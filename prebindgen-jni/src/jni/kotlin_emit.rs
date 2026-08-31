@@ -203,7 +203,10 @@ impl Declarations {
                                 self, &sum.name, &alt.name, &property, field,
                             ),
                             close: crate::jni::struct_plan::type_close_strategy(
-                                self, registry, &field.ty, 0,
+                                self,
+                                registry.flat(),
+                                &field.ty,
+                                0,
                             ),
                             property,
                         }

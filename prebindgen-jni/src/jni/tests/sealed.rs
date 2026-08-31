@@ -647,7 +647,8 @@ fn sum_is_its_own_type_kind() {
         .package(crate::package!().class(crate::sealed_class!(Reading)));
     let ty: syn::Type = syn::parse_quote!(Reading);
     assert!(matches!(
-        jni.decls.type_kind(&registry, &TypeKey::from_type(&ty)),
+        jni.decls
+            .type_kind(registry.flat(), &TypeKey::from_type(&ty)),
         crate::jni::classify::TypeKind::Sum
     ));
     let cfg = jni
@@ -2362,12 +2363,12 @@ fn a_types_close_answer_matches_its_plans() {
             let path = format!("{owner}.{}", field.member().to_token_stream());
             // A field `classify_field` refuses has no plan answer to compare
             // against — the documented, deliberate asymmetry.
-            let Some(kind) = classify_field(ext, registry, &field.ty, &path, 0) else {
+            let Some(kind) = classify_field(ext, registry.flat(), &field.ty, &path, 0) else {
                 continue;
             };
             assert_eq!(
                 kind.destructible().is_some(),
-                type_close_strategy(ext, registry, &field.ty, 0).is_some(),
+                type_close_strategy(ext, registry.flat(), &field.ty, 0).is_some(),
                 "the two forms disagree about `{path}`: a plan field and its \
                  bare type must reach the same handles",
             );
@@ -2392,7 +2393,7 @@ fn a_types_close_answer_matches_its_plans() {
     let closes: Vec<String> = everything
         .fields
         .iter()
-        .filter(|f| type_close_strategy(ext, registry, &f.ty, 0).is_some())
+        .filter(|f| type_close_strategy(ext, registry.flat(), &f.ty, 0).is_some())
         .map(|f| f.name.as_ref().unwrap().to_string())
         .collect();
     assert_eq!(

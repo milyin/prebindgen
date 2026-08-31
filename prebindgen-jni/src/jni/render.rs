@@ -100,7 +100,7 @@ pub(crate) fn build_data_class(
     // parameter itself comes from the decomposition, so what these two must
     // agree about is the value, not the slot.
     let plan = ext
-        .struct_plan(registry, item_struct, 0)
+        .struct_plan(registry.flat(), item_struct, 0)
         .unwrap_or_else(|| {
             panic!(
                 "data class `{}`: could not classify every field for the fromParts bridge. Each \

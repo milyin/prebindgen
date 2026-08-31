@@ -4,7 +4,7 @@
 //! Not the leaf list. This module was the second derivation of that — both
 //! emitters walked the [`StructPlan`] to enumerate the slots of the
 //! `fromParts` bridge, and a standing check said the walk agreed with the
-//! registry-facing decomposition. #620 deleted it: the Rust encode and the
+//! flat-facing decomposition. #620 deleted it: the Rust encode and the
 //! Kotlin factory both render from the decomposition now, so the leaves have
 //! one derivation and nothing needs to agree with anything.
 //!
@@ -17,7 +17,6 @@
 //! off the result.
 
 use kotlin_codegen::KtType;
-use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -92,7 +91,7 @@ pub(crate) struct SumPlanField {
 /// so the class and its leaves decline together.
 pub(crate) fn build_struct_plan(
     ext: &Declarations,
-    registry: &impl Conversions,
+    flat: &prebindgen_registry::flat::Flat,
     s: &prebindgen_registry::flat::Struct,
     depth: usize,
 ) -> Option<StructPlan> {
@@ -107,7 +106,7 @@ pub(crate) fn build_struct_plan(
         // nameless field cannot reach here.
         let fname = field.name.as_ref()?.clone();
         let owner = format!("{}.{}", s.name, fname);
-        let kind = classify_field(ext, registry, &field.ty, &owner, depth)?;
+        let kind = classify_field(ext, flat, &field.ty, &owner, depth)?;
         fields.push(PlanField { kind });
     }
     Some(StructPlan { fields })
@@ -121,7 +120,7 @@ impl Declarations {
     /// [`crate::jni::generation::JniGenerationPlan`].
     pub(crate) fn struct_plan(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         s: &prebindgen_registry::flat::Struct,
         depth: usize,
     ) -> Option<std::rc::Rc<StructPlan>> {
@@ -132,7 +131,7 @@ impl Declarations {
         if let Some(hit) = self.struct_plans.borrow().get(&key) {
             return hit.clone();
         }
-        let plan = build_struct_plan(self, registry, s, depth).map(std::rc::Rc::new);
+        let plan = build_struct_plan(self, flat, s, depth).map(std::rc::Rc::new);
         self.struct_plans.borrow_mut().insert(key, plan.clone());
         plan
     }
@@ -147,14 +146,14 @@ impl Declarations {
 /// `Reading::Exact.v0`).
 pub(crate) fn classify_field(
     ext: &Declarations,
-    registry: &impl Conversions,
+    flat: &prebindgen_registry::flat::Flat,
     reading: &prebindgen_registry::flat::TypeRef,
     owner: &str,
     depth: usize,
 ) -> Option<PlanFieldKind> {
     // The **reading**, not a spelling. Every layer question below is answered
     // from `kind` and cannot fail: holding a `TypeRef` is proof the model
-    // classified this type. Taking a `syn::Type` meant asking the registry per
+    // classified this type. Taking a `syn::Type` meant asking the flat per
     // question, and a type it had never seen answered "no layer" rather than
     // saying so — which is the missing `?` of #273 waiting to happen again.
 
@@ -177,7 +176,7 @@ pub(crate) fn classify_field(
     let bare_ref = optional_inner.unwrap_or(reading);
     let seq_elem = bare_ref.sequence_elem();
     let core = seq_elem.unwrap_or(bare_ref);
-    if matches!(ext.type_kind(registry, &core.key()), TypeKind::Sum) {
+    if matches!(ext.type_kind(flat, &core.key()), TypeKind::Sum) {
         // A `Vec` of tag-gated groups has variable arity, exactly like a `Vec`
         // of nested data classes — the flattened bridge is fixed-layout by
         // construction.
@@ -188,14 +187,7 @@ pub(crate) fn classify_field(
                 core,
             );
         }
-        return sum_plan_kind(
-            ext,
-            registry,
-            bare_ref,
-            owner,
-            optional_inner.is_some(),
-            depth,
-        );
+        return sum_plan_kind(ext, flat, bare_ref, owner, optional_inner.is_some(), depth);
     }
 
     let field_entry = ext.out_frag(reading)?;
@@ -258,11 +250,11 @@ pub(crate) fn classify_field(
         // has no converter of its own, so there is no single slot to fall
         // through to.
         let inner_ty = bare_ref;
-        if let TypeKind::DataStruct { st, cfg } = ext.type_kind(registry, &inner_ty.key()) {
+        if let TypeKind::DataStruct { st, cfg } = ext.type_kind(flat, &inner_ty.key()) {
             let child_fqn = cfg
                 .and_then(|c| c.name_spec.as_ref())
                 .map(|s| ext.fqn_of(s));
-            let plan = build_struct_plan(ext, registry, st, depth + 1)?;
+            let plan = build_struct_plan(ext, flat, st, depth + 1)?;
             return Some(PlanFieldKind::Nested {
                 optional: optional_inner.is_some(),
                 child_fqn,
@@ -464,7 +456,7 @@ fn whole_value_close(optional: bool, sequence: bool) -> FoldStrategy {
 /// leak direction — for a shape nobody can compile anyway.
 pub(crate) fn type_close_strategy(
     ext: &Declarations,
-    registry: &impl Conversions,
+    flat: &prebindgen_registry::flat::Flat,
     ty: &prebindgen_registry::flat::TypeRef,
     depth: usize,
 ) -> Option<FoldStrategy> {
@@ -485,17 +477,17 @@ pub(crate) fn type_close_strategy(
     // a `Box<Option<T>>` reaches is what `T` reaches.
     let bare = ty.optional_inner().unwrap_or(ty);
     let core = bare.sequence_elem().unwrap_or(bare);
-    let reaches = match ext.type_kind(registry, &core.key()) {
+    let reaches = match ext.type_kind(flat, &core.key()) {
         TypeKind::Sum => core
             .key()
             .ident()
-            .and_then(|ident| registry.flat().declared_type(&ident))
+            .and_then(|ident| flat.declared_type(&ident))
             .is_some_and(|ty| match ty {
                 prebindgen_registry::flat::Type::Variant(sum) => {
                     sum.alternatives.iter().any(|alt| {
                         alt.fields
                             .iter()
-                            .any(|f| type_close_strategy(ext, registry, &f.ty, depth + 1).is_some())
+                            .any(|f| type_close_strategy(ext, flat, &f.ty, depth + 1).is_some())
                     })
                 }
                 _ => false,
@@ -503,7 +495,7 @@ pub(crate) fn type_close_strategy(
         TypeKind::DataStruct { st, .. } => st
             .fields
             .iter()
-            .any(|f| type_close_strategy(ext, registry, &f.ty, depth + 1).is_some()),
+            .any(|f| type_close_strategy(ext, flat, &f.ty, depth + 1).is_some()),
         TypeKind::Handle | TypeKind::Enum | TypeKind::Other => false,
     };
     // Put back exactly the layers peeled above. `reaches` was answered about
@@ -535,7 +527,7 @@ pub(crate) fn type_close_strategy(
 /// was first attempted.
 fn sum_plan_kind(
     ext: &Declarations,
-    registry: &impl Conversions,
+    flat: &prebindgen_registry::flat::Flat,
     ty: &prebindgen_registry::flat::TypeRef,
     owner: &str,
     optional: bool,
@@ -563,8 +555,7 @@ fn sum_plan_kind(
     // already, so classifying one asks nothing and cannot be asked about a type
     // the model never saw. One lookup, not two — the `enum_item` that used to
     // sit beside this only fed a `SumSpec` of what the element already says.
-    let Some(prebindgen_registry::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
-    else {
+    let Some(prebindgen_registry::flat::Type::Variant(sum)) = flat.declared_type(&ident) else {
         panic!("fromParts bridge: sealed-class field `{owner}`: `{ident}` is not an indexed sum")
     };
     let key = TypeKey::from_ident(&ident);
@@ -592,7 +583,7 @@ fn sum_plan_kind(
             let owner = format!("{ident}::{}.{prop}", alt.name);
             // `?` — a payload whose converter has not resolved yet defers the
             // whole plan to the next iteration, it does not fail the build.
-            let kind = classify_field(ext, registry, &field.ty, &owner, depth + 1)?;
+            let kind = classify_field(ext, flat, &field.ty, &owner, depth + 1)?;
             fields.push(SumPlanField { kind });
         }
         variants.push(SumPlanVariant { fields });

@@ -347,7 +347,7 @@ impl JniGenerationPlan {
             .cloned()
             .collect();
         for item in &data_classes {
-            let _ = decls.struct_plan(registry, item, 0);
+            let _ = decls.struct_plan(registry.flat(), item, 0);
         }
 
         let sealed_classes: Vec<_> = registry
