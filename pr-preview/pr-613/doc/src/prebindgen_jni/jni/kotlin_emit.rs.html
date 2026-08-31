@@ -1324,7 +1324,7 @@
 <a href=#1324 id=1324 data-nosnippet>1324</a>                        // class (an enum's `fromInt`), so it registers imports
 <a href=#1325 id=1325 data-nosnippet>1325</a>                        // like every other emitter here.
 <a href=#1326 id=1326 data-nosnippet>1326</a>                        </span><span class="kw">let </span><span class="kw-2">mut </span>proxy_imports: BTreeSet&lt;String&gt; = BTreeSet::new();
-<a href=#1327 id=1327 data-nosnippet>1327</a>                        <span class="kw">let </span>proxy = s.to_as_raw_fun(<span class="self">self</span>, registry, <span class="kw-2">&amp;mut </span>proxy_imports);
+<a href=#1327 id=1327 data-nosnippet>1327</a>                        <span class="kw">let </span>proxy = s.to_as_raw_fun(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>proxy_imports);
 <a href=#1328 id=1328 data-nosnippet>1328</a>                        <span class="kw">for </span>fqn <span class="kw">in </span>proxy_imports {
 <a href=#1329 id=1329 data-nosnippet>1329</a>                            file = file.import(fqn);
 <a href=#1330 id=1330 data-nosnippet>1330</a>                        }
