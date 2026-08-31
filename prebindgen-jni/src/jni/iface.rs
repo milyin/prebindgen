@@ -1285,6 +1285,22 @@ impl Declarations {
     /// retries. In debug builds a cache hit re-derives and asserts equality,
     /// so any nondeterminism in the constructors fails loudly under test
     /// instead of shipping descriptor drift.
+    /// The frozen interface spec, for a render caller.
+    ///
+    /// `iface_spec` already answers from the generation first when one is
+    /// installed, so a renderer never reaches the derivation below it and needs
+    /// no `Conversions` to get there. Panics by name if no generation exists,
+    /// which is the failure a renderer would hit deriving without one (#613
+    /// step 7).
+    pub(crate) fn iface_spec_frozen(&self, key: &SpecKey) -> Option<std::sync::Arc<IfaceSpec>> {
+        self.generation
+            .as_deref()
+            .unwrap_or_else(|| {
+                panic!("interface spec `{key:?}`: its frozen JNI generation plan is unavailable")
+            })
+            .interface(key)
+    }
+
     pub(crate) fn iface_spec(
         &self,
         registry: &impl Conversions,

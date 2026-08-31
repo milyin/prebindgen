@@ -971,7 +971,6 @@ pub(crate) fn render_const_val(
     ext: &Declarations,
     package: &str,
     c: &prebindgen_registry::flat::Constant,
-    registry: &Registry,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(KtFun, KtProperty)> {
@@ -999,7 +998,7 @@ pub(crate) fn render_const_val(
         .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
-    render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
+    render_val_over_helper(ext, helper, val_name, kdoc, imports)
 }
 
 /// Render one fn-sourced constant (see `ConstDecl::fun`):
@@ -1011,7 +1010,6 @@ pub(crate) fn render_constant_fn_val(
     ext: &Declarations,
     package: &str,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(KtFun, KtProperty)> {
@@ -1038,7 +1036,7 @@ pub(crate) fn render_constant_fn_val(
         .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
-    render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
+    render_val_over_helper(ext, helper, val_name, kdoc, imports)
 }
 
 /// Render one expression-backed constant (see `ConstDecl::expr`):
@@ -1050,7 +1048,6 @@ pub(crate) fn render_const_expr_val(
     ext: &Declarations,
     package: &str,
     decl: &crate::jni::decl::ConstExprDecl,
-    registry: &Registry,
     imports: &mut BTreeSet<String>,
 ) -> Option<(KtFun, KtProperty)> {
     let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, ext);
@@ -1070,14 +1067,7 @@ pub(crate) fn render_const_expr_val(
         "Binding-defined constant: `{expr}` (evaluated lazily, once, through \
          the generated JNI getter on first use)."
     );
-    render_val_over_helper(
-        ext,
-        registry,
-        helper,
-        decl.kotlin_name.clone(),
-        kdoc,
-        imports,
-    )
+    render_val_over_helper(ext, helper, decl.kotlin_name.clone(), kdoc, imports)
 }
 
 /// Shared val-rendering core for both constant kinds (`ConstDecl` /
@@ -1089,7 +1079,6 @@ pub(crate) fn render_const_expr_val(
 /// not fire one JNI call per `val` at class-load (issue #58).
 fn render_val_over_helper(
     ext: &Declarations,
-    registry: &Registry,
     mut helper: KtFun,
     val_name: String,
     kdoc: String,
@@ -1100,7 +1089,7 @@ fn render_val_over_helper(
     // A constant always carries a value type; a helper with no return would
     // mean the type never resolved — skip like an unresolvable fn.
     let val_ty = helper.ret.clone()?;
-    let spec = ext.iface_spec(registry, &SpecKey::JniErrorHandler)?;
+    let spec = ext.iface_spec_frozen(&SpecKey::JniErrorHandler)?;
     imports.insert(spec.fqn());
     let init = format!(
         "{helper_name}(JniErrorHandler {{ je -> error(je ?: \"const {val_name}: JNI getter failed\") }})"
