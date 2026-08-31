@@ -705,6 +705,22 @@ impl Declarations {
     /// [`Declarations::iface_spec`]. Once resolution finishes both memos are
     /// drained into [`crate::jni::generation::JniGenerationPlan`], so emission
     /// cannot resume either derivation.
+    /// This function's lowered plan, read from the frozen generation.
+    ///
+    /// For a **render-only** caller. `freeze` drains the lowering memos into
+    /// `GenerationPlan`, which owns them afterwards, so a renderer reads rather
+    /// than re-lowering — and needs no `Registry` to do it.
+    ///
+    /// Not for a caller that also runs during validation: no generation is
+    /// installed then, this answers `None`, and a site that skips silently
+    /// stops reporting what lowering would have diagnosed (#613 step 7).
+    pub(crate) fn fn_plan_frozen(
+        &self,
+        f: &prebindgen_registry::flat::Function,
+    ) -> Option<std::rc::Rc<JniFunctionPlan>> {
+        self.generation.as_deref()?.function(&f.name)
+    }
+
     pub(crate) fn fn_plan(
         &self,
         registry: &Registry,
