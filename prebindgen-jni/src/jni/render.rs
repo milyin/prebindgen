@@ -1053,7 +1053,7 @@ pub(crate) fn render_const_expr_val(
     registry: &Registry,
     imports: &mut BTreeSet<String>,
 ) -> Option<(KtFun, KtProperty)> {
-    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, ext);
     let fplan = ext.fn_plan_frozen(&getter)?;
     let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);

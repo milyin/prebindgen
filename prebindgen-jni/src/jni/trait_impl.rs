@@ -255,7 +255,10 @@ pub(crate) fn plan_constant_expressions(
         .flat_map(|package| &package.constant_exprs)
         .map(|decl| {
             validate_constant_expr(ext, &decl.kotlin_name, &decl.ty);
-            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+            let getter = {
+                ext.freeze_reading_of(registry, &decl.ty);
+                const_expr_getter_fn(&decl.kotlin_name, &decl.ty, ext)
+            };
             let expr = &decl.expr;
             let callee: syn::Expr = syn::parse_quote!({
                 #(

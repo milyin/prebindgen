@@ -2011,7 +2011,7 @@ impl Declarations {
             .collect();
         expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
         for decl in expr_decls {
-            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, self);
             if let Some(fun) = render_extern_decl(self, &getter) {
                 externs.push(fun);
             }
