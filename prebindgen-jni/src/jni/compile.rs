@@ -222,6 +222,11 @@ pub(crate) struct JConverterArtifact {
     pub(crate) niches: prebindgen_registry::Niches,
     /// The wire-facing conversion's identity.
     pub(crate) converter: OperationId,
+    /// Semantic stages rendered beside the wire-facing converter. A fragment
+    /// can emit more than one converter function, and this is where it says so
+    /// — adapter payload, so the canonical plan carries it without the registry
+    /// needing a multi-artifact fragment (#613 step 8).
+    pub(crate) stages: Vec<crate::jni::chain::JFunction>,
 }
 
 impl JConverterArtifact {
@@ -1181,9 +1186,13 @@ impl JFrag {
     /// wire-facing converter. Marker-only compatibility stages stay in the
     /// ordered list so the shared writer can de-duplicate them by identity;
     /// their `should_emit` policy keeps them out of the final file.
+    /// Every converter function this fragment renders, read off its artifact —
+    /// which is what the canonical plan carries, so the same list is derivable
+    /// from a `FragmentPlan` alone (#613 step 8).
     pub(crate) fn converter_artifacts(&self) -> Vec<crate::jni::chain::JFunction> {
-        std::iter::once(self.rust.clone())
-            .chain(self.rust_stages.iter().cloned())
+        let artifact = self.artifact();
+        std::iter::once(artifact.rust.clone())
+            .chain(artifact.stages.iter().cloned())
             .chain(
                 self.chain
                     .steps()
@@ -1204,6 +1213,7 @@ impl JFrag {
             metadata: self.conv.metadata.clone(),
             niches: self.conv.niches.clone(),
             converter: self.conv.converter_id().clone(),
+            stages: self.rust_stages.clone(),
         }
     }
 
@@ -4230,8 +4240,8 @@ impl Conv {
 
     #[cfg(test)]
     pub(crate) fn has_custom_conversion_stage(&self) -> bool {
-        self.0
-            .rust_stages
+        self.1
+            .stages
             .iter()
             .any(crate::jni::chain::JFunction::is_custom_conversion)
     }
