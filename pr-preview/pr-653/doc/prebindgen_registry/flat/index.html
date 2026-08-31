@@ -1,0 +1,178 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The flat model itself lives in the separate `prebindgen-flat` crate — re-exported here so an adapter names one crate root for the whole pipeline. `RustEmitter` is deliberately omitted: registry-only adapters receive final rendering authority as [`RustWriter`] in callbacks. A different collector depends on `prebindgen-flat` directly to implement its own key. The prebindgen source language: one parser from captured records to [`Element`]s."><title>prebindgen_registry::flat - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_registry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.0 (88d9e12ae 2026-08-18)" data-channel="1.98.0" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module flat</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../prebindgen_registry/index.html">prebindgen_<wbr>registry</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module flat</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#what-an-element-is" title="What an element is">What an element is</a></li><li><a href="#what-earns-a-variant" title="What earns a variant">What earns a variant</a></li><li><a href="#why-the-syntax-rides-along" title="Why the syntax rides along">Why the syntax rides along</a></li><li><a href="#where-acceptance-is-enforced" title="Where acceptance is enforced">Where acceptance is enforced</a></li><li><a href="#declaring-a-handle" title="Declaring a handle">Declaring a handle</a></li><li><a href="#shapes-that-must-be-refused-rather-than-approximated" title="Shapes that must be refused rather than approximated">Shapes that must be refused rather than approximated</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#constants" title="Constants">Constants</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate prebindgen_<wbr>registry</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">prebindgen_registry</a></div><h1>Module <span>flat</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The flat model itself lives in the separate <code>prebindgen-flat</code> crate —
+re-exported here so an adapter names one crate root for the whole
+pipeline. <code>RustEmitter</code> is deliberately omitted: registry-only adapters
+receive final rendering authority as <a href="../struct.RustWriter.html" title="struct prebindgen_registry::RustWriter"><code>RustWriter</code></a> in callbacks. A different collector
+depends on <code>prebindgen-flat</code> directly to implement its own key.
+The prebindgen <strong>source language</strong>: one parser from captured records to
+<a href="../enum.Element.html" title="enum prebindgen_registry::Element"><code>Element</code></a>s.</p>
+<blockquote>
+<p>Naming: <code>flat</code> is the <em>source</em> side — the flat API a
+<code>#[prebindgen]</code> crate may write. The destination adapters (C, JNI) ship
+as the separate <code>prebindgen-c</code> / <code>prebindgen-jni</code> crates. They are
+opposite ends of the pipeline.</p>
+</blockquote>
+<div class="example-wrap"><pre class="language-text"><code>Source(s) ──items──&gt; Flat ──Elements──&gt; Registry ──&gt; adapters
+  raw records          parse +               indexes       classify off `kind`
+  (syn::Item)          validate              elements      spell through a callback key</code></pre></div>
+<p><a href="struct.FlatBuilder.html#method.source" title="method prebindgen_registry::flat::FlatBuilder::source"><code>FlatBuilder::source</code></a> folds the first arrow in for the common case, so a build
+script names one directory and gets elements; <a href="struct.FlatBuilder.html#method.items" title="method prebindgen_registry::flat::FlatBuilder::items"><code>FlatBuilder::items</code></a> keeps the
+arrow itself, for a stream that needs shaping first.</p>
+<h2 id="what-an-element-is"><a class="doc-anchor" href="#what-an-element-is">§</a>What an element is</h2>
+<p>Two things at once, and that pairing is the whole design:</p>
+<ul>
+<li>a <strong>closed model</strong> — <a href="enum.TypeKind.html" title="enum prebindgen_registry::flat::TypeKind"><code>TypeKind</code></a>, the field list, which of the two enum
+shapes an item is — where the type grammar is the accepted Rust syntax and
+the element structure is the concept above it;</li>
+<li>one <a href="struct.Origin.html" title="struct prebindgen_registry::flat::Origin"><code>Origin</code></a>, carrying the <strong>exact syntax</strong> the node was built from and
+the source it arrived in.</li>
+</ul>
+<p>The <code>Origin</code> is uniform: every node has one, at every level — item,
+parameter, field, variant, type, array extent. Some levels know less than
+others (a field has no line of its own, so it shares its item’s), but the
+shape does not change with the level, and no level copies a piece of
+provenance down from the one above. That copying is what previously let the
+same crate name appear under three field names with two meanings.</p>
+<p>So the rule for every consumer is:</p>
+<blockquote>
+<p><strong>Analyze Flat facts; generate Rust from Flat facts. Never analyze retained Rust syntax.</strong></p>
+</blockquote>
+<p>The model enforces the classification half rather than asking: <a href="struct.Origin.html" title="struct prebindgen_registry::flat::Origin"><code>Origin</code></a>’s
+syntax is private, and every direct route to it — <code>spell()</code>, <code>as_syn()</code> —
+is visible only inside this crate. Matching a <code>syn::Type</code> or <code>syn::Expr</code>
+variant outside this module is a classifier, and issue #211 says
+classification lives here.</p>
+<p>Final generation is an explicit collector boundary. Code whose job <em>is</em>
+producing Rust receives a collector-owned <a href="crate::RustEmitter"><code>RustEmitter</code></a>
+key, whose operations reconstruct output from <code>TypeKind</code>, identities, and
+explicit shape facts. The registry exposes its narrower key only in emission
+callbacks; neither key returns retained source syntax.</p>
+<h2 id="what-earns-a-variant"><a class="doc-anchor" href="#what-earns-a-variant">§</a>What earns a variant</h2>
+<p>For a <strong>type</strong>, a Rust form — and nothing else. <a href="enum.TypeKind.html" title="enum prebindgen_registry::flat::TypeKind"><code>TypeKind</code></a> is the accepted
+subset of <code>syn::Type</code>, so two spellings are two variants even when every
+destination language would treat them alike. Deciding that <code>&amp;str</code> and
+<code>String</code> are both “a string” is a destination’s decision, taken in an
+adapter, on a reading the model provides:</p>
+<div><table><thead><tr><th>Rust writes</th><th>The model says</th><th>The reading, where a consumer wants one</th></tr></thead><tbody>
+<tr><td><code>String</code>, <code>str</code></td><td><a href="enum.TypeKind.html#variant.String" title="variant prebindgen_registry::flat::TypeKind::String"><code>String</code></a>, <a href="enum.TypeKind.html#variant.Str" title="variant prebindgen_registry::flat::TypeKind::Str"><code>Str</code></a></td><td>the adapter’s, at its own site</td></tr>
+<tr><td><code>Vec&lt;T&gt;</code>, <code>[T]</code></td><td><a href="enum.TypeKind.html#variant.Vec" title="variant prebindgen_registry::flat::TypeKind::Vec"><code>Vec</code></a>, <a href="enum.TypeKind.html#variant.Slice" title="variant prebindgen_registry::flat::TypeKind::Slice"><code>Slice</code></a></td><td><a href="struct.TypeRef.html#method.sequence_elem" title="method prebindgen_registry::flat::TypeRef::sequence_elem"><code>TypeRef::sequence_elem</code></a> — one run of <code>T</code></td></tr>
+<tr><td><code>Box&lt;T&gt;</code>, <code>Cow&lt;'_, T&gt;</code></td><td><a href="enum.TypeKind.html#variant.Boxed" title="variant prebindgen_registry::flat::TypeKind::Boxed"><code>Boxed</code></a>, <a href="enum.TypeKind.html#variant.Cow" title="variant prebindgen_registry::flat::TypeKind::Cow"><code>Cow</code></a></td><td><a href="struct.TypeRef.html#method.unwrapped" title="method prebindgen_registry::flat::TypeRef::unwrapped"><code>TypeRef::unwrapped</code></a> — a <code>T</code> either way</td></tr>
+<tr><td><code>&amp;mut MaybeUninit&lt;T&gt;</code></td><td><code>Ref</code> over <a href="enum.TypeKind.html#variant.Uninit" title="variant prebindgen_registry::flat::TypeKind::Uninit"><code>Uninit</code></a></td><td><a href="struct.TypeRef.html#method.borrow_target" title="method prebindgen_registry::flat::TypeRef::borrow_target"><code>TypeRef::borrow_target</code></a> — the value, not its slot</td></tr>
+<tr><td>no <code>-&gt;</code>, <code>-&gt; ()</code></td><td><a href="enum.TypeKind.html#variant.Unit" title="variant prebindgen_registry::flat::TypeKind::Unit"><code>TypeKind::Unit</code></a></td><td>the same function</td></tr>
+<tr><td><code>*const T</code></td><td><em>rejected</em></td><td>a source crate is idiomatic Rust; the adapter owns pointers</td></tr>
+</tbody></table>
+</div>
+<p>It buys one property: the syntax is <strong>recoverable from the kind</strong>
+(checked, over the whole acceptance corpus, by rebuilding it). Which is
+the difference between a slice that rides along because it is exact, and one
+the model cannot do without.</p>
+<p>An <strong>element</strong> is not a type, and there the rule is still the concept:</p>
+<div><table><thead><tr><th>Rust writes</th><th>The model says</th><th>Because</th></tr></thead><tbody>
+<tr><td><code>struct S;</code>, <code>struct S {}</code></td><td>zero fields</td><td>the delimiters are spelling</td></tr>
+<tr><td><code>enum E { A(u8) }</code></td><td><a href="struct.Variant.html" title="struct prebindgen_registry::flat::Variant"><code>Variant</code></a></td><td>a sum, identified by position</td></tr>
+<tr><td><code>enum E { A = 7 }</code></td><td><a href="struct.Enum.html" title="struct prebindgen_registry::flat::Enum"><code>Enum</code></a></td><td>a named integer, identified by its value</td></tr>
+<tr><td><code>type X = ..</code>, <code>struct X(..)</code></td><td><a href="struct.Extern.html" title="struct prebindgen_registry::flat::Extern"><code>Extern</code></a></td><td>named here; contents not modelled</td></tr>
+</tbody></table>
+</div>
+<p>The two enum shapes are the clearest case of a <em>concept</em> splitting where Rust
+has one spelling. Both are <code>enum</code> and both keep a <code>syn::ItemEnum</code>, but a sum’s
+alternatives are identified by <strong>position</strong> — the mirror an adapter builds
+carries no <code>repr</code> and numbers its own arms — while a fieldless enum’s members
+are identified by the <strong>value Rust assigns</strong>, which a C header re-states and a
+Kotlin <code>enum class</code> entry carries. Neither numbering means anything for the
+other shape, so one model covering both would carry a field that is dead in
+each direction, and worse than dead: Rust does assign a discriminant to a
+sum’s alternatives, and using it would be wrong.</p>
+<p>The identities follow the same rule: a nominal type is a <a href="struct.TypeId.html" title="struct prebindgen_registry::flat::TypeId"><code>TypeId</code></a> — a
+name — not a <code>syn::Path</code>, so nothing downstream has to take a path apart to
+learn what a type is. And a name is <em>all</em> it is: <strong>a reference carries a
+name, the declaration carries the origin</strong>, so the same type never compares
+unequal to itself because two source crates mentioned it. The one place a
+crate name rides with an identity is <a href="struct.ConstId.html" title="struct prebindgen_registry::flat::ConstId"><code>ConstId</code></a>, and that is the const’s
+<em>declaring</em> crate, resolved by lookup — which is exactly what lets an array
+extent refuse a const from another source.</p>
+<h2 id="why-the-syntax-rides-along"><a class="doc-anchor" href="#why-the-syntax-rides-along">§</a>Why the syntax rides along</h2>
+<p>The generated Rust glue is itself a destination artifact, and the only one
+that needs syntax fidelity: <code>B()</code> must not be re-spelled <code>B</code>, <code>= 0x07</code> must
+not become <code>= 7</code>. Carrying the source’s own slice is how it gets that —
+exactly, and at no modelling cost, so a delimiter and a literal’s base need
+never become fields.</p>
+<p>For a <strong>type</strong> the slice is no longer where facts go to survive:
+<a href="enum.TypeKind.html" title="enum prebindgen_registry::flat::TypeKind"><code>TypeKind</code></a> keeps the lifetime, the wrapper and the argument it once
+dropped, and rebuilding the syntax from it is the round-trip that says
+so. What is
+left is the reason a slice beats a reconstruction anywhere — it is what the
+source wrote, and it is already there.</p>
+<h2 id="where-acceptance-is-enforced"><a class="doc-anchor" href="#where-acceptance-is-enforced">§</a>Where acceptance is enforced</h2>
+<p>Lowering is <strong>total over the accepted grammar</strong>: a form with no variant in
+<a href="enum.TypeKind.html" title="enum prebindgen_registry::flat::TypeKind"><code>TypeKind</code></a> is a form the language does not accept, so there is no second
+acceptance list to drift from it. One rule cannot be stated that way and is
+stated in the lowering instead: <a href="enum.TypeKind.html#variant.Uninit" title="variant prebindgen_registry::flat::TypeKind::Uninit"><code>Uninit</code></a> is accepted only
+directly under a <code>&amp;mut</code>, which is a fact about a <strong>position</strong> and not about a
+form.</p>
+<p><strong>Parsing diagnoses; ingestion raises.</strong> Those are two different points, and
+the split is what lets one model serve both.</p>
+<p>Parsing never fails on a single item: an item the language cannot express
+becomes <a href="../enum.Element.html#variant.Unsupported" title="variant prebindgen_registry::Element::Unsupported"><code>Element::Unsupported</code></a> carrying its diagnosis, and
+<a href="struct.FlatBuilder.html#method.build" title="method prebindgen_registry::flat::FlatBuilder::build"><code>FlatBuilder::build</code></a> returns the model with it in place. Only whole-stream
+rules — a duplicate name in the flat namespace — are <a href="enum.ParseError.html" title="enum prebindgen_registry::flat::ParseError"><code>ParseError</code></a>s, because
+no declaration can make two items with one name unambiguous. So a consumer
+that wants to <em>inspect</em> what a source crate marked, refusals included, gets
+exactly that from <a href="../struct.Flat.html#method.unsupported" title="method prebindgen_registry::Flat::unsupported"><code>Flat::unsupported</code></a>.</p>
+<p><code>Registry</code> ingestion is where the diagnoses are raised.
+Building a registry from this model <strong>fails if any element is
+<code>Unsupported</code></strong> — all of them at once, so a source crate that needs migrating
+sees one list rather than one rebuild per item — and it fails before any
+adapter declaration is examined. A binding is built against a model the
+frontend could read in full, or it is not built.</p>
+<p>No <strong>marked</strong> item passes through verbatim, because a <code>#[prebindgen]</code> crate
+marks the items that cross the boundary and leaves the supporting code to the
+consumer. The proc-macro already enforces that — a <code>use</code>, <code>mod</code>, <code>impl</code> or
+<code>macro_rules!</code> cannot be marked at all — so the only item kind left that this
+module does not model is a <code>union</code>, and it is diagnosed like anything else the
+language cannot express.</p>
+<p>The one item that <em>is</em> re-emitted verbatim is a <a href="struct.Guard.html" title="struct prebindgen_registry::flat::Guard"><code>Guard</code></a> — an anonymous
+const, which has no address and so cannot be part of an API addressed by name.
+Today these are the feature checks <a href="prebindgen::Source"><code>Source</code></a> injects on its own
+behalf. Modelled rather than dropped because this module must be total over
+what it is handed, and a separate element so nothing that consumes the API has
+to remember to skip it.</p>
+<h2 id="declaring-a-handle"><a class="doc-anchor" href="#declaring-a-handle">§</a>Declaring a handle</h2>
+<p><code>#[prebindgen] pub type X = path::To&lt;Thing&gt;;</code> declares an <a href="struct.Extern.html" title="struct prebindgen_registry::flat::Extern"><code>Extern</code></a>: it gives
+a foreign or crate-private type a <strong>name in the flat API</strong> without claiming
+anything about its contents. That is what makes the API closable — a handle
+enters it deliberately rather than by being mentioned — and it is why a
+reference can be required to resolve. A marked tuple struct declares the same
+thing, since no adapter has ever crossed its fields.</p>
+<h2 id="shapes-that-must-be-refused-rather-than-approximated"><a class="doc-anchor" href="#shapes-that-must-be-refused-rather-than-approximated">§</a>Shapes that must be refused rather than approximated</h2>
+<p>An <a href="../enum.Element.html" title="enum prebindgen_registry::Element"><code>Element</code></a> holds what it holds: ordinary parameters, a direct return, no
+generic binder. A shape with no slot in that structure cannot be <em>partly</em>
+accepted — the missing piece would simply be dropped, and silently:</p>
+<div><table><thead><tr><th>Shape</th><th>Would become</th><th>So</th></tr></thead><tbody>
+<tr><td><code>async fn</code></td><td>a function returning <code>()</code></td><td>the future is dropped and the export’s body never runs</td></tr>
+<tr><td><code>fn f(a: u8, ...)</code></td><td>a function without the tail</td><td>the variadic arguments vanish</td></tr>
+<tr><td><code>struct S&lt;T&gt;</code>, <code>fn f&lt;T&gt;()</code>, <code>struct S&lt;const N: usize&gt;</code></td><td><code>T</code> as a nominal reference</td><td>a parameter is indistinguishable from an item named <code>T</code></td></tr>
+</tbody></table>
+</div>
+<p>All three are <a href="enum.ItemError.html" title="enum prebindgen_registry::flat::ItemError"><code>ItemError</code></a>s, carried like any other refusal and raised at
+registry ingestion. A
+<strong>lifetime</strong> binder is not among them: lifetimes are spelling, and the
+spelling already travels. Nor is <code>impl Trait</code> in argument position — Rust
+calls it an anonymous type parameter, but it is not a binder in the syntax,
+so the callback form is untouched.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Alternative.html" title="struct prebindgen_registry::flat::Alternative">Alternative</a></dt><dd>One alternative of a <a href="struct.Variant.html" title="struct prebindgen_registry::flat::Variant"><code>Variant</code></a>.</dd><dt><a class="struct" href="struct.ArrayExtent.html" title="struct prebindgen_registry::flat::ArrayExtent">Array<wbr>Extent</a></dt><dd>A fixed-size array’s extent: the number, the const identity when the source
+named one, and the spelling it was written with.</dd><dt><a class="struct" href="struct.ConstId.html" title="struct prebindgen_registry::flat::ConstId">ConstId</a></dt><dd>A <code>#[prebindgen]</code> const, identified the way the flat namespace identifies
+everything: by name, plus the crate it was marked in.</dd><dt><a class="struct" href="struct.Constant.html" title="struct prebindgen_registry::flat::Constant">Constant</a></dt><dd>A <code>#[prebindgen]</code> constant.</dd><dt><a class="struct" href="struct.DuplicateName.html" title="struct prebindgen_registry::flat::DuplicateName">Duplicate<wbr>Name</a></dt><dd>The two items of a <a href="enum.ParseError.html#variant.DuplicateName" title="variant prebindgen_registry::flat::ParseError::DuplicateName"><code>ParseError::DuplicateName</code></a>.</dd><dt><a class="struct" href="struct.Enum.html" title="struct prebindgen_registry::flat::Enum">Enum</a></dt><dd>A <code>#[prebindgen]</code> enum whose every alternative is fieldless — the C-style
+shape, a named set of integers.</dd><dt><a class="struct" href="struct.EnumValue.html" title="struct prebindgen_registry::flat::EnumValue">Enum<wbr>Value</a></dt><dd>One named value of an <a href="struct.Enum.html" title="struct prebindgen_registry::flat::Enum"><code>Enum</code></a>.</dd><dt><a class="struct" href="struct.Extern.html" title="struct prebindgen_registry::flat::Extern">Extern</a></dt><dd>A type the flat API <strong>names</strong> but whose contents it does not model.</dd><dt><a class="struct" href="struct.Field.html" title="struct prebindgen_registry::flat::Field">Field</a></dt><dd>One field of a <a href="struct.Struct.html" title="struct prebindgen_registry::flat::Struct"><code>Struct</code></a> or of an <a href="struct.Alternative.html" title="struct prebindgen_registry::flat::Alternative"><code>Alternative</code></a>.</dd><dt><a class="struct" href="struct.Flat.html" title="struct prebindgen_registry::flat::Flat">Flat</a></dt><dd>The flat API: every <code>#[prebindgen]</code> item from every ingested source, parsed,
+indexed by name, and with every type reference resolved.</dd><dt><a class="struct" href="struct.FlatBuilder.html" title="struct prebindgen_registry::flat::FlatBuilder">Flat<wbr>Builder</a></dt><dd>Collects what to parse, then hands over the model.</dd><dt><a class="struct" href="struct.Function.html" title="struct prebindgen_registry::flat::Function">Function</a></dt><dd>A <code>#[prebindgen]</code> free function.</dd><dt><a class="struct" href="struct.Guard.html" title="struct prebindgen_registry::flat::Guard">Guard</a></dt><dd>An <strong>anonymous const</strong>: <code>const _: T = ..</code>, whatever produced it.</dd><dt><a class="struct" href="struct.Origin.html" title="struct prebindgen_registry::flat::Origin">Origin</a></dt><dd>The syntax a node was built from, plus where that syntax came from.</dd><dt><a class="struct" href="struct.Param.html" title="struct prebindgen_registry::flat::Param">Param</a></dt><dd>One parameter of a <a href="struct.Function.html" title="struct prebindgen_registry::flat::Function"><code>Function</code></a>.</dd><dt><a class="struct" href="struct.Struct.html" title="struct prebindgen_registry::flat::Struct">Struct</a></dt><dd>A <code>#[prebindgen]</code> struct: a product of fields that cross the boundary.</dd><dt><a class="struct" href="struct.TypeId.html" title="struct prebindgen_registry::flat::TypeId">TypeId</a></dt><dd>A nominal type’s identity: a name, and nothing else.</dd><dt><a class="struct" href="struct.TypeKey.html" title="struct prebindgen_registry::flat::TypeKey">TypeKey</a></dt><dd>Canonical type-shape key: identity is the token string of the
+<strong>normalized</strong> type. Normalization is a closed rule set — group/paren
+unwrap, a <code>crate::</code>/<code>self::</code>/source-module path reduced to its final
+segment, and a prelude path read as the bare name the language knows it
+by (<code>std::vec::Vec&lt;Foo&gt;</code> ≡ <code>Vec&lt;Foo&gt;</code>) — and any spelling it does not
+cover is kept verbatim.</dd><dt><a class="struct" href="struct.TypeKeyParseError.html" title="struct prebindgen_registry::flat::TypeKeyParseError">Type<wbr>KeyParse<wbr>Error</a></dt><dd>Structured failure of <a href="../struct.TypeKey.html#method.parse" title="associated function prebindgen_registry::TypeKey::parse"><code>TypeKey::parse</code></a>: the offending input plus the
+underlying <code>syn</code> parse error.</dd><dt><a class="struct" href="struct.TypeRef.html" title="struct prebindgen_registry::flat::TypeRef">TypeRef</a></dt><dd>A type as the language accepted it, plus the exact syntax it came from.</dd><dt><a class="struct" href="struct.Unsupported.html" title="struct prebindgen_registry::flat::Unsupported">Unsupported</a></dt><dd>An item the language cannot express.</dd><dt><a class="struct" href="struct.UnsupportedArrayLen.html" title="struct prebindgen_registry::flat::UnsupportedArrayLen">Unsupported<wbr>Array<wbr>Len</a></dt><dd>A length the prebindgen source language does not accept.</dd><dt><a class="struct" href="struct.UnsupportedType.html" title="struct prebindgen_registry::flat::UnsupportedType">Unsupported<wbr>Type</a></dt><dd>A type the prebindgen source language does not accept.</dd><dt><a class="struct" href="struct.Variant.html" title="struct prebindgen_registry::flat::Variant">Variant</a></dt><dd>A <code>#[prebindgen]</code> enum whose alternatives carry payloads — a sum type.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.ArrayLenReason.html" title="enum prebindgen_registry::flat::ArrayLenReason">Array<wbr>LenReason</a></dt><dd>Why an array length was refused.</dd><dt><a class="enum" href="enum.Element.html" title="enum prebindgen_registry::flat::Element">Element</a></dt><dd>One member of the flat API.</dd><dt><a class="enum" href="enum.ExtentSource.html" title="enum prebindgen_registry::flat::ExtentSource">Extent<wbr>Source</a></dt><dd>How an <a href="struct.ArrayExtent.html" title="struct prebindgen_registry::flat::ArrayExtent"><code>ArrayExtent</code></a> was addressed at its use site.</dd><dt><a class="enum" href="enum.FieldShape.html" title="enum prebindgen_registry::flat::FieldShape">Field<wbr>Shape</a></dt><dd>Delimiters used by a Rust product constructor or pattern.</dd><dt><a class="enum" href="enum.GenericArg.html" title="enum prebindgen_registry::flat::GenericArg">Generic<wbr>Arg</a></dt><dd>One generic argument of a <a href="enum.TypeKind.html#variant.Named" title="variant prebindgen_registry::flat::TypeKind::Named"><code>Named</code></a> type, as written.</dd><dt><a class="enum" href="enum.ItemError.html" title="enum prebindgen_registry::flat::ItemError">Item<wbr>Error</a></dt><dd>Why one item could not be expressed in the language.</dd><dt><a class="enum" href="enum.ParseError.html" title="enum prebindgen_registry::flat::ParseError">Parse<wbr>Error</a></dt><dd>A rule of the language that no single item can satisfy on its own, and that
+no adapter declaration can excuse.</dd><dt><a class="enum" href="enum.ScalarKind.html" title="enum prebindgen_registry::flat::ScalarKind">Scalar<wbr>Kind</a></dt><dd>The primitives the source language accepts. Mirrors the set every adapter
+already treats as directly representable.</dd><dt><a class="enum" href="enum.Type.html" title="enum prebindgen_registry::flat::Type">Type</a></dt><dd>A type the flat API declares.</dd><dt><a class="enum" href="enum.TypeKind.html" title="enum prebindgen_registry::flat::TypeKind">Type<wbr>Kind</a></dt><dd>The <strong>accepted syntax</strong> of a <a href="struct.TypeRef.html" title="struct prebindgen_registry::flat::TypeRef"><code>TypeRef</code></a>: the subset of <a href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type"><code>syn::Type</code></a> a
+<code>#[prebindgen]</code> crate may write, and nothing more.</dd><dt><a class="enum" href="enum.UnsupportedTypeReason.html" title="enum prebindgen_registry::flat::UnsupportedTypeReason">Unsupported<wbr>Type<wbr>Reason</a></dt><dd>Why a type was refused.</dd></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.TRANSPARENT_WRAPPERS.html" title="constant prebindgen_registry::flat::TRANSPARENT_WRAPPERS">TRANSPARENT_<wbr>WRAPPERS</a></dt><dd>Lower one captured type.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Name.html" title="trait prebindgen_registry::flat::Name">Name</a></dt><dd>A name a lookup can be performed with.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.canonical_spelling.html" title="fn prebindgen_registry::flat::canonical_spelling">canonical_<wbr>spelling</a></dt><dd><a href="fn.canonical_type.html" title="fn prebindgen_registry::flat::canonical_type"><code>canonical_type</code></a> as tokens — the string form both indexes use as their key.</dd><dt><a class="fn" href="fn.canonical_type.html" title="fn prebindgen_registry::flat::canonical_type">canonical_<wbr>type</a></dt><dd>A type reduced to the spelling everything keys on: prelude-normalized, so
+<code>std::option::Option&lt;T&gt;</code> and <code>Option&lt;T&gt;</code> are one entry.</dd><dt><a class="fn" href="fn.extract_fn_trait_args.html" title="fn prebindgen_registry::flat::extract_fn_trait_args">extract_<wbr>fn_<wbr>trait_<wbr>args</a></dt><dd>If <code>ty</code> is <code>impl Fn(T1, T2, ...) + Send + Sync + 'static</code>, return the <code>Fn</code>
+argument types in declaration order. Otherwise <code>None</code>.</dd><dt><a class="fn" href="fn.peel_transparent.html" title="fn prebindgen_registry::flat::peel_transparent">peel_<wbr>transparent</a></dt><dd>Strip one <a href="constant.TRANSPARENT_WRAPPERS.html" title="constant prebindgen_registry::flat::TRANSPARENT_WRAPPERS">transparent wrapper</a> from a <strong>spelling</strong>,
+naming the one removed — <code>Box&lt;Option&lt;T&gt;&gt;</code> → <code>("Box", Option&lt;T&gt;)</code>.</dd></dl></section></div></main></body></html>
