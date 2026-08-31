@@ -153,6 +153,9 @@ pub enum PartSource<'a> {
         /// The field itself.
         field: &'a Field,
     },
+    /// The value itself, as one part — the compiled form of
+    /// [`Reach::Identity`]. Nothing is indexed and nothing is called.
+    Identity,
     /// This accessor call.
     Accessor {
         /// The function to call.
@@ -982,6 +985,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
                         name: field_name(field, *index),
                     });
                 }
+                Reach::Identity => parts.push(Part {
+                    from: PartSource::Identity,
+                    mode: mode_of(&at.crossing.value().clone()),
+                    ty: at.crossing.value().clone(),
+                    name: "self".to_string(),
+                }),
                 Reach::Accessor(name) => {
                     let func = self.function(at, name)?;
                     parts.push(Part {
