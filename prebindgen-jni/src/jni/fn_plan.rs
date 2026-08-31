@@ -619,7 +619,10 @@ pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Resu
         .collect();
     expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
     for decl in expr_decls {
-        let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+        let getter = {
+            ext.freeze_reading_of(registry, &decl.ty);
+            const_expr_getter_fn(&decl.kotlin_name, &decl.ty, ext)
+        };
         match ext.fn_plan(registry, &getter) {
             Ok(plan) => record_symbol(&plan.native_symbol, decl.kotlin_name.clone(), &mut errors),
             Err(e) => errors.push(e.message(&getter.name)),

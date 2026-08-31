@@ -94,6 +94,35 @@ impl Declarations {
         key
     }
 
+    /// Freeze the reading for a **type**, keyed by its spelling.
+    ///
+    /// The `constant_expr` path names a type in a build script, so no element
+    /// carries it and only a `Conversions` can resolve it. The validating
+    /// callers do that once; a renderer reads it back (#613 step 7).
+    pub(crate) fn freeze_reading_of(
+        &self,
+        registry: &impl prebindgen_registry::Conversions,
+        ty: &syn::Type,
+    ) -> Option<prebindgen_registry::flat::TypeRef> {
+        let reading = registry.reading_of(ty)?;
+        self.frozen_readings.borrow_mut().insert(
+            quote::ToTokens::to_token_stream(ty).to_string(),
+            reading.clone(),
+        );
+        Some(reading)
+    }
+
+    /// The reading frozen for a type spelling.
+    pub(crate) fn frozen_reading_of(
+        &self,
+        ty: &syn::Type,
+    ) -> Option<prebindgen_registry::flat::TypeRef> {
+        self.frozen_readings
+            .borrow()
+            .get(&quote::ToTokens::to_token_stream(ty).to_string())
+            .cloned()
+    }
+
     /// The reading behind an `IfaceParam`'s identity text.
     pub(crate) fn frozen_reading(&self, text: &str) -> Option<prebindgen_registry::flat::TypeRef> {
         self.frozen_readings.borrow().get(text).cloned()
