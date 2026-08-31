@@ -1285,7 +1285,7 @@ pub(crate) fn leaf_ty_is_prim(
         None => true,
         Some(p) => matches!(p.kind, ProjectionKind::Handle | ProjectionKind::Unsigned64),
     };
-    proj_ok && matches!(jni_field_access(&entry.destination), Some((_, _, false)))
+    proj_ok && matches!(jni_field_access(&entry.wire), Some((_, _, false)))
 }
 
 #[cfg(test)]

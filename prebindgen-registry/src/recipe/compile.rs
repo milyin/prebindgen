@@ -397,24 +397,6 @@ impl<F> Compiled<F> {
         self.recipe_fragment(ty, recipe)
     }
 
-    /// Record a fragment an adapter built **without** the compiler, as this
-    /// crossing's whole answer.
-    ///
-    /// The escape hatch for a crossing the adapter still answers by hand:
-    /// `Compiler::crossing` never saw it, so nothing would file it, and
-    /// [`Self::fragment`] would have no answer to give. Recording it keeps the
-    /// adapter's emitters on one lookup instead of a per-site fall-back to
-    /// whatever else knows.
-    pub fn record(&mut self, recipe: RecipeKey, fragment: F) {
-        let ty = recipe.crossing().ty.clone();
-        let direction = recipe.crossing().direction;
-        self.fragments.insert(
-            FragmentId::new(ty.clone(), recipe.clone()),
-            std::rc::Rc::new(fragment),
-        );
-        self.defaults.insert((ty, direction), recipe);
-    }
-
     /// The fragment for one spelled type and one row key.
     pub fn recipe_fragment(&self, ty: &TypeKey, recipe: &RecipeKey) -> Option<Rc<F>> {
         self.fragments

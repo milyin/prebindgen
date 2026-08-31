@@ -520,7 +520,7 @@ impl Declarations {
             .map(|h| Projection { owned: false, ..h });
         Some(ConverterImpl {
             subs: vec![],
-            destination: inner.destination.clone(),
+            destination: inner.wire.clone(),
             converter: inner.converter.clone(),
             niches: inner.niches.clone(),
             metadata: KotlinMeta {

@@ -138,7 +138,7 @@ fn sealed_payload_kt_type(
             );
         }
     }
-    let primitive_wire = crate::jni::is_jni_primitive(&out.destination);
+    let primitive_wire = crate::jni::is_jni_primitive(&out.wire);
     if field_ty.optional_inner().is_some() && !primitive_wire {
         ty.nullable()
     } else {
