@@ -189,6 +189,43 @@ pub(crate) fn optional_pair_plan(
 /// — rather than in a row of its own. #613 step 4 is what puts JNI fragments
 /// and sites into `FragmentPlan` / `SitePlan`; this states the representation
 /// those will be over, and the chain is its first live use.
+/// One fragment's converter, and the two facts a reader of the canonical plan
+/// needs beside it.
+///
+/// `FragmentPlan` carries the shape, the chain, the niches and the identity;
+/// what it cannot carry is adapter syntax, and both of these are exactly that.
+/// The wire is the JNI type this fragment's converter produces or consumes —
+/// adapter syntax, not captured source syntax, which is what
+/// [`Representation`](prebindgen_registry::generation::Representation) permits
+/// an artifact to retain. The layout is this fragment's own nesting over its
+/// ABI leaves, which no other part of the plan states:
+/// [`AbiLayout`](prebindgen_registry::generation::AbiLayout) is a **site's**
+/// answer, and `ShapePlan` does not imply it — a transparent wrapper over an
+/// optional leaves the shape composed and the layout absent.
+#[derive(Clone)]
+pub(crate) struct JConverterArtifact {
+    /// The private Rust converter this fragment renders.
+    pub(crate) rust: crate::jni::chain::JFunction,
+    /// The JNI wire this converter produces (deconstruct) or consumes
+    /// (construct).
+    pub(crate) wire: syn::Type,
+    /// This fragment's own nesting over its ABI leaves, when it composes.
+    pub(crate) layout: Option<JLayout>,
+}
+
+impl JConverterArtifact {
+    /// Whether the wire is a raw pointer, which decides how a child value is
+    /// handed to its parent converter.
+    pub(crate) fn wire_is_pointer(&self) -> bool {
+        matches!(self.wire, syn::Type::Ptr(_))
+    }
+
+    /// Whether this fragment occupies several ABI leaves under one nesting.
+    pub(crate) fn layout_is_composed(&self) -> bool {
+        self.layout.as_ref().is_some_and(JLayout::is_composed)
+    }
+}
+
 pub(crate) struct JRepresentation;
 
 impl prebindgen_registry::generation::Representation for JRepresentation {
@@ -197,7 +234,7 @@ impl prebindgen_registry::generation::Representation for JRepresentation {
     type Intermediate = TypeKey;
     /// One stage: the identity of the artifact that renders it.
     type Step = OperationId;
-    type ConverterArtifact = crate::jni::chain::JFunction;
+    type ConverterArtifact = JConverterArtifact;
     type TerminalCodec = crate::jni::chain::JFunction;
     type ProductBridge = crate::jni::chain::JFunction;
     type OptionalBridge = crate::jni::chain::JFunction;
@@ -1083,7 +1120,7 @@ impl JFrag {
         );
         match self.composed_only {
             true => plan,
-            false => plan.with_artifact(self.rust.clone()),
+            false => plan.with_artifact(self.artifact()),
         }
     }
 
@@ -1144,13 +1181,28 @@ impl JFrag {
             .collect()
     }
 
+    /// This fragment's converter with its wire and layout — the one statement
+    /// of the three, which both the frozen plan and `composed_chain` are built
+    /// from rather than each reaching for `conv`, `rust` and `layout` apart.
+    pub(crate) fn artifact(&self) -> JConverterArtifact {
+        JConverterArtifact {
+            rust: self.rust.clone(),
+            wire: self.conv.destination.clone(),
+            layout: self.layout.clone(),
+        }
+    }
+
     pub(crate) fn composed_chain(&self) -> Option<ComposedChain> {
         if !self.composed_only {
-            if let Some(layout) = self.layout.clone().filter(JLayout::is_composed) {
+            // Built from the one statement of converter, wire and layout, so
+            // this route and the frozen plan cannot describe the same fragment
+            // differently.
+            let artifact = self.artifact();
+            if let Some(layout) = artifact.layout.filter(JLayout::is_composed) {
                 return Some(ComposedChain {
                     operation: self.conv.converter_id().clone(),
                     layout,
-                    rust: self.rust.clone(),
+                    rust: artifact.rust,
                 });
             }
         }
@@ -2248,6 +2300,7 @@ impl<R: Conversions> JCompile<'_, R> {
         mode: Mode,
         frag: &JFrag,
     ) -> crate::jni::chain::JChild {
+        let artifact = frag.artifact();
         let stages: Vec<OperationId> = frag
             .chain
             .steps()
@@ -2258,9 +2311,7 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Construct => crate::jni::chain::JChild::input(
                 frag.conv.converter_id().clone(),
                 stages,
-                if matches!(frag.conv.destination, syn::Type::Ptr(_))
-                    || frag.layout.as_ref().is_some_and(JLayout::is_composed)
-                {
+                if artifact.wire_is_pointer() || artifact.layout_is_composed() {
                     crate::jni::chain::JValueUse::Direct
                 } else {
                     crate::jni::chain::JValueUse::SharedRef
@@ -2289,10 +2340,15 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Construct => mode,
             Direction::Deconstruct => Mode::Owned,
         };
+        // Read through the fragment's one statement of converter, wire and
+        // layout rather than reaching for `conv`, `rust` and `layout` apart.
+        // This is the whole of what a plan reader needs, which is why the
+        // artifact is what carries it (#613 step 5b).
+        let artifact = frag.artifact();
         crate::jni::chain::JPipeline::new(
-            frag.conv.destination.clone(),
+            artifact.wire.clone(),
             Self::planned_child_mode(direction, mode, frag),
-            direction == Direction::Construct && frag.rust.is_borrowed_optional_value(),
+            direction == Direction::Construct && artifact.rust.is_borrowed_optional_value(),
         )
     }
 
