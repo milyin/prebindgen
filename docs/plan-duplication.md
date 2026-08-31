@@ -172,8 +172,16 @@ items** (`#[cfg(test)]` items and statements inside production files), and
 #613's size gate is that the first two decrease from the `dea7a55` column.
 
 Step 3's four children (#616, #617, #618, #620) leave `prebindgen-jni` at
-**30,408** — below its baseline, so that half of the gate is met. `prebindgen-c`
-is untouched so far; step 6 is where it moves.
+**30,412**, measured at `56bbe59d` — below its 30,534 baseline, so that half of
+the gate is met on step 3's own account. `prebindgen-c` is untouched so far;
+step 6 is where it moves.
+
+Step 4 spends that margin again: `778a381d`, the head of #622 with its
+callback-site child merged, is **30,922**, or +510 over step 3's result. That is
+migration cost with the deletion still ahead of it — step 5c is where `JFrag`,
+`JPlan` and the Rust-graph parts of `JLayout` go — so the gate is not claimed
+until then. Every number in this section comes from the canonical report at the
+named commit, which is the only way they can be compared (#622 rereview).
 
 These numbers are smaller than the ones quoted in #613's own description
 (C 7,240 → 8,931, JNI 30,228 → 32,115), which were counted before this script
