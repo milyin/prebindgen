@@ -27,17 +27,6 @@ use crate::chain::{
     ProductField, ProductPlan, SequencePlan, SliceInputPlan,
 };
 
-/// The shape selected by the recipe compiler, retaining semantic child edges.
-#[derive(Clone)]
-pub(crate) enum CShape {
-    Atomic,
-    Product(Vec<FragmentUse>),
-    Optional(FragmentUse),
-    Sequence(FragmentUse),
-    Choice(Vec<Vec<FragmentUse>>),
-    Invoke(Vec<FragmentUse>),
-}
-
 /// One already-composed C wire-value operation reused by ordinary and callback sites.
 #[derive(Clone)]
 pub(crate) enum CValue {
@@ -353,8 +342,11 @@ pub(crate) struct CFrag {
     pub(crate) arm: Option<Arm>,
     /// What the fragment produces, which is all the registry reads of it.
     pub(crate) yields: Yield,
-    /// Registry-checkable shape edges retained beside the C operation payload.
-    pub(crate) shape: CShape,
+    /// The registry-composed shape of this fragment, in the canonical
+    /// vocabulary. Built where the shape is known — the hook the compiler
+    /// called — rather than stated in an adapter enum and translated at freeze,
+    /// which is the duplication #613 step 6 removes.
+    pub(crate) shape: ShapePlan<CRepresentation>,
     /// Frozen site wire layout and encoder, shared by ordinary and callback sites.
     pub(crate) value: CValue,
 }
@@ -376,6 +368,44 @@ pub(crate) struct ArmPart {
     pub(crate) mode: Mode,
     pub(crate) hold_uninit: bool,
 }
+/// A composed shape's bridge is always this fragment's own call, so each form
+/// is built from its edges alone — and the arity-bearing ones read their counts
+/// off those edges rather than being told.
+fn optional_shape(function: &CFunction, value: FragmentUse) -> ShapePlan<CRepresentation> {
+    ShapePlan::Optional {
+        bridge: function.call().clone(),
+        value,
+    }
+}
+
+fn sequence_shape(function: &CFunction, element: FragmentUse) -> ShapePlan<CRepresentation> {
+    ShapePlan::Sequence {
+        bridge: function.call().clone(),
+        element,
+    }
+}
+
+fn product_shape(function: &CFunction, parts: Vec<FragmentUse>) -> ShapePlan<CRepresentation> {
+    ShapePlan::Product {
+        bridge: FixedArity::new(parts.len(), function.call().clone()),
+        parts,
+    }
+}
+
+fn choice_shape(function: &CFunction, arms: Vec<Vec<FragmentUse>>) -> ShapePlan<CRepresentation> {
+    ShapePlan::Choice {
+        bridge: ChoiceArity::new(arms.iter().map(Vec::len).collect(), function.call().clone()),
+        arms,
+    }
+}
+
+fn invoke_shape(function: &CFunction, arguments: Vec<FragmentUse>) -> ShapePlan<CRepresentation> {
+    ShapePlan::Invoke {
+        bridge: FixedArity::new(arguments.len(), function.call().clone()),
+        arguments,
+    }
+}
+
 fn fragment_use(fragment: &CFrag) -> FragmentUse {
     FragmentUse::new(fragment.id.clone(), fragment.yields.clone())
 }
@@ -448,30 +478,8 @@ impl Carrier for CFrag {
 
 impl CFrag {
     pub(crate) fn freeze(&self) -> FragmentPlan<CRepresentation> {
-        let call = self.function.call().clone();
-        let shape = match &self.shape {
-            CShape::Atomic => ShapePlan::Atomic(call),
-            CShape::Product(parts) => ShapePlan::Product {
-                bridge: FixedArity::new(parts.len(), call),
-                parts: parts.clone(),
-            },
-            CShape::Optional(value) => ShapePlan::Optional {
-                bridge: call,
-                value: value.clone(),
-            },
-            CShape::Sequence(element) => ShapePlan::Sequence {
-                bridge: call,
-                element: element.clone(),
-            },
-            CShape::Choice(arms) => ShapePlan::Choice {
-                bridge: ChoiceArity::new(arms.iter().map(Vec::len).collect(), call),
-                arms: arms.clone(),
-            },
-            CShape::Invoke(arguments) => ShapePlan::Invoke {
-                bridge: FixedArity::new(arguments.len(), call),
-                arguments: arguments.clone(),
-            },
-        };
+        // Stated once, where the hook that composed it knew the shape.
+        let shape = self.shape.clone();
         let niche_key = |slot: &NicheSlot| {
             format!(
                 "{}=>{}",
@@ -529,6 +537,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
             function,
             niches,
             subs,
@@ -538,7 +547,6 @@ impl CFrag {
                 mode: at.crossing.mode(),
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Atomic,
             value,
         }
     }
@@ -559,6 +567,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
             function,
             niches,
             subs,
@@ -568,7 +577,6 @@ impl CFrag {
                 mode: at.crossing.mode(),
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Atomic,
             value,
         }
     }
@@ -593,6 +601,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
             function,
             niches,
             subs: vec![],
@@ -602,7 +611,6 @@ impl CFrag {
                 mode: at.crossing.mode(),
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Atomic,
             value,
         }
     }
@@ -627,6 +635,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
             function,
             niches,
             subs: vec![],
@@ -636,7 +645,6 @@ impl CFrag {
                 mode: at.crossing.mode(),
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Atomic,
             value,
         }
     }
@@ -657,6 +665,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
             function,
             niches,
             subs: vec![],
@@ -666,7 +675,6 @@ impl CFrag {
                 mode: at.crossing.mode(),
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Atomic,
             value,
         }
     }
@@ -694,6 +702,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
             function,
             niches,
             subs,
@@ -703,7 +712,6 @@ impl CFrag {
                 mode: at.crossing.mode(),
                 validity: Validity::Borrowed,
             },
-            shape: CShape::Atomic,
             value,
         }
     }
@@ -734,6 +742,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
             function,
             niches,
             subs,
@@ -745,7 +754,6 @@ impl CFrag {
                 // borrowed wire is explicit in CValue::BorrowedInput.
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Atomic,
             value,
         }
     }
@@ -902,7 +910,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 .expect("Optional output markers accept every resolved inner");
             let mut fragment = CFrag::from_marker(at, marker);
             let absent = inner.value.effective_niches().carve().map(|(slot, _)| slot);
-            fragment.shape = CShape::Optional(fragment_use(inner));
+            fragment.shape = optional_shape(&fragment.function, fragment_use(inner));
             fragment.value = CValue::Optional {
                 inner: Box::new(inner.value.clone()),
                 absent,
@@ -963,6 +971,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination: wire,
+            shape: optional_shape(&function, fragment_use(inner)),
             function,
             niches,
             subs: vec![elem.key()],
@@ -972,7 +981,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 mode: at.crossing.mode(),
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Optional(fragment_use(inner)),
             value,
         })
     }
@@ -1006,6 +1014,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                         id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
                         source: at.crossing.spelled().clone(),
                         destination: syn::parse_quote!(()),
+                        shape: sequence_shape(&function, fragment_use(inner)),
                         function,
                         niches: Niches::empty(),
                         subs: vec![element.key()],
@@ -1015,7 +1024,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                             mode: at.crossing.mode(),
                             validity: Validity::SelfSufficient,
                         },
-                        shape: CShape::Sequence(fragment_use(inner)),
                         value,
                     });
                 }
@@ -1040,7 +1048,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     .expect("Sequence output markers accept every resolved element"),
             ),
         };
-        fragment.shape = CShape::Sequence(fragment_use(inner));
+        fragment.shape = sequence_shape(&fragment.function, fragment_use(inner));
         if at.crossing.direction() == Direction::Deconstruct {
             fragment.value = CValue::BorrowedSequence {
                 element_wire: inner.destination.clone(),
@@ -1174,6 +1182,10 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
                 source: at.crossing.spelled().clone(),
                 destination,
+                shape: product_shape(
+                    &function,
+                    parts.iter().map(|(_, frag)| fragment_use(frag)).collect(),
+                ),
                 function,
                 niches: Niches::empty(),
                 subs: subs.clone(),
@@ -1186,7 +1198,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     mode: at.crossing.mode(),
                     validity: Validity::SelfSufficient,
                 },
-                shape: CShape::Product(parts.iter().map(|(_, frag)| fragment_use(frag)).collect()),
                 value,
             });
         }
@@ -1260,6 +1271,10 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination: wire,
+            shape: product_shape(
+                &function,
+                parts.iter().map(|(_, frag)| fragment_use(frag)).collect(),
+            ),
             function,
             niches: Niches::empty(),
             subs,
@@ -1269,7 +1284,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 mode: at.crossing.mode(),
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Product(parts.iter().map(|(_, frag)| fragment_use(frag)).collect()),
             value,
         })
     }
@@ -1358,6 +1372,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
+            shape: choice_shape(&function, shape_arms),
             function,
             niches: Niches::empty(),
             subs,
@@ -1367,7 +1382,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 mode: at.crossing.mode(),
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Choice(shape_arms),
             value,
         })
     }
@@ -1399,6 +1413,10 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
+            shape: invoke_shape(
+                &function,
+                fragments.iter().map(|frag| fragment_use(frag)).collect(),
+            ),
             function,
             niches: Niches::empty(),
             subs: Vec::new(),
@@ -1408,7 +1426,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 mode: at.crossing.mode(),
                 validity: Validity::SelfSufficient,
             },
-            shape: CShape::Invoke(fragments.iter().map(|frag| fragment_use(frag)).collect()),
             value,
         })
     }

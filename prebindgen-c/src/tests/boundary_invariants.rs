@@ -745,11 +745,12 @@ fn legacy_c_shape_and_callback_planners_are_deleted() {
 ///
 /// A shape-shaped enum — one naming three or more of the registry's structural
 /// forms — is a place where the same structural question is asked a second
-/// time. Two are recorded here: `CShape`, which restates the registry's
-/// `ShapePlan` variant for variant while `CFrag::freeze` translates between
-/// them, and `CBody`, which is the rendering half of the same split. Both are
-/// deletion targets, so this list may shrink; it may not grow without a reader
-/// deciding that a third is worth having.
+/// time. Two were recorded here. `CShape` — which restated the registry's
+/// `ShapePlan` variant for variant while `CFrag::freeze` translated between
+/// them — **is gone**: a `CFrag` now carries its `ShapePlan` directly, built at
+/// the hook that composed it. What is left is `CBody`, the rendering half of
+/// the same split, which is a deletion target too. This list may shrink; it may
+/// not grow without a reader deciding that a third is worth having.
 ///
 /// The sources are DISCOVERED, not listed: a fence over a list only fences the
 /// files someone remembered to add to it, and a new module is the most natural
@@ -769,7 +770,7 @@ fn the_c_adapter_gains_no_third_shape_vocabulary() {
         .collect();
     assert_eq!(
         names,
-        ["CBody (src/chain.rs)", "CShape (src/compile.rs)"],
+        ["CBody (src/chain.rs)"],
         "the C shape vocabularies changed; #613 shrinks this list, and a new \
          entry needs an argument rather than a test update"
     );
