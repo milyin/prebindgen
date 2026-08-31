@@ -95,6 +95,16 @@ impl JFunction {
         matches!(self.0, JBody::Invoke(_))
     }
 
+    /// The delivery plan of a callback conversion, so the sites of the values
+    /// it delivers can name the ABI it finalized.
+    #[cfg(test)]
+    pub(crate) fn invoke_plan(&self) -> Option<&crate::jni::emit::JInvokePlan> {
+        match &self.0 {
+            JBody::Invoke(plan) => Some(plan),
+            _ => None,
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn is_value_codec(&self) -> bool {
         matches!(self.0, JBody::ValueCodec(_))

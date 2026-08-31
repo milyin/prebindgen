@@ -311,6 +311,11 @@ pub(crate) enum JAbiLeaves {
     /// One returned value: the plan that converts it, which is the plan the
     /// emitters read rather than the intermediate the site hook produces.
     Whole(std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>),
+    /// One value a callback delivers whole: the argument's own output ABI,
+    /// shared with the `JInvokePart` the trampoline renders. A returned value
+    /// and a delivered one are converted by different plans, so they are
+    /// different layouts — what they have in common is occupying one leaf.
+    Invoked(std::rc::Rc<OutValueAbi>),
 }
 
 impl JAbiLeaves {
@@ -322,7 +327,7 @@ impl JAbiLeaves {
         match self {
             Self::Params(leaf) => leaf.native.len(),
             Self::Decomposed(wires) => wires.len(),
-            Self::Whole(_) => 1,
+            Self::Whole(_) | Self::Invoked(_) => 1,
         }
     }
 }
@@ -346,6 +351,32 @@ pub(crate) fn whole_return_site(
             validity: Validity::SelfSufficient,
         },
         AbiLayout::new(1, JAbiLeaves::Whole(plan)),
+        Some(()),
+        prebindgen_registry::generation::Cleanup::None,
+    )
+}
+
+/// The canonical site of one value a callback delivers.
+///
+/// Built from the edge the `Invoke` recipe already states — the argument's own
+/// fragment and what that edge requires of it — and from the ABI the
+/// trampoline finalized, which it shares rather than copies. Neither half is
+/// derived here, which is what keeps this a carrier rather than a second
+/// answer beside the delivery (#622 review).
+#[cfg(test)]
+pub(crate) fn callback_arg_site(
+    bound: &prebindgen_registry::recipe::Bound,
+    edge: &prebindgen_registry::generation::FragmentUse,
+    abi: JAbiLeaves,
+) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+    use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+    let slots = abi.len();
+    SitePlan::new(
+        SiteId::new(bound.site.clone()),
+        bound.clone(),
+        edge.fragment().clone(),
+        edge.required().clone(),
+        AbiLayout::new(slots, abi),
         Some(()),
         prebindgen_registry::generation::Cleanup::None,
     )
@@ -3278,12 +3309,18 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Direction::Construct => self.borrow(ty, true),
             Direction::Deconstruct => self.borrow(ty, false),
         };
-        if conv.is_none()
-            && at.crossing.direction() == Direction::Deconstruct
-            && !self
-                .decls
-                .types
-                .contains_key(&at.crossing.value().stripped_key())
+        // Either the type has no whole JNI representation at all, or a site
+        // named the `parts` row a decomposed callback argument states. The
+        // second is how a `Role::CallbackArg` site reaches the same plan the
+        // trampoline delivers, instead of a fragment fabricated beside it.
+        let asks_parts = *at.recipe.name() == crate::jni::recipes::parts();
+        if at.crossing.direction() == Direction::Deconstruct
+            && (asks_parts
+                || (conv.is_none()
+                    && !self
+                        .decls
+                        .types
+                        .contains_key(&at.crossing.value().stripped_key())))
         {
             // A type-level output expansion is already a registry-owned
             // deconstruction plan. Some deliberately Rust-only types have no

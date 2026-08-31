@@ -69,6 +69,36 @@ proceeds but cannot grow unnoticed.
 occupies. The canonical plan has no multi-slot layout yet; #613 step 4 names
 that as a missing general contract rather than a JNI concept.
 
+### Decomposition structure
+
+Two mechanisms state how a value comes apart, and only one of them is a recipe.
+
+| | where | what it states |
+|---|---|---|
+| `Deconstruct` / `Reach` | registry `recipe.rs` | a product's parts as one-hop reaches; nesting is a part with its own recipe |
+| `DeconRecord` / `UnfoldPlan` | registry `unfold.rs` | the same decomposition, flattened: `Acc` splices a child's records, `FieldRecord.members` chains, `Identity` names the value itself |
+
+`unfold` predates the recipe table by two and a half months (`dacbd3ee`,
+2026-06-08, against #450/#451's `cfd020e8`, 2026-08-20) and does three further
+jobs no recipe does: lowering `expand_return!` declarations, registering each
+leaf's `out_ty` so the resolver emits its converter, and generating the reach
+code (`walk.rs`). Only the middle job is duplicated.
+
+The bridge between the two is `prebindgen-jni`'s `value_form_of`, which mirrors
+a declaration into a `Deconstruct::ValueForm` row and refuses three cases
+outright — a nested override, a multi-hop member chain, a self-reach. What it
+refuses has no row, so no site can name it.
+
+**This row is what the census above missed.** Step 1 surveyed adapter carriers;
+`unfold` sits in the registry, reads as language-neutral, and so never came up
+as a second answer — although `prebindgen-c` uses it zero times in production
+and 16 JNI files read `plan.leaves`. #622 names the seam rather than closing
+it: a crossing a callback delivers by taking it apart now states a `parts` row,
+so the argument's site has a row to name, and that row is `Deconstructing::Atomic`
+for the reason the declared-type loop already gives — the adapter emits the
+conversion itself. The structure is still stated once in `DeconRecord` and
+pointed at from the table. Step 10 is the deletion.
+
 ### Stage order
 
 `ConverterImpl::pre_stages` and `ConversionChain` both order the conversion

@@ -273,6 +273,9 @@ impl Declarations {
         registry: &impl prebindgen_registry::Conversions,
     ) -> Result<Recipes, Vec<RecipeError>> {
         let mut recipes = Recipes::builder();
+        // Which crossings already state a deconstructing `parts` row, so the
+        // decomposition block below adds one only where none was declared.
+        let mut parts_out: std::collections::HashSet<TypeKey> = std::collections::HashSet::new();
         // Every Kotlin class declaration, and every `convert!`-declared
         // conversion. The second matters as much as the first: a conversion may
         // be declared on a type the registry would otherwise read as an arity
@@ -319,6 +322,7 @@ impl Declarations {
                     recipes.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
                     if !arms.is_empty() {
                         recipes.declare(ty.clone(), parts(), Deconstructing::Choice { arms });
+                        parts_out.insert(ty.stripped_key());
                     }
                 }
                 // A `data_class` hands its value out as its fields too, so the
@@ -333,6 +337,7 @@ impl Declarations {
                             parts(),
                             Deconstructing::Product(Deconstruct::Fields(reaches)),
                         );
+                        parts_out.insert(ty.stripped_key());
                     }
                 }
                 _ => {
@@ -352,6 +357,7 @@ impl Declarations {
                         parts: reaches,
                     }),
                 );
+                parts_out.insert(ty.stripped_key());
             }
             // A `data_class` also has a recipe that says what it is made of, so
             // its constructing side names which of the two a site takes by
@@ -381,6 +387,47 @@ impl Declarations {
                     recipes.declare(ty, whole(), Constructing::Atomic);
                 }
             }
+        }
+
+        // A type a callback delivers by taking it apart states that as a row,
+        // so the argument's site has a recipe to name. Without one the site
+        // could only be fabricated — a `Bound` no binding answered — which is
+        // what #622's first two attempts produced and why they were withdrawn.
+        //
+        // `Atomic` for the reason the declared-type loop above gives for the
+        // two shapes that plainly have parts: the adapter emits this
+        // conversion itself, and how many wire values that costs is its own
+        // business. The parts are stated by the deconstructor declaration the
+        // registry already resolved into an `UnfoldPlan`, which this row does
+        // not restate — it names the crossing that plan decomposes. Deleting
+        // that second statement is #613 step 5b's, not this row's.
+        //
+        // The source is the plan's own owned core, so a plan keyed under `&T`
+        // and one keyed under `T` state one row; a type that already declared
+        // `parts` — a `data_class`, a `sealed_class`, a value form — keeps it.
+        //
+        // A **whole-element fold** is not one of these and must not earn a row.
+        // `apply_leaf_vec_folds` files a plan for `impl Fn(&[T])` under `&[T]`
+        // whose `source` is the ELEMENT and whose `decon` is `None`: nothing is
+        // taken apart, each element crosses whole through its own converter.
+        // Declaring `parts` off it would state a decomposition of `T` that does
+        // not exist — and, worse, a scalar `T` argument elsewhere in the same
+        // model would then bind to that row and name a fragment compiled under
+        // a different recipe (#623 review). `decon` is the gate the model
+        // already carries for this: `None` only for the whole-element arm.
+        let mut decomposed: BTreeMap<TypeKey, TypeRef> = BTreeMap::new();
+        for plan in registry.callback_arg_plans().values() {
+            if plan.decon.is_none() {
+                continue;
+            }
+            let key = plan.source.stripped_key();
+            if parts_out.contains(&key) {
+                continue;
+            }
+            decomposed.entry(key).or_insert_with(|| plan.source.clone());
+        }
+        for ty in decomposed.into_values() {
+            recipes.declare(ty, parts(), Deconstructing::Atomic);
         }
 
         // Every implicit Optional keeps its established whole/default input
@@ -680,7 +727,14 @@ impl Declarations {
                         );
                         continue;
                     }
-                    if !self.field_crosses_as_its_fields(core) {
+                    // A model-derived data class, or a type whose deconstructor
+                    // declaration earned the `parts` row above. Both take that
+                    // row here, so the fragment the trampoline delivers and the
+                    // one the argument's own `Role::CallbackArg` site names are
+                    // one fragment rather than two rows over one crossing.
+                    if !self.field_crosses_as_its_fields(core)
+                        && registry.callback_arg_plan(&arg.key()).is_none()
+                    {
                         continue;
                     }
                     let crossing = Crossing::new(arg.clone(), Direction::Deconstruct);
@@ -689,6 +743,42 @@ impl Declarations {
                     }
                     bound.bind(
                         Site::part(&row, index),
+                        crossing,
+                        Ask::Recipe(parts()),
+                        Origin::Adapter,
+                    );
+                }
+            }
+        }
+
+        // Each value a callback delivers is a root site of its own — the
+        // function-unique `Role::CallbackArg` the registry names, not the
+        // `Role::Part` above, which is keyed by the callback recipe every
+        // function with that signature shares.
+        //
+        // Bound to `parts` exactly where the argument's crossing states that
+        // row, which is now every argument the trampoline takes apart: a
+        // `data_class`, a `sealed_class`, an implicit Optional over one of
+        // those, or a type whose deconstructor declaration earned the row
+        // declared above. An argument that crosses whole names nothing here and
+        // takes its crossing's default, attributed to the adapter.
+        for f in model.functions() {
+            for (param, p) in f.params.iter().enumerate() {
+                let prebindgen_registry::flat::TypeKind::Callback { args } =
+                    p.ty.unwrapped().kind()
+                else {
+                    continue;
+                };
+                for (arg, ty) in args.iter().enumerate() {
+                    let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
+                    if recipes.key_of(&crossing.key(), &parts()).is_none() {
+                        continue;
+                    }
+                    bound.bind(
+                        Site {
+                            owner: f.name.clone(),
+                            role: prebindgen_registry::recipe::Role::CallbackArg { param, arg },
+                        },
                         crossing,
                         Ask::Recipe(parts()),
                         Origin::Adapter,

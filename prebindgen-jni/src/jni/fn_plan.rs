@@ -950,6 +950,47 @@ fn classify_leaf(
                     },
                     crate::jni::compile::JAbiLeaves::Params(leaf.clone()),
                 )));
+            // And one site per value the callback delivers. A delivered
+            // argument is a place in THIS function, which is what
+            // `Role::CallbackArg` names and why the registry keeps it apart
+            // from the `Role::Part` the shared callback recipe is compiled at:
+            // several functions taking one `impl Fn` signature share the
+            // delivery, and each states its own site over it.
+            //
+            // The recipe is `site_bindings`' answer, not one composed here. A
+            // fabricated `Bound` is what the first two attempts at this
+            // produced, and a site that misreports which row it took is worse
+            // than an absent one (#622 review).
+            if let Some(plan) = fragment.rust.invoke_plan() {
+                let arguments = match &fragment.shape {
+                    prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } => {
+                        arguments.as_slice()
+                    }
+                    _ => &[],
+                };
+                for (arg, ty) in args.iter().enumerate() {
+                    let (Some(edge), Some(abi)) = (arguments.get(arg), plan.arg_abi(arg)) else {
+                        continue;
+                    };
+                    let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
+                    let site = Site {
+                        owner: owner.clone(),
+                        role: prebindgen_registry::recipe::Role::CallbackArg {
+                            param: position,
+                            arg,
+                        },
+                    };
+                    let Some(bound) =
+                        ext.site_bindings()
+                            .resolve(&site, &crossing, ext.recipe_table())
+                    else {
+                        continue;
+                    };
+                    ext.site_plans.borrow_mut().push(std::rc::Rc::new(
+                        crate::jni::compile::callback_arg_site(&bound, edge, abi),
+                    ));
+                }
+            }
         }
         return Ok(leaf);
     }
