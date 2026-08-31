@@ -1089,7 +1089,8 @@ impl Declarations {
                         Some(self.effective_method_name(key, m).as_str()),
                         Some(key),
                     ) {
-                        for ov in crate::jni::render_param_overloads(self, item_fn, registry, &f) {
+                        for ov in crate::jni::param_overloads_of(self, item_fn, registry.flat(), &f)
+                        {
                             class = class.member(ov);
                         }
                         class = class.member(f);
@@ -1117,7 +1118,7 @@ impl Declarations {
                             None,
                         ) {
                             for ov in
-                                crate::jni::render_param_overloads(self, item_fn, registry, &f)
+                                crate::jni::param_overloads_of(self, item_fn, registry.flat(), &f)
                             {
                                 companion = companion.member(ov);
                             }
@@ -1848,7 +1849,7 @@ impl Declarations {
             if let Some(f) = render_wrapper_fn(self, item_fn, Some(&kotlin_name), None) {
                 // #52: idiomatic typed overloads for `.split_on_param`
                 // parameters, delegating to this selector wrapper.
-                for ov in render_param_overloads(self, item_fn, registry, &f) {
+                for ov in crate::jni::param_overloads_of(self, item_fn, registry.flat(), &f) {
                     file = file.decl(ov);
                 }
                 file = file.decl(f);

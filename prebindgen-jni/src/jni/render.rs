@@ -373,7 +373,7 @@ pub(crate) fn build_typed_handle(
                 Some(ext.effective_method_name(key, m).as_str()),
                 None,
             ) {
-                for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                for ov in crate::jni::param_overloads_of(ext, item_fn, registry.flat(), &f) {
                     companion = companion.member(ov);
                 }
                 companion = companion.member(f);
@@ -488,7 +488,7 @@ pub(crate) fn build_typed_handle(
                 Some(ext.effective_method_name(key, m).as_str()),
                 Some(key),
             ) {
-                for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                for ov in crate::jni::param_overloads_of(ext, item_fn, registry.flat(), &f) {
                     class = class.member(ov);
                 }
                 class = class.member(f);
