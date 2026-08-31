@@ -731,7 +731,7 @@
 <a href=#731 id=731 data-nosnippet>731</a>/// argument is the built value (`&amp;value` when the original parameter was `&amp;T`).
 <a href=#732 id=732 data-nosnippet>732</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>emit_expanded_param(
 <a href=#733 id=733 data-nosnippet>733</a>    plan: <span class="kw-2">&amp;</span>ExpandedParamPlan,
-<a href=#734 id=734 data-nosnippet>734</a>    leaves: <span class="kw-2">&amp;</span>[PlanLeaf],
+<a href=#734 id=734 data-nosnippet>734</a>    leaves: <span class="kw-2">&amp;</span>[std::rc::Rc&lt;PlanLeaf&gt;],
 <a href=#735 id=735 data-nosnippet>735</a>    orig_param: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#736 id=736 data-nosnippet>736</a>    on_err: <span class="kw-2">&amp;</span>TokenStream,
 <a href=#737 id=737 data-nosnippet>737</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
