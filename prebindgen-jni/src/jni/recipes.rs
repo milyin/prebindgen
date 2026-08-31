@@ -275,17 +275,30 @@ impl Declarations {
     /// in this workspace has that shape (measured: every `Fields` record stands
     /// alone), so the caller's `Atomic` fallback is a guard rather than a path
     /// anything takes.
-    fn parts_deconstruct(&self, ty: &TypeRef) -> Option<Deconstruct> {
+    fn parts_deconstruct(
+        &self,
+        model: &Flat,
+        registry: &impl prebindgen_registry::Conversions,
+        ty: &TypeRef,
+    ) -> Option<Deconstruct> {
         let decl = self
             .return_expand_decls
             .iter()
             .find(|d| *d.key() == ty.stripped_key())?;
         let fields = decl.field_list();
-        if let [crate::jni::LocalField::Fields(value_form)] = fields {
-            return Some(Deconstruct::ValueForm {
-                func: value_form.func().clone(),
-                parts: Vec::new(),
-            });
+        if matches!(fields, [crate::jni::LocalField::Fields(_)]) {
+            // `ValueForm` means "call this accessor, then read these parts off
+            // its result" — the parts are how the compiler reaches the returned
+            // struct's fields, so an empty list is a decomposition with nothing
+            // in it rather than one of everything (#638 review).
+            //
+            // `value_form_of` already computes exactly that mapping, and it is
+            // not a count: `lower_value_form` returns FLATTENED records, one of
+            // which can splice a child's fields, so `Report` yields six records
+            // over a five-field struct. It maps each record back to the struct
+            // field it names and declines the shapes a row cannot hold.
+            let (func, parts) = self.value_form_of(model, registry, ty)?;
+            return Some(Deconstruct::ValueForm { func, parts });
         }
         let mut reaches = Vec::with_capacity(fields.len());
         for field in fields {
@@ -469,7 +482,7 @@ impl Declarations {
             // `Atomic` here because `Reach` could not spell an identity leaf;
             // it can now (#635), so the row says how the value comes apart
             // instead of only existing to be selected (#613 step 10).
-            match self.parts_deconstruct(&ty) {
+            match self.parts_deconstruct(model, registry, &ty) {
                 Some(deconstruct) => {
                     recipes.declare(ty, parts(), Deconstructing::Product(deconstruct));
                 }
