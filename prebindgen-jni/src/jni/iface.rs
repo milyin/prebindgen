@@ -180,17 +180,17 @@ impl IfaceParam {
     pub fn conversion(
         &self,
         ext: &crate::jni::Declarations,
-        registry: &impl Conversions,
         imports: &mut std::collections::BTreeSet<String>,
     ) -> String {
         // A key the registry no longer knows is not a layer question — it is a
         // param built from a type this generation never classified, and the
         // leaf's own wrap is the whole answer there.
+        // Frozen when the param was built, not resolved again here: the
+        // renderer asks the declarations, never a `Conversions` (#613 step 7).
         let reading = self
             .reading
             .as_deref()
-            .and_then(|text| TypeKey::parse(text).ok())
-            .and_then(|key| registry.reading(&key));
+            .and_then(|text| ext.frozen_reading(text));
         match reading {
             Some(reading) => ext.carry_layers(
                 &self.wrap,
@@ -577,7 +577,6 @@ impl IfaceSpec {
     pub fn to_as_raw_fun(
         &self,
         ext: &crate::jni::Declarations,
-        registry: &impl Conversions,
         imports: &mut std::collections::BTreeSet<String>,
     ) -> KtFun {
         let bare_generics: Vec<String> = self
@@ -627,7 +626,7 @@ impl IfaceSpec {
             self.params
                 .iter()
                 .map(|p| RunArg {
-                    expr: p.conversion(ext, registry, imports),
+                    expr: p.conversion(ext, imports),
                     // A wrapped handle leaf closes as itself; its nullability
                     // rides `nullable` below, exactly as for a group.
                     close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
@@ -657,7 +656,7 @@ impl IfaceSpec {
                     None => {
                         let p = &self.params[at];
                         args.push(RunArg {
-                            expr: p.conversion(ext, registry, imports),
+                            expr: p.conversion(ext, imports),
                             close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
                             nullable: p.raw.is_nullable(),
                             reassembled: false,
@@ -1041,7 +1040,7 @@ fn leaf_iface_param(
                     typed: builder_kt.clone(),
                     raw,
                     wrap: WrapKind::Unsigned64 { niche_sentinel },
-                    reading: Some(out_ty.key().as_str().to_string()),
+                    reading: Some(ext.freeze_reading(out_ty)),
                 });
             }
             ProjectionKind::Handle => {}
@@ -1078,7 +1077,7 @@ fn leaf_iface_param(
                     fqn,
                     niche_sentinel,
                 },
-                reading: Some(out_ty.key().as_str().to_string()),
+                reading: Some(ext.freeze_reading(out_ty)),
             });
         }
         // Whole arg: typed class in both views (no proxy wrap).
@@ -1108,7 +1107,7 @@ fn leaf_iface_param(
                         typed: builder_kt.clone(),
                         raw,
                         wrap: WrapKind::None,
-                        reading: Some(out_ty.key().as_str().to_string()),
+                        reading: Some(ext.freeze_reading(out_ty)),
                     });
                 }
             }

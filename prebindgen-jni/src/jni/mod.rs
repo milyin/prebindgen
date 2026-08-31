@@ -1333,6 +1333,17 @@ pub struct Declarations {
     pub(crate) iface_specs:
         std::cell::RefCell<std::collections::BTreeMap<SpecKey, std::sync::Arc<IfaceSpec>>>,
 
+    /// Readings an interface param resolved when its spec was built, keyed by
+    /// the identity text the param carries.
+    ///
+    /// `IfaceParam::reading` is text because a spec is memoized behind an
+    /// `Arc` and a `TypeRef` carries non-`Send` interiors, so the resolved
+    /// answer cannot live in the spec. It lives here instead, outside the
+    /// `Arc`, which is what lets a renderer ask for the model's answer without
+    /// holding a `Conversions` (#613 step 7).
+    pub(crate) frozen_readings:
+        std::cell::RefCell<std::collections::BTreeMap<String, prebindgen_registry::flat::TypeRef>>,
+
     /// Memoized per-function lowered plans, one [`JniFunctionPlan`] per bound
     /// function/const-getter ident — the single lowering shared by validation
     /// and every emitter (Rust extern, JNINative extern, Kotlin wrapper,

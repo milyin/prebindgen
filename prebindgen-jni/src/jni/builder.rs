@@ -78,6 +78,27 @@ impl DeclaredKind {
 }
 
 impl Declarations {
+    /// Key `out_ty` the way an `IfaceParam` carries it, and remember the
+    /// reading behind that key so rendering needs no registry lookup.
+    ///
+    /// The param stores text, not the `TypeRef`, because its spec is memoized
+    /// behind an `Arc` and a `TypeRef` is not `Send`. Freezing the answer here
+    /// keeps the identity where it has to be and the resolution where a
+    /// renderer can reach it (#613 step 7).
+    pub(crate) fn freeze_reading(&self, out_ty: &prebindgen_registry::flat::TypeRef) -> String {
+        let key = out_ty.key().as_str().to_string();
+        self.frozen_readings
+            .borrow_mut()
+            .entry(key.clone())
+            .or_insert_with(|| out_ty.clone());
+        key
+    }
+
+    /// The reading behind an `IfaceParam`'s identity text.
+    pub(crate) fn frozen_reading(&self, text: &str) -> Option<prebindgen_registry::flat::TypeRef> {
+        self.frozen_readings.borrow().get(text).cloned()
+    }
+
     /// The module path a generated call to `#[prebindgen]` fn `ident` must be
     /// qualified with: the fn's **origin crate** as recorded from its
     /// stream's `SourceLocation` stamp (multi-source bindings — helper
@@ -155,6 +176,7 @@ impl Default for Declarations {
             ignored_const_idents: std::collections::HashSet::new(),
             local_fns: Vec::new(),
             iface_specs: Default::default(),
+            frozen_readings: Default::default(),
             fn_plans: Default::default(),
             struct_plans: Default::default(),
             sum_plans: Default::default(),
