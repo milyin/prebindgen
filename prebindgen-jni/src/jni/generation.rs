@@ -450,7 +450,27 @@ impl JniGenerationPlan {
             }
         }
         use prebindgen_registry::write::RustArtifact as _;
-        let root = |artifact: &JFinalArtifact| {
+        // A borrow delegates to the value it borrows, and says so in
+        // `ConverterImpl::subs` — the census's canonical answer for `subs` is
+        // "FragmentUse edges inside ShapePlan", which an atomic borrow fragment
+        // has nowhere to put. Until it does, the delegation is read from where
+        // the adapter already states it, so the plan roots the owned converter
+        // a borrowed one calls (#613 step 8).
+        let mut declared_surface: Vec<prebindgen_registry::generation::FragmentId> = Vec::new();
+        let mut delegations: std::collections::HashMap<_, Vec<_>> =
+            std::collections::HashMap::new();
+        for fragment in conversions.fragments() {
+            for sub in &fragment.conv.subs {
+                if let Some(target) = conversions.fragment(sub, fragment.id.direction()) {
+                    delegations
+                        .entry(fragment.id.clone())
+                        .or_default()
+                        .push(target.id.clone());
+                }
+            }
+        }
+        let root = |artifact: &JFinalArtifact,
+                    extra: &[prebindgen_registry::generation::FragmentId]| {
             let calls = artifact.calls();
             let inputs: Vec<_> = calls
                 .iter()
@@ -461,6 +481,7 @@ impl JniGenerationPlan {
                     prebindgen_registry::write::ArtifactKey::Artifact(_) => None,
                 })
                 .flatten()
+                .chain(extra.iter().cloned())
                 .map(prebindgen_registry::generation::ArtifactInput::Fragment)
                 .collect();
             if inputs.is_empty() {
@@ -481,6 +502,21 @@ impl JniGenerationPlan {
                 crate::jni::compile::JRepresentation,
             >::new(id, Vec::new(), inputs, artifact.clone()))
         };
+        // A declared class is binding surface in BOTH directions, whether or
+        // not this build happens to export a function that returns it — the
+        // same reason C roots its plan at `opaque`/`data`/`enum` declarations
+        // rather than at call sites alone. Without this a data class's output
+        // converter is reachable only by accident (#613 step 8).
+        for key in decls.types.keys() {
+            for direction in [
+                prebindgen_registry::recipe::Direction::Construct,
+                prebindgen_registry::recipe::Direction::Deconstruct,
+            ] {
+                if let Some(fragment) = conversions.fragment(key, direction) {
+                    declared_surface.push(fragment.id.clone());
+                }
+            }
+        }
         let mut seen = std::collections::HashSet::new();
         for artifact in std::iter::once(JFinalArtifact::Prelude)
             .chain(
@@ -520,13 +556,43 @@ impl JniGenerationPlan {
                     .map(|converter| JFinalArtifact::Converter(Box::new(converter))),
             )
         {
-            if let Some(rooted) = root(&artifact) {
+            // A converter artifact carries its owner's delegations; the
+            // exported artifacts above delegate through their calls alone.
+            let extra: Vec<_> = match artifact.key() {
+                prebindgen_registry::write::ArtifactKey::Operation(operation) => by_operation
+                    .get(&operation)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|owner| delegations.get(owner))
+                    .flatten()
+                    .cloned()
+                    .collect(),
+                prebindgen_registry::write::ArtifactKey::Artifact(_) => Vec::new(),
+            };
+            if let Some(rooted) = root(&artifact, &extra) {
                 // Shared converters are reached from several fragments and
                 // named once in the file; the plan names them once too.
                 if seen.insert(rooted.id().clone()) {
                     collected.artifact(rooted);
                 }
             }
+        }
+        if !declared_surface.is_empty() {
+            declared_surface.sort_by_cached_key(|id| format!("{id:?}"));
+            declared_surface.dedup();
+            collected.artifact(prebindgen_registry::generation::ArtifactPlan::<
+                crate::jni::compile::JRepresentation,
+            >::new(
+                prebindgen_registry::generation::ArtifactId::new("jni-declared-surface", "classes")
+                    .expect("a constant artifact name is non-empty"),
+                Vec::new(),
+                declared_surface
+                    .iter()
+                    .cloned()
+                    .map(prebindgen_registry::generation::ArtifactInput::Fragment)
+                    .collect(),
+                JFinalArtifact::Prelude,
+            ));
         }
         #[cfg_attr(not(test), allow(unused_variables))]
         let plan = collected.build().map_err(|errors| {
@@ -545,10 +611,12 @@ impl JniGenerationPlan {
         for getter in constant_exprs {
             assembly.artifact(JFinalArtifact::ConstantExpr(Box::new(getter)));
         }
+        let reached: std::collections::HashSet<_> =
+            plan.fragments().map(|f| f.id().clone()).collect();
         for converter in conversions
             .fragments()
             .into_iter()
-            .filter(|fragment| !fragment.composed_only)
+            .filter(|fragment| !fragment.composed_only && reached.contains(&fragment.id))
             .flat_map(crate::jni::compile::JFrag::converter_artifacts)
         {
             assembly.artifact(JFinalArtifact::Converter(Box::new(converter)));
