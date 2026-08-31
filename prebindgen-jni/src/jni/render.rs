@@ -801,10 +801,11 @@ pub(crate) fn build_wrapper_surface(
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<WrapperSurface> {
+    let fplan = ext.fn_plan(registry, f).ok()?;
     build_wrapper_surface_with_recovery(
         ext,
         f,
-        registry,
+        &fplan,
         kotlin_name_override,
         receiver_key,
         RecoveryReturn::NullableReferences,
@@ -814,13 +815,12 @@ pub(crate) fn build_wrapper_surface(
 fn build_wrapper_surface_with_recovery(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
+    fplan: &std::rc::Rc<crate::jni::fn_plan::JniFunctionPlan>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
     recovery: RecoveryReturn,
 ) -> Option<WrapperSurface> {
     let mut body_imports = BTreeSet::new();
-    let fplan = ext.fn_plan(registry, f).ok()?;
     // The Kotlin extern in `JNINative` is keyed on the Rust ident (the
     // plan's `jni_method`). The per-entry `.name("...")` override only
     // changes the *user-facing* Kotlin wrapper name; the JNI call still has
@@ -830,10 +830,10 @@ fn build_wrapper_surface_with_recovery(
         None => kt_snake_to_camel(&f.name.to_string()),
     };
     let jni_call = fplan.jni_method.clone();
-    let (params, receiver_idx) = classify_params(&fplan, &mut body_imports, receiver_key)?;
-    let out = classify_output(ext, &fplan, &mut body_imports)?;
+    let (params, receiver_idx) = classify_params(fplan, &mut body_imports, receiver_key)?;
+    let out = classify_output(ext, fplan, &mut body_imports)?;
     let r_ty = recovery_return_type(&out, recovery);
-    let sink = error_sink_parts(&fplan, &mut body_imports, &r_ty)?;
+    let sink = error_sink_parts(fplan, &mut body_imports, &r_ty)?;
 
     let mut fun = KtFun::new(&kt_name).vis(KtVis::Public);
     if let Some(g) = &out.generic {
@@ -894,10 +894,11 @@ pub(crate) fn render_wrapper_fn(
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<KtFun> {
+    let fplan = ext.fn_plan(registry, f).ok()?;
     render_wrapper_fn_with_recovery(
         ext,
         f,
-        registry,
+        &fplan,
         kotlin_name_override,
         receiver_key,
         RecoveryReturn::NullableReferences,
@@ -907,7 +908,7 @@ pub(crate) fn render_wrapper_fn(
 fn render_wrapper_fn_with_recovery(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
+    fplan: &std::rc::Rc<crate::jni::fn_plan::JniFunctionPlan>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
     recovery: RecoveryReturn,
@@ -915,7 +916,7 @@ fn render_wrapper_fn_with_recovery(
     let surface = build_wrapper_surface_with_recovery(
         ext,
         f,
-        registry,
+        fplan,
         kotlin_name_override,
         receiver_key,
         recovery,
@@ -931,8 +932,7 @@ fn render_wrapper_fn_with_recovery(
     // KDoc: the Rust fn's `///` prose first, then generated notes for every
     // position an expansion reshaped away from the Rust signature (N1).
     // Emission-only — the validator skips it.
-    let fplan = ext.fn_plan(registry, f).ok()?;
-    if let Some(doc) = wrapper_kdoc(f, &fplan) {
+    if let Some(doc) = wrapper_kdoc(f, fplan) {
         fun = fun.kdoc(doc);
     }
     // Collect the opaque-handle params so we can scaffold pointer-ordered
@@ -979,12 +979,13 @@ pub(crate) fn render_const_val(
     kotlin_name_override: Option<&str>,
 ) -> Option<(KtFun, KtProperty)> {
     let getter = const_getter_fn(c);
+    let fplan = ext.fn_plan_frozen(&getter)?;
     let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn_with_recovery(
         ext,
         &getter,
-        registry,
+        &fplan,
         Some(&helper_name),
         None,
         RecoveryReturn::Declared,
@@ -1017,12 +1018,13 @@ pub(crate) fn render_constant_fn_val(
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(KtFun, KtProperty)> {
+    let fplan = ext.fn_plan(registry, f).ok()?;
     let default = kt_snake_to_camel(&f.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn_with_recovery(
         ext,
         f,
-        registry,
+        &fplan,
         Some(&helper_name),
         None,
         RecoveryReturn::Declared,
@@ -1055,12 +1057,13 @@ pub(crate) fn render_const_expr_val(
     imports: &mut BTreeSet<String>,
 ) -> Option<(KtFun, KtProperty)> {
     let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+    let fplan = ext.fn_plan_frozen(&getter)?;
     let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn_with_recovery(
         ext,
         &getter,
-        registry,
+        &fplan,
         Some(&helper_name),
         None,
         RecoveryReturn::Declared,
