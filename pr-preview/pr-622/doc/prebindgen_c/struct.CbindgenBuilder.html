@@ -113,8 +113,8 @@ source struct’s bytes</strong>, so its field types are a <em>layout</em> fact.
 is a pointer and <code>T</code> is inline: to C they really are different types, and
 the size/align assert above would reject a mirror that pretended
 otherwise. So this path reads the wrapper the model erases —
-<a href="../prebindgen_flat/flat/ty/struct.TypeRef.html#method.kind" title="method prebindgen_flat::flat::ty::TypeRef::kind"><code>kind</code></a> rather than
-<a href="../prebindgen_flat/flat/ty/struct.TypeRef.html#method.unwrapped" title="method prebindgen_flat::flat::ty::TypeRef::unwrapped"><code>unwrapped</code></a> — on
+<a href="prebindgen_registry::flat::TypeRef::kind"><code>kind</code></a> rather than
+<a href="prebindgen_registry::flat::TypeRef::unwrapped"><code>unwrapped</code></a> — on
 purpose. It is the one place the usual “classify off <code>kind</code>, spell off
 the syntax” split inverts, and it inverts because the contract is layout
 rather than surface.</p>
