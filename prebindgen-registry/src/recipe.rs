@@ -183,14 +183,18 @@ pub enum Reach {
     /// while a handle leaf is the whole value with nothing between (#613 step
     /// 10).
     ///
-    /// **Validates but does not yet compile.** The part's type is the receiver,
-    /// so a compiler that resolves a part by compiling its type re-enters the
-    /// same crossing and recurses without bound — a declared identity row
-    /// overflows the stack rather than erroring. Validation is safe because
-    /// this reach reports no reached type at all. Making the row compilable
-    /// means saying which recipe the part resolves through — its value's
-    /// `whole` row, not the one being compiled — which is the next slice of
-    /// step 10 and the reason no row declares `Identity` yet.
+    /// **Declarable, but not yet useful.** The part's type is the receiver, so
+    /// it resolves through the crossing's DEFAULT row rather than the row being
+    /// compiled — otherwise the compiler re-enters the same crossing and
+    /// recurses until the stack runs out. When that default is the identity row
+    /// itself, the declaration is genuinely circular and is refused as a cycle.
+    ///
+    /// What such a row needs to be useful is a terminal part: a handle leaf's
+    /// converter is not another recipe row, it is the value's own codec, and
+    /// the adapter trait has no way to receive a part that carries no child
+    /// fragment (`construct`/`fields`/`value_form` all take
+    /// `(Part, &Fragment)` pairs). Until that exists, no row declares
+    /// `Identity`.
     Identity,
 }
 

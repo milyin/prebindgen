@@ -1264,6 +1264,44 @@ fn a_product_reached_through_a_borrow_lends_each_field() {
     assert!(plan.contains("payload=field1/&, key=field0/&"), "{plan}");
 }
 
+/// A declared identity row is refused, not an abort.
+///
+/// The part IS its receiver, so its crossing key equals the row's own and the
+/// compiler used to re-enter it until the stack ran out (#635). It resolves
+/// through the crossing's default row now, which for a type whose only row is
+/// the identity one is that row again — a cycle the declaration really wrote,
+/// and reported as one.
+///
+/// A handle leaf whose converter is terminal rather than another row is what
+/// makes such a declaration useful; that needs parts that carry no child
+/// fragment, which the adapter trait cannot express yet.
+#[test]
+fn a_self_defaulting_identity_row_is_refused_as_a_cycle() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    builder.declare_default(
+        ty(&model, "Sample"),
+        recipe_name("handle"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Identity])),
+    );
+    let recipes = builder.build(&model).expect("table");
+    let mut adapter = Recorder::default();
+    let bindings = Bindings::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let err = compiler
+        .site(
+            &mut adapter,
+            Site {
+                owner: ident("z_get"),
+                role: Role::Return,
+            },
+            Crossing::new(ty(&model, "&Sample"), Direction::Deconstruct),
+        )
+        .expect_err("an identity row that defaults to itself is a cycle");
+    assert!(format!("{err:?}").contains("Cycle"), "{err:?}");
+}
+
 #[test]
 fn an_omitted_reach_contributes_no_part() {
     let model = model(&[SAMPLE]);

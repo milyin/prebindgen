@@ -640,7 +640,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         ty: &TypeRef,
         wanted: Mode,
     ) -> Built<C> {
-        self.part_of(adapter, at, direction, None, index, ty, wanted)
+        self.part_of(adapter, at, direction, None, index, ty, wanted, false)
     }
 
     /// [`Self::part`] for a part inside a [`Shape::Choice`] arm, which numbers
@@ -655,9 +655,25 @@ impl<'a, C: Compile> Compiler<'a, C> {
         index: usize,
         ty: &TypeRef,
         wanted: Mode,
+        identity: bool,
     ) -> Built<C> {
         let crossing = Crossing::new(ty.clone(), direction);
         let site = Site::arm_part(at.recipe, arm, index);
+        // An identity part IS its receiver, so resolving it the ordinary way
+        // finds the row being compiled and recurses without bound. It takes the
+        // crossing's DEFAULT row instead — the value's own converter, which is
+        // what a handle leaf delivers. A default that is the row being compiled
+        // is a cycle the declaration actually wrote, and says so (#613 step 10).
+        if identity {
+            let (row, _) = self.recipes.recipe(&crossing);
+            if row == *at.recipe {
+                return Err(RecipeError::Cycle {
+                    path: vec![at.crossing.key(), crossing.key()],
+                }
+                .into());
+            }
+            return self.recipe(adapter, &crossing, &row);
+        }
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRecipe {
                 site,
@@ -858,6 +874,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 index,
                 &part.ty,
                 part.mode,
+                matches!(part.from, PartSource::Identity),
             )?);
         }
         let paired: Vec<(Part<'p>, &C::Fragment)> =
