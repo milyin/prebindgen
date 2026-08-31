@@ -183,18 +183,17 @@ pub enum Reach {
     /// while a handle leaf is the whole value with nothing between (#613 step
     /// 10).
     ///
-    /// **Declarable, but not yet useful.** The part's type is the receiver, so
-    /// it resolves through the crossing's DEFAULT row rather than the row being
-    /// compiled — otherwise the compiler re-enters the same crossing and
-    /// recurses until the stack runs out. When that default is the identity row
-    /// itself, the declaration is genuinely circular and is refused as a cycle.
+    /// The part's type is the receiver, so it resolves through the crossing's
+    /// DEFAULT row rather than the row being compiled — otherwise the compiler
+    /// re-enters the same crossing and recurses until the stack runs out. That
+    /// default is the value's own converter, which is exactly what a handle
+    /// leaf delivers.
     ///
-    /// What such a row needs to be useful is a terminal part: a handle leaf's
-    /// converter is not another recipe row, it is the value's own codec, and
-    /// the adapter trait has no way to receive a part that carries no child
-    /// fragment (`construct`/`fields`/`value_form` all take
-    /// `(Part, &Fragment)` pairs). Until that exists, no row declares
-    /// `Identity`.
+    /// So an identity row works **beside** a default row and not instead of
+    /// one: `whole` stays the default and `handle` states `Identity`, and a
+    /// site asks for `handle`. A type whose ONLY row is the identity one has a
+    /// default that is itself, which is genuinely circular and is refused as a
+    /// cycle.
     Identity,
 }
 
