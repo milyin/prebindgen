@@ -24,37 +24,37 @@ use super::*;
 /// the two — the same reason `FnOutputPlan::Value` boxes its own payload.
 pub(crate) enum JPlan {
     /// One parameter, in the seven-way wire layout the emitters branch on.
-    Param(Box<crate::jni::fn_plan::PlanLeaf>),
+    Param(std::rc::Rc<crate::jni::fn_plan::PlanLeaf>),
     /// A return that crosses as one value: what it converts through, and what
     /// the Kotlin surface declares.
-    Return(Box<crate::jni::fn_plan::ValueOutputPlan>),
+    Return(std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>),
     /// A return the binding takes apart: the values it hands out, in the order
     /// the builder receives them.
     ///
     /// Consumed by ordinary decomposed-return delivery. Callback delivery
     /// takes the same result in the following Invoke stage.
-    Decomposed(Vec<OutWire>),
+    Decomposed(std::rc::Rc<Vec<OutWire>>),
 }
 
 impl JPlan {
     /// This plan as a parameter's, or `None` if it is a return's.
-    pub(crate) fn param(self) -> Option<crate::jni::fn_plan::PlanLeaf> {
+    pub(crate) fn param(self) -> Option<std::rc::Rc<crate::jni::fn_plan::PlanLeaf>> {
         match self {
-            JPlan::Param(leaf) => Some(*leaf),
+            JPlan::Param(leaf) => Some(leaf),
             _ => None,
         }
     }
 
     /// This plan as a return's, or `None` if it is a parameter's.
-    pub(crate) fn returned(self) -> Option<crate::jni::fn_plan::ValueOutputPlan> {
+    pub(crate) fn returned(self) -> Option<std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>> {
         match self {
-            JPlan::Return(plan) => Some(*plan),
+            JPlan::Return(plan) => Some(plan),
             _ => None,
         }
     }
 
     /// The values a decomposed return hands out, or `None` if it is not one.
-    pub(crate) fn decomposed(self) -> Option<Vec<OutWire>> {
+    pub(crate) fn decomposed(self) -> Option<std::rc::Rc<Vec<OutWire>>> {
         match self {
             JPlan::Decomposed(wires) => Some(wires),
             _ => None,
@@ -207,7 +207,8 @@ impl prebindgen_registry::generation::Representation for JRepresentation {
     type Niche = String;
     type Cleanup = ();
     type FailureRoute = ();
-    type AbiLayout = JLayout;
+    /// A site's ordered ABI: the leaves that cross, in order.
+    type AbiLayout = JAbiLeaves;
     type Artifact = crate::jni::generation::JFinalArtifact;
 }
 
@@ -287,6 +288,98 @@ pub(crate) struct JFrag {
     /// own conversion to emit, so "has wires" is the wrong test for what to
     /// leave out of the file.
     pub(crate) composed_only: bool,
+}
+
+/// A site's ordered ABI is the leaves that cross, and nothing else.
+///
+/// Not the fragment's `JLayout`: that is how the fragment's own intermediate
+/// nests, which is a different fact and a different count — a `data_class`
+/// parameter is one intermediate over two native parameters. Cross-checking
+/// them by count asserted they were the same thing, and they are not.
+/// What a site's ordered leaves are, which depends on which side of the
+/// boundary the site sits on.
+#[derive(Clone)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) enum JAbiLeaves {
+    /// A parameter: its ordered native positions AND the operations that
+    /// decode them — the Rust and Kotlin param ops and the pipeline. The whole
+    /// leaf, shared, because those are what an emitter reads and a carrier
+    /// that held only the descriptors could not replace the plan.
+    Params(std::rc::Rc<crate::jni::fn_plan::PlanLeaf>),
+    /// The values a decomposed return hands out, in builder order.
+    Decomposed(std::rc::Rc<Vec<OutWire>>),
+    /// One returned value: the plan that converts it, which is the plan the
+    /// emitters read rather than the intermediate the site hook produces.
+    Whole(std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>),
+    /// One value a callback delivers whole: the argument's own output ABI,
+    /// shared with the `JInvokePart` the trampoline renders. A returned value
+    /// and a delivered one are converted by different plans, so they are
+    /// different layouts — what they have in common is occupying one leaf.
+    Invoked(std::rc::Rc<OutValueAbi>),
+}
+
+impl JAbiLeaves {
+    /// How many ordered ABI **leaves** these are — not how many JVM descriptor
+    /// slots they occupy. One native parameter is one leaf; `jvm_slots` says
+    /// how wide that leaf is in a descriptor, which is a different count and
+    /// summing it here made a two-slot `long` look like two leaves.
+    pub(crate) fn len(&self) -> usize {
+        match self {
+            Self::Params(leaf) => leaf.native.len(),
+            Self::Decomposed(wires) => wires.len(),
+            Self::Whole(_) | Self::Invoked(_) => 1,
+        }
+    }
+}
+
+/// The canonical site of a whole return, frozen from the plan the emitters read
+/// rather than the intermediate the site hook produced.
+#[cfg(test)]
+pub(crate) fn whole_return_site(
+    bound: &prebindgen_registry::recipe::Bound,
+    fragment: &prebindgen_registry::generation::FragmentId,
+    plan: std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>,
+) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+    use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+    SitePlan::new(
+        SiteId::new(bound.site.clone()),
+        bound.clone(),
+        fragment.clone(),
+        Yield {
+            ty: bound.crossing.value().stripped_key(),
+            mode: bound.crossing.mode(),
+            validity: Validity::SelfSufficient,
+        },
+        AbiLayout::new(1, JAbiLeaves::Whole(plan)),
+        Some(()),
+        prebindgen_registry::generation::Cleanup::None,
+    )
+}
+
+/// The canonical site of one value a callback delivers.
+///
+/// Built from the edge the `Invoke` recipe already states — the argument's own
+/// fragment and what that edge requires of it — and from the ABI the
+/// trampoline finalized, which it shares rather than copies. Neither half is
+/// derived here, which is what keeps this a carrier rather than a second
+/// answer beside the delivery (#622 review).
+#[cfg(test)]
+pub(crate) fn callback_arg_site(
+    bound: &prebindgen_registry::recipe::Bound,
+    edge: &prebindgen_registry::generation::FragmentUse,
+    abi: JAbiLeaves,
+) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+    use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+    let slots = abi.len();
+    SitePlan::new(
+        SiteId::new(bound.site.clone()),
+        bound.clone(),
+        edge.fragment().clone(),
+        edge.required().clone(),
+        AbiLayout::new(slots, abi),
+        Some(()),
+        prebindgen_registry::generation::Cleanup::None,
+    )
 }
 
 /// Structural JNI intermediate layout. Leaves are ABI values; Products nest
@@ -996,6 +1089,45 @@ impl JFrag {
         }
     }
 
+    /// This fragment as the plan for one **site** that uses it.
+    ///
+    /// The multi-slot ABI is what JNI demonstrates and C does not need: a C
+    /// site's value occupies the slots its own `CValue` states, while a JNI
+    /// site may occupy several ordered leaves — a `data_class` parameter
+    /// crossing as its fields, an optional as a presence flag ahead of its
+    /// value — and `JLayout` is how their nesting is spelled. `AbiLayout`
+    /// already carries exactly that pair: how many ordered leaves, and the
+    /// adapter's own layout of them.
+    ///
+    /// Failure IS routed at every site, and `Some(())` is how JNI says so. The
+    /// route carries no payload — a conversion failure goes to the error sink
+    /// the wrapper already holds, so there is nothing to choose between, where
+    /// a C site chooses an out-param or a panic. But presence is the semantic
+    /// edge the canonical plan validates: a fallible fragment used by a site
+    /// with no route is `MissingFailureRoute`, and freezing `None` made every
+    /// JNI site that (#622 review).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn freeze_site(
+        &self,
+        bound: &prebindgen_registry::recipe::Bound,
+        leaves: JAbiLeaves,
+    ) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+        use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+        // The leaves come from the plan that produced them — this does not
+        // derive them a second time, which is the whole point: a carrier
+        // derived beside the thing it carries is another parallel answer.
+        let slots = leaves.len();
+        SitePlan::new(
+            SiteId::new(bound.site.clone()),
+            bound.clone(),
+            self.id.clone(),
+            self.yields.clone(),
+            AbiLayout::new(slots, leaves),
+            Some(()),
+            prebindgen_registry::generation::Cleanup::None,
+        )
+    }
+
     /// Every private Rust artifact carried by this registry fragment.
     ///
     /// A custom conversion may add semantic Rust-side stages beside its
@@ -1375,6 +1507,49 @@ impl<R: Conversions> JCompile<'_, R> {
             crate::jni::chain::JFunction::value_codec(plan),
         ))
     }
+
+    /// Freeze this site into the canonical plan, taking its ordered ABI from
+    /// the plan just built rather than deriving it again.
+    #[cfg(test)]
+    fn freeze_site_of(&self, bound: &Bound, root: &JFrag, plan: &JPlan) {
+        let leaves = match plan {
+            // The whole leaf, not just its descriptors: `RustParamOp`,
+            // `KotlinParamOp` and the pipeline are the site's operations, and
+            // a carrier without them could not replace the plan (#622 review).
+            JPlan::Param(leaf) => JAbiLeaves::Params(leaf.clone()),
+            JPlan::Decomposed(wires) => JAbiLeaves::Decomposed(wires.clone()),
+            // A whole return is frozen where its FINAL plan is built, with the
+            // convert delivery attached — the hook's is an intermediate, and
+            // freezing it made the carrier authoritative for something no
+            // emitter reads (#622 review).
+            JPlan::Return(_) => return,
+        };
+        let frozen = root.freeze_site(bound, leaves);
+        // The carrier holds the SAME list the plan does, not a copy of it.
+        // That is the property that makes it a replacement: a copy could only
+        // be checked to match today, while one allocation has nothing to
+        // match. Guarded here so a later `clone()` cannot quietly reintroduce
+        // the second answer (#622 review).
+        match (frozen.abi().payload(), plan) {
+            (JAbiLeaves::Params(frozen), JPlan::Param(leaf)) => assert!(
+                std::rc::Rc::ptr_eq(frozen, leaf),
+                "the site's ABI is a copy of the plan's rather than the same leaf"
+            ),
+            (JAbiLeaves::Decomposed(frozen), JPlan::Decomposed(wires)) => assert!(
+                std::rc::Rc::ptr_eq(frozen, wires),
+                "the site's ABI is a copy of the plan's rather than the same list"
+            ),
+
+            _ => panic!("a site's frozen ABI does not match the plan it was taken from"),
+        }
+        self.decls
+            .site_plans
+            .borrow_mut()
+            .push(std::rc::Rc::new(frozen));
+    }
+
+    #[cfg(not(test))]
+    fn freeze_site_of(&self, _bound: &Bound, _root: &JFrag, _plan: &JPlan) {}
 
     /// Freeze a whole-object struct terminal from the Flat declaration and
     /// already-selected child chains. No source type is spelled and no Rust
@@ -3134,12 +3309,18 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Direction::Construct => self.borrow(ty, true),
             Direction::Deconstruct => self.borrow(ty, false),
         };
-        if conv.is_none()
-            && at.crossing.direction() == Direction::Deconstruct
-            && !self
-                .decls
-                .types
-                .contains_key(&at.crossing.value().stripped_key())
+        // Either the type has no whole JNI representation at all, or a site
+        // named the `parts` row a decomposed callback argument states. The
+        // second is how a `Role::CallbackArg` site reaches the same plan the
+        // trampoline delivers, instead of a fragment fabricated beside it.
+        let asks_parts = *at.recipe.name() == crate::jni::recipes::parts();
+        if at.crossing.direction() == Direction::Deconstruct
+            && (asks_parts
+                || (conv.is_none()
+                    && !self
+                        .decls
+                        .types
+                        .contains_key(&at.crossing.value().stripped_key())))
         {
             // A type-level output expansion is already a registry-owned
             // deconstruction plan. Some deliberately Rust-only types have no
@@ -3549,9 +3730,6 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     /// leaf, and the diagnostic for an unresolved leaf names the parameter that
     /// expanded.
     fn plan(&mut self, _cx: &mut Cx<'_>, bound: &Bound, root: &JFrag) -> Result<JPlan, JErr> {
-        use crate::jni::fn_plan::{
-            kotlin_jvm_slots, plan_error, KotlinParamOp, NativeParam, PlanLeaf, RustParamOp,
-        };
         let site = self
             .site
             .as_ref()
@@ -3565,13 +3743,15 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 // return: the site asked for the `parts` recipe and got what that
                 // recipe states. Nothing else distinguishes the two cases, and
                 // nothing needs to.
-                return Ok(match &root.out_wires {
+                let plan = match &root.out_wires {
                     Some(wires) => {
                         wires.iter().for_each(OutWire::activate);
-                        JPlan::Decomposed(wires.clone())
+                        JPlan::Decomposed(std::rc::Rc::new(wires.clone()))
                     }
-                    None => JPlan::Return(Box::new(self.return_plan(bound, root))),
-                });
+                    None => JPlan::Return(std::rc::Rc::new(self.return_plan(bound, root))),
+                };
+                self.freeze_site_of(bound, root, &plan);
+                return Ok(plan);
             }
             PlanSite::Param(site) => site,
         };
@@ -3774,7 +3954,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             }
         };
 
-        Ok(JPlan::Param(Box::new(PlanLeaf {
+        let plan = JPlan::Param(std::rc::Rc::new(PlanLeaf {
             reading: reading.clone(),
             kt_name,
             kt_public,
@@ -3782,10 +3962,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             as_enum_value,
             enum_niche,
             pipeline,
-            native,
+            native: std::rc::Rc::new(native),
             rust,
             kotlin,
-        })))
+        }));
+        self.freeze_site_of(bound, root, &plan);
+        Ok(plan)
     }
 }
 
@@ -3961,6 +4143,20 @@ impl Conv {
     #[cfg(test)]
     pub(crate) fn is_transparent_plan(&self) -> bool {
         self.0.rust.is_transparent()
+    }
+}
+
+impl Conv {
+    /// The fragment behind this conversion.
+    ///
+    /// A callback parameter is answered whole rather than compiled as a site
+    /// (`classify_leaf` says why: a callback ARGUMENT does not always have a
+    /// conversion of its own), so it has no `Bound` from the compiler — but it
+    /// does have a fragment, and this is what lets its site be stated
+    /// canonically anyway (#622 review).
+    #[cfg(test)]
+    pub(crate) fn fragment(&self) -> &JFrag {
+        &self.0
     }
 }
 
@@ -4188,6 +4384,8 @@ impl<R: Conversions> JCompile<'_, R> {
             .unwrap_or_else(|| bound.crossing.spelled());
         let (surface, enums) = crate::jni::fn_plan::ReturnSurface::classify(self.decls, declared);
         crate::jni::fn_plan::ValueOutputPlan {
+            #[cfg(test)]
+            site: Some((bound.clone(), root.id.clone())),
             is_convert: self.declared_return.is_some(),
             pipeline: Self::planned_pipeline(Direction::Deconstruct, bound.crossing.mode(), root),
             surface,

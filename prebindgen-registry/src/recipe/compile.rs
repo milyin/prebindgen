@@ -277,9 +277,13 @@ pub trait Compile {
     fn tolerates(&self, role: &Role) -> Validity {
         match role {
             Role::Return | Role::Error | Role::Const => Validity::SelfSufficient,
-            Role::Param { .. } | Role::Receiver | Role::CallbackArg { .. } | Role::Part { .. } => {
-                Validity::Borrowed
-            }
+            Role::Param { .. }
+            | Role::Receiver
+            | Role::CallbackArg { .. }
+            | Role::Part { .. }
+            // A leaf of an expanded parameter lives exactly as long as the
+            // parameter it came from, so it borrows on the same terms.
+            | Role::ExpansionLeaf { .. } => Validity::Borrowed,
         }
     }
 

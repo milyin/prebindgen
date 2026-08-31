@@ -1096,6 +1096,28 @@ pub struct SitePlan<R: Representation> {
     cleanup: Cleanup<R::Cleanup>,
 }
 
+// Cloned where a site travels with the plan being collected, for the same
+// reason [`ShapePlan`]'s impl is written out: `derive` would ask `R: Clone`,
+// and `R` names an adapter's associated types rather than being a value.
+impl<R: Representation> Clone for SitePlan<R>
+where
+    R::AbiLayout: Clone,
+    R::FailureRoute: Clone,
+    R::Cleanup: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            bound: self.bound.clone(),
+            fragment: self.fragment.clone(),
+            required: self.required.clone(),
+            abi: AbiLayout::new(self.abi.slots(), self.abi.payload().clone()),
+            failure_route: self.failure_route.clone(),
+            cleanup: self.cleanup.clone(),
+        }
+    }
+}
+
 impl<R: Representation> SitePlan<R> {
     /// Freeze the fragment, ABI, error route, and cleanup selected for a site.
     #[allow(clippy::too_many_arguments)]

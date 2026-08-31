@@ -103,6 +103,24 @@ pub enum Role {
         /// Which argument of that callback.
         arg: usize,
     },
+    /// One leaf of an **expanded** parameter.
+    ///
+    /// An `expand_param!` declaration replaces one source parameter with
+    /// several values, each crossing on its own. They are not
+    /// [`Param`](Self::Param)s: that index is the position in the source
+    /// parameter list, and an expansion's leaves all belong to the one
+    /// parameter that expanded — so numbering them as parameters would name
+    /// positions the function does not have and attach one parameter's site to
+    /// another's crossing (#622 review).
+    ///
+    /// Shaped like [`CallbackArg`](Self::CallbackArg) because the question is
+    /// the same one: which parameter, and which value within it.
+    ExpansionLeaf {
+        /// Which parameter of the exported function expanded.
+        param: usize,
+        /// Which leaf of that expansion.
+        leaf: usize,
+    },
     /// One part of another crossing's recipe.
     Part {
         /// The globally unique row that names this part.
@@ -132,6 +150,9 @@ impl fmt::Display for Role {
             Role::Error => f.write_str("error arm"),
             Role::CallbackArg { param, arg } => {
                 write!(f, "argument {arg} of the callback in parameter {param}")
+            }
+            Role::ExpansionLeaf { param, leaf } => {
+                write!(f, "leaf {leaf} of the expansion of parameter {param}")
             }
             Role::Part { recipe, arm, index } => match arm {
                 Some(arm) => write!(f, "part {index} of arm {arm} of {recipe}"),

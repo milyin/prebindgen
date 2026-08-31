@@ -3325,3 +3325,240 @@ fn a_flattened_leaf_names_the_classes_it_is_put_back_through() {
          levels in names both, outermost first"
     );
 }
+
+/// A site is a place in an exported function, and an expanded parameter's
+/// leaves are places within the ONE parameter that expanded.
+///
+/// `Role::Param`'s index is the position in the source parameter list, so
+/// numbering expansion leaves as parameters names positions the function does
+/// not have: for `(opts: ZOpts, tail: i64)` with a two-leaf expansion it made
+/// `Param(1)` — which denotes `tail` — carry the expansion's second leaf, and
+/// `Param(2)` denote nothing at all.
+///
+/// Uniqueness cannot catch that, and the collected `GenerationPlan` checks only
+/// uniqueness: the wrong mapping was unique too, which is why every test passed
+/// under it (#622 review). So this pins the identities themselves.
+#[test]
+fn an_expansion_leaf_is_a_place_within_the_parameter_that_expanded() {
+    use prebindgen_registry::recipe::Role;
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_opts_new(retries: i32, verbose: bool) -> ZOpts { unimplemented!() }",
+        "pub fn z_run(opts: ZOpts, tail: i64) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_run)))
+        .expand(
+            prebindgen_registry::expand_param!(ZOpts)
+                .variant(prebindgen_registry::fun!(z_opts_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let roles: Vec<String> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter(|plan| plan.id().site().owner == "z_run")
+        .map(|plan| match plan.id().site().role {
+            Role::Param { index } => format!("Param({index})"),
+            Role::ExpansionLeaf { param, leaf } => format!("ExpansionLeaf({param},{leaf})"),
+            ref other => format!("{other}"),
+        })
+        .collect();
+    assert_eq!(
+        roles,
+        [
+            // Every site of `z_run`, so the parameter places are pinned against
+            // the whole set rather than a filtered view of it.
+            "return value".to_string(),
+            "ExpansionLeaf(0,0)".to_string(),
+            "ExpansionLeaf(0,1)".to_string(),
+            "Param(1)".to_string(),
+        ],
+        "the expansion's two leaves belong to parameter 0, and `tail` keeps its \
+         own source position 1 — which the flattened numbering gave away"
+    );
+}
+
+/// A decomposed return's wires are the SAME allocation in the site plan and in
+/// the output plan the emitters read.
+///
+/// Sharing them was not enough on its own: `JPlan::decomposed` used to clone
+/// the `Vec` out of the shared handle, so the carrier matched a transient plan
+/// while the emitters read a copy. Nothing failed, because nothing compared the
+/// carrier with the FINAL plan (#622 review) — so this does.
+#[test]
+fn a_decomposed_return_shares_one_wire_list_with_its_site() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Pair {
+                    pub id: i64,
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn pair_new(id: i64) -> Pair {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Pair))
+                .fun(prebindgen_registry::fun!(pair_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    // The wires the site plan froze for the callback's decomposed delivery…
+    let site_wires: Vec<_> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter_map(|plan| match plan.abi().payload() {
+            crate::jni::compile::JAbiLeaves::Decomposed(wires) => Some(wires.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        !site_wires.is_empty(),
+        "the decomposed delivery must reach the site plan at all"
+    );
+    // …are the ones the FINAL plan holds, not a copy of them. Comparing
+    // against the site store alone would prove nothing: the store owns a
+    // handle, so any count is greater than one by construction.
+    let function = gen
+        .declarations()
+        .generation
+        .as_ref()
+        .expect("resolved JniGen has a frozen generation plan")
+        .function(&syn::parse_quote!(pair_new))
+        .expect("the exported function is planned");
+    let crate::jni::fn_plan::FnOutputPlan::Unfold(output) = &function.output else {
+        panic!("a decomposed return is an unfold delivery");
+    };
+    assert!(
+        site_wires
+            .iter()
+            .any(|wires| std::rc::Rc::ptr_eq(wires, &output.wires)),
+        "the plan the emitters read holds a copy of the wires rather than the \
+         list the site froze"
+    );
+}
+
+/// A whole return's canonical site holds the plan the emitters read — the one
+/// with the **convert delivery** attached, not the intermediate the site hook
+/// produced.
+///
+/// The fixture is a single-leaf `expand_return`, deliberately: an ordinary
+/// scalar return has `convert_delivery: None` before and after finalization, so
+/// it cannot tell the two objects apart and a change that finalized plain
+/// values while dropping the convert branch would pass (#622 review). This one
+/// asserts the three facts together — the return IS a convert, it HAS a
+/// delivery, and the site holds that same object.
+///
+/// `return_plan` answers before `build_output` attaches `convert_delivery`, so
+/// freezing the hook's object made the carrier authoritative for something no
+/// emitter consumes (#622 review). Identity is the check: the site's plan must
+/// be the same allocation `FnOutputPlan::Value` holds.
+#[test]
+fn a_whole_return_site_holds_the_plan_the_emitters_read() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOneStruct {
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_to_struct(o: &ZOne) -> ZOneStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_make(n: i64) -> ZOne {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOne))
+                .fun(prebindgen_registry::fun!(z_one_make)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZOne)
+                .fields(prebindgen_registry::fields!(z_one_to_struct)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let function = gen
+        .declarations()
+        .generation
+        .as_ref()
+        .expect("resolved JniGen has a frozen generation plan")
+        .function(&syn::parse_quote!(z_one_make))
+        .expect("the exported function is planned");
+    let crate::jni::fn_plan::FnOutputPlan::Value(output) = &function.output else {
+        panic!("a single-leaf value form takes the Return delivery");
+    };
+    // The three facts together: without the first two, identity alone would
+    // hold for a plain value whose delivery is `None` either way.
+    assert!(output.is_convert, "the return is a convert");
+    assert!(
+        output.convert_delivery.is_some(),
+        "the convert delivery is attached to the plan the emitters read"
+    );
+    let frozen: Vec<_> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter_map(|plan| match plan.abi().payload() {
+            crate::jni::compile::JAbiLeaves::Whole(value) => Some(value.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        frozen
+            .iter()
+            .any(|value| std::rc::Rc::ptr_eq(value, output)),
+        "the whole-return site holds a plan the emitters do not read"
+    );
+}

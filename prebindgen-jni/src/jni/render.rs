@@ -530,7 +530,7 @@ pub(crate) fn render_extern_decl(
     let jni_call = &fplan.jni_method;
     let mut params: Vec<KtParam> = Vec::new();
     for leaf in fplan.leaves() {
-        for native in &leaf.native {
+        for native in leaf.native.iter() {
             params.push(KtParam::new(
                 native.kt_name.clone(),
                 native.kt_wire.clone()?,
