@@ -1018,7 +1018,7 @@ pub(crate) fn render_constant_fn_val(
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(KtFun, KtProperty)> {
-    let fplan = ext.fn_plan(registry, f).ok()?;
+    let fplan = ext.fn_plan_frozen(f)?;
     let default = kt_snake_to_camel(&f.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn_with_recovery(
