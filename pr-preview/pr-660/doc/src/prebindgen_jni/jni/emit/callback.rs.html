@@ -508,7 +508,7 @@
 <a href=#508 id=508 data-nosnippet>508</a>        // projection, and the final JNI wire; rendering does not look the type
 <a href=#509 id=509 data-nosnippet>509</a>        // up again or reconstruct any of those decisions.
 <a href=#510 id=510 data-nosnippet>510</a>        </span><span class="kw">let </span>fragment = <span class="kw-2">*</span>arg_fragments.get(i)<span class="question-mark">?</span>;
-<a href=#511 id=511 data-nosnippet>511</a>        <span class="kw">let </span>arg_abi = fragment.output_abi();
+<a href=#511 id=511 data-nosnippet>511</a>        <span class="kw">let </span>arg_abi = <span class="kw">crate</span>::jni::compile::output_abi_of(<span class="kw-2">&amp;</span>fragment.freeze())<span class="question-mark">?</span>;
 <a href=#512 id=512 data-nosnippet>512</a>        arg_abi.activate();
 <a href=#513 id=513 data-nosnippet>513</a>        <span class="kw">let </span><span class="kw">crate</span>::jni::compile::OutAbi::Value(arg_value) = arg_abi <span class="kw">else </span>{
 <a href=#514 id=514 data-nosnippet>514</a>            <span class="macro">unreachable!</span>(<span class="string">"a whole callback argument is not a synthesized selector"</span>)
