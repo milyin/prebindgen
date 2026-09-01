@@ -880,10 +880,10 @@
 <a href=#880 id=880 data-nosnippet>880</a>// Struct input flattening (pass a data_class param as its leaf fields)
 <a href=#881 id=881 data-nosnippet>881</a>// ──────────────────────────────────────────────────────────────────────
 <a href=#882 id=882 data-nosnippet>882</a>
-<a href=#883 id=883 data-nosnippet>883</a></span><span class="doccomment">/// One flattened leaf of a struct **input** param. The mirror of
-<a href=#884 id=884 data-nosnippet>884</a>/// [`EncSlot`] for the input direction: instead of reading the field with
-<a href=#885 id=885 data-nosnippet>885</a>/// `env.get_field(...)` out of a single `JObject`, the leaf crosses the JNI
-<a href=#886 id=886 data-nosnippet>886</a>/// boundary as its own wrapper parameter, and the three coordinated sites — the
+<a href=#883 id=883 data-nosnippet>883</a></span><span class="doccomment">/// One flattened leaf of a struct **input** param — the input direction's own
+<a href=#884 id=884 data-nosnippet>884</a>/// slot: instead of reading the field with `env.get_field(...)` out of a single
+<a href=#885 id=885 data-nosnippet>885</a>/// `JObject`, the leaf crosses the JNI boundary as its own wrapper parameter,
+<a href=#886 id=886 data-nosnippet>886</a>/// and the three coordinated sites — the
 <a href=#887 id=887 data-nosnippet>887</a>/// native wrapper signature, the `JNINative` extern declaration and the Kotlin
 <a href=#888 id=888 data-nosnippet>888</a>/// call-site destructure — read it so they cannot drift in order, type, or
 <a href=#889 id=889 data-nosnippet>889</a>/// nullability.

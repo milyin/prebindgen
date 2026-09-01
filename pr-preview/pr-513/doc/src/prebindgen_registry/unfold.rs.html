@@ -36,8 +36,8 @@
 <a href=#36 id=36 data-nosnippet>36</a><span class="kw">mod </span>walk;
 <a href=#37 id=37 data-nosnippet>37</a><span class="kw">pub use </span>walk::{
 <a href=#38 id=38 data-nosnippet>38</a>    bind_as_option, bind_hoists, compose_step, conditional_arm, fold_steps, project_leading_fields,
-<a href=#39 id=39 data-nosnippet>39</a>    reach_leaf, reached_is_ours, segment, segments, DecomposedLeaf, DeliveryBridge, Hoisted,
-<a href=#40 id=40 data-nosnippet>40</a>    LeafAt, LeafPlace, Reach, Slot,
+<a href=#39 id=39 data-nosnippet>39</a>    reach_leaf, reached_is_ours, segment, segments, segments_at, DecomposedLeaf, DeliveryBridge,
+<a href=#40 id=40 data-nosnippet>40</a>    Hoisted, LeafAt, LeafPlace, Reach, Slot,
 <a href=#41 id=41 data-nosnippet>41</a>};
 <a href=#42 id=42 data-nosnippet>42</a>
 <a href=#43 id=43 data-nosnippet>43</a><span class="kw">mod </span>plan;
@@ -540,7 +540,7 @@
 <a href=#540 id=540 data-nosnippet>540</a>///
 <a href=#541 id=541 data-nosnippet>541</a>/// Its [`leaves`](Self::leaves) are a [`LeafSource::SumTag`] selector followed
 <a href=#542 id=542 data-nosnippet>542</a>/// by one **group** per alternative ([`LeafSource::VariantField`] leaves
-<a href=#543 id=543 data-nosnippet>543</a>/// carrying [`UnfoldLeaf::group`]). Exactly one group is live per value; the
+<a href=#543 id=543 data-nosnippet>543</a>/// carrying [`UnfoldLeaf::groups`]). Exactly one group is live per value; the
 <a href=#544 id=544 data-nosnippet>544</a>/// emitter reads the whole list as ONE `match` over the value, filling every
 <a href=#545 id=545 data-nosnippet>545</a>/// inert slot with its wire default. The foreign side picks the live group by
 <a href=#546 id=546 data-nosnippet>546</a>/// the tag and rebuilds the alternative, so no object is built on the Rust
@@ -1421,7 +1421,7 @@
 <a href=#1421 id=1421 data-nosnippet>1421</a>                    identity: <span class="bool-val">true</span>,
 <a href=#1422 id=1422 data-nosnippet>1422</a>                    nullable,
 <a href=#1423 id=1423 data-nosnippet>1423</a>                    source: LeafSource::Reach,
-<a href=#1424 id=1424 data-nosnippet>1424</a>                    group: <span class="prelude-val">None</span>,
+<a href=#1424 id=1424 data-nosnippet>1424</a>                    groups: Vec::new(),
 <a href=#1425 id=1425 data-nosnippet>1425</a>                });
 <a href=#1426 id=1426 data-nosnippet>1426</a>            }
 <a href=#1427 id=1427 data-nosnippet>1427</a>            DeconRecord::Fields {
@@ -1604,7 +1604,7 @@
 <a href=#1604 id=1604 data-nosnippet>1604</a>                            identity: <span class="bool-val">false</span>,
 <a href=#1605 id=1605 data-nosnippet>1605</a>                            nullable,
 <a href=#1606 id=1606 data-nosnippet>1606</a>                            source: LeafSource::Reach,
-<a href=#1607 id=1607 data-nosnippet>1607</a>                            group: <span class="prelude-val">None</span>,
+<a href=#1607 id=1607 data-nosnippet>1607</a>                            groups: Vec::new(),
 <a href=#1608 id=1608 data-nosnippet>1608</a>                        });
 <a href=#1609 id=1609 data-nosnippet>1609</a>                    }
 <a href=#1610 id=1610 data-nosnippet>1610</a>                }
@@ -1705,7 +1705,7 @@
 <a href=#1705 id=1705 data-nosnippet>1705</a>                        identity,
 <a href=#1706 id=1706 data-nosnippet>1706</a>                        nullable,
 <a href=#1707 id=1707 data-nosnippet>1707</a>                        source: LeafSource::Reach,
-<a href=#1708 id=1708 data-nosnippet>1708</a>                        group: <span class="prelude-val">None</span>,
+<a href=#1708 id=1708 data-nosnippet>1708</a>                        groups: Vec::new(),
 <a href=#1709 id=1709 data-nosnippet>1709</a>                    });
 <a href=#1710 id=1710 data-nosnippet>1710</a>                }
 <a href=#1711 id=1711 data-nosnippet>1711</a>            }

@@ -8,7 +8,7 @@ knows how each payload encodes) and handed over as
 selector-carrying sibling of <a href="struct.ValueDecon.html" title="struct prebindgen_registry::unfold::ValueDecon"><code>ValueDecon</code></a>.</p>
 <p>Its <a href="struct.SumDecon.html#structfield.leaves" title="field prebindgen_registry::unfold::SumDecon::leaves"><code>leaves</code></a> are a <a href="enum.LeafSource.html#variant.SumTag" title="variant prebindgen_registry::unfold::LeafSource::SumTag"><code>LeafSource::SumTag</code></a> selector followed
 by one <strong>group</strong> per alternative (<a href="enum.LeafSource.html#variant.VariantField" title="variant prebindgen_registry::unfold::LeafSource::VariantField"><code>LeafSource::VariantField</code></a> leaves
-carrying <a href="struct.UnfoldLeaf.html#structfield.group" title="field prebindgen_registry::unfold::UnfoldLeaf::group"><code>UnfoldLeaf::group</code></a>). Exactly one group is live per value; the
+carrying <a href="struct.UnfoldLeaf.html#structfield.groups" title="field prebindgen_registry::unfold::UnfoldLeaf::groups"><code>UnfoldLeaf::groups</code></a>). Exactly one group is live per value; the
 emitter reads the whole list as ONE <code>match</code> over the value, filling every
 inert slot with its wire default. The foreign side picks the live group by
 the tag and rebuilds the alternative, so no object is built on the Rust
