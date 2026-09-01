@@ -49,10 +49,10 @@ predicate over ANY item kind.</p>
 <a href="../enum.ExpandDecl.html" title="enum prebindgen_jni::ExpandDecl"><code>ExpandDecl</code></a> directions, the direction carried by the decl object
 (the boundary-decl peer of <a href="struct.PackageDecl.html#method.class" title="method prebindgen_jni::jni::PackageDecl::class"><code>PackageDecl::class</code></a>):</p>
 <ul>
-<li><a href="prebindgen_registry::expand_param"><code>expand_param!</code></a> — the input side: how a
+<li><a href="../../prebindgen_registry/macro.expand_param.html" title="macro prebindgen_registry::expand_param"><code>expand_param!</code></a> — the input side: how a
 parameter of the type may be supplied, as an OR-list of build
 variants.</li>
-<li><a href="prebindgen_registry::expand_return"><code>expand_return!</code></a> — the output side: the
+<li><a href="../../prebindgen_registry/macro.expand_return.html" title="macro prebindgen_registry::expand_return"><code>expand_return!</code></a> — the output side: the
 AND-set of fields a returned / callback-delivered / <code>Result</code>-error
 value of the type decomposes into.</li>
 </ul>
@@ -60,7 +60,7 @@ value of the type decomposes into.</li>
 single function overrides via the <a href="../struct.FunctionDecl.html" title="struct prebindgen_jni::FunctionDecl"><code>FunctionDecl</code></a> <code>param_expand*</code> /
 <code>return_expand*</code> methods.</p>
 </div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-JniGenBuilder-3" class="impl"><a class="src rightside" href="../../src/prebindgen_jni/jni/builder.rs.html#1521-1544">Source</a><a href="#impl-JniGenBuilder-3" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.JniGenBuilder.html" title="struct prebindgen_jni::jni::JniGenBuilder">JniGenBuilder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.convert" class="method"><a class="src rightside" href="../../src/prebindgen_jni/jni/builder.rs.html#1530-1543">Source</a><h4 class="code-header">pub fn <a href="#method.convert" class="fn">convert</a>(self, decl: <a class="struct" href="../struct.ConvertDecl.html" title="struct prebindgen_jni::ConvertDecl">ConvertDecl</a>) -&gt; Self</h4></section></summary><div class="docblock"><p>Declare a type’s <strong>canonical single-value conversion</strong> (a
-<a href="../struct.ConvertDecl.html" title="struct prebindgen_jni::ConvertDecl"><code>ConvertDecl</code></a>, built with <a href="prebindgen_registry::convert"><code>convert!</code></a>): a pair of
+<a href="../struct.ConvertDecl.html" title="struct prebindgen_jni::ConvertDecl"><code>ConvertDecl</code></a>, built with <a href="../../prebindgen_registry/macro.convert.html" title="macro prebindgen_registry::convert"><code>convert!</code></a>): a pair of
 <code>#[prebindgen]</code> functions carrying one value of the type across the
 boundary wherever a single value is needed (params, returns,
 <code>Option</code>/<code>Vec</code> elements, the <code>Result&lt;T, E&gt;</code> success position,
@@ -131,7 +131,7 @@ work (±3%, mixed sign); the cheapest op (<code>put</code> with no string field,
 nanosecond. This setting exists so that claim can be independently
 re-verified on your own workload — generate once with <code>false</code>,
 benchmark both, and keep the default — not as an optimization knob.</p>
-</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-JniGenBuilder-5" class="impl"><a class="src rightside" href="../../src/prebindgen_jni/jni/trait_impl.rs.html#572-762">Source</a><a href="#impl-JniGenBuilder-5" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.JniGenBuilder.html" title="struct prebindgen_jni::jni::JniGenBuilder">JniGenBuilder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.build" class="method"><a class="src rightside" href="../../src/prebindgen_jni/jni/trait_impl.rs.html#595-603">Source</a><h4 class="code-header">pub fn <a href="#method.build" class="fn">build</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.JniGen.html" title="struct prebindgen_jni::jni::JniGen">JniGen</a>, WriteRustError&gt;</h4></section></summary><div class="docblock"><p>State this binding into <code>registry</code>: what it exports, what crosses, and
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-JniGenBuilder-5" class="impl"><a class="src rightside" href="../../src/prebindgen_jni/jni/trait_impl.rs.html#572-762">Source</a><a href="#impl-JniGenBuilder-5" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.JniGenBuilder.html" title="struct prebindgen_jni::jni::JniGenBuilder">JniGenBuilder</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.build" class="method"><a class="src rightside" href="../../src/prebindgen_jni/jni/trait_impl.rs.html#595-603">Source</a><h4 class="code-header">pub fn <a href="#method.build" class="fn">build</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.JniGen.html" title="struct prebindgen_jni::jni::JniGen">JniGen</a>, <a class="enum" href="../../prebindgen_registry/registry/error/enum.WriteRustError.html" title="enum prebindgen_registry::registry::error::WriteRustError">WriteRustError</a>&gt;</h4></section></summary><div class="docblock"><p>State this binding into <code>registry</code>: what it exports, what crosses, and
 what it defines itself.</p>
 <p><strong>Push, not pull.</strong> The registry does not call back to ask — the build
 script calls this, and the registry stays a passive recorder. That is
