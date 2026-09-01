@@ -707,7 +707,7 @@
 <a href=#707 id=707 data-nosnippet>707</a>            decl.rust_ident()
 <a href=#708 id=708 data-nosnippet>708</a>        );
 <a href=#709 id=709 data-nosnippet>709</a>        <span class="macro">assert!</span>(
-<a href=#710 id=710 data-nosnippet>710</a>            decl.kotlin_name_override().is_none(),
+<a href=#710 id=710 data-nosnippet>710</a>            decl.name_override().is_none(),
 <a href=#711 id=711 data-nosnippet>711</a>            <span class="string">"constant `{}`: the val name belongs on `constant!(…)` (or its `.name(…)`), \
 <a href=#712 id=712 data-nosnippet>712</a>             not on the source fn `{}`"</span>,
 <a href=#713 id=713 data-nosnippet>713</a>            <span class="self">self</span>.rust_ident,
@@ -778,7 +778,7 @@
 <a href=#778 id=778 data-nosnippet>778</a><span class="kw">impl </span>From&lt;FunctionDecl&gt; <span class="kw">for </span>IgnoreDecl {
 <a href=#779 id=779 data-nosnippet>779</a>    <span class="kw">fn </span>from(decl: FunctionDecl) -&gt; <span class="self">Self </span>{
 <a href=#780 id=780 data-nosnippet>780</a>        <span class="macro">assert!</span>(
-<a href=#781 id=781 data-nosnippet>781</a>            decl.kotlin_name_override().is_none()
+<a href=#781 id=781 data-nosnippet>781</a>            decl.name_override().is_none()
 <a href=#782 id=782 data-nosnippet>782</a>                &amp;&amp; decl.param_expands().is_empty()
 <a href=#783 id=783 data-nosnippet>783</a>                &amp;&amp; decl.return_expand().is_none(),
 <a href=#784 id=784 data-nosnippet>784</a>            <span class="string">"ignore(fun!({})): an ignored fn is never surfaced — \

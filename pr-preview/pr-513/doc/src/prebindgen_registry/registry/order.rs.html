@@ -102,34 +102,44 @@
 <a href=#102 id=102 data-nosnippet>102</a>    /// see.
 <a href=#103 id=103 data-nosnippet>103</a>    ///
 <a href=#104 id=104 data-nosnippet>104</a>    /// A callback argument delivered as leaves needs each leaf's own conversion
-<a href=#105 id=105 data-nosnippet>105</a>    /// before the callback's can be built — and a leaf is named by a plan, not
-<a href=#106 id=106 data-nosnippet>106</a>    /// by the argument's syntax. Without this the order would be structurally
-<a href=#107 id=107 data-nosnippet>107</a>    /// correct and still wrong, which is exactly the kind of gap the old
-<a href=#108 id=108 data-nosnippet>108</a>    /// fixed-point loop papered over by retrying.
-<a href=#109 id=109 data-nosnippet>109</a>    /// Crossings, not spellings: every edge here is a table lookup, and the
-<a href=#110 id=110 data-nosnippet>110</a>    /// model names both ends. `callback_args` is the classification
-<a href=#111 id=111 data-nosnippet>111</a>    /// `extract_fn_trait_args` re-derived from the parameter's bounds, and a
-<a href=#112 id=112 data-nosnippet>112</a>    /// leaf's `out_ty` is a reading whose key is its own.
-<a href=#113 id=113 data-nosnippet>113</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>plan_edges(
-<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#115 id=115 data-nosnippet>115</a>        dir: Direction,
-<a href=#116 id=116 data-nosnippet>116</a>        ty: <span class="kw-2">&amp;</span>prebindgen_flat::flat::TypeRef,
-<a href=#117 id=117 data-nosnippet>117</a>    ) -&gt; Vec&lt;Crossing&gt; {
-<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw">if </span>dir != Direction::Construct {
-<a href=#119 id=119 data-nosnippet>119</a>            <span class="kw">return </span>Vec::new();
-<a href=#120 id=120 data-nosnippet>120</a>        }
-<a href=#121 id=121 data-nosnippet>121</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(args) = ty.callback_args() <span class="kw">else </span>{
-<a href=#122 id=122 data-nosnippet>122</a>            <span class="kw">return </span>Vec::new();
-<a href=#123 id=123 data-nosnippet>123</a>        };
-<a href=#124 id=124 data-nosnippet>124</a>        <span class="kw">let </span><span class="kw-2">mut </span>out = Vec::new();
-<a href=#125 id=125 data-nosnippet>125</a>        <span class="kw">for </span>arg <span class="kw">in </span>args {
-<a href=#126 id=126 data-nosnippet>126</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(plan) = <span class="self">self</span>.callback_arg_plans.get(<span class="kw-2">&amp;</span>arg.key()) {
-<a href=#127 id=127 data-nosnippet>127</a>                <span class="kw">for </span>leaf <span class="kw">in </span><span class="kw-2">&amp;</span>plan.leaves {
-<a href=#128 id=128 data-nosnippet>128</a>                    out.push((Direction::Deconstruct, leaf.out_ty.key()));
-<a href=#129 id=129 data-nosnippet>129</a>                }
-<a href=#130 id=130 data-nosnippet>130</a>            }
-<a href=#131 id=131 data-nosnippet>131</a>        }
-<a href=#132 id=132 data-nosnippet>132</a>        out
-<a href=#133 id=133 data-nosnippet>133</a>    }
-<a href=#134 id=134 data-nosnippet>134</a>}
+<a href=#105 id=105 data-nosnippet>105</a>    /// before the callback's can be built — and a leaf is named by a
+<a href=#106 id=106 data-nosnippet>106</a>    /// decomposition, not by the argument's syntax. Without this the order would
+<a href=#107 id=107 data-nosnippet>107</a>    /// be structurally correct and still wrong, which is exactly the kind of gap
+<a href=#108 id=108 data-nosnippet>108</a>    /// the old fixed-point loop papered over by retrying.
+<a href=#109 id=109 data-nosnippet>109</a>    ///
+<a href=#110 id=110 data-nosnippet>110</a>    /// The leaves are the adapter's answer, declared as
+<a href=#111 id=111 data-nosnippet>111</a>    /// [`Decompositions::callback_arg_leaves`](crate::Decompositions::callback_arg_leaves):
+<a href=#112 id=112 data-nosnippet>112</a>    /// which readings a decomposition delivers is the adapter's to say, while
+<a href=#113 id=113 data-nosnippet>113</a>    /// what that means for the order is the registry's.
+<a href=#114 id=114 data-nosnippet>114</a>    /// Crossings, not spellings: every edge here is a table lookup, and the
+<a href=#115 id=115 data-nosnippet>115</a>    /// model names both ends. `callback_args` is the classification
+<a href=#116 id=116 data-nosnippet>116</a>    /// `extract_fn_trait_args` re-derived from the parameter's bounds, and a
+<a href=#117 id=117 data-nosnippet>117</a>    /// leaf reading's key is its own.
+<a href=#118 id=118 data-nosnippet>118</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>plan_edges(
+<a href=#119 id=119 data-nosnippet>119</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#120 id=120 data-nosnippet>120</a>        dir: Direction,
+<a href=#121 id=121 data-nosnippet>121</a>        ty: <span class="kw-2">&amp;</span>prebindgen_flat::flat::TypeRef,
+<a href=#122 id=122 data-nosnippet>122</a>    ) -&gt; Vec&lt;Crossing&gt; {
+<a href=#123 id=123 data-nosnippet>123</a>        <span class="kw">if </span>dir != Direction::Construct {
+<a href=#124 id=124 data-nosnippet>124</a>            <span class="kw">return </span>Vec::new();
+<a href=#125 id=125 data-nosnippet>125</a>        }
+<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(args) = ty.callback_args() <span class="kw">else </span>{
+<a href=#127 id=127 data-nosnippet>127</a>            <span class="kw">return </span>Vec::new();
+<a href=#128 id=128 data-nosnippet>128</a>        };
+<a href=#129 id=129 data-nosnippet>129</a>        <span class="kw">let </span><span class="kw-2">mut </span>out = Vec::new();
+<a href=#130 id=130 data-nosnippet>130</a>        <span class="kw">for </span>arg <span class="kw">in </span>args {
+<a href=#131 id=131 data-nosnippet>131</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(leaves) = <span class="self">self
+<a href=#132 id=132 data-nosnippet>132</a>                </span>.declared
+<a href=#133 id=133 data-nosnippet>133</a>                .decompositions
+<a href=#134 id=134 data-nosnippet>134</a>                .callback_arg_leaves
+<a href=#135 id=135 data-nosnippet>135</a>                .get(<span class="kw-2">&amp;</span>arg.key())
+<a href=#136 id=136 data-nosnippet>136</a>            {
+<a href=#137 id=137 data-nosnippet>137</a>                <span class="kw">for </span>leaf <span class="kw">in </span>leaves {
+<a href=#138 id=138 data-nosnippet>138</a>                    out.push((Direction::Deconstruct, leaf.key()));
+<a href=#139 id=139 data-nosnippet>139</a>                }
+<a href=#140 id=140 data-nosnippet>140</a>            }
+<a href=#141 id=141 data-nosnippet>141</a>        }
+<a href=#142 id=142 data-nosnippet>142</a>        out
+<a href=#143 id=143 data-nosnippet>143</a>    }
+<a href=#144 id=144 data-nosnippet>144</a>}
 </code></pre></div></section></main></body></html>
