@@ -17,11 +17,6 @@ impl Registry {
         &self.expansion_plans
     }
 
-    /// What the binding declared — read by the emitter's gate.
-    pub(crate) fn declared(&self) -> &Declared {
-        &self.declared
-    }
-
     /// The parsed model this registry projects.
     pub fn flat(&self) -> &prebindgen_flat::flat::Flat {
         &self.flat

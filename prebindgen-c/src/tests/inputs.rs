@@ -69,16 +69,17 @@ fn option_opaque_input_reuses_pointer() {
     // Param reuses the bare handle pointer; NULL ⇒ None.
     assert!(compact.contains("attachment:*mutz_zbytes"), "{src}");
     assert!(
-        compact.contains(
-            "ifv.is_null(){return::core::result::Result::Ok(::core::option::Option::None);}"
-        ),
+        compact.contains("if(v).is_null(){::core::option::Option::None}"),
         "{src}"
     );
     // Non-null path consumes through the inner handle converter.
-    assert!(compact.contains("match__cbg_in_ZZBytes(v)"), "{src}");
+    assert!(
+        operation_call(&compact, "__c_in_convert_wire_to_ZZBytes_", "__present"),
+        "{src}"
+    );
     // Fallible inner decode routes its error through the Result channel (`*e`).
     assert!(compact.contains("e:*mutz_error"), "{src}");
-    assert!(compact.contains("__cbg_out_Error"), "{src}");
+    assert!(compact.contains("__c_out_convert_Error_"), "{src}");
 }
 
 /// `Option<i64>` input (scalar inner, no niche) is boxed behind a `*const`
@@ -105,7 +106,7 @@ fn option_scalar_input_boxed_pointer() {
     // Boxed behind a const pointer; NULL ⇒ None, else `Some` of the pointee, read.
     assert!(compact.contains("timestamp_ntp64:*consti64"), "{src}");
     assert!(
-        compact.contains("ifv.is_null(){::core::option::Option::None}"),
+        compact.contains("if(v).is_null(){::core::option::Option::None}"),
         "{src}"
     );
     assert!(compact.contains("::core::option::Option::Some"), "{src}");
@@ -147,7 +148,11 @@ fn option_data_struct_input_reads_the_pointee() {
 
     assert!(compact.contains("v:*constrec"), "{src}");
     assert!(
-        compact.contains("__cbg_in_Rec(::core::ptr::read(v))"),
+        compact.contains("let__present=::core::ptr::read(v);"),
+        "{src}"
+    );
+    assert!(
+        operation_call(&compact, "__c_in_convert_wire_to_Rec_", "__present"),
         "{src}"
     );
 }
@@ -289,10 +294,7 @@ fn enum_input_validates_the_discriminant() {
         compact.contains("level:::core::mem::MaybeUninit<z_intersection>"),
         "{src}"
     );
-    assert!(
-        !compact.contains("fn__cbg_in_SetIntersectionLevel(v:z_intersection)"),
-        "{src}"
-    );
+    assert!(!compact.contains("(v:z_intersection)"), "{src}");
     // The discriminant is read as a plain integer and compared against the
     // mirror's variants — a `const`-driven one needs no evaluation here.
     assert!(

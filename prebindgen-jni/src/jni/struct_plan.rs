@@ -1,154 +1,70 @@
-//! The shared recursive leaf plan of the data-class `fromParts` bridge.
+//! A data class's own Kotlin **property** declarations: each field's property
+//! type, and whether holding it makes the class destructible.
 //!
-//! A whole-value struct crossing Rust→Kotlin is flattened into leaf wire
-//! slots: the Rust side encodes them and makes ONE
-//! `call_static_method("fromParts", …)`
-//! ([`flatten_struct_encode`](super::flatten_struct_encode)); the Kotlin side
-//! declares the matching `fromParts` factory that reassembles the object in
-//! bytecode ([`flatten_struct_factory`](super::flatten_struct_factory)). Both
-//! sides must enumerate the same leaves, in the same order, with matching
-//! wire slots and JVM descriptors.
+//! Not the leaf list. This module was the second derivation of that — both
+//! emitters walked the [`StructPlan`] to enumerate the slots of the
+//! `fromParts` bridge, and a standing check said the walk agreed with the
+//! flat-facing decomposition. #620 deleted it: the Rust encode and the
+//! Kotlin factory both render from the decomposition now, so the leaves have
+//! one derivation and nothing needs to agree with anything.
 //!
-//! This module holds that agreement: [`build_struct_plan`] classifies every
-//! field ONCE, in one fixed priority order (projection → enum →
-//! `Option<enum>` → nested data-class → simple leaf), and both emitters walk
-//! the resulting [`StructPlan`] — so the two sides agree by construction
-//! instead of by hand-synchronized parallel walks.
+//! What is left is a different question, and one plan answering it is not
+//! duplication: a property is per FIELD, where a leaf is per slot, and a field
+//! whose type is a nested class or a sum is one property over many slots.
+//! [`build_struct_plan`] classifies every field once, in one fixed priority
+//! order (projection → enum → `Option<enum>` → nested data-class → simple
+//! leaf), and [`crate::jni::render`] reads the property type and destructor
+//! off the result.
 
 use kotlin_codegen::KtType;
-use prebindgen_registry::Conversions;
 
 use super::*;
 
-/// The flattened `fromParts` bridge plan of one struct.
+/// One struct's Kotlin **property** declarations, field by field.
 pub(crate) struct StructPlan {
     pub fields: Vec<PlanField>,
 }
 
-/// One classified field of a [`StructPlan`]. Each side derives its own
-/// naming from `fname` (camelCase Kotlin params, snake Rust idents); the
-/// classification fixes the wire slot both sides use.
+/// One classified field of a [`StructPlan`]: what the Kotlin property for it
+/// is. The slots that carry it across are the decomposition's (#620).
 pub(crate) struct PlanField {
-    pub fname: syn::Ident,
     pub kind: PlanFieldKind,
 }
 
-/// How a Rust-side simple leaf binds its encoded wire into the `JValue` slot.
-pub(crate) enum LeafForm {
-    /// Primitive wire: bind as the wire type, pass via `JValue::from`.
-    Prim,
-    /// `JString` / `JByteArray`: bind as `JObject` via `.into()`.
-    IntoObject,
-    /// Already-`JObject` wire (boxed `Option`, `List`, …): bind directly.
-    Object,
-}
-
-/// The COMPLETE Rust → wire conversion of one leaf: the rust-side stages a
-/// custom [`convert!`](prebindgen_registry::convert) declaration inserts (`Duration → u64`)
-/// followed by the wire-facing converter (`u64 → jlong`).
-///
-/// A leaf must carry the whole chain, not just
-/// [`converter_ident`](prebindgen_registry::ConverterImpl::converter_ident):
-/// calling only the wire-facing function would hand it the *semantic* value
-/// (a `Duration`) where it expects the *representation* (a `u64`), which does
-/// not compile. Structural wrappers (`Option<_>`, `Vec<_>`) already compose
-/// the chain; this is the same composition for the positions the flattened
-/// `fromParts` bridge encodes itself.
-pub(crate) struct ConvChain {
-    /// Rust-side stages in output execution order — each consumes the
-    /// previous one's result, the first consumes the Rust value.
-    pub stages: Vec<syn::Ident>,
-    /// The wire-facing converter, applied last.
-    pub function: syn::Ident,
-}
-
-impl ConvChain {
-    /// Read the chain off a resolved output entry.
-    fn of(entry: &prebindgen_registry::ConverterImpl<KotlinMeta>) -> Self {
-        ConvChain {
-            stages: entry
-                .output_stage_order()
-                .map(|(_, stage)| stage.function.sig.ident.clone())
-                .collect(),
-            function: entry.converter_ident().clone(),
-        }
-    }
-
-    /// The expression converting `value` (a Rust value expression) to this
-    /// leaf's wire form, propagating any stage error with `?`.
-    pub(crate) fn call(&self, env: &TokenStream, value: &TokenStream, base: &str) -> TokenStream {
-        let function = &self.function;
-        if self.stages.is_empty() {
-            return quote! { #function(#env, #value.clone())? };
-        }
-        let mut body = TokenStream::new();
-        let mut previous = quote!(#value.clone());
-        for (order, stage) in self.stages.iter().enumerate() {
-            let next = format_ident!("__{}_s{}", base, order);
-            body.extend(quote! {
-                let #next = #stage(#env, #previous)
-                    .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
-                        __e.to_string()))?;
-            });
-            previous = quote!(#next);
-        }
-        quote!({ #body #function(#env, #previous)? })
-    }
-}
-
+/// What kind of Kotlin property a field declares. Each variant carries only
+/// what naming that property needs — how the value CROSSES is the
+/// decomposition's answer, not this one.
 pub(crate) enum PlanFieldKind {
-    /// Projection leaf (opaque handle / `ULong`). Wire slot: `jlong` (`"J"`);
-    /// the factory rebuilds the typed value from `fqn`.
-    Projection {
-        conv: ConvChain,
-        proj: Projection,
-        fqn: String,
-    },
-    /// Bare enum → `jint` discriminant (`"I"`); factory calls `fromInt`.
-    Enum { conv: ConvChain, kotlin: KtType },
-    /// `Option<enum>` → `box_jint`-boxed discriminant
-    /// (`"Ljava/lang/Integer;"`, JVM null = `None`); factory takes `Int?`.
-    OptionEnum { conv: ConvChain, kotlin: KtType },
-    /// Nested plain data-class: its leaves inline here. `optional` prepends
-    /// a `present: Boolean` flag (`"Z"`) and defaults the child slots in the
-    /// `None` arm; the factory guards `Child.fromParts(…)` on the flag.
+    /// Opaque handle / `ULong`: the property is the typed class `fqn` names,
+    /// and holding it is what can make the class destructible.
+    Projection { proj: Projection, fqn: String },
+    /// Bare `enum_class`: the property is the Kotlin enum.
+    Enum { kotlin: KtType },
+    /// `Option<enum_class>`: the same enum, nullable.
+    OptionEnum { kotlin: KtType },
+    /// Nested plain data-class: the property is the child class. `optional`
+    /// makes it nullable, and `plan` is the child's own properties, which the
+    /// emitter needs to know whether holding it is destructible.
     Nested {
         optional: bool,
-        /// The child's registered Kotlin FQN (its `fromParts` owner). `None`
-        /// for an undeclared struct: the Rust encode can still inline it,
-        /// but the Kotlin factory (which must name the child class) aborts.
+        /// The child's registered Kotlin FQN. `None` for an undeclared struct,
+        /// which has no class to name and so no property to declare.
         child_fqn: Option<String>,
         plan: StructPlan,
     },
-    /// Data-carrying enum (`sealed_class`): an `Int` **tag** slot naming the
-    /// live alternative, followed by one **leaf group per variant** laid side
-    /// by side. Exactly one group is live; the rest are wire-defaulted and
-    /// the tag tells both sides which to read.
-    ///
-    /// This is [`Self::Nested`]'s `optional` gating with `N` groups instead
-    /// of one and an `Int` tag instead of a `Boolean` flag — a unit-only
-    /// enum would degenerate to "just a tag", which is why `enum_class`
-    /// keeps its own simpler path.
+    /// Data-carrying enum (`sealed_class`): the property is the sealed
+    /// interface, nullable when `optional`. `variants` are its alternatives'
+    /// own properties, for the same destructibility question.
     Sum {
-        /// Path to the source enum, for the encoder's match arms.
-        source: syn::Path,
-        /// Kotlin FQN of the sealed interface, for the factory's `when`.
+        /// Kotlin FQN of the sealed interface.
         kotlin_fqn: String,
-        /// `Option<E>` keeps its own `present` flag ahead of the tag; the tag
-        /// domain is never overloaded with an "absent" value.
         optional: bool,
-        /// Variants in declaration order; index == tag.
+        /// Variants in declaration order.
         variants: Vec<SumPlanVariant>,
     },
-    /// Simple leaf with its own output converter.
+    /// Anything else: the property is the Kotlin type its output conversion
+    /// names.
     Leaf {
-        conv: ConvChain,
-        /// The converter's destination wire type (boxed: `syn::Type` is the
-        /// enum's size outlier).
-        wire: Box<syn::Type>,
-        form: LeafForm,
-        /// JVM descriptor of the slot (must match the factory param's type).
-        descriptor: String,
         kotlin: KtType,
         /// Kotlin-side `?` (an `Option` field whose wire is object-shaped).
         nullable: bool,
@@ -157,10 +73,6 @@ pub(crate) enum PlanFieldKind {
 
 /// One alternative of a [`PlanFieldKind::Sum`].
 pub(crate) struct SumPlanVariant {
-    /// Variant ident as declared in Rust — the encoder's match pattern.
-    pub rust_ident: syn::Ident,
-    /// Variant class name in Kotlin (after any `variant!(V).name(...)`).
-    pub kotlin_name: String,
     /// This variant's payload, in declaration order. Empty for a unit
     /// variant — the group that contributes nothing but its tag.
     pub fields: Vec<SumPlanField>,
@@ -168,25 +80,18 @@ pub(crate) struct SumPlanVariant {
 
 /// One payload field of a [`SumPlanVariant`]. Classified by exactly the same
 /// [`classify_field`] a struct field goes through, so a payload and a struct
-/// field of the same Rust type get the same slot, wire and Kotlin type.
+/// field of the same Rust type declare the same Kotlin property type.
 pub(crate) struct SumPlanField {
-    /// How the field is addressed in the encoder's match pattern.
-    pub member: syn::Member,
-    /// Slot-name fragment, `<variantCamel>_<prop>` (`exact_v0`). The Kotlin
-    /// property name it embeds is recomputed where needed from
-    /// [`sum_field_prop_name`], so there is one derivation rather than a
-    /// stored copy that could disagree with it.
-    pub slot: String,
     pub kind: PlanFieldKind,
 }
 
-/// Classify `s`'s fields into the shared bridge plan. `None` aborts the
-/// whole-value bridge (an unresolved field converter or a missing Kotlin
-/// name) — consistently for BOTH sides, where the former parallel walks
-/// could silently diverge on such edge cases.
+/// Classify `s`'s fields into their Kotlin property declarations. `None` aborts
+/// the whole-value bridge — an unresolved field converter, or a missing Kotlin
+/// name — which is the same answer the decomposition gives for such a field,
+/// so the class and its leaves decline together.
 pub(crate) fn build_struct_plan(
     ext: &Declarations,
-    registry: &impl Conversions,
+    flat: &prebindgen_registry::flat::Flat,
     s: &prebindgen_registry::flat::Struct,
     depth: usize,
 ) -> Option<StructPlan> {
@@ -201,63 +106,54 @@ pub(crate) fn build_struct_plan(
         // nameless field cannot reach here.
         let fname = field.name.as_ref()?.clone();
         let owner = format!("{}.{}", s.name, fname);
-        let kind = classify_field(ext, registry, &field.ty, &owner, depth)?;
-        fields.push(PlanField { fname, kind });
+        let kind = classify_field(ext, flat, &field.ty, &owner, depth)?;
+        fields.push(PlanField { kind });
     }
     Some(StructPlan { fields })
 }
 
-/// True when this plan's flattened `fromParts` takes at least one **raw
-/// native pointer** leaf — an opaque-handle projection, whose wire slot is a
-/// bare `jlong` the factory mints a handle from.
-///
-/// This is what decides whether that factory needs the raw-pointer guard.
-/// Marking every `fromParts` was over-broad: a pointer-free factory such as
-/// `Timestamp.fromParts(Long, ByteArray)` cannot forge anything, and guarding
-/// it only removed a safe factory from Java and forced unrelated consumers to
-/// opt into a contract it does not have.
-///
-/// Recursive for the same reason the factory is: a nested data class inlines
-/// its leaves into the parent's signature, so a handle two levels down still
-/// arrives as a raw `Long` parameter of the *parent's* `fromParts`.
-pub(crate) fn plan_mints_handle(plan: &StructPlan) -> bool {
-    plan.fields.iter().any(|f| kind_mints_handle(&f.kind))
-}
-
-fn kind_mints_handle(kind: &PlanFieldKind) -> bool {
-    match kind {
-        PlanFieldKind::Projection { proj, .. } => proj.kind == ProjectionKind::Handle,
-        PlanFieldKind::Nested { plan, .. } => plan_mints_handle(plan),
-        PlanFieldKind::Sum { variants, .. } => variants
-            .iter()
-            .flat_map(|v| &v.fields)
-            .any(|f| kind_mints_handle(&f.kind)),
-        // `ULong` is a value, not a pointer; the rest are enums and plain
-        // leaves that carry no address.
-        PlanFieldKind::Enum { .. }
-        | PlanFieldKind::OptionEnum { .. }
-        | PlanFieldKind::Leaf { .. } => false,
+impl Declarations {
+    /// One data class's Kotlin property declarations, for the class emitter —
+    /// the only production reader left, now that the encode and the factory
+    /// take their leaves from the decomposition. During resolution it is
+    /// memoized; after resolution the lookup is served exclusively by
+    /// [`crate::jni::generation::JniGenerationPlan`].
+    pub(crate) fn struct_plan(
+        &self,
+        flat: &prebindgen_registry::flat::Flat,
+        s: &prebindgen_registry::flat::Struct,
+        depth: usize,
+    ) -> Option<std::rc::Rc<StructPlan>> {
+        let key = s.type_ref().key();
+        if let Some(generation) = &self.generation {
+            return generation.struct_plan(&key);
+        }
+        if let Some(hit) = self.struct_plans.borrow().get(&key) {
+            return hit.clone();
+        }
+        let plan = build_struct_plan(self, flat, s, depth).map(std::rc::Rc::new);
+        self.struct_plans.borrow_mut().insert(key, plan.clone());
+        plan
     }
 }
 
 /// Classify ONE value position — a struct field or a sum's variant payload —
-/// into its bridge slot. Both callers go through here so a payload and a
-/// struct field of the same Rust type get the same slot, wire, descriptor and
-/// Kotlin type; the alternative (a second classification walk) is exactly the
-/// drift `StructPlan` exists to prevent.
+/// into the Kotlin property it declares. Both callers go through here so a
+/// payload and a struct field of the same Rust type declare the same type; a
+/// second classification walk beside it is the drift this exists to prevent.
 ///
 /// `owner` is the dotted path used in diagnostics (`Config.mode`,
 /// `Reading::Exact.v0`).
 pub(crate) fn classify_field(
     ext: &Declarations,
-    registry: &impl Conversions,
+    flat: &prebindgen_registry::flat::Flat,
     reading: &prebindgen_registry::flat::TypeRef,
     owner: &str,
     depth: usize,
 ) -> Option<PlanFieldKind> {
     // The **reading**, not a spelling. Every layer question below is answered
     // from `kind` and cannot fail: holding a `TypeRef` is proof the model
-    // classified this type. Taking a `syn::Type` meant asking the registry per
+    // classified this type. Taking a `syn::Type` meant asking the flat per
     // question, and a type it had never seen answered "no layer" rather than
     // saying so — which is the missing `?` of #273 waiting to happen again.
 
@@ -280,7 +176,7 @@ pub(crate) fn classify_field(
     let bare_ref = optional_inner.unwrap_or(reading);
     let seq_elem = bare_ref.sequence_elem();
     let core = seq_elem.unwrap_or(bare_ref);
-    if matches!(ext.type_kind(registry, &core.key()), TypeKind::Sum) {
+    if matches!(ext.type_kind(flat, &core.key()), TypeKind::Sum) {
         // A `Vec` of tag-gated groups has variable arity, exactly like a `Vec`
         // of nested data classes — the flattened bridge is fixed-layout by
         // construction.
@@ -291,18 +187,11 @@ pub(crate) fn classify_field(
                 core,
             );
         }
-        return sum_plan_kind(
-            ext,
-            registry,
-            bare_ref,
-            owner,
-            optional_inner.is_some(),
-            depth,
-        );
+        return sum_plan_kind(ext, flat, bare_ref, owner, optional_inner.is_some(), depth);
     }
 
     let field_entry = ext.out_frag(reading)?;
-    let conv = ConvChain::of(&field_entry);
+    field_entry.activate();
 
     {
         // Projection leaf (opaque handle / `ULong`).
@@ -314,7 +203,7 @@ pub(crate) fn classify_field(
                 );
             }
             let fqn = projection_leaf_kt(ext, &proj)?.to_string();
-            return Some(PlanFieldKind::Projection { conv, proj, fqn });
+            return Some(PlanFieldKind::Projection { proj, fqn });
         }
         // Enum leaf, bare or under `Option` — asked ONCE, of the model, and of
         // the already-peeled reading beside us.
@@ -335,11 +224,11 @@ pub(crate) fn classify_field(
             return match optional_inner {
                 None => {
                     let kotlin = field_entry.metadata.kotlin_name.clone()?;
-                    Some(PlanFieldKind::Enum { conv, kotlin })
+                    Some(PlanFieldKind::Enum { kotlin })
                 }
                 Some(inner) => {
                     let kotlin = ext.out_frag(inner)?.metadata.kotlin_name.clone()?;
-                    Some(PlanFieldKind::OptionEnum { conv, kotlin })
+                    Some(PlanFieldKind::OptionEnum { kotlin })
                 }
             };
         }
@@ -361,83 +250,25 @@ pub(crate) fn classify_field(
         // has no converter of its own, so there is no single slot to fall
         // through to.
         let inner_ty = bare_ref;
-        if let TypeKind::DataStruct { st, cfg } = ext.type_kind(registry, &inner_ty.key()) {
+        if let TypeKind::DataStruct { st, cfg } = ext.type_kind(flat, &inner_ty.key()) {
             let child_fqn = cfg
                 .and_then(|c| c.name_spec.as_ref())
                 .map(|s| ext.fqn_of(s));
-            let plan = build_struct_plan(ext, registry, st, depth + 1)?;
+            let plan = build_struct_plan(ext, flat, st, depth + 1)?;
             return Some(PlanFieldKind::Nested {
                 optional: optional_inner.is_some(),
                 child_fqn,
                 plan,
             });
         }
-        // Simple leaf: derive the slot descriptor and the Rust binding form
-        // from the converter's wire — the one place this decision is made.
-        let wire = field_entry.destination.clone();
+        // Simple leaf: its Kotlin property type, and whether an `Option` over
+        // an object-shaped wire makes that property nullable. The slot's own
+        // descriptor and binding form are the encoder's, and the encoder reads
+        // them off the decomposition now (#619).
+        let wire = field_entry.wire.clone();
         let kotlin = field_entry.metadata.kotlin_name.clone()?;
-        let (form, descriptor) = match jni_field_access(&wire) {
-            Some((sig, _, false)) => (LeafForm::Prim, sig.to_string()),
-            Some((sig, _, true)) => (LeafForm::IntoObject, sig.to_string()),
-            None => {
-                // Object-shaped wire with no fixed descriptor; the JVM slot
-                // must be the field's actual declared type (Option-stripped).
-                // Option-stripped off the MODEL: `optional_inner` is the
-                // layer's own reading, so there is nothing to re-look-up.
-                let slot = optional_inner.unwrap_or(reading);
-                let descriptor = ext
-                    .out_frag(slot)
-                    .and_then(|e| jni_field_access(&e.destination))
-                    .and_then(|(sig, _, is_obj)| {
-                        if is_obj {
-                            Some(sig.to_string())
-                        } else {
-                            // The inner type's own wire is a primitive, so
-                            // this field is an `Option<primitive-wire>` whose
-                            // converter delivers the `box_j*`-boxed OBJECT
-                            // (null for `None`) — the JVM slot is the box
-                            // class, not the primitive.
-                            box_descriptor_for_primitive(sig).map(str::to_string)
-                        }
-                    })
-                    .or_else(|| {
-                        // The NAME off the classification, not off the last
-                        // path segment: `Box<T>` IS `T` here, and taking the
-                        // spelling apart would answer about the wrapper.
-                        match slot.unwrapped().kind() {
-                            prebindgen_registry::flat::TypeKind::Named { id, .. } => id.ident(),
-                            _ => None,
-                        }
-                        .and_then(|name| {
-                            ext.kotlin_fqn(&TypeKey::from_ident(&name))
-                                .map(|v| format!("L{};", v.replace('.', "/")))
-                        })
-                    })
-                    .or_else(|| {
-                        // A run of values is what `kind` says it is.
-                        // `pat_match_top(.., "Vec")` compared the last path
-                        // segment, so a `Box<Vec<T>>` answered false.
-                        if slot.sequence_elem().is_some() {
-                            Some("Ljava/util/List;".to_string())
-                        } else {
-                            // The wire table already names every reference wire's
-                            // descriptor — String and the eight primitive arrays.
-                            jni_field_access(&wire).map(|(sig, _, _)| sig.to_string())
-                        }
-                    })
-                    .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
-                (LeafForm::Object, descriptor)
-            }
-        };
         let nullable = optional_inner.is_some() && !is_jni_primitive(&wire);
-        Some(PlanFieldKind::Leaf {
-            conv,
-            wire: Box::new(wire),
-            form,
-            descriptor,
-            kotlin,
-            nullable,
-        })
+        Some(PlanFieldKind::Leaf { kotlin, nullable })
     }
 }
 
@@ -445,12 +276,11 @@ impl PlanFieldKind {
     /// The Kotlin type of the `data class` **constructor property** this field
     /// becomes.
     ///
-    /// The class declaration, the `fromParts` factory and the Rust encoder are
-    /// three views of one classification, so all three read it from here — the
-    /// module docs' "agree by construction instead of by hand-synchronized
-    /// parallel walks" applied to the declaration too (#156). Deriving it
-    /// separately is what let a property's type disagree with its own
-    /// factory parameter.
+    /// The class declaration reads it from here, and the `fromParts` factory
+    /// and the Rust encoder read the matching leaf types from the
+    /// decomposition — one derivation each, for two different questions. #156
+    /// is why the declaration is not a third: deriving a property's type
+    /// separately is what let it disagree with its own factory parameter.
     ///
     /// `owner` is the dotted path used in diagnostics.
     pub(crate) fn property_type(&self, owner: &str) -> KtType {
@@ -626,7 +456,7 @@ fn whole_value_close(optional: bool, sequence: bool) -> FoldStrategy {
 /// leak direction — for a shape nobody can compile anyway.
 pub(crate) fn type_close_strategy(
     ext: &Declarations,
-    registry: &impl Conversions,
+    flat: &prebindgen_registry::flat::Flat,
     ty: &prebindgen_registry::flat::TypeRef,
     depth: usize,
 ) -> Option<FoldStrategy> {
@@ -647,17 +477,17 @@ pub(crate) fn type_close_strategy(
     // a `Box<Option<T>>` reaches is what `T` reaches.
     let bare = ty.optional_inner().unwrap_or(ty);
     let core = bare.sequence_elem().unwrap_or(bare);
-    let reaches = match ext.type_kind(registry, &core.key()) {
+    let reaches = match ext.type_kind(flat, &core.key()) {
         TypeKind::Sum => core
             .key()
             .ident()
-            .and_then(|ident| registry.flat().declared_type(&ident))
+            .and_then(|ident| flat.declared_type(&ident))
             .is_some_and(|ty| match ty {
                 prebindgen_registry::flat::Type::Variant(sum) => {
                     sum.alternatives.iter().any(|alt| {
                         alt.fields
                             .iter()
-                            .any(|f| type_close_strategy(ext, registry, &f.ty, depth + 1).is_some())
+                            .any(|f| type_close_strategy(ext, flat, &f.ty, depth + 1).is_some())
                     })
                 }
                 _ => false,
@@ -665,7 +495,7 @@ pub(crate) fn type_close_strategy(
         TypeKind::DataStruct { st, .. } => st
             .fields
             .iter()
-            .any(|f| type_close_strategy(ext, registry, &f.ty, depth + 1).is_some()),
+            .any(|f| type_close_strategy(ext, flat, &f.ty, depth + 1).is_some()),
         TypeKind::Handle | TypeKind::Enum | TypeKind::Other => false,
     };
     // Put back exactly the layers peeled above. `reaches` was answered about
@@ -697,7 +527,7 @@ pub(crate) fn type_close_strategy(
 /// was first attempted.
 fn sum_plan_kind(
     ext: &Declarations,
-    registry: &impl Conversions,
+    flat: &prebindgen_registry::flat::Flat,
     ty: &prebindgen_registry::flat::TypeRef,
     owner: &str,
     optional: bool,
@@ -725,8 +555,7 @@ fn sum_plan_kind(
     // already, so classifying one asks nothing and cannot be asked about a type
     // the model never saw. One lookup, not two — the `enum_item` that used to
     // sit beside this only fed a `SumSpec` of what the element already says.
-    let Some(prebindgen_registry::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
-    else {
+    let Some(prebindgen_registry::flat::Type::Variant(sum)) = flat.declared_type(&ident) else {
         panic!("fromParts bridge: sealed-class field `{owner}`: `{ident}` is not an indexed sum")
     };
     let key = TypeKey::from_ident(&ident);
@@ -734,8 +563,10 @@ fn sum_plan_kind(
         .types
         .get(&key)
         .unwrap_or_else(|| panic!("fromParts bridge: `{ident}` is not declared"));
-    let sum_cfg = cfg
-        .sum()
+    // Asked for the diagnostic, not for a value: a `sealed_class!` declaration
+    // is what makes the alternatives' properties meaningful, and a field typed
+    // by an enum that has none is a build error rather than a silent decline.
+    cfg.sum()
         .unwrap_or_else(|| panic!("fromParts bridge: `{ident}` is not a sealed class"));
     let kotlin_fqn = cfg
         .name_spec
@@ -745,30 +576,20 @@ fn sum_plan_kind(
 
     let mut variants: Vec<SumPlanVariant> = Vec::new();
     for alt in &sum.alternatives {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
         let mut fields: Vec<SumPlanField> = Vec::new();
         for field in &alt.fields {
             let member = field.member();
             let prop = sum_field_prop_name(&member);
-            let slot = sum_slot_fragment(&kotlin_name, &prop);
             let owner = format!("{ident}::{}.{prop}", alt.name);
             // `?` — a payload whose converter has not resolved yet defers the
             // whole plan to the next iteration, it does not fail the build.
-            let kind = classify_field(ext, registry, &field.ty, &owner, depth + 1)?;
-            fields.push(SumPlanField { member, slot, kind });
+            let kind = classify_field(ext, flat, &field.ty, &owner, depth + 1)?;
+            fields.push(SumPlanField { kind });
         }
-        variants.push(SumPlanVariant {
-            rust_ident: alt.name.clone(),
-            kotlin_name,
-            fields,
-        });
+        variants.push(SumPlanVariant { fields });
     }
 
     Some(PlanFieldKind::Sum {
-        source: {
-            let module = ext.fn_module(registry, &ident);
-            syn::parse_quote!(#module::#ident)
-        },
         kotlin_fqn,
         optional,
         variants,

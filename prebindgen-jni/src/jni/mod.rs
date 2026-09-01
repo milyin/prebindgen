@@ -16,6 +16,8 @@
 //   * `prim` — JNI primitive (un)boxing tables;
 //   * `kotlin_emit` / `render` / `fold` — the Kotlin source emitters.
 
+mod chain;
+mod generation;
 mod metadata;
 pub(crate) mod wire_access;
 
@@ -41,7 +43,8 @@ pub use prebindgen_jni_runtime::{
 pub(crate) use prebindgen_registry::{
     flat::Origin,
     types_util::{option_inner_type, vec_inner_type},
-    ConverterImpl, Direction, NicheSlot, Niches, Prebindgen, Registry, ScalarValue, Stage, TypeKey,
+    ArtifactId, ConverterImpl, Direction, NicheSlot, Niches, OperationId, Prebindgen, Registry,
+    ScalarValue, TypeKey,
 };
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
@@ -459,8 +462,8 @@ pub struct JniGen {
 }
 
 /// One JNI parameter as a signature writes it: name, Kotlin type, the Kotlin
-/// expression that fills it, the conversion it crosses through, where Kotlin
-/// finds the object to lock and whether that access can be null (both for a
+/// expression that fills it, where Kotlin finds the object to lock and
+/// whether that access can be null (both for a
 /// nested owned handle only), whether the conversion carries Rust-side stages,
 /// and the struct field it fills.
 #[cfg(test)]
@@ -468,7 +471,6 @@ pub(crate) type NamedWire = (
     String,
     String,
     String,
-    Option<String>,
     Option<String>,
     bool,
     bool,
@@ -478,8 +480,8 @@ pub(crate) type NamedWire = (
 /// How a reach renders: its field steps, joined — the accessor call every leaf
 /// hangs off is the site's, not the value's, so it is dropped.
 #[cfg(test)]
-fn reach_of(path: &[prebindgen_registry::unfold::PathStep]) -> String {
-    use prebindgen_registry::unfold::PathStep;
+fn reach_of(path: &[crate::unfold::PathStep]) -> String {
+    use crate::unfold::PathStep;
     path.iter()
         .filter_map(|step| match step {
             PathStep::Field { ident, .. } => Some(ident.to_string()),
@@ -493,10 +495,11 @@ fn reach_of(path: &[prebindgen_registry::unfold::PathStep]) -> String {
 /// the accessor call every leaf hangs off is the site's, not the value's, so it
 /// is dropped to line the two up.
 #[cfg(test)]
-fn leaf_reach(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> String {
-    use prebindgen_registry::unfold::LeafSource;
+fn leaf_reach(leaf: &crate::unfold::UnfoldLeaf) -> String {
+    use crate::unfold::LeafSource;
     match &leaf.source {
         LeafSource::SumTag => "tag".to_string(),
+        LeafSource::Presence => format!("present({})", reach_of(&leaf.path)),
         LeafSource::VariantField { variant, member } => format!(
             "{variant}.{}",
             crate::jni::struct_plan::sum_field_prop_name(member)
@@ -507,13 +510,82 @@ fn leaf_reach(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> String {
 
 #[cfg(test)]
 impl JniGen {
+    /// Compile one arbitrary crossing's declared `parts` row through the real
+    /// recipe driver, then render the JFunction the selected planner retained.
+    ///
+    /// Test support for planner gates: a public binding may fall back before a
+    /// late plan becomes reachable, but the recipe driver still has to select
+    /// the right fragment for that crossing.
+    pub(crate) fn parts_plan_for_test(
+        &self,
+        ty: syn::Type,
+        direction: prebindgen_registry::recipe::Direction,
+    ) -> Result<(bool, String, String), String> {
+        self.render_plan_for_test(ty, direction, true)
+    }
+
+    /// Compile and render the crossing's default row.
+    pub(crate) fn crossing_plan_for_test(
+        &self,
+        ty: syn::Type,
+        direction: prebindgen_registry::recipe::Direction,
+    ) -> Result<(bool, String, String), String> {
+        self.render_plan_for_test(ty, direction, false)
+    }
+
+    fn render_plan_for_test(
+        &self,
+        ty: syn::Type,
+        direction: prebindgen_registry::recipe::Direction,
+        parts: bool,
+    ) -> Result<(bool, String, String), String> {
+        use prebindgen_registry::recipe::{Compiler, Crossing};
+
+        let reading = self
+            .registry
+            .flat()
+            .classify(&ty)
+            .map_err(|e| format!("the model does not classify {}: {e}", quote::quote!(#ty)))?;
+        let crossing = Crossing::new(reading, direction);
+        let mut compiler = Compiler::resume(
+            self.registry.flat(),
+            self.decls.recipe_table(),
+            self.decls.site_bindings(),
+            self.decls.compiled.borrow().clone(),
+        );
+        let mut adapter = crate::jni::compile::JCompile {
+            decls: &self.decls,
+            registry: &self.registry,
+            declared_return: None,
+            site: None,
+        };
+        let fragment = if parts {
+            compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
+        } else {
+            compiler.crossing(&mut adapter, &crossing)
+        }
+        .map_err(|e| e.to_string())?;
+        fragment.rust.mark_reachable();
+        let rendered =
+            fragment
+                .rust
+                .render_fn(&prebindgen_registry::RustWriter::for_registry_test(
+                    &self.registry,
+                ));
+        Ok((
+            fragment.composed_only,
+            rendered.sig.ident.to_string(),
+            quote::quote!(#rendered).to_string(),
+        ))
+    }
+
     /// What one crossing occupies on the wire, named the way a parameter
     /// names it.
     ///
     /// Test support: the composition is what the emitters read, and this is it
     /// in the form the three coordinated sites see — the JNI parameter name,
-    /// its Kotlin type, the Kotlin expression that fills it, the conversion it
-    /// crosses through, where the lock scaffold finds a nested handle and
+    /// its Kotlin type, the Kotlin expression that fills it, where the lock
+    /// scaffold finds a nested handle and
     /// whether that can be null, whether the conversion carries Rust-side
     /// stages, and the struct field it fills.
     pub(crate) fn named_wires_for_test(
@@ -532,7 +604,6 @@ impl JniGen {
                         )),
                         w.kt_ty.clone(),
                         w.access.render(param),
-                        w.conv().map(|c| c.to_string()),
                         w.handle_target
                             .as_ref()
                             .map(|t| crate::jni::compile::reached(param, t)),
@@ -560,8 +631,10 @@ impl JniGen {
         let row =
             prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Deconstruct)
                 .row(crate::jni::recipes::parts());
-        let compiled = self.decls.compiled.borrow();
-        let wires = compiled
+        let wires = self
+            .decls
+            .compiled
+            .borrow()
             .recipe_fragment(&reading.key(), &row)?
             .out_wires
             .clone()?;
@@ -571,6 +644,9 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Present => {
+                            format!("present({})", reach_of(&w.reach))
+                        }
                         crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
@@ -581,7 +657,7 @@ impl JniGen {
                             crate::jni::struct_plan::sum_field_prop_name(member)
                         ),
                     };
-                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.groups)
                 })
                 .collect(),
         )
@@ -610,7 +686,7 @@ impl JniGen {
                         l.name,
                         l.out_ty.key(),
                         leaf_reach(l),
-                        l.group
+                        l.groups
                     )
                 })
                 .collect(),
@@ -626,14 +702,20 @@ impl JniGen {
     /// states.
     pub(crate) fn return_site_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
         let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
-        let wires =
-            crate::jni::fn_plan::decomposed_return_for_test(&self.decls, &self.registry, &ident)?;
+        let plan = self.generation_plan().function(&ident)?;
+        let crate::jni::fn_plan::FnOutputPlan::Unfold(output) = &plan.output else {
+            return None;
+        };
+        let wires = &output.wires;
         Some(
             wires
                 .iter()
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Present => {
+                            format!("present({})", reach_of(&w.reach))
+                        }
                         crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
@@ -644,10 +726,40 @@ impl JniGen {
                             crate::jni::struct_plan::sum_field_prop_name(member)
                         ),
                     };
-                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.groups)
                 })
                 .collect(),
         )
+    }
+
+    /// Frozen ordinary-output operation coverage for one function:
+    /// `(wire count, every wire has an ABI, whole-element pipeline present)`.
+    #[cfg(test)]
+    pub(crate) fn output_freeze_for_test(&self, func: &str) -> Option<(usize, bool, bool)> {
+        let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
+        let plan = self.decls.generation.as_ref()?.function(&ident)?;
+        let crate::jni::fn_plan::FnOutputPlan::Unfold(output) = &plan.output else {
+            return None;
+        };
+        Some((
+            output.wires.len(),
+            output.wires.iter().all(|wire| wire.abi.is_some()),
+            output.element_pipeline.is_some(),
+        ))
+    }
+
+    /// Frozen domain-error operation coverage for one fallible function:
+    /// `(wire count, every wire has an ABI, composed chain present)`.
+    #[cfg(test)]
+    pub(crate) fn error_freeze_for_test(&self, func: &str) -> Option<(usize, bool, bool)> {
+        let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
+        let plan = self.decls.generation.as_ref()?.function(&ident)?;
+        let error = plan.error.as_ref()?;
+        Some((
+            error.wires.len(),
+            error.wires.iter().all(|wire| wire.abi.is_some()),
+            error.chain.is_some(),
+        ))
     }
 
     /// The leaves the registry's own expansion plans for one function, in the
@@ -658,7 +770,7 @@ impl JniGen {
     /// a plan rather than through a leaf list.
     pub(crate) fn plan_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
         let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
-        let plan = prebindgen_registry::Conversions::unfold_plans(&self.registry).get(&ident)?;
+        let plan = self.decls.unfolded().unfold_plans.get(&ident)?;
         Some(
             plan.leaves
                 .iter()
@@ -668,7 +780,7 @@ impl JniGen {
                         l.name,
                         l.out_ty.key(),
                         leaf_reach(l),
-                        l.group
+                        l.groups
                     )
                 })
                 .collect(),
@@ -721,6 +833,59 @@ impl JniGen {
             .wires
             .clone()
     }
+
+    /// Whether an ordinary input crossing retained the borrowed-Optional-handle plan.
+    ///
+    /// Test support for the late-render seam: rendering this plan and storing a
+    /// completed function produce identical Rust, so output assertions alone cannot
+    /// prove resolution did not regain direct type access.
+    #[cfg(test)]
+    pub(crate) fn borrowed_optional_handle_plan_for_test(&self, spelling: &str) -> Option<bool> {
+        use prebindgen_registry::recipe::Direction;
+
+        let ty: syn::Type = syn::parse_str(spelling).ok()?;
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let fragment = self
+            .decls
+            .compiled
+            .borrow()
+            .fragment(&reading.key(), Direction::Construct)?;
+        Some(fragment.rust.is_borrowed_optional_handle())
+    }
+
+    /// Whether an ordinary input crossing retained the shared Optional plan.
+    #[cfg(test)]
+    pub(crate) fn optional_chain_plan_for_test(&self, spelling: &str) -> Option<bool> {
+        use prebindgen_registry::recipe::Direction;
+
+        let ty: syn::Type = syn::parse_str(spelling).ok()?;
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let fragment = self
+            .decls
+            .compiled
+            .borrow()
+            .fragment(&reading.key(), Direction::Construct)?;
+        Some(fragment.rust.is_optional())
+    }
+
+    /// Whether a callback crossing retained the registry's late Invoke plan.
+    #[cfg(test)]
+    pub(crate) fn callback_invoke_for_test(&self, spelling: &str) -> Option<(String, bool)> {
+        use prebindgen_registry::recipe::Direction;
+
+        let ty: syn::Type = syn::parse_str(spelling).ok()?;
+        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let key = reading.key();
+        let fragment = self
+            .decls
+            .compiled
+            .borrow()
+            .fragment(&key, Direction::Construct)?;
+        let rendered = fragment
+            .rust
+            .render_fn(&prebindgen_registry::RustWriter::for_test());
+        Some((rendered.sig.ident.to_string(), fragment.rust.is_invoke()))
+    }
 }
 
 // Opaque — exists so `Result<JniGen, _>::expect_err` works in tests.
@@ -747,12 +912,212 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        // Every binding a test writes also freezes each compiled fragment into
+        // its canonical plan and checks the two describe the same fragment.
+        // Nothing renders from that plan yet — #613 step 4 is what moves JNI
+        // onto it — so this is what says it is ready to.
+        #[cfg(test)]
+        self.assert_fragments_freeze();
+
+        // Every binding a test writes also checks that the assembly's
+        // dependency edges name every call its artifacts render — the
+        // completeness the emission-time check reasons from.
+        #[cfg(test)]
+        prebindgen_registry::write::assert_edges_cover_rendered_calls(
+            self.decls
+                .generation
+                .as_ref()
+                .expect("resolved JniGen has no frozen generation plan")
+                .assembly(),
+            "jni",
+        );
         Ok(prebindgen_registry::write::write_rust(
-            &self.registry,
-            &self.decls,
-            &self.decls.compiled_fns,
+            self.decls
+                .generation
+                .as_ref()
+                .expect("resolved JniGen has no frozen generation plan")
+                .assembly(),
             out_path,
         )?)
+    }
+
+    /// Every compiled fragment states the same thing twice while step 5 is in
+    /// progress — as a [`JFrag`](crate::jni::compile::JFrag) and as the
+    /// `FragmentPlan` the canonical plan holds — and this is what says the two
+    /// agree.
+    ///
+    /// Identity, source and artifact presence are compared because they are
+    /// what a plan is keyed and spelled by, and what an emitter would read
+    /// instead of the fragment. A composed-only fragment renders nothing, and
+    /// the canonical plan says so by carrying no artifact at all.
+    ///
+    /// The plan itself is **not** rebuilt here. Since 5a it is built and
+    /// validated in `JniGenerationPlan::freeze`, so a set-level defect — a
+    /// chain whose endpoints do not join up, an edge naming a fragment nothing
+    /// compiled, a duplicate site identity — fails the binding rather than one
+    /// test. What is left for this check is the per-fragment agreement that
+    /// only survives while `JFrag` still exists; 5c deletes both.
+    #[cfg(test)]
+    fn assert_fragments_freeze(&self) {
+        let generation = self
+            .decls
+            .generation
+            .as_ref()
+            .expect("resolved JniGen has no frozen generation plan");
+        // Driven from the PLAN, not from the compiled store. `build` keeps the
+        // fragments reachable from a site and prunes the rest, so the store is
+        // a superset — a converter the assembly still reaches on its own is in
+        // it and not in the plan. Closing that is step 8's, where artifact
+        // ordering moves onto the plan; until then the plan's own fragments are
+        // what there is to agree about.
+        let compiled = self.decls.compiled.borrow();
+        for plan in generation.plan().fragments() {
+            let fragment = compiled
+                .recipe_fragment(plan.id().spelling(), plan.id().recipe())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "`{}`: the canonical plan holds a fragment nothing compiled",
+                        plan.id().spelling()
+                    )
+                });
+            assert_eq!(
+                plan.id(),
+                &fragment.id,
+                "a frozen fragment plan changed the fragment's identity"
+            );
+            assert_eq!(
+                plan.source().key(),
+                fragment.source.key(),
+                "`{}`: a frozen fragment plan changed the crossing it answers",
+                fragment.source.key()
+            );
+            assert_eq!(
+                plan.artifact().is_some(),
+                !fragment.composed_only,
+                "`{}`: a composed-only fragment renders nothing, and only such a \
+                 fragment freezes without an artifact",
+                fragment.source.key()
+            );
+            // The conversion graph, step for step. Comparing only that a chain
+            // exists would not have caught freezing every staged custom
+            // conversion as `Direct`, which is what the first version of this
+            // did (#621 review): the operations and their order ARE the
+            // contract, and a reader of the plan routes to stage artifacts
+            // through them.
+            let steps = |chain: &prebindgen_registry::generation::ConversionChain<
+                crate::jni::compile::JRepresentation,
+            >| {
+                match chain {
+                    prebindgen_registry::generation::ConversionChain::Direct => Vec::new(),
+                    prebindgen_registry::generation::ConversionChain::Steps(steps) => steps
+                        .iter()
+                        .map(|step| {
+                            format!(
+                                "{:?}:{:?}->{:?}:{:?}",
+                                step.operation(),
+                                step.from(),
+                                step.into(),
+                                step.failure()
+                            )
+                        })
+                        .collect(),
+                }
+            };
+            assert_eq!(
+                steps(plan.converter().chain()),
+                steps(&fragment.chain),
+                "`{}`: a frozen fragment plan changed the conversion graph",
+                fragment.source.key()
+            );
+            // Both niche domains: what the fragment spends on its own absence,
+            // and what it leaves for a parent. Exposing the remainder while
+            // losing the consumed slot was the other thing this check could not
+            // see.
+            // Both niche domains, by identity rather than by count. Comparing
+            // how many there are would pass a substituted sentinel, and
+            // `GenerationPlanBuilder` cannot see one either — a niche is a
+            // bit-pattern contract, so what it IS is the whole of it.
+            let niches = plan.converter().niches();
+            let key = crate::jni::compile::niche_key;
+            assert_eq!(
+                niches.consumed(),
+                fragment
+                    .consumed_niche
+                    .iter()
+                    .map(key)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                "`{}`: a frozen fragment plan changed the niche it consumed",
+                fragment.source.key()
+            );
+            assert_eq!(
+                niches.discriminants(),
+                niches.consumed().len(),
+                "`{}`: a consumed niche is what the fragment discriminates on",
+                fragment.source.key()
+            );
+            assert_eq!(
+                niches.exposed(),
+                fragment
+                    .conv
+                    .niches
+                    .slots
+                    .iter()
+                    .map(key)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                "`{}`: a frozen fragment plan changed the niches it leaves for a parent",
+                fragment.source.key()
+            );
+            // A composition's shape has to be the composition, not the
+            // placeholder every fragment starts with: `JLayout` is what JNI
+            // says today about occupying several wires, so a fragment whose
+            // layout composes must not freeze as `Atomic`.
+            if matches!(
+                fragment.layout,
+                Some(crate::jni::compile::JLayout::Product(_))
+                    | Some(crate::jni::compile::JLayout::Optional(_))
+                    | Some(crate::jni::compile::JLayout::Choice(_))
+            ) {
+                assert!(
+                    !matches!(
+                        plan.converter().shape(),
+                        prebindgen_registry::generation::ShapePlan::Atomic(_)
+                    ),
+                    "`{}`: a fragment whose layout composes froze as atomic — the \
+                     hook that composed it did not state its shape",
+                    fragment.source.key()
+                );
+            }
+        }
+        // Every site the compilation stated reached the stored plan. The
+        // set-level properties — a duplicate identity, a failure route that
+        // does not match its fragment's fallibility, an edge naming a fragment
+        // nothing compiled — are `build`'s, and `build` now runs in `freeze`,
+        // so reaching here at all means it passed. What this adds is that
+        // nothing was dropped between stating a site and storing it.
+        let stated = self.decls.site_plans.borrow();
+        assert_eq!(
+            stated.len(),
+            generation.plan().sites().len(),
+            "the canonical plan holds a different number of sites than were stated"
+        );
+        for site in stated.iter() {
+            // The slot count is what the ABI itself says it is, so the two
+            // cannot drift: `slots` is taken from the leaves rather than
+            // counted beside them.
+            assert_eq!(
+                site.abi().slots(),
+                site.abi().payload().len(),
+                "site {}: the slot count and the ABI disagree",
+                site.id().site()
+            );
+            assert!(
+                generation.plan().site(site.id()).is_some(),
+                "site {} was stated but is not in the canonical plan",
+                site.id().site()
+            );
+        }
     }
 
     /// The resolved registry — conversions, decompositions, and the model.
@@ -763,6 +1128,15 @@ impl JniGen {
     /// What the binding declared.
     pub fn declarations(&self) -> &Declarations {
         &self.decls
+    }
+
+    /// The immutable cross-artifact plan shared by Rust and Kotlin emission.
+    #[cfg(test)]
+    pub(crate) fn generation_plan(&self) -> &generation::JniGenerationPlan {
+        self.decls
+            .generation
+            .as_deref()
+            .expect("resolved JniGen has no frozen generation plan")
     }
 }
 
@@ -837,20 +1211,10 @@ pub struct Declarations {
     pub(crate) packages: BTreeMap<String, PackageConfig>,
 
     /// Canonical single-value conversions ([`ConvertDecl`], accepted by
-    /// [`JniGenBuilder::convert`]), stored raw — the rank-0 converter bodies derive
-    /// from the conversion fns' registry signatures at lookup time
-    /// ([`JniGenBuilder::convert_input_body`] / [`JniGenBuilder::convert_output_body`]),
-    /// keeping declarations order-independent and origin-qualified.
+    /// [`JniGenBuilder::convert`]), stored raw. Recipe compilation freezes
+    /// function/trait call policy and Flat representation/error readings;
+    /// final rendering spells those readings and qualifies their origins.
     pub(crate) convert_decls: Vec<ConvertDecl>,
-    /// Every conversion this binding compiled.
-    ///
-    /// Filled once by `JniGenBuilder::build_with` and handed to `write_rust`
-    /// directly. It is what reaches the generated file, so a fragment no longer
-    /// has to be expressible as one `ConverterImpl` to be emitted — only to be
-    /// looked up. The writer sorts and de-duplicates by function name, so the
-    /// order here decides which of two same-named functions wins and not where
-    /// any of them lands.
-    pub(crate) compiled_fns: Vec<syn::ItemFn>,
     /// Every conversion this binding has compiled so far, keyed by crossing.
     ///
     /// What the emitters ask instead of the converter table. A table entry
@@ -864,7 +1228,9 @@ pub struct Declarations {
     /// `convert_with`. A conversion for one type is built out of the
     /// conversions for its inners, which the resolver compiles first — the same
     /// order that filled the converter table, so a fragment is there exactly
-    /// when a table entry would have been.
+    /// when a table entry would have been. Resolution drains it into
+    /// [`generation::JniGenerationPlan`]; writers and writer-facing lookups
+    /// cannot resume or mutate this store.
     pub(crate) compiled: std::rc::Rc<
         std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>>,
     >,
@@ -967,6 +1333,17 @@ pub struct Declarations {
     pub(crate) iface_specs:
         std::cell::RefCell<std::collections::BTreeMap<SpecKey, std::sync::Arc<IfaceSpec>>>,
 
+    /// Readings an interface param resolved when its spec was built, keyed by
+    /// the identity text the param carries.
+    ///
+    /// `IfaceParam::reading` is text because a spec is memoized behind an
+    /// `Arc` and a `TypeRef` carries non-`Send` interiors, so the resolved
+    /// answer cannot live in the spec. It lives here instead, outside the
+    /// `Arc`, which is what lets a renderer ask for the model's answer without
+    /// holding a `Conversions` (#613 step 7).
+    pub(crate) frozen_readings:
+        std::cell::RefCell<std::collections::BTreeMap<String, prebindgen_registry::flat::TypeRef>>,
+
     /// Memoized per-function lowered plans, one [`JniFunctionPlan`] per bound
     /// function/const-getter ident — the single lowering shared by validation
     /// and every emitter (Rust extern, JNINative extern, Kotlin wrapper,
@@ -978,6 +1355,45 @@ pub struct Declarations {
     /// "derived state, keyed by `(self, registry)`" contract as
     /// [`Self::iface_specs`].
     pub(crate) fn_plans: std::cell::RefCell<HashMap<syn::Ident, std::rc::Rc<JniFunctionPlan>>>,
+
+    /// Whole-value struct layouts accumulated during resolution. The frozen
+    /// generation plan drains this store together with the function and
+    /// interface memos, so Rust and Kotlin cannot rebuild the layout apart.
+    /// Every site frozen into the canonical plan while compiling, so the whole
+    /// set can be validated as one — which is where a duplicate site identity
+    /// or a missing failure route shows up, neither being visible in a site
+    /// compared against itself (#622 review).
+    pub(crate) site_plans: std::cell::RefCell<
+        Vec<
+            std::rc::Rc<
+                prebindgen_registry::generation::SitePlan<crate::jni::compile::JRepresentation>,
+            >,
+        >,
+    >,
+    pub(crate) struct_plans: std::cell::RefCell<HashMap<TypeKey, Option<std::rc::Rc<StructPlan>>>>,
+
+    /// Sealed-class payload/ownership layouts accumulated during resolution.
+    pub(crate) sum_plans:
+        std::cell::RefCell<HashMap<TypeKey, std::rc::Rc<kotlin_emit::SealedClassPlan>>>,
+
+    /// Synthetic `Vec<T>` helper ABI plans, interned by canonical element
+    /// type while function sites are compiled and drained into the frozen
+    /// generation plan before any artifact writer runs.
+    pub(crate) vec_build_plans: std::cell::RefCell<HashMap<TypeKey, std::rc::Rc<VecBuildHelpers>>>,
+
+    /// The output-side decompositions this binding declared, applied.
+    ///
+    /// Filled once, while the binding declares itself into the registry, and
+    /// read at every emission site that asks how a return, an error or a
+    /// callback argument comes apart. The registry holds none of this: it is
+    /// told only which readings the decompositions need on the output side, and
+    /// which leaves a callback argument's delivery depends on.
+    pub(crate) unfolded: std::cell::OnceCell<crate::unfold::Unfolded>,
+
+    /// Present only after resolution has finished. All artifact writers reach
+    /// derived JNI decisions through this one immutable store; the mutable
+    /// memos above are empty after it is installed.
+    pub(crate) generation: Option<std::rc::Rc<generation::JniGenerationPlan>>,
 }
 
 /// Describe a JNI binding: state the Kotlin surface, then [`build`](Self::build).
@@ -1016,7 +1432,6 @@ mod iface;
 mod prim;
 mod prim_array;
 mod recipes;
-mod selector;
 #[cfg(test)]
 mod tests;
 pub(crate) mod trait_impl;

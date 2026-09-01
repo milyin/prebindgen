@@ -81,6 +81,7 @@
 pub mod jni;
 #[cfg(test)]
 mod test_util;
+pub(crate) mod unfold;
 pub(crate) mod util;
 
 pub use jni::{

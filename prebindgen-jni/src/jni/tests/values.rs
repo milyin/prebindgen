@@ -1,4 +1,513 @@
+use prebindgen_registry::Conversions;
+
 use super::*;
+
+#[test]
+fn opaque_handles_retain_late_plans_for_all_ownership_operations() {
+    let loc = myflat_loc();
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub struct Token {
+                    _private: u8,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn owned_handle(value: Token) -> Token {
+                    value
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn borrowed_handle(value: &Token) -> &Token {
+                    value
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn exclusively_borrowed_handle(value: &mut Token) {
+                    let _ = value;
+                }
+            ),
+            loc,
+        ),
+    ]))
+    .expect("index handle fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Token))
+                .fun(prebindgen_registry::fun!(owned_handle))
+                .fun(prebindgen_registry::fun!(borrowed_handle))
+                .fun(prebindgen_registry::fun!(exclusively_borrowed_handle)),
+        )
+        .build_with(registry)
+        .expect("resolve handle fixture");
+
+    for ty in [syn::parse_quote!(Token), syn::parse_quote!(&Token)] {
+        let reading = generation.registry.reading_of(&ty).expect("handle reading");
+        assert!(
+            generation
+                .decls
+                .in_frag(&reading)
+                .expect("handle input")
+                .is_handle_codec_plan(),
+            "the handle input must retain an unrendered handle codec: {ty:?}"
+        );
+        assert!(
+            generation
+                .decls
+                .out_frag(&reading)
+                .expect("handle output")
+                .is_handle_codec_plan(),
+            "the handle output must retain an unrendered handle codec: {ty:?}"
+        );
+    }
+
+    let shared = generation
+        .registry
+        .reading_of(&syn::parse_quote!(&Token))
+        .expect("shared handle reading");
+    let exclusive = generation
+        .registry
+        .reading_of(&syn::parse_quote!(&mut Token))
+        .expect("exclusive handle reading");
+    assert_eq!(
+        generation
+            .decls
+            .in_frag(&shared)
+            .expect("shared input")
+            .converter,
+        generation
+            .decls
+            .in_frag(&exclusive)
+            .expect("exclusive input")
+            .converter,
+        "both borrow crossings must retain one semantic handle operation"
+    );
+}
+
+#[test]
+fn bare_scalars_retain_late_registry_plans_in_both_directions() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::parse_quote!(
+            pub fn scalar_echo(value: u32) -> u32 {
+                value
+            }
+        ),
+        myflat_loc(),
+    )]))
+    .expect("index scalar fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(scalar_echo)))
+        .build_with(registry)
+        .expect("resolve scalar fixture");
+    let reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(u32)))
+        .expect("u32 reading");
+
+    assert!(
+        generation
+            .decls
+            .in_frag(&reading)
+            .expect("u32 input")
+            .is_value_codec_plan(),
+        "the input scalar must retain an unrendered value codec plan"
+    );
+    assert!(
+        generation
+            .decls
+            .out_frag(&reading)
+            .expect("u32 output")
+            .is_value_codec_plan(),
+        "the output scalar must retain an unrendered value codec plan"
+    );
+}
+
+#[test]
+fn byte_vectors_retain_late_registry_plans_in_both_directions() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::parse_quote!(
+            pub fn bytes_echo(value: Vec<u8>) -> Vec<u8> {
+                value
+            }
+        ),
+        myflat_loc(),
+    )]))
+    .expect("index byte-vector fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(bytes_echo)))
+        .build_with(registry)
+        .expect("resolve byte-vector fixture");
+    let reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(Vec<u8>)))
+        .expect("Vec<u8> reading");
+
+    assert!(
+        generation
+            .decls
+            .in_frag(&reading)
+            .expect("Vec<u8> input")
+            .is_value_codec_plan(),
+        "the byte-vector input must retain an unrendered value codec plan"
+    );
+    assert!(
+        generation
+            .decls
+            .out_frag(&reading)
+            .expect("Vec<u8> output")
+            .is_value_codec_plan(),
+        "the byte-vector output must retain an unrendered value codec plan"
+    );
+}
+
+/// Recipe compilation selects terminal representations from Flat kinds and
+/// retains source readings; it cannot spell source Rust or recover a kind by
+/// parsing a key string. `RustWriter` belongs only to the final renderer.
+#[test]
+fn jni_recipe_planning_has_no_emit_or_key_text_escape() {
+    let compile = include_str!("../compile.rs");
+    assert!(!compile.contains(".emit()"), "{compile}");
+
+    let terminals = include_str!("../emit/convert.rs");
+    assert!(!terminals.contains("TypeKey"), "{terminals}");
+    let terminal_selection = terminals
+        .split_once("pub(crate) fn scalar_input(")
+        .expect("scalar terminal policy")
+        .1
+        .split_once("// Callback wrappers")
+        .expect("end of terminal policy")
+        .0;
+    assert!(
+        !terminal_selection.contains(".as_str()"),
+        "{terminal_selection}"
+    );
+}
+
+#[test]
+fn owned_strings_and_unit_retain_late_value_codec_plans() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub fn string_echo(value: String) -> String {
+                    value
+                }
+            ),
+            myflat_loc(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn boxed_string_echo(value: Box<String>) -> Box<String> {
+                    value
+                }
+            ),
+            myflat_loc(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn cow_string_echo(value: Cow<'static, str>) -> Cow<'static, str> {
+                    value
+                }
+            ),
+            myflat_loc(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn unit_result() {}
+            ),
+            myflat_loc(),
+        ),
+    ]))
+    .expect("index value-codec fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .fun(prebindgen_registry::fun!(string_echo))
+                .fun(prebindgen_registry::fun!(boxed_string_echo))
+                .fun(prebindgen_registry::fun!(cow_string_echo))
+                .fun(prebindgen_registry::fun!(unit_result)),
+        )
+        .build_with(registry)
+        .expect("resolve value-codec fixture");
+
+    for ty in [
+        syn::parse_quote!(String),
+        syn::parse_quote!(Box<String>),
+        syn::parse_quote!(Cow<'static, str>),
+    ] {
+        let reading = generation
+            .registry
+            .reading(&TypeKey::from_type(&ty))
+            .expect("owned-string reading");
+        assert!(
+            generation
+                .decls
+                .in_frag(&reading)
+                .expect("owned-string input")
+                .is_value_codec_plan(),
+            "the owned-string input must retain an unrendered value codec: {ty:?}"
+        );
+        assert!(
+            generation
+                .decls
+                .out_frag(&reading)
+                .expect("owned-string output")
+                .is_value_codec_plan(),
+            "the owned-string output must retain an unrendered value codec: {ty:?}"
+        );
+    }
+
+    let unit = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(())))
+        .expect("unit reading");
+    assert!(
+        generation
+            .decls
+            .out_frag(&unit)
+            .expect("unit output")
+            .is_value_codec_plan(),
+        "the unit output must retain an unrendered value codec"
+    );
+}
+
+#[test]
+fn unsized_str_retains_semantic_text_codec_plans() {
+    let loc = myflat_loc();
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub struct Text {
+                    pub value: String,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn text_as_str(value: &Text) -> &str {
+                    unimplemented!()
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn text_len(value: &str) -> i64 {
+                    value.len() as i64
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn owned_text_len(value: String) -> i64 {
+                    value.len() as i64
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn text_emit(cb: impl Fn(Text) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]))
+    .expect("index unsized-str fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Text))
+                .fun(prebindgen_registry::fun!(text_len))
+                .fun(prebindgen_registry::fun!(owned_text_len))
+                .fun(prebindgen_registry::fun!(text_emit)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(Text).field(prebindgen_registry::fun!(text_as_str)),
+        )
+        .build_with(registry)
+        .expect("resolve unsized-str fixture");
+    let str_reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(str)))
+        .expect("str reading");
+    let ref_reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(&str)))
+        .expect("&str reading");
+    let string_reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(String)))
+        .expect("String reading");
+
+    let input = generation.decls.in_frag(&str_reading).expect("str input");
+    let bare_output = generation.decls.out_frag(&str_reading).expect("str output");
+    let ref_output = generation
+        .decls
+        .out_frag(&ref_reading)
+        .expect("&str output");
+    let string_input = generation
+        .decls
+        .in_frag(&string_reading)
+        .expect("String input");
+    assert!(
+        input.is_value_codec_plan(),
+        "the unsized input must retain a semantic owned-text plan"
+    );
+    assert!(
+        bare_output.is_value_codec_plan() && ref_output.is_value_codec_plan(),
+        "both output crossings must retain the semantic borrowed-text plan"
+    );
+    assert_eq!(
+        input.converter, string_input.converter,
+        "bare str input and String must share the owned-text decoder"
+    );
+    assert_eq!(
+        bare_output.converter, ref_output.converter,
+        "rank-0 str and rank-1 &str must share one normalized converter"
+    );
+}
+
+#[test]
+fn fixed_primitive_arrays_retain_late_registry_plans() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::parse_quote!(
+            pub fn array_echo(value: [bool; 4]) -> [bool; 4] {
+                value
+            }
+        ),
+        myflat_loc(),
+    )]))
+    .expect("index primitive-array fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(array_echo)))
+        .build_with(registry)
+        .expect("resolve primitive-array fixture");
+    let reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!([bool; 4])))
+        .expect("primitive-array reading");
+
+    assert!(
+        generation
+            .decls
+            .in_frag(&reading)
+            .expect("primitive-array input")
+            .is_value_codec_plan(),
+        "the input array must retain an unrendered primitive-array plan"
+    );
+    assert!(
+        generation
+            .decls
+            .out_frag(&reading)
+            .expect("primitive-array output")
+            .is_value_codec_plan(),
+        "the output array must retain an unrendered primitive-array plan"
+    );
+}
+
+/// Whole-object planning may inspect Flat fields/alternatives and freeze JNI
+/// property policy, but it must not receive the capability that spells
+/// captured source types. Pin both struct and sum entry points: the recipe
+/// compiler never asks its context for a renderer, and neither JObject plan
+/// builder can accept a `RustWriter` later.
+#[test]
+fn whole_object_planning_has_no_source_spelling_access() {
+    let compile = include_str!("../compile.rs");
+    let struct_planner = compile
+        .split_once("    fn planned_struct_codec(&self, at: At<'_>)")
+        .expect("whole-struct planner")
+        .1
+        .split_once("    /// Freeze the explicit whole-object decoder")
+        .expect("end of whole-struct planner")
+        .0;
+    assert!(!struct_planner.contains(".emit()"), "{struct_planner}");
+    let sum_planner = compile
+        .split_once("    fn planned_sum_codec(&self, at: At<'_>)")
+        .expect("whole-sum planner")
+        .1
+        .split_once("    /// Freeze a declared fieldless enum")
+        .expect("end of whole-sum planner")
+        .0;
+    assert!(!sum_planner.contains(".emit()"), "{sum_planner}");
+
+    let input = include_str!("../emit/flat_input.rs");
+    let struct_signature = input
+        .split_once("pub(crate) fn build_jobject_struct_input_plan(")
+        .expect("JObject struct plan builder")
+        .1
+        .split_once(") -> Option<JObjectStructInputPlan>")
+        .expect("JObject struct plan signature")
+        .0;
+    assert!(
+        !struct_signature.contains("RustWriter"),
+        "{struct_signature}"
+    );
+    let sum_signature = input
+        .split_once("pub(crate) fn build_jobject_sum_input_plan(")
+        .expect("JObject sum plan builder")
+        .1
+        .split_once(") -> Option<JObjectSumInputPlan>")
+        .expect("JObject sum plan signature")
+        .0;
+    assert!(!sum_signature.contains("RustWriter"), "{sum_signature}");
+}
+
+#[test]
+fn cow_byte_slices_retain_a_late_value_codec() {
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::parse_quote!(
+            pub fn cow_bytes() -> Cow<'static, [u8]> {
+                unimplemented!()
+            }
+        ),
+        myflat_loc(),
+    )]))
+    .expect("index Cow-byte fixture");
+    let generation = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(cow_bytes)))
+        .build_with(registry)
+        .expect("resolve Cow-byte fixture");
+    let reading = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(Cow<'static, [u8]>)))
+        .expect("Cow-byte reading");
+
+    let output = generation
+        .decls
+        .out_frag(&reading)
+        .expect("Cow-byte output");
+    assert!(
+        output.is_value_codec_plan(),
+        "Cow<[u8]> output must retain an unrendered value codec"
+    );
+    assert!(
+        output
+            .converter
+            .fragment()
+            .is_some_and(|fragment| fragment.spelling() == &reading.key()),
+        "the late codec identity must preserve the crossing's lifetime"
+    );
+}
 
 #[test]
 fn bounded_duration_option_uses_u64_niche_without_boxing() {
@@ -47,20 +556,141 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
         "{rust}"
     );
     assert!(
-        rc.contains("Some({let__inner_s0=jlong_to_u64_")
-            && rc.contains("let__inner_s1=u64_to_Duration_"),
+        rc.contains("Some({let__chain_s0=__jni_in_convert_")
+            && rc.contains("let__chain_s1=__jni_in_stage_0_"),
         "Option input must compose the raw u64 decoder with the Duration stage:\n{rust}"
     );
     assert!(
-        rc.contains("Some(value)=>{let__inner_s0=")
-            && rc.contains("Duration_to_u64_")
-            && rc.contains("u64_to_jlong_"),
+        rc.contains("Some(__value)=>{{let__chain_s0=")
+            && rc.contains("__jni_out_stage_0_")
+            && rc.contains("__jni_out_convert_"),
         "Option output must compose the Duration stage with the raw u64 encoder:\n{rust}"
     );
     assert!(!rc.contains("Optionbox:"), "{rust}");
     assert!(kc.contains("v:ULong?"), "{kotlin}");
     assert!(kc.contains("v?.toLong()?:-1L"), "{kotlin}");
     assert!(kc.contains("v:Long"), "{kotlin}");
+}
+
+#[test]
+fn enum_terminal_allocates_one_niche_per_optional_layer() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    Normal = 1,
+                    High = 2,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn priority_nested(
+                    value: Option<Option<Priority>>,
+                ) -> Option<Option<Priority>> {
+                    value
+                }
+            ),
+            loc,
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::enum_class!(Priority)))
+        .package(crate::package!().fun(prebindgen_registry::fun!(priority_nested)));
+    let gen = jni
+        .build_with(registry)
+        .expect("resolve nested enum options");
+
+    let key = TypeKey::from_type(&syn::parse_quote!(Priority));
+    let reading = gen.registry.reading(&key).expect("Priority reading");
+    let input = gen.decls.in_frag(&reading).expect("Priority input");
+    let output = gen.decls.out_frag(&reading).expect("Priority output");
+    assert!(
+        input.is_value_codec_plan() && output.is_value_codec_plan(),
+        "both Priority directions must retain unrendered enum codec plans"
+    );
+    assert_eq!(input.niches.len(), 2);
+    assert_eq!(output.niches.len(), 2);
+    assert_eq!(
+        input.metadata.niche_sentinels,
+        ["Int.MIN_VALUE", "-2147483647"]
+    );
+    assert_eq!(
+        input.metadata.niche_sentinels,
+        output.metadata.niche_sentinels
+    );
+    let input_values: Vec<String> = input
+        .niches
+        .slots
+        .iter()
+        .map(|slot| slot.value.to_token_stream().to_string())
+        .collect();
+    let output_values: Vec<String> = output
+        .niches
+        .slots
+        .iter()
+        .map(|slot| slot.value.to_token_stream().to_string())
+        .collect();
+    assert_eq!(
+        input_values, output_values,
+        "directions must allocate identically"
+    );
+    assert_eq!(
+        input_values,
+        ["- 2147483648i32", "- 2147483647i32"],
+        "unused discriminants are allocated in stable order"
+    );
+
+    let option_key = TypeKey::from_type(&syn::parse_quote!(Option<Priority>));
+    let option = gen.registry.reading(&option_key).expect("Option reading");
+    assert_eq!(
+        gen.decls
+            .in_frag(&option)
+            .expect("Option input")
+            .niches
+            .len(),
+        1,
+        "the first Optional layer carves one slot and re-exports the other"
+    );
+    assert_eq!(
+        gen.decls
+            .out_frag(&option)
+            .expect("Option output")
+            .niches
+            .len(),
+        1,
+        "input and output composition must expose the same remainder"
+    );
+    assert_eq!(
+        crate::jni::compile::option_enum_niche(
+            &gen.decls,
+            &option,
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .as_deref(),
+        Some("Int.MIN_VALUE"),
+        "the inner Optional layer consumes the first enum niche"
+    );
+    let nested_key = TypeKey::from_type(&syn::parse_quote!(Option<Option<Priority>>));
+    let nested = gen
+        .registry
+        .reading(&nested_key)
+        .expect("nested Option reading");
+    assert_eq!(
+        crate::jni::compile::option_enum_niche(
+            &gen.decls,
+            &nested,
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .as_deref(),
+        Some("-2147483647"),
+        "the outer Optional layer consumes the second enum niche"
+    );
 }
 
 #[test]
@@ -153,21 +783,31 @@ fn flattened_field_composes_bounded_conversion_stages() {
         kc.contains("if(delay==-1L)nullelsedelay.toULong()"),
         "the raw builder adapter must restore the optional niche:\n{kotlin}"
     );
-    assert!(rc.contains("jlong_to_u64"), "{rust}");
-    assert!(rc.contains("u64_to_Duration"), "{rust}");
+    assert!(rc.contains("__jni_in_stage_0_"), "{rust}");
     assert!(
-        rc.contains("jlong_to_Option_Duration") && rc.contains("env,&__delay_raw)?"),
-        "whole-JObject input must invoke the complete optional Duration converter:\n{rust}"
+        rc.contains(
+            "__jni_in_convert_wire_to_Option_Duration_jni_optional_intermediate_input_niche"
+        ) && rc.contains("env,&__present"),
+        "whole-JObject input must invoke the complete optional Duration converter, on the \
+         value the composed Optional bound:\n{rust}"
     );
     assert!(
-        rc.contains("let___delay:jni::sys::jlong=Option_Duration_to_jlong")
-            && rc.contains("\"(J)Lio/test/jni/Timed;\""),
+        !rc.contains("Some(__jni_in_convert_wire_to_Option_Duration"),
+        "the niche converter already yields the Option, so the composed layer must pass its \
+         answer through rather than wrap it:\n{rust}"
+    );
+    assert!(
+        rc.contains("let__obj0:jni::sys::jlong=") && rc.contains("\"(J)Lio/test/jni/Timed;\""),
         "whole-struct output must pass the niche as primitive jlong:\n{rust}"
     );
     assert!(!rc.contains("let___delay:jni::objects::JObject"), "{rust}");
     assert!(
-        rc.contains("myflat::Timed{delay:__flat_value_delay"),
-        "{rust}"
+        rc.contains("__jni_in_convert_") && rc.contains("(&mutenv,(value_delay,"),
+        "the wrapper must delegate Product reconstruction to its registry chain:\n{rust}"
+    );
+    assert!(
+        rc.contains("let(__chain_wire0,)=match__jni_out_convert_"),
+        "output delivery must delegate Product deconstruction to the same chain:\n{rust}"
     );
 }
 
@@ -561,13 +1201,42 @@ fn conversion_domain_must_match_the_representation() {
     let _ = jni.build_with(registry);
 }
 
-/// Phase 4: a bare `Option<primitive>` / `Option<enum>` **input** parameter
-/// crosses as a decoupled `(present: Boolean, value: <prim>)` pair instead of a
-/// boxed `java.lang.*` `JObject`. The Rust side reassembles the `Option` from
-/// two raw scalars (`if <p>_present != 0u8 { Some(..) } else { None }`) with no
-/// reflective `intValue()`/`longValue()` unbox. The public Kotlin signature
-/// keeps `T?`; the call site passes `<name> != null` and `<name> ?: <zero>`
-/// (`<name>?.value ?: 0` for an enum).
+/// A path-qualified scalar never reaches the domain check above: a marked item
+/// lives in one flat namespace of bare names, so a representation written
+/// `::core::primitive::u64` fails to resolve first. This pins that order —
+/// JniGen compares model type keys, which are not reduced to a canonical
+/// spelling, and would report a mismatch between two spellings of one scalar if
+/// such a representation ever got that far.
+#[test]
+fn a_qualified_scalar_representation_never_reaches_the_domain_check() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> =
+        ["pub fn duration_use(v: Duration) { unimplemented!() }"]
+            .into_iter()
+            .map(|source| {
+                let item: syn::Item = syn::parse_str(source).unwrap();
+                (item, loc.clone())
+            })
+            .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let jni = JniGenBuilder::new()
+        .convert(
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::from!(::core::primitive::u64))
+                .valid_range(0u64..=1_000u64),
+        )
+        .package(crate::package!("time").fun(prebindgen_registry::fun!(duration_use)));
+
+    let error = format!("{:?}", jni.build_with(registry).err());
+    assert!(error.contains("core :: primitive :: u64"), "{error}");
+    assert!(!error.contains("domain type"), "{error}");
+}
+
+/// Phase 4: a bare `Option<primitive>` with no niche crosses as a decoupled
+/// `(present: Boolean, value: <prim>)` pair instead of a boxed
+/// `java.lang.*` `JObject`. An enum terminal contributes unused discriminants,
+/// so `Option<enum>` stays one primitive. Both paths are registry-composed and
+/// the public Kotlin signature remains nullable.
 #[test]
 fn option_scalar_param_crosses_as_present_value_pair() {
     let loc = myflat_loc();
@@ -620,32 +1289,32 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     assert!(kc.contains("count:Int?"), "{kotlin}");
     assert!(kc.contains("mode:Mode?"), "{kotlin}");
 
-    // Extern declares the decomposed `(present, value)` pairs, never a boxed
-    // `Long?`/`Int?` value wire.
+    // Ordinary primitives have no niche and use decomposed `(present, value)`
+    // pairs. The enum uses one non-null Int with an unused discriminant.
     assert!(kc.contains("msPresent:Boolean"), "{kotlin}");
     assert!(kc.contains("msValue:Long"), "{kotlin}");
     assert!(kc.contains("countPresent:Boolean"), "{kotlin}");
     assert!(kc.contains("countValue:Int"), "{kotlin}");
-    assert!(kc.contains("modePresent:Boolean"), "{kotlin}");
-    assert!(kc.contains("modeValue:Int"), "{kotlin}");
+    assert!(kc.contains("mode:Int"), "{kotlin}");
+    assert!(!kc.contains("modePresent:Boolean"), "{kotlin}");
 
-    // Call site splits each param into present-flag + value-or-zero (enum reads
-    // `?.value`).
+    // Primitive call sites split; the enum maps null to its allocated niche.
     assert!(kc.contains("ms!=null"), "{kotlin}");
     assert!(kc.contains("ms?:0L"), "{kotlin}");
     assert!(kc.contains("count?:0"), "{kotlin}");
-    assert!(kc.contains("mode?.value?:0"), "{kotlin}");
+    assert!(kc.contains("mode?.value?:Int.MIN_VALUE"), "{kotlin}");
 
-    // Rust native wrapper takes the two raw scalars and rebuilds the `Option`
-    // with no boxed-object unbox, then passes the rebuilt values to the source
-    // fn. (The `Option<i64>`/`Option<i32>`/`Option<Mode>` boxed converters are
-    // still emitted but are now dead `#[allow(dead_code)]` — the param path no
-    // longer references them, exactly like the Phase-1 dead Vec converters.)
+    // Rust native wrapper takes the two raw scalars and delegates each pair to
+    // the registry-composed Optional converter. The public ABI is unchanged;
+    // the former inline `if <param>_present` reconstruction is gone.
     assert!(rc.contains("ms_present:jni::sys::jboolean"), "{rust}");
     assert!(rc.contains("ms_value:jni::sys::jlong"), "{rust}");
     assert!(rc.contains("count_value:jni::sys::jint"), "{rust}");
-    assert!(rc.contains("mode_value:jni::sys::jint"), "{rust}");
-    assert!(rc.contains("ifms_present!=0u8"), "{rust}");
+    assert!(rc.contains("mode:jni::sys::jint"), "{rust}");
+    assert!(rc.contains("letms=match__jni_in_convert_"), "{rust}");
+    assert!(rc.contains("letcount=match__jni_in_convert_"), "{rust}");
+    assert!(rc.contains("letmode=match__jni_in_convert_"), "{rust}");
+    assert!(rc.contains("if(v).0==0u8"), "{rust}");
     // The live path feeds the three rebuilt `Option`s straight to the source
     // call — no boxed `JObject` param anywhere in the wrapper.
     assert!(
@@ -814,18 +1483,18 @@ fn option_scalar_struct_field_flattens() {
     assert!(kc.contains("o.ttl?:0L"), "{kotlin}");
     assert!(kc.contains("o.flag?:false"), "{kotlin}");
 
-    // Rust rebuilds each field's `Option` from the raw scalars (gated on present)
-    // and reconstructs the struct inline from the flat leaves, passing it to the
-    // source fn. (The whole-struct `JObject_to_Opts` `get_field` converter is
-    // still emitted but is now dead `#[allow(dead_code)]`, like Phase 4's boxed
-    // converters — the live param path no longer references it.)
+    // Rust hands the nested pair intermediates to the registry-composed
+    // Optional chains, then hands their results to the Product chain. The
+    // wrapper does not reconstruct either shape itself. (The whole-struct
+    // `JObject_to_Opts` converter remains a dead compatibility conversion.)
     assert!(rc.contains("o_ttl_present:jni::sys::jboolean"), "{rust}");
     assert!(rc.contains("o_ttl_value:jni::sys::jlong"), "{rust}");
-    assert!(rc.contains("ifo_ttl_present!=0u8"), "{rust}");
     assert!(
-        rc.contains("myflat::Opts{id:__flat_o_id,ttl:__flat_o_ttl,flag:__flat_o_flag"),
+        rc.contains("__jni_in_convert_")
+            && rc.contains("(o_id,(o_ttl_present,o_ttl_value),(o_flag_present,o_flag_value))"),
         "{rust}"
     );
+    assert!(!rc.contains("__flat_o_"), "{rust}");
     assert!(rc.contains("myflat::opts_put(&o)"), "{rust}");
 }
 
@@ -833,16 +1502,13 @@ fn option_scalar_struct_field_flattens() {
 /// `Option<enum>` fields. Output recursively uses `fromParts`; input now
 /// recursively flattens the same graph into primitive leaves, without passing
 /// either `Job` or `Inner` as a `JObject`.
-///  * output `fromParts` descriptor: an `Option`-boxed primitive slot is the
-///    BOX class (`Ljava/lang/Long;` / `Ljava/lang/Integer;`), not the bare
-///    primitive — and the Kotlin factory takes `Int?` for `Option<enum>`,
-///    rebuilding via `?.let { E.fromInt(it) }`;
+///  * output `fromParts` descriptor: an ordinary optional primitive is boxed,
+///    while `Option<enum>` uses one primitive `I` plus an unused discriminant;
 ///  * input `get_field` descriptors are the slots' EXACT static types (nested
 ///    class FQN, box class, enum class + `getValue()I` decode), not the erased
 ///    `Ljava/lang/Object;`;
-///  * a bare `Option<enum>` RETURN wires as `Int?` (the boxed discriminant),
-///    mapped back in the wrapper — previously the extern claimed the enum
-///    class while the native side returned a boxed `Integer`.
+///  * a bare `Option<enum>` RETURN wires as a non-null `Int` carrying that
+///    discriminant and is mapped back in the wrapper.
 #[test]
 fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     let loc = myflat_loc();
@@ -927,39 +1593,47 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     let kc: String = kotlin.split_whitespace().collect();
 
     // OUTPUT (`job_make` → `fromParts`): the nested `inner` inlines to its `J`
-    // leaf, the bare enum stays a raw `I`, and the two `Option` fields occupy
-    // their BOX-class slots.
+    // leaf, the bare enum stays a raw `I`, optional i64 keeps its box, and the
+    // optional enum uses its primitive niche.
     assert!(
-        rc.contains(r#""(JILjava/lang/Long;Ljava/lang/Integer;)Lio/test/jni/model/Job;""#),
+        rc.contains(r#""(JILjava/lang/Long;I)Lio/test/jni/model/Job;""#),
         "{rust}"
     );
-    // Kotlin factory: `Long?` / `Int?` params, enum rebuilt nullably; nested
-    // child reassembled via its own factory.
+    // Kotlin factory: nullable Long plus niche-backed Int, enum rebuilt
+    // nullably; nested child reassembled via its own factory.
     assert!(kc.contains("ttl:Long?"), "{kotlin}");
-    assert!(kc.contains("mode:Int?"), "{kotlin}");
-    assert!(kc.contains("mode?.let{Level.fromInt(it)}"), "{kotlin}");
-    assert!(kc.contains("Inner.fromParts(inner_id)"), "{kotlin}");
+    assert!(kc.contains("mode:Int"), "{kotlin}");
+    assert!(
+        kc.contains("if(mode==Int.MIN_VALUE)nullelseLevel.fromInt(mode)"),
+        "{kotlin}"
+    );
+    assert!(kc.contains("Inner.fromParts(inner__id)"), "{kotlin}");
 
     // INPUT (`job_mode`): the native method receives the recursively flattened
-    // leaves and Rust reconstructs `Inner` before `Job`. No live wrapper-side
-    // `get_field` decode is needed.
+    // leaves. The registry-composed Optional and Product chains reconstruct
+    // `Inner` and `Job`; the wrapper only assembles their tuple intermediate.
     assert!(kc.contains("jInnerId:Long"), "{kotlin}");
     assert!(kc.contains("jLevel:Int"), "{kotlin}");
     assert!(kc.contains("jTtlPresent:Boolean"), "{kotlin}");
-    assert!(kc.contains("jModeValue:Int"), "{kotlin}");
+    assert!(kc.contains("jMode:Int"), "{kotlin}");
     assert!(kc.contains("j.inner.id"), "{kotlin}");
-    assert!(rc.contains("myflat::Inner{id:__flat_j_inner_id"), "{rust}");
     assert!(
-        rc.contains("myflat::Job{inner:__flat_j_inner,level:__flat_j_level"),
+        rc.contains("__jni_in_convert_")
+            && rc.contains("((j_inner_id,),j_level,(j_ttl_present,j_ttl_value),j_mode)"),
         "{rust}"
     );
+    assert!(!rc.contains("__flat_j_"), "{rust}");
 
-    // RETURN (`job_mode` → `Option<Level>`): the extern wires `Int?`; the
-    // wrapper maps the boxed discriminant back to the nullable enum.
-    assert!(kc.contains("jModeValue:Int"), "{kotlin}");
+    // RETURN (`job_mode` → `Option<Level>`): the extern keeps a primitive Int;
+    // the wrapper maps the allocated discriminant back to null.
+    assert!(kc.contains("jMode:Int"), "{kotlin}");
+    assert!(kc.contains("j.mode?.value?:Int.MIN_VALUE"), "{kotlin}");
     assert!(kc.contains("errorSink:Any"), "{kotlin}");
-    assert!(kc.contains("):Int?"), "{kotlin}");
-    assert!(kc.contains("?.let{Level.fromInt(it)}"), "{kotlin}");
+    assert!(kc.contains("):Int"), "{kotlin}");
+    assert!(
+        kc.contains("if(__ret==Int.MIN_VALUE)nullelseio.test.jni.model.Level.fromInt(__ret)"),
+        "{kotlin}"
+    );
 }
 
 #[test]
@@ -1025,6 +1699,26 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    let object_child = generation
+        .registry
+        .reading(&TypeKey::from_type(&syn::parse_quote!(ObjectChild)))
+        .expect("ObjectChild reading");
+    assert!(
+        generation
+            .decls
+            .in_frag(&object_child)
+            .expect("ObjectChild whole input")
+            .is_struct_codec_plan(),
+        "the explicit JObject decoder must remain an unrendered struct plan"
+    );
+    assert!(
+        generation
+            .decls
+            .out_frag(&object_child)
+            .expect("ObjectChild whole output")
+            .is_struct_codec_plan(),
+        "the fromParts encoder must remain an unrendered struct plan"
+    );
     // The two boundaries this fixture draws, stated as the recipe states them:
     // `object` is declared `.jobject_input()` and stays ONE value, and `maybe`
     // is an `Option<data_class>`, which is a presence flag plus the inner's
@@ -1066,12 +1760,23 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     assert!(kc.contains("hPresent:Boolean"), "{kotlin}");
     assert!(kc.contains("hObject:io.test.jni.ObjectChild?"), "{kotlin}");
     assert!(kc.contains("h?.object_"), "{kotlin}");
-    assert!(rc.contains("JObject_to_ObjectChild"), "{rust}");
     assert!(
-        rc.contains(
-            "myflat::Hybrid{flat:__flat_h_flat,maybe:__flat_h_maybe,object:__flat_h_object"
-        ),
+        rc.contains("Result<myflat::ObjectChild,__JniErr>"),
         "{rust}"
+    );
+    assert!(
+        rc.contains("__jni_in_convert_") && rc.contains("(&mutenv,(h_present,((h_flat_id,),"),
+        "the wrapper must pass the gate and nested Product tuple to one Optional chain:\n{rust}"
+    );
+    assert!(
+        rc.contains("if(v).0==0u8")
+            && rc.contains("::core::option::Option::Some(")
+            && rc.contains("__jni_in_convert_"),
+        "the Optional chain must guard and delegate its present child to the Product chain:\n{rust}"
+    );
+    assert!(
+        !rc.contains("__flat_h_"),
+        "the adapter-side reconstruction fallback must disappear:\n{rust}"
     );
     assert!(generation.report().contains("input `JObject` opt-in"));
 }
@@ -1193,6 +1898,11 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    assert_eq!(
+        generation.optional_chain_plan_for_test("Option<Token>"),
+        Some(true),
+        "the owned optional handle must retain the shared Optional plan"
+    );
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -1213,19 +1923,205 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     assert!(kc.contains("e.token.markConsumed()"), "{kotlin}");
     assert!(kc.contains("e.spare?.markConsumed()"), "{kotlin}");
     assert!(
-        rc.contains("Box::from_raw(e_tokenas*mutmyflat::Token)"),
-        "{rust}"
+        rc.contains("lete=match__jni_in_convert_") && rc.contains("e_token,e_spare"),
+        "the wrapper must hand the two handle wires to one Product chain:\n{rust}"
+    );
+    let token_converter = generated_function(
+        &rust,
+        &["jni :: sys :: jlong", "myflat :: Token"],
+        &["Box :: from_raw", "* v == 0", "* v & 1"],
+    );
+    let token_converter_name = token_converter.sig.ident.to_string();
+    assert!(
+        rc.contains(&format!("token:{token_converter_name}(")) && rc.contains("env,&((v).0)"),
+        "the Product chain must consume Token through its owned converter:\n{rust}"
     );
     assert!(
-        rc.contains(
-            "Option::Some(unsafe{*::std::boxed::Box::from_raw(e_spareas*mutmyflat::Token)})"
+        rc.contains("spare:__jni_in_convert_") && rc.contains("env,&((v).1)"),
+        "the registry chain must own the optional field conversion:\n{rust}"
+    );
+    let optional_helper = generated_function(
+        &rust,
+        &["jni :: sys :: jlong", "Option < myflat :: Token >"],
+        &["Option :: Some"],
+    );
+    let optional_body = quote::ToTokens::to_token_stream(&optional_helper.block).to_string();
+    assert!(
+        optional_body.contains(&token_converter_name),
+        "the Optional plan must delegate its present arm to the owned child plan:\n{rust}"
+    );
+    assert!(
+        !optional_body.contains("Box :: from_raw"),
+        "the Optional composer must not reconstruct the owned handle itself:\n{rust}"
+    );
+}
+
+/// Direct owned handles in ordinary and constructor-expanded parameter sites
+/// must both call the one registry-planned converter. Reintroducing either
+/// wrapper-local `Box::from_raw` fast path makes this test lose one call.
+#[test]
+fn owned_handle_sites_reuse_the_frozen_pipeline() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Token {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
         ),
-        "{rust}"
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn request_new(token: Token) -> Request {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn consume_owned(token: Token, request: Request) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Token))
+                .fun(prebindgen_registry::fun!(consume_owned)),
+        )
+        .expand(
+            prebindgen_registry::expand_param!(Request)
+                .variant(prebindgen_registry::fun!(request_new)),
+        );
+    let dir = unique_test_dir("jnigen_owned_handle_site_pipeline");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let file = syn::parse_file(&rust).expect("generated Rust parses");
+
+    let helper = generated_function(
+        &rust,
+        &["jni :: sys :: jlong", "myflat :: Token"],
+        &["Box :: from_raw", "* v == 0", "* v & 1"],
+    );
+    let helper_name = helper.sig.ident.to_string();
+    let helper_body = quote::ToTokens::to_token_stream(&helper.block).to_string();
+    assert!(
+        helper_body.contains("Box :: from_raw")
+            && helper_body.contains("* v == 0")
+            && helper_body.contains("* v & 1"),
+        "the planned helper owns the consume guard and reconstruction:\n{rust}"
+    );
+
+    let wrapper = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Fn(function) => Some(function),
+            _ => None,
+        })
+        .find(|function| function.sig.ident.to_string().ends_with("_consumeOwned"))
+        .expect("consumeOwned JNI wrapper");
+    let wrapper_body = quote::ToTokens::to_token_stream(&wrapper.block).to_string();
+    assert_eq!(
+        wrapper_body.matches(&helper_name).count(),
+        2,
+        "ordinary and expanded owned-handle sites must call the same planned helper:\n{rust}"
+    );
+    assert!(
+        !wrapper_body.contains("Box :: from_raw"),
+        "wrapper emission must not reconstruct owned handles itself:\n{rust}"
+    );
+}
+
+/// A required handle read out of a whole Kotlin object is another owned-input
+/// site. It must call the reached plan instead of emitting a second local
+/// guard and `Box::from_raw`, which also left the reached helper uncalled.
+#[test]
+fn whole_object_handle_field_calls_its_reached_owned_plan() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Token {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Container {
+                    pub token: Token,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn consume_container(container: Container) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Token))
+                .class(crate::data_class!(Container).jobject_input())
+                .fun(prebindgen_registry::fun!(consume_container)),
+        );
+    let dir = unique_test_dir("jnigen_whole_object_owned_handle_plan");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let file = syn::parse_file(&rust).expect("generated Rust parses");
+
+    let helper = generated_function(
+        &rust,
+        &["jni :: sys :: jlong", "myflat :: Token"],
+        &["Box :: from_raw", "* v == 0", "* v & 1"],
+    );
+    let helper_name = helper.sig.ident.to_string();
+    let decoder = generated_function(&rust, &["JObject", "myflat :: Container"], &["get_field"]);
+    let decoder_body = quote::ToTokens::to_token_stream(&decoder.block).to_string();
+    assert_eq!(
+        decoder_body.matches(&helper_name).count(),
+        1,
+        "the handle field must call its planned owned converter:\n{rust}"
+    );
+    assert!(
+        !decoder_body.contains("Box :: from_raw"),
+        "whole-object emission must not reconstruct the handle itself:\n{rust}"
+    );
+    let all_rust = quote::ToTokens::to_token_stream(&file).to_string();
+    assert_eq!(
+        all_rust.matches(&helper_name).count(),
+        2,
+        "the emitted helper must have exactly one call site in this fixture:\n{rust}"
     );
 }
 
 #[test]
-fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
+fn recursive_flattening_counts_long_as_two_and_rejects_jvm_parameter_slot_overflow() {
+    // 127 non-null Long leaves occupy 254 descriptor slots. Together with the
+    // JNINative object receiver and binding-error sink, this is exactly 256:
+    // both the two-slot Long rule and the 255-slot rejection are load-bearing.
     let fields = (0..127)
         .map(|index| format!("pub f{index}: i64"))
         .collect::<Vec<_>>()
@@ -1254,6 +2150,56 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
         .to_string();
     assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
     assert!(error.contains("jobject_input"), "{error}");
+
+    // Pin the two other two-slot paths independently. An ordinary i64 reads
+    // its width from the frozen converter wire, while a handle stores its
+    // primitive jlong width directly in the native parameter plan.
+    let plain_params = (0..127)
+        .map(|index| format!("p{index}: i64"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let use_plain_wide: syn::ItemFn = syn::parse_str(&format!(
+        "pub fn use_plain_wide({plain_params}) -> i64 {{ unimplemented!() }}"
+    ))
+    .expect("parse wide plain function");
+    let registry = crate::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(use_plain_wide),
+        loc.clone(),
+    )]))
+    .expect("index plain function");
+    let error = JniGenBuilder::new()
+        .package(crate::package!().fun(prebindgen_registry::fun!(use_plain_wide)))
+        .build_with(registry)
+        .expect_err("127 ordinary Long parameters plus infrastructure must fail")
+        .to_string();
+    assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
+
+    let handle_params = (0..127)
+        .map(|index| format!("p{index}: &Token"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let token: syn::ItemStruct = syn::parse_quote!(
+        pub struct Token;
+    );
+    let use_handle_wide: syn::ItemFn = syn::parse_str(&format!(
+        "pub fn use_handle_wide({handle_params}) -> i64 {{ unimplemented!() }}"
+    ))
+    .expect("parse wide handle function");
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(token), loc.clone()),
+        (syn::Item::Fn(use_handle_wide), loc.clone()),
+    ]))
+    .expect("index handle function");
+    let error = JniGenBuilder::new()
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Token))
+                .fun(prebindgen_registry::fun!(use_handle_wide)),
+        )
+        .build_with(registry)
+        .expect_err("127 handle Long parameters plus infrastructure must fail")
+        .to_string();
+    assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
 
     // The explicit object boundary keeps the same public Kotlin data class,
     // but the native method receives it in one slot and performs the legacy
@@ -1411,6 +2357,24 @@ fn convert_via_trait_impls() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let reading = gen
+        .registry
+        .reading_of(&syn::parse_quote!(Celsius))
+        .expect("Celsius reading");
+    assert!(
+        gen.decls
+            .in_frag(&reading)
+            .expect("Celsius input")
+            .has_custom_conversion_stage(),
+        "trait input must retain an unrendered custom-conversion operation"
+    );
+    assert!(
+        gen.decls
+            .out_frag(&reading)
+            .expect("Celsius output")
+            .has_custom_conversion_stage(),
+        "trait output must retain an unrendered custom-conversion operation"
+    );
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1493,8 +2457,14 @@ fn option_composition_normalizes_fallible_stage_errors() {
         rc.matches("__e.to_string()").count() >= 2,
         "input and output stages must both normalize their raw errors:\n{rust}"
     );
-    assert!(rc.contains("JObject_to_Option_Percent"), "{rust}");
-    assert!(rc.contains("Option_Percent_to_JObject"), "{rust}");
+    assert!(
+        rc.contains("Result<::core::option::Option<myflat::Percent>,__JniErr>"),
+        "{rust}"
+    );
+    assert!(
+        rc.contains("v:::core::option::Option<myflat::Percent>"),
+        "{rust}"
+    );
 }
 
 /// Binding-local conversion fns via the ONE vocabulary —
@@ -1526,11 +2496,102 @@ fn convert_via_local_fns() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let reading = gen
+        .registry
+        .reading_of(&syn::parse_quote!(Label))
+        .expect("Label reading");
+    assert!(
+        gen.decls
+            .in_frag(&reading)
+            .expect("Label input")
+            .has_custom_conversion_stage(),
+        "function input must retain an unrendered custom-conversion operation"
+    );
+    assert!(
+        gen.decls
+            .out_frag(&reading)
+            .expect("Label output")
+            .has_custom_conversion_stage(),
+        "function output must retain an unrendered custom-conversion operation"
+    );
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
     assert!(rc.contains("crate::conv::label_in("), "{rust}");
     assert!(rc.contains("crate::conv::label_out("), "{rust}");
+    assert!(
+        rc.contains("let__chain_s0=__jni_in_convert_")
+            && rc.contains("let__chain_s1=__jni_in_stage_0_")
+            && rc.contains("Result::<_,__JniErr>::Ok(__chain_s1)"),
+        "the ordinary input must invoke its frozen terminal-then-stage pipeline:\n{rust}"
+    );
+    assert!(
+        rc.contains("let__chain_s0=__jni_out_stage_0_")
+            && rc.contains("__jni_out_convert_")
+            && rc.contains("env,__chain_s0"),
+        "the ordinary output must invoke its frozen stage-then-terminal pipeline:\n{rust}"
+    );
+}
+
+/// A nested pair of declared conversions accumulates two semantic stages.
+/// The frozen pipeline must retain registry order in both directions: terminal
+/// wire decode, then inner-to-outer construction; outer-to-inner deconstruction,
+/// then terminal wire encode.
+#[test]
+fn multi_stage_pipeline_preserves_registry_order() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn tag_id(t: Tag) -> Tag { unimplemented!() }").unwrap();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            prebindgen_registry::convert!(Label)
+                .input(
+                    prebindgen_registry::fun!(crate::conv::label_in)
+                        .sig(prebindgen_registry::sig!((s: String) -> Label)),
+                )
+                .output(
+                    prebindgen_registry::fun!(crate::conv::label_out)
+                        .sig(prebindgen_registry::sig!((l: Label) -> String)),
+                ),
+        )
+        .convert(
+            prebindgen_registry::convert!(Tag)
+                .input(
+                    prebindgen_registry::fun!(crate::conv::tag_in)
+                        .sig(prebindgen_registry::sig!((l: Label) -> Tag)),
+                )
+                .output(
+                    prebindgen_registry::fun!(crate::conv::tag_out)
+                        .sig(prebindgen_registry::sig!((t: Tag) -> Label)),
+                ),
+        )
+        .package(crate::package!("m").fun(prebindgen_registry::fun!(tag_id)));
+    let dir = unique_test_dir("jnigen_convert_two_stages");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    assert!(
+        rc.contains("let__chain_s0=__jni_in_convert_")
+            && rc.contains("let__chain_s1=__jni_in_stage_0_")
+            && rc.contains("let__chain_s2=__jni_in_stage_0_")
+            && rc.contains("Result::<_,__JniErr>::Ok(__chain_s2)"),
+        "construct must run terminal, inner stage, then outer stage:\n{rust}"
+    );
+    assert!(
+        rc.contains("let__chain_s0=__jni_out_stage_0_")
+            && rc.contains("let__chain_s1=__jni_out_stage_0_")
+            && rc.contains("__jni_out_convert_")
+            && rc.contains("env,__chain_s1"),
+        "deconstruct must run outer stage, inner stage, then terminal:\n{rust}"
+    );
 }
 
 /// Two input conversions on one decl are contradictory — decl-time panic.
@@ -1610,7 +2671,10 @@ fn convert_via_local_try_fn_is_fallible() {
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
     assert!(rc.contains("crate::conv::label_in("), "{rust}");
-    assert!(rc.contains("Result<myflat::Label,String>"), "{rust}");
+    assert!(
+        rc.contains("Result<myflat::Label,::std::string::String>"),
+        "{rust}"
+    );
 }
 
 /// I5: data-class members — the receiver re-enters Rust as `this`'s field
@@ -1765,6 +2829,18 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = jni.build_with(registry).expect("resolve");
+    let result = generation
+        .registry
+        .reading_of(&syn::parse_quote!(Result<u64, String>))
+        .expect("fallible output reading");
+    assert!(
+        generation
+            .decls
+            .out_frag(&result)
+            .expect("fallible output")
+            .is_result_plan(),
+        "Result output must retain an unrendered peel with its success dependency"
+    );
     let rust_path = generation
         .write_rust(dir.join("gen.rs"))
         .expect("write_rust");
@@ -1881,7 +2957,7 @@ fn an_optional_handle_field_mints_through_the_factory() {
         .expect("Bag states a composition");
     assert_eq!(
         bag.iter()
-            .map(|(name, kt_ty, access, _, target, nullable, ..)| format!(
+            .map(|(name, kt_ty, access, target, nullable, ..)| format!(
                 "{name}: {kt_ty} = {access} @ {target:?} null={nullable}"
             ))
             .collect::<Vec<_>>(),
@@ -2005,7 +3081,7 @@ fn data_class_properties_match_their_from_parts_params() {
     // child is inlined as its own leaves, the handle arrives as a raw pointer
     // and the enum as its discriminant, then each is rebuilt.
     assert!(kc.contains("Bag(Handle.fromRawPtr(handle)"), "{kotlin}");
-    assert!(kc.contains("Child.fromParts(child_n)"), "{kotlin}");
+    assert!(kc.contains("Child.fromParts(child__n)"), "{kotlin}");
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
 
     // …and the raw-pointer guard follows that same plan, factory by factory
@@ -2263,22 +3339,21 @@ fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
     assert!(ext.is_kotlin_enum_key(&field("plain").key()));
 }
 
-/// A **transparently-wrapped** parameter takes the same specialized lowering as
-/// its bare twin, and the emitter puts the wrapper back.
+/// A **transparently-wrapped** parameter takes the same registry-composed
+/// Optional lowering as its bare twin, and that converter puts the wrapper back.
 ///
 /// The model erases `Box`/`Cow` ([`TRANSPARENT_WRAPPERS`]), so
 /// `Box<Option<Mode>>` classifies as `Optional` exactly as `Option<Mode>` does.
-/// But `build_option_scalar_input_plan` does not *decode* the parameter, it
-/// **rebuilds** it: the emitter writes a literal `Option::Some(v)` /
-/// `Option::None` and hands that to the source function, and handing a bare
-/// `Option<Mode>` to a parameter spelled `Box<Option<Mode>>` is an `E0308`.
+/// The composed converter rebuilds the value: its source policy writes the
+/// `Option` shape and restores `Box`, so handing a bare `Option<Mode>` to a
+/// parameter spelled `Box<Option<Mode>>` remains impossible.
 ///
 /// #290 closed that by **declining** the wrapped spelling. #292 item 3 replaced
 /// the refusal with the rebuild — `Box::new(..)` is exactly what the syntax
 /// asks for — so what this pins flipped: the wrapped parameter must now reach
-/// the decoupled `(present, value)` wire, *and* the Rust side must re-wrap.
+/// the same niche-backed primitive wire, *and* the Rust side must re-wrap.
 ///
-/// Asserted on the **pair** in both artifacts so it cannot pass vacuously: the
+/// Asserted on the **two functions** in both artifacts so it cannot pass vacuously: the
 /// bare twin must take the same Kotlin surface (or the wrapped one proves
 /// nothing) and must **not** get a `Box::new` (or the wrap assertion would hold
 /// for an emitter that wrapped everything).
@@ -2342,12 +3417,12 @@ fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() 
         .join("\n");
     let kc: String = kotlin.split_whitespace().collect();
 
-    // The control: the bare twin still takes the decoupled pair, so a refusal
+    // The control: the bare twin takes the niche-backed primitive, so a refusal
     // below is about the wrapper and not about the fixture failing to reach the
     // specialized path at all.
     assert!(
-        kc.contains("zBare(modePresent:Boolean,modeValue:Int"),
-        "the bare `Option<Mode>` must still cross as (present, value) — \
+        kc.contains("zBare(mode:Int"),
+        "the bare `Option<Mode>` must cross as one niche-backed Int — \
          otherwise this test proves nothing about the wrapped one:\n{kotlin}"
     );
 
@@ -2355,28 +3430,29 @@ fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() 
     // so an identical surface is the whole claim — a wrapper must not cost a
     // parameter its lowering.
     assert!(
-        kc.contains("zBoxed(modePresent:Boolean,modeValue:Int"),
-        "`Box<Option<Mode>>` must take the same present/value lowering as its \
+        kc.contains("zBoxed(mode:Int"),
+        "`Box<Option<Mode>>` must take the same niche lowering as its \
          bare twin — the model erases the `Box`, and the emitter puts it back \
          rather than declining the shape:\n{kotlin}"
     );
 
     // The Rust half, which is what makes taking that lowering legal: the
-    // rebuilt `Option` is wrapped back up before it reaches the source fn.
-    // Without this the extern hands an `Option<Mode>` to a parameter spelled
+    // registry-composed converter restores the transparent wrapper. Without
+    // this the extern hands an `Option<Mode>` to a parameter spelled
     // `Box<Option<Mode>>` — `E0308`, and no Kotlin assertion could see it.
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
         .expect("read rust");
     let rc: String = rust.split_whitespace().collect();
     assert!(
-        rc.contains("letmode=::std::boxed::Box::new(if"),
-        "the rebuilt `Option` must be re-wrapped for the spelling:\n{rust}"
+        rc.contains("::std::boxed::Box::new({if*v==-2147483648i32"),
+        "the Optional converter must re-wrap the source spelling:\n{rust}"
     );
     // The control on the Rust side too: exactly ONE of the two externs wraps,
     // so the assertion above is about the spelling and not an unconditional
     // `Box` the emitter adds to everything.
     assert_eq!(
-        rc.matches("::std::boxed::Box::new(if").count(),
+        rc.matches("::std::boxed::Box::new({if*v==-2147483648i32")
+            .count(),
         1,
         "only the wrapped spelling gets a `Box::new`; the bare twin builds the \
          `Option` and passes it as is:\n{rust}"
@@ -2489,8 +3565,8 @@ fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
     );
 }
 
-/// The two spellings of a **borrowed run** get the same local, and it is the
-/// borrow of the `Vec` rather than a slice of it (#384).
+/// The two spellings of a **borrowed run** get the same frozen site operation,
+/// carrying a borrow of the `Vec` rather than coercing it to a slice (#384).
 ///
 /// `sequence_elem` answers for `&[T]` and `&Vec<T>` alike — they are one type to
 /// the model — so both reach the Vec-build path. The emitter was not symmetric
@@ -2499,8 +3575,8 @@ fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
 /// of the two. A `&Vec<T>` parameter was then handed a `&[T]`, which does not
 /// coerce back — `E0308` in the generated crate.
 ///
-/// Unascribed, the coercion moves to the call site and serves both. What this
-/// test can pin is the **shape**; that it compiles is `covertest-kotlin`'s
+/// The non-owning `OwnedObject<Vec<T>>` carrier leaves coercion at the call site
+/// and serves both. What this test can pin is the **shape**; that it compiles is `covertest-kotlin`'s
 /// `ref_vec_id_sum`/`slice_id_sum` pair, since a lib test emits tokens and never
 /// builds them.
 #[test]
@@ -2576,19 +3652,22 @@ fn both_spellings_of_a_borrowed_run_get_the_vec_borrow() {
         );
     }
 
-    // The finding: ONE local, and it is the `Vec` borrow. Counted rather than
-    // merely found, so a per-spelling form cannot pass.
+    // The finding: both sites invoke the same Vec-handle pipeline operation,
+    // which returns the non-owning carrier the ordinary decode scaffold can
+    // borrow. Counted rather than merely found, so a per-spelling form cannot
+    // pass.
     assert_eq!(
-        rc.matches("letv=unsafe{&*(v_handleas*constVec<myflat::Foo>)};")
+        rc.matches("OwnedObject::from_raw(v_handleas*constVec<myflat::Foo>)")
             .count(),
         2,
-        "both borrowed runs must get the same unascribed `&Vec<Foo>` local:\n{rust}"
+        "both borrowed runs must use the same frozen Vec-handle operation:\n{rust}"
     );
-    // …and no slice ascription survives, which is the thing that broke.
+    // …and neither the old slice ascription nor the wrapper-local direct
+    // reconstruction survives.
     assert!(
-        !rc.contains("letv:&[myflat::Foo]="),
-        "ascribing `&[Foo]` coerces at the `let`, so a `&Vec<Foo>` parameter \
-         gets a `&[Foo]` and the generated crate does not build (E0308):\n{rust}"
+        !rc.contains("letv:&[myflat::Foo]=")
+            && !rc.contains("letv=unsafe{&*(v_handleas*constVec<myflat::Foo>)};"),
+        "borrowed Vec reconstruction must come only from the frozen pipeline:\n{rust}"
     );
 }
 
@@ -2737,6 +3816,62 @@ fn a_wrapped_vec_element_keeps_the_push_path_and_shares_one_trio() {
         !slice_body.contains("fooVecNew"),
         "`&[Box<Foo>]` must keep the general converter path — serving it would \
          mean consuming the Vec the arm exists to borrow:\n{kotlin}"
+    );
+}
+
+/// A parameter-specific Vec-build plan bypasses the root `JObject -> Vec<T>`
+/// converter. The crossing may still have a registry-composed Sequence plan,
+/// but that plan must remain unreachable or it duplicates the legacy decoder
+/// without any call site.
+#[test]
+fn a_vec_build_parameter_does_not_emit_an_unused_sequence_decoder() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn put_boxed_run(v: Box<Vec<Foo>>) {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(prebindgen_registry::fun!(put_boxed_run)),
+        );
+
+    let dir = unique_test_dir("jnigen_vec_build_sequence_reachability");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).expect("read rust");
+    let compact: String = rust.split_whitespace().collect();
+
+    assert!(
+        compact.contains("v_handleas*mutVec<myflat::Foo>"),
+        "the fixture must take the parameter-specific Vec-build path:\n{rust}"
+    );
+    assert_eq!(
+        rust.matches("Vec<_>: list-from-env").count(),
+        0,
+        "the parameter uses only its Vec-build handle; no list decoder has a \
+         call site in this fixture:\n{rust}"
     );
 }
 

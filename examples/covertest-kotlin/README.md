@@ -31,7 +31,7 @@ re-runs `build.rs` to regenerate both sides of the binding
 the Kotlin asserts. Expected output ends with:
 
 ```
-PASS - 35 sections, every JniGen feature exercised
+PASS - 61 sections, every JniGen feature exercised
 ```
 
 (One section deliberately provokes callback exceptions; the stack traces it
@@ -87,13 +87,22 @@ for the full table; in brief:
   raw `TryFrom::Error` input stage and a raw `String` output stage. The runtime
   checks null/value round trips and verifies both stage errors normalize to
   `JniErrorHandler`.
+- **expanded selector scalar leaves:** `Option<&SelectorCode>` has a build arm
+  with a required `u16` that is nullable on the public selector surface. The
+  runtime exercises absent, build, and identity arms; the committed native ABI
+  proves the synthetic `Option<u16>` selects the registry pair recipe and
+  crosses as `Boolean + Int`, without `JObject` allocation or `intValue()`.
 - **type mappings:** primitives, `String`/`&str` (incl. a bare `String`
-  return), `Option<T>` (param / return / **field**, incl. `Option<enum>` in
-  all three positions and `Option<Payload>` in both directions),
-  `Vec<T>`/`&[T]`, `Vec<String>`, `Vec<Stamp>` → `List<Stamp>`,
+  return), `Option<T>` (param / return / **field**, incl.
+  consuming `Option<opaque>`, `Option<enum>` in all three positions, and
+  `Option<Payload>` in both directions), borrowed `Option<&data_class>`
+  (Kotlin-side leaf deconstruction and registry-owned recomposition),
+  `Vec<T>`/`&[T]` (including the registry-planned owned `Vec<T>` carrier for a
+  borrowed slice input), `Vec<String>`, `Vec<Stamp>` → `List<Stamp>`,
   `Vec<handle>` / `Option<Vec<handle>>` (Kotlin-side handle fold),
   borrowed-opaque returns (`Option<&T>` → cloned owned handle),
-  `Result<_, E>` → `onError`, enums, data/sealed classes, fixed-size primitive arrays, `impl Fn` callbacks
+  `Result<_, E>` → `onError`, enums, data/sealed classes, fixed-size primitive arrays
+  (including a marked const-path length qualified from a renamed source), `impl Fn` callbacks
   (single + slice + **owned-handle**), N-ary sorted handle locking (3 handles,
   hammered from 4 threads), the `je != null` binding-error channel (malformed
   wrong-length fixed-size arrays), the callback no-throw contract (exceptions described +

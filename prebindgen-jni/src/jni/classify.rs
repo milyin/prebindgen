@@ -1,8 +1,6 @@
 //! One-stop classification of how a bare Rust type is declared to this
 //! adapter — the single precedence every emitter agrees on instead of each
-//! re-deriving it from `TypeConfig` flags and `registry.flat()` type probes.
-
-use prebindgen_registry::Conversions;
+//! re-deriving it from `TypeConfig` flags and `flat` type probes.
 
 use super::*;
 
@@ -14,7 +12,7 @@ use super::*;
 /// [`DeclaredKind`], so this is a lookup, not a precedence chain.
 /// `DataStruct` is any struct captured from the source crate — `cfg` tells
 /// whether it was also declared to the builder (a `data_class` candidate) or
-/// is merely known to the registry.
+/// is merely known to the flat.
 pub(crate) enum TypeKind<'r, 'c> {
     /// Declared via `ptr_class` — jlong wire, typed-handle Kotlin class.
     Handle,
@@ -30,7 +28,8 @@ pub(crate) enum TypeKind<'r, 'c> {
     /// The **element**, not its `syn::ItemStruct`. A flattening emitter wants
     /// each field's reading, and the model already decided one per field; going
     /// through the syntax means asking some other authority for it again. An
-    /// emitter that only re-emits the struct reads `st.origin.as_syn()`.
+    /// emitter that only re-emits the struct goes through the final writer's
+    /// boundary instead.
     DataStruct {
         st: &'r prebindgen_registry::flat::Struct,
         cfg: Option<&'c TypeConfig>,
@@ -49,12 +48,12 @@ impl TypeConfig {
 }
 
 impl Declarations {
-    /// Classify `bare` against the declared-type table and the registry's
+    /// Classify `bare` against the declared-type table and the flat's
     /// captured structs. Callers strip `Option<_>` / `&_` layers first —
     /// wrapper folding is the resolver's business, not this table's.
     pub(crate) fn type_kind<'r, 'c>(
         &'c self,
-        registry: &'r impl Conversions,
+        flat: &'r prebindgen_registry::flat::Flat,
         bare: &TypeKey,
     ) -> TypeKind<'r, 'c> {
         let cfg = self.types.get(bare);
@@ -64,7 +63,7 @@ impl Declarations {
                 DeclaredKind::Enum(_) => return TypeKind::Enum,
                 DeclaredKind::Sealed(_) => return TypeKind::Sum,
                 // A data class is exactly a declared source struct — fall
-                // through to the registry probe below, which supplies the
+                // through to the flat probe below, which supplies the
                 // element its emitters flatten.
                 DeclaredKind::Data => {}
             }
@@ -73,7 +72,7 @@ impl Declarations {
         // exactly what `bare_path_ident` used to fish out of the node — and this
         // function never wanted anything else from it.
         if let Some(name) = bare.ident() {
-            if let Some(st) = registry.flat().struct_type(&name) {
+            if let Some(st) = flat.struct_type(&name) {
                 return TypeKind::DataStruct { st, cfg };
             }
         }

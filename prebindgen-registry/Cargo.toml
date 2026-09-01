@@ -23,6 +23,6 @@ itertools = { workspace = true }
 [features]
 # Test-support constructors for the test suites of out-of-crate adapters
 # (`prebindgen-jni`, `prebindgen-c`). Non-default and not covered by semver. It
-# exposes both `Registry` test constructors and `Emit::for_test`; the flat rendering
+# exposes both `Registry` test constructors and `RustWriter::for_test`; the flat rendering
 # protocol itself has no test-only construction API.
 testing = []

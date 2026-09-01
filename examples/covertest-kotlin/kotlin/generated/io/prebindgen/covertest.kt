@@ -3,19 +3,14 @@
 package io.prebindgen.covertest
 
 import io.prebindgen.covertest.analytics.Summary
-import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.BlobValue
 import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.Hold
-import io.prebindgen.covertest.model.HoldPolicy
+import io.prebindgen.covertest.model.Ingot
 import io.prebindgen.covertest.model.Lookup
-import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.ObjectBoundary
-import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
-import io.prebindgen.covertest.model.Tagged
-import io.prebindgen.covertest.model.Verdict
 import java.lang.ref.Cleaner
 import java.lang.ref.Cleaner.Cleanable
 import java.util.concurrent.atomic.AtomicLong
@@ -193,6 +188,20 @@ internal inline fun <R> withSortedHandleLocks(
     return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }
 }
 
+/** A product that owns the converted handle. */
+public data class CallbackHolder(val tag: Long, val token: Ingot) : AutoCloseable {
+    override fun close() {
+        token.close()
+    }
+
+    public companion object {
+        @JvmSynthetic
+        @io.prebindgen.covertest.UnsafeNativeApi
+        @JvmStatic
+        public fun fromParts(tag: Long, token: Long): CallbackHolder = CallbackHolder(tag, Ingot.fromRawPtr(token))
+    }
+}
+
 /**
  * The **fourth** position, and the last row of the same table: a `data_class`
  * field whose type is another `data_class` that carries the handle. Nothing
@@ -214,7 +223,7 @@ public data class Dossier(val note: Long, val holder: Holder) : AutoCloseable {
         @JvmSynthetic
         @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
-        public fun fromParts(note: Long, holder_tag: Long, holder_summary: Long): Dossier = Dossier(note, Holder.fromParts(holder_tag, holder_summary))
+        public fun fromParts(note: Long, holder__tag: Long, holder__summary: Long): Dossier = Dossier(note, Holder.fromParts(holder__tag, holder__summary))
     }
 }
 
@@ -657,6 +666,57 @@ internal fun LedgerCallback.asRaw(): LedgerCallbackRaw =
         }
     }
 
+public fun interface CallbackHolderOptionalCallback {
+    public fun run(callbackHolder: CallbackHolder?)
+}
+
+internal fun interface CallbackHolderOptionalCallbackRaw {
+    public fun run(callbackHolderPresent: Boolean, tag: Long, token: Long)
+}
+
+@JvmSynthetic
+internal fun CallbackHolderOptionalCallback.asRaw(): CallbackHolderOptionalCallbackRaw =
+    CallbackHolderOptionalCallbackRaw {
+        callbackHolderPresent,
+        tag,
+        token ->
+        val __own0 = if (callbackHolderPresent) { CallbackHolder.fromParts(tag, token) } else null
+        try {
+            run(__own0)
+        } finally {
+            __own0?.close()
+        }
+    }
+
+public fun interface PayloadOptionalCallback {
+    public fun run(payload: Payload?)
+}
+
+internal fun interface PayloadOptionalCallbackRaw {
+    public fun run(
+        payloadPresent: Boolean,
+        id: Long,
+        seq: Int,
+        value: Double,
+        flag: Boolean,
+        label: String?,
+    )
+}
+
+@JvmSynthetic
+internal fun PayloadOptionalCallback.asRaw(): PayloadOptionalCallbackRaw =
+    PayloadOptionalCallbackRaw {
+        payloadPresent,
+        id,
+        seq,
+        value,
+        flag,
+        label ->
+        run(
+            if (payloadPresent) { Payload.fromParts(id, seq, value, flag, label) } else null
+        )
+    }
+
 public fun interface StorageCallback {
     public fun run(storage: Storage)
 }
@@ -710,6 +770,14 @@ internal fun u64Callback.asRaw(): u64CallbackRaw =
             u64.toULong()
         )
     }
+
+internal fun interface DossierBuilderRaw<out R> {
+    public fun run(note: Long, holder__tag: Long, holder__summary: Long): R
+}
+
+@get:JvmSynthetic
+internal val __DossierBuilderRaw: DossierBuilderRaw<Dossier> =
+DossierBuilderRaw { note, holder__tag, holder__summary -> Dossier.fromParts(note, holder__tag, holder__summary) }
 
 public fun interface LedgerBuilder<out R> {
     public fun run(
@@ -800,6 +868,14 @@ internal fun <R> LedgerBuilder<R>.asRaw(): LedgerBuilderRaw<R> =
         )
     }
 
+internal fun interface MaybeHolderBuilderRaw<out R> {
+    public fun run(tag: Long, summary: Long): R
+}
+
+@get:JvmSynthetic
+internal val __MaybeHolderBuilderRaw: MaybeHolderBuilderRaw<MaybeHolder> =
+MaybeHolderBuilderRaw { tag, summary -> MaybeHolder.fromParts(tag, summary) }
+
 public fun interface PayloadBuilder<out R> {
     public fun run(id: Long, seq: Int, value: Double, flag: Boolean, label: String?): R
 }
@@ -879,6 +955,43 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
             return c
         }
     }
+}
+
+/**
+ * Read a borrowed optional data class without making the JNI side decode the
+ * Kotlin object reflectively. The generated boundary flattens `Payload` into
+ * primitive leaves, lets the registry construct an owned `Option<Payload>`,
+ * and borrows it only for this final source call.
+ */
+public fun payloadOptionalBorrowId(p: Payload?, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.payloadOptionalBorrowId(
+        p != null,
+        p?.id ?: 0L,
+        p?.seq ?: 0,
+        p?.value ?: 0.0,
+        p?.flag ?: false,
+        p?.label,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * Deliver a present or absent handle-owning data class to a callback.
+ *
+ * The generated Kotlin bridge must close `token` after the callback unless
+ * user code has already taken ownership of it.
+ */
+public fun callbackHolderOptionalEmit(
+    present: Boolean,
+    f: CallbackHolderOptionalCallback,
+    onError: JniErrorHandler<Unit>,
+) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.callbackHolderOptionalEmit(present, f.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
 /**
@@ -983,8 +1096,7 @@ internal object CovNative {
         aAlternateLabel: String?,
         aTtlPresent: Boolean,
         aTtlValue: Long,
-        aPriorityPresent: Boolean,
-        aPriorityValue: Int,
+        aPriority: Int,
         errorSink: Any,
     ): Double?
 
@@ -997,10 +1109,10 @@ internal object CovNative {
         payloadLabel: String?,
         ttlPresent: Boolean,
         ttlValue: Long,
-        priorityPresent: Boolean,
-        priorityValue: Int,
+        priority: Int,
+        build: Any,
         errorSink: Any,
-    ): Annotated
+    ): Any?
 
     @JvmSynthetic
     external fun annotatedPayloadValue(
@@ -1017,8 +1129,7 @@ internal object CovNative {
         aAlternateLabel: String?,
         aTtlPresent: Boolean,
         aTtlValue: Long,
-        aPriorityPresent: Boolean,
-        aPriorityValue: Int,
+        aPriority: Int,
         errorSink: Any,
     ): Double
 
@@ -1037,10 +1148,9 @@ internal object CovNative {
         aAlternateLabel: String?,
         aTtlPresent: Boolean,
         aTtlValue: Long,
-        aPriorityPresent: Boolean,
-        aPriorityValue: Int,
+        aPriority: Int,
         errorSink: Any,
-    ): Int?
+    ): Int
 
     @JvmSynthetic
     external fun annotatedTtl(
@@ -1057,8 +1167,7 @@ internal object CovNative {
         aAlternateLabel: String?,
         aTtlPresent: Boolean,
         aTtlValue: Long,
-        aPriorityPresent: Boolean,
-        aPriorityValue: Int,
+        aPriority: Int,
         errorSink: Any,
     ): Long?
 
@@ -1138,7 +1247,7 @@ internal object CovNative {
     ): Long
 
     @JvmSynthetic
-    external fun boxedOptPriorityWeight(pPresent: Boolean, pValue: Int, errorSink: Any): Long
+    external fun boxedOptPriorityWeight(p: Int, errorSink: Any): Long
 
     @JvmSynthetic
     external fun boxedPayloadId(
@@ -1163,7 +1272,13 @@ internal object CovNative {
     ): Int
 
     @JvmSynthetic
+    external fun callbackHolderOptionalEmit(present: Boolean, f: Any, errorSink: Any)
+
+    @JvmSynthetic
     external fun celsiusDouble(c: Int, errorSink: Any): Int
+
+    @JvmSynthetic
+    external fun constArrayEcho(valueBytes: ByteArray, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic
     external fun coverTagRuntime(errorSink: Any): String
@@ -1174,8 +1289,9 @@ internal object CovNative {
         tag: Long,
         count: Long,
         total: Double,
+        build: Any,
         errorSink: Any,
-    ): Dossier
+    ): Any?
 
     @JvmSynthetic
     external fun durationBoundaryEcho(value: DurationBoundary, build: Any, errorSink: Any): Any?
@@ -1190,10 +1306,29 @@ internal object CovNative {
     external fun durationOutOfRange(errorSink: Any): Long
 
     @JvmSynthetic
+    external fun envelopeEach(n: Long, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun envelopeNew(id: Long, present: Boolean, build: Any, errorSink: Any): Any?
+
+    @JvmSynthetic
     external fun escapeProbeNew(value: Long, errorSink: Any): Long
 
     @JvmSynthetic
     external fun escape_probe_value(p: Long, errorSink: Any): Long
+
+    @JvmSynthetic
+    external fun frameEach(n: Long, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun frameNew(
+        id: Long,
+        window: Boolean,
+        span: Boolean,
+        which: Long,
+        build: Any,
+        errorSink: Any,
+    ): Any?
 
     @JvmSynthetic
     external fun holdEcho(h: Hold, build: Any, errorSink: Any): Any?
@@ -1202,8 +1337,9 @@ internal object CovNative {
     external fun holdPolicyEcho(
         pHold: Hold,
         pGrace: io.prebindgen.covertest.model.Hold?,
+        build: Any,
         errorSink: Any,
-    ): HoldPolicy
+    ): Any?
 
     @JvmSynthetic
     external fun holderTagOr(
@@ -1216,6 +1352,15 @@ internal object CovNative {
 
     @JvmSynthetic
     external fun ingotGrams(i: Long, errorSink: Any): Long
+
+    @JvmSynthetic
+    external fun ingotNew(grams: Long, errorSink: Any): Long
+
+    @JvmSynthetic
+    external fun ingotOptionalGrams(i: Long, errorSink: Any): Long
+
+    @JvmSynthetic
+    external fun labelBorrowedConcat(labels: List<String>, errorSink: Any): String
 
     @JvmSynthetic
     external fun labelReverse(l: String, errorSink: Any): String
@@ -1247,8 +1392,9 @@ internal object CovNative {
         count: Long,
         total: Double,
         present: Boolean,
+        build: Any,
         errorSink: Any,
-    ): MaybeHolder
+    ): Any?
 
     @JvmSynthetic
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
@@ -1257,7 +1403,7 @@ internal object CovNative {
     external fun objectBoundaryValue(value: ObjectBoundary, errorSink: Any): Long
 
     @JvmSynthetic
-    external fun observationNew(which: Int, withFallback: Boolean, errorSink: Any): Observation
+    external fun observationNew(which: Int, withFallback: Boolean, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic
     external fun observationWhich(
@@ -1295,6 +1441,20 @@ internal object CovNative {
     ): Long?
 
     @JvmSynthetic
+    external fun payloadOptionalBorrowId(
+        pPresent: Boolean,
+        pId: Long,
+        pSeq: Int,
+        pValue: Double,
+        pFlag: Boolean,
+        pLabel: String?,
+        errorSink: Any,
+    ): Long
+
+    @JvmSynthetic
+    external fun payloadOptionalEmit(present: Boolean, f: Any, errorSink: Any)
+
+    @JvmSynthetic
     external fun payloadPriority(
         pId: Long,
         pSeq: Int,
@@ -1320,7 +1480,13 @@ internal object CovNative {
     external fun plainNoteEcho(note: String?, errorSink: Any): String?
 
     @JvmSynthetic
-    external fun priorityOr(pPresent: Boolean, pValue: Int, fallback: Int, errorSink: Any): Int
+    external fun priorityNested(which: Int, errorSink: Any): Int
+
+    @JvmSynthetic
+    external fun priorityNestedState(p: Int, errorSink: Any): Int
+
+    @JvmSynthetic
+    external fun priorityOr(p: Int, fallback: Int, errorSink: Any): Int
 
     @JvmSynthetic
     external fun priorityWeight(p: Int, errorSink: Any): Int
@@ -1330,6 +1496,19 @@ internal object CovNative {
 
     @JvmSynthetic
     external fun probeNew(seq: Long, count: Long, total: Double, build: Any, errorSink: Any): Any?
+
+    @JvmSynthetic
+    external fun rackEach(n: Long, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun rackNew(
+        id: Long,
+        meter: Boolean,
+        span: Boolean,
+        which: Long,
+        build: Any,
+        errorSink: Any,
+    ): Any?
 
     @JvmSynthetic
     external fun readingEach(n: Int, sink: Any, errorSink: Any)
@@ -1348,6 +1527,19 @@ internal object CovNative {
 
     @JvmSynthetic
     external fun reportEach(n: Long, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun selectorCodeNew(id: Int, schema: ByteArray?, errorSink: Any): Long
+
+    @JvmSynthetic
+    external fun selectorCodeScore(
+        valueSel: Int,
+        value00Present: Boolean,
+        value00Value: Int,
+        value01: ByteArray?,
+        value1: Long,
+        errorSink: Any,
+    ): Long
 
     @JvmSynthetic
     external fun sliceIdSum(ps: Long, errorSink: Any): Long
@@ -1535,6 +1727,18 @@ internal object CovNative {
     ): String
 
     @JvmSynthetic
+    external fun summaryEnvelopeScore(
+        valueSummarySel: Int,
+        valueSummary00Present: Boolean,
+        valueSummary00Value: Long,
+        valueSummary01Present: Boolean,
+        valueSummary01Value: Double,
+        valueSummary1: Long,
+        valueBonus: Long,
+        errorSink: Any,
+    ): Long
+
+    @JvmSynthetic
     external fun summaryFromMean(count: Long, mean: Double, errorSink: Any): Long
 
     @JvmSynthetic
@@ -1611,10 +1815,10 @@ internal object CovNative {
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
 
     @JvmSynthetic
-    external fun taggedNew(which: Int, errorSink: Any): Tagged
+    external fun taggedNew(which: Int, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic
-    external fun taggedRank(tId: Long, tMarker: Marker, errorSink: Any): Int
+    external fun taggedRank(tId: Long, tMarkerTag: Int, tMarkerRankedV0: Int, errorSink: Any): Int
 
     @JvmSynthetic
     external fun ticksEmit(f: Any, errorSink: Any)
@@ -1660,7 +1864,10 @@ internal object CovNative {
     ): Any?
 
     @JvmSynthetic
-    external fun verdictNew(id: Long, count: Long, total: Double, errorSink: Any): Verdict
+    external fun verdictEach(n: Long, total: Double, sink: Any, errorSink: Any)
+
+    @JvmSynthetic
+    external fun verdictNew(id: Long, count: Long, total: Double, build: Any, errorSink: Any): Any?
 
     @JvmSynthetic
     external fun wrappedFieldsSum(

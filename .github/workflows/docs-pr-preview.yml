@@ -1,0 +1,37 @@
+name: Docs PR preview
+
+# Pushes a docs-site preview to the gh-pages branch under pr-preview/pr-<N>/
+# and keeps a sticky PR comment with the link updated.
+# Note: fork PRs get a read-only token, so previews only work for
+# same-repository branches.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency: docs-preview-${{ github.ref }}
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      # No `path:` override here (unlike rust.yml): the deploy action below
+      # runs its own git commands from $GITHUB_WORKSPACE and has no notion of
+      # a nested repo root, so the checkout must land there directly.
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        if: github.event.action != 'closed'
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Build site
+        if: github.event.action != 'closed'
+        run: ./site/build.sh site-build
+
+      - name: Deploy preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: site-build

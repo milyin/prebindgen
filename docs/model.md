@@ -8,6 +8,15 @@ the machinery immediately around it.
 It describes the model, not the API surface an adapter programs against — the
 table, sites, the `Compile` hooks and the error set are documented separately.
 
+## Non-negotiable generation rule
+
+**Analyze the Flat model; generate Rust only.** A language adapter must never
+inspect, reparse, or walk the Rust syntax retained behind a `TypeRef`. Before
+final writing it may use only Flat facts. During final writing the stateful `RustWriter` can
+turn those facts into an inert token fragment for the output file; it does not hand
+the adapter a `syn::Type` that could be analyzed. If Flat cannot generate the
+required source type from its structure, the missing fact belongs in Flat.
+
 ## Where the crates sit
 
 Four take part.
@@ -17,8 +26,11 @@ item of the source crate into a data file at build time. The source crate
 contains nothing about any foreign language.
 - **`prebindgen-flat`** — parses those records into **the model**, `Flat`:
 `Struct`, `Variant` (an enum whose alternatives carry payloads, each an
-`Alternative`), `Enum`, `Function`, `Field`, and `TypeRef`, the model's reading
-of one Rust type. `TypeKey` is the identity that same type is stored under.
+`Alternative`), `Enum`, `Function`, `Field`, and `TypeRef`, the model's
+reading of one Rust type. `TypeKey` is the identity that same type is stored
+under. Its captured delimiters remain part of the `Alternative`; final Rust
+renderers pass the model node to Flat's shape renderer, so `A`, `A()` and
+`A {}` remain distinct without copying that syntax fact into another model.
 - **`prebindgen-registry`** — the language-agnostic half of generation. It is
 what this document describes.
 - **an adapter**, one per target language — `prebindgen-c`, whose generator type
@@ -218,12 +230,13 @@ need and in what order — inner ones first, so a recipe's parts are ready befor
 the recipe that names them — and asks the adapter for a **converter** for each,
 in that order.
 
-A converter is the Rust function that performs the crossing: a constructing one
-takes wire values and returns a Rust value, a deconstructing one takes a Rust
-value and produces wire values. The adapter builds each as a complete
-`syn::ItemFn` — which is why a converter is always exactly one function — and
-keeps it. There is one per recipe, so every site that picks that recipe calls
-the same one.
+A converter plan describes the operation that performs the crossing: a
+constructing one will take wire values and return a Rust value, while a
+deconstructing one will take a Rust value and produce wire values. The adapter
+keeps the syntax-free plan and its registry-owned `OperationId`; it does not
+choose a Rust function name or materialize the function body during this
+round. Sites call the same semantic operation when their conversion contracts
+are equal.
 
 What comes back to the registry is not the function. It is one fact about it:
 which other crossings that function's body calls into. A converter for
@@ -233,30 +246,48 @@ that calls no other names nothing. Those edges are what the registry asked for
 so which converters have to exist.
 
 **Then writing.** The generated code enters here. The adapter calls the writer,
-handing it three things: the resolved registry, itself, and the converters it
-has been holding since the first round. So the registry never carries the
-generated Rust at all — it goes straight from the adapter to the writer.
+handing it three things: the resolved registry, itself, and the converter plans
+it has been holding since the first round. The plans contain model and adapter
+facts, not generated source Rust syntax.
 
 The writer then goes over the declared items in name order and calls the
 adapter back once per kind — `on_function`, `on_struct`, `on_enum`, `on_const`
-— handing over the model element and taking a `TokenStream`. It parses that as
-Rust items and keeps them all. Nothing else is checked: not that a function
-comes out, not that it is one item, not that it mentions the item declared.
-JniGen's constant hook returns two, a getter and an alias.
+— handing over the model element and taking typed `syn::Item`s. The writer
+keeps those items directly; no arbitrary token stream crosses the callback
+boundary and no generated source is reparsed there. A callback may return zero
+or several items: JniGen's constant hook returns two, a getter and an alias.
+
+Typed output is not a route back to captured Rust syntax. Adapters construct
+those items from Flat facts. Only while assembling the final item may they ask
+`RustWriter` to generate a source-type token fragment from `TypeKind`, `TypeId`, and
+`ConstId`; there is no typed counterpart. `RustWriter` likewise has no API that
+returns a captured function, struct or enum as `syn`. A named const alias is
+generated from the modeled name and type. If an adapter has no source module
+and therefore no model-defined value to reference, it must declare another
+value policy explicitly: `on_const` has no default and the captured initializer
+is not an available fallback.
 
 **Finally the file.** The writer concatenates, in this order:
 
 1. the adapter's **prerequisites** — helper functions, type aliases, the
 `#[repr(C)]` structs a C header reads — emitted first so everything below can
 refer to them;
-2. the converters it was handed, sorted by name and deduplicated, so one
-function per name reaches the file however many crossings produced it;
+2. the converter plans it was handed. Operations are grouped by
+their semantic `OperationId` before rendering, with a reachable representative
+preferred when fragments retain separate reachability state. Both JniGen and
+Cbindgen converter plans expose that identity, and composed calls retain the
+same identity rather than a private Rust name. Only final rendering asks
+`RustWriter` to allocate the identifier used by both definition and calls. The name
+keeps model and adapter vocabulary as a readable semantic stem, with a stable
+hash only as its collision suffix. Every converter plan and child call must
+carry an operation identity; there is no preselected-name fallback;
 3. the per-item output, in the order above;
 4. the source crate's own feature guards, verbatim.
 
-It then runs one cross-cutting pass over every item — the adapter's
-`post_process_item`, which is where bare type references get qualified against
-the source module — and writes the result.
+Source qualification is part of `RustWriter`'s model-driven type generation. There
+is no whole-item post-processing pass: such a pass could inspect or rewrite
+unrelated generated syntax and would make every adapter responsible for
+reimplementing source-type resolution.
 
 ### What the foreign side ends up calling
 
@@ -346,6 +377,28 @@ classification of a Rust type into a closed grammar — `Optional`, `Vec`, `Ref`
 re-parsing syntax for itself. `TypeKey` is that same type reduced to an
 identity a map can be keyed by.
 
+Recipe compilation may inspect those model facts and retain a `TypeRef`, but
+it has no capability to recover or emit the captured Rust syntax. In
+particular, `Cx` carries no `RustWriter`, converter calls retain registry-owned
+`OperationId` values rather than names derived from `TypeKey`, and language
+adapters must not parse or classify a key's diagnostic text. Only the final
+`write_rust` pass constructs `RustWriter`; at that point resolution and glue planning are
+complete, and the renderer may generate source-type token fragments and
+allocate private Rust symbols while assembling the file. Even there, the
+adapter cannot recover a typed source AST. Needing to inspect source Rust
+syntax means a fact is missing from the Flat model and must be added there.
+
+An operation is shared by its conversion contract, not by the recipe row that
+happened to request it. For composed converters that contract includes the
+shape, model carrier, ownership mode when deconstructing, direction, and the
+adapter-declared intermediate representation. Adapter terminals likewise name
+their semantic operation, such as borrowing or consuming an opaque handle.
+The final writer turns that identity into a readable private symbol: a bounded
+semantic stem followed by a stable hash. The hash disambiguates the name; it
+does not replace the model and adapter vocabulary useful to a reader. The
+writer also groups plans by this identity before invoking their renderer, so
+sharing is decided before either the symbol or function body exists.
+
 The generated code has to name Rust types. Where a source function's parameter
 is written `&Sample`, the converter for it has to produce a `&Sample`, because
 that is what the call takes and `Sample` would not compile there. What
@@ -391,10 +444,12 @@ third:
 | `mode()` | `Shared` | `Owned` | `Owned` |
 | `key().ty` | `Sample` | `Sample` | `Sample` |
 
-An adapter decides how to convert from `value()`, and writes `spelled()` into
-the generated code. `mode()` is the third answer, kept separate because the
-table checks it: a constructor taking `Sample` cannot be handed a part that
-only yields `Shared`.
+An adapter decides how to convert from the model facts of `value()` and retains
+the complete site `TypeRef` returned by `spelled()` in its semantic plan. When
+the final writer supplies `RustWriter`, Flat generates that structure as Rust tokens;
+it does not copy or expose the captured spelling. `mode()` is the third answer,
+kept separate because the table checks it: a constructor taking `Sample` cannot
+be handed a part that only yields `Shared`.
 
 Note `Box<Sample>` — `value()` keeps the wrapper because a `Box` is not a
 borrow, while `key()` strips it, because `Sample`, `&Sample` and `Box<Sample>`

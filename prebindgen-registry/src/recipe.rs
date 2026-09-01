@@ -177,6 +177,80 @@ pub enum Reach {
     Accessor(syn::Ident),
     /// This position contributes nothing.
     Omit,
+    /// A field of a field: the access chain an inlined nested class needs,
+    /// outermost first. `Field(i)` is the one-element case, kept separate
+    /// because it is the overwhelming majority and reads better.
+    ///
+    /// The form a spliced `FieldRecord` states: its `members` is exactly this
+    /// chain, and without it a `parts` row for a value form that inlines a
+    /// nested declared class cannot be spelled at all (#613 step 10).
+    Path(Vec<usize>),
+    /// Field `index`, taken apart **here** by `shape` rather than by whatever
+    /// row its own type has.
+    ///
+    /// **A STRUCT-shaped field only.** `shape` is a [`Deconstruct`], which is
+    /// `Fields` or `ValueForm` — both read parts off a product — so the field
+    /// must be one. A sum-typed field is refused rather than silently
+    /// contributing nothing, which is what an empty field list would otherwise
+    /// do (#658 review).
+    ///
+    /// It does NOT yet serve the case #613 step 10 ends at. A `sealed_class`
+    /// has no deconstructing whole-value crossing (`prebindgen-jni` states that
+    /// contract), so a sum-typed field's LEAVES are what cross, and reaching
+    /// them is a `Choice` — which lives on [`Shape`], not on `Deconstruct`.
+    /// Carrying one means this reach holding a `Shape<Deconstruct>` and the
+    /// compiler composing a nested choice into a part, neither of which exists
+    /// here.
+    ///
+    /// **Which of the two ways to carry it is settled** (#660 item 6). A part's
+    /// fragment normally comes from resolving the part's own crossing, and a
+    /// sum-typed field has none to resolve, so something has to compose it. The
+    /// two candidates were a [`Part`] — the resolved description of one product
+    /// position — carrying a pre-built fragment, and the product's member list
+    /// admitting a member the compiler composes in place. **It is the second**, because of where the
+    /// two steps sit: reading the parts off the model is a `&self` read with no
+    /// adapter in reach, and composing anything needs one. Pre-building a
+    /// fragment would have to happen during that read, which means handing the
+    /// adapter to it — turning the one step that is purely a model question into
+    /// a second composition site. Composing in place happens where the product
+    /// is already composed, one call away from the loop that composes a
+    /// top-level `Choice`.
+    ///
+    /// The adapter's own hooks do not change: a composed member is still paired
+    /// with a `Part` describing the field it came from, so `fields`,
+    /// `construct` and `value_form` keep seeing one list of
+    /// `(Part, &Fragment)`. What changes is this reach's `shape`, the member
+    /// list the parts reader returns, and one branch in the product path.
+    ///
+    /// Building it is worth doing **with** the reader that needs it, not
+    /// before: the case is a callback argument whose row is
+    /// `Deconstructing::Atomic` today, and `effective_callback_plan` is what
+    /// routes a callback to such a row. The row's shape and that function are
+    /// one mechanism, so the mechanism here and its removal are one change.
+    Nested {
+        /// Position of the field in the struct being taken apart.
+        index: usize,
+        /// How that field comes apart, compiled in place.
+        shape: Box<Deconstruct>,
+    },
+    /// The value itself, as one part — cloned from a borrow, moved from an
+    /// owned receiver. The form `DeconRecord::Identity` states and no reach
+    /// could: `Field` indexes into a product and `Accessor` calls out of one,
+    /// while a handle leaf is the whole value with nothing between (#613 step
+    /// 10).
+    ///
+    /// The part's type is the receiver, so it resolves through the crossing's
+    /// DEFAULT row rather than the row being compiled — otherwise the compiler
+    /// re-enters the same crossing and recurses until the stack runs out. That
+    /// default is the value's own converter, which is exactly what a handle
+    /// leaf delivers.
+    ///
+    /// So an identity row works **beside** a default row and not instead of
+    /// one: `whole` stays the default and `handle` states `Identity`, and a
+    /// site asks for `handle`. A type whose ONLY row is the identity one has a
+    /// default that is itself, which is genuinely circular and is refused as a
+    /// cycle.
+    Identity,
 }
 
 /// Whether a value is handed over, or reached through a borrow.
@@ -962,6 +1036,13 @@ impl<'a> Check<'a, '_> {
         for reach in reaches {
             match reach {
                 Reach::Omit => {}
+                // The part IS the receiver, so it reaches no new type: there
+                // is no accessor to check and nothing further to resolve. It
+                // must not push `ty` either — that reads as the crossing
+                // depending on itself, and validation reports a cycle. The
+                // value's own converter comes from its `whole` row, which is a
+                // different recipe.
+                Reach::Identity => {}
                 Reach::Accessor(func) => {
                     let Some(f) = self.function(func) else {
                         continue;
@@ -974,6 +1055,57 @@ impl<'a> Check<'a, '_> {
                         });
                     }
                     out.push(ret);
+                }
+                // Each hop resolves against the previous field's type, so a
+                // chain is validated exactly as the accesses it renders.
+                // The field's own type is reached, and the nested shape's
+                // reaches are validated against it — the same walk one level in.
+                Reach::Nested { index, shape } => {
+                    let Some(fields) = self.fields(ty) else {
+                        self.not_a_product();
+                        continue;
+                    };
+                    match fields.get(*index) {
+                        Some(field) => {
+                            let inner = field.ty.clone();
+                            // A `Deconstruct` reads parts off a product. A
+                            // field that is not one contributes nothing at all
+                            // through this reach, so it is refused here rather
+                            // than silently dropping its leaves (#658 review).
+
+                            match shape.as_ref() {
+                                Deconstruct::Fields(inner_reaches) => {
+                                    out.extend(self.reaches(&inner, inner_reaches));
+                                }
+                                Deconstruct::ValueForm { parts, .. } => {
+                                    out.extend(self.reaches(&inner, parts));
+                                }
+                            }
+                        }
+                        None => self.out_of_range(*index, fields.len()),
+                    }
+                }
+                Reach::Path(indices) => {
+                    let mut at: TypeRef = ty.clone();
+                    let mut ok = true;
+                    for index in indices {
+                        let Some(fields) = self.fields(&at) else {
+                            self.not_a_product();
+                            ok = false;
+                            break;
+                        };
+                        match fields.get(*index) {
+                            Some(field) => at = field.ty.clone(),
+                            None => {
+                                self.out_of_range(*index, fields.len());
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                    if ok {
+                        out.push(at);
+                    }
                 }
                 Reach::Field(index) => {
                     let Some(fields) = self.fields(ty) else {

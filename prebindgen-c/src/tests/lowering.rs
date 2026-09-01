@@ -56,7 +56,7 @@ fn bounded_duration_option_is_one_scalar_with_named_niche() {
         "{src}"
     );
     assert!(!compact.contains("v:*constu64"), "{src}");
-    assert!(!compact.contains("_present"), "{src}");
+    assert!(!compact.contains("v_present"), "{src}");
     assert!(compact.contains("ifv==18446744073709551615"), "{src}");
 }
 
@@ -135,16 +135,423 @@ fn custom_conversion_without_domain_stays_infallible() {
     let compact: String = src.split_whitespace().collect();
 
     assert!(
-        compact.contains("fn__cbg_in_Ratio(v:f64)->myflat::Ratio"),
+        compact.contains("fn__c_in_convert_wire_to_Ratio_")
+            && compact.contains("(v:f64,)->myflat::Ratio"),
         "{src}"
     );
     assert!(
-        compact.contains("fn__cbg_out_Ratio(v:myflat::Ratio)->f64"),
+        compact.contains("fn__c_out_convert_Ratio_") && compact.contains("(v:myflat::Ratio,)->f64"),
         "{src}"
     );
     assert!(
         compact.contains("extern\"C\"fnratio_echo(v:f64)->f64"),
         "{src}"
+    );
+}
+
+#[test]
+fn custom_conversion_stays_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub fn ratio_from_f64(v: f64) -> Ratio { unimplemented!() }",
+        "pub fn ratio_to_f64(v: Ratio) -> f64 { unimplemented!() }",
+        "pub fn ratio_echo(v: Ratio) -> Ratio { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let generated = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            prebindgen_registry::convert!(Ratio)
+                .input(prebindgen_registry::fun!(ratio_from_f64))
+                .output(prebindgen_registry::fun!(ratio_to_f64)),
+        )
+        .function(syn::parse_quote!(ratio_echo))
+        .build_with(registry)
+        .expect("resolve");
+
+    assert_eq!(
+        generated
+            .gen
+            .converter_functions()
+            .filter(|function| function.is_custom())
+            .count(),
+        2,
+        "both custom directions must retain semantic plans before final writing"
+    );
+}
+
+#[test]
+fn trait_backed_custom_conversion_renders_from_the_late_plan() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> =
+        ["pub fn ratio_echo(v: Ratio) -> Ratio { unimplemented!() }"]
+            .into_iter()
+            .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+            .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            prebindgen_registry::convert!(Ratio)
+                .input(prebindgen_registry::from!(f64))
+                .output(prebindgen_registry::into!(f64)),
+        )
+        .function(syn::parse_quote!(ratio_echo));
+
+    let src = write(cbindgen, registry, "trait_custom_conversion");
+    let compact: String = src.split_whitespace().collect();
+    assert!(
+        compact.contains("<f64as::core::convert::Into<myflat::Ratio>>::into(v)"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("<myflat::Ratioas::core::convert::Into<f64>>::into(v)"),
+        "{src}"
+    );
+}
+
+/// `::core::primitive::u64` and `u64` name one scalar, and a domain declared
+/// over that scalar matches a representation written either way. Before the
+/// domain carried its kind, this fixture failed to build: the check compared
+/// the two spellings and reported "domain type does not match its input
+/// representation" for a type that does match.
+#[test]
+fn a_domain_matches_its_representation_however_the_representation_is_spelled() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> =
+        ["pub fn duration_echo(v: Duration) -> Duration { unimplemented!() }"]
+            .into_iter()
+            .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+            .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::from!(::core::primitive::u64))
+                .output(prebindgen_registry::into!(::core::primitive::u64))
+                .valid_range(0u64..=1_000_000u64),
+        )
+        .base_name("z_duration")
+        .function(syn::parse_quote!(duration_echo))
+        .panic();
+
+    let src = write(cbindgen, registry, "qualified_representation");
+    let compact: String = src.split_whitespace().collect();
+    assert!(
+        compact.contains("extern\"C\"fnduration_echo(v:::core::primitive::u64"),
+        "{src}"
+    );
+    assert!(compact.contains("(v)<=1000000u64"), "{src}");
+}
+
+#[test]
+fn output_terminals_stay_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Handle;",
+        "pub struct Error;",
+        "pub struct Payload;",
+        "pub enum Mode { First, Second }",
+        "pub fn output_unit() {}",
+        "pub fn output_string() -> String { unimplemented!() }",
+        "pub fn output_scalar() -> u64 { unimplemented!() }",
+        "pub fn output_handle() -> Handle { unimplemented!() }",
+        "pub fn output_error() -> Error { unimplemented!() }",
+        "pub fn output_value_opaque() -> Payload { unimplemented!() }",
+        "pub fn output_enum() -> Mode { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .free_memory_function("binding_free")
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_error(syn::parse_quote!(Error), syn::parse_quote!(error_message))
+        .opaque_owned_struct(syn::parse_quote!(Payload), syn::parse_quote!(OpaquePayload))
+        .enum_type(syn::parse_quote!(Mode))
+        .function(syn::parse_quote!(output_unit))
+        .function(syn::parse_quote!(output_string))
+        .function(syn::parse_quote!(output_scalar))
+        .function(syn::parse_quote!(output_handle))
+        .function(syn::parse_quote!(output_error))
+        .function(syn::parse_quote!(output_value_opaque))
+        .function(syn::parse_quote!(output_enum))
+        .build_with(registry)
+        .expect("resolve");
+
+    assert_eq!(
+        generated
+            .gen
+            .converter_functions()
+            .filter(|function| function.is_output_terminal())
+            .count(),
+        6,
+        "every reached whole-value output operation must retain a semantic plan before final writing; unit has no C value site"
+    );
+}
+
+#[test]
+fn input_terminals_stay_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Handle;",
+        "pub struct Payload;",
+        "pub enum Mode { First, Second }",
+        "pub fn input_handle(v: Handle) {}",
+        "pub fn input_value_opaque(v: Payload) {}",
+        "pub fn input_enum(v: Mode) {}",
+        "pub fn input_string(v: String) {}",
+        "pub fn input_str(v: &str) {}",
+        "pub fn input_bool(v: bool) {}",
+        "pub fn input_scalar(v: u64) {}",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_owned_struct(syn::parse_quote!(Payload), syn::parse_quote!(OpaquePayload))
+        .enum_type(syn::parse_quote!(Mode))
+        .function(syn::parse_quote!(input_handle))
+        .panic()
+        .function(syn::parse_quote!(input_value_opaque))
+        .panic()
+        .function(syn::parse_quote!(input_enum))
+        .panic()
+        .function(syn::parse_quote!(input_string))
+        .panic()
+        .function(syn::parse_quote!(input_str))
+        .panic()
+        .function(syn::parse_quote!(input_bool))
+        .function(syn::parse_quote!(input_scalar))
+        .build_with(registry)
+        .expect("resolve");
+
+    assert_eq!(
+        generated
+            .gen
+            .converter_functions()
+            .filter(|function| function.is_input_terminal())
+            .count(),
+        6,
+        "every reached whole-value input operation must retain a semantic plan before final writing; &str uses the slice plan without reaching an element terminal"
+    );
+}
+
+#[test]
+fn tagged_union_payloads_stay_unrendered_until_final_write() {
+    let count: usize = [
+        "Handle",
+        "Option<Handle>",
+        "Box<Handle>",
+        "Option<Box<Handle>>",
+    ]
+    .into_iter()
+    .map(|payload| {
+        let loc = SourceLocation::default();
+        let variant = format!("pub enum Payloads {{ Value({payload}) }}");
+        let items: Vec<(syn::Item, SourceLocation)> = [
+            "pub struct Handle;".to_owned(),
+            variant,
+            "pub fn payload_roundtrip(v: Payloads) -> Payloads { unimplemented!() }".to_owned(),
+        ]
+        .into_iter()
+        .map(|source| (syn::parse_str(&source).unwrap(), loc.clone()))
+        .collect();
+        let registry = crate::test_util::reg_from_items(items).unwrap();
+        let generated = CbindgenBuilder::new()
+            .opaque_ptr(syn::parse_quote!(Handle))
+            .tagged_union(syn::parse_quote!(Payloads))
+            .function(syn::parse_quote!(payload_roundtrip))
+            .panic()
+            .build_with(registry)
+            .expect("resolve");
+        generated
+            .gen
+            .converter_functions()
+            .filter(|function| function.is_payload())
+            .count()
+    })
+    .sum();
+
+    assert_eq!(
+        count, 8,
+        "bare, optional, boxed, and optional-boxed payloads must retain plans in both directions"
+    );
+}
+
+#[test]
+fn specialized_field_terminals_stay_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Record { pub text: String, pub flag: bool }",
+        "pub fn record_roundtrip(v: Record) -> Record { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .free_memory_function("binding_free")
+        .data_struct(syn::parse_quote!(Record))
+        .function(syn::parse_quote!(record_roundtrip))
+        .build_with(registry)
+        .expect("resolve");
+
+    let functions: Vec<_> = generated.gen.converter_functions().collect();
+    assert_eq!(
+        functions
+            .iter()
+            .filter(|function| function.is_string_field_terminal())
+            .count(),
+        1,
+        "lenient String input must retain its field plan"
+    );
+    assert_eq!(
+        functions
+            .iter()
+            .filter(|function| function.is_bool_field_terminal())
+            .count(),
+        1,
+        "normalized bool output must retain its distinct field plan"
+    );
+}
+
+#[test]
+fn borrow_terminals_stay_unrendered_until_final_write() {
+    use crate::chain::BorrowOperation;
+
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Handle;",
+        "pub struct Record { pub value: u64 }",
+        "pub fn read_str(v: &str) -> usize { unimplemented!() }",
+        "pub fn share(v: &Handle) -> &Handle { unimplemented!() }",
+        "pub fn mutate(v: &mut Handle) { unimplemented!() }",
+        "pub fn fill(v: &mut std::mem::MaybeUninit<Record>) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .repr_c_struct(syn::parse_quote!(Record))
+        .function(syn::parse_quote!(read_str))
+        .panic()
+        .function(syn::parse_quote!(share))
+        .panic()
+        .function(syn::parse_quote!(mutate))
+        .panic()
+        .function(syn::parse_quote!(fill))
+        .panic()
+        .build_with(registry)
+        .expect("resolve");
+
+    for operation in [
+        BorrowOperation::StrInput,
+        BorrowOperation::SharedInput,
+        BorrowOperation::MutableInput,
+        BorrowOperation::MutableUninitInput,
+        BorrowOperation::SharedOutput,
+    ] {
+        assert_eq!(
+            generated
+                .gen
+                .converter_functions()
+                .filter(|function| function.borrow_operation() == Some(&operation))
+                .count(),
+            1,
+            "{operation:?} must retain its own semantic plan before final writing"
+        );
+    }
+}
+
+#[test]
+fn slice_input_terminals_stay_unrendered_until_final_write() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub struct Record { pub value: u64 }",
+        "pub fn scalar_slice(v: &[u8]) { unimplemented!() }",
+        "pub fn record_slice(v: &[Record]) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .repr_c_struct(syn::parse_quote!(Record))
+        .function(syn::parse_quote!(scalar_slice))
+        .panic()
+        .function(syn::parse_quote!(record_slice))
+        .panic()
+        .build_with(registry)
+        .expect("resolve");
+
+    let mut operations: Vec<(TypeKey, bool)> = generated
+        .gen
+        .converter_functions()
+        .filter_map(|function| function.slice_input_operation())
+        .map(|(element, reinterpret)| (element.key(), reinterpret))
+        .collect();
+    operations.sort_by(|a, b| a.0.cmp(&b.0));
+
+    assert_eq!(
+        operations,
+        [
+            (TypeKey::from_type(&syn::parse_quote!(Record)), true),
+            (TypeKey::from_type(&syn::parse_quote!(u8)), false),
+        ],
+        "scalar and value-opaque slices must retain their exact final-decode operation"
+    );
+}
+
+#[test]
+fn multi_wire_markers_stay_typed_until_final_write() {
+    use crate::chain::MarkerOperation;
+
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub fn maybe() -> Option<u64> { unimplemented!() }",
+        "pub fn values() -> &'static [u64] { &[] }",
+        "pub fn fallible() -> Result<u64, Error> { unimplemented!() }",
+        "pub struct Error { pub message: String }",
+    ]
+    .into_iter()
+    .map(|source| (syn::parse_str(source).unwrap(), loc.clone()))
+    .collect();
+    let registry = crate::test_util::reg_from_items(items).unwrap();
+    let generated = CbindgenBuilder::new()
+        .free_memory_function("free")
+        .data_struct(syn::parse_quote!(Error))
+        .error()
+        .function(syn::parse_quote!(maybe))
+        .function(syn::parse_quote!(values))
+        .function(syn::parse_quote!(fallible))
+        .build_with(registry)
+        .expect("resolve");
+
+    for operation in [MarkerOperation::Optional, MarkerOperation::Sequence] {
+        assert!(
+            generated
+                .gen
+                .converter_functions()
+                .any(|function| function.marker_operation() == Some(&operation)),
+            "{operation:?} must retain its own semantic marker before final writing"
+        );
+    }
+    assert!(
+        !generated
+            .gen
+            .converter_functions()
+            .any(|function| function.marker_operation() == Some(&MarkerOperation::Result)),
+        "Result is split into return/error sites and its planning-only whole-value marker must be pruned"
     );
 }
 
@@ -224,7 +631,7 @@ fn keyexpr_try_from_lowering() {
         compact.contains("as::core::convert::From<::std::string::String"),
         "{src}"
     );
-    assert!(compact.contains("__cbg_out_Error"), "{src}");
+    assert!(compact.contains("__c_out_convert_Error_"), "{src}");
     assert!(compact.contains("return::core::ptr::null_mut()"), "{src}");
 }
 
@@ -347,7 +754,7 @@ fn a_declared_conversion_owns_its_own_fallibility() {
         "fallible_custom_option_panic",
     );
     assert!(
-        src.contains("__cbg_out_Option___Duration__"),
+        src.contains("__c_out_convert_Option_Duration_"),
         "the declared converter is what the wrapper calls:\n{src}"
     );
 }

@@ -293,6 +293,22 @@ fn an_accessor_reached_through_a_borrow_is_accepted() {
 }
 
 #[test]
+fn an_identity_reach_needs_no_accessor_and_yields_the_value_itself() {
+    // The form `DeconRecord::Identity` states: a handle leaf is the whole
+    // value, with no field to index and no accessor to call. A table that
+    // could not spell it is why #622's callback-argument rows are placeholders
+    // (#613 step 10).
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Sample"),
+        recipe_name("handle"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Identity])),
+    );
+    builder.build(&model).expect("an identity reach validates");
+}
+
+#[test]
 fn a_field_index_past_the_end_is_refused() {
     let model = model(&[SAMPLE]);
     let mut builder = Recipes::builder();
@@ -691,6 +707,33 @@ fn a_site_takes_the_row_it_names() {
 }
 
 #[test]
+fn an_adapter_can_select_one_declared_row_for_one_site() {
+    let model = model(&[SAMPLE]);
+    let recipes = two_recipes(&model);
+    let bindings = Bindings::default();
+    let crossing = Crossing::new(ty(&model, "Sample"), Direction::Deconstruct);
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let selected = compiler
+        .site_recipe(
+            &mut adapter,
+            site("z_put", 0),
+            crossing.clone(),
+            &recipe_name("fields"),
+        )
+        .expect("declared row")
+        .expect("site plan");
+    assert!(selected.contains("recipe `fields`"), "{selected}");
+
+    let default = compiler
+        .site(&mut adapter, site("z_get", 0), crossing)
+        .expect("default row")
+        .expect("site plan");
+    assert!(default.contains("recipe `whole`"), "{default}");
+}
+
+#[test]
 fn the_higher_precedence_declaration_wins_whichever_was_written_first() {
     let model = model(&[SAMPLE]);
     let recipes = two_recipes(&model);
@@ -963,10 +1006,12 @@ fn part_names<C: Compile>(parts: Parts<'_, C>) -> String {
     parts
         .iter()
         .map(|(p, _)| {
-            let source = match p.from {
+            let source = match &p.from {
                 PartSource::Argument { index } => format!("arg{index}"),
                 PartSource::Field { index, .. } => format!("field{index}"),
                 PartSource::Accessor { func } => format!("via {}", func.name),
+                PartSource::Identity => "self".to_string(),
+                PartSource::Path { indices, .. } => format!("path{indices:?}"),
             };
             format!("{}={source}/{}", p.name, p.mode)
         })
@@ -979,11 +1024,8 @@ impl Compile for Recorder {
     type Plan = String;
     type Error = String;
 
-    fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
-        // A fragment is generated Rust, so a hook is an emission callback and
-        // can spell a model type without naming the flat protocol itself.
-        let spelled = cx.emit().spell(at.crossing.spelled()).to_string();
-        self.hook(at, "atomic", spelled)
+    fn atomic(&mut self, _cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+        self.hook(at, "atomic", "model".to_owned())
     }
 
     fn optional(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
@@ -1124,8 +1166,8 @@ fn a_constructors_parameters_are_the_parts() {
     assert_eq!(
         adapter.calls,
         vec![
-            "atomic u32 construct: u32",
-            "atomic u64 construct: u64",
+            "atomic u32 construct: model",
+            "atomic u64 construct: model",
             "construct Sample construct: sample_new(key=arg0/owned, payload=arg1/owned)",
         ]
     );
@@ -1198,6 +1240,331 @@ fn a_field_reach_reads_the_models_own_field() {
 }
 
 #[test]
+fn a_product_reached_through_a_borrow_lends_each_field() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Sample"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(1), Reach::Field(0)])),
+    );
+    let recipes = builder.build(&model).expect("table");
+    let mut adapter = Recorder::default();
+
+    let plan = compile_one(
+        &model,
+        &recipes,
+        &mut adapter,
+        Site {
+            owner: ident("z_get"),
+            role: Role::Return,
+        },
+        "&Sample",
+        Direction::Deconstruct,
+    );
+    assert!(plan.contains("payload=field1/&, key=field0/&"), "{plan}");
+}
+
+/// A declared identity row is refused, not an abort.
+///
+/// The part IS its receiver, so its crossing key equals the row's own and the
+/// compiler used to re-enter it until the stack ran out (#635). It resolves
+/// through the crossing's default row now, which for a type whose only row is
+/// the identity one is that row again — a cycle the declaration really wrote,
+/// and reported as one.
+///
+/// A handle leaf whose converter is terminal rather than another row is what
+/// makes such a declaration useful; that needs parts that carry no child
+/// fragment, which the adapter trait cannot express yet.
+#[test]
+fn a_self_defaulting_identity_row_is_refused_as_a_cycle() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    builder.declare_default(
+        ty(&model, "Sample"),
+        recipe_name("handle"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Identity])),
+    );
+    let recipes = builder.build(&model).expect("table");
+    let mut adapter = Recorder::default();
+    let bindings = Bindings::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+
+    let err = compiler
+        .site(
+            &mut adapter,
+            Site {
+                owner: ident("z_get"),
+                role: Role::Return,
+            },
+            Crossing::new(ty(&model, "&Sample"), Direction::Deconstruct),
+        )
+        .expect_err("an identity row that defaults to itself is a cycle");
+    assert!(format!("{err:?}").contains("Cycle"), "{err:?}");
+}
+
+/// A borrowed identity part is lent, not owned — the coverage #635's review
+/// asked for, now that an identity row beside a default one compiles.
+///
+/// `Crossing::value()` strips `&`/`&mut`, so deriving the mode from it would
+/// record a `&Sample` identity row as owned, losing the clone-for-borrow /
+/// move-for-owned distinction the form exists to carry.
+#[test]
+fn an_identity_part_through_a_borrow_is_lent_not_owned() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    let sample = ty(&model, "Sample");
+    builder
+        .declare_default(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
+        .declare(
+            sample.clone(),
+            recipe_name("handle"),
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Identity])),
+        );
+    let recipes = builder.build(&model).expect("table");
+
+    let crossing = Crossing::new(ty(&model, "&Sample"), Direction::Deconstruct);
+    let mut bind = Bindings::builder();
+    bind.bind(
+        site("z_get", 0),
+        crossing.clone(),
+        Ask::Recipe(recipe_name("handle")),
+        Origin::Function,
+    );
+    let bindings = bind.build(&recipes).expect("bindings");
+
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    let plan = compiler
+        .site(&mut adapter, site("z_get", 0), crossing)
+        .expect("compile")
+        .expect("not omitted");
+    assert!(plan.contains("self=self/&"), "{plan}");
+}
+
+/// The owned half: the same row reached without a borrow moves its value.
+#[test]
+fn an_owned_identity_part_is_moved() {
+    let model = model(&[SAMPLE]);
+    let mut builder = Recipes::builder();
+    let sample = ty(&model, "Sample");
+    builder
+        .declare_default(sample.clone(), recipe_name("whole"), Deconstructing::Atomic)
+        .declare(
+            sample.clone(),
+            recipe_name("handle"),
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Identity])),
+        );
+    let recipes = builder.build(&model).expect("table");
+
+    let crossing = Crossing::new(sample, Direction::Deconstruct);
+    let mut bind = Bindings::builder();
+    bind.bind(
+        site("z_get", 0),
+        crossing.clone(),
+        Ask::Recipe(recipe_name("handle")),
+        Origin::Function,
+    );
+    let bindings = bind.build(&recipes).expect("bindings");
+
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    let plan = compiler
+        .site(&mut adapter, site("z_get", 0), crossing)
+        .expect("compile")
+        .expect("not omitted");
+    assert!(plan.contains("self=self/owned"), "{plan}");
+}
+
+/// A path reaches a field of a field — what an inlined nested class needs.
+///
+/// `FieldRecord::members` is exactly this chain, and before `Reach::Path` a
+/// `parts` row for a value form that inlines a nested declared class could not
+/// be spelled: `value_form_of` declined any record with several members, which
+/// is why two of #638's three rows still fall back to `Atomic` (#613 step 10).
+#[test]
+fn a_path_reach_resolves_a_field_of_a_field() {
+    let model = model(&[
+        SAMPLE,
+        "pub struct Outer { pub inner: Sample, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Outer"),
+        recipe_name("fields"),
+        // `inner.payload`, then `tag` — a chain beside a plain field.
+        Deconstructing::Product(Deconstruct::Fields(vec![
+            Reach::Path(vec![0, 1]),
+            Reach::Field(1),
+        ])),
+    );
+    let recipes = builder.build(&model).expect("a path over declared structs");
+    let mut adapter = Recorder::default();
+
+    let plan = compile_one(
+        &model,
+        &recipes,
+        &mut adapter,
+        Site {
+            owner: ident("z_get"),
+            role: Role::Return,
+        },
+        "Outer",
+        Direction::Deconstruct,
+    );
+    assert!(
+        plan.contains("payload="),
+        "the path reaches the nested field:\n{plan}"
+    );
+    assert!(
+        plan.contains("tag="),
+        "the plain field is unaffected:\n{plan}"
+    );
+}
+
+/// A path whose hop is past the end is refused, like a one-hop `Field`.
+#[test]
+fn a_path_reach_past_the_end_is_refused() {
+    let model = model(&[
+        SAMPLE,
+        "pub struct Outer { pub inner: Sample, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Outer"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Path(vec![0, 7])])),
+    );
+    let errors = builder
+        .build(&model)
+        .expect_err("the second hop is out of range");
+    assert!(
+        matches!(
+            errors.as_slice(),
+            [RecipeError::OutOfRange {
+                index: 7,
+                len: 2,
+                ..
+            }]
+        ),
+        "{errors:?}"
+    );
+}
+
+/// A field taken apart HERE, by a shape the row carries, rather than by the
+/// row its own type has.
+///
+/// The form a sum-typed field needs: a `sealed_class` has no deconstructing
+/// whole-value crossing, so such a field cannot be a whole part at all, and
+/// `Fields(Vec<Reach>)` cannot hold the `Choice` its leaves need (#613 step 10).
+#[test]
+fn a_nested_shape_takes_a_field_apart_in_place() {
+    let model = model(&[
+        SAMPLE,
+        "pub struct Outer { pub inner: Sample, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Outer"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![
+            Reach::Nested {
+                index: 0,
+                shape: Box::new(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
+            },
+            Reach::Field(1),
+        ])),
+    );
+    let recipes = builder.build(&model).expect("a nested shape validates");
+    let mut adapter = Recorder::default();
+
+    let plan = compile_one(
+        &model,
+        &recipes,
+        &mut adapter,
+        Site {
+            owner: ident("z_get"),
+            role: Role::Return,
+        },
+        "Outer",
+        Direction::Deconstruct,
+    );
+    // The nested shape contributes ITS parts, not one part for the field.
+    assert!(
+        plan.contains("key="),
+        "the nested shape's first part:\n{plan}"
+    );
+    assert!(
+        plan.contains("payload="),
+        "the nested shape's second part:\n{plan}"
+    );
+    assert!(
+        plan.contains("tag="),
+        "the plain field is unaffected:\n{plan}"
+    );
+}
+
+/// A nested shape over a SUM-typed field is refused, not silently empty.
+///
+/// `Deconstruct` reads parts off a product, and a variant has no fields to
+/// read, so this reach would contribute nothing at all — dropping the sum's
+/// leaves without a word. Reaching those leaves needs a `Choice`, which lives
+/// on `Shape` and not on `Deconstruct` (#658 review).
+#[test]
+fn a_nested_shape_over_a_sum_field_is_refused() {
+    let model = model(&[
+        "pub enum Pick { A { x: u32 }, B { y: u64 } }",
+        "pub struct Holder { pub pick: Pick, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Holder"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Nested {
+            index: 0,
+            shape: Box::new(Deconstruct::Fields(vec![Reach::Field(0)])),
+        }])),
+    );
+    let errors = builder
+        .build(&model)
+        .expect_err("a sum field cannot be read as a product");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::NotAProduct { .. }]),
+        "{errors:?}"
+    );
+}
+
+/// A nested shape over a field index past the end is refused.
+#[test]
+fn a_nested_shape_past_the_end_is_refused() {
+    let model = model(&[
+        SAMPLE,
+        "pub struct Outer { pub inner: Sample, pub tag: u8 }",
+    ]);
+    let mut builder = Recipes::builder();
+    builder.declare(
+        ty(&model, "Outer"),
+        recipe_name("fields"),
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Nested {
+            index: 9,
+            shape: Box::new(Deconstruct::Fields(vec![Reach::Field(0)])),
+        }])),
+    );
+    let errors = builder.build(&model).expect_err("index 9 is past the end");
+    assert!(
+        matches!(
+            errors.as_slice(),
+            [RecipeError::OutOfRange {
+                index: 9,
+                len: 2,
+                ..
+            }]
+        ),
+        "{errors:?}"
+    );
+}
+
+#[test]
 fn an_omitted_reach_contributes_no_part() {
     let model = model(&[SAMPLE]);
     let mut builder = Recipes::builder();
@@ -1252,9 +1619,9 @@ fn one_row_answering_three_spellings_still_builds_three_fragments() {
     assert_eq!(
         adapter.calls,
         vec![
-            "atomic Sample deconstruct: Sample",
-            "atomic Sample deconstruct: & Sample",
-            "atomic Sample deconstruct: Box < Sample >",
+            "atomic Sample deconstruct: model",
+            "atomic Sample deconstruct: model",
+            "atomic Sample deconstruct: model",
         ]
     );
 }
@@ -2390,7 +2757,7 @@ fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
         compiled
             .fragment(&key, Direction::Deconstruct)
             .map(|n| n.text.clone()),
-        Some("atomic Sample deconstruct: Sample".to_string()),
+        Some("atomic Sample deconstruct: model".to_string()),
     );
     // … and a caller holding a recipe still reaches that recipe.
     assert!(compiled

@@ -1,5 +1,5 @@
 //! Output (data) expansion — the dual of constructor expansion
-//! (`api/core/expand.rs`). A function returning a rich type is *decomposed* by a
+//! ([`crate::expand`]). A function returning a rich type is *decomposed* by a
 //! **deconstructor** into a set of leaf values.
 //!
 //! A **deconstructor** (a type-level `expand_return!` `.field*` list,
@@ -27,12 +27,15 @@
 
 use std::collections::HashSet;
 
-use crate::{
-    declared_target::check_declared_target,
-    registry::{Registry, TypeKey},
-};
+use prebindgen_registry::{declared_target::check_declared_target, TypeKey};
 
 mod error;
+mod walk;
+pub(crate) use walk::{
+    bind_hoists, conditional_arm, reach_leaf, segment, segments, segments_at, DecomposedLeaf,
+    DeliveryBridge, LeafAt, LeafPlace, Reach, Slot,
+};
+
 mod plan;
 
 pub use self::{
@@ -42,6 +45,133 @@ pub use self::{
         UnfoldShape,
     },
 };
+
+// ──────────────────────────────────────────────────────────────────────
+// Where applying the declarations puts its answers
+// ──────────────────────────────────────────────────────────────────────
+
+/// Applying decomposition declarations: the model they are read against, the
+/// plans they produce, and the registrations they ask for.
+///
+/// The adapter that declared the decompositions owns this. It holds no
+/// registry: every `apply*` function here reads signatures from the model and
+/// writes plans and [`Requirement`]s into this, which is what lets the plans be
+/// built at declaration time.
+pub struct Unfolding<'f> {
+    flat: &'f prebindgen_registry::flat::Flat,
+    requirements: Vec<prebindgen_registry::Requirement>,
+
+    /// The plans built so far.
+    pub plans: Unfolded,
+}
+
+/// The decomposition plans applying a set of declarations produced.
+///
+/// The adapter keeps this and reads it back at every emission site; nothing in
+/// the registry holds one.
+#[derive(Default, Clone)]
+pub struct Unfolded {
+    /// Resolved output-expansion plans, keyed by function ident. Read at the
+    /// return-emission site.
+    pub unfold_plans: std::collections::HashMap<syn::Ident, UnfoldPlan>,
+
+    /// Resolved **error**-position expansion plans, keyed by function ident: the
+    /// decomposition of a fallible fn's `Result<_, E>` domain error `E` (from
+    /// `.convert_error` / `.deconstruct_error`). Separate from
+    /// [`Self::unfold_plans`] — a fn may have both an output and an error plan.
+    pub error_plans: std::collections::HashMap<syn::Ident, UnfoldPlan>,
+
+    /// Default decomposition of a **callback argument** type — the `T` of a
+    /// declared fn's `impl Fn(T, …)` parameter — keyed by the bare arg type
+    /// (type-level, fn-independent), from the type's default deconstructor
+    /// (`by_ref = false`: the trampoline owns the value). A type without a
+    /// default deconstructor has no entry and is delivered whole.
+    pub callback_arg_plans: std::collections::HashMap<TypeKey, UnfoldPlan>,
+
+    /// The declaration-default decomposition per deconstructor declaration
+    /// ([`DeconId`]) — resolved once with normalized inputs, independent of
+    /// using functions and processing order. The single source an adapter
+    /// derives declaration-keyed signature artifacts (generated callback
+    /// interfaces, say) from, so every function selecting the same declaration
+    /// sees one signature by construction.
+    pub decon_plans: std::collections::HashMap<DeconId, DeconSpec>,
+}
+
+impl<'f> Unfolding<'f> {
+    /// Start applying declarations against `flat`.
+    pub fn new(flat: &'f prebindgen_registry::flat::Flat) -> Self {
+        Self {
+            flat,
+            requirements: Vec::new(),
+            plans: Unfolded::default(),
+        }
+    }
+
+    /// The model the declarations are read against.
+    pub fn flat(&self) -> &'f prebindgen_registry::flat::Flat {
+        self.flat
+    }
+
+    /// The registrations asked for, in the order they were asked. Hand these to
+    /// [`Decompositions::requirements`](crate::Decompositions::requirements).
+    pub fn requirements(&self) -> &[prebindgen_registry::Requirement] {
+        &self.requirements
+    }
+
+    /// Per callback-argument type, the readings its decomposition delivers.
+    ///
+    /// The ordering fact the registry needs and cannot see: a callback argument
+    /// delivered as leaves needs each leaf's own conversion before the
+    /// callback's can be built, and a leaf is named by a plan rather than by the
+    /// argument's syntax. Hand this to
+    /// [`Decompositions::callback_arg_leaves`](crate::Decompositions::callback_arg_leaves).
+    pub fn callback_arg_leaves(
+        &self,
+    ) -> std::collections::HashMap<TypeKey, Vec<prebindgen_registry::flat::TypeRef>> {
+        self.plans
+            .callback_arg_plans
+            .iter()
+            .map(|(key, plan)| {
+                (
+                    key.clone(),
+                    plan.leaves.iter().map(|leaf| leaf.out_ty.clone()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    /// Take the plans, leaving the requirements behind.
+    pub fn into_plans(self) -> Unfolded {
+        self.plans
+    }
+
+    /// Register `reading` (and its nested positions) as a required **output** so
+    /// the resolver produces a converter for it.
+    fn require_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
+        self.requirements
+            .push(prebindgen_registry::Requirement::Output(reading.clone()));
+    }
+
+    /// Register `reading` as an output cell **without** demanding a converter —
+    /// a type some plan names rather than one that crosses. What a
+    /// [`SumTag`](LeafSource::SumTag) selector needs: it names *which* sum it
+    /// chooses between, and that sum has no whole-value output converter at all,
+    /// so requiring one would fail resolution (#282).
+    fn reference_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
+        self.requirements
+            .push(prebindgen_registry::Requirement::Reference(reading.clone()));
+    }
+
+    /// Drop `reading` from the required-output set. Used by
+    /// [`apply_leaf_vec_folds`]: when a `Vec<T>` / `Option<Vec<T>>` return is
+    /// delivered element-by-element through a fold, the whole-collection
+    /// converter is genuinely not needed — and for a `Vec` of opaque handles it
+    /// cannot resolve at all, so requiring it would wrongly fail resolution.
+    fn unrequire_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
+        self.requirements
+            .push(prebindgen_registry::Requirement::Unrequire(reading.clone()));
+    }
+}
 
 // ──────────────────────────────────────────────────────────────────────
 // Declarations (populated by the language builder)
@@ -118,7 +248,7 @@ pub struct FieldRecord {
     /// returns. Asking the registry here was asking before registration
     /// (#266) — a lookup that could only miss, answered by a second source of
     /// readings that hid the ordering.
-    pub ty: prebindgen_flat::flat::TypeRef,
+    pub ty: prebindgen_registry::flat::TypeRef,
     /// How this field decomposes.
     pub decon: FieldDecon,
 }
@@ -157,7 +287,7 @@ impl DeconRecord {
 #[derive(Clone)]
 pub struct DeconstructorDecl {
     /// The type being decomposed, as an **identity** — see
-    /// [`ConstructorDecl::target`](crate::expand::ConstructorDecl::target).
+    /// [`ConstructorDecl::target`](prebindgen_registry::expand::ConstructorDecl::target).
     pub target: TypeKey,
     pub records: Vec<DeconRecord>,
     /// Auto-apply this deconstructor to every matching declared fn (`Some`
@@ -220,10 +350,8 @@ pub struct OutputDecl {
 /// Deconstructor / output-expansion declarations gathered from a language
 /// builder — an immutable record set: complete values, no build protocol.
 /// Declaration order is the vector order; leaf order is each record
-/// vector's order. Handed to the registry as
-/// [`Decompositions::deconstructors`](crate::Decompositions::deconstructors);
-/// empty or duplicate declarations are diagnosed at resolution (collected),
-/// not at construction.
+/// vector's order. Handed to [`apply`]; empty or duplicate declarations are
+/// diagnosed there (collected), not at construction.
 #[derive(Clone, Default)]
 pub struct Deconstructors {
     pub deconstructors: Vec<DeconstructorDecl>,
@@ -279,8 +407,8 @@ fn validate_declarations(acc: &Deconstructors) -> Result<(), UnfoldError> {
 ///
 /// Runs inside `write_rust` after `expand::apply` and before `resolve`, so leaf
 /// converters resolve through the normal rank machinery.
-pub(crate) fn apply(
-    registry: &mut Registry,
+pub fn apply(
+    registry: &mut Unfolding<'_>,
     acc: &Deconstructors,
     declared_fns: &std::collections::HashSet<syn::Ident>,
     accessor_fns: &std::collections::HashSet<syn::Ident>,
@@ -407,7 +535,7 @@ pub(crate) fn apply(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let prebindgen_flat::flat::TypeKind::Callback { args } = param.ty.kind() else {
+            let prebindgen_registry::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -424,12 +552,12 @@ pub(crate) fn apply(
                 // cannot see — `Box<T>` — stops reading as un-nameable.
                 if !matches!(
                     core_ty.unwrapped().kind(),
-                    prebindgen_flat::flat::TypeKind::Named { .. }
+                    prebindgen_registry::flat::TypeKind::Named { .. }
                 ) {
                     continue;
                 }
                 let key = arg_ty.key();
-                if registry.callback_arg_plans.contains_key(&key) {
+                if registry.plans.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
                 let core_key = core_ty.key();
@@ -466,7 +594,7 @@ pub(crate) fn apply(
                 for leaf in &plan.leaves {
                     registry.require_output(&leaf.out_ty);
                 }
-                registry.callback_arg_plans.insert(key, plan);
+                registry.plans.callback_arg_plans.insert(key, plan);
             }
         }
     }
@@ -475,8 +603,7 @@ pub(crate) fn apply(
 
 /// A synthesized by-value `data_class` decomposition, produced by the language
 /// adapter (which knows the per-field encoding — projections, enums, nested
-/// classes) and handed over as
-/// [`Decompositions::value_structs`](crate::Decompositions::value_structs).
+/// classes) and handed to [`apply_value_structs`].
 /// Its [`leaves`](Self::leaves)
 /// are [`LeafSource::Reach`] leaves: each crosses the boundary as its own field
 /// value and the foreign side reassembles the object (no Java object is built
@@ -485,7 +612,7 @@ pub struct ValueDecon {
     /// Canonical key of the value struct (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The struct type (owned) the leaves decompose.
-    pub source: prebindgen_flat::flat::TypeRef,
+    pub source: prebindgen_registry::flat::TypeRef,
     /// Field-access leaves in foreign-signature / `fromParts` order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -502,8 +629,8 @@ pub struct ValueDecon {
 /// stays non-generic.
 ///
 /// Runs in `write_rust` right after [`apply`] and before `resolve`.
-pub(crate) fn apply_value_structs(
-    registry: &mut Registry,
+pub fn apply_value_structs(
+    registry: &mut Unfolding<'_>,
     decons: Vec<ValueDecon>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
@@ -527,13 +654,12 @@ pub(crate) fn apply_value_structs(
 }
 
 /// A synthesized **sum** decomposition, produced by the language adapter (which
-/// knows how each payload encodes) and handed over as
-/// [`Decompositions::sums`](crate::Decompositions::sums) — the
+/// knows how each payload encodes) and handed to [`apply_sum_returns`] — the
 /// selector-carrying sibling of [`ValueDecon`].
 ///
 /// Its [`leaves`](Self::leaves) are a [`LeafSource::SumTag`] selector followed
 /// by one **group** per alternative ([`LeafSource::VariantField`] leaves
-/// carrying [`UnfoldLeaf::group`]). Exactly one group is live per value; the
+/// carrying [`UnfoldLeaf::groups`]). Exactly one group is live per value; the
 /// emitter reads the whole list as ONE `match` over the value, filling every
 /// inert slot with its wire default. The foreign side picks the live group by
 /// the tag and rebuilds the alternative, so no object is built on the Rust
@@ -542,7 +668,7 @@ pub struct SumDecon {
     /// Canonical key of the sum type (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The enum type (owned) the leaves decompose.
-    pub source: prebindgen_flat::flat::TypeRef,
+    pub source: prebindgen_registry::flat::TypeRef,
     /// The tag leaf followed by every variant's group, in tag order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -577,7 +703,7 @@ pub struct SumDecon {
 /// true for jnigen via `export_type`, and not true at all for a registry
 /// assembled without declarations. The invariant holds by construction now
 /// rather than by declaration order.
-fn register_leaves(registry: &mut crate::registry::Registry, leaves: &[UnfoldLeaf]) {
+fn register_leaves(registry: &mut Unfolding<'_>, leaves: &[UnfoldLeaf]) {
     for leaf in leaves {
         if leaf.has_converter() {
             registry.require_output(&leaf.out_ty);
@@ -588,8 +714,8 @@ fn register_leaves(registry: &mut crate::registry::Registry, leaves: &[UnfoldLea
 }
 
 /// Runs in `write_rust` right after [`apply_value_structs`] and before `resolve`.
-pub(crate) fn apply_sum_returns(
-    registry: &mut Registry,
+pub fn apply_sum_returns(
+    registry: &mut Unfolding<'_>,
     decons: Vec<SumDecon>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
@@ -609,14 +735,15 @@ pub(crate) fn apply_sum_returns(
 /// Register the declaration-canonical [`DeconSpec`] of a synthesized
 /// decomposition (first writer wins) and return its identity.
 fn wire_fixed_decon(
-    registry: &mut Registry,
+    registry: &mut Unfolding<'_>,
     key: &TypeKey,
-    source: &prebindgen_flat::flat::TypeRef,
+    source: &prebindgen_registry::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<DeconId, UnfoldError> {
     let decon = DeconId::Default(key.to_string());
     require_unique_leaf_names(source, leaves)?;
     registry
+        .plans
         .decon_plans
         .entry(decon.clone())
         .or_insert_with(|| DeconSpec {
@@ -632,7 +759,7 @@ fn wire_fixed_decon(
 /// declared return's scan-time output requirement is dropped as the plan
 /// replaces it.
 fn wire_fixed_returns(
-    registry: &mut Registry,
+    registry: &mut Unfolding<'_>,
     vd: &ValueDecon,
     decon: &DeconId,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -642,7 +769,7 @@ fn wire_fixed_returns(
         let Some(ret) = registry.flat().function(&func).map(|f| f.ret.clone()) else {
             continue;
         };
-        if !returns_type(&ret, &vd.key) || registry.unfold_plans.contains_key(func) {
+        if !returns_type(&ret, &vd.key) || registry.plans.unfold_plans.contains_key(func) {
             continue;
         }
         // Shape over the leaf decomposition: peel an outer `Option`, then a
@@ -686,18 +813,19 @@ fn wire_fixed_returns(
             fixed_builder: true,
             hoists: Vec::new(),
         };
-        registry.unfold_plans.insert(func.clone(), plan);
+        registry.plans.unfold_plans.insert(func.clone(), plan);
     }
 }
 
-/// Build a fixed-builder callback-arg plan for every `impl Fn(&T)` /
-/// `impl Fn(T)` parameter (of a declared fn) whose value is the decomposed type
-/// `vd`. The foreign callback receives the flattened leaves (reassembled there)
-/// instead of a whole value built on the Rust side. Separate from the
+/// Build a fixed-builder callback-arg plan for every `impl Fn(&T)`,
+/// `impl Fn(T)`, or `impl Fn(Option<T>)` parameter (of a declared fn) whose
+/// value is the decomposed type `vd`. The foreign callback receives the
+/// flattened leaves (reassembled there) instead of a whole value built on the
+/// Rust side. Separate from the
 /// output-position wiring so the callback path (which needs the foreign-side
 /// group-reassembly adapter) can be enabled on its own.
 fn wire_fixed_callbacks(
-    registry: &mut Registry,
+    registry: &mut Unfolding<'_>,
     vd: &ValueDecon,
     decon: &DeconId,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -710,32 +838,41 @@ fn wire_fixed_callbacks(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let prebindgen_flat::flat::TypeKind::Callback { args } = param.ty.kind() else {
+            let prebindgen_registry::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
-                // Peel a leading `&`, then detect a slice element. An
-                // `impl Fn(&T)` / `impl Fn(T)` arg of the value struct decomposes
-                // into a `Base` fixed builder (foreign side reassembles the whole
-                // value via `fromParts`); an `impl Fn(&[T])` / `impl Fn([T])` arg
-                // becomes an `Iterable` fixed FOLDER (the trampoline folds each
-                // element's leaves into a foreign list — see the callback emitter).
+                // Peel a leading `&`, then one by-value `Option`, then detect a
+                // slice element. A scalar value-struct arg decomposes into a
+                // `Base` fixed builder; `Option<T>` wraps that in `Optional` and
+                // adds a presence slot. A run becomes an `Iterable` fixed FOLDER.
+                // Optional runs are deliberately left to their own shape step.
                 let (by_ref, after_ref) = peel_borrow(arg_ty);
+                let (optional, after_optional) = match after_ref.optional_inner() {
+                    Some(inner) if !by_ref => (true, inner),
+                    _ => (false, after_ref),
+                };
                 // A run of `T` is an Iterable fold over the element; anything else
                 // is a Base fold over the value itself. `Sequence` is the one
                 // question, and it covers `[T]` and `Vec<T>` alike.
-                let (shape, matches_key) = match after_ref.sequence_elem() {
-                    Some(elem) => (
+                let (shape, matches_key) = match after_optional.sequence_elem() {
+                    Some(elem) if !optional => (
                         UnfoldShape::Iterable(Box::new(UnfoldShape::Base)),
                         elem.key() == vd.key,
                     ),
-                    None => (UnfoldShape::Base, after_ref.key() == vd.key),
+                    Some(_) => continue,
+                    None => (UnfoldShape::Base, after_optional.key() == vd.key),
+                };
+                let shape = if optional {
+                    UnfoldShape::Optional((), Box::new(shape))
+                } else {
+                    shape
                 };
                 if !matches_key {
                     continue;
                 }
                 let key = arg_ty.key();
-                if registry.callback_arg_plans.contains_key(&key) {
+                if registry.plans.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
                 register_leaves(registry, &vd.leaves);
@@ -751,7 +888,7 @@ fn wire_fixed_callbacks(
                     fixed_builder: true,
                     hoists: Vec::new(),
                 };
-                registry.callback_arg_plans.insert(key, plan);
+                registry.plans.callback_arg_plans.insert(key, plan);
             }
         }
     }
@@ -772,8 +909,8 @@ fn wire_fixed_callbacks(
 /// Runs right after [`apply_value_structs`]; skips any function/arg that already
 /// carries a plan (an explicit `.deconstruct_output`, a `data_class` fold, …) so
 /// declared decompositions and value-struct folds win.
-pub(crate) fn apply_leaf_vec_folds(
-    registry: &mut Registry,
+pub fn apply_leaf_vec_folds(
+    registry: &mut Unfolding<'_>,
     elements: Vec<TypeKey>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
@@ -782,14 +919,14 @@ pub(crate) fn apply_leaf_vec_folds(
     }
     let elem_keys = elements;
     // Is the leading-`&`-peeled `bare` one of the nominated single-leaf elements?
-    let is_nominated = |bare: &prebindgen_flat::flat::TypeRef| elem_keys.contains(&bare.key());
+    let is_nominated = |bare: &prebindgen_registry::flat::TypeRef| elem_keys.contains(&bare.key());
     for func in declared_fns {
         let Some(params) = registry.flat().function(&func).map(|f| f.params.clone()) else {
             continue;
         };
         // Output position: `Vec<T>` / `Option<Vec<T>>` return. Skip if a plan
         // already exists (declared deconstructor / value-struct fold).
-        if !registry.unfold_plans.contains_key(func) {
+        if !registry.plans.unfold_plans.contains_key(func) {
             let Some(ret) = registry.flat().function(&func).map(|f| f.ret.clone()) else {
                 continue;
             };
@@ -816,6 +953,7 @@ pub(crate) fn apply_leaf_vec_folds(
                     // being flagged as an unresolved-required error.
                     registry.unrequire_output(&ret);
                     registry
+                        .plans
                         .unfold_plans
                         .insert(func.clone(), whole_leaf_fold_plan(vec_elem, shape));
                 }
@@ -826,7 +964,7 @@ pub(crate) fn apply_leaf_vec_folds(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let prebindgen_flat::flat::TypeKind::Callback { args } = param.ty.kind() else {
+            let prebindgen_registry::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -838,13 +976,13 @@ pub(crate) fn apply_leaf_vec_folds(
                     continue;
                 }
                 let key = arg_ty.key();
-                if registry.callback_arg_plans.contains_key(&key) {
+                if registry.plans.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
                 registry.require_output(elem);
                 let plan =
                     whole_leaf_fold_plan(elem, UnfoldShape::Iterable(Box::new(UnfoldShape::Base)));
-                registry.callback_arg_plans.insert(key, plan);
+                registry.plans.callback_arg_plans.insert(key, plan);
             }
         }
     }
@@ -855,7 +993,7 @@ pub(crate) fn apply_leaf_vec_folds(
 /// element `vec_elem` (the `Vec`/slice element as written, keeping any leading
 /// `&` so `into_iter()`'s yield matches the element's own output converter).
 fn whole_leaf_fold_plan(
-    vec_elem: &prebindgen_flat::flat::TypeRef,
+    vec_elem: &prebindgen_registry::flat::TypeRef,
     shape: UnfoldShape,
 ) -> UnfoldPlan {
     UnfoldPlan {
@@ -920,8 +1058,8 @@ fn check_records(
 /// The arity layers over `ty`, the types they wrap, and the value underneath.
 ///
 /// A thin owned view over
-/// [`TypeRef::layer_stack`](prebindgen_flat::flat::TypeRef::layer_stack) and
-/// [`layer_types`](prebindgen_flat::flat::TypeRef::layer_types): the borrows are
+/// [`TypeRef::layer_stack`](prebindgen_registry::flat::TypeRef::layer_stack) and
+/// [`layer_types`](prebindgen_registry::flat::TypeRef::layer_types): the borrows are
 /// resolved to clones because these feed plan fields and registry calls that own
 /// their types. The classification is the model's; only the copying is local, and
 /// it happens **once**, where a value is stored — not on every question asked.
@@ -932,7 +1070,7 @@ struct Layered {
     /// The arity layers, outermost first.
     shape: UnfoldShape,
     /// Every type on the way down, outermost first — what a registration walks.
-    layer_types: Vec<prebindgen_flat::flat::TypeRef>,
+    layer_types: Vec<prebindgen_registry::flat::TypeRef>,
     /// Past the borrow too: what actually crosses — as an **identity**, which
     /// is all its one consumer ever asked of it.
     core: TypeKey,
@@ -947,7 +1085,7 @@ struct Layered {
 /// to be the scan admitting a type with no element. Re-deriving a reading from
 /// `spell()` — the round trip this signature makes impossible — is reasoning
 /// from the spelling, which is what `origin` is not for.
-fn peel(ty: &prebindgen_flat::flat::TypeRef) -> Layered {
+fn peel(ty: &prebindgen_registry::flat::TypeRef) -> Layered {
     let (shape, layered) = ty.layer_stack();
     let borrowed = layered.borrow_target();
     Layered {
@@ -964,7 +1102,9 @@ fn peel(ty: &prebindgen_flat::flat::TypeRef) -> Layered {
 /// because the layer underneath is the thing it is about to classify. `Vec<T>`
 /// answers `(false, Vec<T>)` here and `(iterable, T)` there, and confusing the two
 /// turns "this arg is a collection" into "this arg is a T".
-fn peel_borrow(ty: &prebindgen_flat::flat::TypeRef) -> (bool, &prebindgen_flat::flat::TypeRef) {
+fn peel_borrow(
+    ty: &prebindgen_registry::flat::TypeRef,
+) -> (bool, &prebindgen_registry::flat::TypeRef) {
     match ty.borrow_target() {
         Some(inner) => (true, inner),
         None => (false, ty),
@@ -975,13 +1115,13 @@ fn peel_borrow(ty: &prebindgen_flat::flat::TypeRef) -> (bool, &prebindgen_flat::
 /// `T == key` — the default-output match. `Result<_, _>` is NOT peeled, so a
 /// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
 /// position is matched separately on `E`.
-fn returns_type(ret: &prebindgen_flat::flat::TypeRef, key: &TypeKey) -> bool {
+fn returns_type(ret: &prebindgen_registry::flat::TypeRef, key: &TypeKey) -> bool {
     peel(ret).core == *key
 }
 
 /// Build one output/error plan for `ed` and store it in the right registry map.
 fn process_decl(
-    registry: &mut Registry,
+    registry: &mut Unfolding<'_>,
     acc: &Deconstructors,
     ed: &OutputDecl,
 ) -> Result<(), UnfoldError> {
@@ -1159,8 +1299,8 @@ fn process_decl(
             }
         };
         match ed.target {
-            DeconTarget::Output => registry.unfold_plans.insert(ed.func.clone(), plan),
-            DeconTarget::Error => registry.error_plans.insert(ed.func.clone(), plan),
+            DeconTarget::Output => registry.plans.unfold_plans.insert(ed.func.clone(), plan),
+            DeconTarget::Error => registry.plans.error_plans.insert(ed.func.clone(), plan),
         };
     }
     Ok(())
@@ -1176,13 +1316,13 @@ fn decl_id(type_key: &TypeKey, _decl: &DeconstructorDecl) -> DeconId {
 /// borrowed identity, no outer shape — so the stored spec is independent of
 /// the using function's return shape and of processing order.
 fn register_decon_spec(
-    registry: &mut Registry,
+    registry: &mut Unfolding<'_>,
     acc: &Deconstructors,
     decon: &DeconId,
     records: &[DeconRecord],
-    source: &prebindgen_flat::flat::TypeRef,
+    source: &prebindgen_registry::flat::TypeRef,
 ) -> Result<(), UnfoldError> {
-    if registry.decon_plans.contains_key(decon) {
+    if registry.plans.decon_plans.contains_key(decon) {
         return Ok(());
     }
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
@@ -1204,7 +1344,7 @@ fn register_decon_spec(
         &mut Vec::new(),
     )?;
     require_unique_leaf_names(source, &leaves)?;
-    registry.decon_plans.insert(
+    registry.plans.decon_plans.insert(
         decon.clone(),
         DeconSpec {
             source: source.clone(),
@@ -1253,10 +1393,10 @@ fn find_deconstructor_by_type<'a>(
 #[allow(clippy::too_many_arguments)]
 fn build_plan(
     acc: &Deconstructors,
-    registry: &Registry,
+    registry: &Unfolding<'_>,
     ed: &OutputDecl,
     by_ref: bool,
-    source: &prebindgen_flat::flat::TypeRef,
+    source: &prebindgen_registry::flat::TypeRef,
     shape: UnfoldShape,
     records: &[DeconRecord],
     decon: DeconId,
@@ -1304,7 +1444,7 @@ fn build_plan(
 /// decompositions clone the root identity, so any order is fine.)
 fn require_root_identity_last(
     by_ref: bool,
-    source: &prebindgen_flat::flat::TypeRef,
+    source: &prebindgen_registry::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<(), UnfoldError> {
     if by_ref {
@@ -1342,9 +1482,9 @@ fn require_root_identity_last(
 #[allow(clippy::too_many_arguments)]
 fn flatten(
     acc: &Deconstructors,
-    registry: &Registry,
+    registry: &Unfolding<'_>,
     records: &[DeconRecord],
-    source: &prebindgen_flat::flat::TypeRef,
+    source: &prebindgen_registry::flat::TypeRef,
     path_prefix: &[PathStep],
     name_prefix: &[String],
     by_ref: bool,
@@ -1404,7 +1544,7 @@ fn flatten(
                     identity: true,
                     nullable,
                     source: LeafSource::Reach,
-                    group: None,
+                    groups: Vec::new(),
                 });
             }
             DeconRecord::Fields {
@@ -1587,7 +1727,7 @@ fn flatten(
                             identity: false,
                             nullable,
                             source: LeafSource::Reach,
-                            group: None,
+                            groups: Vec::new(),
                         });
                     }
                 }
@@ -1688,7 +1828,7 @@ fn flatten(
                         identity,
                         nullable,
                         source: LeafSource::Reach,
-                        group: None,
+                        groups: Vec::new(),
                     });
                 }
             }
@@ -1702,7 +1842,7 @@ fn flatten(
 /// names are explicit and emitted literally, so a collision is a declaration
 /// bug — never auto-resolved.
 fn require_unique_leaf_names(
-    source: &prebindgen_flat::flat::TypeRef,
+    source: &prebindgen_registry::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<(), UnfoldError> {
     let mut seen: HashSet<&str> = HashSet::new();
@@ -1745,10 +1885,10 @@ pub fn dedup_names(names: &mut [String]) {
 /// (#223). The comparison is [`check_declared_target`], shared with the input
 /// side's constructor lookup.
 fn accessor_signature(
-    registry: &Registry,
+    registry: &Unfolding<'_>,
     func: &syn::Ident,
     expected: &TypeKey,
-) -> Result<prebindgen_flat::flat::TypeRef, UnfoldError> {
+) -> Result<prebindgen_registry::flat::TypeRef, UnfoldError> {
     let f = registry
         .flat()
         .function(&func)
@@ -1797,7 +1937,7 @@ fn place_is_owned(hoists: &[Hoist], path_prefix: &[PathStep], by_ref: bool) -> b
 /// Asked separately because [`accessor_signature`] peels the `&` in order to
 /// compare target types, so `f(v: T)` and `f(v: &T)` are indistinguishable
 /// there by design.
-fn accessor_consumes(registry: &Registry, func: &syn::Ident) -> bool {
+fn accessor_consumes(registry: &Unfolding<'_>, func: &syn::Ident) -> bool {
     registry
         .flat()
         .function(&func)
@@ -1807,8 +1947,8 @@ fn accessor_consumes(registry: &Registry, func: &syn::Ident) -> bool {
 
 /// The shared mismatch, in this direction's vocabulary: an output accessor is
 /// declared to **take** the type the deconstructor decomposes.
-impl From<crate::declared_target::TargetMismatch> for UnfoldError {
-    fn from(m: crate::declared_target::TargetMismatch) -> Self {
+impl From<prebindgen_registry::declared_target::TargetMismatch> for UnfoldError {
+    fn from(m: prebindgen_registry::declared_target::TargetMismatch) -> Self {
         UnfoldError::AccessorTargetMismatch {
             accessor: m.func,
             takes: m.actual,

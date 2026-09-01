@@ -1971,6 +1971,13 @@ fn a_composed_type_keys_as_its_spelling() {
     );
     assert_eq!(optional.optional_inner().expect("optional").key(), t.key());
 
+    let vector = t.vector();
+    assert_eq!(
+        vector.key(),
+        TypeKey::from_type(&syn::parse_quote!(Vec<u64>))
+    );
+    assert_eq!(vector.sequence_elem().expect("vector").key(), t.key());
+
     // A scalar the binding invented: spelled from its own kind, so the two
     // cannot drift.
     assert_eq!(
@@ -2029,4 +2036,24 @@ fn a_raw_identifier_survives_typeid() {
         name: "foreign::Option".to_string(),
     };
     assert!(qualified.ident().is_none());
+}
+
+/// `ScalarKind` is the closed set of the scalars a source may write, and it
+/// answers for a written type however that type is spelled — so a caller
+/// asking "is this an FFI-safe scalar primitive" needs no name table of its
+/// own.
+#[test]
+fn a_scalar_kind_is_recovered_from_any_spelling_of_its_type() {
+    use crate::flat::ScalarKind;
+
+    assert_eq!(
+        ScalarKind::from_type(&syn::parse_quote!(usize)),
+        Some(ScalarKind::Usize)
+    );
+    assert_eq!(
+        ScalarKind::from_type(&syn::parse_quote!(::core::primitive::usize)),
+        Some(ScalarKind::Usize)
+    );
+    assert_eq!(ScalarKind::from_type(&syn::parse_quote!(String)), None);
+    assert_eq!(ScalarKind::from_type(&syn::parse_quote!(&u8)), None);
 }

@@ -75,26 +75,23 @@ fn tagged_union_mirror_and_converters() {
     );
 
     // Output: match the source enum, convert each arm's fields.
-    assert!(
-        compact.contains("example_flat::Shape::Empty=>shape_t::Empty,"),
-        "{src}"
-    );
+    assert!(compact.contains("example_flat::Shape::Empty=>"), "{src}");
     assert!(
         // The payload converts through its own scalar conversion rather than
         // passing through inline — same value, named once.
-        compact
-            .contains("example_flat::Shape::Circle(__f0)=>shape_t::Circle(__cbg_out_f64(__f0)),"),
+        operation_call(&compact, "__c_out_convert_f64_", "__part0")
+            && compact.contains("shape_t::Circle(__built_arm.0)"),
         "{src}"
     );
     assert!(
         // The `String` payload allocates through `String`'s own conversion,
         // which is where `__cbg_alloc_cstr` lives — one statement of it rather
         // than one per payload position.
-        compact.contains("shape_t::Labeled(__cbg_out_String(__f0),"),
+        operation_call(&compact, "__c_out_convert_String_", "__part0"),
         "{src}"
     );
     assert!(
-        compact.contains("::core::mem::MaybeUninit::new(__cbg_out_Operation(__f1)),"),
+        operation_call(&compact, "__c_out_convert_Operation_", "__part1"),
         "{src}"
     );
 
@@ -102,27 +99,29 @@ fn tagged_union_mirror_and_converters() {
     // but only after the C-supplied tag has been range-checked, and the enum
     // payload's own validating decode propagates with `?`.
     assert!(
-        compact.contains("fn__cbg_in_Shape(v:::core::mem::MaybeUninit<shape_t>,)"),
+        compact
+            .contains("fn__c_in_convert_wire_to_Shape_c_choice_intermediate_repr_c_tagged_union_")
+            && compact.contains("(v:::core::mem::MaybeUninit<shape_t>,)"),
         "{src}"
     );
     assert!(
-        compact.contains("let__tag:::core::ffi::c_int=::core::ptr::read(v.as_ptr()"),
+        compact.contains("::core::ptr::read((v).as_ptr()as*const::core::ffi::c_int)"),
+        "{src}"
+    );
+    assert!(compact.contains("match__tag{"), "{src}");
+    assert!(
+        compact.contains("invalidtag{}for`{}`(expected0..{})"),
         "{src}"
     );
     assert!(
-        compact.contains("if!((__tagasi64)>=0&&(__tagasi64)<4i64)"),
+        compact.contains("let__choice=unsafe{(v).assume_init()};"),
         "{src}"
     );
+    assert!(compact.contains("0=>example_flat::Shape::Empty"), "{src}");
     assert!(
-        compact.contains("invalidtag{}for`shape_t`(expected0..4)"),
+        operation_call(&compact, "__c_in_convert_wire_to_Operation_", "(__arm).1"),
         "{src}"
     );
-    assert!(compact.contains("letv=v.assume_init();"), "{src}");
-    assert!(
-        compact.contains("shape_t::Empty=>example_flat::Shape::Empty,"),
-        "{src}"
-    );
-    assert!(compact.contains("__cbg_in_Operation(__f1)?,"), "{src}");
     // A union taken by value is a fallible input like any other: with no
     // `Result` channel the declaration had to opt into aborting.
     assert!(compact.contains("panic!("), "{src}");
@@ -229,11 +228,17 @@ fn tagged_union_as_data_struct_field() {
             unimplemented!()
         }
     );
+    let inspect: syn::ItemFn = syn::parse_quote!(
+        pub fn drawing_id(drawing: Drawing) -> u64 {
+            unimplemented!()
+        }
+    );
     let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(f), loc.clone()),
+        (syn::Item::Fn(inspect), loc.clone()),
     ]))
     .expect("index items");
 
@@ -246,6 +251,8 @@ fn tagged_union_as_data_struct_field() {
         .tagged_union(syn::parse_quote!(Shape))
         .data_struct(syn::parse_quote!(Drawing))
         .function(syn::parse_quote!(drawing_new))
+        .panic()
+        .function(syn::parse_quote!(drawing_id))
         .panic();
 
     let src = write(cbindgen, registry, "tagged_union_field");
@@ -259,14 +266,29 @@ fn tagged_union_as_data_struct_field() {
     );
     // The field's decode carries the union's fallibility up into the struct's,
     // so a bad tag in a nested union cannot be silently skipped.
-    assert!(compact.contains("shape:__cbg_in_Shape(v.shape)?,"), "{src}");
     assert!(
-        compact.contains("fn__cbg_in_Drawing(v:drawing_t,)->::core::result::Result<"),
+        operation_call(
+            &compact,
+            "__c_in_convert_wire_to_Shape_c_choice_intermediate_repr_c_tagged_union_",
+            "v.shape",
+        ),
+        "{src}"
+    );
+    assert!(
+        compact.contains("fn__c_in_convert_wire_to_Drawing_c_product_intermediate_repr_c_struct_")
+            && compact.contains("(v:drawing_t,)->::core::result::Result<"),
         "{src}"
     );
     // The union's own conversion already produces the `MaybeUninit` the
     // mirror field holds, so the struct passes it through.
-    assert!(compact.contains("shape:__cbg_out_Shape(v.shape),"), "{src}");
+    assert!(
+        operation_call(
+            &compact,
+            "__c_out_convert_Shape_c_choice_intermediate_repr_c_tagged_union_to_wire_",
+            "v.shape",
+        ),
+        "{src}"
+    );
 }
 
 /// A union nested inside a **struct payload** of another union. The record
@@ -370,7 +392,8 @@ fn plain_data_struct_decode_stays_infallible() {
     let compact: String = src.split_whitespace().collect();
 
     assert!(
-        compact.contains("fn__cbg_in_Label(v:label_t)->example_flat::Label"),
+        compact.contains("fn__c_in_convert_wire_to_Label_c_product_intermediate_repr_c_struct_")
+            && compact.contains("(v:label_t,)->example_flat::Label"),
         "{src}"
     );
     assert!(!compact.contains("panic!("), "{src}");
@@ -479,7 +502,7 @@ fn each_payload_rejection_names_its_own_reason() {
 
     // The other three reasons (no output converter, wire mismatch, fallible
     // output converter) are guards: an undeclared payload type fails at
-    // RESOLVE, before `prereq_tagged_unions` runs, so nothing reaches them
+    // RESOLVE, before tagged-union artifact planning runs, so nothing reaches them
     // from a fixture. Their messages are specific, but unexercised.
 }
 
@@ -570,7 +593,7 @@ fn null_opaque_payload_is_reported_not_materialised() {
     );
     assert!(compact.contains("nullpayloadfor`Blob`"), "{src}");
     assert!(
-        compact.contains("Slot::Filled(__cbg_in_Box___Blob___payload(__f0)?)"),
+        operation_call(&compact, "__c_in_convert_wire_to_Box_Blob_", "(__arm).0"),
         "{src}"
     );
     // The `Option` arm keeps NULL as a legitimate value.
@@ -677,19 +700,19 @@ fn payload_wires_come_from_the_converter_destination() {
     assert!(compact.contains("After(u64),"), "{src}");
     // Both directions route through the payload's own converter.
     assert!(
-        compact.contains("note_t::Titled(__cbg_out_Caption(__f0))"),
+        operation_call(&compact, "__c_out_convert_Caption_", "__part0"),
         "{src}"
     );
     assert!(
-        compact.contains("note_t::After(__cbg_out_Millis(__f0))"),
+        operation_call(&compact, "__c_out_convert_Millis_", "__part0"),
         "{src}"
     );
     assert!(
-        compact.contains("example_flat::Note::Titled(__cbg_in_Caption(__f0))"),
+        operation_call(&compact, "__c_in_convert_wire_to_Caption_", "(__arm).0"),
         "{src}"
     );
     assert!(
-        compact.contains("example_flat::Note::After(__cbg_in_Millis(__f0))"),
+        operation_call(&compact, "__c_in_convert_wire_to_Millis_", "(__arm).0"),
         "{src}"
     );
     // The struct payload owns a `char *`, so the union's drop reaches THROUGH
@@ -764,16 +787,16 @@ fn bool_payload_is_normalised_not_materialised() {
     // The payload converts through `bool`'s own field reading rather than
     // inline: same normalisation, named once.
     assert!(
-        compact.contains("example_flat::Flagged::On(__cbg_in_bool(__f0))"),
+        operation_call(&compact, "__c_in_convert_wire_to_bool_", "(__arm).0"),
         "{src}"
     );
     assert!(
-        compact.contains("__cbg_in_bool(v:::core::mem::MaybeUninit<bool>)->bool"),
+        compact.contains("fn__c_in_convert_wire_to_bool_")
+            && compact.contains("(v:::core::mem::MaybeUninit<bool>,)->bool"),
         "{src}"
     );
     assert!(
-        compact
-            .contains("example_flat::Flagged::On(__f0)=>flagged_t::On(__cbg_out_bool_field(__f0))"),
+        operation_call(&compact, "__c_out_convert_bool_", "__part0"),
         "{src}"
     );
     // A bool owns nothing, so the union still gets no typed drop.

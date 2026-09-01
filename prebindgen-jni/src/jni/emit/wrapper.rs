@@ -1,26 +1,85 @@
 //! Extern `"C"` JNI wrapper functions: signature lowering, input
 //! params, and the expanded-param path.
 
-use prebindgen_registry::{types_util::result_ok_type, Conversions};
+use prebindgen_registry::types_util::result_ok_type;
 
 use super::*;
-use crate::jni::trait_impl::{
-    build_through_erased_wrappers, build_through_wrappers, read_through_erased_wrappers,
+use crate::{
+    jni::trait_impl::read_through_erased_wrappers,
+    unfold::{bind_hoists, reach_leaf, LeafAt},
 };
 
-pub(crate) fn emit_jni_function_wrapper(
-    ext: &Declarations,
-    f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
-    emit: &prebindgen_registry::Emit,
-) -> TokenStream {
-    emit_jni_function_wrapper_with_callee(ext, f, registry, None, emit)
+/// What the extern calls once its inputs are decoded.
+#[derive(Clone)]
+pub(crate) enum JCallee {
+    /// The `#[prebindgen]` function itself, under the module it comes from.
+    Source(syn::Path),
+    /// A binding-defined expression — a path to a constant, or a constant
+    /// expression declared with `constant_expr!`.
+    Expr(Box<syn::Expr>),
+}
+
+/// One exported JNI extern, planned while the registry is available and
+/// rendered at the final writing boundary.
+///
+/// Everything the extern needs is here: the frozen function plan, the model
+/// element it exports, and what it calls. Nothing is looked up in a live
+/// registry while the file is assembled.
+#[derive(Clone)]
+pub(crate) struct JWrapper {
+    /// This function's frozen JNI plan — symbol, inputs, output delivery,
+    /// error channels.
+    plan: std::rc::Rc<crate::jni::fn_plan::JniFunctionPlan>,
+    /// The `#[prebindgen]` function, or the synthetic nullary getter a
+    /// declared constant is exported through.
+    function: prebindgen_registry::flat::Function,
+    /// What the extern's body calls.
+    callee: JCallee,
+}
+
+impl JWrapper {
+    /// Plan the extern for one function or constant getter.
+    pub(crate) fn new(
+        ext: &Declarations,
+        registry: &Registry,
+        f: &prebindgen_registry::flat::Function,
+        callee: Option<syn::Expr>,
+    ) -> Self {
+        // Backstop only — `validate_resolved` reports every plan failure
+        // before any writer runs, so this panic is unreachable through the
+        // write paths.
+        let plan = ext
+            .fn_plan(registry, f)
+            .unwrap_or_else(|e| panic!("{}", e.message(&f.name)));
+        Self {
+            plan,
+            function: f.clone(),
+            callee: match callee {
+                Some(expr) => JCallee::Expr(Box::new(expr)),
+                None => JCallee::Source(ext.fn_module(registry, &f.name)),
+            },
+        }
+    }
+
+    /// The `JNINative` extern symbol this wrapper exports.
+    pub(crate) fn symbol(&self) -> &str {
+        &self.plan.native_symbol
+    }
+
+    /// What this extern's body calls: the converters its plan names, and the
+    /// prelude, whose error-channel functions every failure path routes
+    /// through.
+    pub(crate) fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
+        let mut calls = vec![crate::jni::generation::prelude_key()];
+        self.plan.calls(&mut calls);
+        calls
+    }
 }
 
 /// The synthetic nullary getter signature a declared const is emitted
 /// through: `pub fn const_get_<ident_lower>() -> <const ty>`. Both sides —
-/// the Rust extern ([`Declarations::on_const`] via
-/// [`emit_jni_function_wrapper_with_callee`]) and the Kotlin `val`
+/// the Rust extern (the constant artifact's getter, a [`JWrapper`] whose
+/// callee is a path to the const) and the Kotlin `val`
 /// initializer (`render_const_val`) — derive the extern symbol from this one
 /// ident, so they stay in sync by construction. The body is never used.
 pub(crate) fn const_getter_fn(
@@ -128,14 +187,17 @@ pub(crate) fn validate_constant_fn(ext: &Declarations, f: &prebindgen_registry::
 pub(crate) fn const_expr_getter_fn(
     kotlin_name: &str,
     ty: &syn::Type,
-    registry: &impl Conversions,
+    ext: &crate::jni::Declarations,
 ) -> prebindgen_registry::flat::Function {
     let ident = format_ident!("const_get_{}", kotlin_name.to_lowercase());
     // The one lookup this path needs: the type is named by a build script, so
     // no element carries it. A miss means the declared type never entered the
     // pipeline, which is a binding error worth naming rather than a `None` to
     // absorb.
-    let ret = registry.reading_of(ty).unwrap_or_else(|| {
+    // Frozen by the validating callers, which hold a `Conversions`; a render
+    // caller has none and reads what they stored (#613 step 7). The freeze is
+    // idempotent, so the validating path can call this unchanged.
+    let ret = ext.frozen_reading_of(ty).unwrap_or_else(|| {
         panic!(
             "constant_expr `{kotlin_name}`: type `{}` is not a type this binding crosses — \
              declare it, or name one that is",
@@ -176,227 +238,226 @@ pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: 
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:
 /// `None` = the ordinary `<origin module>::<fn ident>(args)` call; `Some(e)`
 /// splices `e` verbatim as the value the output phase converts. Used by the
-/// const getter emission (`Declarations::on_const`), whose synthetic nullary `f`
+/// const getter emission (the constant artifact's), whose synthetic nullary `f`
 /// carries the signature while the value comes from
 /// `<origin module>::<CONST_IDENT>` — a path, not a call.
-pub(crate) fn emit_jni_function_wrapper_with_callee(
-    ext: &Declarations,
-    f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
-    callee: Option<syn::Expr>,
-    emit: &prebindgen_registry::Emit,
-) -> TokenStream {
-    let original_ident = &f.name;
+impl JWrapper {
+    /// Assemble this wrapper's `#[no_mangle] extern "C"` JNI function.
+    pub(crate) fn render_fn(&self, emit: &prebindgen_registry::RustWriter) -> syn::ItemFn {
+        let f = &self.function;
+        let original_ident = &f.name;
 
-    let mut wire_params: Vec<TokenStream> = Vec::new();
-    // Each entry is a per-input decode statement. Fallible decodes are
-    // `match`-arms that, on `Err`, call `signal_error(&mut env,
-    // &__error_sink, &__e)` (invoking the caller's Kotlin sink instead of
-    // throwing a JVM exception) and `return <sentinel>;`.
-    let mut prelude: Vec<TokenStream> = Vec::new();
-    let mut call_args: Vec<TokenStream> = Vec::new();
+        let mut wire_params: Vec<TokenStream> = Vec::new();
+        // Each entry is a per-input decode statement. Fallible decodes are
+        // `match`-arms that, on `Err`, call `signal_error(&mut env,
+        // &__error_sink, &__e)` (invoking the caller's Kotlin sink instead of
+        // throwing a JVM exception) and `return <sentinel>;`.
+        let mut prelude: Vec<TokenStream> = Vec::new();
+        let mut call_args: Vec<TokenStream> = Vec::new();
 
-    // The lowered plan classifies both sides ONCE — the same classification
-    // the Kotlin wrapper and `external fun` renderers consume; this site
-    // renders the Rust decode/encode for each kind. The output is classified
-    // first (inside `build`) so the per-input `match`-arms can splice the
-    // function's sentinel into their early-`return` path.
-    // Backstop only — `validate_resolved` reports every plan failure before
-    // any writer runs, so this panic is unreachable through the write paths.
-    let plan = ext
-        .fn_plan(registry, f)
-        .unwrap_or_else(|e| panic!("{}", e.message(original_ident)));
-    let wrapper_ident = syn::Ident::new(&plan.native_symbol, Span::call_site());
-    // Output (data) expansion: when output expansion was declared for this
-    // function, the return value is decomposed by the deconstructor. Two
-    // deliveries:
-    //   * `Callback` (`deconstruct_output`, `FnOutputPlan::Unfold`): the
-    //     leaves are delivered to a foreign builder/fold lambda — the
-    //     wrapper's wire return is the lambda's `JObject` result (no
-    //     `output_entry`; see `emit_unfold_delivery`).
-    //   * `Return` (`convert_output`, `is_convert`): the single decomposed
-    //     value is **returned** directly through its ordinary output
-    //     converter — the wrapper behaves exactly like a normal function
-    //     whose return type is `convert_out_ty`.
-    let unfold_plan = registry.unfold_plans().get(original_ident);
-    // Error-position expansion: when the fn returns `Result<T, E>` and an error
-    // plan is declared, the **`?`** is applied here — the extern peels the
-    // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
-    // typed DOMAIN handler), and the success path uses `T`'s converter (not the
-    // `Result<T, E>` rank-2 wrapper).
-    let error_plan = registry.error_plans().get(original_ident);
-    let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
-    // The output converter entry (`None` for callback delivery). The lookup
-    // was validated at plan build; re-resolving here keeps the plan free of
-    // registry borrows for the future build-once stage.
-    let output_entry = match &plan.output {
-        FnOutputPlan::Value(v) => Some(
-            ext.out_frag(&v.target_ty)
-                .expect("output entry validated at plan build"),
-        ),
-        FnOutputPlan::Unfold(_) => None,
-    };
-    let wire_ty = plan.output.wire_ty();
-    let wire_return = annotate_jobject_with_lifetime(&wire_ty, "a").to_token_stream();
-    let on_err = sentinel_for_wire(&wire_ty);
+        // The lowered plan classifies both sides ONCE — the same classification
+        // the Kotlin wrapper and `external fun` renderers consume; this site
+        // renders the Rust decode/encode for each kind. The output is classified
+        // first (inside `build`) so the per-input `match`-arms can splice the
+        // function's sentinel into their early-`return` path.
+        let plan = &self.plan;
+        let wrapper_ident = syn::Ident::new(&plan.native_symbol, Span::call_site());
+        // Output (data) expansion: when output expansion was declared for this
+        // function, the return value is decomposed by the deconstructor. Two
+        // deliveries:
+        //   * `Callback` (`deconstruct_output`, `FnOutputPlan::Unfold`): the
+        //     leaves are delivered to a foreign builder/fold lambda — the
+        //     wrapper's wire return is the lambda's `JObject` result (no
+        //     `output_entry`; see `emit_unfold_delivery`).
+        //   * `Return` (`convert_output`, `is_convert`): the single decomposed
+        //     value is **returned** directly through its ordinary output
+        //     converter — the wrapper behaves exactly like a normal function
+        //     whose return type is `convert_out_ty`.
+        let unfold_plan = plan.unfold.as_ref();
+        // Error-position expansion: when the fn returns `Result<T, E>` and an error
+        // plan is declared, the **`?`** is applied here — the extern peels the
+        // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
+        // typed DOMAIN handler), and the success path uses `T`'s converter (not the
+        // `Result<T, E>` rank-2 wrapper).
+        let error_plan = plan.error.as_ref();
+        let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
+        let wire_ty = plan.output.wire_ty();
+        let wire_return = annotate_jobject_with_lifetime(&wire_ty, "a").to_token_stream();
+        let on_err = sentinel_for_wire(&wire_ty);
 
-    for param in &plan.params {
-        let (wp, pre, call_arg) =
-            emit_input_param(ext, registry, original_ident, param, &on_err, emit);
-        wire_params.extend(wp);
-        prelude.extend(pre);
-        call_args.push(call_arg);
-    }
-
-    let raw_call = match &callee {
-        Some(e) => quote!(#e),
-        None => {
-            let call_module = ext.fn_module(registry, original_ident);
-            quote!(#call_module::#original_ident(#(#call_args),*))
+        for param in &plan.params {
+            let (wp, pre, call_arg) = emit_input_param(param, &on_err, emit);
+            wire_params.extend(wp);
+            prelude.extend(pre);
+            call_args.push(call_arg);
         }
-    };
-    // For `convert_output` (Return), the value the output converter sees is the
-    // **deconstructed** single value (the converter's accessor applied to the
-    // raw return, lifted through the shape) — not the raw return. Build that
-    // block so the normal output phase converts it. `Decompose` ⇒ `acc(raw)`;
-    // `Optional` ⇒ `raw.map(|inner| acc(inner))`.
-    let call_expr: TokenStream = if is_convert {
-        use prebindgen_registry::unfold::UnfoldShape;
-        let uplan = unfold_plan.expect("is_convert ⇒ plan");
-        let leaf = &uplan.leaves[0];
-        let by_ref = uplan.by_ref;
-        // One derivation, shared with the multi-leaf encoder — the value forms
-        // are bound by the same [`bind_hoists`] and the leaf reached by the
-        // same [`reach_leaf_flat`]. Deriving either a second time here is what
-        // let the two drift apart: this shortcut used to compose its reach
-        // straight off the raw value, which for a value form declared with
-        // `.fields_self_into(..)` emitted `f(&v)` against a by-value receiver.
-        let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
-        // `None` when the reach is the IDENTITY of `base` and no value form had
-        // to be bound — the leaf IS the value, so there is nothing to compose.
-        // Reported separately from the composed form because the two want
-        // different code: wrapping identity in a block emits `{ __cvsrc }`
-        // (`unused_braces`), and mapping it over an `Option` emits
-        // `.map(|__inner| __inner)` (`clippy::map_identity`). Generated code
-        // runs through the consumer's own lints, where both are denials.
-        let compose = |base: TokenStream, base_is_ref: bool| -> Option<TokenStream> {
-            let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
-            let stmts = &hoisted.stmts;
-            let reached = match hoisted.rebase(&leaf.path) {
-                Some((local, rest, consuming)) => reach_leaf_flat(
-                    &qualify,
-                    &crate::jni::compile::OutWire::from_leaf(leaf),
-                    &rest,
-                    quote!(#local),
-                    false,
-                    consuming,
-                ),
-                None => reach_leaf_flat(
-                    &qualify,
-                    &crate::jni::compile::OutWire::from_leaf(leaf),
-                    &leaf.path,
-                    base.clone(),
-                    base_is_ref,
-                    false,
-                ),
+
+        let raw_call = match &self.callee {
+            JCallee::Expr(e) => quote!(#e),
+            JCallee::Source(call_module) => quote!(#call_module::#original_ident(#(#call_args),*)),
+        };
+        // For `convert_output` (Return), the value the output converter sees is the
+        // **deconstructed** single value (the converter's accessor applied to the
+        // raw return, lifted through the shape) — not the raw return. Build that
+        // block so the normal output phase converts it. `Decompose` ⇒ `acc(raw)`;
+        // `Optional` ⇒ `raw.map(|inner| acc(inner))`.
+        let call_expr: TokenStream = if is_convert {
+            use crate::unfold::UnfoldShape;
+            let uplan = unfold_plan.expect("is_convert ⇒ plan");
+            let leaf = &uplan.leaves[0];
+            let by_ref = uplan.by_ref;
+            // One derivation, shared with the multi-leaf encoder — the value forms
+            // are bound by the same [`bind_hoists`] and the leaf reached by the
+            // same [`reach_leaf_flat`]. Deriving either a second time here is what
+            // let the two drift apart: this shortcut used to compose its reach
+            // straight off the raw value, which for a value form declared with
+            // `.fields_self_into(..)` emitted `f(&v)` against a by-value receiver.
+            // Origins were frozen with the leaf this reach walks, so the shortcut
+            // qualifies its accessor calls without asking the registry.
+            let delivery = match &plan.output {
+                FnOutputPlan::Value(value) => value
+                    .convert_delivery
+                    .as_ref()
+                    .expect("a convert output carries its frozen origins"),
+                FnOutputPlan::Unfold(_) => unreachable!("a convert has a value output plan"),
             };
-            if stmts.is_empty() && reached.to_string() == base.to_string() {
-                return None;
+            let qualify = |id: &syn::Ident| -> syn::Path {
+                crate::unfold::DeliveryBridge::qualify(delivery, id)
+            };
+            // `None` when the reach is the IDENTITY of `base` and no value form had
+            // to be bound — the leaf IS the value, so there is nothing to compose.
+            // Reported separately from the composed form because the two want
+            // different code: wrapping identity in a block emits `{ __cvsrc }`
+            // (`unused_braces`), and mapping it over an `Option` emits
+            // `.map(|__inner| __inner)` (`clippy::map_identity`). Generated code
+            // runs through the consumer's own lints, where both are denials.
+            let compose = |base: TokenStream, base_is_ref: bool| -> Option<TokenStream> {
+                let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
+                let stmts = &hoisted.stmts;
+                let wire = crate::jni::compile::OutWire::from_leaf(leaf);
+                let rebased = hoisted.rebase(&leaf.path);
+                let (path, from, from_is_ref, consuming) = match &rebased {
+                    Some((local, rest, consuming)) => {
+                        (rest.as_slice(), quote!(#local), false, *consuming)
+                    }
+                    None => (leaf.path.as_slice(), base.clone(), base_is_ref, false),
+                };
+                // `absent: None` — a single delivered return has no arm to put
+                // an absent value in, so an optional step on the way to this
+                // leaf is refused rather than gated.
+                let reached = reach_leaf(
+                    &qualify,
+                    LeafAt {
+                        leaf: &wire,
+                        path,
+                        base: from,
+                        base_is_ref: from_is_ref,
+                        consuming,
+                        unwrap_last: false,
+                    },
+                    None,
+                    &|reached| reached,
+                );
+                if stmts.is_empty() && reached.to_string() == base.to_string() {
+                    return None;
+                }
+                Some(quote!({ #stmts #reached }))
+            };
+            match &uplan.shape {
+                UnfoldShape::Optional((), _) => match compose(quote!(__inner), by_ref) {
+                    Some(inner) => quote!({
+                        let __cvsrc = #raw_call;
+                        __cvsrc.map(|__inner| #inner)
+                    }),
+                    None => raw_call.clone(),
+                },
+                _ => match compose(quote!(__cvsrc), by_ref) {
+                    Some(v) => quote!({
+                        let __cvsrc = #raw_call;
+                        #v
+                    }),
+                    None => raw_call.clone(),
+                },
             }
-            Some(quote!({ #stmts #reached }))
-        };
-        match &uplan.shape {
-            UnfoldShape::Optional((), _) => match compose(quote!(__inner), by_ref) {
-                Some(inner) => quote!({
-                    let __cvsrc = #raw_call;
-                    __cvsrc.map(|__inner| #inner)
-                }),
-                None => raw_call.clone(),
-            },
-            _ => match compose(quote!(__cvsrc), by_ref) {
-                Some(v) => quote!({
-                    let __cvsrc = #raw_call;
-                    #v
-                }),
-                None => raw_call.clone(),
-            },
-        }
-    } else if let Some(ep) = error_plan {
-        // `Result<T, E>` peel (the automatic `?`): success ⇒ `T`; on `Err(e)`,
-        // decompose `e` into the `ze` leaves — through the SAME shared leaf
-        // encoder every output/callback delivery uses (typed jvalues, handle
-        // wraps, Option-nested accessor unwrap) — and invoke the typed DOMAIN
-        // handler (no `je`, no defaults), then return the sentinel. A failure
-        // while ENCODING the error itself degrades to the BINDING channel
-        // (`signal_binding_error`). The success `T` flows into the normal
-        // output phase.
-        let eze_idents: Vec<syn::Ident> = (0..ep.leaves.len())
-            .map(|i| format_ident!("__eze{}", i))
-            .collect();
-        let ze_fail = |msg: TokenStream| -> TokenStream {
-            quote! {
-                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &#msg);
-                return #on_err;
-            }
-        };
-        let (ze_stmts, ze_args) = encode_plan_leaves(
-            ext,
-            registry,
-            crate::jni::emit::Delivered::of(ep),
-            &eze_idents,
-            &quote!(__de),
-            &ze_fail,
-            emit,
-        );
-        quote! {
-            match #raw_call {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__de) => {
-                    #ze_stmts
-                    signal_domain_error(
-                        &mut env, &__domain_sink,
-                        &__DSINK_MID, __DSINK_FQN, __DSINK_DESCR,
-                        &[#(#ze_args),*],
-                    );
+        } else if let Some(ep) = error_plan {
+            // `Result<T, E>` peel (the automatic `?`): success ⇒ `T`; on `Err(e)`,
+            // decompose `e` into the `ze` leaves — through the SAME shared leaf
+            // encoder every output/callback delivery uses (typed jvalues, handle
+            // wraps, Option-nested accessor unwrap) — and invoke the typed DOMAIN
+            // handler (no `je`, no defaults), then return the sentinel. A failure
+            // while ENCODING the error itself degrades to the BINDING channel
+            // (`signal_binding_error`). The success `T` flows into the normal
+            // output phase.
+            let eze_idents: Vec<syn::Ident> = (0..ep.leaves.len())
+                .map(|i| format_ident!("__eze{}", i))
+                .collect();
+            let ze_fail = |msg: TokenStream| -> TokenStream {
+                quote! {
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &#msg);
                     return #on_err;
                 }
+            };
+            let (ze_stmts, ze_args, _) = encode_plan_leaves(
+                &ep.delivery,
+                crate::jni::emit::Delivered::planned(
+                    &ep.unfold,
+                    ep.wires.clone(),
+                    ep.chain.clone(),
+                ),
+                &eze_idents,
+                &quote!(__de),
+                &ze_fail,
+                emit,
+            );
+            quote! {
+                match #raw_call {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__de) => {
+                        #ze_stmts
+                        signal_domain_error(
+                            &mut env, &__domain_sink,
+                            &__DSINK_MID, __DSINK_FQN, __DSINK_DESCR,
+                            &[#(#ze_args),*],
+                        );
+                        return #on_err;
+                    }
+                }
             }
-        }
-    } else {
-        raw_call
-    };
-
-    // Output phase. Three shapes:
-    //   * `Callback` output expansion: decompose the return value and deliver the
-    //     leaves to the foreign builder/fold (`__builder` / `__acc`+`__fold`).
-    //   * `Return` output expansion (convert) and normal returns: every output
-    //     converter returns `Result<wire, <err_type>>`; run pre_stages then the
-    //     wire-facing converter, routing each `Err` through `signal_error`. (For
-    //     convert, `call_expr` above already deconstructed the value.)
-    let mut builder_param: Option<TokenStream> = None;
-    let output_phase: TokenStream = if let FnOutputPlan::Unfold(u) = &plan.output {
-        // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
-        // Decompose/Optional: a single `__builder` callback.
-        let uplan = unfold_plan.expect("Unfold output ⇒ unfold plan present");
-        builder_param = Some(unfold_builder_param(u.iterable_fold));
-        // The delivery **binds** the returned value and matches it against the
-        // canonical shape its `kind` names (`Option`, then a run). Conversion
-        // follows the SYNTAX, and this position takes no converter — nothing
-        // between the source call and the match re-spells anything — so the
-        // wrappers the classification erased have to come off here, at the
-        // emitter's own binding, or the match is an `E0308` on a spelling the
-        // model deliberately reads as optional (#292).
-        //
-        // The value delivered is the `Ok` side when the error plan applied the
-        // `?`, and the return itself otherwise — the wrappers questioned are
-        // those over whatever `call_expr` actually yields.
-        let delivered = match error_plan {
-            Some(_) => f.ret.fallible_parts().map_or(&f.ret, |(ok, _)| ok),
-            None => &f.ret,
+        } else {
+            raw_call
         };
-        let call_expr =
-            read_through_erased_wrappers(delivered, call_expr.clone()).unwrap_or_else(|| {
-                panic!(
+
+        // Output phase. Three shapes:
+        //   * `Callback` output expansion: decompose the return value and deliver the
+        //     leaves to the foreign builder/fold (`__builder` / `__acc`+`__fold`).
+        //   * `Return` output expansion (convert) and normal returns: invoke the
+        //     frozen registry-planned pipeline once and route its `Err` through
+        //     `signal_error`. (For convert, `call_expr` above already deconstructed
+        //     the value.)
+        let mut builder_param: Option<TokenStream> = None;
+        let output_phase: TokenStream = if let FnOutputPlan::Unfold(u) = &plan.output {
+            // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
+            // Decompose/Optional: a single `__builder` callback.
+            let uplan = unfold_plan.expect("Unfold output ⇒ unfold plan present");
+            builder_param = Some(unfold_builder_param(u.iterable_fold));
+            // The delivery **binds** the returned value and matches it against the
+            // canonical shape its `kind` names (`Option`, then a run). Conversion
+            // follows the SYNTAX, and this position takes no converter — nothing
+            // between the source call and the match re-spells anything — so the
+            // wrappers the classification erased have to come off here, at the
+            // emitter's own binding, or the match is an `E0308` on a spelling the
+            // model deliberately reads as optional (#292).
+            //
+            // The value delivered is the `Ok` side when the error plan applied the
+            // `?`, and the return itself otherwise — the wrappers questioned are
+            // those over whatever `call_expr` actually yields.
+            let delivered = match error_plan {
+                Some(_) => f.ret.fallible_parts().map_or(&f.ret, |(ok, _)| ok),
+                None => &f.ret,
+            };
+            let call_expr = read_through_erased_wrappers(delivered, call_expr.clone())
+                .unwrap_or_else(|| {
+                    panic!(
                     "`{original_ident}` returns `{}`, whose leaves are delivered to a builder: \
                      the value has to be moved out of `{}` to be decomposed, and that wrapper \
                      does not permit it (a `Cow` payload cannot be moved through `Deref`). \
@@ -406,39 +467,17 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                     delivered,
                     delivered.erased_wrappers().join("<"),
                 )
-            });
-        emit_unfold_delivery(
-            ext,
-            registry,
-            uplan,
-            u.iface.as_deref(),
-            &call_expr,
-            &on_err,
-            emit,
-        )
-    } else {
-        let output_entry = output_entry.expect("normal path has an output entry");
-        let mut phase: TokenStream = quote! { let __out = #call_expr; };
-        let mut prev_out: TokenStream = quote!(__out);
-        // Pre_stages run in forward order BEFORE the wire-facing function:
-        // rust → pre_stages[0] → … → pre_stages[N-1] → function → wire.
-        for (i, stage) in output_entry.output_stage_order() {
-            let stage_fn = &stage.function.sig.ident;
-            let next_ident = format_ident!("__out_s{}", i);
+                });
+            emit_unfold_delivery(uplan, u, &call_expr, &on_err, emit)
+        } else {
+            let output = match &plan.output {
+                FnOutputPlan::Value(value) => value,
+                FnOutputPlan::Unfold(_) => unreachable!("normal output has a value plan"),
+            };
+            let convert = output.pipeline.invoke(quote!(__out), emit);
+            let mut phase: TokenStream = quote! { let __out = #call_expr; };
             phase.extend(quote! {
-                let #next_ident = match #stage_fn(&mut env, #prev_out) {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                        return #on_err;
-                    }
-                };
-            });
-            prev_out = quote!(#next_ident);
-        }
-        let conv_out = output_entry.converter_ident().clone();
-        phase.extend(quote! {
-            match #conv_out(&mut env, #prev_out) {
+            match #convert {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
                     signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
@@ -446,69 +485,71 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                 }
             }
         });
-        phase
-    };
+            phase
+        };
 
-    // Error sinks. Both channels are typed `fun interface`s whose `run` method
-    // ID is resolved once per process on the interface class (the sink instance
-    // differs per call). The BINDING channel (`__error_sink` + `__SINK_*`, the
-    // base `JniErrorHandler`) is always present — every wrapper can hit a
-    // binding/marshalling failure. The DOMAIN channel (`__domain_sink` +
-    // `__DSINK_*`, the typed `<Src>Handler`) is present only for a fallible fn
-    // with a declared error plan; its `Err(E)` decomposition delivers the real
-    // leaves (no `je`, no fabricated defaults).
-    let error_ifaces = plan.onerror_iface.as_ref().unwrap_or_else(|| {
-        panic!(
-            "jnigen: cannot derive the onError handler interface for `{}`",
-            original_ident
-        )
-    });
-    let bsink_fqn_lit = syn::LitStr::new(&error_ifaces.binding.raw_slash_fqn(), Span::call_site());
-    let bsink_descr_lit = syn::LitStr::new(&error_ifaces.binding.descr, Span::call_site());
-    let (domain_setup, domain_sink_param) = match &error_ifaces.domain {
-        Some(dsink) => {
-            let dfqn = syn::LitStr::new(&dsink.raw_slash_fqn(), Span::call_site());
-            let ddescr = syn::LitStr::new(&dsink.descr, Span::call_site());
-            (
-                quote! {
-                    #[allow(non_upper_case_globals)]
-                    static __DSINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
-                        ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-                    const __DSINK_FQN: &str = #dfqn;
-                    const __DSINK_DESCR: &str = #ddescr;
-                },
-                quote!(__domain_sink: jni::objects::JObject<'a>,),
+        // Error sinks. Both channels are typed `fun interface`s whose `run` method
+        // ID is resolved once per process on the interface class (the sink instance
+        // differs per call). The BINDING channel (`__error_sink` + `__SINK_*`, the
+        // base `JniErrorHandler`) is always present — every wrapper can hit a
+        // binding/marshalling failure. The DOMAIN channel (`__domain_sink` +
+        // `__DSINK_*`, the typed `<Src>Handler`) is present only for a fallible fn
+        // with a declared error plan; its `Err(E)` decomposition delivers the real
+        // leaves (no `je`, no fabricated defaults).
+        let error_ifaces = plan.onerror_iface.as_ref().unwrap_or_else(|| {
+            panic!(
+                "jnigen: cannot derive the onError handler interface for `{}`",
+                original_ident
             )
-        }
-        None => (quote!(), quote!()),
-    };
-    let sinks_setup = quote! {
-        #[allow(non_upper_case_globals)]
-        static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
-            ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-        const __SINK_FQN: &str = #bsink_fqn_lit;
-        const __SINK_DESCR: &str = #bsink_descr_lit;
-        #domain_setup
-    };
+        });
+        let bsink_fqn_lit =
+            syn::LitStr::new(&error_ifaces.binding.raw_slash_fqn(), Span::call_site());
+        let bsink_descr_lit = syn::LitStr::new(&error_ifaces.binding.descr, Span::call_site());
+        let (domain_setup, domain_sink_param) = match &error_ifaces.domain {
+            Some(dsink) => {
+                let dfqn = syn::LitStr::new(&dsink.raw_slash_fqn(), Span::call_site());
+                let ddescr = syn::LitStr::new(&dsink.descr, Span::call_site());
+                (
+                    quote! {
+                        #[allow(non_upper_case_globals)]
+                        static __DSINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
+                            ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+                        const __DSINK_FQN: &str = #dfqn;
+                        const __DSINK_DESCR: &str = #ddescr;
+                    },
+                    quote!(__domain_sink: jni::objects::JObject<'a>,),
+                )
+            }
+            None => (quote!(), quote!()),
+        };
+        let sinks_setup = quote! {
+            #[allow(non_upper_case_globals)]
+            static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
+                ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+            const __SINK_FQN: &str = #bsink_fqn_lit;
+            const __SINK_DESCR: &str = #bsink_descr_lit;
+            #domain_setup
+        };
 
-    // Trailing sink params: `__error_sink` (binding) always, then
-    // `__domain_sink` (typed domain error) for a fallible fn — a capture is
-    // passed for each. Declared after the wire params + builder so the order
-    // matches the Kotlin `external fun`.
-    quote! {
-        #[no_mangle]
-        #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
-        pub unsafe extern "C" fn #wrapper_ident<'a>(
-            mut env: jni::JNIEnv<'a>,
-            _class: jni::objects::JClass<'a>,
-            #(#wire_params,)*
-            #builder_param
-            __error_sink: jni::objects::JObject<'a>,
-            #domain_sink_param
-        ) -> #wire_return {
-            #sinks_setup
-            #(#prelude)*
-            #output_phase
+        // Trailing sink params: `__error_sink` (binding) always, then
+        // `__domain_sink` (typed domain error) for a fallible fn — a capture is
+        // passed for each. Declared after the wire params + builder so the order
+        // matches the Kotlin `external fun`.
+        syn::parse_quote! {
+            #[no_mangle]
+            #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+            pub unsafe extern "C" fn #wrapper_ident<'a>(
+                mut env: jni::JNIEnv<'a>,
+                _class: jni::objects::JClass<'a>,
+                #(#wire_params,)*
+                #builder_param
+                __error_sink: jni::objects::JObject<'a>,
+                #domain_sink_param
+            ) -> #wire_return {
+                #sinks_setup
+                #(#prelude)*
+                #output_phase
+            }
         }
     }
 }
@@ -526,238 +567,97 @@ fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
 /// Render the Rust-side decode for one source-fn parameter from its lowered
 /// [`PlanParam`]: the wire params, prelude decode statements, and the call
 /// argument. The classification (which crossing form) lives in the plan; this
-/// site only renders each [`InputKind`]'s decode.
+/// site renders the frozen Rust decode operation over the leaf's exact native
+/// ABI.
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
-    ext: &Declarations,
-    registry: &Registry,
-    original_ident: &syn::Ident,
     param: &PlanParam,
     on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     // Constructor-expansion: this parameter's wire form is the fold plan's
     // flattened leaves. Decode each leaf with its own converter, run the
     // (pure-Rust) fold to build the value, then pass it to the call.
     let leaf = match &param.form {
-        ParamForm::Expanded(leaves) => {
-            let fold = registry
-                .expansion_plans()
-                .get(&(original_ident.clone(), param.ident.clone()))
-                .expect("ParamForm::Expanded ⇒ expansion plan present");
-            return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err, emit);
+        ParamForm::Expanded { plan: fold, leaves } => {
+            return emit_expanded_param(fold, leaves, &param.ident, on_err, emit);
         }
         ParamForm::Single(leaf) => &**leaf,
     };
     let arg_ident = &param.ident;
     let arg_ty = &param.ty;
 
-    let mut wire_params: Vec<TokenStream> = Vec::new();
-    let mut prelude: Vec<TokenStream> = Vec::new();
+    let wire_params: Vec<TokenStream> = leaf
+        .native
+        .iter()
+        .map(|native| {
+            let ident = &native.rust_ident;
+            let wire = &native.rust_wire;
+            quote!(#ident: #wire)
+        })
+        .collect();
 
-    match &leaf.kind {
+    match &leaf.rust {
         // Flattenable data_class param: cross its fields as separate wire
         // params and reconstruct the struct inline — no per-call
         // `env.get_field(...)` reflection. The `JNINative` extern and the
         // Kotlin call-site destructure read the same plan so the three
         // sites can't drift.
-        InputKind::FlattenStruct(plan) => {
-            for leaf in &plan.leaves {
-                let pid = &leaf.native_ident;
-                let pty = &leaf.native_wire_ty();
-                wire_params.push(quote!(#pid: #pty));
-            }
+        RustParamOp::FlattenStruct(plan) => {
             let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err, emit);
-            prelude.push(decode);
-            (wire_params, prelude, call_arg)
+            (wire_params, vec![decode], call_arg)
         }
 
         // Bare `Option<primitive>` / `Option<enum>` param: cross as a
         // `(present: jboolean, value: <wire>)` pair instead of a boxed
-        // `java.lang.*` `JObject`. The Rust side rebuilds the `Option` from
-        // two raw scalars — no `env.call_method("intValue", …)` unbox.
-        InputKind::OptionScalar(sp) => {
+        // `java.lang.*` `JObject`. The registry's selected Optional fragment
+        // rebuilds the value from two raw scalars — no
+        // `env.call_method("intValue", …)` unbox.
+        RustParamOp::OptionalPair(sp) => {
             let pid = &sp.present_ident;
             let vid = &sp.value_ident;
-            let vwire = &sp.value_wire;
-            wire_params.push(quote!(#pid: jni::sys::jboolean));
-            wire_params.push(quote!(#vid: #vwire));
-            let conv = &sp.inner_conv;
-            let tmp = format_ident!("__{}_val", arg_ident);
-            // The rebuilt `Option`, then the wrappers the parameter's spelling
-            // adds over it — `Box<Option<T>>` gets its `Box` back here, because
-            // nothing between this and the source call re-spells the value.
-            // The plan only exists when the build resolves, so this cannot fail.
-            let built = build_through_wrappers(
-                &sp.arg_wrappers,
-                quote! {
-                    if #pid != 0u8 {
-                        let #tmp = match #conv(&mut env, &#vid) {
-                            ::core::result::Result::Ok(__v) => __v,
-                            ::core::result::Result::Err(__e) => {
-                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                                return #on_err;
-                            }
-                        };
-                        ::core::option::Option::Some(#tmp)
-                    } else {
-                        ::core::option::Option::None
+            let converter = emit.operation_ident("jni", &sp.chain.operation);
+            let decode = quote! {
+                let #arg_ident = match #converter(&mut env, (#pid, #vid)) {
+                    ::core::result::Result::Ok(__value) => __value,
+                    ::core::result::Result::Err(__error) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__error.to_string(),
+                        );
+                        return #on_err;
                     }
-                },
-            )
-            .expect("an option-scalar plan is built only for a buildable spelling");
-            prelude.push(quote! {
-                let #arg_ident = #built;
-            });
-            (wire_params, prelude, quote!(#arg_ident))
-        }
-
-        // per-element `env.get_field(...)`. A borrowed run — `&[T]` or
-        // `&Vec<T>` — borrows the boxed Vec; by-value `Vec<T>` moves it out
-        // with `mem::take` (leaving an empty Vec the Kotlin `finally` frees).
-        // Decode is infallible, like the by-value-handle consume below.
-        InputKind::VecBuild {
-            elem,
-            by_ref,
-            elem_wrappers,
-        } => {
-            // Generated Rust spells the reading's own tokens. This is the
-            // CANONICAL element, which is what the helper trio stores — so the
-            // cast below and `build_vec_build_helper_items` name one type.
-            let elem = emit.spell(elem);
-            let handle_ident = format_ident!("{}_handle", arg_ident);
-            wire_params.push(quote!(#handle_ident: jni::sys::jlong));
-            if *by_ref {
-                // `vec_build_elem` refuses a wrapped run on this path, so the
-                // borrow is the parameter's own spelling and there is nothing
-                // to put back.
-                //
-                // **No ascription**, for the reason the by-value branch below
-                // gives: the expression already produces the local's type, and
-                // naming it here writes the same fact twice — but here it also
-                // got it WRONG. `&*(.. as *const Vec<T>)` is a `&Vec<T>`, and
-                // ascribing `&[T]` coerced it at the `let`, where only one of
-                // the two spellings the model accepts can come out. A
-                // `&Vec<T>` parameter — which `sequence_elem` answers for
-                // exactly as it does for `&[T]` — was then handed a `&[T]`:
-                // `E0308` in the generated crate, since the deref coercion runs
-                // `&Vec<T>` → `&[T]` and not back (#384).
-                //
-                // Unascribed, the coercion moves to the call site and serves
-                // both: exact for `&Vec<T>`, deref for `&[T]`. `&mut Vec<T>`
-                // stays refused, and by `sequence_elem` returning `None` for a
-                // `Ref` kind rather than by the `mutable: false` guard — that
-                // guard is what refuses `&mut [T]`.
-                prelude.push(quote!(
-                    let #arg_ident = unsafe { &*(#handle_ident as *const Vec<#elem>) };
-                ));
-            } else {
-                // By value the local is owned, so the run's wrappers go back on
-                // for free — `Box<Vec<T>>` is `Box::new(mem::take(..))`. The
-                // ascription is dropped rather than restated: the wrapped
-                // spelling is what the expression now produces, and naming it
-                // here would be the same fact written twice.
-                let taken = quote!(unsafe {
-                    ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>))
-                });
-                // The ELEMENT's wrappers, which the storage does not carry
-                // (#296). One O(n) pass over a Vec already being moved, and it
-                // goes INSIDE the run wrap: `Box<Vec<Box<Payload>>>` boxes each
-                // element, collects, then boxes the run. Emitted only when there
-                // are wrappers, so every existing shape keeps its exact tokens.
-                let taken = if elem_wrappers.is_empty() {
-                    taken
-                } else {
-                    let wrapped = build_through_wrappers(elem_wrappers, quote!(__e))
-                        .expect("vec_build_elem accepted this element spelling");
-                    quote!(
-                        #taken
-                            .into_iter()
-                            .map(|__e| #wrapped)
-                            .collect::<Vec<_>>()
-                    )
                 };
-                let taken = build_through_erased_wrappers(&leaf.reading, taken)
-                    .expect("vec_build_elem accepted this run spelling");
-                prelude.push(quote!(let #arg_ident = #taken;));
-            }
-            (wire_params, prelude, quote!(#arg_ident))
-        }
-
-        // By-value `T` opaque-handle parameter: emit the consume
-        // converter inline, bypassing `OwnedObject`. The Java side
-        // holds the handle's monitor and passes the pointer here;
-        // `Box::from_raw` reconstructs the unique owner and `*box`
-        // moves `T` out, dropping the heap allocation. The
-        // unique-ownership invariant is upheld by the Kotlin wrapper
-        // (monitor + tag-bit close in `finally`), which ensures the
-        // same live pointer cannot be passed twice. No `T: Clone`
-        // bound, so non-Clone handles (e.g. `Publisher<'a>`) work too.
-        // A null or tagged (closed) pointer — a close that raced past
-        // the pre-lock guard — is rejected before any dereference.
-        InputKind::Handle { direct: true }
-            if !matches!(
-                arg_ty.kind(),
-                prebindgen_registry::flat::TypeKind::Ref { .. }
-            ) =>
-        {
-            let entry = ext
-                .in_frag(arg_ty)
-                .expect("plan classified Handle ⇒ entry present");
-            let wire_ident = if matches!(&entry.destination, syn::Type::Ptr(_)) {
-                format_ident!("{}_ptr", arg_ident)
-            } else {
-                arg_ident.clone()
             };
-            wire_params.push(quote!(#wire_ident: jni::sys::jlong));
-            let arg_ty = emit.spell(arg_ty);
-            prelude.push(quote!(
-                if #wire_ident == 0 || (#wire_ident & 1) == 1 {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
-                    return #on_err;
-                }
-                let #arg_ident: #arg_ty = unsafe {
-                    *std::boxed::Box::from_raw(#wire_ident as *mut #arg_ty)
-                };
-            ));
-            (wire_params, prelude, quote!(#arg_ident))
+            (wire_params, vec![decode], quote!(#arg_ident))
         }
 
-        // Everything else — borrowed/composed handles, value projections,
-        // callbacks, plain types — decodes through the resolved entry's
-        // ordinary converter chain.
-        InputKind::Callback { .. }
-        | InputKind::Handle { .. }
-        | InputKind::Unsigned64 { .. }
-        | InputKind::Plain => {
-            // The leaf's reading — for `ParamForm::Single` it is the very
-            // reading `param.ty` was spelled from, so this is the same lookup
-            // without the round trip. The panic now CALLS the shared message
-            // instead of restating it, which is what `PlanError::message`'s doc
-            // has always claimed and hand-duplication did not deliver.
-            let entry = ext.in_frag(&leaf.reading).unwrap_or_else(|| {
-                panic!(
-                    "{}",
-                    PlanError::Unresolved {
-                        ty: Box::new(leaf.reading.clone())
-                    }
-                    .message(original_ident)
-                )
-            });
-            emit_plain_decode(&entry, arg_ident, arg_ty, on_err)
+        // Handles, value projections, callbacks, Vec-build inputs, and plain
+        // values all execute the registry-planned pipeline. The plan already
+        // fixed the sole native leaf's name and type.
+        RustParamOp::Pipeline { wire_ident } => {
+            let (prelude, call_arg) =
+                emit_plain_decode(&leaf.pipeline, arg_ident, arg_ty, on_err, emit, wire_ident);
+            (wire_params, prelude, call_arg)
         }
     }
 }
 
-/// The ordinary converter-chain decode shared by every pass-through kind:
-/// wire param + staged decode prelude + the call argument (`&decoded` /
-/// `.as_deref()` per the source param's Rust shape).
+/// The ordinary converter decode shared by every pass-through kind emits a
+/// wire parameter, one frozen-pipeline invocation, and the call argument
+/// (`&decoded` / `.as_deref()` per the source parameter's Rust shape).
 fn emit_plain_decode(
-    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
+    pipeline: &crate::jni::chain::JPipeline,
     arg_ident: &syn::Ident,
     arg_ty: &prebindgen_registry::flat::TypeRef,
     on_err: &TokenStream,
-) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
+    emit: &prebindgen_registry::RustWriter,
+    wire_ident: &syn::Ident,
+) -> (Vec<TokenStream>, TokenStream) {
     use prebindgen_registry::flat::TypeKind;
     /// `&mut T`, read off the kind — and off `kind()` rather than through
     /// `is_exclusive_borrow`, which also sees through a `Box` and refuses an
@@ -776,41 +676,20 @@ fn emit_plain_decode(
             _ => None,
         }
     }
-    let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
-    let wire = &entry.destination;
-    let conv = entry.converter_ident().clone();
-    let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
-        format_ident!("{}_ptr", arg_ident)
-    } else {
-        arg_ident.clone()
-    };
-
-    let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
-    wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
-    // Input wrapper takes wires by ref except for raw pointers. The
-    // converter returns `Result<T, __JniErr>`; on `Err` we signal the
-    // error sink and bail with the function sentinel (no JVM throw).
-    let decode_call = if matches!(wire, syn::Type::Ptr(_)) {
-        quote!(#conv(&mut env, #wire_ident))
-    } else {
-        quote!(#conv(&mut env, &#wire_ident))
-    };
     // Binding for the final `arg_ident` needs `mut` when the source
     // fn takes `&mut T` — the call site below emits `&mut arg_ident`,
     // which requires a mutable binding. Also for `Option<&mut T>`
-    // where the call site needs `.as_deref_mut()`. Intermediate stage
-    // bindings (`__{ident}_sN`) don't need it.
+    // where the call site needs `.as_deref_mut()`.
     let arg_mut: TokenStream = if is_mut_ref(arg_ty) || matches!(opt_ref_mut(arg_ty), Some(true)) {
         quote!(mut)
     } else {
         quote!()
     };
-    // Stage 0: wire-facing function. Pre_stages then run in REVERSE
-    // (rust-side last). Even with no pre_stages this collapses to a
-    // single `let #arg_ident = match decode_call { ... }`, byte-
-    // identical to the pre-chain emission.
-    if entry.pre_stages.is_empty() {
+    if let Some(value) = pipeline.invoke_infallible(quote!(#wire_ident), emit) {
+        prelude.push(quote!(let #arg_mut #arg_ident = #value;));
+    } else {
+        let decode_call = pipeline.invoke(quote!(#wire_ident), emit);
         prelude.push(quote!(
             let #arg_mut #arg_ident = match #decode_call {
                 ::core::result::Result::Ok(__v) => __v,
@@ -820,62 +699,31 @@ fn emit_plain_decode(
                 }
             };
         ));
-    } else {
-        // Multi-stage: introduce a temporary for the function's
-        // result, then thread each pre_stage in reverse onto it.
-        let stage0_ident = format_ident!("__{}_s0", arg_ident);
-        prelude.push(quote!(
-            let #stage0_ident = match #decode_call {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                    return #on_err;
-                }
-            };
-        ));
-        let mut prev = stage0_ident;
-        // pre_stages[0] is closest to rust → iterated last; walk
-        // back from the function-adjacent end.
-        let n = entry.pre_stages.len();
-        for (idx, stage) in entry.input_stage_order() {
-            let stage_fn = &stage.function.sig.ident;
-            let is_last = idx == 0;
-            let out_ident = if is_last {
-                arg_ident.clone()
-            } else {
-                format_ident!("__{}_s{}", arg_ident, n - idx)
-            };
-            // Final binding gets `mut` if the source fn takes `&mut`.
-            let bind_mut: TokenStream = if is_last { arg_mut.clone() } else { quote!() };
-            prelude.push(quote!(
-                let #bind_mut #out_ident = match #stage_fn(&mut env, #prev) {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                        return #on_err;
-                    }
-                };
-            ));
-            prev = out_ident;
-        }
     }
     let call_arg = match arg_ty.kind() {
         TypeKind::Ref { mutable: true, .. } => quote!(&mut #arg_ident),
         TypeKind::Ref { .. } => quote!(&#arg_ident),
-        // `Option<&T>` / `Option<&mut T>` for opaque inner: the input
-        // converter produced `Option<OwnedObject<T>>` (see rank-1
-        // handler above). `.as_deref()` / `.as_deref_mut()` coerces
-        // back to `Option<&T>` / `Option<&mut T>` via OwnedObject's
-        // Deref / DerefMut impls.
+        // An Optional borrow carries either an owned value assembled by a
+        // registry chain (`Option<T>`) or an `OwnedObject<T>` pointing into a
+        // locked Kotlin handle. The frozen pipeline says which one it yields;
+        // the call site performs only the final borrow.
         _ if matches!(opt_ref_mut(arg_ty), Some(false)) => {
-            quote!(#arg_ident.as_deref())
+            if pipeline.borrowed_optional_value() {
+                quote!(#arg_ident.as_ref())
+            } else {
+                quote!(#arg_ident.as_deref())
+            }
         }
         _ if matches!(opt_ref_mut(arg_ty), Some(true)) => {
-            quote!(#arg_ident.as_deref_mut())
+            if pipeline.borrowed_optional_value() {
+                quote!(#arg_ident.as_mut())
+            } else {
+                quote!(#arg_ident.as_deref_mut())
+            }
         }
         _ => quote!(#arg_ident),
     };
-    (wire_params, prelude, call_arg)
+    (prelude, call_arg)
 }
 
 /// Emit the wire params, decode prelude, and call argument for one
@@ -886,171 +734,67 @@ fn emit_plain_decode(
 /// through the same error sink as any fallible input. The returned call
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
-    ext: &Declarations,
-    registry: &Registry,
-    plan: &prebindgen_registry::expand::FoldPlan,
-    leaves: &[PlanLeaf],
+    plan: &ExpandedParamPlan,
+    leaves: &[std::rc::Rc<PlanLeaf>],
     orig_param: &syn::Ident,
     on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     let mut wire_params: Vec<TokenStream> = Vec::new();
+    let fold = plan.fold();
     let mut prelude: Vec<TokenStream> = Vec::new();
     let mut leaf_locals: Vec<syn::Ident> = Vec::new();
 
-    debug_assert_eq!(plan.leaves.len(), leaves.len());
-    for (leaf, classified) in plan.leaves.iter().zip(leaves) {
+    debug_assert_eq!(fold.leaves.len(), leaves.len());
+    for (leaf, classified) in fold.leaves.iter().zip(leaves) {
         let leaf_ty = &leaf.ty;
         // The ascription generated Rust writes for this leaf's local.
-        let leaf_ty_tokens = emit.spell(leaf_ty);
-        let lookup_entry = || {
-            // The leaf's own reading goes straight to the entry: spelling it and
-            // looking the same reading back up is the round trip #286 removed.
-            ext.in_frag(&leaf.ty).unwrap_or_else(|| {
-                // Shared wording, not restated — see the sibling backstop above.
-                panic!(
-                    "{}",
-                    PlanError::UnresolvedLeaf {
-                        ty: Box::new(leaf.ty.clone()),
-                        param: orig_param.clone(),
-                    }
-                    .message(orig_param)
-                )
-            })
-        };
+        let leaf_ty_tokens = emit.emit_source_type(leaf_ty);
         let local = format_ident!("__exp_{}", leaf.name);
+        wire_params.extend(classified.native.iter().map(|native| {
+            let ident = &native.rust_ident;
+            let wire = &native.rust_wire;
+            quote!(#ident: #wire)
+        }));
 
-        // An expansion leaf can itself be a data class. Reuse the recursive
-        // plan instead of allowing that leaf to fall back to a JObject, so
-        // expansion and ordinary parameters have the same boundary rule.
-        if let InputKind::FlattenStruct(flat) = &classified.kind {
-            for flat_leaf in &flat.leaves {
-                let ident = &flat_leaf.native_ident;
-                let wire = &flat_leaf.native_wire_ty();
-                wire_params.push(quote!(#ident: #wire));
+        match &classified.rust {
+            // An expansion leaf can itself be a data class. Reuse the
+            // recursive rebuild operation used by an ordinary parameter.
+            RustParamOp::FlattenStruct(flat) => {
+                let (decode, _) = render_flat_input_decode(flat, &local, on_err, emit);
+                prelude.push(decode);
             }
-            let (decode, _) = render_flat_input_decode(flat, &local, on_err, emit);
-            prelude.push(decode);
-            leaf_locals.push(local);
-            continue;
-        }
-
-        // `Option<scalar>` / `Option<enum>` leaf (only produced by a
-        // selector-dispatched constructor variant, where each arm's args are
-        // `Option`-wrapped by presence): cross as a decoupled
-        // `(present: jboolean, value: <wire>)` pair instead of a boxed
-        // `java.lang.*` `JObject`. The Kotlin extern and call site consume
-        // the same classified plan, so the JNI arity/types agree on both
-        // sides of the wire.
-        if let InputKind::OptionScalar(sp) = &classified.kind {
-            let present_ident = &sp.present_ident;
-            let value_ident = &sp.value_ident;
-            let value_wire = &sp.value_wire;
-            let inner_conv = &sp.inner_conv;
-            wire_params.push(quote!(#present_ident: jni::sys::jboolean));
-            wire_params.push(quote!(#value_ident: #value_wire));
-            // The local is ascribed the leaf's own SPELLING (`leaf_ty`), so the
-            // rebuilt `Option` has to be wrapped back up to match it — the same
-            // rule as the parameter path above, and the reason the ascription
-            // can stay as written rather than being weakened to the stripped
-            // type.
-            let built = build_through_wrappers(
-                &sp.arg_wrappers,
-                quote! {
-                    if #present_ident != 0u8 {
-                        let __v = match #inner_conv(&mut env, &#value_ident) {
-                            ::core::result::Result::Ok(__v) => __v,
-                            ::core::result::Result::Err(__e) => {
-                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                                return #on_err;
-                            }
-                        };
-                        ::core::option::Option::Some(__v)
-                    } else {
-                        ::core::option::Option::None
-                    }
-                },
-            )
-            .expect("an option-scalar plan is built only for a buildable spelling");
-            prelude.push(quote!(
-                let #local: #leaf_ty_tokens = #built;
-            ));
-            leaf_locals.push(local);
-            continue;
-        }
-
-        // Direct owned-handle leaf (e.g. an identity-variant `T`): consume the
-        // jlong handle inline, mirroring the normal by-value-handle path —
-        // including its null/tagged (closed) pointer guard.
-        let is_consume = matches!(classified.kind, InputKind::Handle { direct: true })
-            && !matches!(
-                leaf_ty.kind(),
-                prebindgen_registry::flat::TypeKind::Ref { .. }
-            );
-        if is_consume {
-            let wire_ident = format_ident!("{}_ptr", leaf.name);
-            wire_params.push(quote!(#wire_ident: jni::sys::jlong));
-            prelude.push(quote!(
-                if #wire_ident == 0 || (#wire_ident & 1) == 1 {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
-                    return #on_err;
-                }
-                let #local: #leaf_ty_tokens = unsafe {
-                    *std::boxed::Box::from_raw(#wire_ident as *mut #leaf_ty_tokens)
-                };
-            ));
-            leaf_locals.push(local);
-            continue;
-        }
-
-        let entry = lookup_entry();
-        let wire = &entry.destination;
-        let conv = entry.function.sig.ident.clone();
-        let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
-            format_ident!("{}_ptr", leaf.name)
-        } else {
-            leaf.name.clone()
-        };
-        let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
-        wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
-        let decode_call = if matches!(wire, syn::Type::Ptr(_)) {
-            quote!(#conv(&mut env, #wire_ident))
-        } else {
-            quote!(#conv(&mut env, &#wire_ident))
-        };
-        // Compose any pre_stages (rust-side, reverse order) onto the decode.
-        if entry.pre_stages.is_empty() {
-            prelude.push(quote!(
-                let #local = match #decode_call {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                        return #on_err;
-                    }
-                };
-            ));
-        } else {
-            let stage0 = format_ident!("{}_s0", local);
-            prelude.push(quote!(
-                let #stage0 = match #decode_call {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                        return #on_err;
-                    }
-                };
-            ));
-            let n = entry.pre_stages.len();
-            let mut prev = stage0;
-            for (idx, stage) in entry.pre_stages.iter().enumerate().rev() {
-                let stage_fn = &stage.function.sig.ident;
-                let out_ident = if idx == 0 {
-                    local.clone()
-                } else {
-                    format_ident!("{}_s{}", local, n - idx)
-                };
+            // Selector-dispatched Optional leaf: rebuild from its already
+            // frozen `(present, value)` native pair.
+            RustParamOp::OptionalPair(sp) => {
+                let present_ident = &sp.present_ident;
+                let value_ident = &sp.value_ident;
+                let converter = emit.operation_ident("jni", &sp.chain.operation);
                 prelude.push(quote!(
-                    let #out_ident = match #stage_fn(&mut env, #prev) {
+                    let #local: #leaf_ty_tokens = match #converter(
+                        &mut env,
+                        (#present_ident, #value_ident),
+                    ) {
+                        ::core::result::Result::Ok(__value) => __value,
+                        ::core::result::Result::Err(__error) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__error.to_string(),
+                            );
+                            return #on_err;
+                        }
+                    };
+                ));
+            }
+            RustParamOp::Pipeline { wire_ident } => {
+                let pipeline = &classified.pipeline;
+                let decode_call = pipeline.invoke(quote!(#wire_ident), emit);
+                prelude.push(quote!(
+                    let #local = match #decode_call {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
                             signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
@@ -1058,7 +802,6 @@ pub(crate) fn emit_expanded_param(
                         }
                     };
                 ));
-                prev = out_ident;
             }
         }
         leaf_locals.push(local);
@@ -1066,11 +809,7 @@ pub(crate) fn emit_expanded_param(
 
     // The fold itself (language-agnostic). Its `Err(String)` is lifted into
     // `__JniErr` and routed through the same sink as fallible inputs.
-    let qualify = |id: &syn::Ident| -> syn::Path {
-        let m = ext.fn_module(registry, id);
-        syn::parse_quote!(#m::#id)
-    };
-    let fold_expr = prebindgen_registry::expand::emit_fold(plan, &leaf_locals, &qualify);
+    let fold_expr = plan.emit(&leaf_locals);
     let folded = format_ident!("__folded_{}", orig_param);
     prelude.push(quote!(
         let #folded = match #fold_expr {
@@ -1085,7 +824,7 @@ pub(crate) fn emit_expanded_param(
 
     // `Option<&T>` ⇒ `folded.as_ref()`; `&T` ⇒ `&folded`; by-value (incl.
     // `Option<T>`) ⇒ `folded`.
-    let call_arg = match (plan.produces_option(), plan.by_ref) {
+    let call_arg = match (fold.produces_option(), fold.by_ref) {
         (true, true) => quote!(#folded.as_ref()),
         (false, true) => quote!(&#folded),
         (_, false) => quote!(#folded),

@@ -78,6 +78,56 @@ impl DeclaredKind {
 }
 
 impl Declarations {
+    /// Key `out_ty` the way an `IfaceParam` carries it, and remember the
+    /// reading behind that key so rendering needs no registry lookup.
+    ///
+    /// The param stores text, not the `TypeRef`, because its spec is memoized
+    /// behind an `Arc` and a `TypeRef` is not `Send`. Freezing the answer here
+    /// keeps the identity where it has to be and the resolution where a
+    /// renderer can reach it (#613 step 7).
+    pub(crate) fn freeze_reading(&self, out_ty: &prebindgen_registry::flat::TypeRef) -> String {
+        let key = out_ty.key().as_str().to_string();
+        self.frozen_readings
+            .borrow_mut()
+            .entry(key.clone())
+            .or_insert_with(|| out_ty.clone());
+        key
+    }
+
+    /// Freeze the reading for a **type**, keyed by its spelling.
+    ///
+    /// The `constant_expr` path names a type in a build script, so no element
+    /// carries it and only a `Conversions` can resolve it. The validating
+    /// callers do that once; a renderer reads it back (#613 step 7).
+    pub(crate) fn freeze_reading_of(
+        &self,
+        registry: &impl prebindgen_registry::Conversions,
+        ty: &syn::Type,
+    ) -> Option<prebindgen_registry::flat::TypeRef> {
+        let reading = registry.reading_of(ty)?;
+        self.frozen_readings.borrow_mut().insert(
+            quote::ToTokens::to_token_stream(ty).to_string(),
+            reading.clone(),
+        );
+        Some(reading)
+    }
+
+    /// The reading frozen for a type spelling.
+    pub(crate) fn frozen_reading_of(
+        &self,
+        ty: &syn::Type,
+    ) -> Option<prebindgen_registry::flat::TypeRef> {
+        self.frozen_readings
+            .borrow()
+            .get(&quote::ToTokens::to_token_stream(ty).to_string())
+            .cloned()
+    }
+
+    /// The reading behind an `IfaceParam`'s identity text.
+    pub(crate) fn frozen_reading(&self, text: &str) -> Option<prebindgen_registry::flat::TypeRef> {
+        self.frozen_readings.borrow().get(text).cloned()
+    }
+
     /// The module path a generated call to `#[prebindgen]` fn `ident` must be
     /// qualified with: the fn's **origin crate** as recorded from its
     /// stream's `SourceLocation` stamp (multi-source bindings — helper
@@ -99,23 +149,9 @@ impl Declarations {
             .unwrap_or_else(|| syn::parse_quote!(crate))
     }
 
-    /// Whether `ty` was registered via an `EnumClassDecl` — used by the
-    /// Kotlin wrapper generator to decide if a parameter needs a `.value`
-    /// projection between the typed enum (Kotlin signature) and the `Int`
-    /// wire (JNI `external fun`).
-    ///
-    /// Keyed on the canonical **spelling**, so it answers about the wrapper for
-    /// a transparently-wrapped type: `Box<Priority>` is `false` here.
-    /// [`is_kotlin_enum_reading`](Self::is_kotlin_enum_reading) is the same
-    /// question asked of the model, and is what a caller holding a reading
-    /// should use.
-    pub(crate) fn is_kotlin_enum(&self, ty: &syn::Type) -> bool {
-        self.is_kotlin_enum_key(&TypeKey::from_type(ty))
-    }
-
-    /// [`Self::is_kotlin_enum`] off the **identity** — the whole type's, not a
-    /// probe through its layers. See [`Self::is_kotlin_enum_reading`] for the
-    /// question that does peel, and why the two are not interchangeable.
+    /// Whether this exact type identity was registered as an `EnumClassDecl`.
+    /// See [`Self::is_kotlin_enum_reading`] for the question that peels model
+    /// layers before probing the identity.
     pub(crate) fn is_kotlin_enum_key(&self, key: &TypeKey) -> bool {
         self.types.get(key).is_some_and(|c| c.is_enum_class())
     }
@@ -124,10 +160,8 @@ impl Declarations {
     /// asked of the **reading**: [`enum_probe`] peels the borrow/optional
     /// layers off the model, and the name comes off the classification.
     ///
-    /// The name off `TypeKind::Named` rather than the spelling is the whole
-    /// difference from [`is_kotlin_enum`](Self::is_kotlin_enum). A declaration
-    /// names a type (`enum_class!(Priority)` keys `Priority`), and the model
-    /// erases the wrappers no destination language can see — so
+    /// A declaration names a type (`enum_class!(Priority)` keys `Priority`),
+    /// and the model erases the wrappers no destination language can see — so
     /// `Box<Option<&Priority>>` reaches the same declaration `Priority` does,
     /// where taking the spelling apart finds `Box` and answers about it.
     pub(crate) fn is_kotlin_enum_reading(&self, reading: &TypeRef) -> bool {
@@ -143,9 +177,9 @@ impl Declarations {
 impl Default for Declarations {
     fn default() -> Self {
         Self {
-            compiled_fns: Vec::new(),
             tables: None,
             compiled: Default::default(),
+            site_plans: Default::default(),
             package: String::new(),
             fun_name_mangle: None,
             ptr_class_name_mangle: None,
@@ -171,7 +205,13 @@ impl Default for Declarations {
             ignored_const_idents: std::collections::HashSet::new(),
             local_fns: Vec::new(),
             iface_specs: Default::default(),
+            frozen_readings: Default::default(),
             fn_plans: Default::default(),
+            struct_plans: Default::default(),
+            sum_plans: Default::default(),
+            vec_build_plans: Default::default(),
+            unfolded: Default::default(),
+            generation: None,
         }
     }
 }
@@ -193,6 +233,17 @@ impl JniGenBuilder {
 }
 
 impl Declarations {
+    /// The applied output-side decompositions — how a return, an error or a
+    /// callback argument comes apart.
+    ///
+    /// Filled while this binding declares itself into the registry, which every
+    /// caller here is downstream of.
+    pub(crate) fn unfolded(&self) -> &crate::unfold::Unfolded {
+        self.unfolded
+            .get()
+            .expect("decompositions are applied while the binding is declared")
+    }
+
     /// Apply the package-level function-name mangle closure to `name`.
     pub(crate) fn mangle_fun(&self, package: &str, name: &str) -> String {
         match &self.fun_name_mangle {
@@ -594,7 +645,7 @@ impl JniGenBuilder {
     fn accept_members(&mut self, key: &TypeKey, members: Vec<(FunctionDecl, MemberKind)>) {
         for (decl, kind) in members {
             let rust_ident = decl.rust_ident().clone();
-            let kotlin_name_override = decl.kotlin_name_override().clone();
+            let kotlin_name_override = decl.name_override().clone();
             self.accept_fn_expands(decl);
             // A constructor member's return is a factory, never
             // output-flattened — derived from `class_members` in
@@ -613,7 +664,7 @@ impl JniGenBuilder {
 
     fn accept_function(&mut self, subpackage: &str, decl: FunctionDecl) {
         let mut entry = FunctionEntry::new(decl.rust_ident().clone());
-        entry.kotlin_name_override = decl.kotlin_name_override().clone();
+        entry.kotlin_name_override = decl.name_override().clone();
         self.decls
             .packages
             .entry(subpackage.to_string())
@@ -845,8 +896,8 @@ impl Declarations {
         registry: &impl Conversions,
         key: &TypeKey,
         fields: &[LocalField],
-    ) -> Vec<prebindgen_registry::unfold::DeconRecord> {
-        use prebindgen_registry::unfold::DeconRecord;
+    ) -> Vec<crate::unfold::DeconRecord> {
+        use crate::unfold::DeconRecord;
         fields
             .iter()
             .map(|f| match f {
@@ -883,7 +934,7 @@ impl Declarations {
     }
 
     /// Expand a `.fields(fields!(f))` declaration into one
-    /// [`FieldRecord`](prebindgen_registry::unfold::FieldRecord) per field of the
+    /// [`FieldRecord`](crate::unfold::FieldRecord) per field of the
     /// struct `f` returns — the value form.
     ///
     /// The walk is the adapter's job because only it knows which structs are
@@ -902,7 +953,7 @@ impl Declarations {
         registry: &impl Conversions,
         key: &TypeKey,
         decl: &FieldsDecl,
-    ) -> Vec<prebindgen_registry::unfold::FieldRecord> {
+    ) -> Vec<crate::unfold::FieldRecord> {
         let func = decl.func();
         let accessor = registry.flat().function(&func).unwrap_or_else(|| {
             panic!(
@@ -923,7 +974,7 @@ impl Declarations {
              value form returns the struct holding this type's fields",
             key.as_str(),
         );
-        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, &ret.key()) else {
+        let TypeKind::DataStruct { st, .. } = self.type_kind(registry.flat(), &ret.key()) else {
             panic!(
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
@@ -941,7 +992,7 @@ impl Declarations {
         // than a no-op.
         let named: std::collections::HashSet<String> = out
             .iter()
-            .map(|r: &prebindgen_registry::unfold::FieldRecord| {
+            .map(|r: &crate::unfold::FieldRecord| {
                 r.members
                     .iter()
                     .map(|m| m.to_string())
@@ -984,9 +1035,9 @@ impl Declarations {
         members: &[syn::Ident],
         name_prefix: &str,
         depth: usize,
-        out: &mut Vec<prebindgen_registry::unfold::FieldRecord>,
+        out: &mut Vec<crate::unfold::FieldRecord>,
     ) {
-        use prebindgen_registry::unfold::{FieldDecon, FieldRecord};
+        use crate::unfold::{FieldDecon, FieldRecord};
         // A value form holding itself would expand forever; the cycle rule for
         // everything reachable BELOW a field is core's `visited` check.
         assert!(
@@ -1071,7 +1122,7 @@ impl Declarations {
             // must decompose into its selector and groups wherever it appears.
             let bare = field.ty.optional_inner().unwrap_or(&field.ty);
             let probe = bare.sequence_elem().unwrap_or(bare);
-            match self.type_kind(registry, &probe.key()) {
+            match self.type_kind(registry.flat(), &probe.key()) {
                 TypeKind::DataStruct { st, cfg: Some(_) }
                     if field.ty.optional_inner().is_none()
                         && field.ty.sequence_elem().is_none() =>
@@ -1166,8 +1217,8 @@ impl Declarations {
     pub(crate) fn build_deconstructors(
         &self,
         registry: &impl Conversions,
-    ) -> prebindgen_registry::unfold::Deconstructors {
-        use prebindgen_registry::unfold::{
+    ) -> crate::unfold::Deconstructors {
+        use crate::unfold::{
             DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,
         };
         let mut dec = Deconstructors {
@@ -1493,240 +1544,6 @@ impl JniGenBuilder {
 }
 
 impl Declarations {
-    /// Derive the rank-0 **input** converter body for a `convert!`-declared
-    /// type: `(continue_ty, exc, body)` where `continue_ty` is the conversion
-    /// fn's parameter type (by value) — the composed-converter machinery
-    /// chains it through that type's own converter, so the wire and the
-    /// Kotlin surface derive from it. It is what [`Self::lookup_input`]
-    /// answers with; signatures are read from the registry at
-    /// lookup time (order-independent, and multi-source qualification via
-    /// [`Self::fn_module`]).
-    pub(crate) fn convert_input_body(
-        &self,
-        key: &TypeKey,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
-        let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
-        // The `convert!` declaration's own spelling — the key is how the decl
-        // was found, not a second source for what it says (#291).
-        let target = decl.rust_type().declared_spelling();
-        let result = match decl.input_spec().as_ref()? {
-            ConvertSpec::PrebindgenFn(f) => {
-                let item_fn = registry.flat().function(&f).unwrap_or_else(|| {
-                    panic!(
-                        "convert!({}).input({f}): function not found among #[prebindgen] items",
-                        key.as_str()
-                    )
-                });
-                let (param_reading, by_ref) = convert_single_param(key, f, item_fn, "input");
-                let param_ty = emit.spell_ty(param_reading);
-                // Return: `T` (infallible) or `Result<T, E>` (fallible — E
-                // routes to the caller's error handler via the exc slot).
-                // Off `TypeKind::Fallible`, where `result_ok_type` /
-                // `result_err_type` each found the `Result` in a path.
-                let (ok_ty, exc) = match item_fn.ret.fallible_parts() {
-                    Some((ok, err)) => (emit.spell_ty(ok), Some(emit.spell_ty(err))),
-                    None => (emit.spell_ty(&item_fn.ret), None),
-                };
-                assert!(
-                    TypeKey::from_type(&ok_ty) == *key,
-                    "convert!({k}).input({f}): the function produces `{got}`, not `{k}`",
-                    k = key.as_str(),
-                    got = TypeKey::from_type(&ok_ty).as_str()
-                );
-                let module = self.fn_module(registry, f);
-                let body: syn::Expr = if by_ref {
-                    syn::parse_quote!(#module::#f(&v))
-                } else {
-                    syn::parse_quote!(#module::#f(v))
-                };
-                Some((param_ty, exc, body))
-            }
-            // `Into`/`TryInto` impls: the repr is stated in the decl; the
-            // fully-qualified call form pins both type parameters so the
-            // right impl is selected regardless of what else is in scope.
-            ConvertSpec::Trait { repr, fallible } => {
-                if *fallible {
-                    let exc: syn::Type = syn::parse_quote!(
-                        <#repr as ::core::convert::TryInto<#target>>::Error
-                    );
-                    let body: syn::Expr = syn::parse_quote!(
-                        <#repr as ::core::convert::TryInto<#target>>::try_into(v)
-                    );
-                    Some((repr.clone(), Some(exc), body))
-                } else {
-                    let body: syn::Expr = syn::parse_quote!(
-                        <#repr as ::core::convert::Into<#target>>::into(v)
-                    );
-                    Some((repr.clone(), None, body))
-                }
-            } // Binding-local callable: emitted verbatim (multi-segment paths
-              // pass the qualification visitor untouched). With a declared
-              // error type the fn returns `Result<T, E>` — emitted as-is, `E`
-              // riding the standard exc slot.
-        };
-        let (repr, exc, body) = result?;
-        Some(self.apply_input_domain(decl, repr, exc, body))
-    }
-
-    /// Output-direction peer of [`Self::convert_input_body`]: the conversion
-    /// fn takes `&T` (or `T`) and returns the continue type.
-    pub(crate) fn convert_output_body(
-        &self,
-        key: &TypeKey,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
-        let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
-        // The `convert!` declaration's own spelling — the key is how the decl
-        // was found, not a second source for what it says (#291).
-        let target = decl.rust_type().declared_spelling();
-        let result = match decl.output_spec().as_ref()? {
-            ConvertSpec::PrebindgenFn(g) => {
-                let item_fn = registry.flat().function(&g).unwrap_or_else(|| {
-                    panic!(
-                        "convert!({}).output({g}): function not found among #[prebindgen] items",
-                        key.as_str()
-                    )
-                });
-                let (param_reading, by_ref) = convert_single_param_any(g, item_fn);
-                assert!(
-                    param_reading.key() == *key,
-                    "convert!({k}).output({g}): the function takes `{got}`, not `{k}`",
-                    k = key.as_str(),
-                    got = param_reading.key().as_str()
-                );
-                let (repr, exc) = match item_fn.ret.fallible_parts() {
-                    Some((ok, err)) => (emit.spell_ty(ok), Some(emit.spell_ty(err))),
-                    None => (emit.spell_ty(&item_fn.ret), None),
-                };
-                assert!(
-                    TypeKey::from_type(&repr) != *key,
-                    "convert!({k}).output({g}): the function must return the converted form, \
-                     not `{k}`",
-                    k = key.as_str()
-                );
-                let module = self.fn_module(registry, g);
-                let body: syn::Expr = if by_ref {
-                    syn::parse_quote!(#module::#g(&v))
-                } else {
-                    syn::parse_quote!(#module::#g(v))
-                };
-                Some((repr, exc, body))
-            }
-            ConvertSpec::Trait { repr, fallible } => {
-                if *fallible {
-                    let exc: syn::Type = syn::parse_quote!(
-                        <#target as ::core::convert::TryInto<#repr>>::Error
-                    );
-                    let body: syn::Expr = syn::parse_quote!(
-                        <#target as ::core::convert::TryInto<#repr>>::try_into(v)
-                    );
-                    Some((repr.clone(), Some(exc), body))
-                } else {
-                    let body: syn::Expr = syn::parse_quote!(
-                        <#target as ::core::convert::Into<#repr>>::into(v)
-                    );
-                    Some((repr.clone(), None, body))
-                }
-            }
-        };
-        let (repr, exc, body) = result?;
-        Some(self.apply_output_domain(decl, repr, exc, body))
-    }
-
-    /// Idents of every `#[prebindgen]`-fn conversion source — scanned as
-    /// helper functions ([`Prebindgen::helper_functions`]) so their extern
-    /// emission is suppressed. Trait/local-fn sources have no registry item.
-    fn apply_input_domain(
-        &self,
-        decl: &ConvertDecl,
-        repr: syn::Type,
-        exc: Option<syn::Type>,
-        body: syn::Expr,
-    ) -> (syn::Type, Option<syn::Type>, syn::Expr) {
-        let Some(domain) = decl.domain() else {
-            return (repr, exc, body);
-        };
-        assert_eq!(
-            TypeKey::from_type(domain.ty()),
-            TypeKey::from_type(&repr),
-            "convert!({}): domain type {} does not match input representation {}",
-            decl.key().as_str(),
-            TypeKey::from_type(domain.ty()),
-            TypeKey::from_type(&repr),
-        );
-        let valid = domain.contains_expr(quote!(v));
-        let key = decl.key().as_str();
-        let converted = if exc.is_some() {
-            quote!((#body).map_err(|__e| {
-                <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
-            }))
-        } else {
-            quote!(::core::result::Result::Ok(#body))
-        };
-        let body = syn::parse_quote!({
-            if #valid {
-                #converted
-            } else {
-                ::core::result::Result::Err(
-                    <__JniErr as ::core::convert::From<String>>::from(
-                        format!("{} representation is outside its declared domain", #key)
-                    )
-                )
-            }
-        });
-        (repr, Some(syn::parse_quote!(__JniErr)), body)
-    }
-
-    fn apply_output_domain(
-        &self,
-        decl: &ConvertDecl,
-        repr: syn::Type,
-        exc: Option<syn::Type>,
-        body: syn::Expr,
-    ) -> (syn::Type, Option<syn::Type>, syn::Expr) {
-        let Some(domain) = decl.domain() else {
-            return (repr, exc, body);
-        };
-        assert_eq!(
-            TypeKey::from_type(domain.ty()),
-            TypeKey::from_type(&repr),
-            "convert!({}): domain type {} does not match output representation {}",
-            decl.key().as_str(),
-            TypeKey::from_type(domain.ty()),
-            TypeKey::from_type(&repr),
-        );
-        let valid = domain.contains_expr(quote!(__repr));
-        let key = decl.key().as_str();
-        let converted = if exc.is_some() {
-            quote!((#body).map_err(|__e| {
-                <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
-            }))
-        } else {
-            quote!(::core::result::Result::Ok(#body))
-        };
-        let body = syn::parse_quote!({
-            match #converted {
-                ::core::result::Result::Ok(__repr) if #valid => {
-                    ::core::result::Result::Ok(__repr)
-                }
-                ::core::result::Result::Ok(_) => {
-                    ::core::result::Result::Err(
-                        <__JniErr as ::core::convert::From<String>>::from(
-                            format!("{} representation is outside its declared domain", #key)
-                        )
-                    )
-                }
-                ::core::result::Result::Err(__e) => {
-                    ::core::result::Result::Err(__e)
-                }
-            }
-        });
-        (repr, Some(syn::parse_quote!(__JniErr)), body)
-    }
-
     pub(crate) fn convert_fns(&self) -> impl Iterator<Item = syn::Ident> + '_ {
         self.convert_decls
             .iter()
@@ -1756,22 +1573,6 @@ fn convert_single_param_any<'f>(
     }
 }
 
-/// [`convert_single_param_any`] + the direction-specific error context.
-fn convert_single_param<'f>(
-    key: &TypeKey,
-    f: &syn::Ident,
-    item_fn: &'f prebindgen_registry::flat::Function,
-    dir: &str,
-) -> (&'f TypeRef, bool) {
-    let (ty, by_ref) = convert_single_param_any(f, item_fn);
-    assert!(
-        ty.key() != *key,
-        "convert!({k}).{dir}({f}): the function must take the converted form, not `{k}` itself",
-        k = key.as_str()
-    );
-    (ty, by_ref)
-}
-
 impl Declarations {
     /// Build a `KotlinMeta` carrying just the value-context Kotlin name.
     /// Used by every built-in converter (primitives, structs, `Option<_>`,
@@ -1781,41 +1582,25 @@ impl Declarations {
     pub(crate) fn framework_meta(&self, kotlin_name: Option<KtType>) -> KotlinMeta {
         KotlinMeta {
             kotlin_name,
-            value_rust_type: None,
+            value_reading: None,
             projection: None,
+            niche_sentinels: Vec::new(),
         }
     }
 
-    fn conversion_domain_niches(
+    /// Maximum number of `Option` layers placed over `key` in one crossing
+    /// direction. This is representation demand, not a spelling probe: the
+    /// registry's readings already account for transparent wrappers.
+    pub(crate) fn optional_niche_demand(
         &self,
         key: &TypeKey,
         registry: &impl Conversions,
         direction: Direction,
-        wire: &syn::Type,
-    ) -> (Niches, Vec<String>) {
-        let Some(domain) = self
-            .convert_decls
-            .iter()
-            .find(|d| d.key() == key)
-            .and_then(|d| d.domain().as_ref())
-        else {
-            return (Niches::empty(), Vec::new());
-        };
-        if TypeKey::from_type(domain.ty()).as_str() != "u64"
-            || prebindgen_registry::types_util::path_tail_ident(wire)
-                .is_none_or(|ident| ident != "jlong")
-        {
-            return (Niches::empty(), Vec::new());
-        }
-        let demand = registry
+    ) -> usize {
+        registry
             .crossing_keys(direction)
             .iter()
             .map(|candidate| {
-                // How many `Option` layers this crossing puts over `key` — the
-                // model's count, so a wrapped spelling contributes the same
-                // demand a bare one does. Walking the reading also drops the
-                // re-lookup the old loop did: it peeled a spelling and re-keyed
-                // each result, where the layers are already right here (#273).
                 let Some(mut reading) = registry.reading(candidate) else {
                     return 0;
                 };
@@ -1831,7 +1616,89 @@ impl Declarations {
                 }
             })
             .max()
-            .unwrap_or(0);
+            .unwrap_or(0)
+    }
+
+    /// Allocate unused `jint` discriminants for an `enum_class` terminal.
+    /// One slot is exposed per Optional layer that the registry will compose;
+    /// the ordered slots let nested options remain a single primitive wire.
+    pub(crate) fn enum_niches(
+        &self,
+        e: &prebindgen_registry::flat::Enum,
+        registry: &impl Conversions,
+        direction: Direction,
+    ) -> (Niches, Vec<String>) {
+        let key = TypeKey::from_ident(&e.name);
+        let demand = self.optional_niche_demand(&key, registry, direction);
+        if demand == 0 {
+            return (Niches::empty(), Vec::new());
+        }
+        let used: std::collections::BTreeSet<i64> = e
+            .discriminant_values()
+            .unwrap_or_else(|name| {
+                panic!(
+                    "enum `{}` variant `{name}` has a non-literal discriminant; use a literal \
+                     integer value (e.g. `= 1`) or an implicit discriminant",
+                    e.name
+                )
+            })
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect();
+        let mut raw = i32::MIN;
+        let mut slots = Vec::with_capacity(demand);
+        let mut kotlin = Vec::with_capacity(demand);
+        while slots.len() < demand {
+            if !used.contains(&i64::from(raw)) {
+                slots.push(NicheSlot {
+                    value: syn::parse_quote!(#raw),
+                    matches: syn::parse_quote!(*v == #raw),
+                });
+                kotlin.push(if raw == i32::MIN {
+                    "Int.MIN_VALUE".to_string()
+                } else {
+                    raw.to_string()
+                });
+                if slots.len() == demand {
+                    break;
+                }
+            }
+            raw = raw.checked_add(1).unwrap_or_else(|| {
+                panic!(
+                    "enum `{}` does not leave {demand} free jint discriminants for Optional \
+                     composition",
+                    e.name
+                )
+            });
+        }
+        (Niches::from_slots(slots), kotlin)
+    }
+
+    pub(crate) fn conversion_domain_niches(
+        &self,
+        key: &TypeKey,
+        registry: &impl Conversions,
+        direction: Direction,
+        wire: &syn::Type,
+    ) -> (Niches, Vec<String>) {
+        let Some(domain) = self
+            .convert_decls
+            .iter()
+            .find(|d| d.key() == key)
+            .and_then(|d| d.domain().as_ref())
+        else {
+            return (Niches::empty(), Vec::new());
+        };
+        if domain.kind() != prebindgen_registry::DomainKind::U64
+            || prebindgen_registry::types_util::path_tail_ident(wire)
+                .is_none_or(|ident| ident != "jlong")
+        {
+            return (Niches::empty(), Vec::new());
+        }
+        // How many `Option` layers this crossing puts over `key` — the
+        // model's count, so a wrapped spelling contributes the same demand a
+        // bare one does (#273).
+        let demand = self.optional_niche_demand(key, registry, direction);
         let mut slots = Vec::new();
         let mut kotlin = Vec::new();
         for value in domain.niche_values(demand) {
@@ -1853,45 +1720,19 @@ impl Declarations {
         (Niches::from_slots(slots), kotlin)
     }
 
-    fn attach_domain_sentinels(metadata: &mut KotlinMeta, sentinels: Vec<String>) {
+    pub(crate) fn attach_domain_sentinels(metadata: &mut KotlinMeta, sentinels: Vec<String>) {
         if let Some(projection) = metadata.projection.as_mut() {
             projection.niche_sentinels = sentinels;
         }
     }
 
-    // ── Converter lookups (used by the Prebindgen impl) ───────────
-
-    /// The input converter a `convert!` declaration supplies for `outer`.
+    /// The representation a `convert!` declaration depends on.
     ///
-    /// The body triple's middle slot carries the bound exception — `None` ⇒
-    /// framework `__JniErr` with an `Ok`-wrap, `Some(<Rust type>)` ⇒
-    /// `Result<ty, <Rust type>>` emitted verbatim, decided in
-    /// [`Self::build_input_fn`].
-    ///
-    /// The closure's returned type is classified by [`is_wire_type`]:
-    /// * **wire** ⇒ terminal: a single converter `wire → outer`.
-    /// * **rust type** ⇒ composed: that type's input converter runs
-    ///   first (`wire → ty`), then this registration's body is a
-    ///   value-inspecting stage `ty → outer` (built by-value via
-    ///   [`Self::build_output_fn`]) prepended to the inner chain. Defer
-    ///   (`None`) if the inner converter isn't resolved yet.
-    ///
-    /// The type a `convert!` declaration's conversion chains through, by
-    /// **identity**.
-    ///
-    /// The declare-time probe: `declare_into` crosses this type and records an
-    /// edge to it, and both are identity uses. It used to call
-    /// `convert_{input,output}_body` and throw the body away — which now would
-    /// mean handing the capability to declaration code, for a spelling it
-    /// discards.
-    ///
-    /// The representation, per direction, is what those bodies return: the
-    /// input fn's **parameter** (what the wire hands in), the output fn's
-    /// **return** (what the wire gets back), and for a `Trait` spec the `repr`
-    /// the declaration states outright.
-    ///
-    /// A `TypeKey` is a normalized type, so re-parsing one is exactly what
-    /// `cross` canonicalizes to anyway.
+    /// This declaration-only bridge exists because `RegistryBuilder::cross`
+    /// still accepts syntax. Function-backed conversions already provide a
+    /// Flat `TypeRef`; converting its key back to syntax is the leak tracked
+    /// by #558. Recipe compilation does not use this result: it retains the
+    /// reading itself and final rendering alone spells it.
     pub(crate) fn convert_target(
         &self,
         key: &TypeKey,
@@ -1918,283 +1759,6 @@ impl Declarations {
             }
         }
     }
-
-    pub(crate) fn lookup_input(
-        &self,
-        outer: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // A `convert!`-declared conversion is the only thing that answers here.
-        // There was a wildcard-pattern table beside it; nothing ever wrote to
-        // the input half, so every lookup through it returned `None`.
-        let key = outer.key();
-        let (ty, exc_ty, body) = self.convert_input_body(&key, registry, emit)?;
-        // The closure's middle slot carries the `Result`'s raw Rust error
-        // type (or `None` for the framework `__JniErr`); it feeds the
-        // converter signature `Result<_, E>` directly — no registration.
-        let exc = exc_ty.as_ref();
-        // Terminal vs composed: `ty` is composed iff it's a *distinct*
-        // rust type with its own input converter. The self-check guards
-        // the void/identity case, and the registered-converter probe
-        // distinguishes a rust continue-type (compose) from a wire
-        // (terminal) without forcing `()` either way. A non-wire `ty` that
-        // isn't yet resolved defers.
-        let outer_node: syn::Type = {
-            let spelled = emit.spell(outer);
-            syn::parse_quote!(#spelled)
-        };
-        let is_self = TypeKey::from_type(&ty) == outer.key();
-        let inner = if is_self {
-            None
-        } else {
-            registry.reading_of(&ty).and_then(|tr| self.in_frag(&tr))
-        };
-        match inner {
-            None if is_self || is_wire_type(&ty) => {
-                // Terminal: `ty` is the wire; the body produces `outer`.
-                let kotlin_name = self
-                    .types
-                    .get(&key)
-                    .and_then(|c| c.name_spec.as_ref())
-                    .map(|s| KtType::cls(self.fqn_of(s)))
-                    .or_else(|| kotlin_for_wire(&ty));
-                let niches = Niches::empty();
-                Some(ConverterImpl {
-                    subs: vec![],
-                    pre_stages: vec![],
-                    function: self.build_input_fn_of(outer, &ty, &body, exc, emit),
-                    destination: ty,
-                    niches,
-                    metadata: KotlinMeta {
-                        kotlin_name,
-                        value_rust_type: None,
-                        // Terminal: body produces the wire directly, no inner
-                        // converter composed, so no handle to carry.
-                        projection: None,
-                    },
-                })
-            }
-            // Non-wire `ty` whose converter isn't resolved yet — defer.
-            None => None,
-            Some(inner) => {
-                // Composed: `ty` is the inner source rust type. Its input
-                // converter (`wire → ty`) is the wire-facing function;
-                // this body is a stage `ty → outer` that runs after it.
-                // The stage takes the inner-produced value BY VALUE and
-                // yields `outer`, i.e. the same shape an output converter
-                // has — so it's built with `build_output_fn`.
-                let stage = Stage {
-                    // `outer` sits in the WIRE slot here: the stage yields it
-                    // from `ty`, so it is spelled into the signature rather
-                    // than classified.
-                    function: self.build_output_fn(&ty, &outer_node, &body, exc),
-                    metadata: KotlinMeta::default(),
-                };
-                let mut pre_stages = vec![stage];
-                pre_stages.extend(inner.pre_stages.iter().cloned());
-                let kotlin_name = inner.metadata.kotlin_name.clone();
-                let value_rust_type = None;
-                let (niches, sentinels) = self.conversion_domain_niches(
-                    &key,
-                    registry,
-                    Direction::Construct,
-                    &inner.destination,
-                );
-                let mut metadata = KotlinMeta {
-                    kotlin_name,
-                    value_rust_type,
-                    projection: inner.metadata.projection.clone(),
-                };
-                Self::attach_domain_sentinels(&mut metadata, sentinels);
-                Some(ConverterImpl {
-                    subs: vec![],
-                    function: inner.function.clone(),
-                    destination: inner.destination.clone(),
-                    pre_stages,
-                    niches,
-                    metadata,
-                })
-            }
-        }
-    }
-
-    /// Look up a registered output converter for `pat` with `args`
-    /// substituted into its `_` slots. Mirror of [`Self::lookup_input`].
-    ///
-    /// The closure's returned type is classified by [`is_wire_type`]:
-    /// * **wire** ⇒ terminal: a single converter `outer → wire`,
-    ///   returning `Result<wire, err>` (throwing iff exc is set).
-    /// * **rust type** ⇒ composed: this body is a value-inspecting stage
-    ///   `outer → ty` prepended to `ty`'s own output converter chain
-    ///   (e.g. `ZResult<T>` returns rust `T`, so the peel stage raises
-    ///   its exception and `T`'s converter marshals the wire). Defer
-    ///   (`None`) if `ty`'s converter isn't resolved yet.
-    pub(crate) fn lookup_output(
-        &self,
-        outer: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let key = outer.key();
-        let (ty, exc_ty, body) = self.convert_output_body(&key, registry, emit)?;
-        self.build_output_converter(outer, None, ty, exc_ty, body, registry, emit)
-    }
-
-    /// The `Result<T, E>` output peel: the value succeeds as `T`, and `E` routes
-    /// to the error sink on `Err`.
-    ///
-    /// This was the sole entry in a four-rank wildcard-pattern table, reached
-    /// through a general unification engine. The model already calls this shape
-    /// [`TypeKind::Fallible`](prebindgen_registry::flat::TypeKind::Fallible), so the
-    /// engine expressed one fact the frontend states outright.
-    pub(crate) fn result_peel(
-        &self,
-        outer: &prebindgen_registry::flat::TypeRef,
-        ok: &syn::Type,
-        err: &syn::Type,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.build_output_converter(
-            outer,
-            Some(ok),
-            ok.clone(),
-            Some(err.clone()),
-            syn::parse_quote!(v),
-            registry,
-            emit,
-        )
-    }
-
-    /// Assemble the output `ConverterImpl` from a body triple.
-    ///
-    /// `arg0` is the peeled inner type for a shape peel, `None` for a
-    /// `convert!`-declared conversion — which is what the old `rank == 0`
-    /// tested.
-    #[allow(clippy::too_many_arguments)]
-    fn build_output_converter(
-        &self,
-        outer: &prebindgen_registry::flat::TypeRef,
-        arg0: Option<&syn::Type>,
-        ty: syn::Type,
-        exc_ty: Option<syn::Type>,
-        body: syn::Expr,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let key = outer.key();
-        // The middle slot carries the `Result`'s raw Rust error type (or `None`
-        // for the framework `__JniErr`).
-        let exc = exc_ty.as_ref();
-        // Terminal vs composed — see [`Self::lookup_input`] for the rule.
-        let is_self = TypeKey::from_type(&ty) == key;
-        let inner = if is_self {
-            None
-        } else {
-            registry.reading_of(&ty).and_then(|tr| self.out_frag(&tr))
-        };
-        match inner {
-            None if is_self || is_wire_type(&ty) => {
-                // Terminal: `ty` is the wire; the body produces it from `outer`.
-                let (kotlin_name, value_rust_type) = if let Some(a0) = arg0 {
-                    registry
-                        .reading_of(a0)
-                        .and_then(|tr| self.out_frag(&tr))
-                        .map(|e| {
-                            (
-                                e.metadata.kotlin_name.clone(),
-                                Some(prebindgen_registry::flat::canonical_type(a0)),
-                            )
-                        })
-                        .unwrap_or((None, None))
-                } else {
-                    let kn = self
-                        .types
-                        .get(&key)
-                        .and_then(|c| c.name_spec.as_ref())
-                        .map(|s| KtType::cls(self.fqn_of(s)))
-                        .or_else(|| kotlin_for_wire(&ty));
-                    (kn, None)
-                };
-                let niches = match arg0 {
-                    None => Niches::empty(),
-                    Some(_) => default_niches_for_wire(&ty),
-                };
-                Some(ConverterImpl {
-                    subs: vec![],
-                    pre_stages: vec![],
-                    function: self.build_output_fn_of(outer, &ty, &body, exc, emit),
-                    destination: ty,
-                    niches,
-                    metadata: KotlinMeta {
-                        kotlin_name,
-                        value_rust_type,
-                        // Terminal: body produces the wire directly, no inner
-                        // converter composed, so no handle to carry.
-                        projection: None,
-                    },
-                })
-            }
-            // Non-wire `ty` whose converter isn't resolved yet — defer.
-            None => None,
-            Some(inner) => {
-                // Composed: `ty` is the continue rust type; chain its converter.
-                let stage = Stage {
-                    function: self.build_output_fn_of(outer, &ty, &body, exc, emit),
-                    metadata: KotlinMeta::default(),
-                };
-                let mut pre_stages = vec![stage];
-                pre_stages.extend(inner.pre_stages.iter().cloned());
-                let kotlin_name = inner.metadata.kotlin_name.clone();
-                let value_rust_type = arg0.map(prebindgen_registry::flat::canonical_type);
-                let (niches, sentinels) = match arg0 {
-                    None => self.conversion_domain_niches(
-                        &key,
-                        registry,
-                        Direction::Deconstruct,
-                        &inner.destination,
-                    ),
-                    Some(_) => (default_niches_for_wire(&inner.destination), Vec::new()),
-                };
-                let mut metadata = KotlinMeta {
-                    kotlin_name,
-                    value_rust_type,
-                    projection: inner.metadata.projection.clone(),
-                };
-                Self::attach_domain_sentinels(&mut metadata, sentinels);
-                Some(ConverterImpl {
-                    subs: vec![],
-                    function: inner.function.clone(),
-                    destination: inner.destination.clone(),
-                    pre_stages,
-                    niches,
-                    metadata,
-                })
-            }
-        }
-    }
-}
-
-/// Recognise the JNI **wire** shapes a converter body may return as a
-/// terminal destination. Reuses the back-end's existing wire knowledge:
-/// every `jni::sys::*` / `jni::objects::*` wire is recognised by
-/// [`kotlin_for_wire`] (returns `Some`), plus
-/// raw pointers structurally — so there is no separate wire-type
-/// allowlist to keep in sync.
-///
-/// `()` is deliberately **not** treated as a wire here: it is ambiguous
-/// (the void wire of a self-converter *and* the unit continue-type of
-/// `ZResult<()>`). The terminal-vs-composed decision in
-/// [`JniGenBuilder::lookup_input`] / [`JniGenBuilder::lookup_output`] resolves that
-/// ambiguity via the self-check + registered-converter probe, so `()`
-/// flows correctly without being force-classified here.
-pub(crate) fn is_wire_type(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Ptr(_)) || kotlin_for_wire(ty).is_some()
-}
-
-pub(crate) fn default_err_type() -> syn::Type {
-    syn::parse_quote!(__JniErr)
 }
 
 /// The actual framework error type the `__JniErr` alias resolves to: the

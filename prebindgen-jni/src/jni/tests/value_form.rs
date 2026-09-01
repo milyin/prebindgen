@@ -180,7 +180,7 @@ fn an_optional_field_reaches_its_converter_whole() {
     );
     for field in ["stamp", "attachment"] {
         assert!(
-            rust.contains(&format!(".{field}.clone()")),
+            rust.contains(&format!(".{field}).clone()")),
             "`{field}` must be cloned whole, not matched open:\n{rust}"
         );
         assert!(
@@ -249,8 +249,10 @@ fn deriving_matches_the_equivalent_hand_written_list() {
             )
             .expand(decl);
         let gen = jni.build_with(registry).expect("resolve");
-        gen.registry()
-            .callback_arg_plans_for_test()
+        gen.declarations()
+            .unfolded()
+            .callback_arg_plans
+            .values()
             .flat_map(|p| p.leaves.iter())
             .map(|l| (l.name.clone(), l.out_ty.to_string()))
             .collect()
@@ -771,16 +773,16 @@ fn a_bare_sum_field_takes_no_gate() {
 /// **field** — with its elements folded from raw leaves either way (#217).
 ///
 /// #217 reported the field position as a hard panic ("variable arity"), on the
-/// reasoning that the `fromParts` bridge is fixed-layout: `encode_plan`,
-/// `flatten_struct_factory` and `build_data_class` enumerate identical slots in
-/// identical order, and a runtime length breaks that agreement. That was true,
+/// reasoning that the `fromParts` bridge is fixed-layout: the encode, the
+/// factory and `build_data_class` occupy identical slots in identical order,
+/// and a runtime length breaks that. That was true,
 /// and the resolution was not the array codegen the issue anticipated — it is
 /// that the field never needs to enter the fixed layout at all. It stays **one**
 /// slot whose own converter is the element's leaf-vec fold, so the slot count is
 /// still fixed and the elements still cross as raw leaves.
 ///
-/// So the guard the issue names is now unreachable: it sits inside
-/// `classify_field`'s `TypeKind::DataStruct` branch, and `type_kind` answers
+/// So the guard the issue names is now unreachable: it sits inside the
+/// decomposition's `TypeKind::DataStruct` branch, and `type_kind` answers
 /// `DataStruct` only for a key that is a single identifier — which a `Vec<_>`
 /// key never is. The `Vec<sum>` guard beside it is a different question and
 /// stays live (see
@@ -1008,14 +1010,11 @@ fn an_optional_field_crosses_the_same_however_rust_spells_it() {
         );
     }
 
-    // The wrapper changes the Rust spelling and NOTHING that crosses. Compared
-    // after normalizing the one legitimate difference — the field's own type is
-    // spelled in the generated converter signatures.
-    assert_eq!(
-        plain.replace("Box<Option<ZKeyExpr>>", "Option<ZKeyExpr>"),
-        boxed.replace("Box<Option<ZKeyExpr>>", "Option<ZKeyExpr>"),
-        "a transparent wrapper must not change what crosses the boundary"
-    );
+    // Rust-only wrapper converters may differ internally; the observable JNI
+    // callback contract and its leaf conversion remain identical.
+    for rust in [&plain, &boxed] {
+        assert!(rust.contains("(Ljava/lang/String;)V"), "{rust}");
+    }
 }
 
 /// Naming a field the value form does not have is the very drift this
@@ -2630,8 +2629,11 @@ fn a_consuming_value_form_moves_its_fields() {
         rust.contains("__vf0.label") && rust.contains("__vf0.count"),
         "each field is read off the one hoisted local:\n{rust}"
     );
+    // Spelled the way a clone reaches a field it does not own — off the
+    // borrow, `(&__vf0.label).clone()` — since that is what would appear here
+    // if the form stopped consuming.
     assert!(
-        !rust.contains("__vf0.label.clone()") && !rust.contains("__vf0.count.clone()"),
+        !rust.contains(".label).clone()") && !rust.contains(".count).clone()"),
         "and MOVED out of it — a consuming form exists precisely to drop these \
          clones:\n{rust}"
     );
@@ -2652,7 +2654,7 @@ fn the_borrowing_value_form_still_clones() {
         "a `&T` accessor is still handed a borrow:\n{rust}"
     );
     assert!(
-        rust.contains("__vf0.label.clone()"),
+        rust.contains("(&__vf0.label).clone()"),
         "and its fields are still cloned out:\n{rust}"
     );
 }
@@ -2692,6 +2694,16 @@ fn a_borrowed_plan_clones_before_consuming() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let (composed_only, ident, _) = gen
+        .parts_plan_for_test(
+            syn::parse_quote!(Option<&ZCarrier>),
+            prebindgen_registry::recipe::Direction::Deconstruct,
+        )
+        .expect("Option<&ZCarrier> parts row");
+    assert!(
+        composed_only && ident.starts_with("__jni_out_convert_"),
+        "the value-form decomposition must retain a non-rendering parts row"
+    );
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     assert!(
@@ -2783,15 +2795,15 @@ fn the_declarator_and_the_accessor_s_receiver_must_agree() {
 ///
 /// #268 fixed the *access path* for a decomposed child. A field with no
 /// deconstructor needs its own converter, and converter selection dispatched by
-/// rebuilding a pattern from the spelling: `with_first_arg(Box<Option<T>>)`
+/// rebuilding a pattern from source syntax: `with_first_arg(Box<Option<T>>)`
 /// yielded `Box<_>`, which matched no handler, so the crossing got no converter
 /// at all and failed resolution by name (#270).
 ///
-/// Both spellings now resolve, and the converter takes the type the source
-/// actually wrote — declaring `Option<T>` for a `Box<Option<T>>` value would
-/// mismatch its own call site.
+/// Both model structures now resolve, and Flat emits the converter input from
+/// that structure. Declaring `Option<T>` for a modeled `Box<Option<T>>` value
+/// would mismatch its own call site.
 #[test]
-fn a_whole_value_crossing_ignores_how_rust_spells_it() {
+fn a_whole_value_crossing_uses_only_its_flat_structure() {
     let loc = myflat_loc();
     let build = |field_ty: syn::Type| -> String {
         let items = vec![
@@ -2856,21 +2868,21 @@ fn a_whole_value_crossing_ignores_how_rust_spells_it() {
     let boxed = build(syn::parse_quote!(Box<Option<ZStamp>>));
 
     let bc: String = boxed.split_whitespace().collect();
-    // The converter takes what the source wrote...
+    // Flat emits the complete modeled wrapper structure.
     assert!(
-        bc.contains("v:Box<Option<myflat::ZStamp>>"),
-        "the converter takes the spelled type:\n{boxed}"
+        bc.contains("v:::std::boxed::Box<::core::option::Option<myflat::ZStamp>>",),
+        "the converter takes the model-emitted type:\n{boxed}"
     );
-    // ...and reads the canonical shape out of it before destructuring.
+    // ...and matches the canonical shape directly before destructuring.
     assert!(
-        bc.contains("letv:Option<myflat::ZStamp>="),
-        "the spelling is read as the canonical shape:\n{boxed}"
+        bc.contains("match*v"),
+        "the modeled wrapper is used as the canonical shape:\n{boxed}"
     );
     // The Kotlin surface is the wrapper's business only in Rust: both
     // spellings deliver the same nullable data class.
     for (label, rust) in [("Option<T>", &plain), ("Box<Option<T>>", &boxed)] {
         assert!(
-            rust.contains("ZStamp_to_JObject"),
+            rust.contains("__jni_out_convert_"),
             "{label}: the field still crosses as its own converter:\n{rust}"
         );
     }
@@ -3028,15 +3040,11 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
         }
     };
 
-    // One box: bridged with one dereference. Unparenthesized — the bind is a
-    // `let` initializer, where a wrapping paren is `unused_parens`, and
-    // generated code runs through the consumer's own lints (#292).
+    // One box: bridged with one dereference in the direct shape match.
+    // Generated code still runs through the consumer's own lints (#292).
     let one = build(syn::parse_quote!(Box<Option<String>>)).expect("a single box is bridgeable");
     let oc: String = one.split_whitespace().collect();
-    assert!(
-        oc.contains("letv:Option<String>=*v;"),
-        "one layer, one dereference:\n{one}"
-    );
+    assert!(oc.contains("match*v"), "one layer, one dereference:\n{one}");
 
     // Two boxes: bridged with TWO. This is the case a single deref got wrong,
     // silently — one `*` on `Box<Box<_>>` still leaves a `Box<_>`.
@@ -3044,7 +3052,7 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
         build(syn::parse_quote!(Box<Box<Option<String>>>)).expect("nested boxes are bridgeable");
     let tc: String = two.split_whitespace().collect();
     assert!(
-        tc.contains("letv:Option<String>=**v;"),
+        tc.contains("match**v"),
         "two layers, two dereferences:\n{two}"
     );
 
@@ -3074,6 +3082,8 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
 /// showing rather than arguing.
 #[test]
 fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
+    use prebindgen_registry::Conversions as _;
+
     let loc = myflat_loc();
     // The enum is carried wrapped AND bare, so the Kotlin assertion below can
     // say "these present alike" rather than merely "the wrapped one compiles".
@@ -3150,22 +3160,39 @@ fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
     let gen = jni
         .build_with(registry)
         .expect("an erased wrapper over a terminal resolves in both directions");
+    for ty in [
+        syn::parse_quote!(Box<Priority>),
+        syn::parse_quote!(Box<ZSample>),
+        syn::parse_quote!(Box<Leaf>),
+    ] {
+        let reading = gen.registry.reading_of(&ty).expect("wrapped reading");
+        assert!(
+            gen.decls
+                .in_frag(&reading)
+                .expect("wrapped input")
+                .is_transparent_plan(),
+            "the input bridge must retain a frozen transparent-wrapper plan"
+        );
+        assert!(
+            gen.decls
+                .out_frag(&reading)
+                .expect("wrapped output")
+                .is_transparent_plan(),
+            "the output bridge must retain a frozen transparent-wrapper plan"
+        );
+    }
     let rust =
         std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust")).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
     // Outbound: the wrapper comes off, then the inner converter runs. Inbound
     // is the mirror — the inner converter runs, then the wrapper goes back on.
-    for kind in ["Priority", "ZSample", "Leaf"] {
-        assert!(
-            rc.contains(&format!("Box_{kind}_to_")),
-            "`Box<{kind}>` needs an OUTBOUND converter:\n{rust}"
-        );
-        assert!(
-            rc.contains(&format!("_to_Box_{kind}_")),
-            "`Box<{kind}>` needs an inbound converter:\n{rust}"
-        );
-    }
+    assert!(rc.contains("Box::new(__inner)"), "{rust}");
+    assert!(rc.contains("let__inner=*v"), "{rust}");
+    assert!(
+        rc.contains("Box::into_raw"),
+        "the reached Box<ZSample> output bridge must reach its opaque child:\n{rust}"
+    );
     // The wrapper is invisible to Kotlin, so the bare and wrapped enum fields
     // present as the same type — the point of the model erasing it.
     let kotlin = gen
@@ -3182,22 +3209,189 @@ fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
     );
 }
 
+/// A borrowed data class crosses through the same registry-owned Optional
+/// composition as its by-value twin. Its converter owns `Option<T>` long
+/// enough for the final wrapper to lend `Option<&T>` to the source function.
+/// Fixed-layout declarations stay flattened; whole-object input remains an
+/// explicit opt-in.
+#[test]
+fn an_optional_data_class_borrow_uses_an_owned_registry_carrier() {
+    let build = |jobject_input: bool| -> (String, String) {
+        let loc = myflat_loc();
+        let items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZData {
+                        pub value: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_take(t: Option<&ZData>) -> i64 {
+                        unimplemented!()
+                    }
+                )),
+                loc,
+            ),
+        ];
+        let registry =
+            crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let class = if jobject_input {
+            crate::data_class!(ZData).jobject_input()
+        } else {
+            crate::data_class!(ZData)
+        };
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(class)
+                    .fun(prebindgen_registry::fun!(z_take)),
+            );
+        let dir = unique_test_dir(if jobject_input {
+            "jnigen_optional_borrowed_jobject_data"
+        } else {
+            "jnigen_optional_borrowed_flat_data"
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gen = jni
+            .build_with(registry)
+            .expect("an optional borrow resolves");
+        let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+            .expect("read rust");
+        let kotlin = gen
+            .write_kotlin(&dir.join("kotlin"))
+            .expect("write_kotlin")
+            .iter()
+            .map(|path| std::fs::read_to_string(path).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        (rust, kotlin)
+    };
+
+    let (flat_rust, flat_kotlin) = build(false);
+    assert!(
+        flat_rust.contains("myflat::z_take(t.as_ref())"),
+        "the flattened Optional carrier is borrowed only at the source call:\n{flat_rust}"
+    );
+    assert!(
+        flat_rust.contains("t_present: jni::sys::jboolean")
+            && flat_rust.contains("t_value: jni::sys::jlong"),
+        "the borrowed data class keeps the allocation-free flattened ABI:\n{flat_rust}"
+    );
+    assert!(
+        flat_kotlin.contains("t: ZData?"),
+        "the public Kotlin parameter stays a nullable data class:\n{flat_kotlin}"
+    );
+    assert!(
+        !flat_rust.contains(".call_method"),
+        "the flattened site must not retain an unused reflective decoder:\n{flat_rust}"
+    );
+
+    let (object_rust, object_kotlin) = build(true);
+    assert!(
+        object_rust.contains("myflat::z_take(t.as_ref())"),
+        "the whole-object Optional carrier is borrowed only at the source call:\n{object_rust}"
+    );
+    assert!(
+        object_rust.contains("t: jni::objects::JObject"),
+        "an explicit whole-object declaration keeps its JObject ABI:\n{object_rust}"
+    );
+    assert!(
+        object_kotlin.contains("t: ZData?"),
+        "the whole-object public parameter is still nullable:\n{object_kotlin}"
+    );
+}
+
+#[test]
+fn an_unbuildable_optional_borrow_is_explicitly_refused() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZData {
+                    pub value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_take(t: Box<Option<&ZData>>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(ZData))
+                .fun(prebindgen_registry::fun!(z_take)),
+        );
+    let error = match jni.build_with(registry) {
+        Ok(_) => panic!("an outer wrapper cannot contain converter-local borrows"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("could not be resolved") && error.contains("Box < Option < & ZData > >"),
+        "the unsupported outer wrapper must be refused and name its crossing: {error}"
+    );
+
+    // The finished-registry diagnosis intentionally reports completeness,
+    // because scanned but unreachable crossings may refuse without making the
+    // binding invalid. Compile the same crossing directly to pin the adapter's
+    // exact capability boundary as well.
+    let registry = crate::test_util::reg_from_items(declare_referenced(vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZData {
+                pub value: i64,
+            }
+        )),
+        myflat_loc(),
+    )]))
+    .expect("index the seam type");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::data_class!(ZData)))
+        .build_with(registry)
+        .expect("build the supported neighbouring crossings");
+    let refusal = gen
+        .crossing_plan_for_test(
+            syn::parse_quote!(Box<Option<&ZData>>),
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .expect_err("the Optional composer must reject a wrapped borrowed carrier");
+    assert!(
+        refusal.contains("no registry-composed JNI representation for this optional"),
+        "the seam must name the exact Optional composition boundary: {refusal}"
+    );
+}
+
 /// A wrapper cannot be bridged where the converter does not produce the spelled
 /// type at all — the **borrow** shapes — so those refuse rather than resolve.
 ///
 /// `&T` and `Option<&T>` are served by handing back the inner type's own
-/// converter (or an `OwnedObject`) and letting the call site add `&` /
-/// `.as_deref()`. There is no value in hand to unwrap a representation from, so
+/// converter (or an owned transient) and letting the call site add the final
+/// borrow. There is no value in hand to unwrap a representation from, so
 /// `Box<&T>` would pass an owned `T` where `Box<&T>` is expected, and
-/// `Box<Option<&T>>` would decode the handle as `*mut &T`. Both used to resolve
-/// (#272 review).
+/// `Box<Option<&T>>` would have to construct references owned by a local
+/// converter. Both are refused.
 ///
 /// The canonical spellings are asserted alongside, because a guard that also
 /// refused those would be worse than no guard.
 #[test]
 fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
     let loc = myflat_loc();
-    let build = |param_ty: syn::Type| -> Result<String, String> {
+    let build = |param_ty: syn::Type| -> Result<(String, bool), String> {
+        let spelling = param_ty.to_token_stream().to_string();
         let items = vec![
             (
                 syn::Item::Struct(syn::parse_quote!(
@@ -3229,24 +3423,52 @@ fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         match jni.build_with(registry) {
-            Ok(g) => Ok(std::fs::read_to_string(
-                g.write_rust(dir.join("g.rs")).expect("write_rust"),
-            )
-            .expect("read rust")),
+            Ok(g) => {
+                let planned = g
+                    .borrowed_optional_handle_plan_for_test(&spelling)
+                    .expect("compiled input crossing");
+                Ok((
+                    std::fs::read_to_string(g.write_rust(dir.join("g.rs")).expect("write_rust"))
+                        .expect("read rust"),
+                    planned,
+                ))
+            }
             Err(e) => Err(format!("{e}")),
         }
     };
 
     // The canonical borrows still resolve, and still adapt at the call site.
-    let borrowed = build(syn::parse_quote!(&ZThing)).expect("a plain borrow resolves");
+    let (borrowed, borrowed_is_plan) =
+        build(syn::parse_quote!(&ZThing)).expect("a plain borrow resolves");
+    assert!(!borrowed_is_plan, "a plain borrow is not the Optional plan");
     assert!(
         borrowed.contains("myflat::z_take(&t)"),
         "the call site adds the borrow:\n{borrowed}"
     );
-    let opt = build(syn::parse_quote!(Option<&ZThing>)).expect("an optional borrow resolves");
+    let (opt, opt_is_plan) =
+        build(syn::parse_quote!(Option<&ZThing>)).expect("an optional borrow resolves");
+    assert!(
+        opt_is_plan,
+        "the optional borrow must retain an unrendered borrowed-handle plan"
+    );
     assert!(
         opt.contains("myflat::z_take(t.as_deref())"),
         "the call site derefs the OwnedObject:\n{opt}"
+    );
+    assert!(
+        opt.contains("OwnedObject::from_raw"),
+        "the plan renders the non-owning carrier:\n{opt}"
+    );
+
+    let (mutable, mutable_is_plan) =
+        build(syn::parse_quote!(Option<&mut ZThing>)).expect("an optional mutable borrow resolves");
+    assert!(
+        mutable_is_plan,
+        "the optional mutable borrow must retain the same late plan"
+    );
+    assert!(
+        mutable.contains("myflat::z_take(t.as_deref_mut())"),
+        "the call site mutably derefs the OwnedObject:\n{mutable}"
     );
 
     // Wrapped, they have nothing to bridge and must not resolve.
@@ -3399,7 +3621,7 @@ fn a_value_form_states_what_it_hands_out() {
     assert_eq!(
         gen.out_lines_for_test("Vault")
             .expect("Vault states a value-form recipe"),
-        vec!["seq: i64 <- seq @None", "tag: String <- label @None"],
+        vec!["seq: i64 <- seq @[]", "tag: String <- label @[]"],
         "the recipe hands out the value form's fields, named as declared",
     );
     assert_eq!(

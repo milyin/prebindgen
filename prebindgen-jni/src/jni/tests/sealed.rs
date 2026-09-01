@@ -1,4 +1,4 @@
-use prebindgen_registry::RegistryBuilder;
+use prebindgen_registry::{Conversions, RegistryBuilder};
 
 use super::*;
 
@@ -647,7 +647,8 @@ fn sum_is_its_own_type_kind() {
         .package(crate::package!().class(crate::sealed_class!(Reading)));
     let ty: syn::Type = syn::parse_quote!(Reading);
     assert!(matches!(
-        jni.decls.type_kind(&registry, &TypeKey::from_type(&ty)),
+        jni.decls
+            .type_kind(registry.flat(), &TypeKey::from_type(&ty)),
         crate::jni::classify::TypeKind::Sum
     ));
     let cfg = jni
@@ -667,7 +668,7 @@ fn sum_is_its_own_type_kind() {
 /// * a **cell** says the type entered the pipeline;
 /// * a **root** says the binding demands its converter — cleared here, because
 ///   a sum crosses decomposed and has no whole-value output converter;
-/// * an **entry** says one resolved — present INPUT-side (`sum_input_body`
+/// * an **entry** says one resolved — present INPUT-side (a retained sum plan
 ///   decodes a whole `JObject`), absent OUTPUT-side, and that asymmetry is the
 ///   design, not an accident.
 ///
@@ -739,6 +740,14 @@ fn a_sums_registry_cells_are_registered_but_not_required() {
     assert!(
         reg.has_entry_for_test(Direction::Construct, &key) == Some(true),
         "the input direction has a whole-object decoder"
+    );
+    let reading = gen.registry.reading(&key).expect("Reading model type");
+    assert!(
+        gen.decls
+            .in_frag(&reading)
+            .expect("Reading whole-object input")
+            .is_sum_codec_plan(),
+        "the whole-object decoder must retain an unrendered sum plan"
     );
     assert!(
         reg.has_entry_for_test(Direction::Deconstruct, &key) == Some(false),
@@ -1121,38 +1130,47 @@ fn sum_from_parts_stays_the_property_typed_convenience() {
     );
 }
 
-/// The Rust side emits ONE `match` over the returned value: the live arm
-/// converts its own group's payloads and every other slot takes the wire
-/// default. No leaf is an independent expression — that is what a product
-/// decomposition does, and a sum is not one.
+/// The registry-composed Choice converter emits one `match` over the returned
+/// value: the live arm invokes its child chains and every other arm
+/// intermediate takes the adapter's inactive value. The exported wrapper calls
+/// that converter instead of reconstructing the sum walk itself.
 #[test]
 fn sum_return_emits_one_match_with_wire_defaults() {
     let (rust, _) = sum_returns("jnigen_sum_match");
-    let at = rust
-        .find("fn Java_io_test_jni_JNINative_readOne")
-        .expect("extern");
-    let body = &rust[at..at + 4000];
+    let choice = generated_function(&rust, &["v : myflat :: Reading"], &["match v"]);
+    let choice_name = choice.sig.ident.to_string();
+    let body = choice.block.to_token_stream().to_string();
+    let compact: String = body.split_whitespace().collect();
     assert!(
-        body.contains("match &__out"),
+        body.contains("match v"),
         "one match over the value:\n{body}"
     );
     assert!(
-        body.contains("myflat::Reading::Missing =>")
-            && body.contains("myflat::Reading::Range { low"),
+        compact.contains("myflat::Reading::Missing=>")
+            && compact.contains("myflat::Reading::Range{low:"),
         "arms bind each variant's payload by pattern:\n{body}"
     );
-    // The payload-less arm assigns the tag and defaults every group slot.
     assert!(
         body.contains("jni :: objects :: JObject :: null ()") || body.contains("JObject::null()"),
-        "an inert object slot is wire-defaulted to null:\n{body}"
+        "an inactive object arm is wire-defaulted to null:\n{body}"
+    );
+
+    let wrapper_at = rust
+        .find("fn Java_io_test_jni_JNINative_readOne")
+        .expect("extern");
+    let wrapper = &rust[wrapper_at..];
+    assert!(
+        wrapper.contains(&choice_name),
+        "the wrapper delegates to the Choice converter:\n{wrapper}"
     );
 }
 
 /// A sum returned **borrowed** (`&E`, `Option<&E>`). `unfold::returns_type`
 /// peels the leading `&` and `wire_fixed_returns` records `by_ref`, so the
-/// encoder matches THROUGH the reference rather than moving the value out of
-/// the owner. Each live group then clones what it needs, and Kotlin receives an
-/// ordinary value with no borrow to track — the borrow never crosses (#161).
+/// registry Choice chain matches THROUGH the reference rather than moving the
+/// value out of the owner. Each live group then clones what it needs, and
+/// Kotlin receives an ordinary value with no borrow to track — the borrow never
+/// crosses (#161).
 #[test]
 fn borrowed_sum_return_matches_through_the_reference() {
     let (rust, kotlin) = sum_returns("jnigen_sum_borrowed");
@@ -1162,30 +1180,23 @@ fn borrowed_sum_return_matches_through_the_reference() {
             .find(&format!("fn Java_io_test_jni_JNINative_{extern_fn}"))
             .unwrap_or_else(|| panic!("{extern_fn} extern missing:\n{rust}"));
         let body = &rust[at..at + 4000];
-        // The value is borrowed from its owner, so the encoder matches the
-        // binding DIRECTLY — `by_ref` is already reflected in `__out`'s type.
-        // Asserted exactly: a bare `contains("match __out")` would also accept
-        // `match __out2`, and accepting `match &__out` as an alternative would
-        // let a regression to double-referencing the borrow pass silently.
+        // The exact borrowed Choice crossing is frozen during planning, so the
+        // wrapper delegates rather than rebuilding the match locally.
         assert!(
-            body.contains("match __out {"),
-            "{extern_fn}: one match over the borrowed value:\n{body}"
+            body.contains("__jni_out_convert_"),
+            "{extern_fn}: delegates to the borrowed Choice chain:\n{body}"
         );
         assert!(
             !body.contains("match &__out"),
             "{extern_fn}: a borrowed return must not take a second reference:\n{body}"
         );
-        assert!(
-            body.contains("myflat::Reading::Missing =>"),
-            "{extern_fn}: arms bind each variant through the reference:\n{body}"
-        );
-        // A payload reached through a borrow cannot be moved out, so the live
-        // group clones it.
-        assert!(
-            body.contains(".clone()"),
-            "{extern_fn}: a borrowed group's payload is cloned, not moved:\n{body}"
-        );
     }
+
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("v:&myflat::Reading") && rc.contains("matchv{") && rc.contains(".clone()"),
+        "the retained Choice chain matches through the borrow and clones payloads:\n{rust}"
+    );
 
     // Kotlin sees a plain value / nullable value — a borrowed sum is not a
     // handle, so there is nothing to close and no lifetime to track.
@@ -1410,10 +1421,11 @@ fn sum_return_group_can_own_a_handle() {
 ///   makes the two spellings agree is that `Lookup` is itself `AutoCloseable`
 ///   — the `when` over the alternatives lives in the sum, so the container
 ///   emits the same one-line cascade either way.
-/// * A sum field takes its parent off the fixed-builder path onto the
-///   whole-value `fromParts` bridge (`synth_value_struct_leaves` declines
-///   `TypeKind::Sum`), so the value costs a JVM object — a slower shape, not a
-///   broken one.
+/// * A sum field keeps its parent on the fixed-builder path: since #616 the
+///   decomposition states it as a tag over one group per alternative, so the
+///   value crosses as leaves and no JVM object is built for it. It used to
+///   decline, which cost the parent an object — a slower shape, not a broken
+///   one — and this test passed either way, since what it pins is the cascade.
 #[test]
 fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
     let loc = myflat_loc();
@@ -1478,14 +1490,16 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
         .collect::<Vec<_>>()
         .join("\n");
 
-    // The tag keeps the `__` marker; a group slot is prefixed with its field
-    // by the single-underscore nesting convention (`mode_periodicQueries_period`).
+    // Both the tag and a group slot are reached THROUGH the field, and the
+    // decomposition joins every such step with `__` — one naming for the
+    // factory and the builder interfaces alike, now that both read the same
+    // leaves (#619).
     assert!(
-        kotlin.contains("outcome__tag: Int") && kotlin.contains("outcome_found_v0: Long"),
+        kotlin.contains("outcome__tag: Int") && kotlin.contains("outcome__found_v0: Long"),
         "the selector plus a raw-pointer group slot, both prefixed by the field:\n{kotlin}"
     );
     assert!(
-        kotlin.contains("Lookup.Found(Probe.fromRawPtr(outcome_found_v0))"),
+        kotlin.contains("Lookup.Found(Probe.fromRawPtr(outcome__found_v0))"),
         "the parent's fromParts inlines the `when` and wraps the pointer:\n{kotlin}"
     );
     assert!(
@@ -2349,12 +2363,12 @@ fn a_types_close_answer_matches_its_plans() {
             let path = format!("{owner}.{}", field.member().to_token_stream());
             // A field `classify_field` refuses has no plan answer to compare
             // against — the documented, deliberate asymmetry.
-            let Some(kind) = classify_field(ext, registry, &field.ty, &path, 0) else {
+            let Some(kind) = classify_field(ext, registry.flat(), &field.ty, &path, 0) else {
                 continue;
             };
             assert_eq!(
                 kind.destructible().is_some(),
-                type_close_strategy(ext, registry, &field.ty, 0).is_some(),
+                type_close_strategy(ext, registry.flat(), &field.ty, 0).is_some(),
                 "the two forms disagree about `{path}`: a plan field and its \
                  bare type must reach the same handles",
             );
@@ -2379,7 +2393,7 @@ fn a_types_close_answer_matches_its_plans() {
     let closes: Vec<String> = everything
         .fields
         .iter()
-        .filter(|f| type_close_strategy(ext, registry, &f.ty, 0).is_some())
+        .filter(|f| type_close_strategy(ext, registry.flat(), &f.ty, 0).is_some())
         .map(|f| f.name.as_ref().unwrap().to_string())
         .collect();
     assert_eq!(
@@ -2448,12 +2462,12 @@ fn a_sealed_class_states_what_it_hands_out() {
     assert_eq!(
         composed,
         vec![
-            "tag: Reading <- tag @None",
-            "exact_v0: i64 <- Exact.v0 @Some(1)",
-            "range_low: i64 <- Range.low @Some(2)",
-            "range_high: i64 <- Range.high @Some(2)",
-            "tagged_v0: String <- Tagged.v0 @Some(3)",
-            "tagged_v1: Priority <- Tagged.v1 @Some(3)",
+            "tag: Reading <- tag @[]",
+            "exact_v0: i64 <- Exact.v0 @[1]",
+            "range_low: i64 <- Range.low @[2]",
+            "range_high: i64 <- Range.high @[2]",
+            "tagged_v0: String <- Tagged.v0 @[3]",
+            "tagged_v1: Priority <- Tagged.v1 @[3]",
         ],
         "the recipe states the tag, then one group per alternative",
     );
@@ -2469,12 +2483,15 @@ fn a_sealed_class_states_what_it_hands_out() {
 /// A `data_class` states a recipe saying what it hands out, and a field that is
 /// itself one contributes its own values under the parent's name and chain.
 ///
-/// The recipe declines for the **whole** value rather than per field, because the
-/// emitter it feeds does: a handle, an `enum_class`, a sum, or a `data_class`
-/// behind an `Option` or a `Vec` is delivered with a transform the decoupled
-/// form does not carry, and one such field sends the whole object down the
-/// whole-value `fromParts` path. So `Wrapped` composes and `Opaque`-bearing
-/// `Guarded` does not, and both agree with the synthesis they will replace.
+/// The recipe declines for the **whole** value rather than per field, because
+/// the emitter it feeds does: one field it cannot state sends the whole object
+/// down the whole-value `fromParts` path. What is left to decline is structural
+/// — a repeated nested class, a field the model does not hold as a named one —
+/// and a handle field is not one of those: it is an ordinary leaf whose own
+/// output conversion carries it as the `jlong` the receiver adopts, which is
+/// what the whole-object encode always emitted for it (#602). So `Wrapped` and
+/// `Opaque`-bearing `Guarded` both compose, and both agree with the synthesis
+/// they will replace.
 #[test]
 fn a_data_class_states_what_it_hands_out() {
     let loc = myflat_loc();
@@ -2550,15 +2567,16 @@ fn a_data_class_states_what_it_hands_out() {
         gen.out_lines_for_test("Wrapped")
             .expect("Wrapped states a deconstructing parts recipe"),
         vec![
-            "id: i64 <- id @None",
-            "inner__count: i64 <- inner.count @None",
-            "inner__label: String <- inner.label @None",
+            "id: i64 <- id @[]",
+            "inner__count: i64 <- inner.count @[]",
+            "inner__label: String <- inner.label @[]",
         ],
         "a nested data class contributes its own values, under its field's name",
     );
-    // Compared as options, because declining is one of the two answers: a recipe
-    // that states nothing and a synthesis that returns nothing are the same
-    // claim, and `Guarded` makes it.
+    // Compared as options, because declining is still one of the two answers:
+    // a recipe that states nothing and a synthesis that returns nothing are the
+    // same claim. No type here makes it any more — the remaining declines are
+    // structural — so what this pins is that the two agree either way.
     for short in ["Wrapped", "Inner", "Guarded"] {
         assert_eq!(
             gen.out_lines_for_test(short),
@@ -2566,9 +2584,14 @@ fn a_data_class_states_what_it_hands_out() {
             "the recipe and the leaf synthesis disagree on {short}",
         );
     }
-    assert!(
-        gen.out_lines_for_test("Guarded").is_none(),
-        "a handle field sends the whole object down the whole-value path",
+    // A handle field is an ordinary leaf: the handle crosses as the `jlong`
+    // the receiver adopts, which is what the whole-object encode has always
+    // emitted for it. Refusing it here kept such a struct off fixed-builder
+    // delivery for no reason the encode shares (#602).
+    assert_eq!(
+        gen.out_lines_for_test("Guarded")
+            .expect("a handle field decomposes like any other leaf"),
+        vec!["id: i64 <- id @[]", "held: Opaque <- held @[]"],
     );
 }
 
@@ -2622,10 +2645,10 @@ fn a_decomposed_return_is_a_site_asking_for_the_parts_row() {
     let gen = jni.build_with(registry).expect("resolve");
 
     let expected = vec![
-        "tag: Reading <- tag @None",
-        "exact_v0: i64 <- Exact.v0 @Some(1)",
-        "range_low: i64 <- Range.low @Some(2)",
-        "range_high: i64 <- Range.high @Some(2)",
+        "tag: Reading <- tag @[]",
+        "exact_v0: i64 <- Exact.v0 @[1]",
+        "range_low: i64 <- Range.low @[2]",
+        "range_high: i64 <- Range.high @[2]",
     ];
     assert_eq!(
         gen.return_site_lines_for_test("read_one")
@@ -2649,4 +2672,431 @@ fn a_decomposed_return_is_a_site_asking_for_the_parts_row() {
         gen.plan_lines_for_test("read_one"),
         "the site and the expansion plan disagree",
     );
+}
+
+/// Generate one Optional crossing through the real recipe driver and Rust
+/// writer. Keeping the crossing isolated lets a refused composed planner fall
+/// back without another function making the whole fixture ambiguous.
+fn optional_wrapper_rust(
+    ty: syn::Type,
+    direction: prebindgen_registry::recipe::Direction,
+    case: &str,
+) -> Result<String, String> {
+    use prebindgen_registry::recipe::Direction;
+
+    let loc = myflat_loc();
+    let gen = match direction {
+        Direction::Construct => {
+            let items: Vec<(syn::Item, SourceLocation)> = vec![(
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn cross(v: #ty) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            )];
+            let registry = crate::test_util::reg_from_items(declare_referenced(items))
+                .map_err(|e| e.to_string())?;
+            JniGenBuilder::new()
+                .set_package_prefix("io.test.jni")
+                .package(crate::package!().fun(prebindgen_registry::fun!(cross)))
+                .build_with(registry)
+                .map_err(|e| e.to_string())?
+        }
+        Direction::Deconstruct => {
+            let items: Vec<(syn::Item, SourceLocation)> = vec![
+                (
+                    syn::Item::Struct(syn::parse_quote!(
+                        pub struct Holder {
+                            pub reading: #ty,
+                        }
+                    )),
+                    loc.clone(),
+                ),
+                (
+                    syn::Item::Fn(syn::parse_quote!(
+                        pub fn z_sample_to_holder(s: &ZSample) -> Holder {
+                            unimplemented!()
+                        }
+                    )),
+                    loc.clone(),
+                ),
+                (
+                    syn::Item::Fn(syn::parse_quote!(
+                        pub fn z_sample_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) {
+                            unimplemented!()
+                        }
+                    )),
+                    loc.clone(),
+                ),
+            ];
+            let registry = crate::test_util::reg_from_items(declare_referenced(items))
+                .map_err(|e| e.to_string())?;
+            JniGenBuilder::new()
+                .set_package_prefix("io.test.jni")
+                .package(
+                    crate::package!()
+                        .class(crate::ptr_class!(ZSample))
+                        .fun(prebindgen_registry::fun!(z_sample_sub)),
+                )
+                .expand(
+                    prebindgen_registry::expand_return!(ZSample)
+                        .fields(prebindgen_registry::fields!(z_sample_to_holder)),
+                )
+                .build_with(registry)
+                .map_err(|e| e.to_string())?
+        }
+    };
+    let dir = unique_test_dir(case);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = gen
+        .write_rust(dir.join("g.rs"))
+        .map_err(|e| e.to_string())?;
+    std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+/// Compile and render one Choice crossing through the real recipe driver.
+fn choice_wrapper_plan(
+    ty: syn::Type,
+    direction: prebindgen_registry::recipe::Direction,
+) -> Result<(bool, String, String), String> {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn seed(n: i32, sink: impl Fn(Reading) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).map_err(|e| e.to_string())?;
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(prebindgen_registry::fun!(seed)),
+        )
+        .build_with(registry)
+        .map_err(|e| e.to_string())?;
+    gen.parts_plan_for_test(ty, direction)
+}
+
+fn product_wrapper_plan(
+    ty: syn::Type,
+    direction: prebindgen_registry::recipe::Direction,
+) -> Result<(bool, String, String), String> {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Sample {
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn seed(v: Sample) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).map_err(|e| e.to_string())?;
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Sample))
+                .fun(prebindgen_registry::fun!(seed)),
+        )
+        .build_with(registry)
+        .map_err(|e| e.to_string())?;
+    gen.parts_plan_for_test(ty, direction)
+}
+
+fn sequence_wrapper_plan(
+    ty: syn::Type,
+    direction: prebindgen_registry::recipe::Direction,
+) -> Result<(bool, String, String), String> {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn seed(v: Vec<String>) {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).map_err(|e| e.to_string())?;
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(seed)))
+        .build_with(registry)
+        .map_err(|e| e.to_string())?;
+    gen.crossing_plan_for_test(ty, direction)
+}
+
+/// Sequence composition has two registry-owned outcomes: an executable list
+/// converter for a one-slot element, and a non-rendering shape fragment when a
+/// site already folds a multi-slot element on the Kotlin side.
+#[test]
+fn borrowed_sequences_keep_their_registry_plan_or_specialized_shape() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                pub struct Payload {
+                    pub id: i64,
+                    pub label: String,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn seed(cb: impl Fn(&[Payload]) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn take_labels(labels: &[String]) {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Payload))
+                .fun(prebindgen_registry::fun!(seed))
+                .fun(prebindgen_registry::fun!(take_labels)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+    let (specialized, ident, rendered) = gen
+        .crossing_plan_for_test(
+            syn::parse_quote!(&[Payload]),
+            prebindgen_registry::recipe::Direction::Deconstruct,
+        )
+        .expect("plan");
+    assert!(
+        specialized && ident.starts_with("__jni_out_convert_"),
+        "the flattened callback fold needs only its Sequence shape: {ident}\n{rendered}"
+    );
+
+    let (specialized, borrowed_ident, borrowed_rendered) = gen
+        .crossing_plan_for_test(
+            syn::parse_quote!(&[String]),
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .expect("labels plan");
+    let compact: String = borrowed_rendered.split_whitespace().collect();
+    assert!(
+        !specialized
+            && borrowed_ident.starts_with("__jni_in_convert_")
+            && compact.contains(
+                "Result<::std::vec::Vec<::std::string::String>,__JniErr>",
+            )
+            && compact.contains("letmut__sequence_values")
+            && compact.contains("__jni_in_convert_"),
+        "the borrowed input must retain the executable registry Sequence plan: {borrowed_ident}\n{borrowed_rendered}"
+    );
+
+    let (specialized, owned_ident, owned_rendered) = gen
+        .crossing_plan_for_test(
+            syn::parse_quote!(Vec<String>),
+            prebindgen_registry::recipe::Direction::Construct,
+        )
+        .expect("owned labels plan");
+    assert!(
+        !specialized
+            && owned_ident == borrowed_ident
+            && owned_rendered == borrowed_rendered,
+        "owned Vec and borrowed slice inputs must share their produced-carrier converter:\nborrowed {borrowed_ident}: {borrowed_rendered}\nowned {owned_ident}: {owned_rendered}"
+    );
+}
+
+/// Every composed planner refuses a wrapper it cannot peel and put back, and
+/// refuses to read one it does not own.
+///
+/// Optional goes through public binding resolution and `write_rust`. Product
+/// and Choice ask their declared `parts` rows, while Sequence asks its default
+/// row; each then renders the JFunction the actual planner retained. Choice
+/// needs the explicit row because sealed-class inputs intentionally retain a
+/// whole-JObject compatibility row.
+///
+/// Both directions exercise a supported `Box` first, proving that the composed
+/// Optional route is available rather than merely asserting every wrapper is
+/// refused. Their unsupported twins then exercise each half of the gate:
+///
+/// * `&Box<Option<String>>` going out: reading peels with `*v`, so a chain
+///   composed over a shared borrow moves the `Option` out of the `Box` — E0507
+///   in the consumer's crate, not here.
+/// * `Cow<'_, Option<String>>` coming in: `Cow` has no build operation, so
+///   planning would succeed and `JSource::build` would hit its `expect` while
+///   `write_rust` renders — a panic in the generator, after every check has
+///   passed.
+///
+/// Product, Sequence and Optional have no legacy JNI representation for the
+/// refused input spellings, so resolution names the unsupported type. Choice
+/// does have one: its refused crossings must retain a non-emitting marker, while an
+/// owned `Box<Reading>` renders the chain converter.
+#[test]
+fn a_composed_chain_refuses_a_wrapper_it_cannot_peel() {
+    use prebindgen_registry::recipe::Direction;
+
+    let output = optional_wrapper_rust(
+        syn::parse_quote!(Box<Option<String>>),
+        Direction::Deconstruct,
+        "jnigen_chain_wrapper_output",
+    )
+    .expect("an owned Box output composes");
+    let output_compact: String = output.split_whitespace().collect();
+    assert!(
+        output_compact.contains("fn__jni_out_convert_"),
+        "the output uses the composed Optional converter:\n{output}"
+    );
+    assert!(
+        output_compact.contains("match*v{"),
+        "the owned wrapper is peeled inside that converter:\n{output}"
+    );
+
+    let borrowed = optional_wrapper_rust(
+        syn::parse_quote!(&'static Box<Option<String>>),
+        Direction::Deconstruct,
+        "jnigen_chain_wrapper_borrowed_output",
+    );
+    let borrowed = borrowed.expect_err("a shared Box output must refuse composition");
+    assert!(
+        borrowed.contains("unresolved prebindgen output type")
+            && borrowed.contains("Box < Option < String > >"),
+        "the refusal names the unsupported borrowed output: {borrowed}"
+    );
+
+    let input = optional_wrapper_rust(
+        syn::parse_quote!(Box<Option<String>>),
+        Direction::Construct,
+        "jnigen_chain_wrapper_input",
+    )
+    .expect("an owned Box input composes");
+    let input_compact: String = input.split_whitespace().collect();
+    assert!(
+        input_compact.contains("fn__jni_in_convert_"),
+        "the input uses the composed Optional converter:\n{input}"
+    );
+    assert!(
+        input_compact.contains("Box::new({ifv.is_null()"),
+        "the canonical Optional is put back in its owned wrapper:\n{input}"
+    );
+
+    let cow = optional_wrapper_rust(
+        syn::parse_quote!(Cow<'static, Option<String>>),
+        Direction::Construct,
+        "jnigen_chain_wrapper_cow_input",
+    );
+    let cow = cow.expect_err("a Cow input must refuse composition");
+    assert!(
+        cow.contains("unresolved prebindgen input type")
+            && cow.contains("Cow < 'static , Option < String > >"),
+        "the refusal names the unsupported Cow input: {cow}"
+    );
+
+    let (legacy, ident, rendered) =
+        product_wrapper_plan(syn::parse_quote!(Box<Sample>), Direction::Construct)
+            .expect("an owned Box Product composes");
+    assert!(
+        !legacy
+            && ident.starts_with("__jni_in_convert_")
+            && rendered
+                .replace(' ', "")
+                .contains("Box::new(myflat::Sample{"),
+        "the Product parts row must retain its wrapper-aware plan: {ident}\n{rendered}"
+    );
+    let (legacy, ident, _) = product_wrapper_plan(
+        syn::parse_quote!(Cow<'static, Sample>),
+        Direction::Construct,
+    )
+    .expect("a Cow Product keeps its compatibility fragment");
+    assert!(
+        legacy && ident.starts_with("__jni_in_convert_"),
+        "the Cow Product must retain the legacy parts fragment, got {ident}"
+    );
+
+    let (legacy, ident, rendered) =
+        sequence_wrapper_plan(syn::parse_quote!(Box<Vec<String>>), Direction::Construct)
+            .expect("an owned Box Sequence composes");
+    assert!(
+        !legacy
+            && ident.starts_with("__jni_in_convert_")
+            && rendered
+                .replace(' ', "")
+                .contains("Box::new({let__sequence_list="),
+        "the Sequence default row must retain its wrapper-aware plan: {ident}\n{rendered}"
+    );
+    let refused = sequence_wrapper_plan(
+        syn::parse_quote!(Cow<'static, Vec<String>>),
+        Direction::Construct,
+    )
+    .expect_err("a Cow Sequence must refuse composition");
+    assert!(
+        refused.contains("no JNI representation for this run"),
+        "the Sequence refusal names its missing compatibility path: {refused}"
+    );
+
+    let (legacy, ident, rendered) =
+        choice_wrapper_plan(syn::parse_quote!(Box<Reading>), Direction::Deconstruct)
+            .expect("an owned Box Choice composes");
+    let rendered_compact: String = rendered.split_whitespace().collect();
+    assert!(!legacy, "the owned Choice must select its composed plan");
+    assert!(
+        ident.starts_with("__jni_out_convert_") && rendered_compact.contains("match*v{"),
+        "the owned Choice renders its wrapper-aware converter: {ident}\n{rendered}"
+    );
+
+    for (label, ty, direction) in [
+        (
+            "borrowed",
+            syn::parse_quote!(&'static Box<Reading>),
+            Direction::Deconstruct,
+        ),
+        (
+            "cow",
+            syn::parse_quote!(Cow<'static, Reading>),
+            Direction::Construct,
+        ),
+    ] {
+        let (legacy, ident, _) = choice_wrapper_plan(ty, direction)
+            .unwrap_or_else(|error| panic!("the {label} Choice keeps its fallback: {error}"));
+        assert!(
+            legacy && ident.starts_with("__jni_"),
+            "the {label} Choice must retain the legacy parts fragment, got {ident}"
+        );
+    }
 }

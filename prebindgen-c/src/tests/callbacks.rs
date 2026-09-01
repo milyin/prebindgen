@@ -1,5 +1,42 @@
 use super::*;
 
+#[test]
+fn callback_artifact_consumes_frozen_argument_sites() {
+    use prebindgen_registry::{generation::ArtifactInput, recipe::Role};
+
+    let loc = SourceLocation::default();
+    let function: syn::ItemFn = syn::parse_quote!(
+        pub fn on_value(cb: impl Fn(u64) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(function), loc)]))
+            .expect("index items");
+    let binding = CbindgenBuilder::new()
+        .callback(syn::parse_quote!(impl Fn(u64) + Send + Sync + 'static))
+        .function(syn::parse_quote!(on_value))
+        .build_with(registry)
+        .expect("resolve");
+    let generation = binding
+        .gen
+        .generation
+        .as_ref()
+        .expect("frozen generation plan");
+    let callback_sites: Vec<_> = generation
+        .sites()
+        .filter(|site| matches!(site.id().site().role, Role::CallbackArg { .. }))
+        .collect();
+    assert_eq!(callback_sites.len(), 1);
+    let artifacts: Vec<_> = generation.artifacts().collect();
+    assert_eq!(artifacts.len(), 1);
+    assert_eq!(artifacts[0].id().kind(), "c-callback");
+    assert!(matches!(
+        artifacts[0].inputs(),
+        [ArtifactInput::Site { site, slots: 1 }] if site == callback_sites[0].id()
+    ));
+}
+
 /// A `.takeable_param(idx)` callback arg is delivered as `*mut z_x_t`: the
 /// closure `call` takes a pointer, the trampoline drops it after the call, and
 /// a public `z_x_take(dst, src)` move function is emitted.
@@ -118,18 +155,19 @@ fn callback_subscriber_emits_closure_structs() {
 
     // Trampoline: by-value struct in, `impl Fn(<src arg>)` out; Arc-held ctx.
     assert!(
-            compact.contains(
-                "fn__cbg_in_z_closure_sample_t(c:z_closure_sample_t,)->implFn(zenoh_flat::ZSample)+Send+Sync+'static"
-            ),
-            "{src}"
-        );
+        compact.contains(
+            "fn__c_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_c_invoke_callback_capture_"
+        ) && compact
+            .contains("(c:z_closure_sample_t,)->implFn(zenoh_flat::ZSample)+Send+Sync+'static"),
+        "{src}"
+    );
     assert!(
         compact.contains("Arc::new(__Ctx{context:c.context,drop:c.drop"),
         "{src}"
     );
     // Arg encoded via its OUTPUT converter, then passed (owned) with context.
     assert!(
-        compact.contains("let__w0=__cbg_out_ZSample(__a0);"),
+        operation_call(&compact, "__c_out_convert_ZSample_", "__a0"),
         "{src}"
     );
     assert!(compact.contains("__f(__w0,__ctx.context)"), "{src}");
@@ -137,8 +175,8 @@ fn callback_subscriber_emits_closure_structs() {
     // Zero-arg trampoline.
     assert!(
         compact.contains(
-            "fn__cbg_in_z_closure_drop_t(c:z_closure_drop_t,)->implFn()+Send+Sync+'static"
-        ),
+            "fn__c_in_convert_wire_to_impl_Fn_Send_Sync_static_c_invoke_callback_capture_"
+        ) && compact.contains("(c:z_closure_drop_t,)->implFn()+Send+Sync+'static"),
         "{src}"
     );
     assert!(compact.contains("move||{"), "{src}");
@@ -151,11 +189,19 @@ fn callback_subscriber_emits_closure_structs() {
     assert!(compact.contains("callback:z_closure_sample_t"), "{src}");
     assert!(compact.contains("on_close:z_closure_drop_t"), "{src}");
     assert!(
-        compact.contains("letcallback=__cbg_in_z_closure_sample_t(callback);"),
+        operation_call(
+            &compact,
+            "__c_in_convert_wire_to_impl_Fn_ZSample_Send_Sync_static_c_invoke_callback_capture_",
+            "callback",
+        ),
         "{src}"
     );
     assert!(
-        compact.contains("leton_close=__cbg_in_z_closure_drop_t(on_close);"),
+        operation_call(
+            &compact,
+            "__c_in_convert_wire_to_impl_Fn_Send_Sync_static_c_invoke_callback_capture_",
+            "on_close",
+        ),
         "{src}"
     );
     // Result of an opaque handle rides the return (NULL = Err); `e` out-param.
@@ -200,8 +246,8 @@ fn callback_scalar_arg_not_module_qualified() {
     assert!(compact.contains("move|__a0:f64|"), "{src}");
     assert!(
         compact.contains(
-            "fn__cbg_in_z_closure_value_t(c:z_closure_value_t,)->implFn(f64)+Send+Sync+'static"
-        ),
+            "fn__c_in_convert_wire_to_impl_Fn_f64_Send_Sync_static_c_invoke_callback_capture_"
+        ) && compact.contains("(c:z_closure_value_t,)->implFn(f64)+Send+Sync+'static"),
         "{src}"
     );
 }
@@ -302,12 +348,9 @@ fn callback_arg_qualifies_a_source_type_under_a_wrapper() {
 /// An `Option<T>` callback argument is lowered like any other composite, not
 /// handed to the marker that stands in for one.
 ///
-/// `out_wrappers` gives `Option`/`Vec`/`Cow` a marker converter with a `()`
-/// destination: it exists to resolve the entry and make the inner required,
-/// while the real ABI is structural. The return path lowers those shapes in
-/// `lower_shape`/`encode_value`; the callback-argument path had no case for
-/// them, so it fell back to calling the entry's converter — the marker, which
-/// takes no arguments (#428).
+/// `out_wrappers` retains a `()` marker only as a legacy converter carrier. The
+/// registry-composed `CValue` owns the real ABI and encoder, and both return and
+/// callback sites consume that same frozen payload (#428).
 #[test]
 fn callback_arg_lowers_an_optional_structurally() {
     let loc = SourceLocation::default();
@@ -411,13 +454,9 @@ fn a_result_under_an_option_is_refused_too() {
 /// A run whose ELEMENT has no wire of its own is refused too — the case a list
 /// of shapes cannot catch.
 ///
-/// `&[u8]` is a plain borrow by every shape test there is, and in the converter
-/// table it is a shared-slice **marker**: the `(ptr, len)` lowering for one is
-/// structural in the callback path, so it has no element wire to be the element
-/// of something else. `Vec<&'static [u8]>` therefore passed a check that
-/// enumerated wrapper kinds, and the lowering mapped a zero-argument marker over
-/// real slices (#428 review). Lowerability asks the table instead, so a marker
-/// disqualifies its shape whatever put it there.
+/// A shared slice itself occupies a pointer-plus-length site and therefore has
+/// no single element wire that a surrounding `Vec` can allocate. Recursive
+/// `CValue::has_abi` validation rejects that terminal marker before rendering.
 #[test]
 fn a_run_of_markers_is_refused() {
     let loc = SourceLocation::default();
@@ -501,7 +540,7 @@ fn a_converted_optional_callback_arg_keeps_its_declared_wire() {
     // One parameter, the declared representation — not a decomposition.
     assert!(
         compact.contains("unsafeextern\"C\"fn(i64,*mut::core::ffi::c_void)")
-            && compact.contains("__cbg_out_Option___Duration__(__a0)"),
+            && operation_call(&compact, "__c_out_convert_Option_Duration_", "__a0",),
         "the declared wire survives in the closure struct:\n{src}"
     );
     // …and the closure calls that converter rather than filling lowered slots.
@@ -515,10 +554,8 @@ fn a_converted_optional_callback_arg_keeps_its_declared_wire() {
 ///
 /// `Vec<Option<Duration>>` over a declared `Option<Duration>` is a run of a
 /// composite that has a wire of its own, so it lowers to that wire's pointer and
-/// length. Before the walk stopped at a node with its own converter, the
-/// predicate said lowerable — reading the element's real `i64` entry — while
-/// `lower_shape` refused the same element for being an `Option`, so the rule did
-/// not compose under `Vec` (#428 review).
+/// length. The registry-composed Sequence payload must stop at that declared
+/// converter instead of reopening the Optional shape underneath it (#428 review).
 #[test]
 fn a_run_of_converted_optionals_uses_the_declared_wire() {
     let loc = SourceLocation::default();
@@ -554,10 +591,22 @@ fn a_run_of_converted_optionals_uses_the_declared_wire() {
             impl Fn(Vec<Option<Duration>>) + Send + Sync + 'static
         ))
         .base_name("z_closure_durations_t")
+        // The run hands C a malloc'd block, so the freer that releases it has
+        // to be declared — the same requirement a `Vec` return carries (#437).
+        .free_memory_function("z_free")
         .function(syn::parse_quote!(duration_each));
 
     let src = write(cbindgen, registry, "cb_vec_converted_optional");
     let compact: String = src.split_whitespace().collect();
+
+    // #437: the run is built by the array builder, and this binding returns no
+    // `Vec` at all — the helper is emitted because the callback's own encode
+    // declares it, not because a return type was scanned for one.
+    assert!(compact.contains("__cbg_alloc_array"), "{src}");
+    assert!(
+        compact.contains("fn__cbg_alloc_array<W>"),
+        "the array builder must be emitted for a callback that delivers a run:\n{src}"
+    );
 
     // The run lowers to the element's DECLARED wire, pointer and length.
     assert!(
@@ -566,7 +615,7 @@ fn a_run_of_converted_optionals_uses_the_declared_wire() {
     );
     // …and each element goes through that converter, not through a decomposition.
     assert!(
-        compact.contains("__cbg_out_Option___Duration__"),
+        compact.contains("__c_out_convert_Option_Duration_"),
         "the declared element converter is what fills the array:\n{src}"
     );
 }
@@ -604,11 +653,9 @@ fn a_run_of_units_is_refused() {
 /// A `Result` callback argument is refused where it is declared, not emitted as
 /// a call to the marker that stands in for it.
 ///
-/// `out_wrappers` gives `Result<T, E>` the same `()` destination it gives
-/// `Option`/`Vec`/`Cow`, and no arm of `lower_shape` lowers one. So a rule that
-/// asked the *destination* whether a shape can be lowered structurally answered
-/// yes for this one and produced the very `E0061` #428 is about (#428 review).
-/// The question is the model's: which shapes does `lower_shape` decompose.
+/// A `Result<T, E>` marker has no frozen C ABI payload. Callback-site validation
+/// rejects it instead of treating every marker as a composable shape and later
+/// calling a zero-argument converter with a value (#428 review).
 #[test]
 fn a_result_callback_arg_is_refused_at_its_declaration() {
     let loc = SourceLocation::default();

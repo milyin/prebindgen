@@ -201,16 +201,15 @@ impl Function {
     /// the ordinary output-converter machinery and so has to arrive as a
     /// `Function` like any other.
     ///
-    /// It lives here because building one means **spelling** `ret`, and #280
-    /// says a `TypeRef` is the model's to mint. An adapter that built this
-    /// itself needed a spelling for a model element — which dragged the
-    /// emission capability into validation and Kotlin rendering, both of which
-    /// only wanted the resulting `Function`.
+    /// It lives here because #280 says a `TypeRef` is the model's to mint. Flat
+    /// reconstructs the synthetic signature from `TypeKind`; no adapter needs
+    /// source syntax or an emission capability during validation or Kotlin
+    /// rendering.
     ///
     /// The body is `unimplemented!()` and is never emitted: only the signature
     /// is read.
     pub fn synthetic_getter(ident: syn::Ident, ret: TypeRef) -> Self {
-        let ret_syntax = ret.spell();
+        let ret_syntax = ret.kind.to_syn();
         let item: syn::ItemFn = syn::parse_quote! {
             pub fn #ident() -> #ret_syntax {
                 unimplemented!()
@@ -240,13 +239,14 @@ pub struct Param {
 /// nothing in it — so `fields` is a plain list, and empty means the source wrote
 /// a struct with no fields.
 ///
-/// Whether the fields are named or positional is not recorded: a [`Field`]
-/// already knows its own address, and the delimiters are spelling, read off the
-/// syntax when the struct is spelled.
+/// The delimiter kind is an explicit model fact. Final Rust generation must
+/// not reopen the retained `syn::Fields` merely to decide whether to write a
+/// unit, tuple, or named-field constructor.
 #[derive(Clone, Debug)]
 pub struct Struct {
     pub name: syn::Ident,
     pub fields: Vec<Field>,
+    pub shape: FieldShape,
     pub origin: Origin<syn::ItemStruct>,
     /// This struct **as a type**, taken at parse time — the twin of
     /// [`Variant::reading`], stored and `pub(super)` for the same two reasons.
@@ -366,7 +366,9 @@ pub struct Alternative {
     /// mix payload-carrying and payload-free alternatives, and only the presence
     /// of *some* payload makes the type a `Variant`.
     pub fields: Vec<Field>,
-    /// The alternative as written: delimiters, attributes, doc comments.
+    /// The Rust constructor/pattern delimiter kind.
+    pub shape: FieldShape,
+    /// The alternative as written, retained for diagnostics and fidelity tests.
     pub origin: Origin<syn::Variant>,
 }
 
@@ -374,8 +376,7 @@ impl Alternative {
     /// True when this alternative carries no payload.
     ///
     /// The *group* question, not the syntax one: `B`, `B()` and `B {}` are all
-    /// empty by this test; what keeps their delimiters apart is the spelling,
-    /// not this.
+    /// empty by this test; [`Self::shape`] keeps their delimiter forms apart.
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }
@@ -408,7 +409,8 @@ impl Enum {
     /// reference a Rust constant: a Kotlin `enum class` entry is `NAME(3)`, and
     /// the generated `int → value` decode matches on the same numbers, so both
     /// come from here and cannot drift. An `Err` is a refusal for *that*
-    /// consumer only — one that re-emits the source spelling never asks.
+    /// consumer only — final Rust output can retain the explicit discriminant
+    /// without requiring its evaluated number.
     pub fn discriminant_values(&self) -> Result<Vec<(&syn::Ident, i64)>, &syn::Ident> {
         self.values
             .iter()
@@ -444,12 +446,17 @@ pub struct EnumValue {
     /// `None` once a spelling the frontend cannot evaluate (a `const`, a `cfg`,
     /// arithmetic) has broken the chain, or once the chain has run out of `i64`.
     /// That is not a failure: only a consumer that needs the *number* is
-    /// affected, and one that re-emits the *spelling* reads
-    /// [`Self::origin`]`.syntax.discriminant` instead.
+    /// affected; explicit final output is stored separately.
     pub discriminant: Option<i64>,
-    /// The value as written: `= 0x07`, attributes, doc comments — and its
-    /// delimiters, since `B` and `B()` are both fieldless and still spelled
-    /// differently.
+    /// Exact explicit discriminant output, retained as an inert fragment.
+    ///
+    /// Private so it cannot become an adapter-side syntax input. The final
+    /// emission capability may copy it into generated Rust but never inspect
+    /// it to decide what the value means.
+    pub(super) discriminant_output: Option<proc_macro2::TokenStream>,
+    /// The Rust constructor/pattern delimiter kind.
+    pub shape: FieldShape,
+    /// The value as written, retained for diagnostics and fidelity tests.
     pub origin: Origin<syn::Variant>,
 }
 
@@ -468,6 +475,27 @@ pub struct Field {
     pub ty: TypeRef,
     /// The field as written — `pub id: u64`, attributes and docs included.
     pub origin: Origin<syn::Field>,
+}
+
+/// Delimiters used by a Rust product constructor or pattern.
+///
+/// This is structure, not retained syntax: it is the exact Flat fact needed
+/// to generate `S`, `S(...)`, or `S { ... }` without reopening a `syn` node.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FieldShape {
+    Unit,
+    Tuple,
+    Named,
+}
+
+impl FieldShape {
+    pub(super) fn from_syn(fields: &syn::Fields) -> Self {
+        match fields {
+            syn::Fields::Unit => Self::Unit,
+            syn::Fields::Unnamed(_) => Self::Tuple,
+            syn::Fields::Named(_) => Self::Named,
+        }
+    }
 }
 
 /// A `#[prebindgen]` constant.
@@ -506,8 +534,10 @@ pub struct Constant {
 /// a guard that names something undeclared refuse the whole element.
 #[derive(Clone, Debug)]
 pub struct Guard {
-    /// Emitted verbatim, so the item is all there is.
+    /// Kept for source location and diagnostics only.
     pub origin: Origin<syn::ItemConst>,
+    /// Final output item, private so adapters cannot inspect it as source.
+    pub(super) output: syn::ItemConst,
 }
 
 /// An item the language cannot express.

@@ -17,7 +17,7 @@ pub use prebindgen_flat::shape::Shape as FoldShape;
 #[derive(Clone)]
 pub struct FoldPlan {
     /// Owned type the core construct produces — what the underlying call needs
-    /// (before any [`Self::shape`] wrapping). A **reading**: `emit.spell(&target)` in an emission callback
+    /// (before any [`Self::shape`] wrapping). A **reading**: `emit.emit_source_type(&target)` in an emission callback
     /// for generated Rust, `target.key()` for a lookup.
     pub target: prebindgen_flat::flat::TypeRef,
     /// True when the original parameter was `&T` / `Option<&T>`: the call
@@ -64,11 +64,11 @@ pub struct FoldLeaf {
     /// The **reading** of the type whose resolved input converter decodes this
     /// leaf. For a single constructor these are the raw constructor parameter
     /// types; for a combined one the selector (`i32`) and `Option`-wrapped
-    /// variant inputs. Spell it with `emit.spell(&ty)` in an emission callback.
+    /// variant inputs. Spell it with `emit.emit_source_type(&ty)` in an emission callback.
     ///
-    /// A reading rather than a spelling for the reason `UnfoldLeaf::out_ty`
-    /// gives: a consumer asking what this leaf's type MEANS had to hand the
-    /// spelling back to the registry (#275). The leaves no source wrote — the
+    /// A reading rather than a spelling, for the same reason every leaf type in
+    /// this pipeline is one: a consumer asking what this leaf's type MEANS had
+    /// to hand the spelling back to the registry (#275). The leaves no source wrote — the
     /// presence flag, the selector — are built by
     /// [`TypeRef::scalar`](prebindgen_flat::flat::TypeRef::scalar), which
     /// pairs the kind with its own spelling and is placeless by construction.

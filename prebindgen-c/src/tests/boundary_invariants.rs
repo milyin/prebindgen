@@ -230,7 +230,7 @@ fn restricted_inbound(
     if let syn::Type::Reference(r) = ty {
         return restricted_inbound(&r.elem, structs, enums, seen);
     }
-    let tail = type_path_tail(ty)?.to_string();
+    let tail = prebindgen_registry::types_util::path_tail_ident(ty)?.to_string();
     if tail == "MaybeUninit" {
         return None;
     }
@@ -262,8 +262,8 @@ fn restricted_inbound(
 }
 
 /// Every generated function that C can call or that decodes C's bytes: the
-/// `#[no_mangle] extern "C"` wrappers and destructors, plus the `__cbg_in_*`
-/// input converters they call.
+/// `#[no_mangle] extern "C"` wrappers and destructors, plus the registry-named
+/// `__c_in_*` input converters they call.
 fn inbound_fns(file: &syn::File) -> Vec<syn::ItemFn> {
     file.items
         .iter()
@@ -271,7 +271,7 @@ fn inbound_fns(file: &syn::File) -> Vec<syn::ItemFn> {
             syn::Item::Fn(f) => Some(f.clone()),
             _ => None,
         })
-        .filter(|f| f.sig.abi.is_some() || f.sig.ident.to_string().starts_with("__cbg_in_"))
+        .filter(|f| f.sig.abi.is_some() || f.sig.ident.to_string().starts_with("__c_in_"))
         .collect()
 }
 
@@ -376,5 +376,408 @@ fn no_raw_pointer_is_dereferenced_without_a_null_check() {
     assert!(
         checked >= 5,
         "expected the corpus to exercise several pointer-reconstituting fns, saw {checked}\n{src}"
+    );
+}
+
+#[test]
+fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
+    let source = include_str!("../assembly.rs");
+    let file = syn::parse_file(source).expect("C assembly parses");
+    let wrapper = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(item) => Some(item),
+            _ => None,
+        })
+        .flat_map(|item| &item.items)
+        .find_map(|item| match item {
+            syn::ImplItem::Fn(method) if method.sig.ident == "render_fn" => {
+                Some(method.block.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("ordinary wrapper renderer");
+    let wrapper: String = wrapper.split_whitespace().collect();
+
+    for forbidden in [
+        "lower_shape(",
+        "encode_value(",
+        "output_is_fallible(",
+        ".in_frag(",
+        ".out_frag(",
+    ] {
+        assert!(
+            !wrapper.contains(forbidden),
+            "ordinary wrapper renderer resumed legacy planning through {forbidden}"
+        );
+    }
+    for required in [
+        "self.site(",
+        "failure_route()",
+        "planned_inputs(",
+        ".encode(",
+    ] {
+        assert!(
+            wrapper.contains(required),
+            "ordinary wrapper renderer stopped consuming frozen plans through {required}"
+        );
+    }
+}
+
+/// The wrapper is planned once, at the end of resolution: what it renders from
+/// is its own frozen state and the frozen plan, never the declaration object
+/// the binding was written into.
+#[test]
+fn a_planned_wrapper_holds_no_declaration_object() {
+    let source = include_str!("../assembly.rs");
+    let file = syn::parse_file(source).expect("C assembly parses");
+    let fields = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Struct(item) if item.ident == "CWrapper" => {
+                Some(item.fields.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("the planned wrapper");
+    let fields: String = fields.split_whitespace().collect();
+    for forbidden in ["CbindgenBuilder", "Registry", "Compiled", "RefCell"] {
+        assert!(
+            !fields.contains(forbidden),
+            "a planned wrapper retains {forbidden}, so rendering could resume planning"
+        );
+    }
+    assert!(
+        fields.contains("GenerationPlan"),
+        "a planned wrapper must read its boundary sites from the frozen plan"
+    );
+}
+
+/// A planned artifact — an opaque handle, a value-opaque, a tagged union, a
+/// callback — reaches the file through a lookup in the frozen plan and the
+/// writer, and through nothing else.
+#[test]
+fn planned_artifacts_reach_the_file_through_the_frozen_plan() {
+    let source = include_str!("../assembly.rs");
+    let file = syn::parse_file(source).expect("C assembly parses");
+    let fields = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Struct(item) if item.ident == "CPlanned" => {
+                Some(item.fields.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("the planned-artifact placement");
+    let fields: String = fields.split_whitespace().collect();
+    for forbidden in ["CbindgenBuilder", "Registry", "Compiled", "RefCell"] {
+        assert!(
+            !fields.contains(forbidden),
+            "a placed artifact retains {forbidden}, so rendering could resume planning"
+        );
+    }
+    assert!(
+        fields.contains("Rc<GenerationPlan") && fields.contains("ArtifactId"),
+        "a placed artifact is a frozen plan and the identity to look up in it"
+    );
+}
+
+#[test]
+fn type_artifacts_retain_source_types_and_fragment_dependencies() {
+    use prebindgen_registry::generation::ArtifactInput;
+
+    let loc = SourceLocation::default();
+    let items = declare_referenced([
+        (
+            syn::parse_quote!(
+                pub struct Handle;
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub struct Payload {
+                    pub bytes: Vec<u8>,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn make_handle() -> Handle {
+                    unimplemented!()
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn make_payload() -> Payload {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]);
+    let registry = crate::test_util::reg_from_items(items).expect("index items");
+    let binding = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(source))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_owned_struct(syn::parse_quote!(Payload), syn::parse_quote!(PayloadOpaque))
+        .function(syn::parse_quote!(make_handle))
+        .function(syn::parse_quote!(make_payload))
+        .build_with(registry)
+        .expect("resolve");
+    let generation = binding.gen.generation.as_ref().expect("frozen plan");
+
+    let handle = generation
+        .artifacts()
+        .find(|artifact| artifact.id().kind() == "c-opaque-handle")
+        .expect("opaque handle artifact");
+    assert!(handle
+        .inputs()
+        .iter()
+        .all(|input| matches!(input, ArtifactInput::Fragment(_))));
+    assert!(matches!(
+        handle.payload(),
+        crate::chain::CArtifact::OpaqueHandle(plan) if plan.source.key().as_str() == "Handle"
+    ));
+
+    let value = generation
+        .artifacts()
+        .find(|artifact| artifact.id().kind() == "c-value-opaque")
+        .expect("value opaque artifact");
+    assert!(value
+        .inputs()
+        .iter()
+        .all(|input| matches!(input, ArtifactInput::Fragment(_))));
+    assert!(matches!(
+        value.payload(),
+        crate::chain::CArtifact::ValueOpaque(plan) if plan.source.key().as_str() == "Payload"
+    ));
+}
+
+#[test]
+fn tagged_union_artifacts_retain_cleanup_types_and_dependencies() {
+    use prebindgen_registry::generation::{ArtifactId, ArtifactInput};
+
+    let loc = SourceLocation::default();
+    let items = declare_referenced([
+        (
+            syn::parse_quote!(
+                pub struct Handle;
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub enum Shape {
+                    Empty,
+                    Filled(Box<Handle>),
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub struct Drawing {
+                    pub shape: Shape,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub enum Note {
+                    Silent,
+                    Sketched(Drawing),
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn make_shape() -> Shape {
+                    unimplemented!()
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn make_note() -> Note {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]);
+    let registry = crate::test_util::reg_from_items(items).expect("index items");
+    let binding = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(source))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .tagged_union(syn::parse_quote!(Shape))
+        .data_struct(syn::parse_quote!(Drawing))
+        .tagged_union(syn::parse_quote!(Note))
+        .function(syn::parse_quote!(make_shape))
+        .function(syn::parse_quote!(make_note))
+        .build_with(registry)
+        .expect("resolve");
+    let generation = binding.gen.generation.as_ref().expect("frozen plan");
+    let tagged: Vec<_> = generation
+        .artifacts()
+        .filter(|artifact| artifact.id().kind() == "c-tagged-union")
+        .collect();
+    assert_eq!(tagged.len(), 2);
+    assert_eq!(
+        tagged
+            .iter()
+            .map(|artifact| artifact.id().name())
+            .collect::<Vec<_>>(),
+        ["Shape", "Note"],
+        "the registry orders the inner union before its dependent"
+    );
+    for artifact in &tagged {
+        assert!(
+            !artifact.inputs().is_empty(),
+            "{} must consume reached converter fragments",
+            artifact.id()
+        );
+        assert!(artifact
+            .inputs()
+            .iter()
+            .all(|input| matches!(input, ArtifactInput::Fragment(_))));
+    }
+
+    let shape = tagged
+        .iter()
+        .find(|artifact| artifact.id().name() == "Shape")
+        .expect("Shape artifact");
+    let crate::chain::CArtifact::TaggedUnion(shape_plan) = shape.payload() else {
+        panic!("Shape must be a tagged-union artifact");
+    };
+    assert!(matches!(
+        shape_plan.arms[1].fields[0].cleanup.as_ref(),
+        Some(crate::chain::PayloadCleanup::BoxedPointer { source })
+            if source.key().as_str() == "Handle"
+    ));
+
+    let note = tagged
+        .iter()
+        .find(|artifact| artifact.id().name() == "Note")
+        .expect("Note artifact");
+    let shape_id = ArtifactId::new("c-tagged-union", "Shape").expect("valid artifact id");
+    assert_eq!(note.prerequisites(), std::slice::from_ref(&shape_id));
+    let crate::chain::CArtifact::TaggedUnion(note_plan) = note.payload() else {
+        panic!("Note must be a tagged-union artifact");
+    };
+    assert!(matches!(
+        note_plan.arms[1].fields[0].cleanup.as_ref(),
+        Some(crate::chain::PayloadCleanup::Fields(fields))
+            if matches!(
+                fields.as_slice(),
+                [(field, crate::chain::PayloadCleanup::NestedUnion { artifact, .. })]
+                    if field == "shape" && artifact == &shape_id
+            )
+    ));
+}
+
+#[test]
+fn legacy_c_shape_and_callback_planners_are_deleted() {
+    let sources = [
+        include_str!("../lib.rs"),
+        include_str!("../builder.rs"),
+        include_str!("../chain.rs"),
+        include_str!("../compile.rs"),
+        include_str!("../convert.rs"),
+        include_str!("../emit.rs"),
+        include_str!("../recipes.rs"),
+        include_str!("../trait_impl.rs"),
+    ]
+    .join("\n");
+    for deleted in [
+        "fn lower_shape",
+        "fn encode_value",
+        "dispatch_fn_input",
+        "prereq_callback_structs",
+        "out_slice_marker",
+        "shape_is_lowerable",
+        "is_lowered_composite",
+        "has_own_wire",
+        "fn from_converter",
+        "fn validity_of",
+        "fn produces_borrow",
+        "fn prereq_opaque_handles",
+        "fn prereq_value_opaque",
+        "fn value_opaque_writeback(",
+        "fn prereq_tagged_unions",
+        "fn payload_free_stmt",
+        "fn tag_guard",
+        "fn src_ty_of",
+        "Complete(syn::ItemFn)",
+        "CFunction::complete",
+        "compiled_fns",
+        "chain::Call::new(",
+        "fn in_name_of",
+        "fn out_name_of",
+    ] {
+        assert!(
+            !sources.contains(deleted),
+            "deleted C compatibility planner returned through {deleted}"
+        );
+    }
+    let compact: String = sources.chars().filter(|c| !c.is_whitespace()).collect();
+    assert!(
+        compact.contains("operation:MarkerOperation::ChoiceArm"),
+        "Product-to-Choice composition must use its typed transient marker"
+    );
+    assert!(
+        !compact.contains("Option<ConverterImpl>"),
+        "a C production path accepts the deleted generic converter carrier"
+    );
+}
+
+/// The C adapter declares exactly one shape vocabulary of its own, and #613 is
+/// about removing it rather than gaining another.
+///
+/// A shape-shaped enum — one naming three or more of the registry's structural
+/// forms — is a place where the same structural question is asked a second
+/// time. Two were recorded here. `CShape` — which restated the registry's
+/// `ShapePlan` variant for variant while `CFrag::freeze` translated between
+/// them — **is gone**: a `CFrag` now carries its `ShapePlan` directly, built at
+/// the hook that composed it.
+///
+/// What is left is `CBody`, and it is **not** a deletion target the way `CShape`
+/// was. Its variants mirror `ShapePlan`'s, but they carry what rendering needs
+/// and the registry does not model — a `ProductField`'s binding name, mode and
+/// uninit-holding against a `FragmentUse`'s identity and yield. It is the
+/// converter artifact's payload (`ConverterArtifact = CFunction`), not a
+/// vocabulary beside the shape. This fence exists so a THIRD vocabulary cannot
+/// appear unnoticed; it is no longer waiting for this list to reach one.
+///
+/// The sources are DISCOVERED, not listed: a fence over a list only fences the
+/// files someone remembered to add to it, and a new module is the most natural
+/// way to introduce a third vocabulary.
+#[test]
+fn the_c_adapter_gains_no_third_shape_vocabulary() {
+    let sources = prebindgen_registry::generation::production_sources(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+    );
+    let borrowed: Vec<(&str, &str)> = sources
+        .iter()
+        .map(|(label, text)| (label.as_str(), text.as_str()))
+        .collect();
+    let names: Vec<String> = prebindgen_registry::generation::shape_like_enums(&borrowed)
+        .iter()
+        .map(|(name, label)| format!("{name} ({label})"))
+        .collect();
+    assert_eq!(
+        names,
+        ["CBody (src/chain.rs)"],
+        "the C shape vocabularies changed; a new entry needs an argument \
+         rather than a test update"
     );
 }

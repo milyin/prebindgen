@@ -707,7 +707,7 @@ impl ConstDecl {
             decl.rust_ident()
         );
         assert!(
-            decl.kotlin_name_override().is_none(),
+            decl.name_override().is_none(),
             "constant `{}`: the val name belongs on `constant!(…)` (or its `.name(…)`), \
              not on the source fn `{}`",
             self.rust_ident,
@@ -778,7 +778,7 @@ pub(crate) enum IgnoreKind {
 impl From<FunctionDecl> for IgnoreDecl {
     fn from(decl: FunctionDecl) -> Self {
         assert!(
-            decl.kotlin_name_override().is_none()
+            decl.name_override().is_none()
                 && decl.param_expands().is_empty()
                 && decl.return_expand().is_none(),
             "ignore(fun!({})): an ignored fn is never surfaced — \

@@ -178,7 +178,7 @@ pub use crate::api::{
 };
 
 // The flat model (`flat`, `shape`, `types_util`, `Element`, `Flat`, `TypeKey`,
-// `Emit`, …) moved to the separate `prebindgen-flat` crate, which depends on
+// `RustEmitter`, …) moved to the separate `prebindgen-flat` crate, which depends on
 // this crate for [`Source`] / [`SourceLocation`] and parses the
 // `(syn::Item, SourceLocation)` pairs [`Source`] hands out into one flat
 // namespace — see that crate's docs for the model.

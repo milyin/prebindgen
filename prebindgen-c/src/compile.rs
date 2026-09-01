@@ -12,50 +12,458 @@
 
 use prebindgen_registry::{
     flat::{Alternative, Function},
+    generation::{
+        AbiLayout, ArtifactId, ChoiceArity, Cleanup, ConverterPlan, Failure, FixedArity,
+        FragmentPlan, FragmentUse, NichePlan, OperationId, Representation, ShapePlan, SiteId,
+        SitePlan,
+    },
     recipe::{At, Carrier, Compile, Cx, Frag, Mode, Parts, Role, Validity, Yield},
+    FragmentId,
 };
 
 use super::*;
+use crate::chain::{
+    CCall, CFunction, ChoicePlan, MarkerOperation, MarkerPlan, OptionalPlan, OptionalRepr,
+    ProductField, ProductPlan, SequencePlan, SliceInputPlan,
+};
+
+/// One already-composed C wire-value operation reused by ordinary and callback sites.
+#[derive(Clone)]
+pub(crate) enum CValue {
+    Direct {
+        wire: syn::Type,
+        converter: CCall,
+        niches: Niches,
+    },
+    Optional {
+        inner: Box<CValue>,
+        absent: Option<NicheSlot>,
+    },
+    OwnedSequence {
+        element_wire: syn::Type,
+        converter: CCall,
+    },
+    BorrowedSequence {
+        element_wire: syn::Type,
+        converter: CCall,
+    },
+    BorrowedInput {
+        element: TypeRef,
+        wire: syn::Type,
+        reinterpret: bool,
+    },
+}
+
+impl CValue {
+    /// The converters this value's decode or encode calls.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match self {
+            Self::Direct { converter, .. } => out.push(converter.artifact_key()),
+            // A sequence hands C a malloc'd block, which the array builder
+            // among the memory helpers allocates.
+            Self::OwnedSequence { converter, .. } | Self::BorrowedSequence { converter, .. } => {
+                out.push(converter.artifact_key());
+                out.push(crate::assembly::array_builder_key());
+            }
+            Self::Optional { inner, .. } => inner.calls(out),
+            // A borrowed input is reinterpreted, not converted.
+            Self::BorrowedInput { .. } => {}
+        }
+    }
+
+    pub(crate) fn direct(&self) -> Option<(&syn::Type, &CCall)> {
+        match self {
+            Self::Direct {
+                wire, converter, ..
+            } => Some((wire, converter)),
+            _ => None,
+        }
+    }
+
+    /// Whether every terminal leaf occupies a real C wire. Structural values
+    /// are valid only when the registry-composed children they terminate in are.
+    pub(crate) fn has_abi(&self) -> bool {
+        match self {
+            Self::Direct { wire, .. } => !marker_destination(wire),
+            Self::Optional { inner, .. } => inner.has_abi(),
+            Self::OwnedSequence { element_wire, .. }
+            | Self::BorrowedSequence { element_wire, .. } => !marker_destination(element_wire),
+            Self::BorrowedInput { .. } => true,
+        }
+    }
+
+    pub(crate) fn slots(&self) -> usize {
+        match self {
+            Self::Direct { .. } => 1,
+            Self::Optional {
+                inner,
+                absent: Some(_),
+            } => inner.slots(),
+            Self::Optional {
+                inner,
+                absent: None,
+            } => 1 + inner.slots(),
+            Self::OwnedSequence { .. }
+            | Self::BorrowedSequence { .. }
+            | Self::BorrowedInput { .. } => 2,
+        }
+    }
+
+    pub(crate) fn failure(&self) -> Failure {
+        let fallible = match self {
+            Self::Direct { converter, .. }
+            | Self::OwnedSequence { converter, .. }
+            | Self::BorrowedSequence { converter, .. } => converter.fallible(),
+            Self::Optional { inner, .. } => inner.failure() == Failure::Fallible,
+            Self::BorrowedInput { .. } => false,
+        };
+        if fallible {
+            Failure::Fallible
+        } else {
+            Failure::Infallible
+        }
+    }
+
+    pub(crate) fn fields(&self) -> Vec<WireField> {
+        match self {
+            Self::Direct { wire, .. } => vec![WireField {
+                suffix: "",
+                wire: wire.clone(),
+            }],
+            Self::Optional {
+                inner,
+                absent: Some(_),
+            } => inner.fields(),
+            Self::Optional {
+                inner,
+                absent: None,
+            } => {
+                let mut fields = vec![WireField {
+                    suffix: "_present",
+                    wire: syn::parse_quote!(bool),
+                }];
+                fields.extend(inner.fields());
+                fields
+            }
+            Self::OwnedSequence { element_wire, .. }
+            | Self::BorrowedSequence { element_wire, .. } => vec![
+                WireField {
+                    suffix: "",
+                    wire: syn::parse_quote!(*mut #element_wire),
+                },
+                WireField {
+                    suffix: "_len",
+                    wire: syn::parse_quote!(usize),
+                },
+            ],
+            Self::BorrowedInput { wire, .. } => vec![
+                WireField {
+                    suffix: "",
+                    wire: wire.clone(),
+                },
+                WireField {
+                    suffix: "_len",
+                    wire: syn::parse_quote!(usize),
+                },
+            ],
+        }
+    }
+
+    pub(crate) fn encode(
+        &self,
+        val: TokenStream,
+        targets: &[TokenStream],
+        route: &ErrRoute<'_>,
+        emit: &prebindgen_registry::RustWriter,
+    ) -> TokenStream {
+        match self {
+            Self::Direct { converter, .. } => {
+                let conv = converter.ident(emit);
+                let converted = if converter.fallible() {
+                    route_result(quote!(#conv(#val)), route)
+                } else {
+                    quote!(#conv(#val))
+                };
+                let target = &targets[0];
+                quote!(#target = #converted;)
+            }
+            Self::Optional {
+                inner,
+                absent: Some(slot),
+            } => {
+                let inner_encode = inner.encode(quote!(__x), targets, route, emit);
+                let absent = &slot.value;
+                let target = &targets[0];
+                quote!(
+                    match #val {
+                        ::core::option::Option::Some(__x) => { #inner_encode }
+                        ::core::option::Option::None => { #target = #absent; }
+                    }
+                )
+            }
+            Self::Optional {
+                inner,
+                absent: None,
+            } => {
+                let present = &targets[0];
+                let inner_encode = inner.encode(quote!(__x), &targets[1..], route, emit);
+                quote!(
+                    match #val {
+                        ::core::option::Option::Some(__x) => {
+                            #present = true;
+                            #inner_encode
+                        }
+                        ::core::option::Option::None => { #present = false; }
+                    }
+                )
+            }
+            Self::OwnedSequence {
+                element_wire,
+                converter,
+            } => {
+                let conv = converter.ident(emit);
+                let converted = if converter.fallible() {
+                    route_result(quote!(#conv(#val)), route)
+                } else {
+                    quote!(#conv(#val))
+                };
+                let pointer = &targets[0];
+                let length = &targets[1];
+                quote!(
+                    let __arr: ::std::vec::Vec<#element_wire> = #converted;
+                    let (__p, __n) = __cbg_alloc_array(__arr);
+                    #pointer = __p;
+                    #length = __n;
+                )
+            }
+            Self::BorrowedSequence {
+                element_wire,
+                converter,
+            } => {
+                let conv = converter.ident(emit);
+                let pointer = &targets[0];
+                let length = &targets[1];
+                if converter.fallible() {
+                    let converted = route_result(quote!(#conv(__value)), route);
+                    quote!(
+                        let mut __arr: ::std::vec::Vec<#element_wire> = ::std::vec::Vec::new();
+                        for __value in #val.iter().copied() {
+                            __arr.push(#converted);
+                        }
+                        let (__p, __n) = __cbg_alloc_array(__arr);
+                        #pointer = __p;
+                        #length = __n;
+                    )
+                } else {
+                    let map = map_arg(&conv, converter.unsafe_());
+                    quote!(
+                        let __arr: ::std::vec::Vec<#element_wire> =
+                            #val.iter().copied().map(#map).collect();
+                        let (__p, __n) = __cbg_alloc_array(__arr);
+                        #pointer = __p;
+                        #length = __n;
+                    )
+                }
+            }
+            Self::BorrowedInput { .. } => {
+                unreachable!("borrowed input plan cannot encode an output")
+            }
+        }
+    }
+
+    pub(crate) fn effective_niches(&self) -> Niches {
+        match self {
+            Self::Direct { wire, niches, .. }
+                if niches.is_empty() && matches!(wire, syn::Type::Ptr(_)) =>
+            {
+                let null = null_for(wire);
+                Niches::one(syn::parse_quote!(#null), syn::parse_quote!(v.is_null()))
+            }
+            Self::Direct { niches, .. } => niches.clone(),
+            Self::Optional { inner, absent } => match absent {
+                Some(_) => inner
+                    .effective_niches()
+                    .carve()
+                    .map_or_else(Niches::empty, |(_, rest)| rest),
+                None => Niches::empty(),
+            },
+            Self::OwnedSequence { .. }
+            | Self::BorrowedSequence { .. }
+            | Self::BorrowedInput { .. } => Niches::empty(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum CFailureRoute {
+    Panic,
+    Error(SiteId),
+}
+
+/// C-specific payloads held behind the registry's generic frozen vocabulary.
+pub(crate) enum CRepresentation {}
+
+impl Representation for CRepresentation {
+    type Intermediate = TypeKey;
+    type Step = CCall;
+    type ConverterArtifact = CFunction;
+    type TerminalCodec = CCall;
+    type Bridge = CCall;
+    type Niche = String;
+    type Cleanup = ();
+    type FailureRoute = CFailureRoute;
+    type AbiLayout = CValue;
+    type Artifact = crate::chain::CArtifact;
+}
 
 /// The C adapter's answer for one crossing.
 #[derive(Clone)]
 pub(crate) struct CFrag {
+    /// Stable identity and opaque source spelling of this recipe answer.
+    pub(crate) id: FragmentId,
+    pub(crate) source: TypeRef,
     /// The C wire type this crossing carries.
     pub(crate) destination: syn::Type,
-    /// The generated converter, complete.
-    pub(crate) function: syn::ItemFn,
+    /// The generated converter's callable contract and late-rendered plan.
+    pub(crate) function: CFunction,
     /// Bit patterns the wire can represent and this conversion never produces.
     pub(crate) niches: Niches,
     /// Inner types this fragment composed from, which is what marks them
     /// reachable in the registry that still emits them.
     pub(crate) subs: Vec<TypeKey>,
-    /// One arm's payload, converted, for a fragment on its way from
+    /// One arm's payload plan on its way from
     /// [`Compile::fields`] to [`Compile::choice`].
     ///
-    /// A union's arm is a product whose parts do not assemble into a value of
-    /// their own — they are bound in a `match` and rebuilt on the other side —
-    /// so the arm's fragment carries the converted expressions rather than a
-    /// function. `None` for every other fragment, which is what a struct's is.
+    /// `None` for every other fragment, which is what a struct's is.
     pub(crate) arm: Option<Arm>,
     /// What the fragment produces, which is all the registry reads of it.
     pub(crate) yields: Yield,
+    /// The registry-composed shape of this fragment, in the canonical
+    /// vocabulary. Built where the shape is known — the hook the compiler
+    /// called — rather than stated in an adapter enum and translated at freeze,
+    /// which is the duplication #613 step 6 removes.
+    pub(crate) shape: ShapePlan<CRepresentation>,
+    /// Frozen site wire layout and encoder, shared by ordinary and callback sites.
+    pub(crate) value: CValue,
 }
 
-/// One alternative's payload, converted in both directions.
-///
-/// What [`Compile::fields`] hands [`Compile::choice`] for a tagged union: the
-/// per-field expressions, keyed by nothing because their order is the
-/// alternative's own.
+/// One alternative's payload plan on its way to [`Compile::choice`].
 #[derive(Clone)]
 pub(crate) struct Arm {
-    /// Converted payload expressions, in field order, over the bindings
-    /// `__f0..__fN` a `match` arm introduces.
-    pub(crate) exprs: Vec<TokenStream>,
-    /// Whether any of them can fail, so the union's own converter knows
-    /// whether it needs a `Result`.
-    pub(crate) fallible: bool,
+    /// Ordered payload wires and resolved child calls.
+    pub(crate) parts: Vec<ArmPart>,
     /// Inner types the payloads composed from.
     pub(crate) subs: Vec<TypeKey>,
+}
+
+#[derive(Clone)]
+pub(crate) struct ArmPart {
+    pub(crate) use_: FragmentUse,
+    pub(crate) wire: syn::Type,
+    pub(crate) child: CCall,
+    pub(crate) mode: Mode,
+    pub(crate) hold_uninit: bool,
+}
+/// A composed shape's bridge is always this fragment's own call, so each form
+/// is built from its edges alone — and the arity-bearing ones read their counts
+/// off those edges rather than being told.
+fn optional_shape(function: &CFunction, value: FragmentUse) -> ShapePlan<CRepresentation> {
+    ShapePlan::Optional {
+        bridge: function.call().clone(),
+        value,
+    }
+}
+
+fn sequence_shape(function: &CFunction, element: FragmentUse) -> ShapePlan<CRepresentation> {
+    ShapePlan::Sequence {
+        bridge: function.call().clone(),
+        element,
+    }
+}
+
+fn product_shape(function: &CFunction, parts: Vec<FragmentUse>) -> ShapePlan<CRepresentation> {
+    ShapePlan::Product {
+        bridge: FixedArity::new(parts.len(), function.call().clone()),
+        parts,
+    }
+}
+
+fn choice_shape(function: &CFunction, arms: Vec<Vec<FragmentUse>>) -> ShapePlan<CRepresentation> {
+    ShapePlan::Choice {
+        bridge: ChoiceArity::new(arms.iter().map(Vec::len).collect(), function.call().clone()),
+        arms,
+    }
+}
+
+fn invoke_shape(function: &CFunction, arguments: Vec<FragmentUse>) -> ShapePlan<CRepresentation> {
+    ShapePlan::Invoke {
+        bridge: FixedArity::new(arguments.len(), function.call().clone()),
+        arguments,
+    }
+}
+
+fn fragment_use(fragment: &CFrag) -> FragmentUse {
+    FragmentUse::new(fragment.id.clone(), fragment.yields.clone())
+}
+
+fn c_artifact(kind: &'static str, name: impl Into<String>) -> ArtifactId {
+    ArtifactId::new(kind, name).expect("C operation identity is non-empty")
+}
+
+fn model_operation(at: At<'_>, kind: &'static str, name: impl Into<String>) -> OperationId {
+    model_operation_for(at.crossing.value(), at, kind, name)
+}
+
+fn model_operation_for(
+    source: &TypeRef,
+    at: At<'_>,
+    kind: &'static str,
+    name: impl Into<String>,
+) -> OperationId {
+    OperationId::model_artifact(source, c_artifact(kind, name), at.crossing.direction())
+}
+
+pub(crate) fn callback_operation(source: &TypeRef) -> OperationId {
+    OperationId::model_artifact(
+        source,
+        c_artifact("c-invoke", "callback-capture"),
+        Direction::Construct,
+    )
+}
+
+fn marker_name(operation: &MarkerOperation) -> &'static str {
+    match operation {
+        MarkerOperation::ChoiceArm => "choice-arm",
+        MarkerOperation::Optional => "optional",
+        MarkerOperation::Sequence => "sequence",
+        MarkerOperation::Result => "result",
+    }
+}
+
+fn input_terminal_name(operation: &crate::chain::InputTerminalOperation) -> &'static str {
+    match operation {
+        crate::chain::InputTerminalOperation::OwnedHandle { .. } => "owned-handle",
+        crate::chain::InputTerminalOperation::ValueOpaque { .. } => "value-opaque",
+        crate::chain::InputTerminalOperation::Enum { .. } => "enum",
+        crate::chain::InputTerminalOperation::String => "string",
+        crate::chain::InputTerminalOperation::StringField => "string-field",
+        crate::chain::InputTerminalOperation::StrMarker => "str-marker",
+        crate::chain::InputTerminalOperation::Bool => "bool",
+        crate::chain::InputTerminalOperation::Scalar => "scalar",
+    }
+}
+
+fn output_terminal_name(operation: &crate::chain::OutputTerminalOperation) -> &'static str {
+    match operation {
+        crate::chain::OutputTerminalOperation::Unit => "unit",
+        crate::chain::OutputTerminalOperation::String => "string",
+        crate::chain::OutputTerminalOperation::BoolField => "bool-field",
+        crate::chain::OutputTerminalOperation::Scalar => "scalar",
+        crate::chain::OutputTerminalOperation::OwnedHandle { .. } => "owned-handle",
+        crate::chain::OutputTerminalOperation::OpaqueError { .. } => "opaque-error",
+        crate::chain::OutputTerminalOperation::ValueOpaque => "value-opaque",
+        crate::chain::OutputTerminalOperation::Enum { .. } => "enum",
+    }
 }
 
 impl Carrier for CFrag {
@@ -65,69 +473,287 @@ impl Carrier for CFrag {
 }
 
 impl CFrag {
-    /// One of the adapter's existing converter builders, as a fragment.
-    fn from_converter(at: At<'_>, conv: ConverterImpl) -> Self {
-        let validity = validity_of(&conv, at.crossing.direction());
+    pub(crate) fn freeze(&self) -> FragmentPlan<CRepresentation> {
+        // Stated once, where the hook that composed it knew the shape.
+        let shape = self.shape.clone();
+        let niche_key = |slot: &NicheSlot| {
+            format!(
+                "{}=>{}",
+                slot.value.to_token_stream(),
+                slot.matches.to_token_stream()
+            )
+        };
+        let exposed: Vec<String> = self
+            .value
+            .effective_niches()
+            .slots
+            .iter()
+            .map(niche_key)
+            .collect();
+        let consumed: Vec<String> = match &self.value {
+            CValue::Optional {
+                absent: Some(slot), ..
+            } => vec![niche_key(slot)],
+            _ => Vec::new(),
+        };
+        let discriminants = usize::from(!consumed.is_empty());
+        let converter = ConverterPlan::new(
+            shape,
+            NichePlan::new(discriminants, consumed, exposed),
+            self.value.failure(),
+            Cleanup::None,
+        );
+        let plan = FragmentPlan::new(
+            self.id.clone(),
+            self.source.clone(),
+            TypeKey::from_type(&self.destination),
+            converter,
+            self.yields.clone(),
+        );
+        if self.function.is_deferred_invoke() {
+            // Invoked where it lands rather than through a function of its own:
+            // no artifact, and still a conversion the plan can name.
+            plan.with_composed_conversion(self.function.clone())
+        } else {
+            plan.with_artifact(self.function.clone())
+        }
+    }
+
+    /// A multi-wire crossing whose exact ABI is carried by its frozen value.
+    fn from_marker(at: At<'_>, plan: MarkerPlan) -> Self {
+        let destination: syn::Type = syn::parse_quote!(());
+        let subs = plan.subs.iter().map(TypeRef::key).collect();
+        let operation = model_operation(at, "c-marker", marker_name(&plan.operation));
+        let function = CFunction::marker(operation, plan);
+        let niches = Niches::empty();
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
         Self {
-            destination: conv.destination,
-            function: conv.function,
-            niches: conv.niches,
-            subs: conv.subs,
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
+            function,
+            niches,
+            subs,
             arm: None,
             yields: Yield {
                 ty: at.crossing.value().stripped_key(),
                 mode: at.crossing.mode(),
-                validity,
+                validity: Validity::SelfSufficient,
             },
+            value,
         }
     }
 
-    /// What the registry that still emits converters expects back.
-    pub(crate) fn into_converter(self) -> ConverterImpl {
-        ConverterImpl {
-            destination: self.destination,
-            function: self.function,
-            niches: self.niches,
-            subs: self.subs,
-            pre_stages: vec![],
-            metadata: (),
+    /// A canonical scalar conversion retained as an operation until final
+    /// Rust emission rather than routed through a complete-function carrier.
+    fn from_custom(at: At<'_>, plan: crate::chain::CustomPlan, niches: Niches) -> Self {
+        let destination = plan.wire.clone();
+        let subs = vec![TypeKey::from_type(&destination)];
+        let operation = model_operation_for(&plan.source, at, "c-terminal", "custom");
+        let function = CFunction::custom(operation, plan);
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
+            function,
+            niches,
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            value,
         }
     }
-}
 
-/// How long what this conversion produces stays usable.
-///
-/// A property of the **conversion**, not of how the crossing was spelled.
-/// Reading the spelling is wrong in both directions: a conversion may clone or
-/// allocate out of a borrow, and — the case C actually has — a conversion may
-/// hand C a pointer *into* a Rust value from a crossing that looks owned.
-fn validity_of(conv: &ConverterImpl, direction: Direction) -> Validity {
-    match direction {
-        // Rust to C. A `*const T` is the zero-copy borrow: `out_borrow_or_result`
-        // casts the Rust value's own address, and `repr_c_struct`'s reinterpret
-        // does the same, so the pointer dies with the value it points into. A
-        // `*mut` is a handle C now owns (`Box::into_raw`) or a block C must free
-        // (`__cbg_alloc_cstr`), and every by-value wire is a copy.
-        Direction::Deconstruct => match &conv.destination {
-            syn::Type::Ptr(p) if p.mutability.is_none() => Validity::Borrowed,
-            _ => Validity::SelfSufficient,
-        },
-        // C to Rust: what the converter's own function hands back. A decode
-        // yielding `&'a T` borrows the caller's memory, which is right at a
-        // parameter and refused at a return.
-        Direction::Construct => match &conv.function.sig.output {
-            syn::ReturnType::Type(_, ty) if produces_borrow(ty) => Validity::Borrowed,
-            _ => Validity::SelfSufficient,
-        },
+    /// A whole-value output retained as an operation until final Rust emission.
+    fn from_output_terminal(at: At<'_>, plan: crate::chain::OutputTerminalPlan) -> Self {
+        let destination = plan.wire.clone();
+        let operation = model_operation_for(
+            &plan.source,
+            at,
+            "c-terminal-output",
+            output_terminal_name(&plan.operation),
+        );
+        let function = CFunction::output_terminal(operation, plan);
+        let niches = Niches::empty();
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
+            function,
+            niches,
+            subs: vec![],
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            value,
+        }
     }
-}
 
-/// Whether a converter's return type hands back a borrow — `&T`, or a
-/// `Result<&T, E>` whose success arm is one.
-fn produces_borrow(ty: &syn::Type) -> bool {
-    match ty {
-        syn::Type::Reference(_) => true,
-        _ => result_parts(ty).is_some_and(|(ok, _)| matches!(ok, syn::Type::Reference(_))),
+    /// A whole-value input retained as an operation until final Rust emission.
+    fn from_input_terminal(at: At<'_>, plan: crate::chain::InputTerminalPlan) -> Self {
+        let destination = plan.wire.clone();
+        let operation = model_operation_for(
+            &plan.source,
+            at,
+            "c-terminal-input",
+            input_terminal_name(&plan.operation),
+        );
+        let function = CFunction::input_terminal(operation, plan);
+        let niches = Niches::empty();
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
+            function,
+            niches,
+            subs: vec![],
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            value,
+        }
+    }
+
+    /// A tagged-union pointer payload retained until final Rust emission.
+    fn from_payload(at: At<'_>, plan: crate::chain::PayloadPlan) -> Self {
+        let destination = plan.wire.clone();
+        let payload_kind = format!("payload-optional-{}-boxed-{}", plan.optional, plan.boxed);
+        let operation = model_operation_for(&plan.source, at, "c-terminal", payload_kind);
+        let function = CFunction::payload(operation, plan);
+        let niches = Niches::empty();
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
+            function,
+            niches,
+            subs: vec![],
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            value,
+        }
+    }
+
+    /// A source borrow retained until final Rust emission.
+    fn from_borrow(at: At<'_>, plan: crate::chain::BorrowPlan) -> Self {
+        let destination = plan.wire.clone();
+        let subs = vec![plan.source_inner.key()];
+        let borrow_kind = match plan.operation {
+            crate::chain::BorrowOperation::StrInput => "str-input",
+            crate::chain::BorrowOperation::SharedInput => "shared-input",
+            crate::chain::BorrowOperation::MutableInput => "mutable-input",
+            crate::chain::BorrowOperation::MutableUninitInput => "mutable-uninit-input",
+            crate::chain::BorrowOperation::SharedOutput => "shared-output",
+        };
+        let operation = model_operation_for(&plan.source_inner, at, "c-borrow", borrow_kind);
+        let function = CFunction::borrow(operation, plan);
+        let niches = Niches::empty();
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
+            function,
+            niches,
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::Borrowed,
+            },
+            value,
+        }
+    }
+
+    /// A shared-slice marker retained as semantic data until final emission.
+    fn from_slice_input(at: At<'_>, plan: SliceInputPlan) -> Self {
+        let destination = plan.wire.clone();
+        let element = plan.element.clone();
+        let reinterpret = plan.reinterpret;
+        let subs = vec![element.key()];
+        let operation = model_operation(
+            at,
+            "c-slice-input",
+            if plan.reinterpret {
+                "reinterpret"
+            } else {
+                "direct"
+            },
+        );
+        let function = CFunction::slice_input(operation, plan);
+        let niches = Niches::empty();
+        let value = CValue::BorrowedInput {
+            element,
+            wire: destination.clone(),
+            reinterpret,
+        };
+        Self {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            shape: ShapePlan::Atomic(function.call().clone()),
+            function,
+            niches,
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                // Preserve the legacy marker's classification. The actual
+                // borrowed wire is explicit in CValue::BorrowedInput.
+                validity: Validity::SelfSufficient,
+            },
+            value,
+        }
     }
 }
 
@@ -184,31 +810,19 @@ fn held_uninit(declared: &syn::Type, produced: &syn::Type) -> bool {
         if TypeKey::from_type(inner) == TypeKey::from_type(produced))
 }
 
-/// Whether a generated converter can fail, read off its own return type.
-fn fallible(function: &syn::ItemFn) -> bool {
-    matches!(&function.sig.output, syn::ReturnType::Type(_, t) if is_result(t))
-}
-
 /// A refusal naming the crossing that could not be answered.
 fn refuse(at: At<'_>, why: &str) -> String {
     format!("Cbindgen: {} ({why})", at.crossing.key())
 }
 
-impl<R: Conversions> CCompile<'_, R> {
-    fn wrap(&self, at: At<'_>, why: &str, conv: Option<ConverterImpl>) -> Frag<Self> {
-        conv.map(|c| CFrag::from_converter(at, c))
-            .ok_or_else(|| refuse(at, why))
-    }
-}
-
 impl<R: Conversions> Compile for CCompile<'_, R> {
     type Fragment = CFrag;
-    /// C keeps its own per-site emission for now: the exported signature, the
-    /// call and the cleanup are built in `emit.rs` from the resolved registry.
-    type Plan = ();
+    /// C signatures, calls, and callback arguments render from this immutable
+    /// site plan.
+    type Plan = SitePlan<CRepresentation>;
     type Error = String;
 
-    fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+    fn atomic(&mut self, _cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
         // The field recipe, where a value crosses differently **inside a
         // `data_struct`'s mirror** than it does on its own. Two types have one:
@@ -224,49 +838,60 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         // `Blob` share one recipe and could not be told apart there. A fragment is
         // keyed by the spelling, which is exactly the distinction needed.
         if at.recipe.name() == &crate::recipes::payload() {
-            let conv = match at.crossing.direction() {
-                Direction::Construct => self.gen.in_boxed_payload(ty),
-                Direction::Deconstruct => self.gen.out_boxed_payload(ty),
-            };
-            return self.wrap(at, "no payload reading for this handle", conv);
+            let plan = self
+                .gen
+                .payload_plan(ty, at.crossing.direction())
+                .ok_or_else(|| refuse(at, "no payload reading for this handle"))?;
+            return Ok(CFrag::from_payload(at, plan));
         }
         if at.recipe.name() == &crate::recipes::in_field() {
-            let conv = match at.crossing.direction() {
+            if at.crossing.direction() == Direction::Construct && r_is_bool(ty) {
+                let plan = self
+                    .gen
+                    .in_terminal(ty, self.registry)
+                    .expect("bool has an ordinary input-terminal plan");
+                return Ok(CFrag::from_input_terminal(at, plan));
+            }
+            return match at.crossing.direction() {
                 Direction::Construct => self
                     .gen
-                    .in_bool(ty)
-                    .or_else(|| self.gen.in_string_field(ty)),
+                    .in_string_field_plan(ty)
+                    .map(|plan| CFrag::from_input_terminal(at, plan))
+                    .ok_or_else(|| refuse(at, "no field reading for this type")),
                 // Only `bool` reads differently on the way out; a `String`
                 // field is allocated exactly as a `String` return is.
-                Direction::Deconstruct => self.gen.out_bool_field(ty),
+                Direction::Deconstruct => self
+                    .gen
+                    .out_bool_field_plan(ty)
+                    .map(|plan| CFrag::from_output_terminal(at, plan))
+                    .ok_or_else(|| refuse(at, "no field reading for this type")),
             };
-            return self.wrap(at, "no field reading for this type", conv);
         }
-        let conv = match at.crossing.direction() {
-            Direction::Construct => self
-                .gen
-                .in_custom(ty, self.registry, cx.emit())
-                .or_else(|| self.gen.in_opaque_handle(ty))
-                .or_else(|| self.gen.in_value_opaque(ty, self.registry))
-                .or_else(|| self.gen.in_enum(ty, self.registry))
-                .or_else(|| self.gen.in_string(ty))
-                .or_else(|| self.gen.in_str(ty))
-                .or_else(|| self.gen.in_bool(ty))
-                .or_else(|| self.gen.in_scalar(ty))
-                .or_else(|| self.gen.in_borrow(ty))
-                .or_else(|| {
-                    // A callback whose signature was declared: its own
-                    // `#[repr(C)]` closure struct.
-                    let args = ty.callback_args()?;
-                    self.gen.dispatch_fn_input(args, self.registry)
-                }),
-            Direction::Deconstruct => self
-                .gen
-                .out_custom(ty, self.registry, cx.emit())
-                .or_else(|| self.gen.out_terminal(ty, self.registry, cx.emit()))
-                .or_else(|| self.gen.out_borrow_or_result(ty)),
-        };
-        self.wrap(at, "no C representation for this type", conv)
+        if let Some((plan, niches)) =
+            self.gen
+                .custom_plan(ty, self.registry, at.crossing.direction())
+        {
+            return Ok(CFrag::from_custom(at, plan, niches));
+        }
+        if at.crossing.direction() == Direction::Deconstruct {
+            if let Some(plan) = self.gen.out_terminal(ty, self.registry) {
+                return Ok(CFrag::from_output_terminal(at, plan));
+            }
+        }
+        if at.crossing.direction() == Direction::Construct {
+            if let Some(plan) = self.gen.in_terminal(ty, self.registry) {
+                return Ok(CFrag::from_input_terminal(at, plan));
+            }
+        }
+        if let Some(plan) = self.gen.borrow_plan(ty, at.crossing.direction()) {
+            return Ok(CFrag::from_borrow(at, plan));
+        }
+        if at.crossing.direction() == Direction::Deconstruct {
+            if let Some(plan) = self.gen.out_marker_plan(MarkerOperation::Result, ty) {
+                return Ok(CFrag::from_marker(at, plan));
+            }
+        }
+        Err(refuse(at, "no C representation for this type"))
     }
 
     fn optional(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &CFrag) -> Frag<Self> {
@@ -276,11 +901,86 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 "an optional recipe over a type that is not optional",
             ));
         };
-        let conv = match at.crossing.direction() {
-            Direction::Construct => self.gen.in_option(elem, inner),
-            Direction::Deconstruct => Some(self.gen.out_arity_marker("option", elem)),
+        if at.crossing.direction() == Direction::Deconstruct {
+            let marker = self
+                .gen
+                .out_marker_plan(MarkerOperation::Optional, elem)
+                .expect("Optional output markers accept every resolved inner");
+            let mut fragment = CFrag::from_marker(at, marker);
+            let absent = inner.value.effective_niches().carve().map(|(slot, _)| slot);
+            fragment.shape = optional_shape(&fragment.function, fragment_use(inner));
+            fragment.value = CValue::Optional {
+                inner: Box::new(inner.value.clone()),
+                absent,
+            };
+            fragment.niches = fragment.value.effective_niches();
+            return Ok(fragment);
+        }
+
+        let inner_wire = inner.destination.clone();
+        let (wire, repr, niches) = if let Some((slot, rest)) = inner.niches.clone().carve() {
+            (
+                inner_wire,
+                OptionalRepr::Niche {
+                    absent: slot.matches,
+                },
+                rest,
+            )
+        } else {
+            let read_direct = matches!(inner_wire, syn::Type::Ptr(_));
+            let wire = if read_direct {
+                inner_wire
+            } else {
+                syn::parse_quote!(*const #inner_wire)
+            };
+            (
+                wire,
+                OptionalRepr::Nullable { read_direct },
+                Niches::empty(),
+            )
         };
-        self.wrap(at, "no C representation for this optional", conv)
+        let representation = match &repr {
+            OptionalRepr::Niche { .. } => "niche",
+            OptionalRepr::Nullable { read_direct: true } => "nullable-direct",
+            OptionalRepr::Nullable { read_direct: false } => "nullable-indirect",
+        };
+        let operation = OperationId::optional_converter(
+            at.crossing.value(),
+            at.crossing.mode(),
+            c_artifact("c-optional-intermediate", representation),
+            at.crossing.direction(),
+        );
+        let function = CFunction::optional(
+            operation,
+            OptionalPlan {
+                source: at.crossing.spelled().clone(),
+                wire: wire.clone(),
+                converter: inner.function.call().clone(),
+                repr,
+                borrowed: elem.borrow_target().is_some(),
+            },
+        );
+        let value = CValue::Direct {
+            wire: wire.clone(),
+            converter: function.call().clone(),
+            niches: niches.clone(),
+        };
+        Ok(CFrag {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination: wire,
+            shape: optional_shape(&function, fragment_use(inner)),
+            function,
+            niches,
+            subs: vec![elem.key()],
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            value,
+        })
     }
 
     fn sequence(
@@ -288,22 +988,72 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         _cx: &mut Cx<'_>,
         at: At<'_>,
         _elements: Mode,
-        _inner: &CFrag,
+        inner: &CFrag,
     ) -> Frag<Self> {
         let ty = at.crossing.spelled();
-        let conv = match at.crossing.direction() {
+        if at.crossing.direction() == Direction::Deconstruct {
+            if let TypeKind::Vec(element) = at.crossing.value().kind() {
+                if !marker_destination(&inner.destination) {
+                    let operation = at.sequence_converter_for(at.crossing.value());
+                    let function = CFunction::sequence(
+                        operation,
+                        SequencePlan {
+                            source: ty.clone(),
+                            element: (**element).clone(),
+                            child_wire: inner.destination.clone(),
+                            child: inner.function.call().clone(),
+                        },
+                    );
+                    let value = CValue::OwnedSequence {
+                        element_wire: inner.destination.clone(),
+                        converter: function.call().clone(),
+                    };
+                    return Ok(CFrag {
+                        id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+                        source: at.crossing.spelled().clone(),
+                        destination: syn::parse_quote!(()),
+                        shape: sequence_shape(&function, fragment_use(inner)),
+                        function,
+                        niches: Niches::empty(),
+                        subs: vec![element.key()],
+                        arm: None,
+                        yields: Yield {
+                            ty: at.crossing.value().stripped_key(),
+                            mode: at.crossing.mode(),
+                            validity: Validity::SelfSufficient,
+                        },
+                        value,
+                    });
+                }
+            }
+        }
+        let mut fragment = match at.crossing.direction() {
             // A `&[E]` is the only run C builds a Rust value out of, and it does
             // it zero-copy from the caller's own block.
-            Direction::Construct => self.gen.in_slice(ty),
-            // A `&[E]` callback argument is delivered by reference and has its
-            // own marker; every other run is lowered structurally from the
-            // element's.
-            Direction::Deconstruct => self
-                .gen
-                .out_slice_marker(ty)
-                .or_else(|| Some(self.gen.out_arity_marker("vec", ty.sequence_elem()?))),
+            Direction::Construct => {
+                let plan = self
+                    .gen
+                    .in_slice_plan(ty)
+                    .ok_or_else(|| refuse(at, "no C representation for this run"))?;
+                CFrag::from_slice_input(at, plan)
+            }
+            // A deconstructed run has no single wire of its own. The frozen
+            // CValue below carries its pointer-plus-length ABI and encoder.
+            Direction::Deconstruct => CFrag::from_marker(
+                at,
+                self.gen
+                    .out_marker_plan(MarkerOperation::Sequence, &inner.source)
+                    .expect("Sequence output markers accept every resolved element"),
+            ),
         };
-        self.wrap(at, "no C representation for this run", conv)
+        fragment.shape = sequence_shape(&fragment.function, fragment_use(inner));
+        if at.crossing.direction() == Direction::Deconstruct {
+            fragment.value = CValue::BorrowedSequence {
+                element_wire: inner.destination.clone(),
+                converter: inner.function.call().clone(),
+            };
+        }
+        Ok(fragment)
     }
 
     fn construct(
@@ -374,31 +1124,23 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     );
                 }
             }
-            let exprs = parts
+            let arm_parts = parts
                 .iter()
-                .enumerate()
-                .map(|(i, (part, frag))| {
-                    let bind = format_ident!("__f{}", i);
-                    let conv = &frag.function.sig.ident;
-                    let call = if fallible(&frag.function) {
-                        quote!(#conv(#bind)?)
-                    } else {
-                        quote!(#conv(#bind))
-                    };
-                    // The union holds a payload whose bytes C may write —
-                    // a nested enum or a `bool` — as `MaybeUninit`, so the
-                    // decode can check them before assuming them valid. Same
-                    // holding form a struct's mirror field takes, and the same
-                    // reason: the wrap belongs to whatever holds the value, not
-                    // to the value's own conversion.
-                    match (
-                        at.crossing.direction(),
-                        self.gen.payload_field_wire(&part.ty),
-                    ) {
-                        (Direction::Deconstruct, Ok(w)) if held_uninit(&w, &frag.destination) => {
-                            quote!(::core::mem::MaybeUninit::new(#call))
-                        }
-                        _ => call,
+                .map(|(part, frag)| {
+                    // Input planning can precede the matching output fragment.
+                    // The output pass later validates the one-wire contract
+                    // and refuses fallible encoders before planning Choice.
+                    let wire = self
+                        .gen
+                        .payload_field_wire(&part.ty)
+                        .unwrap_or_else(|_| frag.destination.clone());
+                    ArmPart {
+                        use_: fragment_use(frag),
+                        hold_uninit: at.crossing.direction() == Direction::Deconstruct
+                            && held_uninit(&wire, &frag.destination),
+                        wire,
+                        child: frag.function.call().clone(),
+                        mode: part.mode,
                     }
                 })
                 .collect();
@@ -415,28 +1157,49 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 })
                 .map(|(p, _)| p.ty.key())
                 .collect();
+            let operation = OperationId::shared(
+                c_artifact("c-marker", "choice-arm"),
+                at.crossing.direction(),
+            );
+            let function = CFunction::marker(
+                operation,
+                MarkerPlan {
+                    operation: MarkerOperation::ChoiceArm,
+                    // Choice retains the exact part FragmentUse edges; this
+                    // transient bridge has no independent dependency.
+                    subs: Vec::new(),
+                },
+            );
+            let destination: syn::Type = syn::parse_quote!(());
+            let value = CValue::Direct {
+                wire: destination.clone(),
+                converter: function.call().clone(),
+                niches: Niches::empty(),
+            };
             return Ok(CFrag {
-                destination: syn::parse_quote!(()),
-                function: syn::parse_quote!(
-                    #[allow(dead_code)]
-                    fn __cbg_arm() {}
+                id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+                source: at.crossing.spelled().clone(),
+                destination,
+                shape: product_shape(
+                    &function,
+                    parts.iter().map(|(_, frag)| fragment_use(frag)).collect(),
                 ),
+                function,
                 niches: Niches::empty(),
                 subs: subs.clone(),
                 arm: Some(Arm {
-                    fallible: parts.iter().any(|(_, f)| fallible(&f.function)),
                     subs,
-                    exprs,
+                    parts: arm_parts,
                 }),
                 yields: Yield {
                     ty: at.crossing.value().stripped_key(),
                     mode: at.crossing.mode(),
                     validity: Validity::SelfSufficient,
                 },
+                value,
             });
         }
         let c_struct = self.gen.c_type_ident(&key);
-        let src = self.gen.src_ty_of(&key);
         // Each part converts itself. The three statements of a field's wire —
         // this conversion, its twin in the other direction, and the mirror's
         // own field list — collapse to one: the part's fragment says it, and
@@ -457,232 +1220,212 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 ));
             }
         }
-        let names: Vec<syn::Ident> = parts
+        let fields = parts
             .iter()
-            .map(|(p, _)| format_ident!("{}", p.name))
-            .collect();
-        let calls: Vec<TokenStream> = parts
-            .iter()
-            .zip(&names)
-            .map(|((part, frag), fname)| {
-                let conv = &frag.function.sig.ident;
-                let call = quote!(#conv(v.#fname));
-                let call = if fallible(&frag.function) {
-                    quote!(#call?)
-                } else {
-                    call
-                };
+            .map(|(part, frag)| {
                 // The mirror holds a tagged-union field as `MaybeUninit`, so a
                 // C caller can hand over any discriminant and the decode can
                 // check it before assuming it initialised. That is the
                 // struct's holding form rather than the union's wire, so the
                 // wrap belongs here and the union's own conversion stays the
                 // one both directions use.
-                match (at.crossing.direction(), self.gen.data_field_wire(&part.ty)) {
-                    (Direction::Deconstruct, Some(w)) if held_uninit(&w, &frag.destination) => {
-                        quote!(::core::mem::MaybeUninit::new(#call))
-                    }
-                    _ => call,
+                let hold_uninit = at.crossing.direction() == Direction::Deconstruct
+                    && self
+                        .gen
+                        .data_field_wire(&part.ty)
+                        .is_some_and(|wire| held_uninit(&wire, &frag.destination));
+                ProductField {
+                    name: format_ident!("{}", part.name),
+                    converter: frag.function.call().clone(),
+                    mode: part.mode,
+                    hold_uninit,
                 }
             })
             .collect();
-        let any_fallible = parts.iter().any(|(_, f)| fallible(&f.function));
         let subs: Vec<TypeKey> = parts.iter().map(|(p, _)| p.ty.key()).collect();
-
-        match at.crossing.direction() {
-            Direction::Construct => {
-                let name = CbindgenBuilder::in_name_of(&key);
-                let function: syn::ItemFn = if any_fallible {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) unsafe fn #name(
-                            v: #c_struct,
-                        ) -> ::core::result::Result<#src, ::std::string::String> {
-                            ::core::result::Result::Ok(#src { #(#names: #calls),* })
-                        }
-                    )
-                } else {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) unsafe fn #name(v: #c_struct) -> #src {
-                            #src { #(#names: #calls),* }
-                        }
-                    )
-                };
-                Ok(CFrag::from_converter(
-                    at,
-                    ConverterImpl {
-                        subs,
-                        destination: syn::parse_quote!(#c_struct),
-                        function,
-                        pre_stages: vec![],
-                        niches: Niches::empty(),
-                        metadata: (),
-                    },
-                ))
-            }
-            Direction::Deconstruct => {
-                let name = CbindgenBuilder::out_name_of(&key);
-                let function: syn::ItemFn = if any_fallible {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) fn #name(
-                            v: #src,
-                        ) -> ::core::result::Result<#c_struct, ::std::string::String> {
-                            ::core::result::Result::Ok(#c_struct { #(#names: #calls),* })
-                        }
-                    )
-                } else {
-                    syn::parse_quote!(
-                        #[allow(non_snake_case, unused_variables, dead_code)]
-                        pub(crate) fn #name(v: #src) -> #c_struct {
-                            #c_struct { #(#names: #calls),* }
-                        }
-                    )
-                };
-                Ok(CFrag::from_converter(
-                    at,
-                    ConverterImpl {
-                        subs,
-                        destination: syn::parse_quote!(#c_struct),
-                        function,
-                        pre_stages: vec![],
-                        niches: Niches::empty(),
-                        metadata: (),
-                    },
-                ))
-            }
-        }
+        let direction = at.crossing.direction();
+        let wire: syn::Type = syn::parse_quote!(#c_struct);
+        let operation = OperationId::product_converter(
+            at.crossing.value(),
+            at.crossing.mode(),
+            c_artifact("c-product-intermediate", "repr-c-struct"),
+            at.crossing.direction(),
+        );
+        let function = CFunction::product(
+            operation,
+            ProductPlan {
+                source: at.crossing.spelled().clone(),
+                wire: wire.clone(),
+                direction,
+                fields,
+            },
+        );
+        let value = CValue::Direct {
+            wire: wire.clone(),
+            converter: function.call().clone(),
+            niches: Niches::empty(),
+        };
+        Ok(CFrag {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination: wire,
+            shape: product_shape(
+                &function,
+                parts.iter().map(|(_, frag)| fragment_use(frag)).collect(),
+            ),
+            function,
+            niches: Niches::empty(),
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            value,
+        })
     }
 
     fn choice(
         &mut self,
-        cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_>,
         at: At<'_>,
         arms: &[(&Alternative, &CFrag)],
     ) -> Frag<Self> {
-        let ty = at.crossing.spelled();
-        let key = ty.key();
+        let key = at.crossing.spelled().key();
         let cname = self.gen.c_type_ident(&key);
-        let src = self.gen.src_ty_of(&key);
-        let emit = cx.emit();
-        let construct = at.crossing.direction() == Direction::Construct;
-
-        let mut subs: Vec<TypeKey> = Vec::new();
-        let mut fallible_any = false;
-        let mut match_arms: Vec<TokenStream> = Vec::new();
-        for (alternative, frag) in arms {
-            let Some(arm) = frag.arm.as_ref() else {
+        let direction = at.crossing.direction();
+        let mut subs = Vec::new();
+        let mut planned_arms = Vec::with_capacity(arms.len());
+        for (alternative, fragment) in arms {
+            let Some(arm) = fragment.arm.as_ref() else {
                 return Err(refuse(at, "an arm that composed no payload"));
             };
-            subs.extend(arm.subs.iter().cloned());
-            fallible_any |= arm.fallible;
-            let vident = &alternative.name;
-            let binds: Vec<syn::Ident> = (0..alternative.fields.len())
-                .map(|i| format_ident!("__f{}", i))
-                .collect();
-            let bound: Vec<TokenStream> = alternative
-                .fields
-                .iter()
-                .zip(&binds)
-                .map(|(f, b)| f.bind(b))
-                .collect();
-            let built: Vec<TokenStream> = alternative
-                .fields
-                .iter()
-                .zip(&arm.exprs)
-                .map(|(f, e)| f.bind(e))
-                .collect();
-            // The alternative's own delimiters on both sides, so a tuple arm
-            // and a braced one each spell themselves.
-            let (from_head, to_head) = if construct {
-                (quote!(#cname::#vident), quote!(#src::#vident))
-            } else {
-                (quote!(#src::#vident), quote!(#cname::#vident))
-            };
-            let from = emit.shape_alternative(alternative, from_head, &bound);
-            let to = emit.shape_alternative(alternative, to_head, &built);
-            match_arms.push(quote!(#from => #to,));
-        }
-
-        let conv = if construct {
-            let name = CbindgenBuilder::in_name_of(&key);
-            let bad = format!(
-                "invalid tag {{}} for `{cname}` (expected 0..{})",
-                arms.len()
-            );
-            // A C-supplied mirror may hold any discriminant, so the tag is
-            // checked before the value is assumed initialised. Neither the tag
-            // nor the check is a crossing — the adapter invents both, which is
-            // why no recipe mentions them.
-            let guard = self.gen.tag_guard(
-                &cname,
-                arms.len(),
-                quote!(v),
-                quote!(return ::core::result::Result::Err(::std::format!(#bad, __tag));),
-            );
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(
-                    v: ::core::mem::MaybeUninit<#cname>,
-                ) -> ::core::result::Result<#src, ::std::string::String> {
-                    #guard
-                    let v = v.assume_init();
-                    ::core::result::Result::Ok(match v { #(#match_arms)* })
-                }
-            );
-            ConverterImpl {
-                subs,
-                destination: syn::parse_quote!(::core::mem::MaybeUninit<#cname>),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            }
-        } else {
-            if fallible_any {
+            if direction == Direction::Deconstruct
+                && arm.parts.iter().any(|part| part.child.fallible())
+            {
                 return Err(refuse(
                     at,
                     "a payload whose encode can fail, which a union has no way to report",
                 ));
             }
-            let name = CbindgenBuilder::out_name_of(&key);
-            // `MaybeUninit`, matching the wire the decode takes: one C type for
-            // both directions, so a union returned by one function can be
-            // handed straight to another that takes one. The value written is
-            // always initialised — only the *type* has room for a discriminant
-            // C might not have written.
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src) -> ::core::mem::MaybeUninit<#cname> {
-                    ::core::mem::MaybeUninit::new(match v { #(#match_arms)* })
-                }
-            );
-            ConverterImpl {
-                subs,
-                destination: syn::parse_quote!(::core::mem::MaybeUninit<#cname>),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            }
+            subs.extend(arm.subs.iter().cloned());
+            planned_arms.push(prebindgen_registry::chain::ChoiceArm {
+                alternative: (*alternative).clone(),
+                tag: {
+                    let tag =
+                        syn::LitInt::new(&alternative.index.to_string(), alternative.name.span());
+                    syn::parse_quote!(#tag)
+                },
+                bridge: prebindgen_registry::chain::TupleProduct {
+                    parts: arm.parts.iter().map(|part| part.wire.clone()).collect(),
+                },
+                parts: arm
+                    .parts
+                    .iter()
+                    .map(|part| prebindgen_registry::chain::ChoicePart {
+                        child: part.child.clone(),
+                        mode: part.mode,
+                        hold_uninit: part.hold_uninit,
+                    })
+                    .collect(),
+            });
+        }
+
+        let destination: syn::Type = syn::parse_quote!(::core::mem::MaybeUninit<#cname>);
+        let shape_arms = arms
+            .iter()
+            .map(|(_, fragment)| {
+                fragment
+                    .arm
+                    .as_ref()
+                    .expect("validated Choice arm")
+                    .parts
+                    .iter()
+                    .map(|part| part.use_.clone())
+                    .collect()
+            })
+            .collect();
+        let operation = OperationId::choice_converter(
+            at.crossing.value(),
+            at.crossing.mode(),
+            c_artifact("c-choice-intermediate", "repr-c-tagged-union"),
+            at.crossing.direction(),
+        );
+        let function = CFunction::choice(
+            operation,
+            ChoicePlan {
+                source: at.crossing.spelled().clone(),
+                wire: cname,
+                direction,
+                arms: planned_arms,
+            },
+        );
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: Niches::empty(),
         };
-        let _ = fallible_any;
-        Ok(CFrag::from_converter(at, conv))
+        Ok(CFrag {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            shape: choice_shape(&function, shape_arms),
+            function,
+            niches: Niches::empty(),
+            subs,
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            value,
+        })
     }
 
     fn callback(
         &mut self,
         _cx: &mut Cx<'_>,
         at: At<'_>,
-        _args: &[&CFrag],
+        fragments: &[&CFrag],
         _result: Option<&CFrag>,
     ) -> Frag<Self> {
         let Some(args) = at.crossing.value().callback_args() else {
             return Err(refuse(at, "a callback recipe over a type that is not one"));
         };
-        let conv = self.gen.dispatch_fn_input(args, self.registry);
-        self.wrap(at, "undeclared callback signature", conv)
+        let key: CallbackKey = args.iter().map(|arg| arg.key()).collect();
+        if !self.gen.callbacks.contains_key(&key) {
+            return Err(refuse(at, "undeclared callback signature"));
+        }
+        let c_struct = self.gen.callback_c_ident(&key);
+        let destination: syn::Type = syn::parse_quote!(#c_struct);
+        let operation = callback_operation(at.crossing.value());
+        let function = CFunction::deferred_invoke(operation);
+        let value = CValue::Direct {
+            wire: destination.clone(),
+            converter: function.call().clone(),
+            niches: Niches::empty(),
+        };
+        Ok(CFrag {
+            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+            source: at.crossing.spelled().clone(),
+            destination,
+            shape: invoke_shape(
+                &function,
+                fragments.iter().map(|frag| fragment_use(frag)).collect(),
+            ),
+            function,
+            niches: Niches::empty(),
+            subs: Vec::new(),
+            arm: None,
+            yields: Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            },
+            value,
+        })
     }
 
     /// C hands out borrows deliberately, so a returned one is not an error.
@@ -697,7 +1440,35 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         Validity::Borrowed
     }
 
-    fn plan(&mut self, _cx: &mut Cx<'_>, _bound: &Bound, _root: &CFrag) -> Result<(), String> {
-        Ok(())
+    fn plan(
+        &mut self,
+        _cx: &mut Cx<'_>,
+        bound: &Bound,
+        root: &CFrag,
+    ) -> Result<SitePlan<CRepresentation>, String> {
+        let failure_route = (root.value.failure() == Failure::Fallible).then(|| {
+            let function = self
+                .registry
+                .flat()
+                .function(&bound.site.owner)
+                .expect("site owner is a declared function");
+            if function.ret.fallible_parts().is_some() {
+                CFailureRoute::Error(SiteId::new(prebindgen_registry::recipe::Site {
+                    owner: bound.site.owner.clone(),
+                    role: Role::Error,
+                }))
+            } else {
+                CFailureRoute::Panic
+            }
+        });
+        Ok(SitePlan::new(
+            SiteId::new(bound.site.clone()),
+            bound.clone(),
+            root.id.clone(),
+            root.yields.clone(),
+            AbiLayout::new(root.value.slots(), root.value.clone()),
+            failure_route,
+            Cleanup::None,
+        ))
     }
 }

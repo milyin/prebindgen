@@ -29,7 +29,8 @@
 //! | bounded conversion domains + niches | `Option<Duration>` ⇄ bounded millisecond `ULong?`; raw JNI remains primitive `Long`, `None` uses an invalid `u64`, invalid input/output routes to `onError`; `DurationBoundary` composes the niche through a data-class field and whole-object decode |
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
-//! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
+//! | recursive `expand_param!` constructor input | `SummaryEnvelope` folds the nested Summary build/identity selector before its outer constructor |
+//! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones; `selector_code_score(Option<&SelectorCode>)` lowers its synthetic `Option<u16>` build-arm leaf to a primitive presence/value pair |
 //! | `FunctionDecl::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
 //! | split × builder-delivered return (#87) | `summaryMerge` — cartesian split + generic `<R>` wrapper; every overload re-declares `<R>` |
 //! | JNI native-symbol escaping (#86)      | `esc_pkg.Esc_Probe` — underscored subpackage + class (escaped `freePtr` symbol) + hook-mangled `escape_probe_value` harness extern |
@@ -57,7 +58,10 @@
 //! | `Result<_, E>` → typed domain `onError` | `storage_try_with_label` |
 //! | two-caller split (#45): `onBindingError` + `onError` on one fallible wrapper | `storage_try_from_stamp` (wrong-length `tag` → binding; bad `secs` → domain) |
 //! | fixed-width unsigned scalars (#108) | `Unsigned` + direct/optional/callback/collection max-value round trips |
+//! | owned `Option<opaque>` input         | `ingot_optional_grams`: null niche or consuming handle through the shared registry Optional chain |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
+//! | borrowed `Option<&data_class>`       | `payload_optional_borrow_id`: Kotlin-side flattening → registry-owned `Option<Payload>` carrier → final borrow |
+//! | borrowed `&[T]` Sequence input      | `label_borrowed_concat`: registry Sequence chain builds an owned `Vec<Label>` carrier → final borrow |
 //! | non-null enum field under nullable-context (#144) | `Option<CacheConfig>` → nested `RepliesConfig.priority` (single Elvis default) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
 //! | owned-handle callback (`Fn(Storage)`)| `storage_handler_new` / `storage_emit` |
@@ -67,6 +71,7 @@
 //! | N-ary sorted handle locking          | `storage_total_len` (3 handles) + a 4-thread smoke |
 //! | `Vec<String>` return                 | `storage_labels` (single-leaf string fold) |
 //! | `String` return                      | `string_new` |
+//! | fixed-size primitive arrays          | every JNI scalar element + `[u8; CONST_ARRAY_LEN]` from the renamed helper source |
 //! | binding-error channel (`JniErrorHandler`) | wrong-length `[u8; 2]` (fixed-size array length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
@@ -201,6 +206,18 @@ fn main() {
                 )
                 .valid_range(0u64..=86_400_000u64),
         )
+        // Output-only semantic wrapper over an owned opaque handle, used to
+        // verify callback cleanup through an Optional(Product) chain.
+        .convert(convert!(CallbackToken).output(fun!(callback_token_into_ingot)))
+        .ignore(ty!(CallbackToken))
+        // The helper source is private to this JVM covertest. Its array length
+        // is a marked const, so final Rust emission must qualify the path with
+        // the helper crate's configured `cov_helpers` name.
+        .package(
+            package!("model")
+                .class(data_class!(ConstArray))
+                .fun(fun!(const_array_echo)),
+        )
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
         // reassembled via a generated `fromParts`). A data class can carry
@@ -210,18 +227,25 @@ fn main() {
         // `PayloadApi` exposes its fields + `labelLen()`, and the
         // hand-written `Timestamped` interface extends it (#54).
         .package(
-            package!().class(
-                data_class!(Payload)
-                    .interface()
-                    .implements("io.prebindgen.covertest.Timestamped")
-                    .method(fun!(payload_label_len)),
-            ),
+            package!()
+                .class(
+                    data_class!(Payload)
+                        .interface()
+                        .implements("io.prebindgen.covertest.Timestamped")
+                        .method(fun!(payload_label_len)),
+                )
+                .fun(fun!(payload_optional_borrow_id)),
         )
         // `Option<Holder>` where `Holder` has a REQUIRED handle field: the
         // absent case passes pointer 0 for it, so the field decodes must stay
         // inside the presence gate or `null` becomes a binding error instead of
         // `None` (PR#294 review).
-        .package(package!().class(data_class!(Holder)))
+        .package(
+            package!()
+                .class(data_class!(Holder))
+                .class(data_class!(CallbackHolder))
+                .fun(fun!(callback_holder_optional_emit)),
+        )
         // #218's last row: a data class that only REACHES a handle, through
         // another data class. `Dossier`'s cascade is a one-liner that assumes
         // `Holder` above was independently made `AutoCloseable` — the JVM
@@ -298,7 +322,12 @@ fn main() {
                 // while both halves still compile.
                 .class(ptr_class!(Vault))
                 .class(ptr_class!(VaultHolder))
-                .class(ptr_class!(Ingot).method(fun!(ingot_grams)))
+                .class(
+                    ptr_class!(Ingot)
+                        .constructor(fun!(ingot_new))
+                        .method(fun!(ingot_grams)),
+                )
+                .fun(fun!(ingot_optional_grams))
                 // `Hold`'s payload is a CONVERTED type, so its leaf crosses
                 // through the `convert!(Duration)` chain; `HoldPolicy` puts
                 // that same payload in the data-class-field position.
@@ -309,14 +338,14 @@ fn main() {
                 // ordinary flattened leaves, so the tag-gated groups must
                 // interleave with them on one `fromParts` call.
                 .class(data_class!(Observation))
-                // `Marker`'s `Option<enum>` payload is not leaf-shaped, so the
-                // sum degrades to a whole-object crossing instead of failing —
-                // and that path is what reads an enum property back.
+                // `Marker`'s `Option<enum>` payload uses one primitive jint;
+                // an enum niche represents null while the sum tag independently
+                // identifies the active variant.
                 .class(sealed_class!(Marker))
                 .class(data_class!(Tagged))
                 // `Annotated` exercises a NESTED data-class field (`payload`,
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
-                // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
+                // Option<enum> FIELDS (one jint carrying an unused discriminant for null).
                 .class(data_class!(Annotated))
                 // #144: a NON-NULL enum field (`RepliesConfig.priority`) reached
                 // through an outer `Option<CacheConfig>` param. The outer
@@ -350,6 +379,14 @@ fn main() {
                 // instance methods (`secs()` / `nanos()`) whose receiver crosses
                 // as those field leaves, and `Vec<Stamp>` surfaces as
                 // `List<Stamp>`.
+                // The optional nested class #602 names first: `Envelope`'s
+                // stamp is sometimes there, and the decomposition says so with
+                // a presence flag ahead of the child's leaves.
+                .class(data_class!(Envelope))
+                .class(data_class!(Window))
+                .class(data_class!(Frame))
+                .class(data_class!(Meter))
+                .class(data_class!(Rack))
                 .class(
                     data_class!(Stamp)
                         .method(fun!(stamp_secs))
@@ -413,6 +450,16 @@ fn main() {
                                 .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>)),
                         ),
                 )
+                // A multi-variant Optional input whose required `u16` build-arm
+                // leaf is nullable on the public surface. Its synthetic
+                // `Option<u16>` reading must still select the allocation-free
+                // registry pair recipe at the native ABI (#525 follow-up).
+                .class(ptr_class!(SelectorCode).constructor(fun!(selector_code_new)))
+                .fun(fun!(selector_code_score))
+                // `SummaryEnvelope` has no Kotlin class. Its sole constructor
+                // takes `Summary`, so the registry recursively folds Summary's
+                // own selector expansion before building the outer Rust value.
+                .fun(fun!(summary_envelope_score))
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
@@ -429,6 +476,12 @@ fn main() {
         .expand(
             expand_param!(Summary)
                 .variant(fun!(summary_new))
+                .variant_self(),
+        )
+        .expand(expand_param!(SummaryEnvelope).variant(fun!(summary_envelope_new)))
+        .expand(
+            expand_param!(SelectorCode)
+                .variant(fun!(selector_code_new))
                 .variant_self(),
         )
         // `Summary` default output: decomposed `(count, total)` leaves, names
@@ -544,6 +597,8 @@ fn main() {
                 .fun(fun!(payload_priority))
                 .fun(fun!(priority_weight))
                 .fun(fun!(priority_or))
+                .fun(fun!(priority_nested))
+                .fun(fun!(priority_nested_state))
                 .fun(fun!(stamp_new))
                 .fun(fun!(stamp_series))
                 // The three convert!-source-kind fns (conversions declared
@@ -554,6 +609,7 @@ fn main() {
                 .fun(fun!(percent_invalid_output))
                 .fun(fun!(label_reverse))
                 .fun(fun!(label_series_echo))
+                .fun(fun!(label_borrowed_concat))
                 .fun(fun!(annotated_new))
                 .fun(fun!(annotated_alternate_value))
                 .fun(fun!(annotated_ttl))
@@ -565,9 +621,8 @@ fn main() {
                 .fun(fun!(observation_which))
                 .fun(fun!(tagged_new))
                 .fun(fun!(tagged_rank))
-                // The same `Option<enum>` payload in RETURN position — the
-                // `synth_sum_leaves` path, which the struct field above does
-                // not reach (it degrades to the whole-object crossing).
+                // The same niche-backed `Option<enum>` payload in RETURN
+                // position exercises the hoisted sum builder.
                 .fun(fun!(marker_of))
                 // A sum as the function's OWN return (and callback argument):
                 // the tag + groups ride the hoisted builder / folder singleton
@@ -591,6 +646,18 @@ fn main() {
                 // #218: the same handle reached through a data-class FIELD, so
                 // the JVM harness can assert the container's cascade closes it.
                 .fun(fun!(verdict_new))
+                // …and the same data class handed to a CALLBACK, which
+                // reassembles through the interface path rather than the
+                // return path — a different question about the same leaves
+                // (#616 review).
+                .fun(fun!(verdict_each))
+                // The optional nested class on both delivery routes.
+                .fun(fun!(envelope_new))
+                .fun(fun!(envelope_each))
+                .fun(fun!(frame_new))
+                .fun(fun!(frame_each))
+                .fun(fun!(rack_new))
+                .fun(fun!(rack_each))
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
                 .fun(fun!(dossier_new))
@@ -815,6 +882,8 @@ fn main() {
                 .fun(fun!(storage_labels))
                 // Option<data-class> input.
                 .fun(fun!(storage_put_opt))
+                // Option<data-class> callback output in both presence states.
+                .fun(fun!(payload_optional_emit))
                 // `.name(...)`: per-function Kotlin rename override. The default name
                 // would be `millisAdd`; force it to `addMillis` to exercise the
                 // override path (the Rust symbol/extern is unaffected).
@@ -845,7 +914,9 @@ fn main() {
         .join("src")
         .join("generated_bindings.rs");
     let jni = binding.build().expect("build failed");
-    let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
+    let rust_path = jni
+        .write_rust(&rust_dest)
+        .unwrap_or_else(|error| panic!("write_rust failed: {error}"));
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()

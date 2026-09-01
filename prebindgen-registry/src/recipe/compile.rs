@@ -30,12 +30,12 @@
 use std::{collections::HashMap, fmt, rc::Rc};
 
 use super::{
-    Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Reach, Recipe, RecipeError,
-    RecipeKey, RecipeName, Recipes, Role, Shape, Site,
+    Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Origin, Reach, Recipe,
+    RecipeError, RecipeKey, RecipeName, Recipes, Role, Shape, Site,
 };
 use crate::{
     flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef},
-    Emit,
+    FragmentId,
 };
 
 /// What a fragment produces, which is the only thing the registry reads out of
@@ -93,44 +93,32 @@ pub struct At<'a> {
     pub recipe: &'a RecipeKey,
 }
 
-/// What every hook receives: a read-only view of the model and the table, and
-/// the capability to emit Rust.
+impl At<'_> {
+    /// Stable registry identity of the fragment being compiled.
+    pub fn fragment_id(&self) -> FragmentId {
+        FragmentId::new(self.crossing.spelled().key(), self.recipe.clone())
+    }
+
+    /// Sequence-converter identity for a model carrier deliberately shared by
+    /// owned collections and borrowed views.
+    pub fn sequence_converter_for(&self, carrier: &TypeRef) -> crate::OperationId {
+        crate::OperationId::sequence_converter(carrier, self.crossing.direction())
+    }
+}
+
+/// What every hook receives: a read-only view of the model and the table.
 ///
 /// A hook asks the registry nothing and records nothing in it. What it produces
 /// is its fragment, and what the registry reads of that is
 /// [`Carrier::yields`].
 pub struct Cx<'a> {
     model: &'a Flat,
-    recipes: &'a Recipes,
-    emit: &'a Emit,
 }
 
 impl Cx<'_> {
-    /// The Rust-emission capability.
-    ///
-    /// A fragment is generated Rust, so compiling one is an emission callback
-    /// and is handed the key exactly as `Prebindgen`'s `on_*` methods are.
-    pub fn emit(&self) -> &Emit {
-        self.emit
-    }
-
     /// The model every structural fact is read off.
     pub fn model(&self) -> &Flat {
         self.model
-    }
-
-    /// The table, for asking about a crossing without demanding it.
-    pub fn table(&self) -> &Recipes {
-        self.recipes
-    }
-
-    /// Which reusable recipe names are declared under a crossing key.
-    ///
-    /// Demands nothing, so an adapter may ask about an alternative it will not
-    /// take. Empty for a crossing nobody declared, which still has a derived
-    /// recipe.
-    pub fn recipe_names(&self, crossing: &Crossing) -> Vec<&RecipeName> {
-        self.recipes.names_of(&crossing.key())
     }
 }
 
@@ -151,12 +139,24 @@ pub struct Part<'a> {
 }
 
 /// Where one part comes from.
-#[derive(Copy, Clone, Debug)]
+/// `Clone` and not `Copy`: `Path` carries its access chain, and a derived
+/// recipe is owned and dropped inside the compile, so the chain cannot be
+/// borrowed from it (#613 step 10).
+#[derive(Clone, Debug)]
 pub enum PartSource<'a> {
     /// Parameter `index` of the constructor being called.
     Argument {
         /// Position in the constructor's parameter list.
         index: usize,
+    },
+    /// A chain of field accesses, outermost first — an inlined nested class's
+    /// leaf. The one-hop case is [`Self::Field`] (#613 step 10).
+    Path {
+        /// Each hop's position in the struct it indexes. Borrowed from the
+        /// recipe row, which outlives the compile.
+        indices: Vec<usize>,
+        /// The field the chain arrives at.
+        field: &'a Field,
     },
     /// Field `index` of the value, read directly.
     Field {
@@ -165,6 +165,9 @@ pub enum PartSource<'a> {
         /// The field itself.
         field: &'a Field,
     },
+    /// The value itself, as one part — the compiled form of
+    /// [`Reach::Identity`]. Nothing is indexed and nothing is called.
+    Identity,
     /// This accessor call.
     Accessor {
         /// The function to call.
@@ -274,9 +277,13 @@ pub trait Compile {
     fn tolerates(&self, role: &Role) -> Validity {
         match role {
             Role::Return | Role::Error | Role::Const => Validity::SelfSufficient,
-            Role::Param { .. } | Role::Receiver | Role::CallbackArg { .. } | Role::Part { .. } => {
-                Validity::Borrowed
-            }
+            Role::Param { .. }
+            | Role::Receiver
+            | Role::CallbackArg { .. }
+            | Role::Part { .. }
+            // A leaf of an expanded parameter lives exactly as long as the
+            // parameter it came from, so it borrows on the same terms.
+            | Role::ExpansionLeaf { .. } => Validity::Borrowed,
         }
     }
 
@@ -331,7 +338,7 @@ type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>
 /// and so cannot keep one [`Compiler`], but the fragments it built borrow
 /// nothing and outlive any of them.
 pub struct Compiled<F> {
-    fragments: HashMap<FragmentKey, Rc<F>>,
+    fragments: HashMap<FragmentId, Rc<F>>,
     /// Which row answered when a crossing was compiled **as a whole**, rather
     /// than as one part of a container. Recorded by [`Compiler::crossing`],
     /// which is the only entry point that consults the crossing's default —
@@ -339,11 +346,6 @@ pub struct Compiled<F> {
     /// choosing between the recipes a crossing happens to have.
     defaults: HashMap<(TypeKey, Direction), RecipeKey>,
 }
-
-/// What a fragment is memoised under: the type **as the site spelled it**, the
-/// row key. The spelling remains separate because one normalized row can serve
-/// `T`, `&T` and `Box<T>`, whose generated Rust differs.
-type FragmentKey = (TypeKey, RecipeKey);
 
 impl<F> Default for Compiled<F> {
     fn default() -> Self {
@@ -388,32 +390,18 @@ impl<F> Compiled<F> {
     ///
     /// Handed back as the `Rc` it is stored under: an adapter that reads its
     /// store while compilation is still filling it cannot hold a borrow across
-    /// the next write, and a fragment holds a whole `syn::ItemFn` that a
-    /// recursive lookup should not be copying.
+    /// the next write, and a fragment may hold a nontrivial semantic plan that
+    /// a recursive lookup should not copy.
     pub fn fragment(&self, ty: &TypeKey, direction: Direction) -> Option<Rc<F>> {
         let recipe = self.defaults.get(&(ty.clone(), direction))?;
         self.recipe_fragment(ty, recipe)
     }
 
-    /// Record a fragment an adapter built **without** the compiler, as this
-    /// crossing's whole answer.
-    ///
-    /// The escape hatch for a crossing the adapter still answers by hand:
-    /// `Compiler::crossing` never saw it, so nothing would file it, and
-    /// [`Self::fragment`] would have no answer to give. Recording it keeps the
-    /// adapter's emitters on one lookup instead of a per-site fall-back to
-    /// whatever else knows.
-    pub fn record(&mut self, recipe: RecipeKey, fragment: F) {
-        let ty = recipe.crossing().ty.clone();
-        let direction = recipe.crossing().direction;
-        self.fragments
-            .insert((ty.clone(), recipe.clone()), std::rc::Rc::new(fragment));
-        self.defaults.insert((ty, direction), recipe);
-    }
-
     /// The fragment for one spelled type and one row key.
     pub fn recipe_fragment(&self, ty: &TypeKey, recipe: &RecipeKey) -> Option<Rc<F>> {
-        self.fragments.get(&(ty.clone(), recipe.clone())).cloned()
+        self.fragments
+            .get(&FragmentId::new(ty.clone(), recipe.clone()))
+            .cloned()
     }
 
     /// Every fragment this compilation built, in a deterministic order.
@@ -424,12 +412,12 @@ impl<F> Compiled<F> {
     /// crossing key and then by recipe name, so a file written from this is
     /// stable across runs.
     pub fn fragments(&self) -> Vec<&F> {
-        let mut keyed: Vec<(&FragmentKey, &Rc<F>)> = self.fragments.iter().collect();
+        let mut keyed: Vec<(&FragmentId, &Rc<F>)> = self.fragments.iter().collect();
         keyed.sort_by(|a, b| {
-            (a.0 .0.as_str(), a.0 .1.crossing().direction, a.0 .1.name()).cmp(&(
-                b.0 .0.as_str(),
-                b.0 .1.crossing().direction,
-                b.0 .1.name(),
+            (a.0.spelling(), a.0.direction(), a.0.recipe().name()).cmp(&(
+                b.0.spelling(),
+                b.0.direction(),
+                b.0.recipe().name(),
             ))
         });
         keyed.into_iter().map(|(_, f)| &**f).collect()
@@ -443,7 +431,6 @@ pub struct Compiler<'a, C: Compile> {
     recipes: &'a Recipes,
     bindings: &'a Bindings,
     compiled: Compiled<C::Fragment>,
-    emit: Emit,
 }
 
 impl<'a, C: Compile> Compiler<'a, C> {
@@ -464,7 +451,6 @@ impl<'a, C: Compile> Compiler<'a, C> {
             recipes,
             bindings,
             compiled,
-            emit: Emit::new(),
         }
     }
 
@@ -491,6 +477,49 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Ok(None);
         };
+        self.plan(adapter, bound)
+    }
+
+    /// Compile one site through a named recipe chosen by the adapter.
+    ///
+    /// This is the dynamic counterpart of a binding-table
+    /// `Ask::Recipe`: useful where the choice follows from a compiled
+    /// destination fragment rather than from the Flat model alone. The row
+    /// must still be declared in the recipe table, so choosing it cannot
+    /// invent a representation outside the registry's model. An
+    /// adapter-selected recipe deliberately takes precedence over any binding
+    /// for the same site; callers use this entry point only after destination
+    /// compilation has supplied information the binding table cannot express.
+    pub fn site_recipe(
+        &mut self,
+        adapter: &mut C,
+        site: Site,
+        crossing: Crossing,
+        name: &RecipeName,
+    ) -> Result<Option<C::Plan>, CompileError<C::Error>> {
+        let crossing_key = crossing.key();
+        let Some(recipe) = self.recipes.key_of(&crossing_key, name).cloned() else {
+            return Err(RecipeError::NoSuchRecipe {
+                recipe: crossing_key.row(name.clone()),
+            }
+            .into());
+        };
+        self.plan(
+            adapter,
+            Bound {
+                site,
+                crossing,
+                recipe,
+                origin: Origin::Adapter,
+            },
+        )
+    }
+
+    fn plan(
+        &mut self,
+        adapter: &mut C,
+        bound: Bound,
+    ) -> Result<Option<C::Plan>, CompileError<C::Error>> {
         let root = self.recipe(adapter, &bound.crossing, &bound.recipe)?;
         let needed = adapter.tolerates(&bound.site.role);
         let got = root.yields().validity;
@@ -502,11 +531,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
             .into());
         }
-        let mut cx = Cx {
-            model: self.model,
-            recipes: self.recipes,
-            emit: &self.emit,
-        };
+        let mut cx = Cx { model: self.model };
         adapter
             .plan(&mut cx, &bound, &root)
             .map(Some)
@@ -579,7 +604,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         debug_assert_eq!(recipe.crossing(), &crossing.key());
         // The row has global identity, while the fragment also needs the spelling:
         // one row can serve `T`, `&T` and `Box<T>`, whose Rust differs.
-        let key = (crossing.spelled().key(), recipe.clone());
+        let key = FragmentId::new(crossing.spelled().key(), recipe.clone());
         if let Some(built) = self.compiled.fragments.get(&key) {
             return Ok(built.clone());
         }
@@ -627,7 +652,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         ty: &TypeRef,
         wanted: Mode,
     ) -> Built<C> {
-        self.part_of(adapter, at, direction, None, index, ty, wanted)
+        self.part_of(adapter, at, direction, None, index, ty, wanted, false)
     }
 
     /// [`Self::part`] for a part inside a [`Shape::Choice`] arm, which numbers
@@ -642,9 +667,25 @@ impl<'a, C: Compile> Compiler<'a, C> {
         index: usize,
         ty: &TypeRef,
         wanted: Mode,
+        identity: bool,
     ) -> Built<C> {
         let crossing = Crossing::new(ty.clone(), direction);
         let site = Site::arm_part(at.recipe, arm, index);
+        // An identity part IS its receiver, so resolving it the ordinary way
+        // finds the row being compiled and recurses without bound. It takes the
+        // crossing's DEFAULT row instead — the value's own converter, which is
+        // what a handle leaf delivers. A default that is the row being compiled
+        // is a cycle the declaration actually wrote, and says so (#613 step 10).
+        if identity {
+            let (row, _) = self.recipes.recipe(&crossing);
+            if row == *at.recipe {
+                return Err(RecipeError::Cycle {
+                    path: vec![at.crossing.key(), crossing.key()],
+                }
+                .into());
+            }
+            return self.recipe(adapter, &crossing, &row);
+        }
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRecipe {
                 site,
@@ -826,6 +867,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
         kind: ProductKind<'p>,
         parts: Vec<Part<'p>>,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
+        let mut parts = parts;
+        if at.crossing.direction() == Direction::Deconstruct {
+            for part in &mut parts {
+                part.mode = part.mode.through(at.crossing.mode());
+            }
+        }
         let mut built = Vec::new();
         for (index, part) in parts.iter().enumerate() {
             // `part.mode` rather than the type's own spelling: a product edge
@@ -839,15 +886,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 index,
                 &part.ty,
                 part.mode,
+                matches!(part.from, PartSource::Identity),
             )?);
         }
         let paired: Vec<(Part<'p>, &C::Fragment)> =
             parts.into_iter().zip(built.iter().map(|f| &**f)).collect();
-        let mut cx = Cx {
-            model: self.model,
-            recipes: self.recipes,
-            emit: &self.emit,
-        };
+        let mut cx = Cx { model: self.model };
         match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
             ProductKind::Fields => adapter.fields(&mut cx, at, &paired),
@@ -863,11 +907,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         arms: Vec<(&'a Alternative, C::Fragment)>,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
         let paired: Vec<(&Alternative, &C::Fragment)> = arms.iter().map(|(a, f)| (*a, f)).collect();
-        let mut cx = Cx {
-            model: self.model,
-            recipes: self.recipes,
-            emit: &self.emit,
-        };
+        let mut cx = Cx { model: self.model };
         adapter
             .choice(&mut cx, at, &paired)
             .map_err(CompileError::Adapter)
@@ -876,11 +916,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
     // ── Reading the parts off the model ───────────────────────────────────
 
     fn cx(&mut self) -> Cx<'_> {
-        Cx {
-            model: self.model,
-            recipes: self.recipes,
-            emit: &self.emit,
-        }
+        Cx { model: self.model }
     }
 
     fn construct_parts(
@@ -960,6 +996,54 @@ impl<'a, C: Compile> Compiler<'a, C> {
         for reach in reaches {
             match reach {
                 Reach::Omit => {}
+                // The nested shape's own parts, compiled against the field's
+                // type. `deconstruct_parts` is the same entry the outer shape
+                // took, one level in — so a nested `Choice` composes exactly as
+                // a top-level one does (#613 step 10).
+                Reach::Nested { index, shape } => {
+                    let field = fields.get(*index).ok_or_else(|| {
+                        CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                            recipe: at.recipe.clone(),
+                            index: *index,
+                            len: fields.len(),
+                        }))
+                    })?;
+                    let inner = self.fields_of(&field.ty);
+                    let (_, mut inner_parts) = self.deconstruct_parts(at, shape, Some(inner))?;
+                    parts.append(&mut inner_parts);
+                }
+                Reach::Path(indices) => {
+                    // Walk the chain against the model, as validation did.
+                    let mut here: &[Field] = fields;
+                    let mut field: Option<&Field> = None;
+                    for index in indices {
+                        let hop = here.get(*index).ok_or_else(|| {
+                            CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                                recipe: at.recipe.clone(),
+                                index: *index,
+                                len: here.len(),
+                            }))
+                        })?;
+                        field = Some(hop);
+                        here = self.fields_of(&hop.ty);
+                    }
+                    let field = field.ok_or_else(|| {
+                        CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                            recipe: at.recipe.clone(),
+                            index: 0,
+                            len: 0,
+                        }))
+                    })?;
+                    parts.push(Part {
+                        from: PartSource::Path {
+                            indices: indices.clone(),
+                            field,
+                        },
+                        mode: mode_of(&field.ty),
+                        ty: field.ty.clone(),
+                        name: field_name(field, *indices.last().unwrap_or(&0)),
+                    });
+                }
                 Reach::Field(index) => {
                     let field = fields.get(*index).ok_or_else(|| {
                         CompileError::Recipe(Box::new(RecipeError::OutOfRange {
@@ -978,6 +1062,17 @@ impl<'a, C: Compile> Compiler<'a, C> {
                         name: field_name(field, *index),
                     });
                 }
+                Reach::Identity => parts.push(Part {
+                    from: PartSource::Identity,
+                    // From the SPELLED crossing, not `value()`: the latter
+                    // strips `&`/`&mut`, which would record a borrowed
+                    // identity row as `Owned` and lose the clone-for-borrow /
+                    // move-for-owned distinction this form exists to carry
+                    // (#635 review).
+                    mode: at.crossing.mode(),
+                    ty: at.crossing.value().clone(),
+                    name: "self".to_string(),
+                }),
                 Reach::Accessor(name) => {
                     let func = self.function(at, name)?;
                     parts.push(Part {

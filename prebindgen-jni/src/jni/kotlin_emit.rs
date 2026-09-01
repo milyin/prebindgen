@@ -29,7 +29,6 @@ use kotlin_codegen::{
     KtClass, KtClassKind, KtClassModifier, KtCode, KtCompanion, KtCtorParam, KtDecl, KtFile, KtFun,
     KtParam, KtProperty, KtType, KtVis,
 };
-use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -58,6 +57,94 @@ pub(crate) struct TypedHandle<'a> {
     pub key: &'a TypeKey,
 }
 
+/// Kotlin-facing payload and ownership decisions for one sealed class,
+/// frozen before any Kotlin artifact is rendered.
+pub(crate) struct SealedClassPlan {
+    pub variants: Vec<SealedVariantPlan>,
+}
+
+pub(crate) struct SealedVariantPlan {
+    pub rust_ident: syn::Ident,
+    pub kotlin_name: String,
+    pub fields: Vec<SealedFieldPlan>,
+}
+
+pub(crate) struct SealedFieldPlan {
+    pub member: syn::Member,
+    pub property: String,
+    pub kotlin: KtType,
+    pub close: Option<FoldStrategy>,
+}
+
+fn sealed_payload_kt_type(
+    ext: &Declarations,
+    sum_name: &syn::Ident,
+    variant: &syn::Ident,
+    prop: &str,
+    field: &prebindgen_registry::flat::Field,
+) -> KtType {
+    let field_ty = &field.ty;
+    let where_ = || format!("sealed_class!({sum_name}) payload `{variant}.{prop}`");
+    let out = ext.out_frag(field_ty).unwrap_or_else(|| {
+        panic!(
+            "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
+             cannot be derived — register converters for the payload type before \
+             declaring the sealed class",
+            where_(),
+            field_ty,
+        )
+    });
+
+    if let Some(projection) = out.metadata.projection.clone() {
+        let leaf = projection_leaf_kt(ext, &projection).unwrap_or_else(|| {
+            panic!(
+                "{}: leaf `{}` has no Kotlin FQN registered (ptr_class)",
+                where_(),
+                projection.leaf_key
+            )
+        });
+        return handle_kt_type(&projection.strategy, &leaf);
+    }
+
+    let ty = out.metadata.kotlin_name.clone().unwrap_or_else(|| {
+        panic!(
+            "{}: `{}` has no Kotlin type mapping on its output converter",
+            where_(),
+            field_ty,
+        )
+    });
+    if let Some(inp) = ext.in_frag(field_ty) {
+        if let (Some(in_ty), (Some(a), Some(b))) = (
+            inp.metadata.kotlin_name.clone(),
+            (
+                inp.metadata
+                    .kotlin_name
+                    .as_ref()
+                    .and_then(|t| t.leaf_name())
+                    .map(str::to_string),
+                ty.leaf_name().map(str::to_string),
+            ),
+        ) {
+            assert!(
+                a == b,
+                "{}: the input and output converters for `{}` disagree on its Kotlin \
+                 type (`{}` in, `{}` out) — a sealed class's properties are read by both \
+                 directions, so they must map to one type",
+                where_(),
+                field_ty,
+                in_ty,
+                ty,
+            );
+        }
+    }
+    let primitive_wire = crate::jni::is_jni_primitive(&out.wire);
+    if field_ty.optional_inner().is_some() && !primitive_wire {
+        ty.nullable()
+    } else {
+        ty
+    }
+}
+
 impl super::JniGen {
     /// Unified Kotlin emission — the JNI adapter's second artifact,
     /// alongside [`write_rust`](Self::write_rust). Each per-kind emitter
@@ -67,31 +154,109 @@ impl super::JniGen {
     /// and marks it generator-owned; later writes replace only marked output
     /// (point it at a dedicated directory like `kotlin/generated/`, never at
     /// hand-written sources). Pure emission
-    /// over the resolved registry — order-free with respect to
+    /// over the resolved flat — order-free with respect to
     /// `write_rust`. Returns every path written (one per non-empty
     /// package).
     pub fn write_kotlin(&self, kotlin_root: &Path) -> Result<Vec<PathBuf>, WriteKotlinError> {
         self.declarations()
-            .write_kotlin(self.registry(), kotlin_root)
+            .write_kotlin(self.registry().flat(), kotlin_root)
     }
 }
 
 impl Declarations {
+    /// Resolve or look up the one sealed-class plan. Before the freeze this
+    /// classifies payload types and close ownership once; afterwards it can
+    /// only read the immutable generation plan.
+    /// The frozen sealed-class plan, for a render caller.
+    ///
+    /// Panics if the generation is not installed — which is the same failure a
+    /// renderer would hit trying to lower without one, said earlier and by
+    /// name.
+    pub(crate) fn sealed_class_plan_frozen(
+        &self,
+        sum: &prebindgen_registry::flat::Variant,
+    ) -> std::rc::Rc<SealedClassPlan> {
+        let key = sum.type_ref().key();
+        self.generation
+            .as_deref()
+            .unwrap_or_else(|| {
+                panic!(
+                    "`{}`: its frozen JNI generation plan is unavailable",
+                    sum.name
+                )
+            })
+            .sealed_class_plan(&key)
+    }
+
+    pub(crate) fn sealed_class_plan(
+        &self,
+        registry: &Registry,
+        sum: &prebindgen_registry::flat::Variant,
+    ) -> std::rc::Rc<SealedClassPlan> {
+        let key = sum.type_ref().key();
+        // Frozen first: after `freeze` the generation owns every sealed-class
+        // plan, so a render caller never reaches the lowering below and never
+        // needs the flat it would take (#613 step 7).
+        if let Some(generation) = &self.generation {
+            return generation.sealed_class_plan(&key);
+        }
+        if let Some(hit) = self.sum_plans.borrow().get(&key).cloned() {
+            return hit;
+        }
+        let cfg = self
+            .types
+            .get(&key)
+            .and_then(|cfg| cfg.sum())
+            .unwrap_or_else(|| panic!("`{}` is not declared as a sealed class", sum.name));
+        let variants = sum
+            .alternatives
+            .iter()
+            .map(|alt| SealedVariantPlan {
+                rust_ident: alt.name.clone(),
+                kotlin_name: self.sum_variant_class_name(cfg, &alt.name),
+                fields: alt
+                    .fields
+                    .iter()
+                    .map(|field| {
+                        let member = field.member();
+                        let property = sum_field_prop_name(&member);
+                        SealedFieldPlan {
+                            member,
+                            kotlin: sealed_payload_kt_type(
+                                self, &sum.name, &alt.name, &property, field,
+                            ),
+                            close: crate::jni::struct_plan::type_close_strategy(
+                                self,
+                                registry.flat(),
+                                &field.ty,
+                                0,
+                            ),
+                            property,
+                        }
+                    })
+                    .collect(),
+            })
+            .collect();
+        let plan = std::rc::Rc::new(SealedClassPlan { variants });
+        self.sum_plans.borrow_mut().insert(key, plan.clone());
+        plan
+    }
+
     /// Kotlin emission body — the public entry point is
-    /// `JniGen::write_kotlin`, which guarantees the registry
+    /// `JniGen::write_kotlin`, which guarantees the flat
     /// was resolved first.
     pub(crate) fn write_kotlin(
         &self,
-        registry: &Registry,
+        flat: &prebindgen_registry::flat::Flat,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
         // Validation already ran once in `RegistryBuilder::build` — this emitter
-        // is a pure consumer of the resolved, validated registry.
+        // is a pure consumer of the resolved, validated flat.
         let mut fragments: Vec<KtFile> = Vec::new();
         fragments.push(self.write_native_handle());
-        fragments.extend(self.write_enum_classes(registry)?);
-        fragments.extend(self.write_sealed_classes(registry)?);
-        fragments.extend(self.write_data_classes(registry));
+        fragments.extend(self.write_enum_classes(flat)?);
+        fragments.extend(self.write_sealed_classes(flat)?);
+        fragments.extend(self.write_data_classes(flat));
 
         // Build the borrowed `TypedHandle<'_>` view from internal config.
         let owned = self.collect_typed_handles();
@@ -103,8 +268,8 @@ impl Declarations {
                 key: &h.key,
             })
             .collect();
-        fragments.extend(self.write_typed_handles(registry, &typed_handles));
-        fragments.extend(self.write_callback_ifaces(registry));
+        fragments.extend(self.write_typed_handles(flat, &typed_handles));
+        fragments.extend(self.write_callback_ifaces(flat));
         for (subpackage, pkg_cfg) in &self.packages {
             if pkg_cfg.functions.is_empty()
                 && pkg_cfg.constants.is_empty()
@@ -113,9 +278,9 @@ impl Declarations {
             {
                 continue;
             }
-            fragments.push(self.write_jni_package(registry, subpackage, pkg_cfg));
+            fragments.push(self.write_jni_package(flat, subpackage, pkg_cfg));
         }
-        fragments.push(self.write_jni_native(registry));
+        fragments.push(self.write_jni_native(flat));
 
         // Banner after the merge, not per fragment: `merge_files` keeps the
         // first fragment of a package that sets one, so setting it here is
@@ -536,7 +701,7 @@ impl Declarations {
     /// uniform.
     pub(crate) fn write_enum_classes(
         &self,
-        registry: &Registry,
+        flat: &prebindgen_registry::flat::Flat,
     ) -> Result<Vec<KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
@@ -557,8 +722,7 @@ impl Declarations {
             // The element: a fieldless `Enum`, which is what an `enum_class!`
             // declares. A sum under the same name is a `Variant` and is not one
             // of these — the model's own distinction, made at parse time.
-            let Some(prebindgen_registry::flat::Type::Enum(item_enum)) =
-                registry.flat().declared_type(&name)
+            let Some(prebindgen_registry::flat::Type::Enum(item_enum)) = flat.declared_type(&name)
             else {
                 continue;
             };
@@ -595,7 +759,7 @@ impl Declarations {
     /// and each declarator rejects the other's.
     pub(crate) fn write_sealed_classes(
         &self,
-        registry: &Registry,
+        flat: &prebindgen_registry::flat::Flat,
     ) -> Result<Vec<KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
@@ -620,7 +784,7 @@ impl Declarations {
             // already draws the distinction this arm used to re-derive with
             // `enum_shape`. It is a declaration error rather than a skip, so it
             // keeps its diagnosis; only the source of the answer changed.
-            let declared = registry.flat().declared_type(&ident);
+            let declared = flat.declared_type(&ident);
             assert!(
                 matches!(declared, Some(prebindgen_registry::flat::Type::Variant(_))),
                 "`{}` has no payload variants: declare it with `enum_class!({})`, not \
@@ -648,7 +812,8 @@ impl Declarations {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            let mut class = self.build_sealed_class(registry, &class_name, sum, sum_cfg);
+            let plan = self.sealed_class_plan_frozen(sum);
+            let mut class = self.build_sealed_class(&class_name, sum, sum_cfg, &plan);
             let mut file = KtFile::new(package);
             if let Some(iface) =
                 self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
@@ -667,11 +832,18 @@ impl Declarations {
     /// identically.
     fn build_sealed_class(
         &self,
-        registry: &Registry,
         class_name: &str,
         sum: &prebindgen_registry::flat::Variant,
         sum_cfg: &SumConfig,
+        plan: &SealedClassPlan,
     ) -> KtClass {
+        let variants = &plan.variants;
+        assert_eq!(
+            sum.alternatives.len(),
+            variants.len(),
+            "sealed class `{}` model/plan alternative count drifted",
+            sum.name
+        );
         // Everything below comes off the element: `alternatives` for the
         // classes, `Field::member()` for the property names, `docs()` for the
         // prose the source wrote.
@@ -694,13 +866,9 @@ impl Declarations {
         // type changed.
         // A variant closes what its own payload owns; the interface is
         // closeable if any alternative is.
-        let payload_close = |field: &prebindgen_registry::flat::Field| {
-            crate::jni::struct_plan::type_close_strategy(self, registry, &field.ty, 0)
-        };
-        let any_closeable = sum
-            .alternatives
+        let any_closeable = variants
             .iter()
-            .any(|alt| alt.fields.iter().any(|f| payload_close(f).is_some()));
+            .any(|alt| alt.fields.iter().any(|f| f.close.is_some()));
 
         let mut class = KtClass::sealed_interface(class_name)
             .vis(KtVis::Public)
@@ -718,26 +886,28 @@ impl Declarations {
         }
 
         // Nested variant classes, in declaration (tag) order.
-        for alt in &sum.alternatives {
-            let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
+        for (alt, alt_plan) in sum.alternatives.iter().zip(variants) {
+            assert_eq!(alt.name, alt_plan.rust_ident);
+            let vname = &alt_plan.kotlin_name;
             // Payload properties are built first: a `data class` declares its
             // first constructor property at construction, and a payload-free
             // alternative is a `data object` with none at all.
             let mut vprops: Vec<(String, KtType)> = Vec::new();
             let mut vparams: Vec<KtCtorParam> = Vec::new();
             let mut vcloses: Vec<String> = Vec::new();
-            for field in &alt.fields {
-                let prop = sum_field_prop_name(&field.member());
-                let ty = self.sum_payload_kt_type(&sum.name, &alt.name, &prop, field);
-                if let Some(strategy) = payload_close(field) {
-                    vcloses.push(render_handle_close(&strategy, &prop));
+            for (field, field_plan) in alt.fields.iter().zip(&alt_plan.fields) {
+                assert_eq!(field.member(), field_plan.member);
+                let prop = field_plan.property.clone();
+                let ty = field_plan.kotlin.clone();
+                if let Some(strategy) = &field_plan.close {
+                    vcloses.push(render_handle_close(strategy, &prop));
                 }
                 vprops.push((prop.clone(), ty.clone()));
                 vparams.push(KtCtorParam::new(&prop, ty).val().vis(KtVis::Public));
             }
             let mut vparams = vparams.into_iter();
             let mut vclass = if alt.is_empty() {
-                KtClass::data_object(&vname)
+                KtClass::data_object(vname)
             } else {
                 let first = vparams.next().unwrap_or_else(|| {
                     panic!(
@@ -746,7 +916,7 @@ impl Declarations {
                         sum.name, alt.name
                     )
                 });
-                KtClass::data(&vname, first)
+                KtClass::data(vname, first)
             }
             .vis(KtVis::Public)
             .implements(KtType::cls(class_name));
@@ -758,7 +928,7 @@ impl Declarations {
             }
             // An array-backed payload (a `Vec<u8>` variant field) compares by
             // identity otherwise — same rule as a data-class property.
-            for m in crate::jni::equality::content_equality_members(&vname, &vprops)
+            for m in crate::jni::equality::content_equality_members(vname, &vprops)
                 .into_iter()
                 .flatten()
             {
@@ -782,7 +952,7 @@ impl Declarations {
         // by side, in the same order both sides enumerate them.
         // No raw-pointer guard here, unlike the data class's `fromParts`. This
         // one's parameters are the variants' **property** types
-        // (`sum_payload_kt_type`), so a handle payload arrives as its typed
+        // (the frozen sealed payload plan), so a handle payload arrives as its typed
         // handle class, never as a `Long` — there is no pointer to forge. The
         // wire-shaped reassembly a sum actually needs is the inlined `when`
         // over the tag that `sum_builder_singleton` emits, not this factory.
@@ -791,25 +961,25 @@ impl Declarations {
             .annotation("JvmStatic")
             .param(KtParam::new("tag", KtType::int()))
             .returns(KtType::cls(class_name));
-        for alt in &sum.alternatives {
-            let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
-            for field in &alt.fields {
-                let prop = sum_field_prop_name(&field.member());
-                let ty = self.sum_payload_kt_type(&sum.name, &alt.name, &prop, field);
-                factory = factory.param(KtParam::new(sum_slot_fragment(&vname, &prop), ty));
+        for (alt, alt_plan) in sum.alternatives.iter().zip(variants) {
+            let vname = &alt_plan.kotlin_name;
+            for (_field, field_plan) in alt.fields.iter().zip(&alt_plan.fields) {
+                let prop = field_plan.property.clone();
+                let ty = field_plan.kotlin.clone();
+                factory = factory.param(KtParam::new(sum_slot_fragment(vname, &prop), ty));
             }
         }
         let mut body = KtCode::new();
         body = body.blk("when (tag) {", |mut w| {
-            for alt in &sum.alternatives {
-                let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
-                let args: Vec<String> = alt
+            for (alt, alt_plan) in sum.alternatives.iter().zip(variants) {
+                let vname = &alt_plan.kotlin_name;
+                let args: Vec<String> = alt_plan
                     .fields
                     .iter()
-                    .map(|f| sum_slot_fragment(&vname, &sum_field_prop_name(&f.member())))
+                    .map(|f| sum_slot_fragment(vname, &f.property))
                     .collect();
                 let ctor = if alt.is_empty() {
-                    vname
+                    vname.clone()
                 } else {
                     format!("{vname}({})", args.join(", "))
                 };
@@ -881,123 +1051,12 @@ impl Declarations {
         }
     }
 
-    /// Kotlin type of one payload field, derived from the **output**
-    /// converter entry — one direction, authoritatively.
-    ///
-    /// A sealed class is a bidirectional contract: the Rust output encoder
-    /// builds it through `fromParts`, and the Kotlin input destructure reads
-    /// the same properties back out. The property's Kotlin type, its
-    /// nullability and its wire slot are therefore **one** decision, and
-    /// every fact behind it has to come from the same entry — deriving the
-    /// type from whichever direction happens to have resolved while reading
-    /// the wire from the other is how the two flatten paths drift apart.
-    /// Output is the authoritative side because this emitter declares the
-    /// `fromParts` slots the output encoder fills.
-    ///
-    /// So there is deliberately **no** output-then-input fallback here:
-    ///
-    /// * a missing output entry is a generation error naming the payload,
-    ///   rather than a Kotlin surface quietly emitted for a direction that
-    ///   never resolved;
-    /// * an input entry that disagrees on the Kotlin type is a generation
-    ///   error too — that disagreement is exactly the drift the shared plans
-    ///   exist to prevent, and it must surface at the declaration, not as an
-    ///   ABI mismatch at runtime.
-    fn sum_payload_kt_type(
-        &self,
-        sum_name: &syn::Ident,
-        variant: &syn::Ident,
-        prop: &str,
-        field: &prebindgen_registry::flat::Field,
-    ) -> KtType {
-        // The field's own reading: the nullability question below is answered
-        // from `kind`, so a wrapped spelling answers as the bare one does and
-        // nothing is looked up (#275). It is named only in the three panics
-        // below, which is a diagnostic and needs no emission capability.
-        let field_ty = &field.ty;
-        let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
-        let out = self.out_frag(&field.ty).unwrap_or_else(|| {
-            panic!(
-                "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
-                 cannot be derived — register converters for the payload type before \
-                 declaring the sealed class",
-                where_(),
-                field_ty,
-            )
-        });
-
-        if let Some(h) = out.metadata.projection.clone() {
-            let leaf = projection_leaf_kt(self, &h).unwrap_or_else(|| {
-                panic!(
-                    "{}: leaf `{}` has no Kotlin FQN registered (ptr_class)",
-                    where_(),
-                    h.leaf_key
-                )
-            });
-            return handle_kt_type(&h.strategy, &leaf);
-        }
-
-        let ty = out.metadata.kotlin_name.clone().unwrap_or_else(|| {
-            panic!(
-                "{}: `{}` has no Kotlin type mapping on its output converter",
-                where_(),
-                field_ty,
-            )
-        });
-        // The input side must agree on WHICH TYPE the property is — Kotlin
-        // reads these very properties back when the value crosses the other
-        // way, so a genuine disagreement (`String` in, `Long` out) is drift
-        // that belongs at the declaration.
-        //
-        // Nullability is deliberately excluded from the comparison: the two
-        // directions record it by different conventions. For `Option<T>` the
-        // output converter's name carries the `?` while the input converter's
-        // does not, because the input side expresses absence in the wire (a
-        // boxed value, a present flag, a niche) rather than in the type name.
-        // Comparing the rendered types would reject that legitimate shape —
-        // which is what an `Option<enum>` payload does.
-        if let Some(inp) = self.in_frag(&field.ty) {
-            if let (Some(in_ty), (Some(a), Some(b))) = (
-                inp.metadata.kotlin_name.clone(),
-                (
-                    inp.metadata
-                        .kotlin_name
-                        .as_ref()
-                        .and_then(|t| t.leaf_name())
-                        .map(str::to_string),
-                    ty.leaf_name().map(str::to_string),
-                ),
-            ) {
-                assert!(
-                    a == b,
-                    "{}: the input and output converters for `{}` disagree on its Kotlin \
-                     type (`{}` in, `{}` out) — a sealed class's properties are read by both \
-                     directions, so they must map to one type",
-                    where_(),
-                    field_ty,
-                    in_ty,
-                    ty,
-                );
-            }
-        }
-        // An `Option<T>` payload whose wire is a JNI primitive is encoded as
-        // the bare primitive with a sentinel, exactly as for a data-class
-        // field — the Kotlin type must match that slot. Read from the same
-        // entry the type came from.
-        let primitive_wire = crate::jni::is_jni_primitive(&out.destination);
-        if field.ty.optional_inner().is_some() && !primitive_wire {
-            ty.nullable()
-        } else {
-            ty
-        }
-    }
-
     /// Build one Kotlin `data class` fragment per `data_class`-declared
     /// struct. Uses resolved converter metadata to derive Kotlin field
     /// types, so wrappers and data-class declarations stay in sync. A
     /// compatibility-alias fragment is appended when any data class is
     /// renamed relative to its Rust ident.
-    pub(crate) fn write_data_classes(&self, registry: &Registry) -> Vec<KtFile> {
+    pub(crate) fn write_data_classes(&self, flat: &prebindgen_registry::flat::Flat) -> Vec<KtFile> {
         let mut written = Vec::new();
         let mut aliases: Vec<(String, String)> = Vec::new();
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -1017,7 +1076,7 @@ impl Declarations {
             let Some(name) = key.short_name() else {
                 continue;
             };
-            let Some(item_struct) = registry.flat().struct_type(&name) else {
+            let Some(item_struct) = flat.struct_type(&name) else {
                 continue;
             };
 
@@ -1028,7 +1087,7 @@ impl Declarations {
             if item_struct.name != class_name {
                 aliases.push((item_struct.name.to_string(), class_name.clone()));
             }
-            let mut class = build_data_class(self, &class_name, item_struct, registry);
+            let mut class = build_data_class(self, &class_name, item_struct, flat);
             // The data class is self-contained (property/factory types +
             // factory-body imports ride the AST/`Code`); this file-level set
             // is only for the `JNINative` harness the promoted members call.
@@ -1045,15 +1104,14 @@ impl Declarations {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
             for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-                if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
+                if let Some(item_fn) = flat.function(&m.rust_ident) {
                     if let Some(f) = crate::jni::render_wrapper_fn(
                         self,
                         item_fn,
-                        registry,
                         Some(self.effective_method_name(key, m).as_str()),
                         Some(key),
                     ) {
-                        for ov in crate::jni::render_param_overloads(self, item_fn, registry, &f) {
+                        for ov in crate::jni::param_overloads_of(self, item_fn, flat, &f) {
                             class = class.member(ov);
                         }
                         class = class.member(f);
@@ -1073,17 +1131,14 @@ impl Declarations {
                     .map(|c| *c)
                     .unwrap_or_else(|| KtCompanion::new().vis(KtVis::Public));
                 for m in ctors {
-                    if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
+                    if let Some(item_fn) = flat.function(&m.rust_ident) {
                         if let Some(f) = crate::jni::render_wrapper_fn(
                             self,
                             item_fn,
-                            registry,
                             Some(self.effective_method_name(key, m).as_str()),
                             None,
                         ) {
-                            for ov in
-                                crate::jni::render_param_overloads(self, item_fn, registry, &f)
-                            {
+                            for ov in crate::jni::param_overloads_of(self, item_fn, flat, &f) {
                                 companion = companion.member(ov);
                             }
                             companion = companion.member(f);
@@ -1130,151 +1185,139 @@ impl Declarations {
     /// Emit every typed callback `fun interface` the declared functions
     /// reference — impl-`Fn` delivery callbacks, output-expansion builders
     /// and folders, and onError handlers (plus the shared `JniErrorHandler`
-    /// for infallible functions). The function walk only **collects which
-    /// identities are used** (emission stays opt-in: an unused declaration
-    /// emits nothing); each spec is then derived exactly once per identity
-    /// from the declaration's representative plan (`registry.decon_plans`) —
-    /// the same source the native emitters read, so all sites agree by
-    /// construction (no dedup, no signature reconciliation).
-    pub(crate) fn write_callback_ifaces(&self, registry: &Registry) -> Vec<KtFile> {
-        use prebindgen_registry::unfold::{DeconId, Delivery};
-
-        // Distinct interface identities in use — [`SpecKey`] (`Ord`, so
-        // emission is deterministic). The memo derives each spec from the
-        // key alone, so no side context is carried.
-        let mut uses: BTreeSet<SpecKey> = BTreeSet::new();
-
+    /// for infallible functions). The immutable generation plan supplies both
+    /// the interface allocation and its fixed-singleton request; this emitter
+    /// only deduplicates identities and renders them.
+    pub(crate) fn write_callback_ifaces(
+        &self,
+        flat: &prebindgen_registry::flat::Flat,
+    ) -> Vec<KtFile> {
         /// A hoisted-singleton request emitted alongside an interface: the
         /// `fromParts` builder / folder for a synthesized `data_class`, or the
         /// single-leaf appender for a whole-element leaf fold. The wrapper
         /// references the singleton instead of taking a caller `build`/`fold`.
         enum FixedSingleton {
-            StructBuilder(DeconId),
-            StructFolder(DeconId),
+            StructBuilder(std::rc::Rc<crate::unfold::DeconSpec>),
+            StructFolder(std::rc::Rc<crate::unfold::DeconSpec>),
             /// A decomposed **sum**: the reassembly is a `when` over the tag
             /// picking the live group, not a `fromParts` over a fixed product.
-            SumBuilder(DeconId),
-            SumFolder(DeconId),
+            SumBuilder(std::rc::Rc<crate::unfold::DeconSpec>),
+            SumFolder(std::rc::Rc<crate::unfold::DeconSpec>),
             LeafFolder,
         }
-        // A decomposition is a sum's when it carries the synthesized selector.
-        let is_sum = |d: &DeconId| {
-            registry
-                .decon_plans()
-                .get(d)
-                .is_some_and(|p| is_sum_row(&crate::jni::compile::OutWire::from_leaves(&p.leaves)))
-        };
-
-        // Fixedness sets shared with the memo derivation (`iface.rs`): a
-        // fixed DeconId gets a hoisted `__<Name>Builder` / folder-appender
-        // singleton emitted alongside its interface; a fixed whole-element
-        // key gets the `__<Elem>FolderRaw` appender, the leaf dual.
-        let fixed_decons = fixed_decon_ids(registry);
-        let fixed_leaf_elements = fixed_leaf_element_keys(registry);
-
-        // Walk every declared function — free `.fun`s AND class methods/factories
-        // (`.method`/`.accessor`/`.constructor`): a method can also need a
-        // generated interface (e.g. a `Vec<T>` whole-element folder). The `uses`
-        // map dedups, so an identity shared across positions emits once.
-        let declared_idents: std::collections::BTreeSet<syn::Ident> = self
-            .packages
-            .values()
-            .flat_map(|p| p.functions.iter().map(|e| e.rust_ident.clone()))
-            .chain(
-                self.class_members
-                    .values()
-                    .flatten()
-                    .map(|m| m.rust_ident.clone()),
-            )
-            .collect();
-        for ident in &declared_idents {
-            {
-                // The ELEMENT, so the callback params come off the model's own
-                // classification rather than a second walk of the bounds.
-                let Some(func) = registry.flat().function(&ident) else {
-                    continue;
-                };
-                for p in &func.params {
-                    if let Some(cb_args) = p.ty.callback_args() {
-                        uses.insert(SpecKey::callback(cb_args));
-                    }
+        // The interface allocations and their use-site roles are already in
+        // the frozen function plans. Keep the original `SpecKey` ordering so
+        // freezing changes ownership, not generated declaration order.
+        let mut uses: BTreeMap<SpecKey, (std::sync::Arc<IfaceSpec>, bool, Option<FixedSingleton>)> =
+            BTreeMap::new();
+        let mut add = |key: SpecKey,
+                       spec: std::sync::Arc<IfaceSpec>,
+                       is_error: bool,
+                       fixed: Option<FixedSingleton>| {
+            use std::collections::btree_map::Entry;
+            match uses.entry(key) {
+                Entry::Vacant(entry) => {
+                    entry.insert((spec, is_error, fixed));
                 }
-                if let Some(plan) = registry
-                    .unfold_plans()
-                    .get(&func.name)
-                    .filter(|p| p.delivery == Delivery::Callback)
-                {
-                    let iterable = is_iterable_fold(&plan.shape);
-                    match (iterable, &plan.element, &plan.decon) {
-                        (true, Some(el), _) => {
-                            uses.insert(SpecKey::whole_folder(el));
-                        }
-                        (true, None, Some(d)) => {
-                            uses.insert(SpecKey::Folder(d.clone()));
-                        }
-                        (false, _, Some(d)) => {
-                            uses.insert(SpecKey::Builder(d.clone()));
-                        }
-                        _ => {}
-                    }
-                }
-                match registry.error_plans().get(&func.name) {
-                    Some(ep) => {
-                        let d = ep
-                            .decon
-                            .clone()
-                            .expect("error plans are always record-built (decon is Some)");
-                        uses.insert(SpecKey::Handler(d));
-                    }
-                    None => {
-                        uses.insert(SpecKey::JniErrorHandler);
+                Entry::Occupied(mut entry) => {
+                    let (known_spec, known_error, known_fixed) = entry.get_mut();
+                    debug_assert!(std::sync::Arc::ptr_eq(known_spec, &spec));
+                    *known_error |= is_error;
+                    if known_fixed.is_none() {
+                        *known_fixed = fixed;
                     }
                 }
             }
+        };
+        let generation = self
+            .generation
+            .as_deref()
+            .expect("callback-interface emission requires a frozen JNI plan");
+        for fplan in generation.functions() {
+            for leaf in fplan.leaves() {
+                if let KotlinParamOp::Callback { iface: Some(spec) } = &leaf.kotlin {
+                    let args = leaf
+                        .reading
+                        .callback_args()
+                        .expect("callback ABI leaf carries callback arguments");
+                    add(SpecKey::callback(args), spec.clone(), false, None);
+                }
+            }
+            if let FnOutputPlan::Unfold(output) = &fplan.output {
+                if let Some(spec) = &output.iface {
+                    let fixed = output.fixed_builder.then(|| {
+                        if output.whole_element {
+                            return FixedSingleton::LeafFolder;
+                        }
+                        let unfold = fplan
+                            .unfold
+                            .as_ref()
+                            .expect("unfold output carries its frozen flat plan");
+                        let decon = output
+                            .decon
+                            .clone()
+                            .expect("fixed decomposed output carries its declaration plan");
+                        // Whether the delivered value IS a sum — a struct
+                        // with a sum-typed field contains a tag and still
+                        // reassembles through its own `fromParts`.
+                        let sum = crate::jni::emit::is_whole_sum_row(
+                            &crate::jni::compile::OutWire::from_leaves(&unfold.leaves),
+                        );
+                        match (output.iterable_fold, sum) {
+                            (true, true) => FixedSingleton::SumFolder(decon),
+                            (true, false) => FixedSingleton::StructFolder(decon),
+                            (false, true) => FixedSingleton::SumBuilder(decon),
+                            (false, false) => FixedSingleton::StructBuilder(decon),
+                        }
+                    });
+                    let unfold = fplan
+                        .unfold
+                        .as_ref()
+                        .expect("unfold output carries its frozen flat plan");
+                    let key = if output.iterable_fold {
+                        match (&unfold.element, &unfold.decon) {
+                            (Some(element), _) => SpecKey::whole_folder(element),
+                            (None, Some(decon)) => SpecKey::Folder(decon.clone()),
+                            _ => panic!("iterable output has no interface identity"),
+                        }
+                    } else {
+                        SpecKey::Builder(
+                            unfold
+                                .decon
+                                .clone()
+                                .expect("builder output carries a DeconId"),
+                        )
+                    };
+                    add(key, spec.clone(), false, fixed);
+                }
+            }
+            let ifaces = fplan
+                .onerror_iface
+                .as_ref()
+                .expect("resolved function carries error-channel interfaces");
+            if fplan.error.is_some() {
+                add(
+                    SpecKey::Handler(
+                        fplan
+                            .error
+                            .as_ref()
+                            .and_then(|plan| plan.decon.clone())
+                            .expect("domain error plan carries a DeconId"),
+                    ),
+                    ifaces
+                        .domain
+                        .as_ref()
+                        .expect("frozen domain error plan carries its interface")
+                        .clone(),
+                    true,
+                    None,
+                );
+            } else {
+                add(SpecKey::JniErrorHandler, ifaces.binding.clone(), true, None);
+            }
         }
 
-        uses.into_iter()
-            .filter_map(|u| {
-                // Every spec comes from the SAME memo the wrappers and the
-                // resolve-time trampoline read ([`Declarations::iface_spec`]) —
-                // this site only classifies the extras: `is_error` ⇒ also
-                // emit the zero-alloc capture holder used by the generated
-                // wrappers' error channel; `fixed` carries a
-                // hoisted-singleton request (the `fromParts` builder /
-                // folder-appender for a synthesized `data_class`, or the
-                // single-leaf appender for a fixed whole-element fold).
-                let (is_error, fixed) = match &u {
-                    SpecKey::Callback(_) => (false, None),
-                    SpecKey::Builder(d) => (
-                        false,
-                        fixed_decons.contains(d).then(|| {
-                            if is_sum(d) {
-                                FixedSingleton::SumBuilder(d.clone())
-                            } else {
-                                FixedSingleton::StructBuilder(d.clone())
-                            }
-                        }),
-                    ),
-                    SpecKey::Folder(d) => (
-                        false,
-                        fixed_decons.contains(d).then(|| {
-                            if is_sum(d) {
-                                FixedSingleton::SumFolder(d.clone())
-                            } else {
-                                FixedSingleton::StructFolder(d.clone())
-                            }
-                        }),
-                    ),
-                    SpecKey::WholeFolder(el_key) => (
-                        false,
-                        fixed_leaf_elements
-                            .contains(el_key)
-                            .then_some(FixedSingleton::LeafFolder),
-                    ),
-                    SpecKey::Handler(_) | SpecKey::JniErrorHandler => (true, None),
-                };
-                self.iface_spec(registry, &u).map(|s| (s, is_error, fixed))
-            })
+        uses.into_values()
             .map(|(s, is_error, fixed)| {
                 // A **fixed** builder/folder has no user-facing side: the only
                 // implementation is the hoisted singleton emitted below, which
@@ -1302,7 +1345,7 @@ impl Declarations {
                         // class (an enum's `fromInt`), so it registers imports
                         // like every other emitter here.
                         let mut proxy_imports: BTreeSet<String> = BTreeSet::new();
-                        let proxy = s.to_as_raw_fun(self, registry, &mut proxy_imports);
+                        let proxy = s.to_as_raw_fun(self, &mut proxy_imports);
                         for fqn in proxy_imports {
                             file = file.import(fqn);
                         }
@@ -1331,16 +1374,16 @@ impl Declarations {
                 if let Some(fixed) = fixed {
                     let decl = match fixed {
                         FixedSingleton::StructBuilder(decon) => {
-                            self.value_struct_builder_singleton(registry, &s, &decon)
+                            self.value_struct_builder_singleton(&s, &decon)
                         }
                         FixedSingleton::StructFolder(decon) => {
-                            self.value_struct_folder_singleton(registry, &s, &decon)
+                            self.value_struct_folder_singleton(&s, &decon)
                         }
                         FixedSingleton::SumBuilder(decon) => {
-                            self.sum_builder_singleton(registry, &s, &decon)
+                            self.sum_builder_singleton(flat, &s, &decon)
                         }
                         FixedSingleton::SumFolder(decon) => {
-                            self.sum_folder_singleton(registry, &s, &decon)
+                            self.sum_folder_singleton(flat, &s, &decon)
                         }
                         FixedSingleton::LeafFolder => self.whole_value_folder_singleton(&s),
                     };
@@ -1362,11 +1405,10 @@ impl Declarations {
     /// positionally with `fromParts`.
     fn value_struct_builder_singleton(
         &self,
-        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen_registry::unfold::DeconId,
+        decon: &crate::unfold::DeconSpec,
     ) -> KtDecl {
-        let source = &registry.decon_plans()[decon].source;
+        let source = &decon.source;
         let class_fqn = self
             .kotlin_fqn(&source.key())
             .unwrap_or_else(|| panic!("value-struct builder: no Kotlin FQN for {}", source.key()));
@@ -1409,11 +1451,10 @@ impl Declarations {
     /// `[acc, leaf0, …]`; `fromParts` takes the element leaves (all but `acc`).
     fn value_struct_folder_singleton(
         &self,
-        registry: &Registry,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen_registry::unfold::DeconId,
+        decon: &crate::unfold::DeconSpec,
     ) -> KtDecl {
-        let source = &registry.decon_plans()[decon].source;
+        let source = &decon.source;
         let class_fqn = self
             .kotlin_fqn(&source.key())
             .unwrap_or_else(|| panic!("value-struct folder: no Kotlin FQN for {}", source.key()));
@@ -1466,18 +1507,17 @@ impl Declarations {
     /// object slots are non-null, which an inert group's `JObject::null()`
     /// would trip on before any code runs. The reassembly the wire needs is the
     /// same inlined `when` a sum-typed struct field already gets from
-    /// `factory_field`, so it is emitted here directly.
+    /// [`Self::sum_reconstruct`], so it is emitted here directly.
     fn sum_builder_singleton(
         &self,
-        registry: &Registry,
+        flat: &prebindgen_registry::flat::Flat,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen_registry::unfold::DeconId,
+        plan: &crate::unfold::DeconSpec,
     ) -> KtDecl {
-        let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
-            registry,
+            flat,
             &plan.source.key(),
             &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
             &spec.params,
@@ -1512,15 +1552,14 @@ impl Declarations {
     /// `[acc, tag, group-slots…]`, so the reassembly reads all but `acc`.
     fn sum_folder_singleton(
         &self,
-        registry: &Registry,
+        flat: &prebindgen_registry::flat::Flat,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen_registry::unfold::DeconId,
+        plan: &crate::unfold::DeconSpec,
     ) -> KtDecl {
-        let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
-            registry,
+            flat,
             &plan.source.key(),
             &crate::jni::compile::OutWire::from_leaves(&plan.leaves),
             &spec.params[1..],
@@ -1560,7 +1599,7 @@ impl Declarations {
     /// its variant-constructor argument by [`Self::sum_ctor_arg`].
     pub(crate) fn sum_reconstruct(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         // The sum's **identity**: every use of `source` here was
         // `TypeKey::from_type` or `bare_path_ident`, and a key that is one
         // identifier IS the ident — the same reduction `type_kind` made.
@@ -1577,15 +1616,18 @@ impl Declarations {
         let ident = key
             .ident()
             .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
-        let Some(prebindgen_registry::flat::Type::Variant(sum)) =
-            registry.flat().declared_type(&ident)
-        else {
+        let Some(prebindgen_registry::flat::Type::Variant(sum)) = flat.declared_type(&ident) else {
             panic!("sum builder: `{ident}` is not an indexed sum")
         };
         let sum_cfg = self.types[key]
             .sum()
             .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
         let tag = &names[0];
+        // How deep this segment sits is its own selector's answer: a sum field
+        // of a struct is at the top, an `Option<sum>`'s tag one arm inside the
+        // presence flag that gates it. Its alternatives extend that path by
+        // one, so that is where their tag is read.
+        let depth = leaves[0].groups.len();
 
         let mut arms: Vec<String> = Vec::new();
         for alt in &sum.alternatives {
@@ -1595,7 +1637,7 @@ impl Declarations {
                 .iter()
                 .zip(params)
                 .zip(names)
-                .filter(|((l, _), _)| l.group == Some(group))
+                .filter(|((l, _), _)| l.groups.get(depth) == Some(&group))
                 .map(|((l, p), n)| self.sum_ctor_arg(l, p, n, imports))
                 .collect();
             // Kotlin has no `B()` / `B {}` distinction to keep: a payload-less
@@ -1638,7 +1680,10 @@ impl Declarations {
     /// inside its own live arm it is re-asserted with `!!`. A payload that is
     /// *itself* optional keeps its null — there the JVM null means `None`, and
     /// `!!` would turn a legitimately absent value into an exception.
-    fn sum_ctor_arg(
+    /// One leaf's raw parameter, spelled as the value it stands for: its wrap
+    /// applied through whatever layers sit over it. Named for the sum payload
+    /// it was written for; a data class's own field is the same question.
+    pub(crate) fn sum_ctor_arg(
         &self,
         leaf: &crate::jni::compile::OutWire,
         param: &crate::jni::IfaceParam,
@@ -1692,6 +1737,22 @@ impl Declarations {
         imports: &mut BTreeSet<String>,
     ) -> String {
         if let Some(inner) = ty.optional_inner() {
+            if let Some(niche) = crate::jni::compile::option_enum_niche(
+                self,
+                ty,
+                prebindgen_registry::recipe::Direction::Deconstruct,
+            ) {
+                let present = self.carry_layers(
+                    wrap,
+                    slot_nullable,
+                    inner,
+                    recv.clone(),
+                    false,
+                    depth,
+                    imports,
+                );
+                return format!("if ({recv} == {niche}) null else {present}");
+            }
             return self.carry_layers(wrap, slot_nullable, inner, recv, true, depth, imports);
         }
         if let Some(elem) = ty.sequence_elem() {
@@ -1727,8 +1788,8 @@ impl Declarations {
         let nullable = nullable && (depth > 0 || slot_nullable);
         // An enum payload rides its `jint` discriminant, so the interface types
         // it `Int` and the wrap has to name the enum class itself — read off the
-        // same output-converter metadata `factory_field` reads for an enum
-        // struct field.
+        // same output-converter metadata a data class's own enum property is
+        // typed from.
         if self.is_kotlin_enum_reading(ty) {
             let name = self
                 .out_frag(ty)
@@ -1785,7 +1846,7 @@ impl Declarations {
 
     pub(crate) fn write_jni_package(
         &self,
-        registry: &Registry,
+        flat: &prebindgen_registry::flat::Flat,
         subpackage: &str,
         pkg_cfg: &crate::jni::PackageConfig,
     ) -> KtFile {
@@ -1793,22 +1854,19 @@ impl Declarations {
         let mut file = KtFile::new(&package);
         let mut imports: BTreeSet<String> = BTreeSet::new();
         for entry in &pkg_cfg.functions {
-            let item_fn = &registry
-                .flat()
-                .function(&entry.rust_ident)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "write_jni_package: function `{}` registered via .function(...) is \
-                         not in the prebindgen registry — check the spelling against the \
+            let item_fn = &flat.function(&entry.rust_ident).unwrap_or_else(|| {
+                panic!(
+                    "write_jni_package: function `{}` registered via .function(...) is \
+                         not in the prebindgen flat — check the spelling against the \
                          matching `#[prebindgen]` Rust fn name.",
-                        entry.rust_ident,
-                    )
-                });
+                    entry.rust_ident,
+                )
+            });
             let kotlin_name = self.effective_function_name(subpackage, entry);
-            if let Some(f) = render_wrapper_fn(self, item_fn, registry, Some(&kotlin_name), None) {
+            if let Some(f) = render_wrapper_fn(self, item_fn, Some(&kotlin_name), None) {
                 // #52: idiomatic typed overloads for `.split_on_param`
                 // parameters, delegating to this selector wrapper.
-                for ov in render_param_overloads(self, item_fn, registry, &f) {
+                for ov in crate::jni::param_overloads_of(self, item_fn, flat, &f) {
                     file = file.decl(ov);
                 }
                 file = file.decl(f);
@@ -1817,23 +1875,19 @@ impl Declarations {
         // Declared consts: a private nullary helper + the public
         // lazily-initialized `val` (see `render_const_val`).
         for entry in &pkg_cfg.constants {
-            let item_const = registry
-                .flat()
-                .constant(&entry.rust_ident)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "write_jni_package: const `{}` registered via .constant(...) is \
-                     not in the prebindgen registry — check the spelling against the \
+            let item_const = flat.constant(&entry.rust_ident).unwrap_or_else(|| {
+                panic!(
+                    "write_jni_package: const `{}` registered via .constant(...) is \
+                     not in the prebindgen flat — check the spelling against the \
                      matching `#[prebindgen]` Rust const name.",
-                        entry.rust_ident,
-                    )
-                });
+                    entry.rust_ident,
+                )
+            });
             reject_handle_const(self, item_const);
             if let Some((helper, prop)) = render_const_val(
                 self,
                 &package,
                 item_const,
-                registry,
                 &mut imports,
                 entry.kotlin_name_override.as_deref(),
             ) {
@@ -1845,23 +1899,19 @@ impl Declarations {
         // `val` (see `render_constant_fn_val`). The JNINative extern and the
         // Rust wrapper are the plain declared-function ones.
         for entry in &pkg_cfg.constant_functions {
-            let item_fn = &registry
-                .flat()
-                .function(&entry.rust_ident)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "write_jni_package: constant fn `{}` registered via .constant_fun(...) \
-                         is not in the prebindgen registry — check the spelling against the \
+            let item_fn = &flat.function(&entry.rust_ident).unwrap_or_else(|| {
+                panic!(
+                    "write_jni_package: constant fn `{}` registered via .constant_fun(...) \
+                         is not in the prebindgen flat — check the spelling against the \
                          matching `#[prebindgen]` Rust fn name.",
-                        entry.rust_ident,
-                    )
-                });
+                    entry.rust_ident,
+                )
+            });
             validate_constant_fn(self, item_fn);
             if let Some((helper, prop)) = render_constant_fn_val(
                 self,
                 &package,
                 item_fn,
-                registry,
                 &mut imports,
                 entry.kotlin_name_override.as_deref(),
             ) {
@@ -1874,8 +1924,7 @@ impl Declarations {
         // evaluated Rust-side (`prerequisites`).
         for decl in &pkg_cfg.constant_exprs {
             validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
-            if let Some((helper, prop)) =
-                render_const_expr_val(self, &package, decl, registry, &mut imports)
+            if let Some((helper, prop)) = render_const_expr_val(self, &package, decl, &mut imports)
             {
                 file = file.decl(helper).decl(prop);
             }
@@ -1900,7 +1949,7 @@ impl Declarations {
     /// inside an `init { … }` block here (e.g. a reference to the consumer's
     /// own loader object). Unset, the holder stays free of any loading logic
     /// and the wrapper layer is responsible for loading.
-    pub(crate) fn write_jni_native(&self, registry: &Registry) -> KtFile {
+    pub(crate) fn write_jni_native(&self, flat: &prebindgen_registry::flat::Flat) -> KtFile {
         let class_name = self.jni_native_class_name();
         let declared = self.declared_functions();
 
@@ -1908,14 +1957,13 @@ impl Declarations {
         // shortens types, collects imports, and wraps long signatures (no
         // derivation-time import set).
         let mut externs: Vec<KtFun> = Vec::new();
-        let mut fns: Vec<&prebindgen_registry::flat::Function> =
-            registry.flat().functions().collect();
+        let mut fns: Vec<&prebindgen_registry::flat::Function> = flat.functions().collect();
         fns.sort_by(|a, b| a.name.cmp(&b.name));
         for f in fns {
             if !declared.contains(&f.name) {
                 continue;
             }
-            if let Some(fun) = render_extern_decl(self, f, registry) {
+            if let Some(fun) = render_extern_decl(self, f) {
                 externs.push(fun);
             }
         }
@@ -1931,11 +1979,11 @@ impl Declarations {
             .collect();
         const_idents.sort_by_key(|i| i.to_string());
         for ident in const_idents {
-            let Some(item_const) = registry.flat().constant(&ident) else {
+            let Some(item_const) = flat.constant(&ident) else {
                 continue; // missing decl already warned by the scan
             };
             let getter = crate::jni::const_getter_fn(item_const);
-            if let Some(fun) = render_extern_decl(self, &getter, registry) {
+            if let Some(fun) = render_extern_decl(self, &getter) {
                 externs.push(fun);
             }
         }
@@ -1949,8 +1997,8 @@ impl Declarations {
             .collect();
         expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
         for decl in expr_decls {
-            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
-            if let Some(fun) = render_extern_decl(self, &getter, registry) {
+            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, self);
+            if let Some(fun) = render_extern_decl(self, &getter) {
                 externs.push(fun);
             }
         }
@@ -1960,10 +2008,7 @@ impl Declarations {
         // `external fun` halves of `build_vec_build_helper_items`. Kotlin builds
         // the Rust-side `Vec` by pushing each element's leaves (decoupled raw
         // params), then passes the handle (see `ParamMode::VecBuild`).
-        for elem in crate::jni::collect_vec_build_elem_types(self, registry) {
-            let Some(h) = crate::jni::vec_build_helpers(self, registry, &elem) else {
-                continue;
-            };
+        for h in crate::jni::collect_vec_build_helpers(self) {
             let new_m = crate::jni::vec_helper_method_name(self, &h.base, "New");
             let push_m = crate::jni::vec_helper_method_name(self, &h.base, "Push");
             let free_m = crate::jni::vec_helper_method_name(self, &h.base, "Free");
@@ -2044,7 +2089,7 @@ impl Declarations {
     /// promoted method's signature).
     pub(crate) fn write_typed_handles(
         &self,
-        registry: &Registry,
+        flat: &prebindgen_registry::flat::Flat,
         handles: &[TypedHandle<'_>],
     ) -> Vec<KtFile> {
         let mut written = Vec::new();
@@ -2056,7 +2101,7 @@ impl Declarations {
             let mut imports: BTreeSet<String> = BTreeSet::new();
             let mut class = build_typed_handle(
                 self,
-                registry,
+                flat,
                 &class_name,
                 handle.rust_doc,
                 handle.key,

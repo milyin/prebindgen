@@ -85,15 +85,18 @@ fn snapshot_rust_side() {
     // Source-module-qualified calls into the flat crate.
     assert!(rc.contains("myflat::z_thing_new"), "{rust}");
     assert!(rc.contains("myflat::z_thing_name"), "{rust}");
-    // Opaque handle round-trips as a boxed pointer of the source type.
+    // Opaque handle round-trips as a boxed pointer of the source type. The
+    // output half is demand-driven: `Result<ZThing, Error>` must reach its
+    // retained success plan for `Box::into_raw` to be present at all.
     assert!(rc.contains("myflat::ZThing"), "{rust}");
     assert!(rc.contains("Box::from_raw"), "{rust}");
+    assert!(rc.contains("Box::into_raw"), "{rust}");
     // Handle-input converters reject null AND tag-bit-set (closed) pointers
     // before any dereference — the #34 guard; bit 0 is the Kotlin closed tag.
     assert!(rc.contains("if*v==0||(*v&1)==1"), "{rust}");
     // Every opaque type carries the compile-time alignment floor that keeps
-    // bit 0 free for the closed tag (source-module-qualified: the check is
-    // real AST, so it rides the `qualify_item` pass).
+    // bit 0 free for the closed tag. Its source type is qualified by the
+    // registry-owned final emitter before the guard is assembled.
     assert!(rc.contains("align_of::<myflat::ZThing>()<2"), "{rust}");
     // The freePtr destructor ignores tagged (already-closed) pointers.
     assert!(rc.contains("ifptr!=0&&(ptr&1)==0"), "{rust}");
@@ -604,7 +607,8 @@ fn slice_input_builds_vec_handle() {
     assert!(kc.contains("}finally{"), "{kotlin}");
     assert!(kc.contains("JNINative.fooVecFree(__vec_v)"), "{kotlin}");
 
-    // Rust: the three helper symbols + both decode shapes (borrow / take).
+    // Rust: the three helper symbols + both frozen site-pipeline operations
+    // (a non-owning carrier for borrow, `mem::take` for consume).
     assert!(
         rc.contains("fnJava_io_test_jni_JNINative_fooVecNew"),
         "{rust}"
@@ -618,8 +622,12 @@ fn slice_input_builds_vec_handle() {
         "{rust}"
     );
     assert!(
-        rc.contains("&*(v_handleas*constVec<myflat::Foo>)"),
+        rc.contains("OwnedObject::from_raw(v_handleas*constVec<myflat::Foo>)"),
         "{rust}"
+    );
+    assert!(
+        rc.contains("#[inline]fnderef(&self)->&Self::Target"),
+        "the non-owning carrier's dereference must be explicitly inline:\n{rust}"
     );
     assert!(
         rc.contains("mem::take(&mut*(v_handleas*mutVec<myflat::Foo>))"),

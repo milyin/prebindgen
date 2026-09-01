@@ -1,0 +1,921 @@
+use prebindgen::SourceLocation;
+
+use super::*;
+use crate::{
+    flat::Flat,
+    recipe::{Origin, RecipeName, Role, Validity},
+    test_util::declare_referenced,
+};
+
+struct Fake;
+
+impl Representation for Fake {
+    type Intermediate = &'static str;
+    type Step = &'static str;
+    type ConverterArtifact = &'static str;
+    type TerminalCodec = &'static str;
+    type Bridge = &'static str;
+    type Niche = u8;
+    type Cleanup = &'static str;
+    type FailureRoute = &'static str;
+    type AbiLayout = &'static str;
+    type Artifact = &'static str;
+}
+
+fn model() -> Flat {
+    let items = [
+        "pub struct Leaf;",
+        "pub struct Pair { pub left: Leaf, pub right: Leaf }",
+    ]
+    .into_iter()
+    .map(|source| {
+        (
+            syn::parse_str::<syn::Item>(source).unwrap(),
+            SourceLocation::default(),
+        )
+    });
+    Flat::builder()
+        .items(declare_referenced(items))
+        .build()
+        .unwrap()
+}
+
+fn ty(model: &Flat, spelling: &str) -> TypeRef {
+    model.classify(&syn::parse_str(spelling).unwrap()).unwrap()
+}
+
+fn fragment_id(model: &Flat, spelling: &str, direction: Direction) -> FragmentId {
+    let crossing = Crossing::new(ty(model, spelling), direction);
+    FragmentId::new(
+        crossing.spelled().key(),
+        crossing.row(RecipeName::new("whole")),
+    )
+}
+
+fn yield_of(id: &FragmentId, mode: Mode, validity: Validity) -> Yield {
+    Yield {
+        ty: id.recipe().crossing().ty.clone(),
+        mode,
+        validity,
+    }
+}
+
+#[test]
+fn operation_identity_is_owned_by_fragment_and_role() {
+    let model = model();
+    let input = fragment_id(&model, "Leaf", Direction::Construct);
+    let output = fragment_id(&model, "Leaf", Direction::Deconstruct);
+
+    let converter = OperationId::converter(input.clone());
+    let stage0 = OperationId::stage(input.clone(), 0);
+    let stage1 = OperationId::stage(input, 1);
+    let output_converter = OperationId::converter(output);
+
+    assert_ne!(converter, stage0);
+    assert_ne!(stage0, stage1);
+    assert_ne!(converter, output_converter);
+    assert!(matches!(converter.role(), OperationRole::Converter));
+    assert!(matches!(stage0.role(), OperationRole::Stage(0)));
+}
+
+#[test]
+fn sequence_operation_identity_is_shared_only_by_carrier_and_direction() {
+    let model = model();
+    let carrier = ty(&model, "Leaf");
+
+    let first = OperationId::sequence_converter(&carrier, Direction::Construct);
+    let same = OperationId::sequence_converter(&carrier, Direction::Construct);
+    let reverse = OperationId::sequence_converter(&carrier, Direction::Deconstruct);
+
+    assert_eq!(first, same);
+    assert_ne!(first, reverse);
+}
+
+#[test]
+fn composed_operation_identity_covers_shape_carrier_mode_and_representation() {
+    let model = model();
+    let carrier = ty(&model, "Pair");
+    let tuple = ArtifactId::new("test-product", "tuple").unwrap();
+    let object = ArtifactId::new("test-product", "object").unwrap();
+
+    let product =
+        OperationId::product_converter(&carrier, Mode::Owned, tuple.clone(), Direction::Construct);
+    let same =
+        OperationId::product_converter(&carrier, Mode::Owned, tuple.clone(), Direction::Construct);
+    let optional =
+        OperationId::optional_converter(&carrier, Mode::Owned, tuple.clone(), Direction::Construct);
+    let construct_for_borrow =
+        OperationId::product_converter(&carrier, Mode::Shared, tuple.clone(), Direction::Construct);
+    let deconstruct_owned = OperationId::product_converter(
+        &carrier,
+        Mode::Owned,
+        tuple.clone(),
+        Direction::Deconstruct,
+    );
+    let deconstruct_borrowed =
+        OperationId::product_converter(&carrier, Mode::Shared, tuple, Direction::Deconstruct);
+    let differently_represented =
+        OperationId::product_converter(&carrier, Mode::Owned, object, Direction::Construct);
+
+    assert_eq!(product, same);
+    assert_ne!(product, optional);
+    assert_eq!(product, construct_for_borrow);
+    assert_ne!(deconstruct_owned, deconstruct_borrowed);
+    assert_ne!(product, differently_represented);
+}
+
+#[test]
+fn model_artifact_identity_shares_only_the_same_adapter_contract() {
+    let model = model();
+    let carrier = ty(&model, "Leaf");
+    let borrow = ArtifactId::new("test-handle", "borrow").unwrap();
+    let consume = ArtifactId::new("test-handle", "consume").unwrap();
+
+    let first = OperationId::model_artifact(&carrier, borrow.clone(), Direction::Construct);
+    let same = OperationId::model_artifact(&carrier, borrow, Direction::Construct);
+    let different = OperationId::model_artifact(&carrier, consume, Direction::Construct);
+
+    assert_eq!(first, same);
+    assert_ne!(first, different);
+}
+
+fn atomic(model: &Flat, id: FragmentId, failure: Failure, mode: Mode) -> FragmentPlan<Fake> {
+    FragmentPlan::new(
+        id.clone(),
+        ty(model, id.spelling().as_str()),
+        "intermediate",
+        ConverterPlan::new(
+            ShapePlan::Atomic("codec"),
+            NichePlan::none(),
+            failure,
+            Cleanup::None,
+        ),
+        yield_of(&id, mode, Validity::SelfSufficient),
+    )
+}
+
+fn site(
+    model: &Flat,
+    fragment: &FragmentId,
+    failure_route: Option<&'static str>,
+    slots: usize,
+) -> SitePlan<Fake> {
+    let site = Site {
+        owner: syn::parse_str("make_pair").unwrap(),
+        role: Role::Return,
+    };
+    let crossing = Crossing::new(
+        ty(model, fragment.spelling().as_str()),
+        fragment.direction(),
+    );
+    let bound = Bound {
+        site: site.clone(),
+        crossing,
+        recipe: fragment.recipe().clone(),
+        origin: Origin::Adapter,
+    };
+    SitePlan::new(
+        SiteId::new(site),
+        bound,
+        fragment.clone(),
+        yield_of(fragment, Mode::Owned, Validity::SelfSufficient),
+        AbiLayout::new(slots, "layout"),
+        failure_route,
+        Cleanup::None,
+    )
+}
+
+fn artifact(
+    kind: &str,
+    name: &str,
+    prerequisites: Vec<ArtifactId>,
+    inputs: Vec<ArtifactInput>,
+) -> ArtifactPlan<Fake> {
+    ArtifactPlan::new(
+        ArtifactId::new(kind, name).unwrap(),
+        prerequisites,
+        inputs,
+        "artifact",
+    )
+}
+
+fn errors(result: Result<GenerationPlan<Fake>, PlanErrors>) -> PlanErrors {
+    result.expect_err("plan should be invalid")
+}
+
+fn has(errors: &PlanErrors, predicate: impl Fn(&PlanError) -> bool) {
+    assert!(errors.errors().iter().any(predicate), "{errors}");
+}
+
+#[test]
+fn semantic_identities_refuse_accidental_aliases() {
+    let model = model();
+    let leaf = Crossing::new(ty(&model, "Leaf"), Direction::Construct);
+    let pair = Crossing::new(ty(&model, "Pair"), Direction::Construct);
+    let recipe = leaf.row(RecipeName::new("whole"));
+    assert_ne!(
+        FragmentId::new(leaf.spelled().key(), recipe.clone()),
+        FragmentId::new(pair.spelled().key(), recipe),
+    );
+    assert!(ArtifactId::new("", "wrapper").is_err());
+}
+
+#[test]
+fn freeze_prunes_unreached_fragments_and_orders_dependencies_first() {
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let pair = fragment_id(&model, "Pair", Direction::Construct);
+    let unused = fragment_id(&model, "&Leaf", Direction::Construct);
+    let requirement = yield_of(&leaf, Mode::Owned, Validity::Borrowed);
+    let pair_plan = FragmentPlan::new(
+        pair.clone(),
+        ty(&model, "Pair"),
+        "pair intermediate",
+        ConverterPlan::new(
+            ShapePlan::Product {
+                bridge: FixedArity::new(2, "tuple"),
+                parts: vec![
+                    FragmentUse::new(leaf.clone(), requirement.clone()),
+                    FragmentUse::new(leaf.clone(), requirement),
+                ],
+            },
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        yield_of(&pair, Mode::Owned, Validity::SelfSufficient),
+    )
+    .with_artifact("pair converter");
+    let site_plan = site(&model, &pair, None, 2);
+    let site_id = site_plan.id().clone();
+    let helper_id = ArtifactId::new("converter", "pair").unwrap();
+    let wrapper_id = ArtifactId::new("wrapper", "make_pair").unwrap();
+
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder
+        .fragment(pair_plan)
+        .fragment(
+            atomic(&model, unused.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("unused converter"),
+        )
+        .fragment(
+            atomic(&model, leaf.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("leaf converter"),
+        )
+        .site(site_plan)
+        .artifact(artifact(
+            "wrapper",
+            "make_pair",
+            vec![helper_id.clone()],
+            vec![ArtifactInput::Site {
+                site: site_id,
+                slots: 2,
+            }],
+        ))
+        .artifact(artifact(
+            "converter",
+            "pair",
+            vec![],
+            vec![ArtifactInput::Fragment(pair.clone())],
+        ));
+    let plan = builder.build().unwrap();
+
+    let fragments: Vec<_> = plan.fragments().map(FragmentPlan::id).collect();
+    assert_eq!(fragments, vec![&leaf, &pair]);
+    let converter_artifacts: Vec<_> = plan
+        .fragments()
+        .map(|fragment| *fragment.artifact().expect("reached converter artifact"))
+        .collect();
+    assert_eq!(converter_artifacts, ["leaf converter", "pair converter"]);
+    assert!(plan.fragment(&unused).is_none());
+    let artifacts: Vec<_> = plan.artifacts().map(ArtifactPlan::id).collect();
+    assert_eq!(artifacts, vec![&helper_id, &wrapper_id]);
+}
+
+#[test]
+fn an_artifact_that_follows_an_unreached_fragment_asks_for_nothing() {
+    // Three crossings compiled, one reached: a site names `Leaf`, nothing names
+    // `&Leaf`, and `Pair` is named only by the converter `&Leaf` would have
+    // rendered. So the file emits `Leaf`'s converter and neither of the others.
+    //
+    // The trap this guards is the artifact input: an artifact's inputs are
+    // reasons to keep a fragment, and a converter for an unreached fragment
+    // would otherwise keep everything it calls — which would make `follows`
+    // decide nothing, because the fragments it gates on could never be pruned.
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let unreached = fragment_id(&model, "&Leaf", Direction::Construct);
+    let called_only_by_it = fragment_id(&model, "Pair", Direction::Construct);
+
+    let site_plan = site(&model, &leaf, None, 1);
+    let site_id = site_plan.id().clone();
+    let kept_id = ArtifactId::new("converter", "leaf").unwrap();
+    let dropped_id = ArtifactId::new("converter", "unreached").unwrap();
+    let orphan_id = ArtifactId::new("converter", "pair").unwrap();
+    let wrapper_id = ArtifactId::new("wrapper", "make_pair").unwrap();
+
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder
+        .fragment(
+            atomic(&model, leaf.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("leaf converter"),
+        )
+        .fragment(
+            atomic(&model, unreached.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("unreached converter"),
+        )
+        .fragment(
+            atomic(
+                &model,
+                called_only_by_it.clone(),
+                Failure::Infallible,
+                Mode::Owned,
+            )
+            .with_artifact("pair converter"),
+        )
+        .site(site_plan)
+        .artifact(artifact(
+            "wrapper",
+            "make_pair",
+            vec![],
+            vec![ArtifactInput::Site {
+                site: site_id,
+                slots: 1,
+            }],
+        ))
+        .artifact(artifact("converter", "leaf", vec![], vec![]).follows(vec![leaf.clone()]))
+        .artifact(
+            artifact(
+                "converter",
+                "unreached",
+                vec![],
+                vec![ArtifactInput::Fragment(called_only_by_it.clone())],
+            )
+            .follows(vec![unreached.clone()]),
+        )
+        .artifact(
+            artifact("converter", "pair", vec![], vec![]).follows(vec![called_only_by_it.clone()]),
+        );
+    let plan = builder.build().unwrap();
+
+    let artifacts: Vec<_> = plan.artifacts().map(ArtifactPlan::id).collect();
+    assert_eq!(artifacts, vec![&wrapper_id, &kept_id]);
+    assert!(!artifacts.contains(&&dropped_id));
+    assert!(!artifacts.contains(&&orphan_id));
+    let fragments: Vec<_> = plan.fragments().map(FragmentPlan::id).collect();
+    assert_eq!(fragments, vec![&leaf]);
+    assert!(plan.fragment(&unreached).is_none());
+    assert!(plan.fragment(&called_only_by_it).is_none());
+}
+
+#[test]
+fn an_unknown_root_or_followed_fragment_is_rejected() {
+    // Both references the plan gained with `follows` name a fragment by id and
+    // are read outside the input/prerequisite walk, so an id no fragment
+    // answers to has to be refused here. Unrefused it is worse than an unknown
+    // input: the reachability walk reaches whatever it is handed, so an
+    // artifact following an unknown id would be kept, and a kept artifact roots
+    // its own inputs — an adapter identity bug would silently widen the plan
+    // rather than fail it.
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let absent = fragment_id(&model, "&Leaf", Direction::Construct);
+
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder
+        .fragment(atomic(
+            &model,
+            leaf.clone(),
+            Failure::Infallible,
+            Mode::Owned,
+        ))
+        .site(site(&model, &leaf, None, 1))
+        .artifact(artifact("converter", "absent", vec![], vec![]).follows(vec![absent.clone()]))
+        .root(absent.clone());
+    let errors = errors(builder.build());
+
+    has(
+        &errors,
+        |e| matches!(e, PlanError::UnknownFollowedFragment { fragment, .. } if *fragment == absent),
+    );
+    has(
+        &errors,
+        |e| matches!(e, PlanError::UnknownRoot(id) if *id == absent),
+    );
+}
+
+#[test]
+fn freeze_reports_arity_niche_ownership_and_validity_errors() {
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let pair = fragment_id(&model, "Pair", Direction::Construct);
+    let bad = FragmentPlan::new(
+        pair.clone(),
+        ty(&model, "Pair"),
+        "pair",
+        ConverterPlan::new(
+            ShapePlan::Product {
+                bridge: FixedArity::new(2, "tuple"),
+                parts: vec![FragmentUse::new(
+                    leaf.clone(),
+                    yield_of(&leaf, Mode::Exclusive, Validity::SelfSufficient),
+                )],
+            },
+            NichePlan::new(2, vec![1], vec![1]),
+            Failure::Infallible,
+            Cleanup::UnlessTransferred("drop"),
+        ),
+        yield_of(&pair, Mode::Shared, Validity::Borrowed),
+    );
+    let leaf_plan = FragmentPlan::new(
+        leaf.clone(),
+        ty(&model, "Leaf"),
+        "leaf",
+        ConverterPlan::new(
+            ShapePlan::Atomic("codec"),
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        yield_of(&leaf, Mode::Shared, Validity::Borrowed),
+    );
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder
+        .fragment(leaf_plan)
+        .fragment(bad)
+        .site(site(&model, &pair, None, 1));
+    let errors = errors(builder.build());
+
+    has(&errors, |e| matches!(e, PlanError::Arity(_)));
+    has(&errors, |e| matches!(e, PlanError::InsufficientNiches(_)));
+    has(&errors, |e| matches!(e, PlanError::OverlappingNiches(_)));
+    has(&errors, |e| matches!(e, PlanError::TransferOfBorrowed(_)));
+    has(&errors, |e| matches!(e, PlanError::ContractMode(_)));
+    has(&errors, |e| matches!(e, PlanError::ContractValidity(_)));
+}
+
+#[test]
+fn invoke_children_must_use_the_opposite_direction() {
+    let model = model();
+    let callable = fragment_id(&model, "Pair", Direction::Construct);
+    let argument = fragment_id(&model, "Leaf", Direction::Construct);
+    let invoke = FragmentPlan::new(
+        callable.clone(),
+        ty(&model, "Pair"),
+        "callable",
+        ConverterPlan::new(
+            ShapePlan::Invoke {
+                bridge: FixedArity::new(1, "invoke"),
+                arguments: vec![FragmentUse::new(
+                    argument.clone(),
+                    yield_of(&argument, Mode::Owned, Validity::SelfSufficient),
+                )],
+            },
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        yield_of(&callable, Mode::Owned, Validity::SelfSufficient),
+    );
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder
+        .fragment(atomic(&model, argument, Failure::Infallible, Mode::Owned))
+        .fragment(invoke)
+        .site(site(&model, &callable, None, 1));
+    has(&errors(builder.build()), |e| {
+        matches!(e, PlanError::ChildDirection(_))
+    });
+}
+
+#[test]
+fn site_failure_and_abi_contracts_are_checked() {
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let mut missing_route = GenerationPlanBuilder::<Fake>::new();
+    missing_route
+        .fragment(atomic(&model, leaf.clone(), Failure::Fallible, Mode::Owned))
+        .site(site(&model, &leaf, None, 2));
+    has(&errors(missing_route.build()), |e| {
+        matches!(e, PlanError::MissingFailureRoute(_))
+    });
+
+    let site_plan = site(&model, &leaf, Some("throw"), 2);
+    let site_id = site_plan.id().clone();
+    let mut bad_arity = GenerationPlanBuilder::<Fake>::new();
+    bad_arity
+        .fragment(atomic(&model, leaf, Failure::Fallible, Mode::Owned))
+        .site(site_plan)
+        .artifact(artifact(
+            "wrapper",
+            "leaf",
+            vec![],
+            vec![ArtifactInput::Site {
+                site: site_id,
+                slots: 1,
+            }],
+        ));
+    has(&errors(bad_arity.build()), |e| {
+        matches!(e, PlanError::AbiArity(_, _))
+    });
+}
+
+#[test]
+fn duplicate_and_cyclic_artifact_identities_are_rejected() {
+    let a = ArtifactId::new("helper", "a").unwrap();
+    let b = ArtifactId::new("helper", "b").unwrap();
+    let mut duplicate = GenerationPlanBuilder::<Fake>::new();
+    duplicate
+        .artifact(artifact("helper", "a", vec![], vec![]))
+        .artifact(artifact("helper", "a", vec![], vec![]));
+    has(&errors(duplicate.build()), |e| {
+        matches!(e, PlanError::DuplicateArtifact(_))
+    });
+
+    let mut cyclic = GenerationPlanBuilder::<Fake>::new();
+    cyclic
+        .artifact(artifact("helper", "a", vec![b.clone()], vec![]))
+        .artifact(artifact("helper", "b", vec![a], vec![]));
+    has(&errors(cyclic.build()), |e| {
+        matches!(e, PlanError::ArtifactCycle(_))
+    });
+}
+
+#[test]
+fn atomic_codec_and_staged_chain_are_distinct_operations() {
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let fragment = FragmentPlan::new(
+        leaf.clone(),
+        ty(&model, "Leaf"),
+        "jint",
+        ConverterPlan::with_chain(
+            ShapePlan::Atomic("read jint wire"),
+            ConversionChain::Steps(vec![
+                ConverterStep::new(
+                    ChainValue::Intermediate("jint"),
+                    ChainValue::Intermediate("i32"),
+                    "normalize jint",
+                    Failure::Infallible,
+                    Cleanup::None,
+                ),
+                ConverterStep::new(
+                    ChainValue::Intermediate("i32"),
+                    ChainValue::Source,
+                    "construct Percent",
+                    Failure::Fallible,
+                    Cleanup::OnFailure("drop intermediate"),
+                ),
+            ]),
+            NichePlan::none(),
+            Failure::Fallible,
+            Cleanup::None,
+        ),
+        yield_of(&leaf, Mode::Owned, Validity::SelfSufficient),
+    );
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder
+        .fragment(fragment)
+        .site(site(&model, &leaf, Some("throw"), 1));
+    let plan = builder.build().unwrap();
+
+    let fragment = plan.fragment(&leaf).unwrap();
+    let converter = fragment.converter();
+    let ShapePlan::Atomic(codec) = converter.shape() else {
+        panic!("staged leaf must retain its terminal wire codec");
+    };
+    assert_eq!(*codec, "read jint wire");
+    assert_eq!(fragment.intermediate(), &"jint");
+    let chain = converter.chain();
+    assert_eq!(chain.steps().len(), 2);
+    assert_eq!(*chain.steps()[0].operation(), "normalize jint");
+    assert_eq!(*chain.steps()[1].operation(), "construct Percent");
+}
+
+#[test]
+fn malformed_conversion_chains_are_rejected() {
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+
+    let mut empty = GenerationPlanBuilder::<Fake>::new();
+    empty.fragment(FragmentPlan::new(
+        leaf.clone(),
+        ty(&model, "Leaf"),
+        "Leaf",
+        ConverterPlan::with_chain(
+            ShapePlan::Atomic("codec"),
+            ConversionChain::Steps(vec![]),
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        yield_of(&leaf, Mode::Owned, Validity::SelfSufficient),
+    ));
+    has(&errors(empty.build()), |e| {
+        matches!(e, PlanError::EmptyConversionChain(_))
+    });
+
+    let mut broken = GenerationPlanBuilder::<Fake>::new();
+    broken.fragment(FragmentPlan::new(
+        leaf.clone(),
+        ty(&model, "Leaf"),
+        "Leaf",
+        ConverterPlan::with_chain(
+            ShapePlan::Atomic("codec"),
+            ConversionChain::Steps(vec![ConverterStep::new(
+                ChainValue::Intermediate("not jint"),
+                ChainValue::Intermediate("i32"),
+                "convert",
+                Failure::Fallible,
+                Cleanup::None,
+            )]),
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        yield_of(&leaf, Mode::Owned, Validity::SelfSufficient),
+    ));
+    let errors = errors(broken.build());
+    has(&errors, |e| {
+        matches!(e, PlanError::BrokenConversionChain(_))
+    });
+    has(&errors, |e| {
+        matches!(e, PlanError::UnreportedStepFailure(_))
+    });
+}
+
+#[test]
+fn fragment_identity_duplicates_and_yield_type_are_checked() {
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+
+    let mut duplicate = GenerationPlanBuilder::<Fake>::new();
+    duplicate
+        .fragment(atomic(
+            &model,
+            leaf.clone(),
+            Failure::Infallible,
+            Mode::Owned,
+        ))
+        .fragment(atomic(
+            &model,
+            leaf.clone(),
+            Failure::Infallible,
+            Mode::Owned,
+        ));
+    has(&errors(duplicate.build()), |e| {
+        matches!(e, PlanError::DuplicateFragment(_))
+    });
+
+    let leaf_crossing = Crossing::new(ty(&model, "Leaf"), Direction::Construct);
+    let leaf_recipe = leaf_crossing.row(RecipeName::new("whole"));
+    let pair_spelling = ty(&model, "Pair").key();
+    let bad_spelling = FragmentId::new(pair_spelling.clone(), leaf_recipe.clone());
+    let mut spelling = GenerationPlanBuilder::<Fake>::new();
+    spelling.fragment(FragmentPlan::new(
+        bad_spelling.clone(),
+        ty(&model, "Leaf"),
+        "Leaf",
+        ConverterPlan::new(
+            ShapePlan::Atomic("codec"),
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        yield_of(&bad_spelling, Mode::Owned, Validity::SelfSufficient),
+    ));
+    has(&errors(spelling.build()), |e| {
+        matches!(e, PlanError::FragmentSpelling(_))
+    });
+
+    let bad_crossing = FragmentId::new(pair_spelling, leaf_recipe);
+    let mut crossing = GenerationPlanBuilder::<Fake>::new();
+    crossing.fragment(FragmentPlan::new(
+        bad_crossing.clone(),
+        ty(&model, "Pair"),
+        "Pair",
+        ConverterPlan::new(
+            ShapePlan::Atomic("codec"),
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        yield_of(&bad_crossing, Mode::Owned, Validity::SelfSufficient),
+    ));
+    has(&errors(crossing.build()), |e| {
+        matches!(e, PlanError::FragmentCrossing(_))
+    });
+
+    let mut wrong_yield = GenerationPlanBuilder::<Fake>::new();
+    wrong_yield.fragment(FragmentPlan::new(
+        leaf.clone(),
+        ty(&model, "Leaf"),
+        "Leaf",
+        ConverterPlan::new(
+            ShapePlan::Atomic("codec"),
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        Yield {
+            ty: ty(&model, "Pair").key(),
+            mode: Mode::Owned,
+            validity: Validity::SelfSufficient,
+        },
+    ));
+    has(&errors(wrong_yield.build()), |e| {
+        matches!(e, PlanError::YieldType(_))
+    });
+}
+
+#[test]
+fn unknown_fragment_edges_and_fragment_cycles_are_rejected() {
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let pair = fragment_id(&model, "Pair", Direction::Construct);
+
+    let mut unknown = GenerationPlanBuilder::<Fake>::new();
+    unknown.fragment(FragmentPlan::new(
+        pair.clone(),
+        ty(&model, "Pair"),
+        "Pair",
+        ConverterPlan::new(
+            ShapePlan::Product {
+                bridge: FixedArity::new(1, "tuple"),
+                parts: vec![FragmentUse::new(
+                    leaf.clone(),
+                    yield_of(&leaf, Mode::Owned, Validity::SelfSufficient),
+                )],
+            },
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        yield_of(&pair, Mode::Owned, Validity::SelfSufficient),
+    ));
+    has(&errors(unknown.build()), |e| {
+        matches!(e, PlanError::UnknownChild { .. })
+    });
+
+    let pair_part = FragmentUse::new(
+        leaf.clone(),
+        yield_of(&leaf, Mode::Owned, Validity::SelfSufficient),
+    );
+    let leaf_part = FragmentUse::new(
+        pair.clone(),
+        yield_of(&pair, Mode::Owned, Validity::SelfSufficient),
+    );
+    let mut cyclic = GenerationPlanBuilder::<Fake>::new();
+    cyclic
+        .fragment(FragmentPlan::new(
+            pair.clone(),
+            ty(&model, "Pair"),
+            "Pair",
+            ConverterPlan::new(
+                ShapePlan::Product {
+                    bridge: FixedArity::new(1, "tuple"),
+                    parts: vec![pair_part],
+                },
+                NichePlan::none(),
+                Failure::Infallible,
+                Cleanup::None,
+            ),
+            yield_of(&pair, Mode::Owned, Validity::SelfSufficient),
+        ))
+        .fragment(FragmentPlan::new(
+            leaf.clone(),
+            ty(&model, "Leaf"),
+            "Leaf",
+            ConverterPlan::new(
+                ShapePlan::Product {
+                    bridge: FixedArity::new(1, "tuple"),
+                    parts: vec![leaf_part],
+                },
+                NichePlan::none(),
+                Failure::Infallible,
+                Cleanup::None,
+            ),
+            yield_of(&leaf, Mode::Owned, Validity::SelfSufficient),
+        ));
+    has(&errors(cyclic.build()), |e| {
+        matches!(e, PlanError::FragmentCycle(_))
+    });
+}
+
+#[test]
+fn site_identity_recipe_contract_and_cleanup_are_checked() {
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let stored_site = Site {
+        owner: syn::parse_str("make_pair").unwrap(),
+        role: Role::Return,
+    };
+    let bound_site = Site {
+        owner: syn::parse_str("make_pair").unwrap(),
+        role: Role::Param { index: 0 },
+    };
+    let alternate =
+        Crossing::new(ty(&model, "Leaf"), Direction::Construct).row(RecipeName::new("alternate"));
+    let bad_site = SitePlan::new(
+        SiteId::new(stored_site),
+        Bound {
+            site: bound_site,
+            crossing: Crossing::new(ty(&model, "Pair"), Direction::Deconstruct),
+            recipe: alternate,
+            origin: Origin::Adapter,
+        },
+        leaf.clone(),
+        Yield {
+            ty: ty(&model, "Pair").key(),
+            mode: Mode::Owned,
+            validity: Validity::SelfSufficient,
+        },
+        AbiLayout::new(1, "layout"),
+        Some("throw"),
+        Cleanup::UnlessTransferred("drop"),
+    );
+    let borrowed_leaf = FragmentPlan::new(
+        leaf.clone(),
+        ty(&model, "Leaf"),
+        "Leaf",
+        ConverterPlan::new(
+            ShapePlan::Atomic("codec"),
+            NichePlan::none(),
+            Failure::Infallible,
+            Cleanup::None,
+        ),
+        yield_of(&leaf, Mode::Shared, Validity::Borrowed),
+    );
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder.fragment(borrowed_leaf).site(bad_site);
+    let site_errors = errors(builder.build());
+
+    has(&site_errors, |e| matches!(e, PlanError::SiteIdentity(_)));
+    has(&site_errors, |e| matches!(e, PlanError::SiteDirection(_)));
+    has(&site_errors, |e| matches!(e, PlanError::SiteSpelling(_)));
+    has(&site_errors, |e| matches!(e, PlanError::SiteRecipe(_)));
+    has(&site_errors, |e| matches!(e, PlanError::ContractType(_)));
+    has(&site_errors, |e| matches!(e, PlanError::ContractMode(_)));
+    has(&site_errors, |e| {
+        matches!(e, PlanError::ContractValidity(_))
+    });
+    has(&site_errors, |e| {
+        matches!(e, PlanError::UnexpectedFailureRoute(_))
+    });
+    has(&site_errors, |e| {
+        matches!(e, PlanError::SiteTransferOfBorrowed(_))
+    });
+
+    let duplicate_site = site(&model, &leaf, None, 1);
+    let mut duplicate = GenerationPlanBuilder::<Fake>::new();
+    duplicate
+        .fragment(atomic(
+            &model,
+            leaf.clone(),
+            Failure::Infallible,
+            Mode::Owned,
+        ))
+        .site(duplicate_site)
+        .site(site(&model, &leaf, None, 1));
+    has(&errors(duplicate.build()), |e| {
+        matches!(e, PlanError::DuplicateSite(_))
+    });
+
+    let mut unknown = GenerationPlanBuilder::<Fake>::new();
+    unknown.site(site(&model, &leaf, None, 1));
+    has(&errors(unknown.build()), |e| {
+        matches!(e, PlanError::UnknownSiteFragment(_))
+    });
+}
+
+#[test]
+fn unknown_artifact_dependencies_and_inputs_are_rejected() {
+    let model = model();
+    let unknown_fragment = fragment_id(&model, "Leaf", Direction::Construct);
+    let unknown_site = SiteId::new(Site {
+        owner: syn::parse_str("missing").unwrap(),
+        role: Role::Return,
+    });
+    let prerequisite = ArtifactId::new("helper", "missing").unwrap();
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder.artifact(artifact(
+        "wrapper",
+        "broken",
+        vec![prerequisite],
+        vec![
+            ArtifactInput::Fragment(unknown_fragment),
+            ArtifactInput::Site {
+                site: unknown_site,
+                slots: 1,
+            },
+        ],
+    ));
+    let errors = errors(builder.build());
+
+    has(&errors, |e| {
+        matches!(e, PlanError::UnknownPrerequisite { .. })
+    });
+    has(&errors, |e| {
+        matches!(e, PlanError::UnknownArtifactFragment(_))
+    });
+    has(&errors, |e| matches!(e, PlanError::UnknownArtifactSite(_)));
+}

@@ -9,6 +9,16 @@ use prebindgen_registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 use super::*;
 
+/// Whether Flat classifies this exact crossing as the unsigned 64-bit scalar.
+/// Destination policy asks the model once through this helper; no caller reads
+/// or compares Rust spelling.
+pub(crate) fn is_unsigned64(ty: &prebindgen_registry::flat::TypeRef) -> bool {
+    matches!(
+        ty.kind(),
+        prebindgen_registry::flat::TypeKind::Scalar(prebindgen_registry::flat::ScalarKind::U64)
+    )
+}
+
 /// The `#[allow(...)]` carried by every generated converter `fn`.
 ///
 /// Generated converters are uniform templates, not hand-written idiomatic Rust,
@@ -19,7 +29,7 @@ use super::*;
 /// * `let_and_return` — a multi-stage conversion fold's trailing `let`;
 /// * `nonminimal_bool` / `eq_op` — a representation-domain guard whose bounds
 ///   are the scalar's min/max (`true &&`) or which has no exclusions (`!(false)`).
-fn generated_converter_attr() -> syn::Attribute {
+pub(crate) fn generated_converter_attr() -> syn::Attribute {
     syn::parse_quote!(#[allow(
         non_snake_case,
         unused_mut,
@@ -46,312 +56,11 @@ fn generated_converter_attr() -> syn::Attribute {
 // ──────────────────────────────────────────────────────────────────────
 
 impl Declarations {
-    /// Build the standard JNI input-converter `fn` for a Rust type this
-    /// **adapter composed**. Body assumes in-scope `env: &mut JNIEnv` and
-    /// `v: &<wire>` (or `v: <wire>` for raw-pointer wires); produces a value of
-    /// `rust`. Returned function has its name already set per the JNI plugin's
-    /// naming convention.
-    ///
-    /// There are three composed types: `impl Fn(..)` for a callback, `String`
-    /// for the `str` terminal (which yields an owned value the call site
-    /// borrows), and `Vec<T>` for the `&[T]` parameter, likewise. None is a
-    /// borrow, which is why this spells its input verbatim — there is no `&_`
-    /// to splice `'env` into. [`Self::build_input_fn_of`] is the door that
-    /// annotates, and it does so off `TypeKind::Ref`, where
-    /// `annotate_borrow_with_lifetime` matched a `syn::Type::Reference` and
-    /// rebuilt it.
-    ///
-    /// `exc` ties the body convention to the `Result`'s Rust error type:
-    /// * `None` → signature `Result<rust, __JniErr>` and the body is
-    ///   wrapped `Ok(<body>)`; `?` inside propagates the framework error.
-    /// * `Some(E)` → signature `Result<rust, E>` and the body is emitted
-    ///   as-is — `<body>` already evaluates to that `Result`, so no `Ok`
-    ///   wrap. `E` is the raw error type peeled from a `Result<T, E>`.
-    pub(crate) fn build_input_fn_composed(
-        &self,
-        rust: &syn::Type,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-    ) -> syn::ItemFn {
-        let spelled = rust.to_token_stream();
-        self.build_input_fn_parts(&spelled, &spelled, wire, body, exc)
-    }
-
-    /// [`Self::build_input_fn`] for a caller holding the **reading** of the Rust
-    /// type this converter yields — the terminals and the transparent bridges.
-    ///
-    /// The borrow annotation is the only thing it does differently:
-    /// [`annotate_borrow_with_lifetime`] matched a `syn::Type::Reference` with
-    /// no lifetime, and the model states both facts on
-    /// [`TypeKind::Ref`](prebindgen_registry::flat::TypeKind::Ref), so this spells
-    /// `&'env [mut] <inner>` off the classification. Everything else the
-    /// signature needs is the spelling, which is the reading's own tokens.
-    pub(crate) fn build_input_fn_of(
-        &self,
-        rust: &prebindgen_registry::flat::TypeRef,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-        emit: &prebindgen_registry::Emit,
-    ) -> syn::ItemFn {
-        let spelled = emit.spell(rust);
-        let rust_with_lifetime = match rust.kind() {
-            prebindgen_registry::flat::TypeKind::Ref {
-                lifetime: None,
-                mutable,
-                inner,
-            } => {
-                let inner = emit.spell(inner);
-                let m = if *mutable { quote!(mut) } else { quote!() };
-                quote!(&'env #m #inner)
-            }
-            _ => spelled.clone(),
-        };
-        self.build_input_fn_parts(&spelled, &rust_with_lifetime, wire, body, exc)
-    }
-
-    pub(crate) fn build_input_fn_parts(
-        &self,
-        rust: &TokenStream,
-        rust_with_lifetime: &TokenStream,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-    ) -> syn::ItemFn {
-        let name = input_name(rust, wire);
-        let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "v");
-        let err_type = exc.cloned().unwrap_or_else(default_err_type);
-        let ret_body = body_for_exc(body, exc);
-        let gen_allow = generated_converter_attr();
-        if matches!(wire, syn::Type::Ptr(_)) {
-            syn::parse_quote!(
-                #gen_allow
-                pub(crate) unsafe fn #name<'env>(env: &mut jni::JNIEnv<'env>, v: #wire) -> ::core::result::Result<#rust_with_lifetime, #err_type> {
-                    #ret_body
-                }
-            )
-        } else {
-            syn::parse_quote!(
-                #gen_allow
-                pub(crate) unsafe fn #name<'env, 'v>(env: &mut jni::JNIEnv<'env>, v: &#wire_with_lifetime) -> ::core::result::Result<#rust_with_lifetime, #err_type> {
-                    #ret_body
-                }
-            )
-        }
-    }
-
-    /// Build the standard JNI output-converter `fn`. Body assumes in-scope
-    /// `env: &mut JNIEnv` and `v: <rust>` (by value — handles like
-    /// `Subscriber<()>` aren't `Clone`, so callers move into the converter).
-    ///
-    /// `exc` — see [`Self::build_input_fn`]; same body↔exception coupling,
-    /// output side.
-    pub(crate) fn build_output_fn(
-        &self,
-        rust: &syn::Type,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-    ) -> syn::ItemFn {
-        self.build_output_fn_parts(&rust.to_token_stream(), wire, body, exc)
-    }
-
-    /// [`Self::build_output_fn`] off the **reading**. The output signature takes
-    /// the value by move and needs no lifetime splice, so this is the spelling
-    /// and nothing else.
-    pub(crate) fn build_output_fn_of(
-        &self,
-        rust: &prebindgen_registry::flat::TypeRef,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-        emit: &prebindgen_registry::Emit,
-    ) -> syn::ItemFn {
-        self.build_output_fn_parts(&emit.spell(rust), wire, body, exc)
-    }
-
-    pub(crate) fn build_output_fn_parts(
-        &self,
-        rust: &TokenStream,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-    ) -> syn::ItemFn {
-        let name = output_name(rust, wire);
-        let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
-        let err_type = exc.cloned().unwrap_or_else(default_err_type);
-        let ret_body = body_for_exc(body, exc);
-        let gen_allow = generated_converter_attr();
-        syn::parse_quote!(
-            #gen_allow
-            pub(crate) unsafe fn #name<'a>(env: &mut jni::JNIEnv<'a>, v: #rust) -> ::core::result::Result<#wire_with_lifetime, #err_type> {
-                #ret_body
-            }
-        )
-    }
-
-    /// Borrowed string-slice output converter (`&str → jstring`, a single
-    /// copy — the dual of the `str` input arm). Shared by two resolver arms so
-    /// they emit the SAME-named fn (write.rs dedups by `sig.ident`):
-    /// * the rank-1 `&str` arm — the converter actually used for a reference
-    ///   accessor leaf (`f(&T) -> &str`, output expansion);
-    /// * the rank-0 `str` arm — resolves the unsized `str` reached as the sub
-    ///   of `&str` (so required-propagation doesn't flag `str` unresolved).
-    ///
-    /// Surfaces as Kotlin `String`. Built from a normalized (lifetime-free)
-    /// `&str` so both arms produce an identical [`output_name`].
-    fn str_ref_output(&self) -> ConverterImpl<KotlinMeta> {
-        let outer_ty: syn::Type = syn::parse_quote!(&str);
-        let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-        let body: syn::Expr = syn::parse_quote!({
-            env.new_string(v).map_err(|e| {
-                <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
-            })?
-        });
-        let kotlin_name =
-            self.override_kotlin_name(&TypeKey::from_type(&outer_ty), Some(KtType::string()));
-        let niches = default_niches_for_wire(&wire);
-        ConverterImpl {
-            subs: vec![],
-            pre_stages: vec![],
-            function: self.build_output_fn(&outer_ty, &wire, &body, None),
-            destination: wire,
-            niches,
-            metadata: self.framework_meta(kotlin_name),
-        }
-    }
-
-    /// `Cow<[u8]>` output converter (any lifetime form) — see the call site
-    /// in [`Self::output_terminal`]. `None` when `ty` isn't a
-    /// `Cow<…, [u8]>` path.
-    fn cow_bytes_output(
-        &self,
-        ty: &prebindgen_registry::flat::TypeRef,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `TypeKind::Cow` is the form, and its `inner` is the argument — where
-        // this walked a path's last segment, compared the ident to the NAME
-        // `"Cow"`, and scanned the angle-bracketed arguments for a `[u8]`.
-        let prebindgen_registry::flat::TypeKind::Cow { inner, .. } = ty.kind() else {
-            return None;
-        };
-        if inner.key().as_str() != "[u8]" {
-            return None;
-        }
-        // The generated fn's param type must be resolvable without imports —
-        // normalize whatever path form the accessor wrote to the full one.
-        let norm_ty: syn::Type = syn::parse_quote!(::std::borrow::Cow<'_, [u8]>);
-        let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
-        let body: syn::Expr = syn::parse_quote!({
-            env.byte_array_from_slice(&v).map_err(|e| {
-                <__JniErr as ::core::convert::From<String>>::from(format!(
-                    "encode_byte_array: {}",
-                    e
-                ))
-            })?
-        });
-        let kotlin_name = self.override_kotlin_name(&ty.key(), Some(KtType::byte_array()));
-        let niches = default_niches_for_wire(&wire);
-        Some(ConverterImpl {
-            subs: vec![],
-            pre_stages: vec![],
-            function: self.build_output_fn(&norm_ty, &wire, &body, None),
-            destination: wire,
-            niches,
-            metadata: self.framework_meta(kotlin_name),
-        })
-    }
-
-    /// Universal "opaque Box-handle as `jlong`" pair — input side.
-    ///
-    /// Use for any Rust type whose lifecycle is owned by the Java side:
-    /// Java holds the raw `Box<T>` pointer as a `Long` and calls Rust
-    /// passing the pointer. The converter handles both parameter
-    /// shapes, the decision is taken in `on_function` from the
-    /// parameter's syntax:
-    ///
-    /// **`&T` sites (borrow)**: `OwnedObject::from_raw` stores the
-    /// pointer without taking ownership of the `Box`; `Deref<Target
-    /// = T>` exposes `&*ptr` so the generated call site can borrow it
-    /// as `&T`. The wrapper has no `Drop` — nothing is freed, the
-    /// heap allocation stays with Java. The Java side must take the
-    /// pointer out of its `NativeHandle.withPtr` (read lock) so the
-    /// borrow is sequenced against any concurrent consume / close.
-    ///
-    /// **`T` sites (consume, by-value)**: the call-site emitter
-    /// bypasses `OwnedObject` and inlines `*Box::from_raw(ptr)` —
-    /// infallible. The Java side must take the pointer out of its
-    /// `NativeHandle.consume` (write lock + atomic null) before
-    /// invoking this entry point; that write lock drains concurrent
-    /// borrows and the atomic-null ensures the same Long cannot be
-    /// passed twice. No `T: Clone` bound (Box requires nothing of T),
-    /// so non-Clone handles (`Publisher<'a>`, `Subscriber<()>`) can
-    /// consume.
-    ///
-    /// **Convention** (single rule for both input and output):
-    /// * Wire: `jni::sys::jlong` — the same width JNI hands across
-    ///   the boundary on every platform (`*mut T` would mismatch
-    ///   on 32-bit, where ptr size is 4 but jlong is 8).
-    /// * Output: `Box::into_raw(Box::new(v)) as i64` — leak the heap
-    ///   allocation to Java; sole owner is whoever later calls
-    ///   `Box::from_raw` on the same pointer.
-    /// * Input: `OwnedObject::from_raw(*v as *const T)` (borrow only),
-    ///   after rejecting null and tag-bit-set values — bit 0 is the
-    ///   Kotlin-side closed tag (see `NativeHandle`), so an odd `jlong`
-    ///   is a handle that was closed after the wrapper's pre-lock guard;
-    ///   it must never be dereferenced.
-    /// * Niche: `0i64` / `*v == 0` — `Box::into_raw` never returns 0,
-    ///   so `Option<T>` automatically synthesises `0` = `None`,
-    ///   matching the legacy "null pointer" ABI for nullable handles.
-    ///   A *tagged* (closed-but-present) value is an error, not `None`.
-    pub fn opaque_handle_input(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> ConverterImpl<KotlinMeta> {
-        let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let ty = emit.spell(reading);
-        let name = input_name(&ty, &wire);
-        let gen_allow = generated_converter_attr();
-        let function: syn::ItemFn = syn::parse_quote!(
-            #gen_allow
-            pub(crate) unsafe fn #name<'env, 'v>(
-                env: &mut jni::JNIEnv<'env>,
-                v: &jni::sys::jlong,
-            ) -> ::core::result::Result<OwnedObject<#ty>, __JniErr> {
-                // Null or tag-bit-set (closed handle raced past the Kotlin
-                // pre-lock guard) — reject before any dereference.
-                if *v == 0 || (*v & 1) == 1 {
-                    return ::core::result::Result::Err(
-                        <__JniErr as ::core::convert::From<String>>::from(
-                            "Operation on a closed native handle.".to_string(),
-                        ),
-                    );
-                }
-                Ok(unsafe { OwnedObject::from_raw(*v as *const #ty) })
-            }
-        );
-        ConverterImpl {
-            subs: vec![],
-            function,
-            destination: wire,
-            pre_stages: vec![],
-            niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
-            // Opaque handles' value-context Kotlin name stays `"Long"`
-            // (the jlong wire mention); the *typed* Kotlin rendering is
-            // derived from `handle` below. The wrapper's `?` path surfaces
-            // an `OwnedObject::from_raw` failure as the framework
-            // `JniBindingError`, so the throws fields point at the
-            // framework exception.
-            metadata: self.opaque_leaf_meta(reading.key()),
-        }
-    }
-
-    /// Leaf metadata for an opaque handle: value-context name `"Long"`
-    /// plus the [`Projection`] that folds outward through wrappers (owned,
-    /// [`FoldStrategy::Base`]). The single seam where a Rust type is
-    /// first marked a closeable native handle.
-    fn opaque_leaf_meta(&self, key: TypeKey) -> KotlinMeta {
+    /// Leaf metadata for an opaque handle: value-context name `Long` plus the
+    /// projection that folds outward through wrappers. The corresponding
+    /// ownership, null-niche, and odd-pointer-tag operations live in the late
+    /// `JHandleCodecPlan`; this method describes the Kotlin-facing leaf only.
+    pub(crate) fn opaque_leaf_meta(&self, key: TypeKey) -> KotlinMeta {
         KotlinMeta {
             projection: Some(Projection {
                 leaf_key: key,
@@ -367,7 +76,7 @@ impl Declarations {
     /// Leaf metadata for Rust `u64`: the JNI value-context stays `Long`, while
     /// projection-aware Kotlin emitters surface `ULong` and insert the
     /// bit-preserving `toLong()` / `toULong()` bridge.
-    fn unsigned64_leaf_meta(&self) -> KotlinMeta {
+    pub(crate) fn unsigned64_leaf_meta(&self) -> KotlinMeta {
         KotlinMeta {
             projection: Some(Projection {
                 leaf_key: TypeKey::parse("u64").expect("builtin type key"),
@@ -407,8 +116,8 @@ impl Declarations {
     }
 
     /// Canonical input-converter name for `(rust, wire)` — exposed
-    /// for plugin wrapper exts that build `ConverterImpl::function`
-    /// manually with a non-standard return type (e.g.
+    /// for plugin wrapper exts that name a converter artifact with a
+    /// non-standard return type (e.g.
     /// `impl Into<…>` parameters that can't be expressed via
     /// `input_wrapper_shape`'s fixed signature shape).
     pub fn input_converter_name(&self, rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
@@ -418,114 +127,6 @@ impl Declarations {
     /// Symmetric to [`Self::input_converter_name`].
     pub fn output_converter_name(&self, rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
         output_name(&rust.to_token_stream(), wire)
-    }
-
-    fn emitted_source_type_names(
-        &self,
-        registry: &Registry,
-    ) -> std::collections::HashMap<String, syn::Path> {
-        let mut names = std::collections::HashMap::new();
-        let mut add = |key: &TypeKey| {
-            if let Some(short) = rust_short_name_opt(key) {
-                // Per-item origin when the type has an indexed
-                // `#[prebindgen]` item; else the default module (a declared
-                // type re-exported by the primary source, or a deliberately
-                // unmarked type like a convert!-only newtype).
-                // Parsed, not constructed: a short name is whatever the source
-                // wrote, and `Ident::new` PANICS on a raw one (`r#type`)
-                // rather than erroring. Pre-existing; found by the raw-name
-                // regression added for the sum encoder's twin of this bug.
-                let Ok(ident) = syn::parse_str::<syn::Ident>(&short) else {
-                    return;
-                };
-                let module = registry
-                    .origin_module(&ident)
-                    .unwrap_or_else(|| self.default_module(registry));
-                names.insert(short, module);
-            }
-        };
-        for key in self.types.keys() {
-            add(key);
-        }
-        // Rust-side-only boundary types are absent from the type table but
-        // still appear in emitted signatures (e.g. the `E` of a peeled
-        // `Result<T, E>`), so they need the same qualification.
-        for (key, _) in self.rust_side_only_types().collect::<Vec<_>>() {
-            add(&key);
-        }
-        // `convert!`-declared types likewise have no type-table entry but
-        // appear in emitted converter signatures.
-        for decl in &self.convert_decls {
-            add(decl.key());
-        }
-        names
-    }
-
-    /// Walk `item` and prefix every bare single-segment type reference
-    /// matching a [`Self::emitted_source_type_names`] name with that name's
-    /// origin module. Applied once per emitted item at write
-    /// time via [`Prebindgen::post_process_item`] so converter bodies,
-    /// type ascriptions, and casts all stay in sync without each emit
-    /// site having to remember to qualify.
-    fn qualify_item(&self, item: &mut syn::Item, registry: &Registry) {
-        let source_names = self.emitted_source_type_names(registry);
-        // Names reachable from an array LENGTH (`[u8; MAX]`, `[u8; Holder::N]`).
-        //
-        // Registry-wide, NOT the declared-surface `source_names`: a length's
-        // owner is a compile-time namespace, not a boundary type. Requiring it
-        // to be declared would force an otherwise-unused Kotlin class into
-        // existence just to make the generated Rust compile, and would be
-        // asymmetric with consts, which qualify whether or not JniGenBuilder declared
-        // them.
-        // EVERY named item the registry indexes. A length is an arbitrary const
-        // expression, so it can name a const, the type owning an associated
-        // const, or a `const fn` — and enumerating item KINDS here missed one
-        // of those three twice, so the enumeration lives in core
-        // (`named_item_idents`) where a new kind is added once.
-        //
-        // The NAME SET is independent of origin stamps and the VALUE falls back
-        // to the default module: an origin-less hand-built stream holds elements
-        // whose location carries no crate name, and those still need qualifying
-        // (core documents `crate` as their module).
-        let length_names: std::collections::HashMap<String, syn::Path> = registry
-            .named_item_idents()
-            .map(|ident| {
-                let module = registry
-                    .origin_module(ident)
-                    .unwrap_or_else(|| self.default_module(registry));
-                (ident.to_string(), module)
-            })
-            .collect();
-        let mut visitor = QualifyEmittedTypes {
-            source_names: &source_names,
-            length_names: &length_names,
-        };
-        syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
-    }
-
-    /// Output side of [`Self::opaque_handle_input`] — see that method's
-    /// docs for the full convention.
-    pub fn opaque_handle_output(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> ConverterImpl<KotlinMeta> {
-        let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let body: syn::Expr =
-            syn::parse_quote!(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64);
-        ConverterImpl {
-            subs: vec![],
-            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-            destination: wire,
-            pre_stages: vec![],
-            niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
-            // Opaque handles' value-context name `"Long"` + folded
-            // `Projection` — see [`Self::opaque_handle_input`] /
-            // [`Self::opaque_leaf_meta`]. Framework throws because the
-            // wrapper's emitted match-arm still has a `JniBindingError`
-            // branch reachable via the chain.
-            metadata: self.opaque_leaf_meta(reading.key()),
-        }
     }
 }
 
@@ -608,6 +209,69 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
     )
 }
 
+/// The items every extern body reaches by bare name: the framework error
+/// alias, the `OwnedObject` carrier borrowed-handle plans return, and the two
+/// error-channel functions.
+///
+/// `__JniErr` is the **framework** error type alias — always the
+/// `JniBindingError` String-wrapper. Built-in converter bodies compose their
+/// `?` failures into this type via its `From<String>` impl. A `Result<T, E>`
+/// return instead binds its own raw `E`; both funnel to the per-call
+/// `signal_error` sink (generic over `Display`).
+///
+/// The two error-channel fns are `signal_binding_error` (binding/system
+/// failure → `JniErrorHandler`) and `signal_domain_error` (a fallible fn's
+/// `Err(E)` → the typed `<Src>Handler`). They are written above the converters
+/// so wrapper code references them by bare name; the binding crate reaches
+/// them as `<include_module>::signal_*` from outside the file.
+pub(crate) fn render_prelude() -> Vec<syn::Item> {
+    let error_type = framework_error_type();
+    let mut items: Vec<syn::Item> = vec![syn::parse_quote!(
+        #[allow(dead_code)]
+        pub(crate) type __JniErr = #error_type;
+    )];
+    items.extend(owned_object_prerequisite_items());
+    items.push(build_signal_binding_error_item());
+    items.push(build_signal_domain_error_item());
+    items
+}
+
+/// One nullary getter extern per binding-defined constant expression.
+///
+/// The expression is evaluated with a glob import of every source module, so
+/// it composes the source crate's items without qualification. The getter
+/// reuses the whole extern pipeline through a synthetic nullary signature,
+/// exactly like a const-backed getter.
+pub(crate) fn plan_constant_expressions(
+    ext: &Declarations,
+    registry: &Registry,
+) -> Vec<crate::jni::emit::JWrapper> {
+    let mut glob_modules = registry.all_source_modules();
+    if glob_modules.is_empty() {
+        glob_modules.push(ext.default_module(registry));
+    }
+    ext.packages
+        .values()
+        .flat_map(|package| &package.constant_exprs)
+        .map(|decl| {
+            validate_constant_expr(ext, &decl.kotlin_name, &decl.ty);
+            let getter = {
+                ext.freeze_reading_of(registry, &decl.ty);
+                const_expr_getter_fn(&decl.kotlin_name, &decl.ty, ext)
+            };
+            let expr = &decl.expr;
+            let callee: syn::Expr = syn::parse_quote!({
+                #(
+                    #[allow(unused_imports)]
+                    use #glob_modules::*;
+                )*
+                #expr
+            });
+            crate::jni::emit::JWrapper::new(ext, registry, &getter, Some(callee))
+        })
+        .collect()
+}
+
 /// One `#[no_mangle] extern "C"` destructor per opaque handle — the Rust
 /// counterpart to the `public fun free() = free {
 /// freePtr<suffix>(it) }` / `private external fun freePtr<suffix>` pair
@@ -623,20 +287,19 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 /// the package/class-aware method hook — exact symmetry with the Kotlin
 /// `external fun <mangled-freePtr>` declaration in
 /// [`render_typed_handle_source`]. `ext.types` is a `HashMap`, so the
-/// items are sorted by symbol to keep generated output deterministic.
+/// artifacts are sorted by symbol to keep generated output deterministic.
 ///
-/// Emission is gated on the resolved `registry`: a destructor is only
-/// emitted for an opaque handle whose type a scanned `#[prebindgen]` fn
-/// actually references (as input or output). This mirrors converter
-/// emission and keeps feature-gated handles (e.g. `zenoh-ext`-only types
-/// whose declare/undeclare fns are `#[cfg]`'d out of the scan) from
-/// producing destructors that reference types not in scope.
-pub(crate) fn build_handle_destructor_items(
+/// Planning is gated on the resolved `registry`: a destructor is only planned
+/// for an opaque handle whose type a scanned `#[prebindgen]` fn actually
+/// references (as input or output). This mirrors converter emission and keeps
+/// feature-gated handles (e.g. `zenoh-ext`-only types whose declare/undeclare
+/// fns are `#[cfg]`'d out of the scan) from producing destructors that
+/// reference types not in scope.
+pub(crate) fn plan_handle_destructors(
     ext: &Declarations,
     registry: &Registry,
-    emit: &prebindgen_registry::Emit,
-) -> Vec<syn::Item> {
-    let mut named: Vec<(String, syn::Item)> = Vec::new();
+) -> Vec<crate::jni::generation::JHandleDestructor> {
+    let mut planned: Vec<crate::jni::generation::JHandleDestructor> = Vec::new();
     for (key, cfg) in &ext.types {
         if !cfg.is_opaque() {
             continue;
@@ -651,14 +314,13 @@ pub(crate) fn build_handle_destructor_items(
         if ext.in_frag(&reading).is_none() && ext.out_frag(&reading).is_none() {
             continue;
         }
-        let ty = emit.spell(&reading);
         let class_fqn = cfg
             .name_spec
             .as_ref()
             .map(|s| ext.fqn_of(s))
             .unwrap_or_else(|| {
                 panic!(
-                    "build_handle_destructor_items: opaque handle `{}` has no \
+                    "plan_handle_destructors: opaque handle `{}` has no \
                      name spec to derive a destructor symbol from",
                     key.as_str()
                 )
@@ -666,65 +328,13 @@ pub(crate) fn build_handle_destructor_items(
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         let class_package = class_fqn.rsplit_once('.').map(|(pkg, _)| pkg).unwrap_or("");
         let free_ptr = ext.mangle_method(class_package, class_short, "freePtr");
-        let symbol = super::symbol::native_symbol(class_package, class_short, &free_ptr);
-        let ident = syn::Ident::new(&symbol, Span::call_site());
-        // Bit 0 of the jlong is the Kotlin-side closed tag, so every handle
-        // type must leave it free: `Box` pointers to `T` are `align_of::<T>()`
-        // aligned, hence the compile-time floor of 2. Spelled as an `if` +
-        // `panic!` (not `assert!`) so the type reference is real AST — the
-        // `qualify_item` pass does not descend into macro token streams.
-        let item: syn::Item = syn::parse_quote!(
-            const _: () = {
-                if ::core::mem::align_of::<#ty>() < 2 {
-                    panic!(
-                        "opaque handle types must have alignment >= 2 (bit 0 is the closed tag)"
-                    );
-                }
-            };
-        );
-        named.push((format!("{symbol}__align_assert"), item));
-        let item: syn::Item = syn::parse_quote!(
-            #[no_mangle]
-            #[allow(non_snake_case, unused_variables)]
-            pub(crate) unsafe extern "C" fn #ident(
-                _env: jni::JNIEnv,
-                _class: jni::objects::JClass,
-                ptr: jni::sys::jlong,
-            ) {
-                if ptr != 0 && (ptr & 1) == 0 {
-                    drop(Box::from_raw(ptr as *mut #ty));
-                }
-            }
-        );
-        named.push((symbol, item));
+        planned.push(crate::jni::generation::JHandleDestructor::new(
+            reading,
+            super::symbol::native_symbol(class_package, class_short, &free_ptr),
+        ));
     }
-    named.sort_by(|a, b| a.0.cmp(&b.0));
-    named.into_iter().map(|(_, item)| item).collect()
-}
-
-/// Which built-in wrapper a converter is being built for — **the model's
-/// answer, not a guess from the spelling**.
-///
-/// This used to be a `&syn::Type` wildcard pattern (`Option<_>`, `& mut _`)
-/// rebuilt from the type's tokens and compared as a *string*. That made the
-/// dispatch depend on how Rust happened to spell the type: `Box<Option<T>>`
-/// reconstructed as `Box<_>`, matched no pattern, and got no converter at all
-/// (#270) — even though the model classifies it `Optional` and says so.
-///
-/// So the shape comes from [`TypeKind`](prebindgen_registry::flat::TypeKind) and
-/// the spelling comes from `spell()`, which is the same split the rest of
-/// the pipeline follows: classify off `kind`, spell with `spell()`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum WrapperShape {
-    /// `Ref` — a borrow of its inner.
-    Borrow { mutable: bool },
-    /// `Optional` whose inner is a `Ref` — the deep handle-borrow form, tried
-    /// before [`Self::Optional`].
-    OptionRef { mutable: bool },
-    /// `Sequence` — a run of its element.
-    Sequence,
-    /// `Optional` — its inner, or absent.
-    Optional,
+    planned.sort_by(|a, b| a.symbol().cmp(b.symbol()));
+    planned
 }
 
 /// What generated Rust can do with one wrapper the model
@@ -741,7 +351,7 @@ pub(crate) enum WrapperShape {
 /// (the adapter decides what it can rebuild); `every_erased_wrapper_has_ops`
 /// fails if the two disagree, so a wrapper cannot become transparent without
 /// this file having an answer for it.
-struct WrapperOps {
+pub(crate) struct WrapperOps {
     /// Its last path segment, as `TRANSPARENT_WRAPPERS` spells it.
     name: &'static str,
     /// Move the inner value **out**. `None` when the representation does not
@@ -753,9 +363,9 @@ struct WrapperOps {
     /// generated code runs through the consumer's own lints, where that is a
     /// denial. A consumer that splices into a tighter position (a method
     /// receiver, a field base) parenthesizes at its own site.
-    read: Option<fn(TokenStream) -> TokenStream>,
+    pub(crate) read: Option<fn(TokenStream) -> TokenStream>,
     /// Build it **from** the inner value. `None` when not supported.
-    build: Option<fn(TokenStream) -> TokenStream>,
+    pub(crate) build: Option<fn(TokenStream) -> TokenStream>,
 }
 
 /// The operations table. One recipe per wrapper the model erases.
@@ -792,138 +402,8 @@ const WRAPPER_OPS: &[WrapperOps] = &[
     },
 ];
 
-fn wrapper_ops(name: &str) -> Option<&'static WrapperOps> {
+pub(crate) fn wrapper_ops(name: &str) -> Option<&'static WrapperOps> {
     WRAPPER_OPS.iter().find(|w| w.name == name)
-}
-
-/// What a wrapper arm's converter **yields**.
-///
-/// Two cases, and the code always had both — one of them just had no name:
-///
-/// * `Reading` — the crossing's own type, as the model classified it. Every
-///   arm but one gets this.
-/// * `Composed` — a shape this adapter built. The `&[T]` parameter is the only
-///   instance: it decodes to an owned `Vec<T>` the call site borrows, and #280
-///   leaves `api::lang` no way to mint that reading. A composed shape carries
-///   no erased wrappers by construction — it *is* the canonical form.
-///
-/// The distinction is what the `canonical` argument used to stand in for. A
-/// spelling was compared token-for-token against a reconstructed
-/// `Option<t1>` / `Vec<t1>` / `&t1` to find out what wrappers sat over it —
-/// which is [`TypeRef::erased_wrappers`], asked of the classification instead
-/// of re-derived from tokens.
-pub(crate) enum Produced<'a> {
-    Reading(&'a prebindgen_registry::flat::TypeRef),
-    /// Boxed: a `syn::Type` dwarfs the borrow beside it, and the composed case
-    /// is the rare one (a single arm).
-    Composed(Box<syn::Type>),
-}
-
-impl Produced<'_> {
-    /// The chain of wrappers standing between what this yields and the
-    /// canonical shape its `kind` names, outermost first — empty when the
-    /// source already wrote the canonical form.
-    ///
-    /// `None` when a wrapper has no [`WrapperOps`], so no converter claims it.
-    fn bridge_layers(&self) -> Option<Vec<&'static WrapperOps>> {
-        match self {
-            Produced::Reading(r) => r.erased_wrappers().into_iter().map(wrapper_ops).collect(),
-            Produced::Composed(_) => Some(Vec::new()),
-        }
-    }
-
-    /// True when what this yields IS the canonical shape — no wrapper to
-    /// bridge. The arms that hand back an inner converter verbatim require it:
-    /// there is no value in hand to wrap or unwrap.
-    fn is_canonical(&self) -> bool {
-        self.bridge_layers().is_some_and(|l| l.is_empty())
-    }
-
-    /// The tokens generated Rust spells for this type.
-    fn spell(&self, emit: &prebindgen_registry::Emit) -> TokenStream {
-        match self {
-            Produced::Reading(r) => emit.spell(r),
-            Produced::Composed(t) => t.to_token_stream(),
-        }
-    }
-
-    /// This type's identity.
-    fn key(&self) -> TypeKey {
-        match self {
-            Produced::Reading(r) => r.key(),
-            Produced::Composed(t) => TypeKey::from_type(t),
-        }
-    }
-
-    /// The borrow this yields, when the source wrote one — the reading's own
-    /// `TypeKind::Ref`. A composed shape is never a borrow.
-    fn borrow(&self) -> Option<(&prebindgen_registry::flat::TypeRef, bool)> {
-        match self {
-            Produced::Reading(r) => match r.kind() {
-                prebindgen_registry::flat::TypeKind::Ref { mutable, inner, .. } => {
-                    Some((inner, *mutable))
-                }
-                _ => None,
-            },
-            Produced::Composed(_) => None,
-        }
-    }
-}
-
-impl Declarations {
-    /// [`Self::build_input_fn`] over either case.
-    fn build_input_fn_produced(
-        &self,
-        produced: &Produced<'_>,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-        emit: &prebindgen_registry::Emit,
-    ) -> syn::ItemFn {
-        match produced {
-            Produced::Reading(r) => self.build_input_fn_of(r, wire, body, exc, emit),
-            Produced::Composed(t) => self.build_input_fn_composed(t, wire, body, exc),
-        }
-    }
-
-    /// [`Self::build_output_fn`] over either case.
-    fn build_output_fn_produced(
-        &self,
-        produced: &Produced<'_>,
-        wire: &syn::Type,
-        body: &syn::Expr,
-        exc: Option<&syn::Type>,
-        emit: &prebindgen_registry::Emit,
-    ) -> syn::ItemFn {
-        match produced {
-            Produced::Reading(r) => self.build_output_fn_of(r, wire, body, exc, emit),
-            Produced::Composed(t) => self.build_output_fn(t, wire, body, exc),
-        }
-    }
-}
-
-/// Read the converter's `v` as the canonical shape, undoing each layer
-/// outside-in. `None` when any layer cannot be read through — the crossing then
-/// stays **unresolved**, naming the type, rather than resolving and emitting
-/// Rust the consumer cannot build (#270 review).
-fn read_as_canonical(produced: &Produced<'_>) -> Option<TokenStream> {
-    let layers = produced.bridge_layers()?;
-    let mut e = quote!(v);
-    for w in layers {
-        e = (w.read?)(e);
-    }
-    Some(e)
-}
-
-/// Build the spelling from a canonical value — the input-side peer, applying
-/// each layer inside-out.
-fn build_from_canonical(produced: &Produced<'_>, value: TokenStream) -> Option<TokenStream> {
-    let layers = produced.bridge_layers()?;
-    let mut e = value;
-    for w in layers.into_iter().rev() {
-        e = (w.build?)(e);
-    }
-    Some(e)
 }
 
 /// Move a value the **source** produced out of the transparent wrappers its
@@ -996,7 +476,7 @@ pub(crate) fn build_through_erased_wrappers(
 ///
 /// The list is the only part of the reading a rebuild uses, and it is two
 /// pointers instead of a `TypeRef`'s ~264 bytes. That matters because these
-/// plans live in `InputKind`, whose size every variant pays.
+/// plans live in `KotlinParamOp`, whose size every variant pays.
 pub(crate) fn build_through_wrappers(
     names: &[&'static str],
     value: TokenStream,
@@ -1008,39 +488,22 @@ pub(crate) fn build_through_wrappers(
     Some(out)
 }
 
-/// Per-shape **input** wrapper converter builders (`&`/`Option<&>`/`Vec`/
-/// `Option`). Each returns `Some(ConverterImpl)` only for the [`WrapperShape`]
-/// it claims; [`Declarations::input_wrapper_shape`] chains them in priority
-/// order. The shapes are disjoint — except the two `Optional` sub-cases
-/// (direct-handle-by-value vs general), which share one and so live together in
-/// [`Declarations::input_option`] to keep their original fall-through.
-///
-/// Each takes `produced`: the Rust type the converter's function **yields**.
-/// Normally that is the crossing's own spelling, so a `Box<Option<T>>` crossing
-/// produces a `Box<Option<T>>` rather than silently declaring `Option<T>` and
-/// mismatching its call site. The one deliberate exception is a `&[T]`
-/// parameter, which decodes to an owned `Vec<T>` the call site borrows — see
-/// [`Declarations::select_input_type`].
 impl Declarations {
     /// `& _` / `& mut _` borrow: share T's resolved converter — `&T`'s entry
     /// points at the same `ItemFn` (the fn returns owned `T`; the call site in
     /// `emit_jni_function_wrapper` adds `&decoded`). Exists so the
     /// wildcard-substitution machinery marks T required transitively from `&T`.
-    fn input_borrow(
+    pub(crate) fn input_borrow(
         &self,
-        shape: WrapperShape,
-        produced: &Produced<'_>,
+        produced: &prebindgen_registry::flat::TypeRef,
         t1: &prebindgen_registry::flat::TypeRef,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let WrapperShape::Borrow { .. } = shape else {
-            return None;
-        };
         // This converter does NOT produce the spelled type: it hands back the
         // inner type's own entry, and the call site adds the `&`. So there is no
         // value in hand to unwrap a representation from, and a wrapped spelling
         // — `Box<&T>` — must not resolve here (it would pass an owned `T` where
         // `Box<&T>` is expected).
-        if !produced.is_canonical() {
+        if !produced.erased_wrappers().is_empty() {
             return None;
         }
         let inner = self.in_frag(t1)?;
@@ -1060,273 +523,16 @@ impl Declarations {
             .map(|h| Projection { owned: false, ..h });
         Some(ConverterImpl {
             subs: vec![],
-            destination: inner.destination.clone(),
-            function: inner.function.clone(),
-            pre_stages: vec![],
+            destination: inner.wire.clone(),
+            converter: inner.converter.clone(),
             niches: inner.niches.clone(),
             metadata: KotlinMeta {
                 kotlin_name,
-                value_rust_type: None,
+                value_reading: None,
                 projection,
+                niche_sentinels: inner.metadata.niche_sentinels.clone(),
             },
         })
-    }
-
-    /// `Option<&T>` / `Option<&mut T>` for opaque T: returns
-    /// `Option<OwnedObject<T>>` (the call site `.as_deref()` coerces back).
-    /// `None` for non-opaque inners — the resolver then offers `Option<_>`
-    /// over `&T` and the general handler takes it.
-    fn input_option_ref(
-        &self,
-        shape: WrapperShape,
-        produced: &Produced<'_>,
-        t1: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions — the
-        // canonical form a produced spelling is compared against, and the
-        // type ascriptions the generated body writes. Everything else takes
-        // the READING itself (#284).
-        let t1_ty = emit.spell(t1);
-        let WrapperShape::OptionRef { .. } = shape else {
-            return None;
-        };
-        // Produces `Option<OwnedObject<T>>`, which the call site adapts with
-        // `.as_deref()` — again not the spelled type, so a wrapped spelling has
-        // nothing to bridge and must not resolve. See `input_borrow`.
-        if !produced.is_canonical() {
-            return None;
-        }
-        let inner = self.in_frag(t1)?;
-        if !inner.metadata.is_direct_handle() {
-            // Non-opaque: let the general `Option<_>` handler take it.
-            return None;
-        }
-        let inner_wire = inner.destination.clone();
-        let inner_conv = inner.function.sig.ident.clone();
-        let outer_ty = produced.key();
-        let outer_spelled = produced.spell(emit);
-        let name = input_name(&outer_spelled, &inner_wire);
-        let gen_allow = generated_converter_attr();
-        let function: syn::ItemFn = syn::parse_quote!(
-            #gen_allow
-            pub(crate) unsafe fn #name<'env, 'v>(
-                env: &mut jni::JNIEnv<'env>,
-                v: &#inner_wire,
-            ) -> ::core::result::Result<Option<OwnedObject<#t1_ty>>, __JniErr> {
-                Ok({
-                    if *v == 0 { None } else { Some(#inner_conv(env, v)?) }
-                })
-            }
-        );
-        let kotlin_name = self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
-        let projection = inner.metadata.projection.clone().map(|h| Projection {
-            owned: false,
-            // `Option<&Handle>` always rides the inner's `*v == 0` niche
-            // (body is `if *v == 0 { None } else { ... }` above), so
-            // null is the `0i64` sentinel — never JVM boxed.
-            strategy: FoldStrategy::Optional(NullableKind::Niche, Box::new(h.strategy)),
-            ..h
-        });
-        Some(ConverterImpl {
-            subs: vec![],
-            pre_stages: vec![],
-            function,
-            destination: inner_wire,
-            niches: Niches::empty(),
-            metadata: KotlinMeta {
-                kotlin_name,
-                value_rust_type: None,
-                projection,
-            },
-        })
-    }
-
-    /// `Vec<T>` (input side): wire is `JObject` carrying a Java
-    /// `List<InnerWire>`; iterate, decode each element via the inner converter,
-    /// collect into a `Vec`. (`Vec<u8>` is special-cased at rank-0.)
-    fn input_vec(
-        &self,
-        shape: WrapperShape,
-        produced: &Produced<'_>,
-        t1: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions — the
-        // canonical form a produced spelling is compared against, and the
-        // type ascriptions the generated body writes. Everything else takes
-        // the READING itself (#284).
-        let t1_ty = emit.spell(t1);
-        if shape != WrapperShape::Sequence {
-            return None;
-        }
-        let inner = self.in_frag(t1)?;
-        reject_vec_of_handle(&inner.metadata.projection, t1);
-        let inner_wire = inner.destination.clone();
-        if !is_jobject_shaped_wire(&inner_wire) {
-            return None;
-        }
-        // The element's COMPLETE wire -> Rust chain: a `convert!` element
-        // (`Label` -> `String`) reaches its value through the rust-side stages,
-        // not through the wire-facing converter alone.
-        let inner_conv =
-            crate::jni::emit::composed_inner_input(&inner, quote::quote!(&__elem_wire));
-        let outer_ty = produced.key();
-        // Bridgeable first — see `box_layers_to`.
-        let build = build_from_canonical(produced, quote::quote!(__out))?;
-        let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
-        let body: syn::Expr = syn::parse_quote!({
-            let __list = jni::objects::JList::from_env(env, v)
-                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-            let mut __it = __list.iter(env)
-                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-iter: {}", e)))?;
-            let mut __out: Vec<#t1_ty> = Vec::new();
-            while let Some(__obj) = __it.next(env)
-                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-next: {}", e)))?
-            {
-                let __elem_wire: #inner_wire = __obj.into();
-                let __elem: #t1_ty = #inner_conv;
-                __out.push(__elem);
-            }
-            #build
-        });
-        let inner_kotlin = inner.metadata.kotlin_name.clone()?;
-        let kotlin_name = self.override_kotlin_name(
-            &outer_ty,
-            // `List` is auto-imported in Kotlin (default imports).
-            Some(KtType::generic("List", [inner_kotlin])),
-        );
-        Some(ConverterImpl {
-            subs: vec![],
-            pre_stages: vec![],
-            function: self.build_input_fn_produced(produced, &wire, &body, None, emit),
-            destination: wire,
-            niches: Niches::empty(),
-            metadata: KotlinMeta {
-                kotlin_name,
-                value_rust_type: None,
-                projection: None,
-            },
-        })
-    }
-
-    /// `Option<T>`: first the direct-opaque-handle by-value consume (wire
-    /// `jlong`, `0` = `None`, `Box` reconstructed and `T` moved out), then —
-    /// when the inner isn't a direct handle — the general nullable fold. The
-    /// two share the `Option<_>` pattern, so they stay in one method to keep
-    /// the original sequential fall-through.
-    fn input_option(
-        &self,
-        shape: WrapperShape,
-        produced: &Produced<'_>,
-        t1: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions — the
-        // canonical form a produced spelling is compared against, and the
-        // type ascriptions the generated body writes. Everything else takes
-        // the READING itself (#284).
-        let t1_ty = emit.spell(t1);
-        if shape == WrapperShape::Optional {
-            let inner = self.in_frag(t1)?;
-            if inner.metadata.is_direct_handle() {
-                let inner_wire = inner.destination.clone();
-                let outer_ty = produced.key();
-                let outer_spelled = produced.spell(emit);
-                let build = build_from_canonical(produced, quote::quote!(__v))?;
-                let name = input_name(&outer_spelled, &inner_wire);
-                let gen_allow = generated_converter_attr();
-                let function: syn::ItemFn = syn::parse_quote!(
-                    #gen_allow
-                    pub(crate) unsafe fn #name<'env, 'v>(
-                        env: &mut jni::JNIEnv<'env>,
-                        v: &#inner_wire,
-                    ) -> ::core::result::Result<#outer_spelled, __JniErr> {
-                        Ok({
-                            let __v: ::core::option::Option<#t1_ty> = if *v == 0 {
-                                None
-                            } else if (*v & 1) == 1 {
-                                // Tagged (closed) handle raced past the Kotlin
-                                // pre-lock guard — present-but-closed is an
-                                // error, absent is None.
-                                return ::core::result::Result::Err(
-                                    <__JniErr as ::core::convert::From<String>>::from(
-                                        "Operation on a closed native handle.".to_string(),
-                                    ),
-                                );
-                            } else {
-                                Some(*std::boxed::Box::from_raw(*v as *mut #t1_ty))
-                            };
-                            #build
-                        })
-                    }
-                );
-                let kotlin_name =
-                    self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
-                let projection = inner.metadata.projection.clone().map(|h| Projection {
-                    owned: true,
-                    // Rides the inner's `*v == 0` niche, so the wire stays
-                    // `jlong` and `None` is the `0` sentinel (never JVM boxed).
-                    strategy: FoldStrategy::Optional(NullableKind::Niche, Box::new(h.strategy)),
-                    ..h
-                });
-                return Some(ConverterImpl {
-                    subs: vec![],
-                    pre_stages: vec![],
-                    function,
-                    destination: inner_wire,
-                    niches: Niches::empty(),
-                    metadata: KotlinMeta {
-                        kotlin_name,
-                        value_rust_type: None,
-                        projection,
-                    },
-                });
-            }
-            // Non-opaque inner: fall through to the general Option handler.
-        }
-        if shape == WrapperShape::Optional {
-            let outer_ty = produced.key();
-            let build = build_from_canonical(produced, quote::quote!(__v))?;
-            let (wire, inner_body, niches) = option_input(t1, self, emit)?;
-            // `option_input` yields the canonical `Option<T>`; the converter
-            // yields the spelling.
-            let body: syn::Expr = syn::parse_quote!({
-                let __v: ::core::option::Option<#t1_ty> = #inner_body;
-                #build
-            });
-            // Inherit the inner's name; user pins on `Option<T>` win.
-            // The nullability marker (`?`) is added by the use site.
-            let inherited = self
-                .in_frag(t1)
-                .and_then(|e| e.metadata.kotlin_name.clone());
-            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
-            // Fold a Nullable layer over the inner projection (if any). The
-            // kind mirrors which path `option_input` took: when it consumed
-            // an inner niche, the wire stays identical to the inner's
-            // destination and `None` is the niche slot sentinel; the boxed
-            // fallback widens the wire to `JObject`.
-            let nullable_kind = nullable_kind_for(&wire, t1, self);
-            let projection = self
-                .in_frag(t1)
-                .and_then(|e| e.metadata.projection.clone())
-                .map(|h| Projection {
-                    strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
-                    ..h
-                });
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_produced(produced, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: KotlinMeta {
-                    projection,
-                    ..self.framework_meta(kotlin_name)
-                },
-            });
-        }
-        None
     }
 
     /// True when `elem` crosses the boundary as a **single leaf** the foreign
@@ -1353,7 +559,7 @@ impl Declarations {
             // unsupported status (`Vec<u8>` is the rank-0 ByteArray special).
             None => {
                 matches!(elem.kind(), prebindgen_registry::flat::TypeKind::String)
-                    || elem.key().as_str() == "u64"
+                    || is_unsigned64(elem)
             }
         }
     }
@@ -1410,19 +616,20 @@ impl JniGenBuilder {
         registry: prebindgen_registry::RegistryBuilder,
     ) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let mut decls = self.decls;
-        let declared = decls.declare_into(registry)?.validate_with(&decls)?;
+        let mut declared = decls.declare_into(registry)?.validate_with(&decls)?;
         // A second holding of the model: `convert_with` consumes the builder,
         // and the table outlives that call.
         let model = declared.flat().clone();
-        let recipes = decls.recipes(&model, &declared).map_err(|errors| {
-            prebindgen_registry::ScanError::AdapterInvariant {
+        let expansion_leaves: Vec<_> = declared.expansion_leaf_readings()?.cloned().collect();
+        let recipes = decls
+            .recipes(&model, &expansion_leaves, &declared)
+            .map_err(|errors| prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors
                     .iter()
                     .map(|e| e.to_string())
                     .collect::<Vec<_>>()
                     .join("; "),
-            }
-        })?;
+            })?;
         // A `data_class` field that is itself one takes the `parts` recipe rather
         // than its own default — see `Declarations::bindings`.
         let bindings = decls
@@ -1443,47 +650,25 @@ impl JniGenBuilder {
         // built out of the conversions for its inners, which are compiled
         // first. That is the same order the converter table was filled in, so
         // a fragment is there exactly when a table entry would have been.
-        // A callback is still answered without the compiler — see
-        // `compile_crossing` — so no fragment carries its conversion and the
-        // fragment list alone would not reach the file. Collected here rather
-        // than papered over: this list empties when the derived callback recipe
-        // takes over.
-        let mut uncompiled: Vec<syn::ItemFn> = Vec::new();
         // Compositions that refused. See `compile_crossing`: these are adapter
         // invariants, reported together once the walk is done.
         let mut refusals: Vec<String> = Vec::new();
         let registry = declared
-            .convert_with(|crossing, built, emit| {
+            .convert_with(|crossing, built| {
                 let mut compiler = prebindgen_registry::recipe::Compiler::resume(
                     &model,
                     decls.recipe_table(),
                     decls.site_bindings(),
                     decls.compiled.borrow().clone(),
                 );
-                let conv =
-                    decls.compile_crossing(&mut compiler, crossing, built, emit, &mut refusals);
+                let compiled =
+                    decls.compile_crossing(&mut compiler, crossing, built, &mut refusals);
                 *decls.compiled.borrow_mut() = compiler.finish();
-                if let (Some(c), true) =
-                    (conv.as_ref(), decls.is_callback_crossing(crossing, built))
-                {
-                    uncompiled.push(c.function.clone());
-                    // File it as this crossing's fragment even though no recipe
-                    // built it, so every emitter has one lookup rather than a
-                    // fall-back for the one crossing kind the compiler skips.
-                    let (dir, key) = crossing;
-                    decls.compiled.borrow_mut().record(
-                        prebindgen_registry::recipe::CrossingKey {
-                            ty: key.clone(),
-                            direction: *dir,
-                        }
-                        .row(prebindgen_registry::recipe::RecipeName::new("callback")),
-                        crate::jni::compile::JFrag::by_hand(key.clone(), c.clone()),
-                    );
-                }
+                let conv = compiled?;
                 // The conversion stays here; what the registry gets back is
                 // which other crossings this one delegates to, which is what
                 // its reachability walk needs.
-                conv.map(|c| prebindgen_registry::Answer::over(c.subs))
+                Some(prebindgen_registry::Answer::over(conv.subs))
             })?
             .build()?;
         if !refusals.is_empty() {
@@ -1492,50 +677,16 @@ impl JniGenBuilder {
             }
             .into());
         }
-        // What the compilation produced, kept for emission. The converter table
-        // stays the lookup index; this is what reaches the file.
-        decls.compiled_fns = decls
-            .compiled
-            .borrow()
-            .fragments()
-            .into_iter()
-            // A composed-only fragment has no conversion to emit: the `parts`
-            // recipe states what a `data_class` is made of, and the function that
-            // reads those several values and rebuilds the struct is what the
-            // emitter switch brings. Its marker would otherwise reach the file.
-            // Deliberately not "has wires" — an `Option<data_class>` has both a
-            // wire list and a conversion of its own.
-            .filter(|f| !f.composed_only)
-            // A JNI conversion already emits more than one function: a
-            // `convert!` with a fallible or binding-local step carries it as a
-            // pre-stage, and every one of them has to reach the file. This is
-            // the case the converter table could hold only because it kept a
-            // list beside the conversion; a fragment says it directly.
-            .flat_map(|f| {
-                std::iter::once(f.conv.function.clone())
-                    .chain(f.conv.pre_stages.iter().map(|s| s.function.clone()))
-            })
-            .chain(uncompiled)
-            .collect();
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
         decls
             .validate_resolved(&registry)
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
-        // What each declared class hands out, composed last of all.
-        //
-        // Driven here rather than from `compile_crossing` because a
-        // `sealed_class` has **no** deconstructing crossing to be driven from:
-        // it is boundary-only, so nothing ever asks for its whole-value output
-        // conversion and the converter walk never reaches it. A `data_class`
-        // does have one, and goes through the same loop so that both sides of
-        // the same question are answered in one place.
-        //
-        // After `validate_resolved`, so a binding whose part simply has no
-        // output conversion gets the diagnostic that names the part rather than
-        // this one, which could only say that composing failed. Nothing reads
-        // the result yet; compiling it is what holds the composition to every
-        // binding this crate builds rather than to one fixture.
+        // Validate every declared decomposition. Product plans remain queryable
+        // descriptors rather than emission roots: final per-item planning marks only
+        // chains used by a concrete input, output or callback and activates nested
+        // dependencies transitively. Sealed classes need this pass because they have
+        // no deconstructing whole-value crossing.
         for key in decls.declared_decompositions() {
             let Some(ident) = key.ident() else { continue };
             let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
@@ -1556,9 +707,6 @@ impl JniGenBuilder {
                     Some(prebindgen_registry::flat::Type::Struct(s)) => {
                         s.fields.iter().map(|f| &f.ty).collect()
                     }
-                    // A value form's parts belong to the struct its accessor
-                    // returns, not to this type — so there is nothing to
-                    // pre-check here, and the compiler's own deferral answers.
                     _ if decls.value_form_names(&registry, &ty).is_some() => Vec::new(),
                     _ => continue,
                 };
@@ -1599,8 +747,7 @@ impl JniGenBuilder {
                     "`{key}` hands out its parts, but composing them failed: {e:?}"
                 ));
             }
-            let compiled = compiler.finish();
-            *decls.compiled.borrow_mut() = compiled;
+            *decls.compiled.borrow_mut() = compiler.finish();
         }
         if !refusals.is_empty() {
             return Err(prebindgen_registry::ScanError::AdapterInvariant {
@@ -1608,6 +755,8 @@ impl JniGenBuilder {
             }
             .into());
         }
+        let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry)?;
+        decls.generation = Some(std::rc::Rc::new(generation));
         Ok(JniGen { decls, registry })
     }
 }
@@ -1618,19 +767,6 @@ impl Declarations {
     ///
     /// `None` is *cannot*, never *not yet*: the crossings arrive inner-first,
     /// so everything this could compose from is already in `built`.
-    /// Whether this crossing is the callback shape `compile_crossing` answers
-    /// without the compiler.
-    fn is_callback_crossing<R: Conversions>(&self, crossing: &Crossing, built: &R) -> bool {
-        let (dir, key) = crossing;
-        matches!(dir, Direction::Construct)
-            && built.reading(key).is_some_and(|r| {
-                matches!(
-                    r.unwrapped().kind(),
-                    prebindgen_registry::flat::TypeKind::Callback { .. }
-                )
-            })
-    }
-
     fn compile_crossing<'v, R: Conversions>(
         &'v self,
         compiler: &mut prebindgen_registry::recipe::Compiler<
@@ -1639,28 +775,12 @@ impl Declarations {
         >,
         crossing: &Crossing,
         built: &'v R,
-        emit: &prebindgen_registry::Emit,
         refusals: &mut Vec<String>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
         // key the crossing IS.
         let reading = built.reading(key)?;
-        // A callback is compiled whole rather than through the table. The
-        // registry derives a recipe that takes one apart into its arguments and
-        // compiles each of them, and a JniGen callback argument does not always
-        // have a conversion to compile: a sealed class reaches the JVM as a
-        // selector plus the live arm's slots, through a decomposition the table
-        // does not describe yet. Stating those arms as recipes is what lets the
-        // derived callback recipe take over, and it is a later stage than this
-        // one.
-        if matches!(dir, Direction::Construct) {
-            if let prebindgen_registry::flat::TypeKind::Callback { args } =
-                reading.unwrapped().kind()
-            {
-                return self.dispatch_fn_input(args, built, emit);
-            }
-        }
         let direction = *dir;
         let mut adapter = crate::jni::compile::JCompile {
             decls: self,
@@ -1670,11 +790,9 @@ impl Declarations {
         };
         let crossing = prebindgen_registry::recipe::Crossing::new(reading, direction);
         let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
-        // A `data_class` also states a recipe that says what it is made of, and
-        // compiling it here is what holds the composition to every binding this
-        // crate builds rather than to one fixture. Nothing reads the result
-        // yet: `whole` is still the recipe every site takes, so a failure here is
-        // a failure to compose parts that already cross individually.
+        // A `data_class` also states a recipe that says what it is made of.
+        // Compiling that named recipe equips whole-value input, output and
+        // callback paths with the same registry-owned Product descriptor.
         // The **stripped** key, so `Box<Payload>` and `&Payload` compile the
         // recipe too: all three spellings find one recipe and each gets its own
         // fragment, which is what a site taking a wrapped spelling reads.
@@ -1683,13 +801,14 @@ impl Declarations {
         // where it was declared. `recipe_of` refuses an absent name rather than
         // answering with the default, which is what makes that condition the
         // one that has to match.
-        if direction == prebindgen_registry::recipe::Direction::Construct
+        if (direction == prebindgen_registry::recipe::Direction::Construct
             && matches!(
                 self.types
                     .get(&crossing.value().stripped_key())
                     .map(|c| &c.kind),
                 Some(DeclaredKind::Data)
             )
+            || crossing.value().optional_inner().is_some())
             && compiler
                 .recipes()
                 .key_of(&crossing.key(), &crate::jni::recipes::parts())
@@ -1717,7 +836,7 @@ impl Declarations {
     pub fn declare_into(
         &self,
         mut registry: RegistryBuilder,
-    ) -> Result<RegistryBuilder, prebindgen_registry::ScanError> {
+    ) -> Result<RegistryBuilder, prebindgen_registry::WriteRustError> {
         // Binding-local fns first: they become model, and everything below may
         // name one.
         for (item_fn, origin) in self.collect_local_functions() {
@@ -1779,14 +898,53 @@ impl Declarations {
         // How composites cross in pieces. Every one of these reads only the
         // model, which is what lets them be stated here rather than asked for
         // mid-resolve.
+        //
+        // The output side is applied here rather than declared: the plans are
+        // this adapter's to keep, and the registry is told only the two things
+        // it needs from them — which readings must cross on the output side,
+        // and which leaves a callback argument's delivery depends on.
+        let mut unfolding = crate::unfold::Unfolding::new(registry.flat());
+        let exports = registry.exports().clone();
+        let accessors = registry.accessors().clone();
+        crate::unfold::apply(
+            &mut unfolding,
+            &self.build_deconstructors(&registry),
+            &exports,
+            &accessors,
+        )?;
+        // Synthesized by-value `data_class` decompositions: the leaves are
+        // already built above; this wires them into fixed-builder plans.
+        crate::unfold::apply_value_structs(
+            &mut unfolding,
+            self.build_value_struct_decons(&registry),
+            &exports,
+        )?;
+        // The same wiring for a value whose alternatives are chosen at runtime
+        // (a tag plus one leaf group per variant) rather than being a fixed
+        // product.
+        crate::unfold::apply_sum_returns(
+            &mut unfolding,
+            self.build_sum_decons(&registry),
+            &exports,
+        )?;
+        // Single-leaf `Vec<T>`/`&[T]` whole-element folds — the dual of the
+        // `data_class` folds above, for String / scalar / handle elements, so
+        // the list is built on the Kotlin side rather than through a Rust
+        // `ArrayList`.
+        crate::unfold::apply_leaf_vec_folds(
+            &mut unfolding,
+            self.build_leaf_vec_fold_elements(&registry),
+            &exports,
+        )?;
         let decompositions = prebindgen_registry::Decompositions {
             expansions: Some(self.build_expansions()),
-            deconstructors: Some(self.build_deconstructors(&registry)),
-            value_structs: self.build_value_struct_decons(&registry),
-            sums: self.build_sum_decons(&registry),
-            leaf_vec_elements: self.build_leaf_vec_fold_elements(&registry),
+            requirements: unfolding.requirements().to_vec(),
+            callback_arg_leaves: unfolding.callback_arg_leaves(),
             replaces: self.boundary_only_types(),
         };
+        self.unfolded
+            .set(unfolding.into_plans())
+            .unwrap_or_else(|_| panic!("a binding declares itself into a registry once"));
         registry = registry.decompose(decompositions);
         Ok(registry)
     }
@@ -1796,7 +954,7 @@ impl Declarations {
     pub(crate) fn build_value_struct_decons(
         &self,
         registry: &impl Conversions,
-    ) -> Vec<prebindgen_registry::unfold::ValueDecon> {
+    ) -> Vec<crate::unfold::ValueDecon> {
         let mut out = Vec::new();
         for item_struct in registry.flat().types().filter_map(|t| match t {
             prebindgen_registry::flat::Type::Struct(s) => Some(s),
@@ -1809,7 +967,7 @@ impl Declarations {
             // A `data_class` is a registered type that is neither an opaque
             // handle nor an enum.
             let is_data_class = matches!(
-                self.type_kind(registry, &reading.key()),
+                self.type_kind(registry.flat(), &reading.key()),
                 TypeKind::DataStruct { cfg: Some(c), .. } if c.name_spec.is_some()
             );
             if !is_data_class {
@@ -1818,7 +976,7 @@ impl Declarations {
             if let Some(leaves) = crate::jni::synth_value_struct_leaves(self, registry, item_struct)
             {
                 if !leaves.is_empty() {
-                    out.push(prebindgen_registry::unfold::ValueDecon {
+                    out.push(crate::unfold::ValueDecon {
                         key,
                         source: reading.clone(),
                         leaves,
@@ -1832,7 +990,7 @@ impl Declarations {
     pub(crate) fn build_sum_decons(
         &self,
         registry: &impl Conversions,
-    ) -> Vec<prebindgen_registry::unfold::SumDecon> {
+    ) -> Vec<crate::unfold::SumDecon> {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         let mut out = Vec::new();
@@ -1854,7 +1012,7 @@ impl Declarations {
             else {
                 continue;
             };
-            out.push(prebindgen_registry::unfold::SumDecon {
+            out.push(crate::unfold::SumDecon {
                 key: key.clone(),
                 // The sum's own reading, which the declaration answers with —
                 // `Variant::type_ref` exists for exactly this, and it works in
@@ -1924,7 +1082,7 @@ fn peel_one_borrow(t: &prebindgen_registry::flat::TypeRef) -> &prebindgen_regist
 /// `syn::ItemEnum` to work out which of the two shapes it had — the
 /// classification the model makes once, at parse time, and expresses as two
 /// different elements.
-fn flat_unit_enum<'r>(
+pub(crate) fn flat_unit_enum<'r>(
     registry: &'r impl Conversions,
     name: &syn::Ident,
     declarator: &str,
@@ -1952,25 +1110,33 @@ fn flat_unit_enum<'r>(
 impl Declarations {
     pub(crate) fn dispatch_fn_input(
         &self,
+        operation: OperationId,
+        source: &prebindgen_registry::flat::TypeRef,
         args: &[prebindgen_registry::flat::TypeRef],
         registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let outer_ty = build_fn_type(args, emit);
-        let (wire, body) = callback_input(self, args, registry, emit)?;
+        arg_fragments: &[&crate::jni::compile::JFrag],
+    ) -> Option<(ConverterImpl<KotlinMeta>, crate::jni::chain::JFunction)> {
+        let (wire, plan) = callback_input(
+            self,
+            operation.clone(),
+            source,
+            args,
+            registry,
+            arg_fragments,
+        )?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
         // (`Any`) — same as the unfold builder / error-sink params. The typed
         // wrapper-level lambda signature is computed at render time from the
         // arg types' callback plans, not carried in metadata.
-        Some(ConverterImpl {
+        let conv = ConverterImpl {
             subs: vec![],
-            pre_stages: vec![],
-            function: self.build_input_fn_composed(&outer_ty, &wire, &body, None),
+            converter: operation,
             destination: wire,
             niches,
             metadata: self.framework_meta(Some(KtType::any())),
-        })
+        };
+        Some((conv, crate::jni::chain::JFunction::invoke(plan)))
     }
 }
 
@@ -2071,7 +1237,7 @@ impl Prebindgen for Declarations {
             if let Some((ok, _)) = func.ret.fallible_parts() {
                 {
                     let core = crate::util::head_type(ok);
-                    if matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding.flat(), &core.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
                              supported in the success position of a fallible return. A sum \
@@ -2108,7 +1274,9 @@ impl Prebindgen for Declarations {
                         .return_expand_decls
                         .iter()
                         .any(|d| *d.key() == err_ty.key());
-                    if !declared && matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
+                    if !declared
+                        && matches!(self.type_kind(binding.flat(), &core.key()), TypeKind::Sum)
+                    {
                         return Err(format!(
                             "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \
                              but nothing decomposes it in the error position, so it would be \
@@ -2153,7 +1321,7 @@ impl Prebindgen for Declarations {
                         continue;
                     };
                     let elem = peel_one_borrow(elem);
-                    if matches!(self.type_kind(binding, &elem.key()), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding.flat(), &elem.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `impl Fn(&[{}])` — a slice of a sealed_class value \
                              is not supported as a callback argument. A sum crosses as a tag \
@@ -2175,985 +1343,6 @@ impl Prebindgen for Declarations {
     /// be unambiguous, before ANY artifact writer touches disk.
     fn validate_resolved(&self, registry: &Registry) -> Result<(), String> {
         validate_bindings(self, registry)
-    }
-
-    /// The other-side type of every `convert!` conversion, in the
-    /// conversion's direction: an input fn's parameter type (peeled of `&`)
-    /// must have its own **input** converter for the composed rank-0 body to
-    /// chain through; an output fn's return type needs the **output** twin.
-    /// Signatures are read from the registry (missing fns are reported by
-    /// the scan's helper-function warning; the body derivation later
-    /// hard-errors with the precise decl).
-    /// Emit the `OwnedObject<T>` borrow wrapper used by
-    /// [`Self::opaque_handle_input`] into the destination file.
-    /// The struct is referenced by an unqualified `OwnedObject` from
-    /// the same generated file, so no `use` paths leak into the host
-    /// crate's source tree.
-    fn prerequisites(
-        &self,
-        registry: &Registry,
-        emit: &prebindgen_registry::Emit,
-    ) -> Vec<syn::Item> {
-        // `__JniErr` is the **framework** error type alias — always the
-        // `JniBindingError` String-wrapper. Built-in converter bodies compose
-        // their `?` failures into this type via its `From<String>` impl. A
-        // `Result<T, E>` return instead binds its own raw `E`; both funnel to
-        // the per-call `signal_error` sink (generic over `Display`).
-        let error_type = framework_error_type();
-        let alias: syn::Item = syn::parse_quote!(
-            #[allow(dead_code)]
-            pub(crate) type __JniErr = #error_type;
-        );
-        let mut items = vec![alias];
-        items.extend(owned_object_prerequisite_items());
-        // The two error-channel fns the extern bodies call: `signal_binding_error`
-        // (binding/system failure → `JniErrorHandler`) and `signal_domain_error`
-        // (a fallible fn's `Err(E)` → the typed `<Src>Handler`). Emitted above the
-        // converters so wrapper code references them by bare name; the binding
-        // crate reaches them as `<include_module>::signal_*` from outside the file.
-        items.push(build_signal_binding_error_item());
-        items.push(build_signal_domain_error_item());
-        let _ = registry;
-        // Handle destructors — one `extern "C" freePtr<suffix>` per
-        // non-suppressed opaque handle (the Rust half of the typed-handle
-        // `free()` pair the Kotlin emitter generates).
-        items.extend(build_handle_destructor_items(self, registry, emit));
-        // Slice/Vec input helpers — a `…VecNew/Push/Free` trio per flattenable
-        // element type a scanned `&[T]`/`Vec<T>` param takes. Kotlin builds the
-        // Rust-side `Vec` by pushing each element's decoupled leaves, then passes
-        // the handle (see `ParamMode::VecBuild`), avoiding per-element
-        // `env.get_field(...)` upcalls on the Rust side.
-        items.extend(build_vec_build_helper_items(self, registry, emit));
-        // Expression constants — one nullary JNI getter extern per
-        // `PackageDecl::constant_expr`, its value the binding-defined
-        // expression evaluated with a glob import of every source module (so
-        // it composes the source crate's items without qualification). The
-        // getter reuses the whole function-wrapper pipeline via the
-        // synthetic signature, exactly like a const-backed getter.
-        let mut glob_modules = registry.all_source_modules();
-        if glob_modules.is_empty() {
-            glob_modules.push(self.default_module(registry));
-        }
-        for decl in self.packages.values().flat_map(|p| &p.constant_exprs) {
-            validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
-            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
-            let expr = &decl.expr;
-            let callee: syn::Expr = syn::parse_quote!({
-                #(
-                    #[allow(unused_imports)]
-                    use #glob_modules::*;
-                )*
-                #expr
-            });
-            let wrapper =
-                emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
-            items.push(syn::parse2::<syn::Item>(wrapper).expect(
-                "constant_expr: generated getter wrapper is a single item by construction",
-            ));
-        }
-        items
-    }
-
-    fn post_process_item(
-        &self,
-        item: &mut syn::Item,
-        registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
-    ) {
-        self.qualify_item(item, registry);
-    }
-
-    // ── Item methods ─────────────────────────────────────────────────
-
-    fn on_function(
-        &self,
-        f: &prebindgen_registry::flat::Function,
-        registry: &Registry,
-        emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        emit_jni_function_wrapper(self, f, registry, emit)
-    }
-
-    fn on_struct(
-        &self,
-        _s: &prebindgen_registry::flat::Struct,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        // Struct converter bodies are emitted by the resolver via
-        // input_terminal / output_terminal below; no separate
-        // per-struct item is needed.
-        TokenStream::new()
-    }
-
-    fn on_variant(
-        &self,
-        _v: &prebindgen_registry::flat::Variant,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
-    }
-
-    fn on_enum(
-        &self,
-        _e: &prebindgen_registry::flat::Enum,
-        _registry: &Registry,
-        _emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
-    }
-
-    /// Declared consts only reach here (undeclared ones are gated out before
-    /// emission): re-emit the const as a path-alias
-    /// to its source-of-truth (initializer tokens are never copied — they
-    /// may reference source-crate internals) AND emit its nullary JNI getter
-    /// extern. The getter reuses the whole function-wrapper pipeline (so the
-    /// const's type flows through the ordinary output-converter machinery);
-    /// only the callee expression differs — a path to the const, not a call.
-    fn on_const(
-        &self,
-        c: &prebindgen_registry::flat::Constant,
-        registry: &Registry,
-        emit: &prebindgen_registry::Emit,
-    ) -> TokenStream {
-        reject_handle_const(self, c);
-        let getter = const_getter_fn(c);
-        let const_ident = &c.name;
-        let source_module = self.fn_module(registry, const_ident);
-        let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
-        let wrapper =
-            emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
-        let alias = emit.const_alias(c, &source_module);
-        quote! {
-            #alias
-            #wrapper
-        }
-    }
-}
-
-/// Structural converter builders — the rank-0 terminal chains and the rank-1
-/// wrapper-shape handlers, now inherent helpers called by the structural
-/// [`Prebindgen::on_input_type`] / [`Prebindgen::on_output_type`].
-impl Declarations {
-    // ── Input converters ─────────────────────────────────────────────
-
-    /// Whole-type **input** terminal categories (opaque handle, enum,
-    /// `convert!`, `str`, primitive, struct) — depends on nothing, `subs`
-    /// empty.
-    pub(crate) fn input_terminal(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Classify off `kind`, spell with `spell()`: the arms below that ask what
-        // a type IS use `reading`, and everything that has to name it in
-        // generated Rust uses this.
-        // Everything below reads the reading: the identity for a lookup, the
-        // spelling for what generated Rust says. Neither needs a node.
-        // Structured-config overrides first (opaque handles, then user-
-        // registered rank-0 wrappers, then built-ins).
-        let key = reading.key();
-        if let Some(cfg) = self.types.get(&key) {
-            if cfg.is_opaque() {
-                return Some(self.opaque_handle_input(reading, emit));
-            }
-        }
-        // Fixed-size array of JNI primitives — dual of the output branch.
-        // The `try_into` IS the length check: a JVM array of the wrong size
-        // becomes a binding error naming the type, never a panic.
-        if let Some(spec) = crate::jni::prim_array::prim_array_of(reading) {
-            let body = crate::jni::prim_array::input_body(reading, &spec, emit);
-            let wire = spec.wire.clone();
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(spec.kotlin.clone()));
-            let niches = default_niches_for_wire(&wire);
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
-        }
-        // `enum_class`-declared enums: jint wire, `TryFrom<i32>` decode.
-        // Registered before the user-wrapper lookup so a stray
-        // `input_wrapper` registration on the same key would have to be
-        // intentional. The rank-0 enum arm produces a terminal converter
-        // (jint → Rust enum) with the configured Kotlin FQN in metadata.
-        if let Some(cfg) = self.types.get(&key) {
-            if cfg.is_enum_class() {
-                if let Some(name) = reading.key().ident() {
-                    // The ELEMENT, and the match is the check: a declared
-                    // `enum_class!` over a data-carrying enum is a `Variant`,
-                    // not an `Enum`, so the shape assertion the two bodies used
-                    // to run is the kind the model already decided.
-                    if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
-                        let (wire, body) = enum_input_body(self, registry, e);
-                        let niches = default_niches_for_wire(&wire);
-                        let kotlin_name =
-                            cfg.name_spec.as_ref().map(|s| KtType::cls(self.fqn_of(s)));
-                        return Some(ConverterImpl {
-                            subs: vec![],
-                            pre_stages: vec![],
-                            function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                            destination: wire,
-                            niches,
-                            metadata: self.framework_meta(kotlin_name),
-                        });
-                    }
-                }
-            }
-        }
-        if let Some(conv) = self.lookup_input(reading, registry, emit) {
-            return Some(conv);
-        }
-        // `str` is unsized, so converters can't return it directly.
-        // Still register a rank-0 entry to satisfy resolution for
-        // borrowed `&str` parameters: decode `JString` to owned `String`
-        // and let call sites borrow as needed.
-        if reading.key().as_str() == "str" {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-            let body: syn::Expr = syn::parse_quote!({
-                let s = env.get_string(v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "decode_string: {}",
-                        e
-                    ))
-                })?;
-                s.into()
-            });
-            // The unsized `str` yields an OWNED `String` the call site borrows,
-            // so this converter's Rust type is not the reading's spelling.
-            let rust_ty: syn::Type = syn::parse_quote!(String);
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
-            let niches = default_niches_for_wire(&wire);
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_composed(&rust_ty, &wire, &body, None),
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
-        }
-        // Any OWNED string, however Rust spells it — `String`, `Box<String>`,
-        // `Cow<'_, str>`. The model classifies each of them `Str`; the spelling is
-        // the source's business, and `.into()` constructs it from the decoded
-        // `String`. This used to be one hardcoded `TypeKey == "Box < String >"`
-        // arm, which is what a spelling-keyed converter table costs: one
-        // hand-written case per representation anyone happened to write (#270).
-        //
-        // `str` is handled above, separately and deliberately: it is unsized,
-        // so its converter yields an owned `String` the call site borrows —
-        // a different contract, not a different spelling.
-        if matches!(
-            reading.unwrapped().kind(),
-            prebindgen_registry::flat::TypeKind::Str | prebindgen_registry::flat::TypeKind::String
-        ) {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-            let body: syn::Expr = syn::parse_quote!({
-                let s = env.get_string(v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "decode_string: {}",
-                        e
-                    ))
-                })?;
-                // The canonical value, then the spelling.
-                ::std::string::String::from(s).into()
-            });
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
-            let niches = default_niches_for_wire(&wire);
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
-        }
-        if let Some((wire, body)) = primitive_input(&reading.key()) {
-            let niches = default_niches_for_wire(&wire);
-            let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if reading.key().as_str() == "u64" {
-                self.unsigned64_leaf_meta()
-            } else {
-                self.framework_meta(kotlin_name)
-            };
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata,
-            });
-        }
-        if let Some(name) = reading.key().ident() {
-            // A `sealed_class` sum reached as a whole `JObject` — a field of a
-            // data class, or any position where the parent is already an
-            // object. Its own converter, so the parent's generic field branch
-            // delegates exactly as it does for a nested data class. (The
-            // OUTPUT direction has no counterpart: a sum crosses Rust →
-            // Kotlin flattened, always.)
-            if self.types.get(&key).is_some_and(|c| c.sum().is_some()) {
-                if let Some(prebindgen_registry::flat::Type::Variant(v)) =
-                    registry.flat().declared_type(&name)
-                {
-                    let (wire, body) = sum_input_body(self, v, registry, emit)?;
-                    // The wire's own null niche, exactly as a data class gets
-                    // — that is what lets `Option<sum>` fold with JVM null as
-                    // `None` instead of needing a boxed wrapper.
-                    let niches = default_niches_for_wire(&wire);
-                    let kotlin_name = self
-                        .types
-                        .get(&key)
-                        .and_then(|c| c.name_spec.as_ref())
-                        .map(|s| KtType::cls(self.fqn_of(s)));
-                    return Some(ConverterImpl {
-                        subs: vec![],
-                        pre_stages: vec![],
-                        function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                        destination: wire,
-                        niches,
-                        metadata: self.framework_meta(kotlin_name),
-                    });
-                }
-            }
-            if let Some(s) = registry.flat().struct_type(&name) {
-                let (wire, body) = struct_input_body(self, s, registry, emit)?;
-                let niches = default_niches_for_wire(&wire);
-                // Auto-generated struct: the value-context Kotlin name is
-                // whatever the user pinned via `data_class`. If
-                // they didn't, leave `kotlin_name = None` — emitter
-                // surfaces this as a build-time hard error.
-                let kotlin_name = self
-                    .types
-                    .get(&key)
-                    .and_then(|c| c.name_spec.as_ref())
-                    .map(|s| KtType::cls(self.fqn_of(s)));
-                return Some(ConverterImpl {
-                    subs: vec![],
-                    pre_stages: vec![],
-                    function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-                    destination: wire,
-                    niches,
-                    metadata: self.framework_meta(kotlin_name),
-                });
-            }
-            // Bare-ident enum: leave to the consuming crate to override
-            // (today's CongestionControl etc. fall here — caller's wrapper
-            // ext returns Some in its own input_terminal).
-        }
-        None
-    }
-
-    /// The **outbound** half of [`Self::input_transparent_bridge`], and the same
-    /// last resort: a spelling whose only difference from something this adapter
-    /// can already convert is the transparent wrappers over it.
-    ///
-    /// It had no twin, so an erased wrapper resolved inbound and not outbound —
-    /// `Box<Priority>` was a parameter this binding could take and a return it
-    /// could not give, for a wrapper the model exists to make invisible (#309).
-    /// The one arm covers `Box<Handle>`, `Box<enum>` and `Box<DataClass>` alike,
-    /// because [`Self::output_terminal`] misses all three the same way: it keys
-    /// on the SPELLING, and no config sits under `Box < Priority >`.
-    ///
-    /// The wrappers come **off** here rather than going on, which is the whole
-    /// difference:
-    ///
-    /// ```text
-    /// input : let __inner = <inner>(env, v)?;      build_through_erased_wrappers(__inner)
-    /// output: let __inner = read_through(v);       <inner>(env, __inner)
-    /// ```
-    ///
-    /// Everything else is direction-independent — `subs`, `destination`,
-    /// `niches`, `metadata` all mean the same thing either way, and inheriting
-    /// the inner's metadata is what keeps `Box<Priority>` presenting as the
-    /// Kotlin enum class instead of losing it behind the wrapper.
-    pub(crate) fn output_transparent_bridge(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        if reading.erased_wrappers().is_empty() {
-            return None;
-        }
-        // The identity under every wrapper. This spelled the stripped type into
-        // a node purely so `reading_of` could key off it and `subs` could key
-        // off it again — `stripped_key` is that key, and the model already
-        // holds it.
-        let stripped = reading.stripped_key();
-        // A wrapper over a **borrow** is refused here too, and outbound the
-        // reason is its own: a borrow's output route is the clone-into-a-fresh-
-        // handle arm, which hands back a wire built from a reference — there is
-        // no owned value to read the wrapper off. Inbound the same guard is
-        // about `E0106`; the shapes coincide, the reasons do not.
-        //
-        // Asked of the MODEL: an erasure is transparent, so `Box<&T>` already
-        // classifies as `Ref` and nothing here matches a `syn` variant.
-        if reading.borrow_target().is_some() {
-            return None;
-        }
-        // It has to be a type this binding already crosses; if it is not, the
-        // ordinary "unresolved" diagnostic names it, which is the better error.
-        let inner = registry.reading(&stripped)?;
-        let entry = self.out_frag(&inner)?;
-        let wire = entry.destination.clone();
-        // Take the wrappers off what the caller handed us. `None` is `Cow`'s
-        // policy refusal — the crossing then stays unresolved and names the
-        // type, rather than resolving and emitting Rust the consumer cannot
-        // build.
-        let read = read_through_erased_wrappers(reading, quote!(v))?;
-        // The inner's COMPLETE chain, stages included: a `convert!` type reaches
-        // its wire through them.
-        let inner_call = crate::jni::emit::composed_inner_output(&entry, quote!(__inner));
-        let body: syn::Expr = syn::parse_quote!({
-            let __inner = #read;
-            #inner_call
-        });
-        Some(ConverterImpl {
-            subs: vec![stripped],
-            pre_stages: vec![],
-            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-            destination: wire,
-            niches: entry.niches.clone(),
-            // The surface is the inner type's — a wrapper is invisible to the
-            // destination language, which is why the model erases it.
-            metadata: entry.metadata.clone(),
-        })
-    }
-
-    /// **Last resort**: a spelling whose only difference from something this
-    /// adapter can already convert is the transparent wrappers over it.
-    ///
-    /// The layer arms each handle one *classification* layer — `Optional`,
-    /// `Sequence`, `Ref` — and bridge a wrapper as part of doing so. What none of
-    /// them covers is a wrapper over a **terminal**: `Box<Payload>` classifies as
-    /// `Named`, so no layer arm claims it, and `input_terminal` keys on the whole
-    /// spelling and finds no `Payload` config under `Box < Payload >`. Before
-    /// this it resolved to nothing at all — the crossing was refused for a
-    /// wrapper the model exists to make invisible.
-    ///
-    /// So this delegates to the **stripped** spelling's own converter and puts
-    /// the wrappers back on what it produced. The inner type is declared as a
-    /// `sub`, exactly as a layer arm declares its inner, so it is required and
-    /// resolved through the ordinary machinery rather than being resolved here.
-    ///
-    /// Deliberately tried **after** every layer arm, so nothing that resolves
-    /// today changes route: `Box<Option<T>>` keeps the `Optional` arm (which
-    /// bridges via `build_from_canonical`), and only the shapes that previously
-    /// reached `None` arrive here.
-    pub(crate) fn input_transparent_bridge(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        if reading.erased_wrappers().is_empty() {
-            return None;
-        }
-        // The identity under every wrapper — by the model's own definition, the
-        // key of the type whose lowering yields this `kind`. See the outbound
-        // peer for why this is a key rather than a spelling.
-        let stripped = reading.stripped_key();
-        // A wrapper over a **borrow** is not bridgeable here, and the reason is
-        // the converter's own shape rather than the wrapper's: this produces an
-        // owned value, and there is nothing for a `Box<&T>` to borrow *from* —
-        // the returned reference would have to outlive the call that made it
-        // (`E0106` on the generated signature). The borrow arms own that case,
-        // and they serve the canonical spelling only.
-        //
-        // Asked of the MODEL, not of `stripped`: an erasure is transparent, so
-        // `Box<&T>` already classifies as `Ref` and `kind` answers this without
-        // anything here matching a `syn` variant.
-        if reading.borrow_target().is_some() {
-            return None;
-        }
-        // It has to be a type this binding already crosses; if it is not, the
-        // ordinary "unresolved" diagnostic names it, which is the better error.
-        let inner = registry.reading(&stripped)?;
-        let entry = self.in_frag(&inner)?;
-        let wire = entry.destination.clone();
-        // Wrap what the inner converter produced. `None` here is `Cow`'s policy
-        // refusal — the crossing then stays unresolved and names the type,
-        // rather than resolving and emitting Rust the consumer cannot build.
-        let built = build_through_erased_wrappers(reading, quote!(__inner))?;
-        // The inner's COMPLETE chain, stages included. This called
-        // `entry.function` directly and left `pre_stages` empty, which SKIPPED
-        // them: a `convert!`-declared type reaches its Rust value through those
-        // stages (`jlong -> u64 -> Duration`), so a `Box` over one arrived
-        // un-staged. Every other composing arm goes through this helper for
-        // exactly that reason (#309).
-        let inner_call = crate::jni::emit::composed_inner_input(&entry, quote!(v));
-        let body: syn::Expr = syn::parse_quote!({
-            let __inner = #inner_call;
-            #built
-        });
-        Some(ConverterImpl {
-            subs: vec![stripped],
-            pre_stages: vec![],
-            function: self.build_input_fn_of(reading, &wire, &body, None, emit),
-            destination: wire,
-            niches: entry.niches.clone(),
-            // The surface is the inner type's: a wrapper is invisible to the
-            // destination language, which is the whole reason the model erases
-            // it. Inheriting rather than recomputing also keeps a projection's
-            // Kotlin class from being lost behind the wrapper.
-            metadata: entry.metadata.clone(),
-        })
-    }
-
-    /// **Input** wrapper shape (`pat` = the reconstructed canonical pattern,
-    /// `t1` = its captured inner): the built-in `&`/`Option<&>`/`Vec`/`Option`
-    /// handlers. The dual of [`Self::output_wrapper_shape`], whose own doc has
-    /// said so all along — this had been stranded above a different function
-    /// since the transparent bridge was inserted between them (#294), and
-    /// adding the outbound bridge moved it onto an OUTPUT converter, where it
-    /// read as an outright contradiction.
-    pub(crate) fn input_wrapper_shape(
-        &self,
-        shape: WrapperShape,
-        produced: &Produced<'_>,
-        t1: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
-        // borrow/option-ref/vec shapes are mutually exclusive; the two
-        // `Optional` sub-cases share a method.
-        self.input_borrow(shape, produced, t1)
-            .or_else(|| self.input_option_ref(shape, produced, t1, emit))
-            .or_else(|| self.input_vec(shape, produced, t1, emit))
-            .or_else(|| self.input_option(shape, produced, t1, emit))
-    }
-
-    // ── Output converters ────────────────────────────────────────────
-
-    /// Whole-type **output** terminal categories (the dual of
-    /// [`Self::input_terminal`]: opaque handle, enum, user table,
-    /// `str`, `Cow<[u8]>`, unit, primitive, struct) — `subs` empty.
-    pub(crate) fn output_terminal(
-        &self,
-        reading: &prebindgen_registry::flat::TypeRef,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Classify off `kind`, spell with `spell()` — see `input_terminal`.
-        // Everything below reads the reading: the identity for a lookup, the
-        // spelling for what generated Rust says. Neither needs a node.
-        // Structured-config overrides first (opaque handles, then built-ins).
-        let key = reading.key();
-        if let Some(cfg) = self.types.get(&key) {
-            if cfg.is_opaque() {
-                return Some(self.opaque_handle_output(reading, emit));
-            }
-        }
-        // Fixed-size array of JNI primitives: `[u8; N]` -> `ByteArray`,
-        // `[i64; N]` -> `LongArray`, ... Bulk-copied, nothing boxed. See
-        // [`prim_array`]; this replaced the raw-memory value blob.
-        if let Some(spec) = crate::jni::prim_array::prim_array_of(reading) {
-            let body = crate::jni::prim_array::output_body(&spec);
-            let wire = spec.wire.clone();
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(spec.kotlin.clone()));
-            let niches = default_niches_for_wire(&wire);
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
-        }
-        // `enum_class`-declared enums: jint wire, `as jni::sys::jint`
-        // encode. Symmetric to the input arm above; relies on
-        // `#[repr(i32)]` (or any repr that supports the cast) on the
-        // declared enum so the discriminant value round-trips identically.
-        if let Some(cfg) = self.types.get(&key) {
-            if cfg.is_enum_class() {
-                if let Some(name) = reading.key().ident() {
-                    if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
-                        let (wire, body) = enum_output_body(self, e);
-                        let niches = default_niches_for_wire(&wire);
-                        let kotlin_name =
-                            cfg.name_spec.as_ref().map(|s| KtType::cls(self.fqn_of(s)));
-                        return Some(ConverterImpl {
-                            subs: vec![],
-                            pre_stages: vec![],
-                            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                            destination: wire,
-                            niches,
-                            metadata: self.framework_meta(kotlin_name),
-                        });
-                    }
-                }
-            }
-        }
-        if let Some(conv) = self.lookup_output(reading, registry, emit) {
-            return Some(conv);
-        }
-        // `str` is unsized, so it has no by-value output converter — but it is
-        // reached as the sub of a `&str` reference accessor leaf. Resolve it to
-        // the same `&str → jstring` fn the rank-1 `&str` arm uses (deduped by
-        // name) so required-propagation doesn't flag it unresolved.
-        if reading.key().as_str() == "str" {
-            return Some(self.str_ref_output());
-        }
-        // An owned string in any representation the model erases — `Box<String>`,
-        // `Cow<'_, str>`. It classifies each of them `Str`, and the body is
-        // representation-agnostic: `&*v` reaches through any of them by `Deref`
-        // to something `new_string` accepts (`&String` through a `Box`, `&str`
-        // through a `Cow`). Only the *dispatch* was spelling-keyed, as one
-        // hardcoded `TypeKey == "Box < String >"` arm (#270).
-        //
-        // Plain `String` keeps its own earlier arm in `primitive_output`, whose
-        // body this matches exactly; this one is reached for the wrapped
-        // spellings that arm's key cannot name.
-        if matches!(
-            reading.unwrapped().kind(),
-            prebindgen_registry::flat::TypeKind::Str | prebindgen_registry::flat::TypeKind::String
-        ) {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
-            let body: syn::Expr = syn::parse_quote!({
-                env.new_string(&*v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
-                })?
-            });
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
-            let niches = default_niches_for_wire(&wire);
-            // A `Cow` accessor may spell its own path any way it likes, but the
-            // generated fn's param type has to resolve with no imports in the
-            // consumer crate — normalize it, exactly as the `Cow<'_, [u8]>` arm
-            // below does. Every other spelling here (`String`, `Box<String>`)
-            // is already prelude-resolvable, so it keeps its own.
-            let function = match reading.kind() {
-                prebindgen_registry::flat::TypeKind::Cow { .. } => {
-                    let norm: syn::Type = syn::parse_quote!(::std::borrow::Cow<'_, str>);
-                    self.build_output_fn(&norm, &wire, &body, None)
-                }
-                _ => self.build_output_fn_of(reading, &wire, &body, None, emit),
-            };
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function,
-                destination: wire,
-                niches,
-                metadata: self.framework_meta(kotlin_name),
-            });
-        }
-        // `Cow<'_, [u8]>` (any lifetime): a borrow-or-owned byte container —
-        // one copy into the JVM array straight off the `Deref<[u8]>`, no
-        // intermediate owned `Vec` (the zero-copy dual of the `Vec<u8>`
-        // output, for accessors like `zenoh::ZBytes::to_bytes()` that borrow
-        // when the payload is contiguous). Surfaces as Kotlin `ByteArray`.
-        if let Some(conv) = self.cow_bytes_output(reading) {
-            return Some(conv);
-        }
-        // `()` — identity converter so `fn foo()` and `fn foo() -> ()`
-        // funnel through the same uniform output path as everything else.
-        // Wire is `()`. Body just returns `v`. No Kotlin name — Unit
-        // returns are dropped from emitted signatures, so metadata stays
-        // empty.
-        if matches!(
-            reading.unwrapped().kind(),
-            prebindgen_registry::flat::TypeKind::Unit
-        ) {
-            let wire: syn::Type = syn::parse_quote!(());
-            let body: syn::Expr = syn::parse_quote!(v);
-            return Some(ConverterImpl {
-                subs: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: KotlinMeta::default(),
-            });
-        }
-        if let Some((wire, body)) = primitive_output(&reading.key()) {
-            let niches = default_niches_for_wire(&wire);
-            let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if reading.key().as_str() == "u64" {
-                self.unsigned64_leaf_meta()
-            } else {
-                self.framework_meta(kotlin_name)
-            };
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata,
-            });
-        }
-        if let Some(name) = reading.key().ident() {
-            if let Some(s) = registry.flat().struct_type(&name) {
-                let (wire, body) = struct_output_body(self, s, registry)?;
-                let niches = default_niches_for_wire(&wire);
-                let kotlin_name = self
-                    .types
-                    .get(&key)
-                    .and_then(|c| c.name_spec.as_ref())
-                    .map(|s| KtType::cls(self.fqn_of(s)));
-                return Some(ConverterImpl {
-                    subs: vec![],
-                    pre_stages: vec![],
-                    function: self.build_output_fn_of(reading, &wire, &body, None, emit),
-                    destination: wire,
-                    niches,
-                    metadata: self.framework_meta(kotlin_name),
-                });
-            }
-        }
-        None
-    }
-
-    /// **Output** wrapper shape (the dual of [`Self::input_wrapper_shape`]):
-    /// the built-in `&Handle`/`&str`/`Option`/`Vec` handlers. An
-    /// `Option<&Handle>` resolves via the shallow `Option<_>`.
-    pub(crate) fn output_wrapper_shape(
-        &self,
-        shape: WrapperShape,
-        produced: &Produced<'_>,
-        t1: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions — the
-        // canonical form a produced spelling is compared against, and the
-        // type ascriptions the generated body writes. Everything else takes
-        // the READING itself (#284).
-        let t1_ty = emit.spell(t1);
-        // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
-        // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
-        // return *borrowed* handles for the C tier's zero-copy borrows, but
-        // the JVM keeps its handle past the call — so the only sound lowering
-        // is to clone the referent into a fresh owned `Box`-handle (every such
-        // zenoh handle type is `Clone`). This mirrors `opaque_handle_output`
-        // with a `.clone()`; `Option<&T>` then composes through the `Option`
-        // arm below (it looks up this `&T` entry as its inner). Matched
-        // structurally so the lifetime variant `&'static _` is covered too.
-        if let Some((_, false)) = produced.borrow() {
-            if self.types.get(&t1.key()).is_some_and(|c| c.is_opaque()) {
-                let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-                let body: syn::Expr = syn::parse_quote!(std::boxed::Box::into_raw(
-                    std::boxed::Box::new(v.clone())
-                ) as i64);
-                return Some(ConverterImpl {
-                    subs: vec![],
-                    function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
-                    destination: wire,
-                    pre_stages: vec![],
-                    niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
-                    metadata: self.opaque_leaf_meta(t1.key()),
-                });
-            }
-        }
-        // Borrowed string slice output (`&str` / `&'a str`): the converter used
-        // for a zero-copy reference accessor return (`f(&T) -> &str`, output
-        // expansion). The single copy into the JVM is `&str → jstring` (no
-        // intermediate owned `String`). The unsized `str` sub resolves via the
-        // rank-0 arm to the same fn (see [`Self::str_ref_output`]).
-        if let Some((_, false)) = produced.borrow() {
-            if t1.key().as_str() == "str" {
-                return Some(self.str_ref_output());
-            }
-        }
-        // `Result<T, E>` is peeled by the selector, off the model's
-        // `TypeKind::Fallible`. Bindings declare the `Err` type via
-        // `.throwable()`.
-        if shape == WrapperShape::Optional {
-            let outer_ty = produced.key();
-            let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
-            // Bridgeable first: an unsupported representation must not resolve
-            // and then emit code the consumer cannot compile.
-            let read = read_as_canonical(produced)?;
-            let (wire, inner_body, niches) = option_output(t1, self)?;
-            let body: syn::Expr = syn::parse_quote!({
-                let v: #canonical = #read;
-                #inner_body
-            });
-            let inherited = self
-                .out_frag(t1)
-                .and_then(|e| e.metadata.kotlin_name.clone());
-            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
-            // Fold a Nullable layer over the inner projection (if any). The
-            // kind reflects which path `option_output` took (see
-            // [`nullable_kind_for`]): niche-fulfilled keeps the inner wire
-            // and treats the slot value as `None`; boxed widens to `JObject`
-            // and uses JVM null.
-            let nullable_kind = nullable_kind_for_output(&wire, t1, self);
-            let projection = self
-                .out_frag(t1)
-                .and_then(|e| e.metadata.projection.clone())
-                .map(|h| Projection {
-                    strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
-                    ..h
-                });
-            // A **non-projection** `Option<T>` return (`Option<String>`,
-            // `Option<i64>`, …) surfaces directly as a nullable Kotlin type, so
-            // its value-context name carries the `?`. Projection options get the
-            // `?` from `handle_kt_type(Nullable …)` at the use site instead,
-            // so leave those untouched here.
-            let kotlin_name = if projection.is_none() {
-                kotlin_name.map(|n| if n.is_nullable() { n } else { n.nullable() })
-            } else {
-                kotlin_name
-            };
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: KotlinMeta {
-                    projection,
-                    ..self.framework_meta(kotlin_name)
-                },
-            });
-        }
-        // `Vec<T>` (output side): encode as a `java.util.ArrayList<InnerWire>`.
-        // Symmetric to the input handler. `Vec<u8>` is special-cased at
-        // rank-0 (primitive_output → JByteArray) so rank-1 never sees it.
-        if shape == WrapperShape::Sequence {
-            let inner = self.out_frag(t1)?;
-            // `Vec<opaque-handle>` output is delivered by the Kotlin-side leaf
-            // fold (`apply_leaf_vec_folds` → typed-handle wrap), so this
-            // whole-`ArrayList` converter is bypassed for it. A handle's `jlong`
-            // wire isn't JObject-shaped, so it returns `None` below; the
-            // fold-covered return is de-required, so the `None` is not an error.
-            let inner_wire = inner.destination.clone();
-            if !is_jobject_shaped_wire(&inner_wire) {
-                return None;
-            }
-            // The element's COMPLETE Rust -> wire chain (see the input peer).
-            let inner_conv = crate::jni::emit::composed_inner_output(&inner, quote::quote!(__elem));
-            let outer_ty = produced.key();
-            let canonical: syn::Type = syn::parse_quote!(Vec<#t1_ty>);
-            let read = read_as_canonical(produced)?;
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
-            let body: syn::Expr = syn::parse_quote!({
-                let v: #canonical = #read;
-                let __list_obj = env
-                    .new_object("java/util/ArrayList", "()V", &[])
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
-                let __list = jni::objects::JList::from_env(env, &__list_obj)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-                for __elem in v.into_iter() {
-                    let __elem_wire = #inner_conv;
-                    let __elem_obj: jni::objects::JObject = __elem_wire.into();
-                    __list.add(env, &__elem_obj)
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-add: {}", e)))?;
-                }
-                __list_obj
-            });
-            let inner_kotlin = inner.metadata.kotlin_name.clone()?;
-            let kotlin_name = self.override_kotlin_name(
-                &outer_ty,
-                // `List` is auto-imported in Kotlin (default imports). When
-                // the inner carries a projection, this wire-context name
-                // still drives non-projection consumers; projection-aware
-                // sites (classify_return, data-class fields) prefer
-                // `projection` and render the typed `List<TypedShort>`
-                // instead.
-                Some(KtType::generic("List", [inner_kotlin])),
-            );
-            // Fold an Iterable layer over the inner projection (if any), so
-            // `Vec<Handle>` carries the full strategy.
-            let projection = inner.metadata.projection.clone().map(|h| Projection {
-                strategy: FoldStrategy::Iterable(Box::new(h.strategy)),
-                ..h
-            });
-            // The list conversion always builds a fresh non-null `ArrayList`, so
-            // `JObject` null is a free niche — lets `Option<Vec<T>>` ride it
-            // (None ⇒ null list) instead of needing a boxed wrapper.
-            let niches = default_niches_for_wire(&wire);
-            return Some(ConverterImpl {
-                subs: vec![],
-                pre_stages: vec![],
-                function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
-                destination: wire,
-                niches,
-                metadata: KotlinMeta {
-                    kotlin_name,
-                    value_rust_type: None,
-                    projection,
-                },
-            });
-        }
-        None
-    }
-
-    /// `&[T]` borrowed-slice output (used for a **callback argument** that crosses
-    /// native→JVM, e.g. `impl Fn(&[Payload])`). The borrowed dual of the `Vec<T>`
-    /// output handler above: build a `java.util.ArrayList<InnerWire>` by iterating
-    /// the slice **by reference** and cloning each element through its output
-    /// converter (`v.iter()` + `Clone::clone` instead of `into_iter()`). Surfaces
-    /// as Kotlin `List<T>`. The element must have a JObject-shaped output wire
-    /// (struct / String / …) — scalar slices are not handled here.
-    pub(crate) fn output_slice(
-        &self,
-        elem: &prebindgen_registry::flat::TypeRef,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let inner = self.out_frag(elem)?;
-        let elem_key = elem.key();
-        // The element as the source spelled it — the slice type this converter
-        // yields is re-emitted, never re-derived.
-        let elem = emit.spell(elem);
-        // A `&[opaque-handle]` callback arg is delivered by the Kotlin-side leaf
-        // fold (typed-handle wrap), bypassing this whole-`ArrayList` converter; a
-        // handle's `jlong` wire isn't JObject-shaped, so it returns `None` here.
-        let inner_wire = inner.destination.clone();
-        if !is_jobject_shaped_wire(&inner_wire) {
-            return None;
-        }
-        // The element's COMPLETE Rust -> wire chain (see the `Vec<_>` peer).
-        let inner_conv = crate::jni::emit::composed_inner_output(
-            &inner,
-            quote::quote!(::core::clone::Clone::clone(__elem)),
-        );
-        let outer_ty: syn::Type = syn::parse_quote!(&[#elem]);
-        let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
-        let body: syn::Expr = syn::parse_quote!({
-            let __list_obj = env
-                .new_object("java/util/ArrayList", "()V", &[])
-                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("&[_]: new ArrayList: {}", e)))?;
-            let __list = jni::objects::JList::from_env(env, &__list_obj)
-                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("&[_]: list-from-env: {}", e)))?;
-            for __elem in v.iter() {
-                let __elem_wire = #inner_conv;
-                let __elem_obj: jni::objects::JObject = __elem_wire.into();
-                __list.add(env, &__elem_obj)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("&[_]: list-add: {}", e)))?;
-            }
-            __list_obj
-        });
-        let inner_kotlin = inner.metadata.kotlin_name.clone()?;
-        let kotlin_name = self.override_kotlin_name(
-            &TypeKey::from_type(&outer_ty),
-            Some(KtType::generic("List", [inner_kotlin])),
-        );
-        let projection = inner.metadata.projection.clone().map(|h| Projection {
-            strategy: FoldStrategy::Iterable(Box::new(h.strategy)),
-            ..h
-        });
-        let niches = default_niches_for_wire(&wire);
-        Some(ConverterImpl {
-            subs: vec![elem_key],
-            pre_stages: vec![],
-            function: self.build_output_fn(&outer_ty, &wire, &body, None),
-            destination: wire,
-            niches,
-            metadata: KotlinMeta {
-                kotlin_name,
-                value_rust_type: None,
-                projection,
-            },
-        })
     }
 }
 

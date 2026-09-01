@@ -2,6 +2,7 @@ package io.prebindgen.covertest
 
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryVault
+import io.prebindgen.covertest.analytics.SelectorCode
 import io.prebindgen.covertest.analytics.archiveLatest
 import io.prebindgen.covertest.analytics.archiveNew
 import io.prebindgen.covertest.analytics.archiveStore
@@ -18,11 +19,14 @@ import io.prebindgen.covertest.analytics.summarySeries
 import io.prebindgen.covertest.analytics.summarySeriesOpt
 import io.prebindgen.covertest.analytics.summaryTotalOpt
 import io.prebindgen.covertest.analytics.summaryTotalRaw
+import io.prebindgen.covertest.analytics.selectorCodeScore
+import io.prebindgen.covertest.analytics.summaryEnvelopeScore
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.Arrays
 import io.prebindgen.covertest.model.CacheConfig
+import io.prebindgen.covertest.model.ConstArray
 import io.prebindgen.covertest.model.RepliesConfig
 import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.ObjectBoundary
@@ -32,6 +36,8 @@ import io.prebindgen.covertest.model.ObjectBoundary8
 import io.prebindgen.covertest.model.ObjectBoundary16
 import io.prebindgen.covertest.model.ObjectBoundary32
 import io.prebindgen.covertest.model.ObjectBoundary63
+import io.prebindgen.covertest.model.Ingot
+import io.prebindgen.covertest.model.ingotOptionalGrams
 import io.prebindgen.covertest.model.ObjectBoundary64
 import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
@@ -44,6 +50,7 @@ import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.arraysEcho
+import io.prebindgen.covertest.model.constArrayEcho
 import io.prebindgen.covertest.model.blobValueEcho
 import io.prebindgen.covertest.Holder
 import io.prebindgen.covertest.WrappedFields
@@ -72,6 +79,7 @@ import io.prebindgen.covertest.model.durationEmit
 import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.holdEcho
 import io.prebindgen.covertest.model.holdPolicyEcho
+import io.prebindgen.covertest.model.labelBorrowedConcat
 import io.prebindgen.covertest.model.labelReverse
 import io.prebindgen.covertest.model.labelSeriesEcho
 import io.prebindgen.covertest.model.percentInvalidOutput
@@ -93,6 +101,17 @@ import io.prebindgen.covertest.model.probeEach
 import io.prebindgen.covertest.model.probeNew
 import io.prebindgen.covertest.model.lookupOf
 import io.prebindgen.covertest.model.layeredOf
+import io.prebindgen.covertest.model.Envelope
+import io.prebindgen.covertest.model.envelopeEach
+import io.prebindgen.covertest.model.envelopeNew
+import io.prebindgen.covertest.model.Frame
+import io.prebindgen.covertest.model.frameEach
+import io.prebindgen.covertest.model.frameNew
+import io.prebindgen.covertest.model.Meter
+import io.prebindgen.covertest.model.Rack
+import io.prebindgen.covertest.model.rackEach
+import io.prebindgen.covertest.model.rackNew
+import io.prebindgen.covertest.model.verdictEach
 import io.prebindgen.covertest.model.verdictNew
 import io.prebindgen.covertest.model.dossierNew
 import io.prebindgen.covertest.model.archiveReading
@@ -110,6 +129,8 @@ import io.prebindgen.covertest.model.taggedNew
 import io.prebindgen.covertest.model.taggedRank
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
+import io.prebindgen.covertest.model.priorityNested
+import io.prebindgen.covertest.model.priorityNestedState
 import io.prebindgen.covertest.model.priorityWeight
 import io.prebindgen.covertest.model.stampNew
 import io.prebindgen.covertest.model.stampSeries
@@ -118,6 +139,7 @@ import io.prebindgen.covertest.model.unsignedDataMaybe
 import io.prebindgen.covertest.model.unsignedOptional
 import io.prebindgen.covertest.model.unsignedRoundTrip
 import io.prebindgen.covertest.model.unsignedSeries
+import io.prebindgen.covertest.storage.payloadOptionalEmit
 import io.prebindgen.covertest.storage.addMillis
 import io.prebindgen.covertest.storage.payloadHandlerNew
 import io.prebindgen.covertest.storage.payloadVecHandlerNew
@@ -202,6 +224,14 @@ fun main() {
         val p = Payload(1L, 2, 3.5, true, "hello")
         check(p.id == 1L && p.seq == 2 && p.value == 3.5 && p.flag && p.label == "hello")
         check(Payload.fromParts(9L, 9, 9.0, false, null).label == null)
+    }
+
+    // ── borrowed Option<data_class>: null/present are deconstructed on the
+    // Kotlin side, cross as primitive leaves, and are recomposed before the
+    // source call borrows the registry-owned carrier ─────────────────────────
+    section("borrowed Option<&data_class> uses the shared chain") {
+        check(payloadOptionalBorrowId(Payload(17L, 2, 3.5, true, "hello"), boom) == 17L)
+        check(payloadOptionalBorrowId(null, boom) == -1L)
     }
 
     // ── #108: fixed-width unsigned scalars. Small widths widen losslessly;
@@ -373,6 +403,15 @@ fun main() {
         // Option<enum>: null falls back, present overrides.
         check(priorityOr(null, Priority.NORMAL, boom) == Priority.NORMAL)
         check(priorityOr(Priority.LOW, Priority.HIGH, boom) == Priority.LOW)
+        // Nested Option layers share one primitive wire. Kotlin deliberately
+        // collapses both absent Rust states to null, while preserving values.
+        check(priorityNested(0, boom) == null)
+        check(priorityNested(1, boom) == null)
+        check(priorityNested(2, boom) == Priority.HIGH)
+        // On input, null selects the outer None sentinel. The collapsed
+        // Priority? surface cannot construct Rust's inner Some(None) state.
+        check(priorityNestedState(null, boom) == 0)
+        check(priorityNestedState(Priority.HIGH, boom) == 2)
         // enum_class surface: value + fromInt round-trip.
         check(Priority.HIGH.value == 2)
         check(Priority.fromInt(0) == Priority.LOW)
@@ -671,6 +710,177 @@ fun main() {
         absent.close()
     }
 
+    // An OPTIONAL nested data class, the shape #602 names first. The
+    // decomposition refused it outright until it learned a presence flag, so a
+    // struct carrying one got no fixed-builder delivery at all — on either
+    // route. Both routes are here because they fill the gated slots by
+    // different code: a return through the class's own factory, a callback
+    // through its interface.
+    section("an optional nested data class crosses as presence plus its group") {
+        val present = envelopeNew(7L, true, boom).orThrow()
+        check(present.id == 7L)
+        check(present.stamp == Stamp(7L, 14L)) { "got ${present.stamp}" }
+
+        // Absent: the flag is false and the group carries wire defaults, which
+        // the factory must read as "no value" rather than as a zeroed one.
+        val absent = envelopeNew(9L, false, boom).orThrow()
+        check(absent.id == 9L)
+        check(absent.stamp == null) { "got ${absent.stamp}" }
+
+        val seen = mutableListOf<String>()
+        envelopeEach(4L, { envelope ->
+            seen.add("${envelope.id}:${envelope.stamp?.secs ?: "-"}")
+        }, boom).orThrow()
+        check(seen == listOf("0:-", "1:1", "2:-", "3:3")) { "got $seen" }
+    }
+
+    // A gate INSIDE a gate: `Frame.window` is optional, and the `Window` it
+    // gates selects twice of its own — a second presence (`span`) and a sum tag
+    // (`reading`). A flat group number could not state that, since each inner
+    // selector is a member of the outer group AND a selector of its own; the
+    // arm PATH can, and `segments` reads one level at a time.
+    //
+    // `REPORT.md` records that this takes fixed-builder delivery: `Frame`
+    // decomposed into thirteen leaves, `window__present` gating
+    // `window__span__present` and `window__reading__tag` and everything under
+    // them. What is checked here is that the leaves reassemble to the value
+    // they came from — through the class's own factory on the return route and
+    // through its builder interface on the callback route.
+    section("a gate inside a gate (nested selectors under one presence flag)") {
+        // Outer absent: every inner slot carries a wire default, and neither
+        // inner selector may be read as if it had chosen something.
+        val none = frameNew(1L, false, true, 2L, boom).orThrow()
+        check(none.id == 1L)
+        check(none.window == null) { "got ${none.window}" }
+
+        // Outer present, inner presence absent — the two flags are independent
+        // facts, and the inner one must survive the outer arm defaulting.
+        val noSpan = frameNew(2L, true, false, 1L, boom).orThrow()
+        check(noSpan.window?.span == null) { "got ${noSpan.window?.span}" }
+        check(noSpan.window?.reading == Reading.Exact(42L))
+        check(noSpan.window?.label == "w2")
+
+        // Both present, with the nested tag live beside the nested flag.
+        val both = frameNew(3L, true, true, 2L, boom).orThrow()
+        check(both.window?.span == Stamp(3L, 6L)) { "got ${both.window?.span}" }
+        check(both.window?.reading == Reading.Range(1L, 9L))
+
+        // Every alternative of the nested tag, under a live outer gate: an
+        // inner group is selected from inside an arm the outer flag opened.
+        val readings = (0..4).map { frameNew(4L, true, true, it.toLong(), boom).orThrow().window?.reading }
+        check(
+            readings == listOf(
+                Reading.Missing,
+                Reading.Exact(42L),
+                Reading.Range(1L, 9L),
+                Reading.Tagged("warm", Priority.HIGH),
+                Reading.Companion(5L),
+            )
+        ) { "got $readings" }
+
+        // …and the same values by the other route, which fills the gated slots
+        // through the builder interface rather than the factory.
+        val seen = mutableListOf<String>()
+        frameEach(6L, { frame ->
+            val w = frame.window
+            seen.add("${frame.id}:${w?.span?.secs ?: "-"}:${w?.reading?.let { it::class.simpleName } ?: "-"}")
+        }, boom).orThrow()
+        check(
+            seen == listOf(
+                "0:-:-",
+                "1:1:Exact",
+                "2:-:Range",
+                "3:-:-",
+                "4:-:Companion",
+                "5:5:Companion",
+            )
+        ) { "got $seen" }
+    }
+
+    // A nested class whose FIRST field selects. `Meter` begins with an optional
+    // `span` and a sum `reading`, so both of its leading leaves are selectors
+    // that belong to `Meter.fromParts` — not to the parent's expression.
+    //
+    // A parent that asks "is this leaf a selector?" before "does this leaf open
+    // a class?" consumes them itself and calls the child factory without them.
+    // Kotlin compiles that (the arity is still an overload it fails to find
+    // only at the call), and `Window` cannot catch it because it begins with a
+    // plain `label`. Both ways of holding a `Meter` are here: gated, and plain.
+    section("a nested class whose first field selects") {
+        val both = rackNew(5L, true, true, 1L, boom).orThrow()
+        check(both.name == "r5")
+        check(both.meter?.span == Stamp(5L, 15L)) { "got ${both.meter?.span}" }
+        check(both.meter?.reading == Reading.Exact(7L))
+        check(both.meter?.id == 5L)
+        // The ungated sibling carries its own leading selectors independently.
+        check(both.plain.span == null) { "got ${both.plain.span}" }
+        check(both.plain.reading == Reading.Range(2L, 4L))
+        check(both.plain.id == 105L)
+
+        // The gate absent: the child's own leading selectors must not be read
+        // as the parent's when there is no child at all.
+        val none = rackNew(6L, false, false, 0L, boom).orThrow()
+        check(none.meter == null) { "got ${none.meter}" }
+        check(none.plain.span == Stamp(106L, 318L)) { "got ${none.plain.span}" }
+        check(none.plain.reading == Reading.Exact(7L))
+
+        // Every alternative of the nested leading sum, through the gate.
+        val readings = (0..4).map { rackNew(7L, true, false, it.toLong(), boom).orThrow().meter?.reading }
+        check(
+            readings == listOf(
+                Reading.Missing,
+                Reading.Exact(7L),
+                Reading.Range(2L, 4L),
+                Reading.Tagged("hot", Priority.LOW),
+                Reading.Companion(11L),
+            )
+        ) { "got $readings" }
+
+        // …and by the callback route, which fills the same slots through the
+        // builder interface rather than the factory.
+        val seen = mutableListOf<String>()
+        rackEach(4L, { rack ->
+            seen.add("${rack.meter?.id ?: "-"}:${rack.plain.id}:${rack.plain.reading::class.simpleName}")
+        }, boom).orThrow()
+        check(seen == listOf("0:100:Exact", "-:101:Range", "2:102:Tagged", "-:103:Companion")) { "got $seen" }
+    }
+
+    // The same data class arriving at a CALLBACK rather than as a return.
+    //
+    // #602 taught the decomposition a sum-typed field, so `Verdict` crosses as
+    // its leaves — `id`, the outcome's tag, and one slot per alternative — on
+    // both paths. They are two different reassemblies of the same leaves: the
+    // return path builds through the class's own `fromParts`, and this one
+    // through the callback interface, whose derivation asked a different
+    // question about the tag and used to reject a struct that merely contains
+    // one (#616 review). Only a run proves both rebuild the same value.
+    section("a data class with a sum field arrives whole at a callback") {
+        val seen = mutableListOf<String>()
+        val escaped = mutableListOf<Summary>()
+        verdictEach(3L, 2.5, { verdict ->
+            seen.add("${verdict.id}:" + when (val o = verdict.outcome) {
+                is Lookup.Failed -> "failed:${o.v0}"
+                Lookup.Absent -> "absent"
+                is Lookup.Found -> {
+                    val s = o.v0
+                    check(!s.isClosed())
+                    escaped.add(s)
+                    "found:${s.count(boom)}"
+                }
+            })
+        }, boom).orThrow()
+
+        // One value per iteration, each rebuilt from the leaves: the id is the
+        // sibling field, and the outcome is the alternative its tag selected —
+        // all three alternatives, since `lookup_of(i - 1)` walks them.
+        check(seen == listOf("0:failed:negative count", "1:absent", "2:found:1")) { "got $seen" }
+
+        // The container is closed when `run` returns, and its cascade reaches
+        // the handle the sum holds — the same close-unless-taken contract a
+        // bare handle argument has.
+        check(escaped.all { it.isClosed() }) { "the cascade closed every payload" }
+    }
+
     // The FOURTH position, and the row an emission test cannot cover: the field
     // is a plain data class that itself carries the handle. `Dossier`'s cascade
     // is the one-liner `holder.close()`, which only frees anything because
@@ -913,13 +1123,11 @@ fun main() {
         vault.close()
     }
 
-    // ── a sum whose payload is NOT leaf-shaped ────────────────────────────────
-    // `Marker.Ranked` carries `Option<Priority>` — an enum object or null in the
-    // JVM slot, which tag-gated groups cannot express. The sum degrades to a
-    // whole-object crossing rather than failing the build, and that path is what
-    // reads an enum property back (bare and optional read differently: the slot
-    // holds the enum OBJECT, not a boxed Int).
-    section("sum with a non-leaf payload (whole-object crossing, Option<enum>)") {
+    // ── a sum whose payload uses an enum niche ────────────────────────────────
+    // `Marker.Ranked` carries `Option<Priority>` in one primitive jint. An
+    // unused discriminant represents null, while the independent sum tag keeps
+    // `Marker.None_` distinct from `Marker.Ranked(null)`.
+    section("sum with a niche-backed Option<enum> payload") {
         check(taggedRank(taggedNew(0, boom).orThrow(), boom) == -1)
         check(taggedRank(taggedNew(1, boom).orThrow(), boom) == 0)
         check(taggedRank(taggedNew(2, boom).orThrow(), boom) == 10)
@@ -932,13 +1140,9 @@ fun main() {
     }
 
     // ── the same Option<enum> payload in RETURN position ──────────────────────
-    // The field above degrades to the whole-object crossing, so it never reaches
-    // `synth_sum_leaves` — which hardcodes `nullable: false` on every group leaf
-    // and lets `plan_leaf_param` widen from the inert side. Two nullabilities
-    // meet in this one slot and must not collapse into each other: the payload's
-    // own `None`, and the slot being inert because the OTHER variant is live.
-    // Both arrive as a JVM null, so only the tag tells `Ranked(null)` from
-    // `None_`.
+    // The optional payload uses its reserved enum discriminant for null. The
+    // sum tag separately identifies the active variant, so `Ranked(null)` and
+    // `None_` remain distinct in both directions.
     section("Option<enum> payload in a returned sum") {
         check(markerOf(0, boom).orThrow() === Marker.None_)
 
@@ -1162,6 +1366,14 @@ fun main() {
         }
         check(a1.toString().contains("flags=[true, false, true]")) { "got $a1" }
 
+        // This separate source-stream fixture uses `[u8; CONST_ARRAY_LEN]`.
+        // The generated Rust must qualify that const as
+        // `cov_helpers::CONST_ARRAY_LEN`; the binding crate has no bare import.
+        val constArray = ConstArray(byteArrayOf(8, 9, 10))
+        val constEcho = constArrayEcho(constArray, boom)
+        check(constEcho == constArray)
+        check(constEcho.bytes.contentEquals(byteArrayOf(8, 9, 10)))
+
         // Wrong length is a BINDING ERROR, not a panic — the decode's `try_into`
         // is the fixed-size-array length check.
         var lenErr: String? = null
@@ -1265,6 +1477,32 @@ fun main() {
         storageCallback(s, h, boom)
         check(perElem == 6L)
         h.close()
+
+        // Option<Payload> is deconstructed by one registry chain: presence plus
+        // the Product intermediate, then reassembled as a nullable Payload here.
+        val optionalSeen = mutableListOf<Payload?>()
+        val optionalCb = PayloadOptionalCallback { optionalSeen += it }
+        payloadOptionalEmit(true, optionalCb, boom)
+        payloadOptionalEmit(false, optionalCb, boom)
+        check(optionalSeen == listOf(payload(91L, 7, 2.5, true, "optional-callback"), null))
+
+        // The optional chain still owns the handles nested in a delivered data
+        // class. The callback may use them, but the bridge closes untaken
+        // ownership after the callback returns. The absent arm owns nothing.
+        val escapedTokens = mutableListOf<Ingot>()
+        val holderSeen = mutableListOf<Long?>()
+        callbackHolderOptionalEmit(true, CallbackHolderOptionalCallback { holder ->
+            val value = holder ?: error("present CallbackHolder was delivered as null")
+            check(value.token.grams(boom) == 23L)
+            holderSeen += value.tag
+            escapedTokens += value.token
+        }, boom)
+        check(escapedTokens.single().isClosed())
+        callbackHolderOptionalEmit(false, CallbackHolderOptionalCallback { holder ->
+            check(holder == null)
+            holderSeen += null
+        }, boom)
+        check(holderSeen == listOf(17L, null))
 
         // payload_vec_handler_new: whole batch delivered once as List<Payload>.
         var batchSize = -1
@@ -1385,6 +1623,39 @@ fun main() {
         check(describeSummary(0, 2L, 8.0, null, false, boom) == "2/8")
         check(describeSummary(1, null, null, m, true, boom) == "summary of 4 payloads totalling 10")
         m.close()
+    }
+
+    // ── expanded nullable u16 leaf: primitive native pair, never JObject ────
+    section("expanded selector keeps nullable scalar off JObject") {
+        // -1 skips every arm; 0 rebuilds from the nullable constructor slots.
+        // The latter crosses JNI as Boolean + Int and executes the registry
+        // Optional chain, without allocating/unboxing java.lang.Integer.
+        check(selectorCodeScore(-1, null, null, null, boom) == -1L)
+        check(selectorCodeScore(0, 41, byteArrayOf(1, 2), null, boom) == 43L)
+
+        // The identity arm uses the same expansion and proves its handle slot
+        // remains independent of the primitive build-arm leaves.
+        val code = SelectorCode.new(50, byteArrayOf(1, 2, 3), boom).orThrow()
+        check(selectorCodeScore(1, null, null, code, boom) == 53L)
+        code.close()
+    }
+
+    // ── owned Option<handle>: shared registry Optional chain ──────────────
+    section("owned optional handle input consumes only the present arm") {
+        check(ingotOptionalGrams(null, boom) == -1L)
+
+        val ingot = Ingot.new(37L, boom).orThrow()
+        check(ingotOptionalGrams(ingot, boom) == 37L)
+        check(ingot.isClosed())
+    }
+
+    // ── recursive constructor expansion: nested build and identity arms ─────
+    section("recursive constructor expansion freezes nested constructors") {
+        // The outer SummaryEnvelope constructor receives a Summary. Exercise
+        // both variants of that nested Summary build before the outer call.
+        check(summaryEnvelopeScore(0, 4L, 10.0, null, 3L, boom) == 17L)
+        val nested = Summary.of(5L, 12.0, boom).orThrow()
+        check(summaryEnvelopeScore(1, null, null, nested, 2L, boom) == 19L)
     }
 
     // ── flatten input on Summary: default + with, both selectors ─────────────
@@ -1619,6 +1890,11 @@ fun main() {
         // is a primitive `Long`, so it is refused at resolve time.)
         check(labelSeriesEcho(listOf("alpha", "beta"), boom) == listOf("alpha", "beta"))
         check(labelSeriesEcho(emptyList(), boom) == emptyList<String>())
+        // A borrowed slice uses the registry Sequence loop too. Its converter
+        // returns an owned Vec<Label> carrier; only the final source call adds
+        // the borrow.
+        check(labelBorrowedConcat(listOf("alpha", "beta"), boom) == "alphabeta")
+        check(labelBorrowedConcat(emptyList(), boom) == "")
     }
 
     // ── Vec<opaque-handle> return: the Kotlin-side handle fold ───────────────

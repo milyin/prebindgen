@@ -1,9 +1,388 @@
 //! `impl Fn(args)` inputs: the native trampoline calling the typed
 //! Kotlin `run`.
 
-use prebindgen_registry::Conversions;
+use prebindgen_registry::{chain::Chain as _, Conversions};
 
 use super::*;
+
+#[derive(Clone)]
+enum JInvokePart {
+    Fold {
+        delivery: FrozenDelivery,
+        fold_obj: syn::Ident,
+        fold_id: syn::Ident,
+        element_frame: syn::LitInt,
+    },
+    Decomposed {
+        delivery: FrozenDelivery,
+        optional: bool,
+    },
+    Whole {
+        /// The argument's own output ABI, shared with the site that names it
+        /// rather than copied — the same property `FrozenDelivery` holds for
+        /// the two decomposing arms (#622 review).
+        abi: std::rc::Rc<crate::jni::compile::OutValueAbi>,
+        wire: syn::Type,
+        primitive: bool,
+    },
+}
+
+impl JInvokePart {
+    /// The converters this argument crosses through.
+    fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match self {
+            Self::Fold { delivery, .. } | Self::Decomposed { delivery, .. } => delivery.calls(out),
+            Self::Whole { abi, .. } => abi.pipeline.calls(out),
+        }
+    }
+}
+
+impl prebindgen_registry::chain::InvokePart for JInvokePart {
+    fn render(
+        &self,
+        value: &syn::Ident,
+        index: usize,
+        emit: &prebindgen_registry::RustWriter,
+    ) -> prebindgen_registry::chain::RenderedInvokePart {
+        assert_eq!(value, &callback_argument_name(index));
+        let fail = |msg: TokenStream| -> TokenStream {
+            quote! {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<String>>::from(#msg));
+            }
+        };
+        let (prepare, arguments) = match self {
+            Self::Fold {
+                delivery,
+                fold_obj,
+                fold_id,
+                element_frame,
+            } => {
+                let obj_idents: Vec<syn::Ident> = (0..delivery.wire_count())
+                    .map(|part| format_ident!("__cbfold{}_obj{}", index, part))
+                    .collect();
+                let (leaf_stmts, leaf_args, _) = encode_plan_leaves(
+                    delivery,
+                    delivery.delivered(),
+                    &obj_idents,
+                    &quote!(__cb_elem),
+                    &fail,
+                    emit,
+                );
+                let acc = format_ident!("__fold{}_acc", index);
+                (
+                    quote! {
+                        let #acc: jni::objects::JObject = env
+                            .new_object("java/util/ArrayList", "()V", &[])
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: new ArrayList: {}", e)))?;
+                        for __cb_elem in #value.iter() {
+                            env.push_local_frame(#element_frame)
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: push frame: {}", e)))?;
+                            let __fold_res = (|| -> ::core::result::Result<(), __JniErr> {
+                                #leaf_stmts
+                                let _ = unsafe {
+                                    env.call_method_unchecked(
+                                        &#fold_obj,
+                                        #fold_id,
+                                        jni::signature::ReturnType::Object,
+                                        &[jni::sys::jvalue { l: #acc.as_raw() }, #(#leaf_args),*],
+                                    )
+                                }
+                                .map_err(|e| {
+                                    let _ = env.exception_describe();
+                                    <__JniErr as ::core::convert::From<String>>::from(format!("fold run: {}", e))
+                                })?;
+                                ::core::result::Result::Ok(())
+                            })();
+                            let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                            __fold_res?;
+                        }
+                    },
+                    vec![quote!(jni::sys::jvalue { l: #acc.as_raw() })],
+                )
+            }
+            Self::Decomposed { delivery, optional } => {
+                let obj_idents: Vec<syn::Ident> = (0..delivery.wire_count())
+                    .map(|part| format_ident!("__cb{}_obj{}", index, part))
+                    .collect();
+                let (stmts, mut arguments, present) = encode_plan_leaves(
+                    delivery,
+                    delivery.delivered(),
+                    &obj_idents,
+                    &quote!(#value),
+                    &fail,
+                    emit,
+                );
+                if *optional {
+                    let present = present.expect("a frozen optional callback delivery has a gate");
+                    arguments.insert(0, quote!(jni::sys::jvalue { z: #present }));
+                }
+                (stmts, arguments)
+            }
+            Self::Whole {
+                abi,
+                wire,
+                primitive,
+            } => {
+                let (pipeline, projection) = (&abi.pipeline, &abi.projection);
+                let enc = format_ident!("__cb{}_enc", index);
+                let call = pipeline.invoke_output(quote!(#value), emit);
+                if projection
+                    .as_ref()
+                    .is_some_and(|projection| projection.kind == ProjectionKind::Handle)
+                {
+                    (
+                        quote!(let #enc = #call?;),
+                        vec![quote!(jni::sys::jvalue { j: #enc })],
+                    )
+                } else if *primitive {
+                    let letter = jni_field_access(wire)
+                        .expect("a primitive callback wire has a jvalue member")
+                        .1;
+                    (
+                        quote!(let #enc = #call?;),
+                        vec![quote!(jni::sys::jvalue { #letter: #enc })],
+                    )
+                } else {
+                    let object = format_ident!("__cb{}_obj", index);
+                    let cast = cast_wire_to_jobject(&enc, wire, &fail);
+                    (
+                        quote! {
+                            let #enc = #call?;
+                            let #object: jni::objects::JObject = #cast;
+                        },
+                        vec![quote!(jni::sys::jvalue { l: #object.as_raw() })],
+                    )
+                }
+            }
+        };
+        prebindgen_registry::chain::RenderedInvokePart {
+            prepare,
+            arguments,
+            cleanup: TokenStream::new(),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct JInvokeBridge {
+    name: syn::LitStr,
+    descriptor: syn::LitStr,
+    frame_capacity: syn::LitInt,
+    fold_setups: Vec<TokenStream>,
+}
+
+fn callback_argument_name(index: usize) -> syn::Ident {
+    format_ident!("__cb_arg{}", index)
+}
+
+/// Freeze one callback argument's deconstructed delivery before the retained
+/// Invoke plan is rendered. A composable recipe contributes its exact child
+/// wires and chain; an irregular registry-owned unfold walk freezes each
+/// already-resolved leaf crossing once at this resolution seam.
+fn freeze_callback_delivery(
+    ext: &Declarations,
+    plan: &crate::unfold::UnfoldPlan,
+    fragment: &crate::jni::compile::JFrag,
+) -> Option<(
+    Vec<crate::jni::compile::OutWire>,
+    Option<crate::jni::compile::ComposedChain>,
+)> {
+    let expected = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
+    let composed = fragment.out_wires.clone().filter(|wires| {
+        wires.len() == expected.len()
+            && wires
+                .iter()
+                .zip(&expected)
+                .all(|(left, right)| left.same_delivery(right))
+    });
+    let wires = match composed {
+        Some(wires) => wires,
+        None => expected
+            .into_iter()
+            .map(|mut wire| {
+                wire.abi = Some(if wire.is_tag() {
+                    crate::jni::compile::OutAbi::Tag
+                } else if matches!(wire.from, crate::jni::compile::OutFrom::Present) {
+                    crate::jni::compile::OutAbi::Present
+                } else {
+                    ext.out_frag(&wire.out_ty)?.output_abi()
+                });
+                if wire.identity
+                    && matches!(
+                        wire.abi,
+                        Some(crate::jni::compile::OutAbi::Value(ref value))
+                            if value.projection.is_none()
+                    )
+                {
+                    return None;
+                }
+                Some(wire)
+            })
+            .collect::<Option<Vec<_>>>()?,
+    };
+    wires
+        .iter()
+        .for_each(crate::jni::compile::OutWire::activate);
+    let chain = fragment.composed_chain();
+    if let Some(chain) = &chain {
+        chain.activate();
+    }
+    Some((wires, chain))
+}
+
+/// A registry-composed callback retained until the final Rust writer runs.
+#[derive(Clone)]
+pub(crate) struct JInvokePlan {
+    operation: prebindgen_registry::OperationId,
+    chain:
+        prebindgen_registry::chain::Invoke<crate::jni::chain::JSource, JInvokeBridge, JInvokePart>,
+}
+
+impl JInvokePlan {
+    pub(crate) fn operation_id(&self) -> &prebindgen_registry::OperationId {
+        &self.operation
+    }
+
+    /// The ABI one delivered argument occupies, as the trampoline finalized
+    /// it. What a `Role::CallbackArg` site names: the same allocation the
+    /// rendered part holds, so the site states the delivery rather than a
+    /// second derivation of it.
+    pub(crate) fn arg_abi(&self, index: usize) -> Option<crate::jni::compile::JAbiLeaves> {
+        Some(match self.chain.parts.get(index)? {
+            JInvokePart::Fold { delivery, .. } | JInvokePart::Decomposed { delivery, .. } => {
+                crate::jni::compile::JAbiLeaves::Decomposed(delivery.wires())
+            }
+            JInvokePart::Whole { abi, .. } => crate::jni::compile::JAbiLeaves::Invoked(abi.clone()),
+        })
+    }
+
+    /// The converters this callback's Invoke helper calls, argument by
+    /// argument.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for part in &self.chain.parts {
+            part.calls(out);
+        }
+    }
+
+    pub(crate) fn render(&self, emit: &prebindgen_registry::RustWriter) -> syn::ItemFn {
+        let rendered = self.chain.render(emit);
+        let name = emit.operation_ident("jni", &self.operation);
+        let source = &rendered.source;
+        let body = &rendered.body;
+        let gen_allow = crate::jni::trait_impl::generated_converter_attr();
+        syn::parse_quote!(
+            #gen_allow
+            pub(crate) unsafe fn #name<'env, 'v>(
+                env: &mut jni::JNIEnv<'env>,
+                v: &jni::objects::JObject<'v>,
+            ) -> ::core::result::Result<#source, __JniErr> {
+                Ok(#body)
+            }
+        )
+    }
+}
+
+impl prebindgen_registry::chain::InvokeBridge for JInvokeBridge {
+    fn intermediate(&self) -> syn::Type {
+        syn::parse_quote!(jni::objects::JObject)
+    }
+
+    fn argument_name(&self, index: usize) -> syn::Ident {
+        callback_argument_name(index)
+    }
+
+    fn capture(&self, value: TokenStream, closure: TokenStream) -> TokenStream {
+        let name = &self.name;
+        let descriptor = &self.descriptor;
+        let fold_setups = &self.fold_setups;
+        // Resolve the typed callback interface's `run` method once, while the
+        // trampoline is created. `JNIEnv::call_method` reparses the descriptor
+        // and resolves the method on every call; that measured at roughly 33%
+        // of subscriber hot-path delivery time. `JMethodID` is Copy + Send +
+        // Sync and remains valid because the global ref pins the callback and
+        // therefore its class for the closure's lifetime.
+        quote!({
+            use std::sync::Arc;
+            let java_vm = Arc::new(env.get_java_vm()
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to retrieve JVM: {}", e)))?);
+            let callback_global_ref = env.new_global_ref(&#value)
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to global-ref callback: {}", e)))?;
+            let __invoke_class = env.get_object_class(&#value)
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to get callback class for {}: {}", #name, e)))?;
+            let __invoke_id = env.get_method_id(&__invoke_class, "run", #descriptor)
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to resolve run for {}: {}", #name, e)))?;
+            #(#fold_setups)*
+            Box::new(#closure)
+        })
+    }
+
+    fn invoke(&self, arguments: &[TokenStream]) -> TokenStream {
+        // SAFETY: `__invoke_id` was resolved on this callback object's exact
+        // class with the exact descriptor represented by `arguments`; the
+        // global ref keeps that class loaded. `run` returns void, primitives
+        // occupy their matching raw jvalue fields, and exception handling is
+        // the same checked JNI path used by `call_method`.
+        //
+        // A plan-less owned-handle argument's per-invocation Box is closed by
+        // Kotlin's `asRaw` proxy in `finally { close() }` (a no-op if taken), so
+        // the Rust invocation has no matching post-call close.
+        quote! {
+            let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
+                env.call_method_unchecked(
+                    &callback_global_ref,
+                    __invoke_id,
+                    jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+                    &[#(#arguments),*],
+                )
+            }
+            .map(|_| ())
+            .map_err(|e| {
+                let _ = env.exception_describe();
+                <__JniErr as ::core::convert::From<String>>::from(e.to_string())
+            });
+            __call_res?;
+        }
+    }
+
+    fn surround(
+        &self,
+        prepare: TokenStream,
+        invoke: TokenStream,
+        cleanup: TokenStream,
+    ) -> TokenStream {
+        let name = &self.name;
+        let frame_capacity = &self.frame_capacity;
+        // Callbacks may run on daemon-attached Zenoh receive threads that never
+        // return through a JNI stack frame. Give every invocation its own local
+        // frame so encoded leaves, handle wrappers and call temporaries cannot
+        // accumulate until `OutOfMemoryError`; pop it unconditionally after the
+        // inner Result, including every early `?`/error path.
+        quote!({
+            let _ = (|| -> ::core::result::Result<(), __JniErr> {
+                let mut env = java_vm
+                    .attach_current_thread_as_daemon()
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Attach thread for {}: {}", #name, e)))?;
+                env.push_local_frame(#frame_capacity)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("push local frame for {}: {}", #name, e)))?;
+                let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
+                    #prepare
+                    #invoke
+                    #cleanup
+                    Ok(())
+                })();
+                let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                __frame_res?;
+                Ok(())
+            })()
+            .map_err(|e| tracing::error!("{} callback error: {e}", #name));
+        })
+    }
+
+    fn fallible(&self) -> bool {
+        true
+    }
+}
 
 /// Build the input-converter body for an `impl Fn(args)` parameter: a
 /// trampoline that wraps the Kotlin **lambda** (`(leaves…) -> Unit`, erased to
@@ -22,10 +401,12 @@ use super::*;
 /// returned), so they are converted to `__JniErr` and logged via `tracing`.
 pub(crate) fn callback_input(
     ext: &Declarations,
+    operation: prebindgen_registry::OperationId,
+    source: &prebindgen_registry::flat::TypeRef,
     args: &[prebindgen_registry::flat::TypeRef],
     registry: &impl Conversions,
-    emit: &prebindgen_registry::Emit,
-) -> Option<(syn::Type, syn::Expr)> {
+    arg_fragments: &[&crate::jni::compile::JFrag],
+) -> Option<(syn::Type, JInvokePlan)> {
     // Human-readable tag for attach/log messages.
     let name = format!(
         "Fn({})",
@@ -36,57 +417,27 @@ pub(crate) fn callback_input(
     );
     let name_lit = syn::LitStr::new(&name, Span::call_site());
 
-    // Trampoline error path for the shared leaf encoder: convert the message
-    // to `__JniErr` inside the per-invocation `Result` closure.
-    let fail = |msg: TokenStream| -> TokenStream {
-        quote! {
-            return ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<String>>::from(#msg));
-        }
-    };
-
-    let arg_names: Vec<syn::Ident> = (0..args.len())
-        .map(|i| format_ident!("__cb_arg{}", i))
-        .collect();
-    let arg_pat_ty: Vec<TokenStream> = args
-        .iter()
-        .map(|t| {
-            let t = emit.spell(t);
-            quote!(#t)
-        })
-        .collect();
-
-    // Per-arg encode preludes binding the typed `run`'s args in declared
-    // order (a decomposed arg contributes one arg per leaf). Each entry of
-    // `jvalue_exprs` is a typed `jvalue`: raw primitives for primitive-wire
-    // leaves, `{ l: obj.as_raw() }` for object leaves — matching the
-    // descriptor of the generated callback interface's `run`.
-    let mut preludes: Vec<TokenStream> = Vec::new();
-    let mut jvalue_exprs: Vec<TokenStream> = Vec::new();
+    let mut parts = Vec::with_capacity(args.len());
     let mut total: usize = 0;
     // One-time setup statements (folder singleton + method id for an
     // `&[data_class]` fold arg), spliced before the `Box::new` so the move
     // closure captures them.
     let mut fold_setups: Vec<TokenStream> = Vec::new();
-
     for (i, arg_ty) in args.iter().enumerate() {
-        let cb_arg = &arg_names[i];
-
         // `&[data_class]` fold arg: instead of building the whole `List` on the
         // Rust side, allocate an empty `ArrayList` and fold each element's raw
         // leaves through the hoisted `__<Folder>Holder.instance` (Kotlin does
         // `fromParts` + `add`), then deliver the assembled list whole to the
         // user callback's `run(List<T>)`. Reuses the OUTPUT fold's folder
         // interface + appender singleton, driven from the trampoline.
-        if let Some(plan) = registry
-            .callback_arg_plan(&arg_ty.key())
+        if let Some(plan) = ext
+            .unfolded()
+            .callback_arg_plans
+            .get(&arg_ty.key())
             .filter(|p| super::render::is_iterable_fold(&p.shape))
         {
-            // Every leaf converter must already be resolved (deferral safety).
-            // A synthesized leaf (a sum's tag) has no converter to wait for.
-            for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                ext.out_frag(&leaf.out_ty)?;
-            }
+            let fragment = *arg_fragments.get(i)?;
+            let (wires, chain) = freeze_callback_delivery(ext, plan, fragment)?;
             let spec = folder_iface_for_plan(ext, registry, plan)?;
             let holder_slash =
                 syn::LitStr::new(&spec.singleton_holder_slash_fqn(), Span::call_site());
@@ -117,206 +468,64 @@ pub(crate) fn callback_input(
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("resolve folder run {}: {}", #run_cls, e)))?
                 };
             });
-            // Per fire: one `ArrayList`, fold each element's leaves through the
-            // appender (which mutates the list in place and returns it — the
-            // return is ignored). Each element's leaf locals live in a nested
-            // local frame so they are freed per element (the daemon-thread
-            // local-ref discipline — only the `acc` ref crosses iterations).
-            let acc = format_ident!("__fold{}_acc", i);
-            let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
-                .map(|k| format_ident!("__cbfold{}_obj{}", i, k))
-                .collect();
-            let (leaf_stmts, leaf_args) = encode_plan_leaves(
-                ext,
-                registry,
-                crate::jni::emit::Delivered::of(plan),
-                &obj_idents,
-                &quote!(__cb_elem),
-                &fail,
-                emit,
-            );
             let elem_frame = std::cmp::max(16, 2 * plan.leaves.len() + 6);
-            let elem_frame_lit = syn::LitInt::new(&elem_frame.to_string(), Span::call_site());
-            preludes.push(quote! {
-                let #acc: jni::objects::JObject = env
-                    .new_object("java/util/ArrayList", "()V", &[])
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: new ArrayList: {}", e)))?;
-                for __cb_elem in #cb_arg.iter() {
-                    env.push_local_frame(#elem_frame_lit)
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: push frame: {}", e)))?;
-                    let __fold_res = (|| -> ::core::result::Result<(), __JniErr> {
-                        #leaf_stmts
-                        // The appender returns the same list it mutates, so the
-                        // result is discarded; `#acc` (an outer-frame ref) stays
-                        // valid across the nested frame.
-                        let _ = unsafe {
-                            env.call_method_unchecked(
-                                &#fold_obj,
-                                #fold_id,
-                                jni::signature::ReturnType::Object,
-                                &[jni::sys::jvalue { l: #acc.as_raw() }, #(#leaf_args),*],
-                            )
-                        }
-                        .map_err(|e| {
-                            let _ = env.exception_describe();
-                            <__JniErr as ::core::convert::From<String>>::from(format!("fold run: {}", e))
-                        })?;
-                        ::core::result::Result::Ok(())
-                    })();
-                    let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
-                    __fold_res?;
-                }
+            parts.push(JInvokePart::Fold {
+                delivery: FrozenDelivery::new(ext, registry, plan, std::rc::Rc::new(wires), chain),
+                fold_obj,
+                fold_id,
+                element_frame: syn::LitInt::new(&elem_frame.to_string(), Span::call_site()),
             });
-            jvalue_exprs.push(quote!(jni::sys::jvalue { l: #acc.as_raw() }));
             total += 1;
             continue;
         }
 
         // Decomposed arg: deliver the leaves of its type-level canonical
         // output, exactly like a return delivery.
-        if let Some(plan) = registry.callback_arg_plan(&arg_ty.key()) {
-            // Deferral safety: every leaf converter (and identity-leaf
-            // projection) must already be resolved — return None so the rank
-            // resolver retries this converter later otherwise. A synthesized
-            // leaf (a sum's tag) has no converter to wait for: requiring one
-            // would make the trampoline wait forever on an `i32` crossing the
-            // binding may not have.
-            for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                let e = ext.out_frag(&leaf.out_ty)?;
-                if leaf.identity && e.metadata.projection.is_none() {
-                    return None;
-                }
+        if let Some(plan) = effective_callback_plan(ext, arg_ty) {
+            let fragment = *arg_fragments.get(i)?;
+            let (wires, chain) = freeze_callback_delivery(ext, plan, fragment)?;
+            let optional = plan.is_optional_base();
+            if optional
+                && !matches!(
+                    chain.as_ref().map(|chain| &chain.layout),
+                    Some(crate::jni::compile::JLayout::Optional(inner))
+                        if inner.leaf_count() == plan.leaves.len()
+                )
+            {
+                return None;
             }
-            let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
-                .map(|k| format_ident!("__cb{}_obj{}", i, k))
-                .collect();
-            let (stmts, arg_exprs) = encode_plan_leaves(
-                ext,
-                registry,
-                crate::jni::emit::Delivered::of(plan),
-                &obj_idents,
-                &quote!(#cb_arg),
-                &fail,
-                emit,
-            );
-            preludes.push(stmts);
-            total += arg_exprs.len();
-            jvalue_exprs.extend(arg_exprs);
+            total += plan.leaves.len() + usize::from(optional);
+            parts.push(JInvokePart::Decomposed {
+                delivery: FrozenDelivery::new(ext, registry, plan, std::rc::Rc::new(wires), chain),
+                optional,
+            });
             continue;
         }
 
-        // Whole-value delivery. A by-value arg (`impl Fn(T)`) has a `T` output
-        // converter and is passed by move. A borrowed whole-value arg
-        // (`impl Fn(&T)` for a type with no accessor plan — e.g. a field-based
-        // `data_class` like `Payload`) has no `&T` converter, so fall back to `T`'s
-        // converter and clone the borrow (the callback only borrows the value). The
-        // `data_class` converter composes the whole object via `fromParts`, so the
-        // Kotlin `run(t: T)` receives a ready-made `T`.
-        let (cb_val, arg_entry) = match ext.out_frag(arg_ty) {
-            Some(e) => (quote!(#cb_arg), e),
-            // A borrow: the callback hands out a reference, and the value is
-            // cloned for the JVM.
-            //
-            // That this is a borrow is the model's answer (`borrow_target`) —
-            // no spelling is inspected here, which is the point of #229.
-            //
-            // `(#cb_arg).clone()` is nonetheless only well-typed for a
-            // DIRECTLY-spelled `&T`: `#cb_arg` carries the source's spelling,
-            // so a transparent wrapper — `Box<&T>`, `Ref` all the same —
-            // would clone to `Box<&T>`, which the `T` converter rejects. That
-            // case is refused before it reaches here: a callback arg's
-            // whole-value output converter is a *required* type, and
-            // `output_wrapper_shape`'s borrowed-opaque arm matches
-            // `syn::Type::Reference` on `produced` structurally, so `Box<&T>`
-            // (a `Type::Path`) never gets one.
-            //
-            // MEASURED, not assumed — `a_wrapped_borrow_callback_arg_declines`
-            // fails, on exactly this clone, if that arm is made
-            // spelling-blind. A local re-check here was tried (#279 review)
-            // and dropped: it changed no output on `Box<&String>` or
-            // `Box<&ZThing>`, and added a classification that never fires.
-            None => {
-                let core = arg_ty.borrow_target()?;
-                (quote!((#cb_arg).clone()), ext.out_frag(core)?)
-            }
+        // Whole-value delivery consumes the exact deconstruct fragment the
+        // registry's Invoke recipe compiled for this argument. Its retained
+        // pipeline already decides move versus borrow cloning, stage order,
+        // projection, and the final JNI wire; rendering does not look the type
+        // up again or reconstruct any of those decisions.
+        let fragment = *arg_fragments.get(i)?;
+        let arg_abi = crate::jni::compile::output_abi_of(&fragment.freeze())?;
+        arg_abi.activate();
+        let crate::jni::compile::OutAbi::Value(arg_value) = arg_abi else {
+            unreachable!("a whole callback argument is not a synthesized selector")
         };
-        let arg_wire = arg_entry.destination.clone();
-        let enc_ident = format_ident!("__cb{}_enc", i);
-        let obj_ident = format_ident!("__cb{}_obj", i);
-
-        // The arg's COMPLETE Rust -> wire chain: the rust-side stages a custom
-        // `convert!` declaration inserts (`Duration -> u64`), then the
-        // wire-facing converter (`u64 -> jlong`). A whole-value callback arg
-        // has no leaf plan, so this is its own encoder path — calling only the
-        // wire-facing converter would hand it the semantic value where it
-        // expects the representation. Stage locals are keyed on the arg index.
-        let conv = {
-            let converter = arg_entry.converter_ident();
-            if arg_entry.pre_stages.is_empty() {
-                quote!(#converter(&mut env, #cb_val)?)
-            } else {
-                let mut body = TokenStream::new();
-                let mut previous = cb_val.clone();
-                for (order, (_, stage)) in arg_entry.output_stage_order().enumerate() {
-                    let stage_fn = &stage.function.sig.ident;
-                    let next = format_ident!("__cb{}_s{}", i, order);
-                    body.extend(quote! {
-                        let #next = #stage_fn(&mut env, #previous)
-                            .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
-                                __e.to_string()))?;
-                    });
-                    previous = quote!(#next);
-                }
-                quote!({ #body #converter(&mut env, #previous)? })
-            }
-        };
-
-        // Plan-less opaque-handle arg: encode to a raw `jlong` (`Box::into_raw`)
-        // and deliver it as-is. The typed handle class is constructed Kotlin-side
-        // by the generated `asRaw` proxy (`WrapKind::HandleOwned`), which also
-        // `close()`s it after `run` (close-unless-taken) — so no Rust
-        // `new_object` and no post-invoke close. The Kotlin wrap lets a queryable
-        // consumer reply through the handle inside the callback (a consuming
-        // reply zeroes the slot, making the proxy's `close` a no-op). See
-        // `owned_handle_iface_param`.
-        if let Some(h) = &arg_entry.metadata.projection {
-            if matches!(h.kind, ProjectionKind::Handle) {
-                preludes.push(quote! {
-                    let #enc_ident = #conv;
-                });
-                jvalue_exprs.push(quote!(jni::sys::jvalue { j: #enc_ident }));
-                total += 1;
-                continue;
-            }
-        }
-
-        // Whole-value arg (scalar / String / data-class …):
-        // encode with its output converter. A non-`Option` primitive-wire arg
-        // passes its raw primitive; everything else casts to JObject. Output
-        // converters take the value by move; `cb_arg` is the closure
-        // parameter, so pass it directly.
-        let arg_is_prim = arg_entry
-            .metadata
+        let arg_value = std::rc::Rc::new(*arg_value);
+        let arg_wire = arg_value.pipeline.wire().clone();
+        let arg_is_prim = arg_value
             .projection
             .as_ref()
             .is_none_or(|p| p.kind == ProjectionKind::Unsigned64)
             && arg_ty.optional_inner().is_none()
             && matches!(jni_field_access(&arg_wire), Some((_, _, false)));
-        if arg_is_prim {
-            let letter = jni_field_access(&arg_wire).unwrap().1;
-            preludes.push(quote! {
-                let #enc_ident = #conv;
-            });
-            jvalue_exprs.push(quote!(jni::sys::jvalue { #letter: #enc_ident }));
-            total += 1;
-            continue;
-        }
-        let cast = cast_wire_to_jobject(&enc_ident, &arg_wire, &fail);
-        preludes.push(quote! {
-            let #enc_ident = #conv;
-            let #obj_ident: jni::objects::JObject = #cast;
+        parts.push(JInvokePart::Whole {
+            abi: arg_value,
+            wire: arg_wire,
+            primitive: arg_is_prim,
         });
-        jvalue_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
         total += 1;
     }
 
@@ -334,85 +543,27 @@ pub(crate) fn callback_input(
     let frame_cap = std::cmp::max(16, 2 * total + 6);
     let frame_cap_lit = syn::LitInt::new(&frame_cap.to_string(), Span::call_site());
 
-    let body: syn::Expr = syn::parse_quote!({
-        use std::sync::Arc;
-        let java_vm = Arc::new(env.get_java_vm()
-            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to retrieve JVM: {}", e)))?);
-        let callback_global_ref = env.new_global_ref(&v)
-            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to global-ref callback: {}", e)))?;
-        // Resolve the typed callback interface's `run` method ID ONCE, here
-        // at trampoline creation. The safe `JNIEnv::call_method` re-parses
-        // the descriptor string (a `combine`-parser run) and re-resolves the
-        // method through the JVM symbol table on EVERY call — measured at
-        // ~33% of per-message delivery time on the subscriber hot path. The
-        // `JMethodID` is `Copy + Send + Sync` and stays valid for the
-        // closure's lifetime: the global ref pins the callback instance and
-        // therefore its class.
-        let __invoke_class = env.get_object_class(&v)
-            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to get callback class for {}: {}", #name_lit, e)))?;
-        let __invoke_id = env.get_method_id(&__invoke_class, "run", #descr_lit)
-            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to resolve run for {}: {}", #name_lit, e)))?;
-        // One-time fold setup (folder singleton global ref + `run` method id),
-        // captured by the move closure below.
-        #(#fold_setups)*
-        Box::new(move |#(#arg_names: #arg_pat_ty),*| {
-            let _ = (|| -> ::core::result::Result<(), __JniErr> {
-                let mut env = java_vm
-                    .attach_current_thread_as_daemon()
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Attach thread for {}: {}", #name_lit, e)))?;
-                // The callback fires on a daemon-attached zenoh RX thread that
-                // never returns through a JNI stack frame, so the JNI local
-                // refs each invocation creates (encoded leaves, wrapped handle
-                // objects, call temporaries) would otherwise accumulate for
-                // the thread's lifetime and exhaust the JVM heap
-                // (OutOfMemoryError). Bracket each invocation in an explicit
-                // local frame so every local is released when the frame pops —
-                // popped unconditionally below so an early `?`/error path
-                // still frees it.
-                env.push_local_frame(#frame_cap_lit)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("push local frame for {}: {}", #name_lit, e)))?;
-                let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
-                    #(#preludes)*
-                    // SAFETY: `__invoke_id` was resolved on this exact
-                    // callback object's class with this exact descriptor, and
-                    // the global ref keeps the class loaded. Exception-check
-                    // semantics are identical to the safe `call_method` (both
-                    // route through the same checked JNI invoke). `run`
-                    // returns void; primitives ride the jvalues raw.
-                    let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
-                        env.call_method_unchecked(
-                            &callback_global_ref,
-                            __invoke_id,
-                            jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
-                            &[#(#jvalue_exprs),*],
-                        )
-                    }
-                    .map(|_| ())
-                    .map_err(|e| {
-                        // `exception_describe` also clears the pending exception.
-                        let _ = env.exception_describe();
-                        <__JniErr as ::core::convert::From<String>>::from(e.to_string())
-                    });
-                    // A plan-less opaque-handle arg's per-invocation `Box` is
-                    // freed Kotlin-side by the `asRaw` proxy's `finally { close() }`
-                    // (close-unless-taken), so there is no Rust-side close here.
-                    __call_res?;
-                    Ok(())
-                })();
-                // Pop the frame unconditionally so locals are freed even when
-                // the body above returned `Err` early.
-                let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
-                __frame_res?;
-                Ok(())
-            })()
-            .map_err(|e| tracing::error!("{} callback error: {e}", #name_lit));
-        })
-    });
+    let chain = prebindgen_registry::chain::Invoke {
+        source: source.clone(),
+        arguments: args.to_vec(),
+        source_policy: crate::jni::chain::JSource {
+            wrappers: Vec::new(),
+        },
+        bridge: JInvokeBridge {
+            name: name_lit,
+            descriptor: descr_lit,
+            frame_capacity: frame_cap_lit,
+            fold_setups,
+        },
+        parts,
+    };
+    let intermediate: syn::Type = syn::parse_quote!(jni::objects::JObject);
+    let rust_plan = JInvokePlan { operation, chain };
 
     // The wire type for an `impl Fn(args)` parameter is JObject (the erased
     // Kotlin lambda). The converter returns Box<dyn Fn(args) + Send + Sync>,
     // which coerces to the source's impl-trait param type.
-    Some((syn::parse_quote!(jni::objects::JObject), body))
+    Some((intermediate, rust_plan))
 }
 
 /// Hard-error guard for `Vec<opaque-handle>` element types. A handle's wire is
@@ -435,17 +586,4 @@ pub(crate) fn reject_vec_of_handle(
             );
         }
     }
-}
-
-/// Reconstruct the `impl Fn(args...) + Send + Sync + 'static` syn::Type
-/// from a flat slice of arg types. Used by the rank-1/2/3 callback impls
-/// to feed `input_wrapper` the original outer type.
-pub(crate) fn build_fn_type(
-    args: &[prebindgen_registry::flat::TypeRef],
-    emit: &prebindgen_registry::Emit,
-) -> syn::Type {
-    // The args as the source spelled them — the callback's Rust type is
-    // re-emitted, never re-derived.
-    let arg_iter = args.iter().map(|a| emit.spell(a));
-    syn::parse_quote!(impl Fn( #(#arg_iter),* ) + Send + Sync + 'static)
 }

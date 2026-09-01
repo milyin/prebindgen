@@ -1,61 +1,35 @@
 //! `Prebindgen` — what a generator still hands the emitter.
 //!
-//! One method per `#[prebindgen]` item kind (`on_function`, `on_struct`,
-//! `on_enum`, `on_const`) returning the wrapper Rust tokens to emit, plus the
-//! items they depend on (`prerequisites`), a cross-cutting rewrite
-//! (`post_process_item`) and two invariant checks.
+//! Two invariant checks, and nothing else. Everything an adapter emits is
+//! planned into its frozen assembly, and what the writer needs of the registry
+//! is frozen with it — so a generator hands the emitter no items, no
+//! prerequisites, and no questions to ask back.
 //!
 //! **Conversion is not here.** A generator builds those itself, one per
 //! crossing, inside `RegistryBuilder::convert_with` — so there is no
 //! `on_input_type`, no deferral, and no fixed-point loop retrying until it
 //! converges.
 //!
-//! [`ConverterImpl::function`] is the **complete** Rust function for a
-//! converter — signature, body, attributes, lifetimes. The generator owns 100%
-//! of the shape. Callers read the name from `function.sig.ident` and the wire
-//! form from `destination`.
+//! [`ConverterImpl::converter`] is the stable identity of the wire-facing
+//! converter. Its executable artifact is retained separately by the adapter's
+//! frozen generation plan; this shared registry carrier never stores rendered
+//! Rust syntax.
 
-use proc_macro2::TokenStream;
-
-use crate::{niches::Niches, registry::Registry};
+use crate::{generation::OperationId, niches::Niches, registry::Registry};
 
 /// A shared predicate over an item name, as used by
 /// `Prebindgen`'s ignore hooks (bulk ignores keyed on a naming
 /// family rather than an exact ident).
 pub type NamePredicate = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
-/// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
-/// a value-inspecting step that sits between the rust value the
-/// `#[prebindgen]` fn yields/receives and the wire-facing
-/// [`ConverterImpl::function`].
-///
-/// Each stage is a fallible `In → Result<Out, Err>` function. The core
-/// pipeline only ever emits and de-duplicates [`Self::function`]; how a
-/// stage's `Err` arm is surfaced to the foreign side — throw an exception,
-/// return an error code, set `errno`, … — is entirely up to the
-/// destination-language adapter and is described by [`Self::metadata`].
-#[derive(Clone)]
-pub struct Stage<M = ()> {
-    /// Complete function definition for this stage. Same shape as
-    /// [`ConverterImpl::function`] but typed for this stage's own `In →
-    /// Out` and own error type.
-    pub function: syn::ItemFn,
-    /// Adapter-specific extras for this stage — the same type as the owning
-    /// converter's ([`ConverterImpl::metadata`]). The core never
-    /// inspects this; the adapter's emitter reads it to decide how the
-    /// stage's `Err` arm is surfaced (e.g. a JNI adapter stores the JVM
-    /// exception class and `throw_*` fn to call here; a C adapter might
-    /// store the error-code sentinel). Defaults to `()`.
-    pub metadata: M,
-}
-
 /// Result of resolving one converter — the wire (destination) type the rest
-/// of the registry sees, plus the complete generated function.
+/// of the registry sees, plus the identity of its separately retained
+/// executable artifact.
 ///
-/// Invariant: `function.sig.ident` MUST be a deterministic function of the
-/// `(rust_type, destination)` pair so that callers of this converter — both
-/// other generated converters from the same adapter and any hand-written code
-/// that knows the convention — can compute or look up the name.
+/// `converter` is registry-owned semantic identity. Composed parents retain
+/// that identity directly; they never recompute it from a Rust type or wire
+/// type. The writer turns it into a private Rust symbol only through
+/// [`crate::RustWriter`] during final file assembly.
 #[derive(Clone)]
 pub struct ConverterImpl<M = ()> {
     /// Wire/destination type. Other converters that ask "what's the wire
@@ -64,26 +38,13 @@ pub struct ConverterImpl<M = ()> {
     /// is the adapter's internal calling convention; `destination` is the
     /// value the wire carries on success.
     pub destination: syn::Type,
-    /// Complete function definition for the **wire-facing** stage. The
-    /// adapter owns the parameter list, return type, `unsafe`/`pub`
-    /// modifiers, lifetime parameters, and any attribute annotations.
+    /// Stable identity of the **wire-facing** stage. The adapter's frozen
+    /// generation plan owns its parameter list, return type, body, and other
+    /// Rust emission policy.
     /// For input direction this is the FIRST stage in execution order
     /// (it takes the wire); for output direction this is the LAST stage
     /// (it produces the wire).
-    pub function: syn::ItemFn,
-    /// **Rust-side** stages that compose with [`Self::function`] to form
-    /// the full conversion chain. Default empty — a 1-stage converter
-    /// is just `function`.
-    ///
-    /// Order is rust-side-first → function-side-last. Concretely:
-    /// * **Input** (wire → rust): chain runs `wire → function →
-    ///   pre_stages[0] → pre_stages[1] → … → pre_stages[N-1] → rust`.
-    /// * **Output** (rust → wire): chain runs `rust → pre_stages[N-1] →
-    ///   … → pre_stages[1] → pre_stages[0] → function → wire`.
-    ///
-    /// Each stage is fallible; how its `Err` arm is surfaced is adapter
-    /// specific and carried in [`Stage::metadata`].
-    pub pre_stages: Vec<Stage<M>>,
+    pub converter: OperationId,
     /// Bit-patterns the wire type can represent but this converter never
     /// produces (output) and rejects (input). Wrapper handlers like
     /// `Option<_>` consume one slot for their own discriminant and
@@ -116,26 +77,14 @@ pub struct ConverterImpl<M = ()> {
 
 /// What an emitter asks of a conversion it holds.
 impl<M> ConverterImpl<M> {
-    /// Identifier of the wire-facing converter function.
-    pub fn converter_ident(&self) -> &syn::Ident {
-        &self.function.sig.ident
+    /// Semantic identity of the wire-facing converter function.
+    pub fn converter_id(&self) -> &OperationId {
+        &self.converter
     }
 
     /// Wire type this conversion carries on success.
     pub fn wire_type(&self) -> &syn::Type {
         &self.destination
-    }
-
-    /// Rust-side stages in input execution order, after the wire-facing
-    /// converter has decoded the wire value.
-    pub fn input_stage_order(&self) -> impl Iterator<Item = (usize, &Stage<M>)> {
-        self.pre_stages.iter().enumerate().rev()
-    }
-
-    /// Rust-side stages in output execution order, before the wire-facing
-    /// converter encodes the final wire value.
-    pub fn output_stage_order(&self) -> impl Iterator<Item = (usize, &Stage<M>)> {
-        self.pre_stages.iter().enumerate()
     }
 }
 
@@ -145,11 +94,9 @@ impl<M> ConverterImpl<M> {
 /// on the wire and what wrapper code to emit.
 ///
 /// The trait has no language-specific concepts of its own, and — since the
-/// registry stopped asking it questions — one job left: **per-item emission**.
-/// The file emitter calls `on_function` / `on_struct` / `on_enum` / `on_const`
-/// to produce the per-item wrapper code, plus `prerequisites` and
-/// `post_process_item` around them and the two `validate` hooks for
-/// adapter invariants.
+/// registry stopped asking it questions and every emitted item became an
+/// artifact of the adapter's frozen assembly — what is left is the two
+/// `validate` hooks for adapter invariants.
 ///
 /// What used to be here and is not any more: which items to build, how
 /// composites decompose, and the wire form of each type. A generator states the
@@ -166,9 +113,11 @@ impl<M> ConverterImpl<M> {
 ///
 /// # The rule an adapter must obey
 ///
-/// "Classify off [`kind`](crate::flat::TypeRef::kind), spell off the syntax"
-/// tells an adapter where to get each fact. It is silent on the question
-/// adapters actually face — what the **destination language** ends up seeing.
+/// "Analyze the Flat model; generate Rust only" tells an adapter where every
+/// decision comes from. Final source-type output is an inert fragment produced
+/// by [`RustWriter`](crate::RustWriter), never a typed view of retained syntax. It is silent
+/// on the question adapters actually face — what the **destination language**
+/// ends up seeing.
 /// That one has its own answer:
 ///
 /// > **Same `kind` ⇒ same destination-language type.** The *wire* is the
@@ -201,32 +150,7 @@ impl<M> ConverterImpl<M> {
 /// Reusing a mirror's spelling test in a converted position is how the rule
 /// gets broken (prebindgen#230, #292).
 pub trait Prebindgen {
-    /// Rust items the adapter's emitted converters depend on (helper
-    /// structs, type aliases, runtime-support code). Emitted at the top
-    /// of the destination file, before all auto-generated converters.
-    ///
-    /// Default: none. Wrapper adapters that compose a base adapter should
-    /// forward to or extend the base's `prerequisites()`. The resolved
-    /// `registry` is supplied so prerequisites can be gated on what the
-    /// (feature-aware) scan actually contains — e.g. emitting a
-    /// per-opaque-handle item only for handles a scanned `#[prebindgen]`
-    /// fn references.
-    fn prerequisites(&self, _registry: &Registry, _emit: &crate::Emit) -> Vec<syn::Item> {
-        Vec::new()
-    }
-
     // ── Declaration queries ────────────────────────────────────────
-
-    /// Final post-processing pass applied to every emitted item right
-    /// before write. Default: no-op.
-    ///
-    /// Use this for cross-cutting transforms that would otherwise have
-    /// to be remembered at every individual emit site — e.g. qualifying
-    /// bare type references against a source module so the emitted
-    /// converter bodies compile in the binding crate's scope. Walks the
-    /// entire AST, not just signatures, so type ascriptions and casts
-    /// inside function bodies are covered.
-    fn post_process_item(&self, _item: &mut syn::Item, _registry: &Registry, _emit: &crate::Emit) {}
 
     /// Adapter-invariant checks that need registry **signatures** — the
     /// earliest they can run (decl objects are built before any source is
@@ -254,86 +178,5 @@ pub trait Prebindgen {
     /// Default: no checks.
     fn validate_resolved(&self, _registry: &Registry) -> Result<(), String> {
         Ok(())
-    }
-
-    /// Absolute path under which the source crate's items are reachable
-    /// from the generated file (e.g. `zenoh_flat`), for adapters that
-    /// qualify emitted references against one. Drives the default
-    /// [`Self::on_const`]: with a source module available, a named const
-    /// re-emits as a path-alias to the source item instead of copying its
-    /// initializer tokens. Default: `None`.
-    fn source_module(&self) -> Option<&syn::Path> {
-        None
-    }
-
-    // ── Item methods ───────────────────────────────────────────────
-    //
-    // Each takes the **element**, not the `syn` item it was parsed from.
-    //
-    // The element is the model's own node: its types are `TypeRef`s, already
-    // classified. An adapter handed one therefore cannot ask what a type means
-    // and be told "no reading" — the question a `&syn::ItemFn` forced it to ask
-    // the registry, and which answered wrongly for a type that never entered
-    // the pipeline (#275). What generated Rust must *spell* is still exactly
-    // available, through `spell()`: classify off `kind`, spell with `spell()`.
-
-    /// Wrap a `#[prebindgen]` fn into the destination-language wrapper
-    /// (e.g. JNI `extern "C"` fn).
-    fn on_function(
-        &self,
-        f: &prebindgen_flat::flat::Function,
-        registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream;
-
-    /// Per-struct emission. Typically empty for languages that get
-    /// everything they need from auto-generated converters.
-    fn on_struct(
-        &self,
-        s: &prebindgen_flat::flat::Struct,
-        registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream;
-
-    /// Per-sum emission — an `enum` whose alternatives carry payloads.
-    ///
-    /// Separate from [`Self::on_enum`] because the model separates them: the
-    /// two are numbered differently and consumed as different constructs. An
-    /// adapter with nothing to say about one shape returns an empty stream, as
-    /// both in-tree adapters do for both.
-    fn on_variant(
-        &self,
-        v: &prebindgen_flat::flat::Variant,
-        registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream;
-
-    /// Per-enum emission — the fieldless shape, a named set of integers.
-    fn on_enum(
-        &self,
-        e: &prebindgen_flat::flat::Enum,
-        registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream;
-
-    /// Per-const emission. Default: a named const re-emits as a path-alias
-    /// when [`Self::source_module`] is available —
-    /// initializer tokens are never copied, so a const whose initializer
-    /// references source-crate internals stays valid in the generated file.
-    /// An adapter without a source module passes the const through verbatim.
-    ///
-    /// A const reaching here is always named: prebindgen's own injected feature
-    /// checks are [`Guard`](prebindgen_flat::flat::Guard)s, not consts, so this
-    /// never has to recognise one.
-    fn on_const(
-        &self,
-        c: &prebindgen_flat::flat::Constant,
-        _registry: &Registry,
-        emit: &crate::Emit,
-    ) -> TokenStream {
-        match self.source_module() {
-            Some(m) => emit.const_alias(c, m),
-            None => emit.const_verbatim(c),
-        }
     }
 }

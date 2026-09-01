@@ -3,8 +3,11 @@ use prebindgen_registry::Conversions;
 use super::*;
 
 impl CbindgenBuilder {
-    pub(crate) fn prereq_domain_constants(&self, registry: &Registry) -> Vec<syn::Item> {
-        let mut items = Vec::new();
+    pub(crate) fn domain_constants(
+        &self,
+        registry: &Registry,
+    ) -> Vec<crate::assembly::CDomainConstant> {
+        let mut constants = Vec::new();
         for decl in &self.convert_decls {
             let Some(domain) = decl.domain() else {
                 continue;
@@ -35,247 +38,132 @@ impl CbindgenBuilder {
                 .take(demand)
                 .enumerate()
             {
-                let name = format_ident!("{}_NICHE_{}", base, index);
-                items.push(syn::parse_quote!(
-                    #[doc = "Reserved representation value used by generated sum-type ABIs."]
-                    pub const #name: #ty = #value;
+                constants.push(crate::assembly::CDomainConstant::niche(
+                    &base,
+                    index,
+                    ty.clone(),
+                    value.clone(),
                 ));
                 if index == 0 {
-                    let none = format_ident!("{}_NONE", base);
-                    items.push(syn::parse_quote!(
-                        #[doc = "Representation of None for the first optional layer."]
-                        pub const #none: #ty = #value;
+                    constants.push(crate::assembly::CDomainConstant::none(
+                        &base,
+                        ty.clone(),
+                        value,
                     ));
                 }
             }
         }
-        items
+        constants
     }
 
-    pub(crate) fn in_custom(
+    pub(crate) fn custom_plan(
         &self,
         ty: &TypeRef,
         registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl> {
+        direction: Direction,
+    ) -> Option<(crate::chain::CustomPlan, Niches)> {
         let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| *d.key() == key)?;
-        let spec = decl.input_spec().as_ref()?;
-        let (repr, conversion, fallible) = self.input_conversion(decl, spec, registry, emit);
+        let spec = match direction {
+            Direction::Construct => decl.input_spec().as_ref()?,
+            Direction::Deconstruct => decl.output_spec().as_ref()?,
+        };
+        let (repr, operation) = self.custom_operation(decl, spec, registry, direction);
         assert!(
             is_scalar(&repr),
             "Cbindgen custom representations must be C scalar types"
         );
         if let Some(domain) = decl.domain() {
+            // Both sides are reduced to their kind first: a representation and
+            // a domain naming one scalar are the same type however either was
+            // spelled.
             assert_eq!(
-                TypeKey::from_type(domain.ty()),
-                TypeKey::from_type(&repr),
-                "Cbindgen conversion domain type does not match its input representation"
+                Some(domain.kind()),
+                prebindgen_registry::DomainKind::from_type(&repr),
+                "Cbindgen conversion domain type does not match its {} representation",
+                match direction {
+                    Direction::Construct => "input",
+                    Direction::Deconstruct => "output",
+                }
             );
         }
-        let src = self.src_ty_of(&key);
-        let wire = repr.clone();
-        let name = Self::in_name_of(&key);
         let valid = decl
             .domain()
             .as_ref()
-            .map(|d| d.contains_expr(quote!(v)))
-            .unwrap_or_else(|| quote!(true));
-        let msg = format!("{} representation is outside its declared domain", key);
-        let function: syn::ItemFn = if decl.domain().is_some() || fallible {
-            let converted = if fallible {
-                quote!((#conversion).map_err(|e| e.to_string()))
-            } else {
-                quote!(::core::result::Result::Ok(#conversion))
-            };
-            syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #wire)
-                    -> ::core::result::Result<#src, ::std::string::String>
-                {
-                    if !(#valid) {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from(#msg)
-                        );
-                    }
-                    #converted
-                }
-            )
-        } else {
-            syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #wire) -> #src {
-                    #conversion
-                }
-            )
-        };
-        let niches = self.c_domain_niches(decl, registry, Direction::Construct);
-        Some(ConverterImpl {
-            subs: vec![TypeKey::from_type(&repr)],
-            destination: wire,
-            function,
-            pre_stages: vec![],
+            .map(|domain| match direction {
+                Direction::Construct => domain.contains_expr(quote!(v)),
+                Direction::Deconstruct => domain.contains_expr(quote!(__repr)),
+            })
+            .map(|tokens| {
+                syn::parse2(tokens).expect("a representation-domain predicate is an expression")
+            });
+        let invalid_message = format!("{} representation is outside its declared domain", key);
+        let niches = self.c_domain_niches(decl, registry, direction);
+        Some((
+            crate::chain::CustomPlan {
+                source: ty.clone(),
+                wire: repr,
+                direction,
+                operation,
+                valid,
+                invalid_message,
+            },
             niches,
-            metadata: (),
-        })
+        ))
     }
 
-    pub(crate) fn out_custom(
-        &self,
-        ty: &TypeRef,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> Option<ConverterImpl> {
-        let key = ty.key();
-        let decl = self.convert_decls.iter().find(|d| *d.key() == key)?;
-        let spec = decl.output_spec().as_ref()?;
-        let (repr, conversion, fallible) = self.output_conversion(decl, spec, registry, emit);
-        assert!(
-            is_scalar(&repr),
-            "Cbindgen custom representations must be C scalar types"
-        );
-        if let Some(domain) = decl.domain() {
-            assert_eq!(
-                TypeKey::from_type(domain.ty()),
-                TypeKey::from_type(&repr),
-                "Cbindgen conversion domain type does not match its output representation"
-            );
-        }
-        let src = self.src_ty_of(&key);
-        let wire = repr.clone();
-        let name = Self::out_name_of(&key);
-        let valid = decl
-            .domain()
-            .as_ref()
-            .map(|d| d.contains_expr(quote!(__repr)))
-            .unwrap_or_else(|| quote!(true));
-        let msg = format!("{} representation is outside its declared domain", key);
-        let function: syn::ItemFn = if decl.domain().is_some() || fallible {
-            let repr_expr = if fallible {
-                quote!((#conversion).map_err(|error| error.to_string())?)
-            } else {
-                quote!(#conversion)
-            };
-            syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src)
-                    -> ::core::result::Result<#wire, ::std::string::String>
-                {
-                    let __repr: #repr = #repr_expr;
-                    if !(#valid) {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from(#msg)
-                        );
-                    }
-                    ::core::result::Result::Ok(__repr)
-                }
-            )
-        } else {
-            syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src) -> #wire {
-                    #conversion
-                }
-            )
-        };
-        let niches = self.c_domain_niches(decl, registry, Direction::Deconstruct);
-        Some(ConverterImpl {
-            subs: vec![TypeKey::from_type(&repr)],
-            destination: wire,
-            function,
-            pre_stages: vec![],
-            niches,
-            metadata: (),
-        })
-    }
-
-    fn input_conversion(
+    fn custom_operation(
         &self,
         decl: &ConvertDecl,
         spec: &ConvertSpec,
         registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty_of(&decl.rust_type().key());
+        direction: Direction,
+    ) -> (syn::Type, crate::chain::CustomOperation) {
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = registry
                     .flat()
                     .function(&f)
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
-                let (repr_reading, by_ref) = one_param(item);
-                let repr = emit.spell_ty(repr_reading);
-                // The element normalizes an elided return to `Unit`, and
-                // `TypeKind::Fallible` is the `Result` `result_parts` looked for
-                // in a path.
-                let (ok, fallible) = match item.ret.fallible_parts() {
-                    Some((ok, _)) => (ok, true),
-                    None => (&item.ret, false),
+                let (repr, by_ref, fallible) = match direction {
+                    Direction::Construct => {
+                        let (repr, by_ref) = one_param(item);
+                        let (ok, fallible) = match item.ret.fallible_parts() {
+                            Some((ok, _)) => (ok, true),
+                            None => (&item.ret, false),
+                        };
+                        assert_eq!(ok.key(), *decl.key());
+                        (repr, by_ref, fallible)
+                    }
+                    Direction::Deconstruct => {
+                        let (param, by_ref) = one_param(item);
+                        assert_eq!(param.key(), *decl.key());
+                        let (repr, fallible) = match item.ret.fallible_parts() {
+                            Some((ok, _)) => (ok, true),
+                            None => (&item.ret, false),
+                        };
+                        (repr, by_ref, fallible)
+                    }
                 };
-                assert_eq!(ok.key(), *decl.key());
+                let repr = scalar_ty(repr).unwrap_or_else(|| {
+                    panic!("Cbindgen custom representations must be C scalar types")
+                });
                 let path = self.conversion_fn_path(registry, f);
-                let expr = if by_ref {
-                    syn::parse_quote!(#path(&v))
-                } else {
-                    syn::parse_quote!(#path(v))
-                };
-                (repr, expr, fallible)
+                (
+                    repr,
+                    crate::chain::CustomOperation::Function {
+                        path,
+                        by_ref,
+                        fallible,
+                    },
+                )
             }
-            ConvertSpec::Trait { repr, fallible } => {
-                let expr = if *fallible {
-                    syn::parse_quote!(
-                        <#repr as ::core::convert::TryInto<#target>>::try_into(v)
-                    )
-                } else {
-                    syn::parse_quote!(
-                        <#repr as ::core::convert::Into<#target>>::into(v)
-                    )
-                };
-                (repr.clone(), expr, *fallible)
-            }
-        }
-    }
-
-    fn output_conversion(
-        &self,
-        decl: &ConvertDecl,
-        spec: &ConvertSpec,
-        registry: &impl Conversions,
-        emit: &prebindgen_registry::Emit,
-    ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty_of(&decl.rust_type().key());
-        match spec {
-            ConvertSpec::PrebindgenFn(f) => {
-                let item = registry
-                    .flat()
-                    .function(&f)
-                    .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
-                let (param, by_ref) = one_param(item);
-                assert_eq!(param.key(), *decl.key());
-                let (repr, fallible) = match item.ret.fallible_parts() {
-                    Some((ok, _)) => (emit.spell_ty(ok), true),
-                    None => (emit.spell_ty(&item.ret), false),
-                };
-                let path = self.conversion_fn_path(registry, f);
-                let expr = if by_ref {
-                    syn::parse_quote!(#path(&v))
-                } else {
-                    syn::parse_quote!(#path(v))
-                };
-                (repr, expr, fallible)
-            }
-            ConvertSpec::Trait { repr, fallible } => {
-                let expr = if *fallible {
-                    syn::parse_quote!(
-                        <#target as ::core::convert::TryInto<#repr>>::try_into(v)
-                    )
-                } else {
-                    syn::parse_quote!(
-                        <#target as ::core::convert::Into<#repr>>::into(v)
-                    )
-                };
-                (repr.clone(), expr, *fallible)
-            }
+            ConvertSpec::Trait { repr, fallible } => (
+                repr.clone(),
+                crate::chain::CustomOperation::Trait {
+                    fallible: *fallible,
+                },
+            ),
         }
     }
 

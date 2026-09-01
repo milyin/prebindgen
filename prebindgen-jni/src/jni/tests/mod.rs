@@ -1,5 +1,4 @@
 pub(crate) use prebindgen::SourceLocation;
-use prebindgen_registry::{Answer, ConverterImpl};
 use quote::ToTokens;
 
 use super::*;
@@ -16,88 +15,42 @@ fn myflat_loc() -> prebindgen::SourceLocation {
     }
 }
 
+/// Locate one generated Rust function by semantic evidence in its signature
+/// and body. Private converter symbols are deliberately chosen only during
+/// final rendering, so tests must not reverse-engineer meaning from them.
+fn generated_function(
+    rust: &str,
+    signature_needles: &[&str],
+    body_needles: &[&str],
+) -> syn::ItemFn {
+    let file = syn::parse_file(rust).expect("generated Rust parses");
+    file.items
+        .into_iter()
+        .filter_map(|item| match item {
+            syn::Item::Fn(function) => Some(function),
+            _ => None,
+        })
+        .find(|function| {
+            let signature = function.sig.to_token_stream().to_string();
+            let body = function.block.to_token_stream().to_string();
+            signature_needles.iter().all(|needle| signature.contains(needle))
+                && body_needles.iter().all(|needle| body.contains(needle))
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "generated function not found; signature={signature_needles:?}, body={body_needles:?}\n{rust}"
+            )
+        })
+}
+
 mod aliasing;
 mod callbacks;
 mod config;
 mod consts;
 mod cross_artifact;
 mod flatten;
-// BLOCKED by the prebindgen-jni crate split: every test in this module calls
-// `Registry::empty_for_test()` and/or `Emit::for_test()`, both `pub(crate)` in
-// `prebindgen::core` — reachable when this module lived inside the
-// `prebindgen` crate, not from the separate `prebindgen-jni` crate it moved
-// to. Left in place, not deleted, pending a `prebindgen`-side test-support
-// hook (see the carve-prebindgen-jni report). `install_input`/`install_output`
-// below exist only to serve it and are gated off with it.
-mod niches;
 mod sealed;
 mod snapshots;
 mod symbols;
 mod value_form;
 mod values;
-
-/// Build a conversion for use in tests. The function body is not inspected by
-/// `option_input` / `option_output`; only the ident, destination, and niches
-/// matter, so we use a stub `ItemFn`.
-fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> ConverterImpl<KotlinMeta> {
-    let ident = syn::Ident::new(conv_name, proc_macro2::Span::call_site());
-    let func: syn::ItemFn = syn::parse_quote!(
-        unsafe fn #ident<'env, 'v>(
-            env: &mut jni::JNIEnv<'env>,
-            v: &#wire,
-        ) -> ::core::result::Result<(), __JniErr> {
-            Ok(())
-        }
-    );
-    ConverterImpl {
-        destination: wire,
-        function: func,
-        pre_stages: vec![],
-        subs: vec![],
-        niches,
-        metadata: KotlinMeta::default(),
-    }
-}
-
-// BLOCKED: `Registry::insert_crossing` is `pub(crate)` in `prebindgen::core` —
-// see the `niches` module gate above.
-/// Put one conversion where both a registry query and an adapter lookup can
-/// find it: in the registry the test builds, and in `decls` as the fragment a
-/// compiled binding would have filed. Helpers under test read the second.
-fn install(
-    reg: &mut Registry,
-    decls: &Declarations,
-    direction: Direction,
-    ty_str: &str,
-    e: ConverterImpl<KotlinMeta>,
-) {
-    let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
-    let key = TypeKey::from_type(&ty);
-    decls.compiled.borrow_mut().record(
-        prebindgen_registry::recipe::CrossingKey {
-            ty: key.clone(),
-            direction,
-        }
-        .row(prebindgen_registry::recipe::RecipeName::new("whole")),
-        crate::jni::compile::JFrag::by_hand(key, e.clone()),
-    );
-    reg.insert_crossing(direction, &ty, true, Some(Answer::over(e.subs)));
-}
-
-fn install_input(
-    reg: &mut Registry,
-    decls: &Declarations,
-    ty_str: &str,
-    e: ConverterImpl<KotlinMeta>,
-) {
-    install(reg, decls, Direction::Construct, ty_str, e);
-}
-
-fn install_output(
-    reg: &mut Registry,
-    decls: &Declarations,
-    ty_str: &str,
-    e: ConverterImpl<KotlinMeta>,
-) {
-    install(reg, decls, Direction::Deconstruct, ty_str, e);
-}

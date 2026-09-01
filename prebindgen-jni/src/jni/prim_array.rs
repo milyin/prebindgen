@@ -28,6 +28,7 @@ use kotlin_codegen::KtType;
 use super::*;
 
 /// The JNI/Kotlin array pair for one primitive element type.
+#[derive(Clone)]
 pub(crate) struct PrimArray {
     /// Wire type: `jni::objects::JLongArray`.
     pub wire: syn::Type,
@@ -135,18 +136,18 @@ pub(crate) fn output_body(spec: &PrimArray) -> syn::Expr {
 pub(crate) fn input_body(
     ty: &prebindgen_registry::flat::TypeRef,
     spec: &PrimArray,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> syn::Expr {
     let key = ty.key();
     // The element spelled from the model's own `Array`, so the local's type
     // ascription cannot disagree with what `prim_array_of` matched.
     let elem_ty = match ty.kind() {
-        prebindgen_registry::flat::TypeKind::Array { elem, .. } => emit.spell(elem),
+        prebindgen_registry::flat::TypeKind::Array { elem, .. } => emit.emit_source_type(elem),
         _ => unreachable!("prim_array_of matched a non-array"),
     };
     // The ascription the decoded array is checked against — spelled from the
     // reading, as generated Rust always spells.
-    let ty = emit.spell(ty);
+    let ty = emit.emit_source_type(ty);
     let len_err = format!("fixed-size array decode: `{key}` expects a different length");
     if spec.is_u8 {
         return syn::parse_quote!({

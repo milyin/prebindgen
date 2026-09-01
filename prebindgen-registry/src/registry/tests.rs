@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use prebindgen_flat::flat::Flat;
-use proc_macro2::TokenStream;
 use quote::ToTokens;
 
 use super::*;
@@ -23,7 +22,7 @@ trait DeclareAndResolve<M> {
 trait AsStub {
     fn stub(&self) -> &StubExt;
     /// Default: converts nothing, so every required crossing is a gap.
-    fn converter(&self, _ty: &syn::Type) -> Option<ConverterImpl> {
+    fn converter(&self, _ty: &prebindgen_flat::flat::TypeRef) -> Option<ConverterImpl> {
         None
     }
 }
@@ -44,8 +43,8 @@ impl DeclareAndResolve<()> for RegistryBuilder {
             .validate_with(&ext)?
             // The reading, not a spelling re-derived from the key: this is the
             // route a real generator takes, so the stub takes it too (#291).
-            .convert_with(|crossing, built, emit| {
-                let conv = ext.converter(&emit.spell_ty(&built.reading(&crossing.1)?))?;
+            .convert_with(|crossing, built| {
+                let conv = ext.converter(&built.reading(&crossing.1)?)?;
                 Some(Answer::over(conv.subs))
             })?
             .build()?;
@@ -95,40 +94,7 @@ impl StubExt {
     }
 }
 
-impl Prebindgen for StubExt {
-    fn on_function(
-        &self,
-        _f: &prebindgen_flat::flat::Function,
-        _registry: &Registry,
-        _emit: &crate::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
-    }
-    fn on_struct(
-        &self,
-        _s: &prebindgen_flat::flat::Struct,
-        _registry: &Registry,
-        _emit: &crate::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
-    }
-    fn on_variant(
-        &self,
-        _v: &prebindgen_flat::flat::Variant,
-        _registry: &Registry,
-        _emit: &crate::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
-    }
-    fn on_enum(
-        &self,
-        _e: &prebindgen_flat::flat::Enum,
-        _registry: &Registry,
-        _emit: &crate::Emit,
-    ) -> TokenStream {
-        TokenStream::new()
-    }
-}
+impl Prebindgen for StubExt {}
 
 // suppress unused warning on Niches — kept available for richer tests
 #[allow(dead_code)]
@@ -229,31 +195,16 @@ fn scan_declared_collects_all_missing_kinds_in_one_error() {
 
 #[test]
 fn conversion_helpers_expose_converter_chain_contract() {
+    let source = prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I64);
+    let crossing = crate::recipe::Crossing::new(source.clone(), Direction::Construct);
+    let fragment = crate::FragmentId::new(
+        source.key(),
+        crossing.row(crate::recipe::RecipeName::new("test")),
+    );
+    let converter = crate::OperationId::converter(fragment.clone());
     let entry = crate::ConverterImpl {
         destination: syn::parse_quote!(jni::sys::jlong),
-        function: syn::parse_quote!(
-            fn __wire(v: Owned) -> jni::sys::jlong {
-                0
-            }
-        ),
-        pre_stages: vec![
-            crate::Stage {
-                function: syn::parse_quote!(
-                    fn __stage_rust(v: Rust) -> Result<Mid, Err> {
-                        todo!()
-                    }
-                ),
-                metadata: (),
-            },
-            crate::Stage {
-                function: syn::parse_quote!(
-                    fn __stage_wire(v: Mid) -> Result<Owned, Err> {
-                        todo!()
-                    }
-                ),
-                metadata: (),
-            },
-        ],
+        converter: converter.clone(),
         subs: vec![
             TypeKey::parse("Rust").expect("test type"),
             TypeKey::parse("Mid").expect("test type"),
@@ -262,29 +213,88 @@ fn conversion_helpers_expose_converter_chain_contract() {
         metadata: (),
     };
 
-    assert_eq!(entry.converter_ident(), "__wire");
+    assert_eq!(entry.converter_id(), &converter);
     assert_eq!(
         TypeKey::from_type(entry.wire_type()),
         TypeKey::parse("jni::sys::jlong").expect("test type")
     );
-    assert_eq!(
-        entry
-            .output_stage_order()
-            .map(|(_, s)| s.function.sig.ident.to_string())
-            .collect::<Vec<_>>(),
-        vec!["__stage_rust", "__stage_wire"]
-    );
-    assert_eq!(
-        entry
-            .input_stage_order()
-            .map(|(_, s)| s.function.sig.ident.to_string())
-            .collect::<Vec<_>>(),
-        vec!["__stage_wire", "__stage_rust"]
-    );
+    // The stages this used to carry are a `ConversionChain` now: one order,
+    // stored in execution order for the fragment's direction, rather than one
+    // stored order and two readers that walked it opposite ways.
     assert_eq!(
         entry.subs.iter().map(TypeKey::as_str).collect::<Vec<_>>(),
         vec!["Rust", "Mid"]
     );
+}
+
+/// Converter-table rows are semantic registry data. Executable Rust belongs to
+/// the adapter's frozen artifact plan and may only be assembled by its final
+/// renderer.
+#[test]
+fn conversion_carriers_cannot_store_complete_rust_syntax() {
+    let source = include_str!("../prebindgen.rs");
+    let carriers = source
+        .split_once("pub struct ConverterImpl")
+        .expect("ConverterImpl declaration")
+        .1
+        .split_once("/// The single extension point")
+        .expect("end of conversion carriers")
+        .0;
+    assert!(!carriers.contains("syn::ItemFn"), "{carriers}");
+    assert!(!carriers.contains("TokenStream"), "{carriers}");
+    assert!(
+        !carriers.contains("pub converter: syn::Ident"),
+        "{carriers}"
+    );
+    // One identity: the wire-facing converter. The stage identities that used
+    // to sit beside it in a `Stage` row are a `ConversionChain` now.
+    assert_eq!(carriers.matches("pub converter: OperationId").count(), 1);
+    assert!(!source.contains("pub struct Stage"), "{source}");
+    assert!(!source.contains("pre_stages"), "{source}");
+
+    let chain = include_str!("../chain.rs");
+    assert!(!chain.contains("Call::complete"), "{chain}");
+    assert!(
+        !chain.contains("fn complete(function: &syn::ItemFn)"),
+        "{chain}"
+    );
+}
+
+/// Recipe planning sees Flat readings and already-built answers. Restoring a
+/// `RustWriter` argument here would reopen source spelling before final
+/// rendering — `RustWriter` is the rendering capability, so it is the name
+/// these fences hold out.
+#[test]
+fn conversion_planning_cannot_obtain_the_writer() {
+    let source = include_str!("declare.rs");
+    let convert_with = source
+        .split_once("pub fn convert_with")
+        .expect("convert_with declaration")
+        .1
+        .split_once("/// The scanned registry")
+        .expect("end of convert_with")
+        .0;
+    assert!(!convert_with.contains("RustWriter"), "{convert_with}");
+    assert!(!convert_with.contains("spell_ty"), "{convert_with}");
+
+    let recipes = include_str!("../recipe/compile.rs");
+    let cx = recipes
+        .split_once("pub struct Cx")
+        .expect("recipe context")
+        .1
+        .split_once("/// One part")
+        .expect("end of recipe context")
+        .0;
+    assert!(!cx.contains("RustWriter"), "{cx}");
+    assert!(!cx.contains("fn emit"), "{cx}");
+    let compiler = recipes
+        .split_once("pub struct Compiler")
+        .expect("recipe compiler")
+        .1
+        .split_once("impl<'a, C: Compile>")
+        .expect("end of compiler fields")
+        .0;
+    assert!(!compiler.contains("RustWriter"), "{compiler}");
 }
 
 /// A name collision across two chained source streams fails registry
@@ -411,38 +421,6 @@ fn resolve_surfaces_adapter_invariant_errors() {
     impl Prebindgen for FailingExt {
         fn validate(&self, _binding: &Building<'_>) -> Result<(), String> {
             Err("member fun `f` has no receiver".to_string())
-        }
-        fn on_function(
-            &self,
-            f: &prebindgen_flat::flat::Function,
-            r: &Registry,
-            _emit: &crate::Emit,
-        ) -> TokenStream {
-            self.0.on_function(f, r, _emit)
-        }
-        fn on_struct(
-            &self,
-            s: &prebindgen_flat::flat::Struct,
-            r: &Registry,
-            _emit: &crate::Emit,
-        ) -> TokenStream {
-            self.0.on_struct(s, r, _emit)
-        }
-        fn on_variant(
-            &self,
-            v: &prebindgen_flat::flat::Variant,
-            r: &Registry,
-            _emit: &crate::Emit,
-        ) -> TokenStream {
-            self.0.on_variant(v, r, _emit)
-        }
-        fn on_enum(
-            &self,
-            e: &prebindgen_flat::flat::Enum,
-            r: &Registry,
-            _emit: &crate::Emit,
-        ) -> TokenStream {
-            self.0.on_enum(e, r, _emit)
         }
     }
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
@@ -1446,58 +1424,30 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         fn stub(&self) -> &StubExt {
             &self.0
         }
-        fn converter(&self, ty: &syn::Type) -> Option<ConverterImpl> {
+        fn converter(&self, ty: &prebindgen_flat::flat::TypeRef) -> Option<ConverterImpl> {
             Self::converter(ty)
         }
     }
     impl AnyConverterExt {
-        fn converter(ty: &syn::Type) -> Option<ConverterImpl> {
+        fn converter(_ty: &prebindgen_flat::flat::TypeRef) -> Option<ConverterImpl> {
+            let source =
+                prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I64);
+            let crossing = crate::recipe::Crossing::new(source.clone(), Direction::Construct);
+            let fragment = crate::FragmentId::new(
+                source.key(),
+                crossing.row(crate::recipe::RecipeName::new("test")),
+            );
             Some(ConverterImpl {
-                destination: ty.clone(),
-                function: syn::parse_quote!(
-                    fn __id() {}
-                ),
-                pre_stages: vec![],
+                destination: syn::parse_quote!(()),
+                converter: crate::OperationId::converter(fragment),
+
                 subs: vec![],
                 niches: Niches::empty(),
                 metadata: (),
             })
         }
     }
-    impl Prebindgen for AnyConverterExt {
-        fn on_function(
-            &self,
-            f: &prebindgen_flat::flat::Function,
-            r: &Registry,
-            _emit: &crate::Emit,
-        ) -> TokenStream {
-            self.0.on_function(f, r, _emit)
-        }
-        fn on_struct(
-            &self,
-            st: &prebindgen_flat::flat::Struct,
-            r: &Registry,
-            _emit: &crate::Emit,
-        ) -> TokenStream {
-            self.0.on_struct(st, r, _emit)
-        }
-        fn on_variant(
-            &self,
-            v: &prebindgen_flat::flat::Variant,
-            r: &Registry,
-            _emit: &crate::Emit,
-        ) -> TokenStream {
-            self.0.on_variant(v, r, _emit)
-        }
-        fn on_enum(
-            &self,
-            e: &prebindgen_flat::flat::Enum,
-            r: &Registry,
-            _emit: &crate::Emit,
-        ) -> TokenStream {
-            self.0.on_enum(e, r, _emit)
-        }
-    }
+    impl Prebindgen for AnyConverterExt {}
 
     // `Option<u64>` appears nowhere in the captured stream.
     let reg: RegistryBuilder =
@@ -1771,4 +1721,54 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
         frontier = next;
     }
     assert!(revisited, "fixture must actually be recursive");
+}
+
+#[test]
+fn expansion_leaf_readings_derive_before_validation() {
+    let consumer: syn::Ident = syn::parse_quote!(consume);
+    let constructor: syn::Ident = syn::parse_quote!(build);
+    let expansions = crate::expand::Expansions {
+        expands: vec![crate::expand::ExpandDecl {
+            func: consumer.clone(),
+            param: syn::parse_quote!(value),
+            declared_target: Some(TypeKey::parse("Value").expect("test type")),
+            sel: crate::expand::ExpandSel::Subset(vec![
+                crate::expand::Variant::Ctor(constructor.clone()),
+                crate::expand::Variant::Identity,
+            ]),
+        }],
+        ..Default::default()
+    };
+    let mut registry = crate::test_util::reg_with(&[
+        "fn build(id: u16) -> Value { todo!() }",
+        "fn consume(value: &Value) {}",
+    ])
+    .export(&consumer)
+    .export(&constructor)
+    .decompose(Decompositions {
+        expansions: Some(expansions),
+        ..Default::default()
+    });
+
+    // No validate/build call precedes this read. The accessor must trigger
+    // derivation itself instead of silently exposing the builder's empty store.
+    let readings: Vec<_> = registry
+        .expansion_leaf_readings()
+        .expect("derive expansion plans")
+        .cloned()
+        .collect();
+
+    assert_eq!(
+        readings.len(),
+        3,
+        "selector, constructor leaf, identity leaf"
+    );
+    assert_eq!(
+        readings
+            .iter()
+            .filter(|reading| reading.optional_inner().is_some())
+            .count(),
+        2,
+        "both non-selector arms are nullable synthetic readings"
+    );
 }

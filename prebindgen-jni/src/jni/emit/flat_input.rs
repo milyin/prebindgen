@@ -9,292 +9,731 @@ use prebindgen_registry::{
 };
 
 use super::*;
-use crate::jni::trait_impl::{build_through_erased_wrappers, build_through_wrappers};
+use crate::jni::trait_impl::build_through_erased_wrappers;
 
 /// Takes the **element**, not the `syn::ItemStruct` it was parsed from (#289):
 /// `flat::Field::ty` is already a `TypeRef`, so every peel below is the model's
 /// answer rather than a last-path-segment test on tokens that had a reading one
 /// level up. Same move `build_flat_struct_node` made for the flatten path; this
 /// is the whole-object `.jobject_input()` decoder.
-pub(crate) fn struct_input_body(
+#[derive(Clone)]
+pub(crate) struct JObjectStructInputPlan {
+    shape: flat::Struct,
+    fields: Vec<JObjectStructFieldPlan>,
+}
+
+impl JObjectStructInputPlan {
+    /// Every converter the decoder calls, one per property.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for field in &self.fields {
+            field.kind.calls(out);
+        }
+    }
+}
+
+#[derive(Clone)]
+struct JObjectStructFieldPlan {
+    name: syn::Ident,
+    property: String,
+    error: String,
+    sum_payload: bool,
+    kind: JObjectStructFieldKind,
+}
+
+impl JObjectStructFieldKind {
+    /// The pipeline this property decodes through.
+    fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match self {
+            Self::Handle { pipeline, .. }
+            | Self::Unsigned64 { pipeline, .. }
+            | Self::Enum { pipeline, .. }
+            | Self::Primitive { pipeline, .. }
+            | Self::IntoObject { pipeline, .. }
+            | Self::Object { pipeline, .. } => pipeline.calls(out),
+            Self::Nullable(plan) => plan.chain.child.calls(out),
+        }
+    }
+}
+
+/// The null-reference `Optional` layer a nullable whole-object property
+/// crosses as.
+///
+/// A `ULong?` property arrives as a boxed `kotlin.ULong` and a nullable enum
+/// class as its own class: absence is a null reference, and the value is one
+/// unboxing call away. The registry composes the layer; this supplies the two
+/// answers only JniGen can give — how to test absence, and how to unbox.
+#[derive(Clone)]
+struct JNullableProperty {
+    /// JVM method that unboxes the property, its signature, and the `JValue`
+    /// accessor for the result.
+    method: &'static str,
+    signature: &'static str,
+    accessor: syn::Ident,
+    /// Per-property error text.
+    error: String,
+    /// Whether the child already yields the optional, because its own wire
+    /// carries a niche encoding of absence. Then a non-null reference is not
+    /// yet a value: the child still has to read its sentinel.
+    flattens: bool,
+}
+
+impl prebindgen_registry::chain::OptionalBridge for JNullableProperty {
+    fn intermediate(&self) -> syn::Type {
+        syn::parse_quote!(jni::objects::JObject)
+    }
+
+    fn is_absent(&self) -> TokenStream {
+        quote!(v.is_null())
+    }
+
+    fn present(&self, value: TokenStream) -> TokenStream {
+        let (method, signature, accessor, error) =
+            (self.method, self.signature, &self.accessor, &self.error);
+        // The accessor already yields the wire type, so the composer's own
+        // binding needs no annotation of its own.
+        quote!(
+            env.call_method(&#value, #method, #signature, &[])
+                .and_then(|val| val.#accessor())
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                    format!(#error, e)
+                ))?
+        )
+    }
+
+    fn source_present(&self, child: TokenStream) -> TokenStream {
+        if self.flattens {
+            child
+        } else {
+            quote!(::core::option::Option::Some(#child))
+        }
+    }
+
+    fn build_absent(&self) -> TokenStream {
+        unreachable!("a whole-object property is decoded, never encoded")
+    }
+
+    fn build_present(&self, _child: TokenStream) -> TokenStream {
+        unreachable!("a whole-object property is decoded, never encoded")
+    }
+}
+
+/// The sealed interface a whole-object sum crosses as: one JVM object whose
+/// class names the live alternative.
+///
+/// Selection is a run of `instanceof` tests, in declaration order, which this
+/// reads once into a tag the composed `Choice` matches on. Absence of a match
+/// and a null reference are distinct failures, and both keep the message they
+/// had.
+#[derive(Clone)]
+struct JSumBridge {
+    /// One JVM class per alternative, in declaration order.
+    classes: Vec<String>,
+    /// The sum's Kotlin name, for the two failure messages.
+    enum_name: String,
+}
+
+impl prebindgen_registry::chain::ChoiceBridge for JSumBridge {
+    fn intermediate(&self) -> syn::Type {
+        syn::parse_quote!(jni::objects::JObject)
+    }
+
+    fn tag(&self, value: TokenStream) -> TokenStream {
+        let enum_name = &self.enum_name;
+        let null = format!("{enum_name}: null value where a variant was required");
+        let tests = self.classes.iter().enumerate().map(|(index, class)| {
+            let index = index as i32;
+            let error = format!("{enum_name}: instanceof {class}: {{}}");
+            quote! {
+                if env.is_instance_of(#value, #class)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                        format!(#error, e)
+                    ))?
+                {
+                    return ::core::result::Result::Ok(#index);
+                }
+            }
+        });
+        quote!({
+            if #value.is_null() {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<String>>::from(#null.to_string()),
+                );
+            }
+            let __tag = (|| -> ::core::result::Result<i32, __JniErr> {
+                #(#tests)*
+                ::core::result::Result::Ok(-1i32)
+            })()?;
+            __tag
+        })
+    }
+
+    fn arm(
+        &self,
+        _emit: &prebindgen_registry::RustWriter,
+        value: TokenStream,
+        _index: usize,
+    ) -> TokenStream {
+        // Every alternative's payload is read off the same object; which
+        // properties belong to it is the arm's own bridge.
+        value
+    }
+
+    fn build(
+        &self,
+        _emit: &prebindgen_registry::RustWriter,
+        _active: usize,
+        _value: TokenStream,
+    ) -> TokenStream {
+        unreachable!("a whole-object sum is decoded, never encoded, through this bridge")
+    }
+
+    fn invalid_tag(&self, _tag: TokenStream) -> TokenStream {
+        let message = format!(
+            "{}: value is not one of its declared variants",
+            self.enum_name
+        );
+        quote!(<__JniErr as ::core::convert::From<String>>::from(#message.to_string()))
+    }
+}
+
+/// The source struct a whole-object decode builds, spelled through the shape
+/// the model holds.
+///
+/// A `data_class` is normally a named-field struct, and the registry's default
+/// construction is exactly that. A unit or tuple struct is not, and only the
+/// element knows which — so it travels with the policy that constructs it.
+#[derive(Clone)]
+struct JStructSource {
+    ordinary: crate::jni::chain::JSource,
+    shape: flat::Struct,
+}
+
+impl prebindgen_registry::chain::Source for JStructSource {
+    fn spell(&self, source: &TypeRef, emit: &prebindgen_registry::RustWriter) -> TokenStream {
+        prebindgen_registry::chain::Source::spell(&self.ordinary, source, emit)
+    }
+
+    fn build(&self, canonical: TokenStream) -> TokenStream {
+        prebindgen_registry::chain::Source::build(&self.ordinary, canonical)
+    }
+
+    fn construct(
+        &self,
+        head: TokenStream,
+        parts: &[(syn::Ident, TokenStream)],
+        emit: &prebindgen_registry::RustWriter,
+    ) -> TokenStream {
+        let bound: Vec<TokenStream> = self
+            .shape
+            .fields
+            .iter()
+            .zip(parts)
+            .map(|(field, (_, value))| field.bind(value))
+            .collect();
+        emit.shape_struct(&self.shape, head, &bound)
+    }
+}
+
+/// The JVM object a whole-object struct crosses as, read one property at a
+/// time.
+///
+/// This is the adapter half of the composed `Product`: the registry walks the
+/// struct's fields and builds the source value; this says what a part *is* —
+/// a property fetched off the object, which can fail.
+#[derive(Clone)]
+struct JObjectBridge {
+    properties: Vec<JObjectStructFieldPlan>,
+}
+
+impl prebindgen_registry::chain::ProductBridge for JObjectBridge {
+    fn intermediate(&self) -> syn::Type {
+        syn::parse_quote!(jni::objects::JObject)
+    }
+
+    fn part(
+        &self,
+        value: TokenStream,
+        index: usize,
+        _name: &syn::Ident,
+    ) -> prebindgen_registry::chain::PartRead {
+        let (prelude, value) = self.properties[index].read(value);
+        prebindgen_registry::chain::PartRead::fallible(prelude, value)
+    }
+
+    fn build(&self, _parts: &[(syn::Ident, TokenStream)]) -> TokenStream {
+        unreachable!("a whole-object struct is decoded, never encoded, through this bridge")
+    }
+}
+
+/// What converts one property once its wire value has been read.
+///
+/// Either the property's own child converter, or — for a nullable property —
+/// the `Optional` layer composed over it, which decides absence before the
+/// child is reached.
+#[derive(Clone)]
+pub(crate) struct JPropertyChild {
+    call: prebindgen_registry::chain::Call,
+    conversion: JPropertyConversion,
+}
+
+#[derive(Clone)]
+enum JPropertyConversion {
+    Converter(crate::jni::chain::JChild),
+    Nullable(
+        Box<
+            prebindgen_registry::chain::Optional<
+                crate::jni::chain::JSource,
+                JNullableProperty,
+                crate::jni::chain::JChild,
+            >,
+        >,
+    ),
+}
+
+impl prebindgen_registry::chain::Child for JPropertyChild {
+    fn call(&self) -> &prebindgen_registry::chain::Call {
+        &self.call
+    }
+
+    fn invoke(&self, value: TokenStream, emit: &prebindgen_registry::RustWriter) -> TokenStream {
+        match &self.conversion {
+            JPropertyConversion::Converter(child) => {
+                prebindgen_registry::chain::Child::invoke(child, value, emit)
+            }
+            // The composed layer names its input `v`, as every chain does, so
+            // the block is what keeps that name local to this property.
+            JPropertyConversion::Nullable(chain) => {
+                let body = prebindgen_registry::chain::Chain::render(chain.as_ref(), emit).body;
+                quote!({
+                    let v = #value;
+                    #body
+                })
+            }
+        }
+    }
+}
+
+/// One nullable property: the reference fetched off the JVM object, and the
+/// registry-composed `Optional` that turns it into the source value.
+#[derive(Clone)]
+struct JNullablePlan {
+    descriptor: String,
+    chain: Box<
+        prebindgen_registry::chain::Optional<
+            crate::jni::chain::JSource,
+            JNullableProperty,
+            crate::jni::chain::JChild,
+        >,
+    >,
+}
+
+/// Compose one nullable property's `Optional` layer over its child converter.
+#[allow(clippy::too_many_arguments)]
+fn nullable_property(
+    reading: &TypeRef,
+    pipeline: crate::jni::chain::JPipeline,
+    descriptor: String,
+    method: &'static str,
+    signature: &'static str,
+    accessor: syn::Ident,
+    error: String,
+    flattens: bool,
+) -> JObjectStructFieldKind {
+    JObjectStructFieldKind::Nullable(Box::new(JNullablePlan {
+        descriptor,
+        chain: Box::new(prebindgen_registry::chain::Optional {
+            source: reading.clone(),
+            direction: prebindgen_registry::recipe::Direction::Construct,
+            source_policy: crate::jni::chain::JSource {
+                wrappers: Vec::new(),
+            },
+            bridge: JNullableProperty {
+                method,
+                signature,
+                accessor,
+                error,
+                flattens,
+            },
+            child: pipeline.converter_child().clone(),
+        }),
+    }))
+}
+
+#[derive(Clone)]
+enum JObjectStructFieldKind {
+    Handle {
+        descriptor: String,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    Unsigned64 {
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    Enum {
+        descriptor: String,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    /// A property whose absence is a null reference: either shape above, when
+    /// the source reads optional. Its `Optional` layer is composed by the
+    /// registry rather than walked here.
+    Nullable(Box<JNullablePlan>),
+    Primitive {
+        wire: syn::Type,
+        descriptor: String,
+        accessor: syn::Ident,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    IntoObject {
+        wire: syn::Type,
+        descriptor: String,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+    Object {
+        descriptor: String,
+        pipeline: crate::jni::chain::JPipeline,
+    },
+}
+
+/// Freeze the explicit whole-`JObject` struct decoder without assembling Rust
+/// source. Every branch below selects JVM property policy from Flat readings
+/// and already-compiled registry fragments. The final writer alone constructs
+/// bindings, child calls, and the source struct literal.
+pub(crate) fn build_jobject_struct_input_plan(
     ext: &Declarations,
     s: &flat::Struct,
     registry: &impl Conversions,
-    emit: &prebindgen_registry::Emit,
-) -> Option<(syn::Type, syn::Expr)> {
+) -> Option<JObjectStructInputPlan> {
     let struct_name = s.name.to_string();
-    let struct_module = struct_module_path(ext, registry, &s.name);
-    let struct_ident = &s.name;
-
-    let mut field_preludes: Vec<TokenStream> = Vec::new();
-    let mut field_init: Vec<TokenStream> = Vec::new();
-
+    let mut fields = Vec::new();
     for field in &s.fields {
-        // A positional field has no name to read a JVM slot by, which is what
-        // the `syn::Fields::Named` guard used to say one level up. Said per
-        // field now, because the element models a field list rather than a
-        // `syn::Fields` shape.
-        let fname_ident = field.name.clone()?;
-        // The name the property was DECLARED with — `GetFieldID` takes the
-        // slot's exact name, so this cannot be derived a second way.
-        let camel = kotlin_property_name(&fname_ident);
-        let err_prefix = format!("{struct_name}.{camel}: {{}}");
-        let raw_ident = format_ident!("__{}_raw", fname_ident);
+        let name = field.name.clone()?;
+        let property = kotlin_property_name(&name);
+        let error = format!("{struct_name}.{property}: {{}}");
+        fields.push(build_jobject_property_plan(
+            ext, &field.ty, name, property, error, false,
+        )?);
+    }
+    let _ = registry;
+    Some(JObjectStructInputPlan {
+        shape: s.clone(),
+        fields,
+    })
+}
 
-        // Defer if any field's input converter isn't resolved yet — the
-        // fixed-point loop will retry on the next iteration. The field's own
-        // reading straight to its entry — the `reading_of` hop only ever
-        // recovered what the field already carried.
-        let field_entry = ext.in_frag(&field.ty)?;
-        // The optional layer off the MODEL, asked once and reused: every site
-        // below that wants "is this field optional" reads this, so they cannot
-        // disagree with each other the way four independent path-segment tests
-        // could (#273). `option_inner_type` compared the last path segment, so
-        // a field spelled `Box<Option<T>>` answered "not optional" here.
-        let field_optional = field.ty.optional_inner().is_some();
-        let inner = field.ty.optional_inner().unwrap_or(&field.ty);
-        let field_wire = field_entry.destination.clone();
-        // The field's COMPLETE decode, stages included — a `convert!` type
-        // reaches its Rust value through them (`jlong -> u64 -> Duration`).
-        let field_conv = composed_entry_decode(&field_entry, &raw_ident, &fname_ident);
-
-        // Projection fields — mirror of `struct_output_body`'s kind branch:
-        //  * Handle: read the JNINativeHandle object from the JVM slot,
-        //    `peek()` the raw jlong, then run the per-field input converter
-        //    (jlong-keyed; null handle ⇒ jlong 0 ⇒ `None` via the niche path).
-        if let Some(proj) = &field_entry.metadata.projection {
-            match proj.kind {
-                ProjectionKind::Handle => {
-                    let java_path = handle_field_fqn(ext, proj).replace('.', "/");
-                    let sig = format!("L{};", java_path);
-                    let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                    // Struct fields are owned, so a non-`Option` handle field
-                    // owns its native object: decode by consuming
-                    // (`Box::from_raw` → owned `T`), mirroring
-                    // `struct_output_body`'s `Box::into_raw`. The borrow
-                    // converter would yield `OwnedObject<T>`, which can't
-                    // populate an owned field. `Option<_>` handle fields keep
-                    // the niche-aware converter (jlong 0 ⇒ `None`).
-                    let field_ty = emit.spell(&field.ty);
-                    let decode = if field_optional {
-                        quote! { let #fname_ident = #field_conv; }
-                    } else {
-                        quote! {
-                            // Null or closed handle in a required field —
-                            // reject before any dereference (`peek()`
-                            // normalizes closed handles to 0).
-                            if #raw_ident == 0 || (#raw_ident & 1) == 1 {
-                                return ::core::result::Result::Err(
-                                    <__JniErr as ::core::convert::From<String>>::from(
-                                        "Operation on a closed native handle.".to_string(),
-                                    ),
-                                );
-                            }
-                            let #fname_ident: #field_ty = unsafe {
-                                *std::boxed::Box::from_raw(#raw_ident as *mut #field_ty)
-                            };
-                        }
-                    };
-                    field_preludes.push(quote! {
-                        let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                            .and_then(|val| val.l())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                        let #raw_ident: jni::sys::jlong = if #tmp_ident.is_null() {
-                            0
-                        } else {
-                            env.call_method(&#tmp_ident, "peek", "()J", &[])
-                                .and_then(|val| val.j())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
-                        };
-                        #decode
-                    });
-                }
-                ProjectionKind::Unsigned64 => {
-                    if field_optional {
-                        let niche = matches!(
-                            proj.strategy,
-                            FoldStrategy::Optional(NullableKind::Niche, _)
-                        );
-                        let inner_conv =
-                            composed_entry_decode(&*ext.in_frag(inner)?, &raw_ident, &fname_ident);
-                        let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                        let decode = if niche {
-                            // The Kotlin data-class property is still `ULong?`
-                            // (and therefore boxed in object storage), but its
-                            // JNI converter is niche-keyed on primitive jlong.
-                            // Run the complete field converter so every custom
-                            // semantic stage (e.g. u64 -> Duration) is applied.
-                            quote! { #field_conv }
-                        } else {
-                            quote! {
-                                ::core::option::Option::Some(#inner_conv)
-                            }
-                        };
-                        field_preludes.push(quote! {
-                            let #tmp_ident: jni::objects::JObject = env
-                                .get_field(v, #camel, "Lkotlin/ULong;")
-                                .and_then(|val| val.l())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                            let #fname_ident = if #tmp_ident.is_null() {
-                                ::core::option::Option::None
-                            } else {
-                                let #raw_ident: jni::sys::jlong = env
-                                    .call_method(&#tmp_ident, "unbox-impl", "()J", &[])
-                                    .and_then(|val| val.j())
-                                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                                #decode
-                            };
-                        });
-                    } else {
-                        field_preludes.push(quote! {
-                            let #raw_ident: jni::sys::jlong = env
-                                .get_field(v, #camel, "J")
-                                .and_then(|val| val.j())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                            let #fname_ident = #field_conv;
-                        });
-                    }
-                }
-            }
-            field_init.push(quote!(#fname_ident));
-            continue;
+fn build_jobject_property_plan(
+    ext: &Declarations,
+    reading: &TypeRef,
+    name: syn::Ident,
+    property: String,
+    error: String,
+    sum_payload: bool,
+) -> Option<JObjectStructFieldPlan> {
+    let optional = reading.optional_inner().is_some();
+    let inner = reading.optional_inner().unwrap_or(reading);
+    let entry = ext.in_frag(reading)?;
+    let wire = entry.destination().clone();
+    let projection = entry.projection();
+    let whole = entry.pipeline(
+        prebindgen_registry::recipe::Direction::Construct,
+        prebindgen_registry::recipe::Mode::Owned,
+    );
+    let kind = if let Some(projection) = projection
+        .as_ref()
+        .filter(|projection| matches!(&projection.kind, ProjectionKind::Handle))
+    {
+        JObjectStructFieldKind::Handle {
+            descriptor: format!("L{};", handle_field_fqn(ext, projection).replace('.', "/")),
+            pipeline: whole,
         }
-
-        // Enum-typed field (bare or `Option`-wrapped): the Kotlin data class
-        // stores the TYPED enum object (`Priority` / `Priority?`), so read the
-        // slot with the enum-class descriptor and decode the discriminant via
-        // its `value` getter (`getValue()I`); a null object is the `None` arm.
-        // (The generic converters can't be used here: the bare-enum one is
-        // jint-keyed, the `Option<enum>` one unboxes `java.lang.Integer`.)
-        if ext.is_kotlin_enum_reading(inner) {
-            // The NAME off the classification, not off the last path segment:
-            // `Box<T>` IS `T` here, and taking the spelling apart would answer
-            // about the wrapper.
-            if let Some(fqn) = match inner.unwrapped().kind() {
-                flat::TypeKind::Named { id, .. } => id.ident(),
-                _ => None,
-            }
-            .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
-            .map(|v| v.to_string())
-            {
-                let sig = format!("L{};", fqn.replace('.', "/"));
-                let inner_conv =
-                    composed_entry_decode(&*ext.in_frag(inner)?, &raw_ident, &fname_ident);
-                let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                let decode = if field_optional {
-                    quote! {
-                        let #fname_ident = if #tmp_ident.is_null() {
-                            ::core::option::Option::None
-                        } else {
-                            let #raw_ident: jni::sys::jint = env.call_method(&#tmp_ident, "getValue", "()I", &[])
-                                .and_then(|val| val.i())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                            ::core::option::Option::Some(#inner_conv)
-                        };
-                    }
-                } else {
-                    quote! {
-                        let #raw_ident: jni::sys::jint = env.call_method(&#tmp_ident, "getValue", "()I", &[])
-                            .and_then(|val| val.i())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                        let #fname_ident = #inner_conv;
-                    }
-                };
-                field_preludes.push(quote! {
-                    let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    #decode
-                });
-                field_init.push(quote!(#fname_ident));
-                continue;
+    } else if let Some(projection) = projection
+        .as_ref()
+        .filter(|projection| !sum_payload && matches!(&projection.kind, ProjectionKind::Unsigned64))
+    {
+        let niche = optional
+            && matches!(
+                projection.strategy,
+                FoldStrategy::Optional(NullableKind::Niche, _)
+            );
+        if optional {
+            // A niche-encoded child reads its own absence out of the unboxed
+            // value, so the null reference is only the first of two tests and
+            // the child's answer is the whole answer.
+            let pipeline = if niche {
+                whole
+            } else {
+                ext.in_frag(inner)?.pipeline(
+                    prebindgen_registry::recipe::Direction::Construct,
+                    prebindgen_registry::recipe::Mode::Owned,
+                )
+            };
+            nullable_property(
+                reading,
+                pipeline,
+                "Lkotlin/ULong;".to_string(),
+                "unbox-impl",
+                "()J",
+                format_ident!("j"),
+                error.clone(),
+                niche,
+            )
+        } else {
+            JObjectStructFieldKind::Unsigned64 { pipeline: whole }
+        }
+    } else if ext.is_kotlin_enum_reading(inner) {
+        let fqn = match inner.unwrapped().kind() {
+            flat::TypeKind::Named { id, .. } => id.ident(),
+            _ => None,
+        }
+        .and_then(|ident| ext.kotlin_fqn(&TypeKey::from_ident(&ident)))?;
+        let descriptor = format!("L{};", fqn.replace('.', "/"));
+        if optional {
+            let pipeline = ext.in_frag(inner)?.pipeline(
+                prebindgen_registry::recipe::Direction::Construct,
+                prebindgen_registry::recipe::Mode::Owned,
+            );
+            nullable_property(
+                reading,
+                pipeline,
+                descriptor,
+                "getValue",
+                "()I",
+                format_ident!("i"),
+                error.clone(),
+                false,
+            )
+        } else {
+            JObjectStructFieldKind::Enum {
+                descriptor,
+                pipeline: whole,
             }
         }
-
-        match jni_field_access(&field_wire) {
-            Some((sig, accessor, false)) => {
-                field_preludes.push(quote! {
-                    let #raw_ident: #field_wire = env.get_field(v, #camel, #sig)
-                        .and_then(|val| val.#accessor())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))? as _;
-                    let #fname_ident = #field_conv;
-                });
-            }
-            Some((sig, _, true)) => {
-                let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                field_preludes.push(quote! {
-                    let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #raw_ident: #field_wire = #tmp_ident.into();
-                    let #fname_ident = #field_conv;
-                });
-            }
+    } else {
+        match jni_field_access(&wire) {
+            Some((descriptor, accessor, false)) => JObjectStructFieldKind::Primitive {
+                wire,
+                descriptor: descriptor.to_string(),
+                accessor,
+                pipeline: whole,
+            },
+            Some((descriptor, _, true)) => JObjectStructFieldKind::IntoObject {
+                wire,
+                descriptor: descriptor.to_string(),
+                pipeline: whole,
+            },
             None => {
-                // Wire is JObject — fetch via .l() and pass by reference. JNI
-                // `GetFieldID` needs the slot's EXACT static descriptor: the
-                // box class for an `Option`-boxed primitive, the registered
-                // Kotlin class for a nested data-class field (Option-stripped
-                // — a nullable field keeps the same descriptor), `List` for a
-                // `Vec` field.
-                let sig = ext
+                let descriptor = ext
                     .in_frag(inner)
-                    .and_then(|e| jni_field_access(&e.destination))
-                    .and_then(|(sig, _, is_obj)| {
-                        if is_obj {
-                            Some(sig.to_string())
+                    .and_then(|entry| jni_field_access(entry.destination()))
+                    .and_then(|(descriptor, _, is_object)| {
+                        if is_object {
+                            Some(descriptor.to_string())
                         } else {
-                            box_descriptor_for_primitive(sig).map(str::to_string)
+                            box_descriptor_for_primitive(descriptor).map(str::to_string)
                         }
                     })
                     .or_else(|| {
-                        // The NAME off the classification, not off the last
-                        // path segment.
                         match inner.unwrapped().kind() {
                             flat::TypeKind::Named { id, .. } => id.ident(),
                             _ => None,
                         }
-                        .and_then(|name| {
-                            ext.kotlin_fqn(&TypeKey::from_ident(&name))
-                                .map(|v| format!("L{};", v.replace('.', "/")))
+                        .and_then(|ident| {
+                            ext.kotlin_fqn(&TypeKey::from_ident(&ident))
+                                .map(|fqn| format!("L{};", fqn.replace('.', "/")))
                         })
                     })
                     .or_else(|| {
-                        // A run of values is what `kind` says it is.
-                        // `pat_match_top(.., "Vec")` compared the last path
-                        // segment, so a `Box<Vec<T>>` answered false.
-                        if inner.sequence_elem().is_some() {
-                            Some("Ljava/util/List;".to_string())
-                        } else {
-                            None
-                        }
+                        inner
+                            .sequence_elem()
+                            .is_some()
+                            .then(|| "Ljava/util/List;".to_string())
                     })
                     .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
-                field_preludes.push(quote! {
-                    let #raw_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #fname_ident = #field_conv;
-                });
+                JObjectStructFieldKind::Object {
+                    descriptor,
+                    pipeline: whole,
+                }
             }
         }
-        field_init.push(quote!(#fname_ident));
+    };
+    Some(JObjectStructFieldPlan {
+        name,
+        property,
+        error,
+        sum_payload,
+        kind,
+    })
+}
+
+impl JObjectStructInputPlan {
+    /// The decode, composed by the registry: it walks the struct's fields,
+    /// reads each part through [`JObjectBridge`], calls each property's
+    /// conversion, and builds the source value.
+    pub(crate) fn render(&self, emit: &prebindgen_registry::RustWriter) -> syn::Expr {
+        let product = prebindgen_registry::chain::Product {
+            source: self.shape.type_ref().clone(),
+            direction: prebindgen_registry::recipe::Direction::Construct,
+            source_policy: JStructSource {
+                ordinary: crate::jni::chain::JSource {
+                    wrappers: Vec::new(),
+                },
+                shape: self.shape.clone(),
+            },
+            bridge: JObjectBridge {
+                properties: self.fields.clone(),
+            },
+            parts: self
+                .fields
+                .iter()
+                .map(|field| prebindgen_registry::chain::ProductPart {
+                    name: field.name.clone(),
+                    child: field.child(),
+                    mode: prebindgen_registry::recipe::Mode::Owned,
+                    hold_uninit: false,
+                })
+                .collect(),
+        };
+        let body = prebindgen_registry::chain::Chain::render(&product, emit).body;
+        syn::parse_quote!(#body)
+    }
+}
+
+impl JObjectStructFieldPlan {
+    /// The statements that read this property's wire value off `receiver`,
+    /// and the expression naming it.
+    ///
+    /// Every read can fail — a JVM field access returns a `Result` — which is
+    /// why the composed `Product` above takes this as a fallible part.
+    fn read(&self, receiver: TokenStream) -> (TokenStream, TokenStream) {
+        let name = &self.name;
+        let property = &self.property;
+        let error = &self.error;
+        let raw = if self.sum_payload {
+            format_ident!("{}_raw", name)
+        } else {
+            format_ident!("__{}_raw", name)
+        };
+        let object = if self.sum_payload {
+            format_ident!("{}_obj", name)
+        } else {
+            format_ident!("__{}_jobj", name)
+        };
+        let fetch_object = |descriptor: &String| {
+            quote! {
+                let #object: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
+                    .and_then(|val| val.l())
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+            }
+        };
+        match &self.kind {
+            JObjectStructFieldKind::Handle { descriptor, .. } => {
+                let fetch = fetch_object(descriptor);
+                (
+                    quote! {
+                        #fetch
+                        let #raw: jni::sys::jlong = if #object.is_null() {
+                            0
+                        } else {
+                            env.call_method(&#object, "peek", "()J", &[])
+                                .and_then(|val| val.j())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?
+                        };
+                    },
+                    quote!(#raw),
+                )
+            }
+            JObjectStructFieldKind::Unsigned64 { .. } => (
+                quote! {
+                    let #raw: jni::sys::jlong = env
+                        .get_field(#receiver, #property, "J")
+                        .and_then(|val| val.j())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                },
+                quote!(#raw),
+            ),
+            JObjectStructFieldKind::Enum { descriptor, .. } => {
+                let fetch = fetch_object(descriptor);
+                (
+                    quote! {
+                        #fetch
+                        let #raw: jni::sys::jint = env.call_method(&#object, "getValue", "()I", &[])
+                            .and_then(|val| val.i())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                    },
+                    quote!(#raw),
+                )
+            }
+            // The reference itself is the wire value: whether it means absence
+            // is the composed `Optional` layer's decision, not the read's.
+            JObjectStructFieldKind::Nullable(plan) => {
+                (fetch_object(&plan.descriptor), quote!(#object))
+            }
+            JObjectStructFieldKind::Primitive {
+                wire,
+                descriptor,
+                accessor,
+                ..
+            } => (
+                quote! {
+                    let #raw: #wire = env.get_field(#receiver, #property, #descriptor)
+                        .and_then(|val| val.#accessor())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))? as _;
+                },
+                quote!(#raw),
+            ),
+            JObjectStructFieldKind::IntoObject {
+                wire, descriptor, ..
+            } => {
+                let fetch = fetch_object(descriptor);
+                (
+                    quote! {
+                        #fetch
+                        let #raw: #wire = #object.into();
+                    },
+                    quote!(#raw),
+                )
+            }
+            JObjectStructFieldKind::Object { descriptor, .. } => (
+                quote! {
+                    let #raw: jni::objects::JObject = env.get_field(#receiver, #property, #descriptor)
+                        .and_then(|val| val.l())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#error, e)))?;
+                },
+                quote!(#raw),
+            ),
+        }
     }
 
-    // The struct's OWN delimiters, from the one place that chooses them.
-    // `flat::Struct` does not record whether its fields were named — that is
-    // spelling — so hard-coding braces here emitted `Unit {}` for
-    // `struct Unit;` and `Empty {}` for `struct Empty()`, neither of which is
-    // Rust. The `syn::Fields::Named` guard this walk replaced happened to
-    // refuse both; the per-field name check cannot, because an empty struct
-    // has no field to refuse. `Struct::spell` is the dual of the
-    // `Alternative::spell` the sum decoder uses for exactly this.
-    let ctor = emit.shape_struct(s, quote!(#struct_module::#struct_ident), &field_init);
-    let body: syn::Expr = syn::parse_quote!({
-        #(#field_preludes)*
-        #ctor
-    });
-    Some((syn::parse_quote!(jni::objects::JObject), body))
+    /// What converts this property once it is read.
+    fn child(&self) -> JPropertyChild {
+        let conversion = match &self.kind {
+            JObjectStructFieldKind::Nullable(plan) => {
+                JPropertyConversion::Nullable(plan.chain.clone())
+            }
+            JObjectStructFieldKind::Handle { pipeline, .. }
+            | JObjectStructFieldKind::Unsigned64 { pipeline }
+            | JObjectStructFieldKind::Enum { pipeline, .. }
+            | JObjectStructFieldKind::Primitive { pipeline, .. }
+            | JObjectStructFieldKind::IntoObject { pipeline, .. }
+            | JObjectStructFieldKind::Object { pipeline, .. } => {
+                JPropertyConversion::Converter(pipeline.converter_child().clone())
+            }
+        };
+        let call = match &conversion {
+            JPropertyConversion::Converter(child) => {
+                prebindgen_registry::chain::Child::call(child).clone()
+            }
+            // The layer propagates its own failures with `?`, so the composer
+            // adds none of its own; the identity is the child's, which is what
+            // the property depends on.
+            JPropertyConversion::Nullable(chain) => prebindgen_registry::chain::Call::operation(
+                prebindgen_registry::chain::Child::call(&chain.child)
+                    .operation_id()
+                    .clone(),
+                false,
+                false,
+            ),
+        };
+        JPropertyChild { call, conversion }
+    }
 }
 
 /// Whole-object **input** decode for a `sealed_class` sum: a `JObject` of the
@@ -318,338 +757,133 @@ pub(crate) fn struct_input_body(
 /// below asks the model instead of peeling tokens. It also retires the two zips
 /// this used to run — a `SumSpec` derived from the item, paired back against the
 /// item it came from — because `Alternative` already is that pairing.
-pub(crate) fn sum_input_body(
+#[derive(Clone)]
+pub(crate) struct JObjectSumInputPlan {
+    shape: flat::Variant,
+    enum_name: String,
+    alternatives: Vec<JObjectSumAlternativePlan>,
+}
+
+#[derive(Clone)]
+struct JObjectSumAlternativePlan {
+    shape: flat::Alternative,
+    jvm_class: String,
+    /// One property per payload field, in declaration order — the same plan a
+    /// struct's field carries, since a payload is read exactly as a field is.
+    fields: Vec<JObjectStructFieldPlan>,
+}
+
+impl JObjectSumInputPlan {
+    /// Every converter the decoder calls, one per property of every
+    /// alternative.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for field in self
+            .alternatives
+            .iter()
+            .flat_map(|alternative| &alternative.fields)
+        {
+            field.kind.calls(out);
+        }
+    }
+}
+
+pub(crate) fn build_jobject_sum_input_plan(
     ext: &Declarations,
     v: &flat::Variant,
     registry: &impl Conversions,
-    emit: &prebindgen_registry::Emit,
-) -> Option<(syn::Type, syn::Expr)> {
+) -> Option<JObjectSumInputPlan> {
     let key = TypeKey::from_ident(&v.name);
     let cfg = ext.types.get(&key)?;
     let sum_cfg = cfg.sum()?;
     let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
     let iface_path = iface_fqn.replace('.', "/");
-    let source_module = ext.fn_module(registry, &v.name);
-    let enum_ident = &v.name;
     let enum_name = v.name.to_string();
-
-    let mut arms: Vec<TokenStream> = Vec::new();
+    let mut alternatives = Vec::new();
     for alt in &v.alternatives {
-        let vident = &alt.name;
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, vident);
-        // A variant class is NESTED in the interface, so its JVM binary name
-        // is `Outer$Variant`.
+        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
         let jvm_class = format!("{iface_path}${kotlin_name}");
-
-        let mut preludes: Vec<TokenStream> = Vec::new();
-        let mut inits: Vec<TokenStream> = Vec::new();
+        let mut fields = Vec::new();
         for field in &alt.fields {
-            let prop = crate::jni::struct_plan::sum_field_prop_name(&field.member());
-            let bind = format_ident!("__p_{}", prop);
-            let err_prefix = format!("{enum_name}.{kotlin_name}.{prop}: {{}}");
-            let (pre, value) = read_kotlin_property(
-                ext,
-                &quote!(__obj),
-                &prop,
-                &field.ty,
-                &bind,
-                &err_prefix,
-                emit,
-            )?;
-            preludes.push(pre);
-            inits.push(field.bind(&value));
+            let property = crate::jni::struct_plan::sum_field_prop_name(&field.member());
+            let bind = format_ident!("__p_{}", property);
+            let error = format!("{enum_name}.{kotlin_name}.{property}: {{}}");
+            fields.push(build_jobject_property_plan(
+                ext, &field.ty, bind, property, error, true,
+            )?);
         }
-        // The alternative's OWN delimiters, from the one place that chooses
-        // them. `B()` carries no payload and still must be written `E::B()` —
-        // a three-arm `syn::Fields` match here would have had to re-derive
-        // that, and `Alternative::is_empty()` cannot: `B`, `B()` and `B {}`
-        // are all empty by it.
-        let ctor =
-            emit.shape_alternative(alt, quote!(#source_module::#enum_ident::#vident), &inits);
-        arms.push(quote! {
-            if env.is_instance_of(__obj, #jvm_class)
-                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
-                    format!(concat!(#enum_name, ": instanceof ", #jvm_class, ": {}"), e)))?
-            {
-                #(#preludes)*
-                return ::core::result::Result::Ok(#ctor);
-            }
+        alternatives.push(JObjectSumAlternativePlan {
+            shape: alt.clone(),
+            jvm_class,
+            fields,
         });
     }
-
-    // No arm matched: the JVM object is not one of the declared variants —
-    // a binding error through the ordinary channel, never a panic.
-    let no_match = format!("{enum_name}: value is not one of its declared variants");
-    // NULL must be rejected BEFORE the dispatch: JNI specifies that
-    // `IsInstanceOf(NULL, any)` is true ("a NULL object can be cast to any
-    // class"), so a null would match the first arm and silently decode as
-    // that variant — for a unit first variant, without even a failed field
-    // read to give it away. An `Option<sum>` never reaches here with null:
-    // its wrapper carves the null niche first and yields `None`.
-    let null_msg = format!("{enum_name}: null value where a variant was required");
-    let body: syn::Expr = syn::parse_quote!({
-        let __obj = v;
-        (|| -> ::core::result::Result<#source_module::#enum_ident, __JniErr> {
-            if __obj.is_null() {
-                return ::core::result::Result::Err(
-                    <__JniErr as ::core::convert::From<String>>::from(#null_msg.to_string()),
-                );
-            }
-            #(#arms)*
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<String>>::from(#no_match.to_string()),
-            )
-        })()?
-    });
-    Some((syn::parse_quote!(jni::objects::JObject), body))
+    let _ = registry;
+    Some(JObjectSumInputPlan {
+        shape: v.clone(),
+        enum_name,
+        alternatives,
+    })
 }
 
-/// Read one Kotlin property off `receiver` and decode it to its Rust value,
-/// binding the result to `bind`. Mirrors the per-field decode
-/// [`struct_input_body`] performs, for the positions that are properties of a
-/// generated class rather than fields of a data class.
-#[allow(clippy::too_many_arguments)]
-fn read_kotlin_property(
-    ext: &Declarations,
-    receiver: &TokenStream,
-    prop: &str,
-    reading: &TypeRef,
-    bind: &syn::Ident,
-    err_prefix: &str,
-    emit: &prebindgen_registry::Emit,
-) -> Option<(TokenStream, TokenStream)> {
-    // The payload's own reading straight to its entry, and the layer questions
-    // below asked of it once — `option_inner_type` compared the last path
-    // segment, so a payload spelled `Box<Option<T>>` answered "not optional"
-    // four separate times here (#289).
-    let entry = ext.in_frag(reading)?;
-    let ty = emit.spell(reading);
-    let optional = reading.optional_inner().is_some();
-    let inner = reading.optional_inner().unwrap_or(reading);
-    let wire = entry.destination.clone();
-    let raw = format_ident!("{}_raw", bind);
-    // The COMPLETE wire → Rust chain, not just the wire-facing converter: a
-    // `convert!`-declared type reaches its Rust value through the rust-side
-    // stages that follow (`jlong → u64 → Duration`). Stage bindings are named
-    // off `bind`, so two payloads of the same type in one variant do not
-    // collide.
-    let conv = composed_property_decode(&entry, bind);
-
-    // A handle property is a `NativeHandle` object whose raw pointer comes
-    // from `peek()`; an enum property is the Kotlin enum class, decoded
-    // through its `getValue`. Both mirror `struct_input_body`.
-    if let Some(proj) = &entry.metadata.projection {
-        if matches!(proj.kind, ProjectionKind::Handle) {
-            let fqn = handle_field_fqn(ext, proj).replace('.', "/");
-            let sig = format!("L{fqn};");
-            let obj = format_ident!("{}_obj", bind);
-            // A required (non-`Option`) handle payload is OWNED by the variant
-            // it builds, so it is decoded by CONSUMING the native object
-            // (`Box::from_raw`) — the mirror of the output side's
-            // `Box::into_raw`. The borrow converter would yield
-            // `OwnedObject<T>`, which cannot populate an owned field. Same rule
-            // (and same reasoning) as an owned handle field of a data class;
-            // `Option<_>` keeps the niche-aware converter (jlong 0 ⇒ `None`).
-            let closed_msg = "Operation on a closed native handle.";
-            let decode = if optional {
-                quote! { let #bind = #conv; }
-            } else {
-                quote! {
-                    if #raw == 0 || (#raw & 1) == 1 {
-                        return ::core::result::Result::Err(
-                            <__JniErr as ::core::convert::From<String>>::from(
-                                #closed_msg.to_string(),
-                            ),
-                        );
-                    }
-                    let #bind: #ty = unsafe {
-                        *std::boxed::Box::from_raw(#raw as *mut #ty)
-                    };
-                }
-            };
-            return Some((
-                quote! {
-                    let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #raw: jni::sys::jlong = if #obj.is_null() {
-                        0
-                    } else {
-                        env.call_method(&#obj, "peek", "()J", &[])
-                            .and_then(|val| val.j())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
-                    };
-                    #decode
-                },
-                quote!(#bind),
-            ));
-        }
-    }
-    // An enum property — bare or under `Option` — is stored as the Kotlin
-    // **enum object**, so it is read through `getValue`, NOT through the
-    // generic converters: the bare-enum one is `jint`-keyed and the
-    // `Option<enum>` one unboxes a `java.lang.Integer`, and neither matches
-    // what the JVM slot actually holds. `struct_input_body` makes the same
-    // distinction for data-class fields; this is that logic for a property.
-    if ext.is_kotlin_enum_reading(inner) {
-        // The NAME off the classification, not off the last path segment.
-        let fqn = match inner.unwrapped().kind() {
-            flat::TypeKind::Named { id, .. } => id.ident(),
-            _ => None,
-        }
-        .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
-        .map(|v| v.to_string())?;
-        let sig = format!("L{};", fqn.replace('.', "/"));
-        let obj = format_ident!("{}_obj", bind);
-        // Under `Option`, JVM null is `None` and the INNER converter decodes
-        // the discriminant; the outer converter would expect a boxed Integer.
-        let decode = if optional {
-            let inner_conv = composed_entry_decode(&*ext.in_frag(inner)?, &raw, bind);
-            quote! {
-                let #bind = if #obj.is_null() {
-                    ::core::option::Option::None
-                } else {
-                    let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
-                        .and_then(|val| val.i())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    ::core::option::Option::Some(#inner_conv)
-                };
-            }
-        } else {
-            quote! {
-                let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
-                    .and_then(|val| val.i())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                let #bind = #conv;
-            }
+impl JObjectSumInputPlan {
+    /// The decode, composed by the registry: it reads the tag, selects the
+    /// arm, reads that arm's payload properties through the same bridge the
+    /// struct decode uses, and constructs the alternative.
+    pub(crate) fn render(&self, emit: &prebindgen_registry::RustWriter) -> syn::Expr {
+        let choice = prebindgen_registry::chain::Choice {
+            source: self.shape.type_ref().clone(),
+            direction: prebindgen_registry::recipe::Direction::Construct,
+            source_policy: crate::jni::chain::JSource {
+                wrappers: Vec::new(),
+            },
+            bridge: JSumBridge {
+                classes: self
+                    .alternatives
+                    .iter()
+                    .map(|alternative| alternative.jvm_class.clone())
+                    .collect(),
+                enum_name: self.enum_name.clone(),
+            },
+            arms: self
+                .alternatives
+                .iter()
+                .enumerate()
+                .map(
+                    |(index, alternative)| prebindgen_registry::chain::ChoiceArm {
+                        alternative: alternative.shape.clone(),
+                        tag: {
+                            let index = index as i32;
+                            syn::parse_quote!(#index)
+                        },
+                        bridge: JObjectBridge {
+                            properties: alternative.fields.to_vec(),
+                        },
+                        parts: alternative
+                            .fields
+                            .iter()
+                            .map(|field| prebindgen_registry::chain::ChoicePart {
+                                child: field.child(),
+                                mode: prebindgen_registry::recipe::Mode::Owned,
+                                hold_uninit: false,
+                            })
+                            .collect(),
+                    },
+                )
+                .collect(),
         };
-        return Some((
-            quote! {
-                let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
-                    .and_then(|val| val.l())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                #decode
-            },
-            quote!(#bind),
-        ));
+        let body = prebindgen_registry::chain::Chain::render(&choice, emit).body;
+        syn::parse_quote!(#body)
     }
-    match jni_field_access(&wire) {
-        Some((sig, accessor, false)) => Some((
-            quote! {
-                let #raw: #wire = env.get_field(#receiver, #prop, #sig)
-                    .and_then(|val| val.#accessor())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))? as _;
-                let #bind = #conv;
-            },
-            quote!(#bind),
-        )),
-        Some((sig, _, true)) => {
-            let obj = format_ident!("{}_obj", bind);
-            Some((
-                quote! {
-                    let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #raw: #wire = #obj.into();
-                    let #bind = #conv;
-                },
-                quote!(#bind),
-            ))
-        }
-        None => {
-            // Object-shaped wire with no fixed descriptor (a nested data
-            // class, another sum, a `List`): the slot's descriptor is the
-            // registered Kotlin class and the value decodes through its own
-            // converter — the same delegation the data-class path uses.
-            let sig = match inner.unwrapped().kind() {
-                // The NAME off the classification, not off the last path
-                // segment: `Box<T>` IS `T` here.
-                flat::TypeKind::Named { id, .. } => id.ident(),
-                _ => None,
-            }
-            .and_then(|name| ext.kotlin_fqn(&TypeKey::from_ident(&name)))
-            .map(|v| format!("L{};", v.replace('.', "/")))
-            .or_else(|| {
-                // A run of values is what `kind` says it is.
-                // `pat_match_top(.., "Vec")` compared the last path segment, so
-                // a `Box<Vec<T>>` answered false.
-                inner
-                    .sequence_elem()
-                    .is_some()
-                    .then(|| "Ljava/util/List;".to_string())
-            })
-            .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
-            Some((
-                quote! {
-                    let #raw: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #bind = #conv;
-                },
-                quote!(#bind),
-            ))
-        }
-    }
-}
-
-/// The complete `wire -> Rust` decode of one value read out of a JVM object:
-/// the wire-facing converter applied to `raw`, followed by the rust-side
-/// stages a custom [`convert!`](prebindgen_registry::convert) declaration inserts.
-///
-/// The mirror of [`ConvChain::call`](super::super::struct_plan::ConvChain) on
-/// the output side, and of the structural wrappers' own chain composition:
-/// stopping at [`ConverterImpl::converter_ident`] would bind the *representation*
-/// (`u64`) where the Rust value (`Duration`) is required, which does not
-/// compile.
-///
-/// Every converter invocation in this module's whole-object decoders goes
-/// through here — a data-class field, a sealed-class property, and the inner
-/// converter an `Option`/enum slot delegates to — so a chain cannot be dropped
-/// by one branch happening not to have been the one under test. Stage bindings
-/// derive from `stage_base`, so two values of the same type in one scope get
-/// distinct names.
-fn composed_entry_decode(
-    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
-    raw: &syn::Ident,
-    stage_base: &syn::Ident,
-) -> TokenStream {
-    let converter = entry.converter_ident();
-    if entry.pre_stages.is_empty() {
-        return quote!(#converter(env, &#raw)?);
-    }
-    let s0 = format_ident!("{}_s0", stage_base);
-    let mut body = quote! { let #s0 = #converter(env, &#raw)?; };
-    let mut previous = s0;
-    for (order, (_, stage)) in entry.input_stage_order().enumerate() {
-        let stage_fn = &stage.function.sig.ident;
-        let next = format_ident!("{}_s{}", stage_base, order + 1);
-        body.extend(quote! {
-            let #next = #stage_fn(env, #previous)
-                .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
-                    __e.to_string()))?;
-        });
-        previous = next;
-    }
-    quote!({ #body #previous })
-}
-
-/// [`composed_entry_decode`] for a sealed-class property, whose raw binding is
-/// `<bind>_raw` by construction.
-fn composed_property_decode(
-    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
-    bind: &syn::Ident,
-) -> TokenStream {
-    composed_entry_decode(entry, &format_ident!("{}_raw", bind), bind)
 }
 
 // ──────────────────────────────────────────────────────────────────────
 // Struct input flattening (pass a data_class param as its leaf fields)
 // ──────────────────────────────────────────────────────────────────────
 
-/// One flattened leaf of a struct **input** param. The mirror of
-/// [`EncSlot`] for the input direction: instead of reading the field with
-/// `env.get_field(...)` out of a single `JObject`, the leaf crosses the JNI
-/// boundary as its own wrapper parameter, and the three coordinated sites — the
+/// One flattened leaf of a struct **input** param — the input direction's own
+/// slot: instead of reading the field with `env.get_field(...)` out of a single
+/// `JObject`, the leaf crosses the JNI boundary as its own wrapper parameter,
+/// and the three coordinated sites — the
 /// native wrapper signature, the `JNINative` extern declaration and the Kotlin
 /// call-site destructure — read it so they cannot drift in order, type, or
 /// nullability.
@@ -665,11 +899,6 @@ pub(crate) struct FlatLeaf {
     pub native_ident: syn::Ident,
     /// Kotlin `external fun` parameter name (camelCase).
     pub kt_name: String,
-    /// The path through the value that reached this wire, as the fragment
-    /// states it — `tag`, `summary.count`, `reading.exact_v0`. What the rebuild
-    /// names a leaf by, so the tree it builds and the recipe it builds from cannot
-    /// disagree about which value is which.
-    pub path: String,
     /// The wire itself.
     pub wire: crate::jni::compile::Wire,
 }
@@ -681,7 +910,6 @@ impl FlatLeaf {
         Self {
             native_ident: format_ident!("{native}"),
             kt_name: snake_to_camel(&native),
-            path: wire.path.clone(),
             wire: wire.clone(),
         }
     }
@@ -696,8 +924,8 @@ impl FlatLeaf {
         &self.wire.kt_ty
     }
 
-    /// Per-field input converter ident (`None` for a synthetic gate or tag).
-    pub fn conv(&self) -> Option<&syn::Ident> {
+    /// Per-field input converter operation (`None` for a synthetic gate or tag).
+    pub fn conv(&self) -> Option<&prebindgen_registry::OperationId> {
         self.wire.conv()
     }
 
@@ -747,156 +975,57 @@ impl FlatLeaf {
     }
 }
 
-pub(crate) struct FlatStructNode {
-    pub struct_module: syn::Path,
-    pub struct_ident: syn::Ident,
-    pub binding: syn::Ident,
-    pub optional: bool,
-    pub present_ident: Option<syn::Ident>,
-    pub fields: Vec<FlatFieldNode>,
-}
-
-pub(crate) enum FlatFieldNode {
-    Value {
-        field: syn::Ident,
-        value_leaf: usize,
-        present_leaf: Option<usize>,
-        /// `Some(target)` iff this field crosses as a raw handle jlong, where
-        /// `target` is the type the `Box` points at — the field's own type with
-        /// its optional layer peeled, **taken off the model at plan time**.
-        ///
-        /// Paired rather than a `bool` beside a spelling the renderer re-peels:
-        /// `option_inner_type` compared the last path segment, so a field
-        /// spelled `Box<Option<T>>` would have handed `Box::from_raw` the wrong
-        /// target. There is no reading here to ask — `FlatFieldNode` is an
-        /// emission IR and tokens are what it is for — so the answer travels
-        /// from where the reading was (#289).
-        /// The handle type a leaf reconstructs by `Box::from_raw` — the
-        /// reading, spelled at the emit site like every other generated type.
-        direct_handle: Option<Box<prebindgen_registry::flat::TypeRef>>,
-        optional_handle: bool,
-        rust_ty: Box<prebindgen_registry::flat::TypeRef>,
-        /// The transparent wrappers this field's spelling adds over its
-        /// classification, outermost first — put back wherever the decode
-        /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
-        /// running the field's own converter, which already yields the spelling.
-        wrappers: Vec<&'static str>,
-    },
-    Nested {
-        field: syn::Ident,
-        node: Box<FlatStructNode>,
-    },
-    /// A data-carrying enum crossing as an `Int` **tag** leaf plus one leaf
-    /// group per variant, inert groups filled with their wire defaults — the
-    /// N-way form of the `present` gating `Option` already uses.
-    Sum {
-        field: syn::Ident,
-        /// Index of the synthetic tag leaf.
-        tag_leaf: usize,
-        /// Index of the `present` gate when the field is `Option<sum>`.
-        /// Optionality and choice stay independent facts: the tag domain is
-        /// never overloaded with an "absent" value.
-        present_leaf: Option<usize>,
-        /// Qualified path to the source enum, for the reconstruct's arms.
-        source: syn::Path,
-        /// Variants in declaration order; index == tag.
-        variants: Vec<FlatSumVariant>,
-        rust_ty: Box<prebindgen_registry::flat::TypeRef>,
-        /// The transparent wrappers this field's spelling adds over its
-        /// classification, outermost first — put back wherever the decode
-        /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
-        /// running the field's own converter, which already yields the spelling.
-        wrappers: Vec<&'static str>,
-    },
-}
-
-/// One alternative of a [`FlatFieldNode::Sum`].
-pub(crate) struct FlatSumVariant {
-    pub rust_ident: syn::Ident,
-    /// This variant's payload: how each field is addressed when rebuilding
-    /// it, paired with the leaf carrying its value. Empty for a unit variant.
-    pub fields: Vec<(syn::Member, usize)>,
-}
-
-/// The three layers a specialized struct lowering descends through, each paired
-/// with the reading whose spelling it must satisfy.
+/// The outer layer a flattened call argument restores after its registry chain
+/// returns the value represented by the crossing.
 ///
-/// `kind` decides what the destination sees; the **conversion** follows the
-/// syntax, and this lowering does not decode its parameter — it emits a literal
-/// `S { .. }`, wraps it in `Option::Some`, and hands it to the source function.
-/// Rebuilding from the classification alone produces the *stripped* type, so a
-/// parameter spelled `Box<Option<S>>` would receive an `Option<S>`: `E0308` in
-/// the generated crate.
-///
-/// So each layer keeps its own reading, and the emitter puts that layer's
-/// wrappers back as it builds outward — see [`RebuildTarget::wrap_core`] and its
-/// siblings. Collected on the way **down** because an erasure sits *outside* the
-/// layer it wraps: `Box<&S>` classifies as `Ref`, and reading `kind` first would
-/// leave the `Box` unreachable.
+/// Product/Optional/Choice construction belongs to the registry chain. The
+/// renderer only adds the source call's borrow; wrappers outside that borrow
+/// still belong afterwards (`Box<&S>` -> `Box::new(&value)`).
 pub(crate) struct RebuildTarget {
     /// Wrappers over the borrow, if there is one — the `Box` of `Box<&S>`.
     arg: Vec<&'static str>,
-    /// Wrappers over the `Option` — the `Box` of `Box<Option<S>>`.
-    under_borrow: Vec<&'static str>,
-    /// Wrappers over the `S { .. }` literal — the `Box` of `Option<Box<S>>`.
-    core: Vec<&'static str>,
-    /// `true` when the source fn takes `&Struct`.
-    pub by_ref: bool,
-    /// `true` when the value is `Option`-wrapped.
-    pub optional: bool,
+    borrow: RebuildBorrow,
+}
+
+#[derive(Clone, Copy)]
+enum RebuildBorrow {
+    None,
+    Outer { mutable: bool },
+    OptionalInner { mutable: bool },
 }
 
 impl RebuildTarget {
-    /// Put back the wrappers standing over the `S { .. }` literal —
-    /// `Option<Box<S>>` wraps here, not at [`Self::wrap_optional`].
-    pub fn wrap_core(&self, e: TokenStream) -> TokenStream {
-        Self::wrap(&self.core, e)
-    }
-
-    /// Put back the wrappers over the `Option<..>` — the `Box` of
-    /// `Box<Option<S>>`.
-    ///
-    /// A no-op when the parameter is not optional, for the same reason
-    /// [`Self::wrap_arg`] is one when it is not a borrow: with no `Option` to
-    /// peel, `under_borrow` and `core` are the *same reading*, and wrapping at
-    /// both would apply one layer twice.
-    ///
-    /// Stated once as the rule the three share: **a layer's wrappers are
-    /// applied only where that layer exists**, and the innermost always applies.
-    pub fn wrap_optional(&self, e: TokenStream) -> TokenStream {
-        if !self.optional {
-            return e;
-        }
-        Self::wrap(&self.under_borrow, e)
-    }
-
     /// Put back the wrappers over the **borrow** — the `Box` of `Box<&S>`,
     /// which goes on after the call site has added its `&`.
     ///
-    /// A no-op when the parameter is not a borrow, and that is not an
-    /// optimisation: with no `&` to peel, `arg` and `under_borrow` are the *same
-    /// reading*, so wrapping at both would apply one layer twice —
-    /// `Box::new(Box::new(v))` for a `Box<Option<S>>` parameter.
-    pub fn wrap_arg(&self, e: TokenStream) -> TokenStream {
-        if !self.by_ref {
-            return e;
+    /// A no-op when the parameter is not a borrow: wrappers at or below the
+    /// crossing are already restored by the registry chain.
+    pub fn call_arg(&self, ident: &syn::Ident) -> TokenStream {
+        let value = match self.borrow {
+            RebuildBorrow::None => quote!(#ident),
+            RebuildBorrow::Outer { mutable: false } => quote!(&#ident),
+            RebuildBorrow::Outer { mutable: true } => quote!(&mut #ident),
+            RebuildBorrow::OptionalInner { mutable: false } => quote!(#ident.as_ref()),
+            RebuildBorrow::OptionalInner { mutable: true } => quote!(#ident.as_mut()),
+        };
+        if !matches!(self.borrow, RebuildBorrow::Outer { .. }) {
+            return value;
         }
-        Self::wrap(&self.arg, e)
+        crate::jni::trait_impl::build_through_wrappers(&self.arg, value)
+            .expect("every layer was checked buildable when the plan was built")
     }
 
-    /// Every wrap goes through the one helper, and every layer was proved
-    /// buildable by [`rebuildable_target`] before a plan existed — so a `None`
-    /// here would mean the descent and the emission disagree about the same
-    /// reading, which is a bug in this file rather than an unsupported source.
-    fn wrap(names: &[&'static str], e: TokenStream) -> TokenStream {
-        build_through_wrappers(names, e)
-            .expect("every layer was checked buildable when the plan was built")
+    fn mutable_binding(&self) -> bool {
+        matches!(
+            self.borrow,
+            RebuildBorrow::Outer { mutable: true } | RebuildBorrow::OptionalInner { mutable: true }
+        )
     }
 }
 
-/// Descend `&` then `Option<…>` off the model to the struct a specialized
-/// lowering will **rebuild**, keeping each layer's reading so its spelling can
-/// be restored.
+/// Descend an outer borrow, an `Option`, or the borrow inside an `Option` to the
+/// struct a specialized lowering will **rebuild**, keeping each layer's reading
+/// so its spelling can be restored.
 ///
 /// One function because it is one rule, and the layers are checked **on the way
 /// down**: an erasure sits outside the layer it wraps, so `Box<&S>` classifies
@@ -911,23 +1040,38 @@ fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
     // peel that would hide it. The token is irrelevant — only the `Option` is.
     let buildable = |t: &TypeRef| build_through_erased_wrappers(t, quote!(__probe)).map(|_| ());
     buildable(arg)?;
-    let by_ref = arg.borrow_target().is_some();
-    let t1 = arg.borrow_target().unwrap_or(arg);
+    let (borrow, t1) = match arg.unwrapped().kind() {
+        flat::TypeKind::Ref { mutable, inner, .. } => {
+            (RebuildBorrow::Outer { mutable: *mutable }, inner.as_ref())
+        }
+        _ => (RebuildBorrow::None, arg),
+    };
     buildable(t1)?;
-    let optional = t1.optional_inner().is_some();
-    let inner = t1.optional_inner().unwrap_or(t1);
-    // The struct is rebuilt BY NAME (`S { .. }`), and its own spelling may add a
-    // wrapper over that name — `Box<S>` gets its `Box::new` at `wrap_core`.
+    let mut inner = t1.optional_inner().unwrap_or(t1);
+    // The chain must also be able to rebuild the crossing's inner spelling.
     buildable(inner)?;
-    // Only the wrapper LISTS are kept: they are all a rebuild uses, and a
-    // `TypeRef` apiece would put ~800 bytes into every `InputKind`.
+    let borrow = if matches!(borrow, RebuildBorrow::None) {
+        match inner.kind() {
+            flat::TypeKind::Ref {
+                mutable,
+                inner: target,
+                ..
+            } if arg.erased_wrappers().is_empty() => {
+                inner = target.as_ref();
+                buildable(inner)?;
+                RebuildBorrow::OptionalInner { mutable: *mutable }
+            }
+            _ => borrow,
+        }
+    } else {
+        borrow
+    };
+    // Only wrappers outside the borrow are kept. Inner wrappers are already
+    // part of the registry chain's source policy.
     Some((
         RebuildTarget {
             arg: arg.erased_wrappers(),
-            under_borrow: t1.erased_wrappers(),
-            core: inner.erased_wrappers(),
-            by_ref,
-            optional,
+            borrow,
         },
         inner,
     ))
@@ -937,12 +1081,18 @@ fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
 /// [`build_flat_input_plan`] and consumed by all three codegen sites.
 pub(crate) struct FlatInputPlan {
     pub leaves: Vec<FlatLeaf>,
-    pub root: FlatStructNode,
-    /// `true` when the source fn takes `&Struct` — the call site passes `&arg`.
-    pub by_ref: bool,
-    /// Vec/slice element lowering deliberately retains its previous
-    /// non-recursive ABI; callers use this bit to decline recursive plans.
-    pub contains_nested: bool,
+    /// Registry-composed source converter over those leaves. Planning verifies
+    /// its presence and leaf arity; cross-artifact and runtime tests verify that
+    /// the ordered leaves have the same meaning on both sides of JNI. There is
+    /// no adapter-side reconstruction path.
+    pub chain: crate::jni::compile::ComposedChain,
+    /// Source identity retained only for the deliberately non-recursive Vec
+    /// push helper, which constructs one simple element literal.
+    pub struct_module: syn::Path,
+    pub struct_ident: syn::Ident,
+    /// Whether any Product child is itself composed. The specialized Vec
+    /// helper only understands a Product of terminal leaves.
+    pub contains_composed_child: bool,
     /// The layer readings the rebuild has to satisfy — carried rather than
     /// re-derived at the emission sites, so the descent is stated once.
     pub target: RebuildTarget,
@@ -955,7 +1105,7 @@ pub(crate) struct FlatInputPlan {
 // parameter spelled `impl Into<S>` never becomes a `TypeRef` and never reached
 // the call. `cargo check` confirmed it dead rather than the reasoning alone.
 // jnigen's actual `impl Into<…>` support is elsewhere: plugin wrapper exts build
-// a `ConverterImpl::function` by hand via `Declarations::input_converter_name`,
+// a converter artifact identity via `Declarations::input_converter_name`,
 // which never consults this.
 // `flat_probe_inner` lived here: it peeled `&` then `Option` off a SPELLING to
 // reach the type an enum probe should ask about. Its last caller now asks
@@ -1047,109 +1197,6 @@ pub(crate) fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<Kotlin
     }
 }
 
-/// The rebuild for a **data-carrying enum** field the recipe flattened into a tag
-/// plus one slot group per alternative.
-///
-/// Which of the two happened is the fragment's decision, not this walk's:
-/// `Compile::choice` composes the groups where every payload has a slot form
-/// and hands back a single-wire fragment where one does not — a handle, say,
-/// whose ownership the group-gated form does not model. So the caller asks
-/// whether the field is whole before reaching here, and every alternative's
-/// payloads are present when it does.
-#[allow(clippy::too_many_arguments)]
-fn build_flat_sum_field(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    sum_reading: &TypeRef,
-    field: syn::Ident,
-    optional: bool,
-    native_prefix: &str,
-    field_reading: &TypeRef,
-    root: &TypeKey,
-    leaves: &mut Leaves<'_>,
-) -> Result<FlatFieldNode, FlatInputError> {
-    let missing = || {
-        flat_error(
-            root,
-            native_prefix,
-            "the recipe states fewer wires than the model",
-        )
-    };
-    // The NAME off the classification, and then the ELEMENT — `enum_item`
-    // hands back only the `syn::ItemEnum`, deliberately, so a consumer that
-    // acts on the Variant/Enum distinction asks `declared_type` (#289).
-    let ident = match sum_reading.unwrapped().kind() {
-        flat::TypeKind::Named { id, .. } => id.ident(),
-        _ => None,
-    }
-    .ok_or_else(missing)?;
-    let Some(flat::Type::Variant(sum)) = registry.flat().declared_type(&ident) else {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "a sum recipe over a type that is not one",
-        ));
-    };
-
-    let present_leaf = match optional {
-        true => Some(leaves.take().ok_or_else(missing)?),
-        false => None,
-    };
-    let tag_leaf = leaves.take().ok_or_else(missing)?;
-    let mut variants = Vec::new();
-    for alt in &sum.alternatives {
-        let mut fields = Vec::new();
-        for f in &alt.fields {
-            fields.push((f.member(), leaves.take().ok_or_else(missing)?));
-        }
-        variants.push(FlatSumVariant {
-            rust_ident: alt.name.clone(),
-            fields,
-        });
-    }
-
-    let module = ext.fn_module(registry, &ident);
-    Ok(FlatFieldNode::Sum {
-        wrappers: field_reading.erased_wrappers(),
-        field,
-        tag_leaf,
-        present_leaf,
-        source: syn::parse_quote!(#module::#ident),
-        variants,
-        rust_ty: Box::new(field_reading.clone()),
-    })
-}
-
-/// The plan's leaves, read in the order the recipe states them.
-///
-/// A cursor rather than a lookup, because a path is not a key: a nested
-/// `data_class` with a field called `value` reaches the same path a decoupled
-/// pair's slot does, and one called `present` reaches the same path as the gate
-/// over its own struct. What is unambiguous is the **order** — the composition
-/// emits a gate before what it gates, fields in the model's order, and a sum's
-/// tag before its arms' slots — which is the order this walk visits them in.
-struct Leaves<'a> {
-    leaves: &'a [FlatLeaf],
-    next: usize,
-}
-
-impl Leaves<'_> {
-    /// The next leaf, consumed.
-    fn take(&mut self) -> Option<usize> {
-        let index = self.next;
-        (index < self.leaves.len()).then(|| {
-            self.next += 1;
-            index
-        })
-    }
-
-    /// Whether the next leaf is the whole of what `path` reaches, rather than
-    /// the first of several.
-    fn is_whole(&self, path: &str) -> bool {
-        self.leaves.get(self.next).is_some_and(|l| l.path == path)
-    }
-}
-
 pub(crate) fn build_flat_input_plan(
     ext: &Declarations,
     registry: &impl Conversions,
@@ -1161,7 +1208,6 @@ pub(crate) fn build_flat_input_plan(
     let Some((target, inner)) = rebuildable_target(arg) else {
         return Ok(None);
     };
-    let (by_ref, optional) = (target.by_ref, target.optional);
     // `impl Into<S>` is NOT peeled here, and cannot be: the model refuses
     // `impl Trait` that is not the callback form (`DisallowedImplTrait`), so a
     // parameter spelled that way never becomes a reading and never reaches this
@@ -1225,611 +1271,69 @@ pub(crate) fn build_flat_input_plan(
         return Ok(None);
     };
     let leaves: Vec<FlatLeaf> = wires.iter().map(|w| FlatLeaf::of(param_name, w)).collect();
-
-    // 3. The tree the Rust side rebuilds through, over those same wires in the
-    //    order the recipe states them.
-    let mut stack = Vec::new();
-    let mut cursor = Leaves {
-        leaves: &leaves,
-        next: 0,
+    let chain = ext
+        .composed_chain(arg, prebindgen_registry::recipe::Direction::Construct)
+        .filter(|chain| chain.layout.leaf_count() == leaves.len())
+        .ok_or_else(|| {
+            flat_error(
+                &key,
+                &param_name.to_string(),
+                "the registry-composed layout arity does not match the declared JNI wires",
+            )
+        })?;
+    chain.activate();
+    let contains_composed_child = match &chain.layout {
+        crate::jni::compile::JLayout::Product(parts) => {
+            parts.iter().any(crate::jni::compile::JLayout::is_composed)
+        }
+        _ => true,
     };
-    let root = build_flat_struct_node(
-        ext,
-        registry,
-        st,
-        optional,
-        &param_name.to_string(),
-        "",
-        &key,
-        &mut stack,
-        &mut cursor,
-    )?;
-    let contains_nested = root
-        .fields
-        .iter()
-        .any(|f| matches!(f, FlatFieldNode::Nested { .. }));
     Ok(Some(FlatInputPlan {
         leaves,
-        root,
-        by_ref,
-        contains_nested,
+        chain,
+        struct_module: struct_module_path(ext, registry, &st.name),
+        struct_ident: st.name.clone(),
+        contains_composed_child,
         target,
     }))
 }
 
-/// The rebuild tree for one struct, over the wires the recipe states for it.
-///
-/// Takes the **element**, not the `syn::ItemStruct` it was parsed from (#289):
-/// `flat::Field::ty` is already a `TypeRef`, so every peel below is the model's
-/// answer rather than a last-path-segment test on tokens that had a reading one
-/// level up.
-///
-/// How many wires a field occupies is the recipe's answer, read off the cursor;
-/// which of the composite shapes it took is the model's, read off the field's
-/// type. The walk that used to decide both made the second decision twice — once
-/// to compose and once to rebuild — and two answers are two things to keep in
-/// step.
-#[allow(clippy::too_many_arguments)]
-fn build_flat_struct_node(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    st: &flat::Struct,
-    optional: bool,
-    native_prefix: &str,
-    path_prefix: &str,
-    root: &TypeKey,
-    stack: &mut Vec<TypeKey>,
-    leaves: &mut Leaves<'_>,
-) -> Result<FlatStructNode, FlatInputError> {
-    let node_key = TypeKey::from_ident(&st.name);
-    if stack.contains(&node_key) {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "recursive data-class cycle",
-        ));
-    }
-    if stack.len() >= 16 {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "recursive flattening exceeds depth 16",
-        ));
-    }
-    stack.push(node_key);
-    let missing = |at: &str| flat_error(root, at, "the recipe states fewer wires than the model");
-    let present_ident = if optional {
-        let gate = leaves.take().ok_or_else(|| missing(native_prefix))?;
-        Some(leaves.leaves[gate].native_ident.clone())
-    } else {
-        None
-    };
-    let mut fields = Vec::new();
-    for field in &st.fields {
-        // A positional field has no name to derive a Kotlin property from, which
-        // is what "only named-field structs can flatten" used to say one level
-        // up. Said per field now, because the element models a field list rather
-        // than a `syn::Fields` shape.
-        let Some(fident) = field.name.clone() else {
-            return Err(flat_error(
-                root,
-                native_prefix,
-                "only named-field structs can flatten",
-            ));
-        };
-        let path = format!("{path_prefix}{fident}");
-        let child_native = format!("{native_prefix}_{fident}");
-        // The optional layer off the MODEL, asked once and reused: every site
-        // below that wants "is this field optional" reads this, so they cannot
-        // disagree with each other the way seven independent path-segment tests
-        // could (#273).
-        let field_optional = field.ty.optional_inner().is_some();
-        let nested = field.ty.optional_inner().unwrap_or(&field.ty);
-        let wrappers = field.ty.erased_wrappers();
-
-        // One wire for the whole field: the ordinary case, and the one an
-        // opaque-handle field takes — the recipe says which by carrying a handle
-        // target on that wire. Also where a sum or a nested class the recipe left
-        // whole ends up.
-        if leaves.is_whole(&path) {
-            let index = leaves.take().ok_or_else(|| missing(&child_native))?;
-            let direct_handle = leaves.leaves[index]
-                .wire
-                .handle_target
-                .is_some()
-                .then(|| Box::new(nested.clone()));
-            if direct_handle.is_some()
-                && matches!(
-                    ext.in_frag(&field.ty).and_then(|e| e
-                        .metadata
-                        .projection
-                        .as_ref()
-                        .map(|p| p.strategy.clone())),
-                    Some(FoldStrategy::Iterable(_))
-                )
-            {
-                return Err(flat_error(
-                    root,
-                    &child_native,
-                    "collections of handles retain their collection boundary",
-                ));
-            }
-            fields.push(FlatFieldNode::Value {
-                field: fident,
-                value_leaf: index,
-                present_leaf: None,
-                optional_handle: direct_handle.is_some() && field_optional,
-                direct_handle,
-                rust_ty: Box::new(field.ty.clone()),
-                wrappers,
-            });
-            continue;
-        }
-
-        // Several wires, and the field's own type says which shape they take.
-        match ext.type_kind(registry, &nested.key()) {
-            TypeKind::Sum => {
-                fields.push(build_flat_sum_field(
-                    ext,
-                    registry,
-                    nested,
-                    fident,
-                    field_optional,
-                    &child_native,
-                    &field.ty,
-                    root,
-                    leaves,
-                )?);
-            }
-            TypeKind::DataStruct {
-                st: child,
-                cfg: Some(_),
-            } => {
-                let node = build_flat_struct_node(
-                    ext,
-                    registry,
-                    child,
-                    field_optional,
-                    &child_native,
-                    &format!("{path}."),
-                    root,
-                    stack,
-                    leaves,
-                )?;
-                fields.push(FlatFieldNode::Nested {
-                    field: fident,
-                    node: Box::new(node),
-                });
-            }
-            // A gate beside a raw slot: the allocation-free pair a nullable
-            // primitive, enum or unsigned representation crosses as.
-            _ => {
-                let present = leaves.take().ok_or_else(|| missing(&child_native))?;
-                let value = leaves.take().ok_or_else(|| missing(&child_native))?;
-                fields.push(FlatFieldNode::Value {
-                    field: fident,
-                    value_leaf: value,
-                    present_leaf: Some(present),
-                    direct_handle: None,
-                    optional_handle: false,
-                    rust_ty: Box::new(field.ty.clone()),
-                    wrappers,
-                });
-            }
-        }
-    }
-    stack.pop();
-    Ok(FlatStructNode {
-        struct_module: struct_module_path(ext, registry, &st.name),
-        struct_ident: st.name.clone(),
-        binding: format_ident!("__flat_{native_prefix}"),
-        optional,
-        present_ident,
-        fields,
-    })
-}
-
-/// Render the native reconstruct for a [`FlatInputPlan`]: decode each leaf
-/// param with its per-field converter (lazily, inside the `present` branch for
-/// an `Option<struct>`) and bind the rebuilt struct to `arg_ident`. Each decode
-/// failure routes through `signal_error` (the per-call sink) and returns the
-/// function `on_err` sentinel. Returns the prelude statements and the call
-/// argument (`arg` or `&arg`).
+/// Render native reconstruction for a [`FlatInputPlan`] through its registry
+/// chain. Building the Product/Optional/Choice tree is entirely a registry
+/// responsibility; this site only supplies the JNI wire leaves.
+/// Failures route through `signal_error` and return the function `on_err`
+/// sentinel. Returns the prelude and call argument (`arg` or `&arg`).
 pub(crate) fn render_flat_input_decode(
     plan: &FlatInputPlan,
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (TokenStream, TokenStream) {
-    let reconstruct = render_flat_struct_node(plan, &plan.root, Some(&plan.target), on_err, emit);
-    let root_binding = &plan.root.binding;
+    let leaves: Vec<syn::Ident> = plan
+        .leaves
+        .iter()
+        .map(|leaf| leaf.native_ident.clone())
+        .collect();
+    let intermediate = plan.chain.layout.expression(&leaves);
+    let converter = emit.operation_ident("jni", &plan.chain.operation);
+    let binding = plan.target.mutable_binding().then(|| quote!(mut));
     let prelude = quote! {
-        #reconstruct
-        let #arg_ident = #root_binding;
-    };
-    // The borrow, then the wrappers standing OVER it — `Box<&S>` is
-    // `Box::new(&arg)`, in that order, because the erasure sits outside the
-    // layer it wraps and the `&` is that layer.
-    let borrowed = if plan.by_ref {
-        quote!(&#arg_ident)
-    } else {
-        quote!(#arg_ident)
-    };
-    (prelude, plan.target.wrap_arg(borrowed))
-}
-
-fn render_entry_decode(
-    entry: &prebindgen_registry::ConverterImpl<KotlinMeta>,
-    wire_ident: &syn::Ident,
-    out_ident: &syn::Ident,
-    on_err: &TokenStream,
-) -> TokenStream {
-    let conv = entry.converter_ident();
-    let decode_call = if matches!(entry.destination, syn::Type::Ptr(_)) {
-        quote!(#conv(&mut env, #wire_ident))
-    } else {
-        quote!(#conv(&mut env, &#wire_ident))
-    };
-    let route = |expr: TokenStream| {
-        quote! {
-            match #expr {
-                ::core::result::Result::Ok(__v) => __v,
-                ::core::result::Result::Err(__e) => {
-                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                    return #on_err;
-                }
-            }
-        }
-    };
-    if entry.pre_stages.is_empty() {
-        let decoded = route(decode_call);
-        return quote!(let #out_ident = #decoded;);
-    }
-    let stage0 = format_ident!("{}_s0", out_ident);
-    let decoded = route(decode_call);
-    let mut body = quote!(let #stage0 = #decoded;);
-    let mut previous = stage0;
-    let n = entry.pre_stages.len();
-    for (idx, stage) in entry.input_stage_order() {
-        let stage_fn = &stage.function.sig.ident;
-        let next = if idx == 0 {
-            out_ident.clone()
-        } else {
-            format_ident!("{}_s{}", out_ident, n - idx)
-        };
-        let converted = route(quote!(#stage_fn(&mut env, #previous)));
-        body.extend(quote!(let #next = #converted;));
-        previous = next;
-    }
-    body
-}
-
-/// `target` is `Some` for the parameter's ROOT node, whose spelling may add
-/// transparent wrappers the rebuild has to restore, and `None` for a nested one
-/// — a nested struct is reached through a field, and a field's own wrappers are
-/// applied where that field is decoded.
-fn render_flat_struct_node(
-    plan: &FlatInputPlan,
-    node: &FlatStructNode,
-    target: Option<&RebuildTarget>,
-    on_err: &TokenStream,
-    emit: &prebindgen_registry::Emit,
-) -> TokenStream {
-    let mut decodes = TokenStream::new();
-    let mut inits = Vec::new();
-    for field in &node.fields {
-        match field {
-            FlatFieldNode::Nested { field, node: child } => {
-                decodes.extend(render_flat_struct_node(plan, child, None, on_err, emit));
-                let child_binding = &child.binding;
-                inits.push(quote!(#field: #child_binding));
-            }
-            // Tag-gated groups: one `match` over the tag rebuilds the live
-            // variant. ONLY that arm's leaves are converted — the inert
-            // groups carry wire defaults nobody reads.
-            FlatFieldNode::Sum {
-                wrappers,
-                field,
-                tag_leaf,
-                present_leaf,
-                source,
-                variants,
-                rust_ty,
-            } => {
-                let tmp = format_ident!("{}_{}", node.binding, field);
-                // The slot's ascription, spelled from the reading the node
-                // carries — see the comment below on why the type is written.
-                let rust_ty = emit.spell(rust_ty);
-                let tag = &plan.leaves[*tag_leaf].native_ident;
-                let arms = variants.iter().enumerate().map(|(t, v)| {
-                    let vident = &v.rust_ident;
-                    let tag_lit = proc_macro2::Literal::i32_unsuffixed(t as i32);
-                    let mut pre = TokenStream::new();
-                    let mut inits: Vec<TokenStream> = Vec::new();
-                    for (member, leaf_idx) in &v.fields {
-                        let leaf = &plan.leaves[*leaf_idx];
-                        let entry = leaf.entry().expect("sum payload leaf has an entry");
-                        let wire = &leaf.native_ident;
-                        let bind = format_ident!("{}_{}", tmp, wire);
-                        pre.extend(render_entry_decode(entry, wire, &bind, on_err));
-                        match member {
-                            syn::Member::Named(n) => inits.push(quote!(#n: #bind)),
-                            syn::Member::Unnamed(_) => inits.push(quote!(#bind)),
-                        }
-                    }
-                    let ctor = if v.fields.is_empty() {
-                        quote!(#source::#vident)
-                    } else if matches!(v.fields[0].0, syn::Member::Named(_)) {
-                        quote!(#source::#vident { #(#inits),* })
-                    } else {
-                        quote!(#source::#vident(#(#inits),*))
-                    };
-                    quote! { #tag_lit => { #pre #ctor } }
-                });
-                // A tag outside `0..N-1` is a binding error through the
-                // ordinary channel — never a panic across the boundary.
-                let bad_tag = format!(
-                    "{}: invalid tag",
-                    source
-                        .segments
-                        .last()
-                        .map(|s| s.ident.to_string())
-                        .unwrap_or_default()
+        let #binding #arg_ident = match #converter(&mut env, #intermediate) {
+            ::core::result::Result::Ok(__value) => __value,
+            ::core::result::Result::Err(__error) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__error.to_string(),
                 );
-                let build = quote! {
-                    match #tag {
-                        #(#arms)*
-                        _ => {
-                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, #bad_tag);
-                            return #on_err;
-                        }
-                    }
-                };
-                // The rebuilt value, then the wrappers this FIELD's spelling
-                // adds — the slot is ascribed `#rust_ty`, so a `Box<Option<T>>`
-                // field needs its `Box` back. Only the rebuilding arms wrap: the
-                // fall-through below runs the field's own converter, which
-                // already yields the spelling.
-                let wrap = |e: TokenStream| {
-                    build_through_wrappers(wrappers, e)
-                        .expect("a field spelling the plan accepted is buildable")
-                };
-                if let Some(p) = present_leaf {
-                    let present = &plan.leaves[*p].native_ident;
-                    let gated = wrap(quote! {
-                        if #present != 0u8 {
-                            ::core::option::Option::Some(#build)
-                        } else {
-                            ::core::option::Option::None
-                        }
-                    });
-                    decodes.extend(quote! { let #tmp: #rust_ty = #gated; });
-                } else {
-                    let built = wrap(build);
-                    decodes.extend(quote! { let #tmp: #rust_ty = #built; });
-                }
-                inits.push(quote!(#field: #tmp));
+                return #on_err;
             }
-            FlatFieldNode::Value {
-                wrappers,
-                field,
-                value_leaf,
-                present_leaf,
-                direct_handle,
-                optional_handle,
-                rust_ty,
-            } => {
-                let leaf = &plan.leaves[*value_leaf];
-                let wire = &leaf.native_ident;
-                let tmp = format_ident!("{}_{}", node.binding, field);
-                let rust_ty = emit.spell(rust_ty);
-                let wrap = |e: TokenStream| {
-                    build_through_wrappers(wrappers, e)
-                        .expect("a field spelling the plan accepted is buildable")
-                };
-                if let Some(target) = direct_handle {
-                    let target_ty = emit.spell(target);
-                    if *optional_handle {
-                        let gated = wrap(quote! {
-                            if #wire == 0 {
-                                ::core::option::Option::None
-                            } else {
-                                if (#wire & 1) == 1 {
-                                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
-                                    return #on_err;
-                                }
-                                ::core::option::Option::Some(unsafe {
-                                    *::std::boxed::Box::from_raw(#wire as *mut #target_ty)
-                                })
-                            }
-                        });
-                        decodes.extend(quote! { let #tmp: #rust_ty = #gated; });
-                    } else {
-                        decodes.extend(quote! {
-                            if #wire == 0 || (#wire & 1) == 1 {
-                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
-                                return #on_err;
-                            }
-                            let #tmp: #rust_ty = unsafe {
-                                *::std::boxed::Box::from_raw(#wire as *mut #rust_ty)
-                            };
-                        });
-                    }
-                } else {
-                    let entry = leaf.entry().expect("ordinary leaf has converter entry");
-                    if let Some(present_index) = present_leaf {
-                        let present = &plan.leaves[*present_index].native_ident;
-                        let inner_tmp = format_ident!("{}_value", tmp);
-                        let decode = render_entry_decode(entry, wire, &inner_tmp, on_err);
-                        let gated = wrap(quote! {
-                            if #present != 0u8 {
-                                #decode
-                                ::core::option::Option::Some(#inner_tmp)
-                            } else {
-                                ::core::option::Option::None
-                            }
-                        });
-                        decodes.extend(quote! { let #tmp = #gated; });
-                    } else {
-                        decodes.extend(render_entry_decode(entry, wire, &tmp, on_err));
-                    }
-                }
-                inits.push(quote!(#field: #tmp));
-            }
-        }
-    }
-    let module = &node.struct_module;
-    let sid = &node.struct_ident;
-    let binding = &node.binding;
-    // The struct literal, then the wrappers the CORE spelling adds over it —
-    // `Option<Box<S>>` gets its `Box::new` here, inside the present gate, not
-    // around it. `None` for a nested node, whose own layers are its field's
-    // question rather than the parameter's.
-    let built = match target {
-        Some(t) => t.wrap_core(quote!(#module::#sid { #(#inits),* })),
-        None => quote!(#module::#sid { #(#inits),* }),
+        };
     };
-    // …and the wrappers over the `Option` (or over the bare value) go around
-    // the whole gate — the `Box` of `Box<Option<S>>`.
-    let outer = |e: TokenStream| match target {
-        Some(t) => t.wrap_optional(e),
-        None => e,
-    };
-    if node.optional {
-        let present = node.present_ident.as_ref().expect("optional node has gate");
-        // `#decodes` belongs **inside** the true arm, and that is a correctness
-        // requirement rather than a tidiness one: when the Kotlin object is null
-        // its leaves carry inert placeholders, and decoding them is not
-        // side-effect-free. A required handle field arrives as pointer `0`, so
-        // an unconditional direct-handle decode calls `signal_binding_error` and
-        // returns instead of delivering `None`; an enum with no discriminant `0`
-        // and a fallible custom converter fail on their placeholders the same
-        // way.
-        //
-        // The wrapper goes around the whole conditional, which is what the
-        // `Option` layer wraps — so `outer` applies to the `if`, never between
-        // it and the decodes.
-        let gate = outer(quote! {
-            if #present != 0u8 {
-                #decodes
-                ::core::option::Option::Some(#built)
-            } else {
-                ::core::option::Option::None
-            }
-        });
-        quote! {
-            let #binding = #gate;
-        }
-    } else {
-        let value = outer(built);
-        quote! {
-            #decodes
-            let #binding = #value;
-        }
-    }
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Bare `Option<primitive>` / `Option<enum>` input → (present, value) leaves
-// ──────────────────────────────────────────────────────────────────────
-
-/// A decomposed plan for an `Option<primitive>` / `Option<enum>` **input**
-/// parameter that would otherwise box into a `java.lang.*` and cross as a
-/// single `JObject` (decoded with a reflective `intValue()`/`longValue()`
-/// unbox). Instead the value crosses as a
-/// `(<param>_present: jboolean, <param>_value: <wire>)` pair — no boxed object
-/// on the wire, and the Rust side reassembles the `Option` from two raw scalars
-/// with zero `env.call_method(...)`. The single-scalar dual of
-/// [`FlatInputPlan`]'s `Option<struct>` present-gate path.
-pub(crate) struct OptionScalarInputPlan {
-    /// Native `<param>_present: jboolean` ident.
-    pub present_ident: syn::Ident,
-    /// Native `<param>_value: <wire>` ident.
-    pub value_ident: syn::Ident,
-    /// JNI primitive wire of the inner value (`jint`/`jlong`/`jboolean`/…).
-    pub value_wire: syn::Type,
-    /// Inner converter (`<wire> -> T`), called inside the `present` branch.
-    pub inner_conv: syn::Ident,
-    /// Kotlin camelCase extern param name for the present flag.
-    pub present_kt: String,
-    /// Kotlin camelCase extern param name for the value.
-    pub value_kt: String,
-    /// Non-null Kotlin type of the value leaf (`Int`/`Long`/…) for the extern.
-    pub value_kt_type: String,
-    /// Kotlin zero literal filling the value leaf when the option is absent.
-    pub value_kt_zero: String,
-    /// The transparent wrappers the parameter's spelling adds over `Optional`,
-    /// outermost first — what the emitter puts back.
-    ///
-    /// This plan **rebuilds** its parameter — the emitter writes a literal
-    /// `Option::Some(v)` / `Option::None` and hands it to the source fn — so a
-    /// parameter spelled `Box<Option<T>>` must receive a `Box`, not the bare
-    /// `Option` the classification names. Carried rather than re-derived at the
-    /// two emission sites, which would be the same rule stated twice; the list
-    /// rather than the reading, because that is all a rebuild uses and this
-    /// plan sits in `InputKind`, whose size every variant pays.
-    pub arg_wrappers: Vec<&'static str>,
-    /// `true` when the inner is an `enum_class` — the call site reads `?.value`.
-    pub is_enum: bool,
-}
-
-/// Build an [`OptionScalarInputPlan`] for a bare `Option<primitive>` /
-/// `Option<enum>` parameter, or `None` to keep the existing single-`JObject`
-/// boxed path. Mirrors exactly the boxed-fallback condition of [`option_input`]
-/// (primitive inner wire, no niche, no projection, no composed pre-stages) so
-/// only the cases that *would* box are intercepted — niche cases (already
-/// unboxed / ABI-clean) and opaque/value projections are left untouched.
-pub(crate) fn build_option_scalar_input_plan(
-    ext: &Declarations,
-    param_name: &syn::Ident,
-    arg: &TypeRef,
-) -> Option<OptionScalarInputPlan> {
-    // The wrappers this spelling adds over `Optional` have to be BUILDABLE, not
-    // absent: the emitter rebuilds a bare `Option::Some(v)` and hands it to the
-    // source fn, so a parameter spelled `Box<Option<T>>` receives a `Box`.
-    // Asked here, before the peel, because an erasure sits outside the layer it
-    // wraps — and asked as "can I build it" rather than "is there one", so the
-    // only refusal left is a wrapper `WRAPPER_OPS` declines (`Cow`).
-    build_through_erased_wrappers(arg, quote!(__probe))?;
-    let inner = arg.optional_inner()?;
-    // `Option<&T>` is the nullable-borrow / handle path, not a scalar.
-    if inner.borrow_target().is_some() {
-        return None;
-    }
-    // The layer's own reading straight to its entry — no spell-and-look-back.
-    let inner_entry = ext.in_frag(inner)?;
-    let value_wire = inner_entry.destination.clone();
-    // Only the boxed-primitive fallback shape: primitive wire, no niche,
-    // no projection, no composed pre-stages.
-    let prim = JniPrim::from_wire(&value_wire)?;
-    if inner_entry.niches.clone().carve().is_some() {
-        return None;
-    }
-    if inner_entry.metadata.projection.is_some() {
-        return None;
-    }
-    if !inner_entry.pre_stages.is_empty() {
-        return None;
-    }
-    // The reading-taking probe: `Option<Box<Priority>>` now answers TRUE, where
-    // keying on the spelling asked about `Box < Priority >` and found nothing —
-    // the #270/#272 family again. The probe also peels an optional, which cannot
-    // matter here: a nested `Option<Option<enum>>` has a BOXED wire, and
-    // `JniPrim::from_wire` above accepts only the eight `j*` primitives, so it
-    // has already returned by this line.
-    let is_enum = ext.is_kotlin_enum_reading(inner);
-    Some(OptionScalarInputPlan {
-        present_ident: format_ident!("{}_present", param_name),
-        value_ident: format_ident!("{}_value", param_name),
-        value_wire,
-        inner_conv: inner_entry.function.sig.ident.clone(),
-        present_kt: snake_to_camel(&format!("{}_present", param_name)),
-        value_kt: snake_to_camel(&format!("{}_value", param_name)),
-        value_kt_type: prim.kotlin_type().to_string(),
-        value_kt_zero: prim.kotlin_zero().to_string(),
-        is_enum,
-        arg_wrappers: arg.erased_wrappers(),
-    })
+    (prelude, plan.target.call_arg(arg_ident))
 }
 
 // ──────────────────────────────────────────────────────────────────────

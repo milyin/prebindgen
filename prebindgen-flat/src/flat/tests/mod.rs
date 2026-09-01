@@ -16,6 +16,22 @@ use super::*;
 mod acceptance;
 mod roundtrip;
 
+#[test]
+fn origin_debug_does_not_reveal_captured_syntax() {
+    let origin: Origin<syn::ItemFn> = Origin::new(
+        syn::parse_quote!(
+            fn secret(value: ::std::borrow::Cow<'_, [u8]>) {}
+        ),
+        Rc::new(loc()),
+    );
+
+    let debug = format!("{origin:?}");
+    assert!(debug.contains("src/lib.rs"));
+    assert!(!debug.contains("secret"));
+    assert!(!debug.contains("Cow"));
+    assert!(!debug.contains("ItemFn"));
+}
+
 /// Lower one type by putting it in a struct field, and report what the language
 /// made of it. The field path is used because a field is the position every
 /// consumer already agrees is a boundary surface.

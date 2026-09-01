@@ -9,10 +9,9 @@ use super::*;
 /// a default declaration set are never consulted. A param WITH layers is
 /// covered where the layers come from: `prebindgen-jni/src/jni/tests`.
 fn render_as_raw(spec: IfaceSpec) -> String {
-    let registry = crate::test_util::reg_from_items(vec![]).expect("an empty registry");
     let ext = crate::jni::Declarations::default();
     let mut imports = std::collections::BTreeSet::new();
-    let fun = spec.to_as_raw_fun(&ext, &registry, &mut imports);
+    let fun = spec.to_as_raw_fun(&ext, &mut imports);
     assert!(imports.is_empty(), "a leaf param imports nothing");
     KtFile::new(&spec.package).decl(fun).render()
 }

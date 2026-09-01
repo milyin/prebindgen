@@ -1,4 +1,4 @@
-use prebindgen_registry::{Conversions, RegistryBuilder};
+use prebindgen_registry::RegistryBuilder;
 
 use super::*;
 
@@ -59,6 +59,16 @@ fn inline_output_gets_own_builder() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    assert_eq!(
+        gen.output_freeze_for_test("z_make_a"),
+        Some((2, true, false)),
+        "the type-level return must freeze every delivered leaf",
+    );
+    assert_eq!(
+        gen.output_freeze_for_test("z_make_b"),
+        Some((3, true, false)),
+        "the function-unique return must freeze its own leaf operations",
+    );
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -155,6 +165,11 @@ fn error_unwrap_universal_records() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    assert_eq!(
+        gen.error_freeze_for_test("z_fallible"),
+        Some((3, true, false)),
+        "the function-unique error walk must freeze every delivered leaf before rendering",
+    );
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -392,7 +407,7 @@ fn rust_side_only_error_type() {
 fn rust_side_only_input_type() {
     let loc = myflat_loc();
     let fns: &[&str] = &[
-        "pub fn z_opts_new(retries: i32, verbose: bool) -> ZOpts { unimplemented!() }",
+        "pub fn z_opts_new(retries: i32, label: Label, verbose: bool) -> ZOpts { unimplemented!() }",
         "pub fn z_run(opts: ZOpts) -> i64 { unimplemented!() }",
     ];
     let items: Vec<(syn::Item, SourceLocation)> = fns
@@ -407,6 +422,12 @@ fn rust_side_only_input_type() {
 
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
+        .convert(
+            prebindgen_registry::convert!(Label).input(
+                prebindgen_registry::fun!(crate::label_in)
+                    .sig(prebindgen_registry::sig!((s: String) -> Label)),
+            ),
+        )
         .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_run)))
         .expand(
             prebindgen_registry::expand_param!(ZOpts)
@@ -422,6 +443,11 @@ fn rust_side_only_input_type() {
     let rc: String = rust.split_whitespace().collect();
     // The wrapper folds the ctor Rust-side.
     assert!(rc.contains("myflat::z_opts_new("), "{rust}");
+    assert!(
+        rc.contains("let__chain_s0=__jni_in_convert_")
+            && rc.contains("let__chain_s1=__jni_in_stage_0_"),
+        "the expansion leaf must invoke its frozen terminal-then-stage pipeline:\n{rust}"
+    );
 
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
@@ -435,7 +461,7 @@ fn rust_side_only_input_type() {
     // The Kotlin wrapper takes the ctor's flattened ingredients (prefixed by
     // the param name), not a ZOpts object; no ZOpts class exists.
     assert!(
-        all.contains("funzRun(optsRetries:Int,optsVerbose:Boolean"),
+        all.contains("funzRun(optsRetries:Int,optsLabel:String,optsVerbose:Boolean"),
         "{all}"
     );
     assert!(!all.contains("classZOpts("), "{all}");
@@ -642,14 +668,16 @@ fn typo_in_expand_decl_is_hard_error() {
     let err = jni
         .build_with(registry)
         .expect_err("typo'd expand accessor must fail the scan");
+    // Reported by the decomposition, not by the scan's declared-name check:
+    // this binding applies its own output decompositions while it declares
+    // itself, which is before the registry has read a signature. The typo is
+    // still a hard error naming the same ident.
     match err {
-        WriteRustError::Scan(ScanError::DeclaredNotFound { entries }) => {
-            assert_eq!(
-                entries,
-                vec![("helper function", "z_err_mesage".to_string())]
-            );
-        }
-        other => panic!("expected DeclaredNotFound, got {other:?}"),
+        WriteRustError::Scan(ScanError::AdapterInvariant { message }) => assert_eq!(
+            message,
+            "output expansion: accessor `z_err_mesage` is not a #[prebindgen] item"
+        ),
+        other => panic!("expected an output-expansion refusal, got {other:?}"),
     }
 }
 
@@ -1119,6 +1147,21 @@ fn binding_local_functions_all_positions() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let function_plan = gen
+        .generation_plan()
+        .function(&syn::parse_quote!(z_use))
+        .expect("frozen z_use plan");
+    let ParamForm::Expanded { plan, .. } = &function_plan.params[0].form else {
+        panic!("z_use primary parameter must be expanded");
+    };
+    assert_eq!(
+        plan.constructor_path("z_thing_from_len")
+            .expect("frozen local constructor path")
+            .to_token_stream()
+            .to_string(),
+        "crate :: z_thing_from_len"
+    );
+
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1921,8 +1964,32 @@ fn optional_selector_dispatch_end_to_end() {
             loc.clone(),
         ),
         (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZReq {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
             syn::Item::Fn(syn::parse_quote!(
-                pub fn z_enc_from_id(id: i32, schema: Option<String>) -> ZEnc {
+                pub fn z_enc_from_id(id: u16, schema: Option<Vec<u8>>) -> ZEnc {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_req_new(enc: ZEnc, bonus: i64) -> ZReq {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_score(req: ZReq) -> i64 {
                     unimplemented!()
                 }
             )),
@@ -1946,17 +2013,58 @@ fn optional_selector_dispatch_end_to_end() {
                 .class(
                     crate::ptr_class!(ZEnc).constructor(prebindgen_registry::fun!(z_enc_from_id)),
                 )
+                .fun(prebindgen_registry::fun!(z_score))
                 .fun(prebindgen_registry::fun!(z_put)),
         )
         .expand(
             prebindgen_registry::expand_param!(ZEnc)
                 .variant(prebindgen_registry::fun!(z_enc_from_id))
                 .variant_self(),
+        )
+        .expand(
+            prebindgen_registry::expand_param!(ZReq).variant(prebindgen_registry::fun!(z_req_new)),
         );
     let dir = unique_test_dir("jnigen_opt_selector");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
+    let function_plan = gen
+        .generation_plan()
+        .function(&syn::parse_quote!(z_put))
+        .expect("frozen z_put plan");
+    let ParamForm::Expanded { plan, .. } = &function_plan.params[0].form else {
+        panic!("z_put encoding parameter must be expanded");
+    };
+    assert_eq!(
+        plan.constructor_path("z_enc_from_id")
+            .expect("frozen source constructor path")
+            .to_token_stream()
+            .to_string(),
+        "myflat :: z_enc_from_id"
+    );
+
+    let nested_plan = gen
+        .generation_plan()
+        .function(&syn::parse_quote!(z_score))
+        .expect("frozen z_score plan");
+    let ParamForm::Expanded { plan, .. } = &nested_plan.params[0].form else {
+        panic!("z_score request parameter must be expanded");
+    };
+    assert_eq!(
+        plan.constructor_path("z_req_new")
+            .expect("frozen outer constructor path")
+            .to_token_stream()
+            .to_string(),
+        "myflat :: z_req_new"
+    );
+    assert_eq!(
+        plan.constructor_path("z_enc_from_id")
+            .expect("frozen nested constructor path")
+            .to_token_stream()
+            .to_string(),
+        "myflat :: z_enc_from_id"
+    );
+
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1964,6 +2072,22 @@ fn optional_selector_dispatch_end_to_end() {
     assert!(rc.contains("<0"), "{rust}");
     assert!(rc.contains("Option::None"), "{rust}");
     assert!(rc.contains("z_enc_from_id"), "{rust}");
+    // The required `u16` constructor argument becomes nullable on the public
+    // selector surface because the identity arm does not use it. The native ABI
+    // must nevertheless stay allocation-free: Kotlin sends presence + raw
+    // primitive, and the registry Optional chain gates the scalar conversion.
+    assert_eq!(
+        rc.matches("Result<::core::option::Option<u16>,__JniErr>")
+            .count(),
+        1,
+        "{rust}"
+    );
+    assert!(
+        rc.contains("encoding_0_0_present:jni::sys::jboolean"),
+        "{rust}"
+    );
+    assert!(rc.contains("encoding_0_0_value:jni::sys::jint"), "{rust}");
+    assert!(!rc.contains("intValue"), "{rust}");
 
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let raw = paths
@@ -1975,9 +2099,11 @@ fn optional_selector_dispatch_end_to_end() {
     // Selector Int + nullable build-arm leaves + nullable identity handle.
     assert!(all.contains("encodingSel:Int"), "{raw}");
     assert!(all.contains("encoding1:ZEnc?"), "{raw}");
-    // The already-Option schema arg stays a single-level String?.
-    assert!(all.contains("encoding01:String?"), "{raw}");
-    assert!(!all.contains("String??"), "{raw}");
+    assert!(all.contains("encoding00:Int?"), "{raw}");
+    assert!(all.contains("encoding00!=null,encoding00?:0"), "{raw}");
+    // The already-Option schema arg stays a single-level ByteArray?.
+    assert!(all.contains("encoding01:ByteArray?"), "{raw}");
+    assert!(!all.contains("ByteArray??"), "{raw}");
 }
 
 /// #96: a `.constructor()` member's return is a factory — it must be
@@ -2020,10 +2146,10 @@ fn constructor_member_skips_default_output_expand() {
                 .field(prebindgen_registry::fun!(z_thing_name)),
         );
     let gen = jni.build_with(registry).expect("resolve");
-    let registry = gen.registry();
+    let unfolded = gen.declarations().unfolded();
     // …the free fn is decomposed…
     assert!(
-        registry.unfold_plans().contains_key(&syn::Ident::new(
+        unfolded.unfold_plans.contains_key(&syn::Ident::new(
             "z_thing_get",
             proc_macro2::Span::call_site()
         )),
@@ -2031,7 +2157,7 @@ fn constructor_member_skips_default_output_expand() {
     );
     // …but the constructor member is NOT (its return is the factory value).
     assert!(
-        !registry.unfold_plans().contains_key(&syn::Ident::new(
+        !unfolded.unfold_plans.contains_key(&syn::Ident::new(
             "z_thing_make",
             proc_macro2::Span::call_site()
         )),
@@ -2247,6 +2373,436 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
             "mInnerId: Long = m.inner?.id ?: 0L",
         ],
     );
+    let (composed_only, ident, _) = gen
+        .parts_plan_for_test(
+            syn::parse_quote!(Option<Mid>),
+            prebindgen_registry::recipe::Direction::Deconstruct,
+        )
+        .expect("Option<Mid> parts row");
+    assert!(
+        composed_only && ident.starts_with("__jni_out_convert_"),
+        "the unsupported whole-value shape must remain a non-rendering parts row"
+    );
+}
+
+/// A nested `data_class` inlines its leaves into its parent's `fromParts`,
+/// under the parent's name and at the right depth.
+///
+/// The property is how a nested path flattens and in what order. It was written
+/// when two derivations had to agree on it and a standing check compared them
+/// (#603); one derivation renders both sides now (#620), so what this fixture
+/// pins is the flattening itself, and `write_rust` is what renders it.
+#[test]
+fn the_two_derivations_agree_on_a_nested_data_class() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Stamp {
+                    pub secs: i64,
+                    pub nanos: i32,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Entry {
+                    pub stamp: Stamp,
+                    pub weight: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Page {
+                    pub head: Entry,
+                    pub count: i32,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn page_count(p: Page) -> i32 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Stamp))
+                .class(crate::data_class!(Entry))
+                .class(crate::data_class!(Page))
+                .fun(prebindgen_registry::fun!(page_count)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    // Two levels of inlining, so the comparison sees depth 0, 1 and 2.
+    let page: syn::Ident = syn::parse_quote!(Page);
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry().flat(), &page)
+        .expect("a nested data class decomposes");
+    let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "head__stamp__secs",
+            "head__stamp__nanos",
+            "head__weight",
+            "count"
+        ],
+        "the decomposition inlines both levels"
+    );
+
+    // Writing the binding renders the encode from these leaves.
+    let dir = unique_test_dir("jnigen_nested_agreement");
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+}
+
+/// A `sealed_class` field decomposes: the struct's leaves carry the sum's tag
+/// and one group per alternative, reached through the field.
+///
+/// This is #602's larger half — a sum field was the most common refusal, four
+/// of the nine in the two examples — and what it buys is fixed-builder
+/// delivery: a declared function returning the struct, or an `impl Fn(T)`
+/// callback taking one, now hands the foreign builder leaves instead of
+/// falling back to a whole JVM object.
+#[test]
+fn a_sum_field_decomposes_into_its_tag_and_groups() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Outcome {
+                    Found(i64),
+                    Missing,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub id: i64,
+                    pub outcome: Outcome,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_id(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Outcome))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(holder_id)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let holder: syn::Ident = syn::parse_quote!(Holder);
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry().flat(), &holder)
+        .expect("a sum field no longer refuses the decomposition");
+    let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["id", "outcome__tag", "outcome__found_v0"],
+        "the sibling field, then the sum's tag and its one payload group, \
+         each named through the field that carries them"
+    );
+    assert!(
+        wires[1].is_tag(),
+        "the selector is a tag, not a value read off a place"
+    );
+    assert_eq!(
+        wires[2].groups,
+        vec![0],
+        "the payload joins the group its tag selects"
+    );
+    assert!(
+        !wires[1].reach.is_empty(),
+        "and the tag is reached THROUGH the field, which is what distinguishes \
+         a struct carrying a sum from a value that IS one"
+    );
+}
+
+/// One selector owns another: an optional nested class whose own child carries
+/// a selector decomposes, with the inner selector one arm further in.
+///
+/// A leaf's group is the **path** of arms it sits inside, so a nested selector
+/// is a member of the outer group (the path it carries) and a selector of its
+/// own (the paths its members carry, one longer) without those being two
+/// meanings of one number. `segments` reads one level at a time, so the ranges
+/// it returns for a level never overlap, and the renderer that enters an arm
+/// asks again one level down (#602).
+#[test]
+fn a_selector_inside_a_gated_group_is_a_segment_of_its_own() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Leaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Mid {
+                    pub inner: Option<Leaf>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Outer {
+                    pub mid: Option<Mid>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn outer_new() -> Outer {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Leaf))
+                .class(crate::data_class!(Mid))
+                .class(crate::data_class!(Outer))
+                .fun(prebindgen_registry::fun!(outer_new)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    // `Mid` decomposes: one selector, its own group.
+    let mid: syn::Ident = syn::parse_quote!(Mid);
+    let names: Vec<String> = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry().flat(), &mid)
+        .expect("one level of gating decomposes")
+        .iter()
+        .map(|wire| wire.name.clone())
+        .collect();
+    assert_eq!(names, ["inner__present", "inner__id"]);
+
+    // `Outer` gates `Mid`'s own selector: two levels, and the arm paths say so.
+    let outer: syn::Ident = syn::parse_quote!(Outer);
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry().flat(), &outer)
+        .expect("a selector inside a gated group decomposes");
+    let leaves: Vec<(String, Vec<i32>)> = wires
+        .iter()
+        .map(|wire| (wire.name.clone(), wire.groups.clone()))
+        .collect();
+    assert_eq!(
+        leaves,
+        [
+            ("mid__present".to_string(), vec![]),
+            ("mid__inner__present".to_string(), vec![0]),
+            ("mid__inner__id".to_string(), vec![0, 0]),
+        ],
+        "the outer flag is unconditional, the inner one sits in the group it          gates, and the leaf sits inside both"
+    );
+    assert_eq!(
+        crate::unfold::segments(&wires),
+        vec![0..3],
+        "one segment at the top level — the inner selector belongs to it          rather than opening a second, overlapping one"
+    );
+    assert_eq!(
+        crate::unfold::segments_at(&wires, 1),
+        vec![1..3],
+        "and it is a segment of its own, one level down"
+    );
+
+    // And it renders: the inner selector is met as a segment rather than as a
+    // payload where a value was expected.
+    let dir = unique_test_dir("jnigen_nested_selector");
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+}
+
+/// A field whose own name contains what used to be a generated marker is just
+/// a name.
+///
+/// The encode once bound a sum's groups twice — inside each match arm and in
+/// the tuple those arms filled — so the two copies of one leaf carried a
+/// generated `__arm{tag}_` prefix to tell them apart, and an earlier version
+/// searched the middle of an ident for that sentinel, which any source-derived
+/// component could contain (#616 review). The double binding is gone with the
+/// second derivation (#620), and the walk names its own slots positionally, so
+/// no source name can collide with a generated one by construction.
+///
+/// The fixture is kept because that is a claim about generated names, and this
+/// spells the old sentinel in a field name and in a variant payload beneath
+/// it. `write_rust` renders the encode over it.
+#[test]
+fn a_field_named_like_the_arm_marker_is_just_a_field() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Outcome_xg {
+                    Found_xg(i64),
+                    Missing,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub id: i64,
+                    pub state_xg: Outcome_xg,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_id(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Outcome_xg))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(holder_id)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let holder: syn::Ident = syn::parse_quote!(Holder);
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry().flat(), &holder)
+        .expect("a sum field decomposes whatever its name spells");
+    let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["id", "stateXg__tag", "stateXg__found_xg_v0"],
+        "the sentinel is part of the name, not a marker to search for"
+    );
+
+    // Rendering is what runs the encode and the agreement check over it.
+    let dir = unique_test_dir("jnigen_arm_marker_name");
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+}
+
+/// An OPTIONAL nested `data_class` decomposes: a presence flag, then the
+/// child's leaves as the group it gates.
+///
+/// This was the refusal #602 leads with, and the one this test used to pin the
+/// other way round. The whole-object encode always supported the shape — a
+/// `present` flag plus a defaulted group — and the decomposition refusing it
+/// is what kept a struct with an optional nested class off fixed-builder
+/// delivery entirely.
+///
+/// A `Vec` of them is still refused, and that one is not a gap: a repeated
+/// value has no fixed number of leaves to lay beside its siblings, which is a
+/// sequence rather than a decomposition.
+#[test]
+fn an_optional_nested_class_decomposes_behind_its_presence() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Leaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub inner: Option<Leaf>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_id(h: Holder) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Leaf))
+                .class(crate::data_class!(Holder))
+                .fun(prebindgen_registry::fun!(holder_id)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let holder: syn::Ident = syn::parse_quote!(Holder);
+    let wires = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry().flat(), &holder)
+        .expect("an optional nested data class no longer refuses the decomposition");
+    let names: Vec<&str> = wires.iter().map(|wire| wire.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["inner__present", "inner__id"],
+        "the presence flag, then the child's leaves"
+    );
+    assert!(
+        matches!(wires[0].from, crate::jni::compile::OutFrom::Present),
+        "presence is synthesized, not read off a place holding a boolean"
+    );
+    assert_eq!(
+        wires[1].groups,
+        vec![0],
+        "the child's leaves are the one group that flag gates"
+    );
+
+    // Rendering runs the encode over these leaves.
+    let dir = unique_test_dir("jnigen_optional_nested");
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
 }
 
 /// A nullable primitive keeps the allocation-free `(present, value)` pair
@@ -2391,6 +2947,23 @@ fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
             "oFallbackTaggedV0: String? = (o.fallback as? io.test.jni.Reading.Tagged)?.v0",
             "oFallbackTaggedV1: Int = (o.fallback as? io.test.jni.Reading.Tagged)?.v1?.value ?: 0",
         ],
+    );
+
+    let dir = unique_test_dir("sealed_choice_input_chain");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write Rust"))
+        .expect("read Rust");
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("reading:__jni_in_convert_")
+            && rc.contains("fallback:__jni_in_convert_")
+            && rc.contains("::core::option::Option::Some(__jni_in_convert_"),
+        "Product and Optional parents must delegate the sum walk to the Choice converter:\n{rust}"
+    );
+    assert!(
+        !rc.contains("matcho_reading__tag"),
+        "the exported wrapper must not reconstruct the sum inline:\n{rust}"
     );
 }
 
@@ -2612,8 +3185,7 @@ fn every_field_shape_the_walk_reads_specially_states_the_same_row() {
         wire_lines(&gen, "Bits", "b"),
         vec![
             "bPri: Int = b.pri.value",
-            "bMaybePriPresent: Boolean = b.maybePri != null",
-            "bMaybePriValue: Int = b.maybePri?.value ?: 0",
+            "bMaybePri: Int = b.maybePri?.value ?: Int.MIN_VALUE",
             "bBig: Long = b.big.toLong()",
             "bMaybeBigPresent: Boolean = b.maybeBig != null",
             "bMaybeBigValue: Long = b.maybeBig?.toLong() ?: 0L",
@@ -2639,8 +3211,7 @@ fn every_field_shape_the_walk_reads_specially_states_the_same_row() {
         vec![
             "bPresent: Boolean = b != null",
             "bPri: Int = b?.pri?.value ?: 0",
-            "bMaybePriPresent: Boolean = b?.maybePri != null",
-            "bMaybePriValue: Int = b?.maybePri?.value ?: 0",
+            "bMaybePri: Int = b?.maybePri?.value ?: Int.MIN_VALUE",
             "bBig: Long = b?.big?.toLong() ?: 0L",
             "bMaybeBigPresent: Boolean = b?.maybeBig != null",
             "bMaybeBigValue: Long = b?.maybeBig?.toLong() ?: 0L",
@@ -2672,4 +3243,324 @@ fn wire_lines(gen: &crate::jni::JniGen, spelling: &str, param: &str) -> Vec<Stri
         .into_iter()
         .map(|(name, kt_ty, access, ..)| format!("{name}: {kt_ty} = {access}"))
         .collect()
+}
+
+/// A flattened leaf says which classes it must be put back through.
+///
+/// A decomposition takes a nested `data_class` apart into the parent's leaves,
+/// and the foreign side reassembles each boundary through that class's own
+/// `fromParts`. Which class that is is known only where the flattening happens.
+/// Recovering it later would mean walking the struct's fields a second time —
+/// the walk this decomposition replaces — so the leaf carries it, outermost
+/// first, the same way it carries the arms it sits inside (#619).
+#[test]
+fn a_flattened_leaf_names_the_classes_it_is_put_back_through() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct TLeaf {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct TMid {
+                    pub inner: TLeaf,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct TTop {
+                    pub note: i64,
+                    pub mid: TMid,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn ttop_new() -> TTop {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(TLeaf))
+                .class(crate::data_class!(TMid))
+                .class(crate::data_class!(TTop))
+                .fun(prebindgen_registry::fun!(ttop_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+    let top: syn::Ident = syn::parse_quote!(TTop);
+    let leaves: Vec<(String, Vec<String>)> = gen
+        .declarations()
+        .struct_out_wires_of(gen.registry().flat(), &top)
+        .expect("a nested data class decomposes")
+        .iter()
+        .map(|wire| (wire.name.clone(), wire.through.clone()))
+        .collect();
+    assert_eq!(
+        leaves,
+        [
+            ("note".to_string(), vec![]),
+            (
+                "mid__inner__id".to_string(),
+                vec![
+                    "io.test.jni.TMid".to_string(),
+                    "io.test.jni.TLeaf".to_string()
+                ],
+            ),
+        ],
+        "a field of the decomposed class itself is inside no class; a leaf two \
+         levels in names both, outermost first"
+    );
+}
+
+/// A site is a place in an exported function, and an expanded parameter's
+/// leaves are places within the ONE parameter that expanded.
+///
+/// `Role::Param`'s index is the position in the source parameter list, so
+/// numbering expansion leaves as parameters names positions the function does
+/// not have: for `(opts: ZOpts, tail: i64)` with a two-leaf expansion it made
+/// `Param(1)` — which denotes `tail` — carry the expansion's second leaf, and
+/// `Param(2)` denote nothing at all.
+///
+/// Uniqueness cannot catch that, and the collected `GenerationPlan` checks only
+/// uniqueness: the wrong mapping was unique too, which is why every test passed
+/// under it (#622 review). So this pins the identities themselves.
+#[test]
+fn an_expansion_leaf_is_a_place_within_the_parameter_that_expanded() {
+    use prebindgen_registry::recipe::Role;
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_opts_new(retries: i32, verbose: bool) -> ZOpts { unimplemented!() }",
+        "pub fn z_run(opts: ZOpts, tail: i64) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_run)))
+        .expand(
+            prebindgen_registry::expand_param!(ZOpts)
+                .variant(prebindgen_registry::fun!(z_opts_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let roles: Vec<String> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter(|plan| plan.id().site().owner == "z_run")
+        .map(|plan| match plan.id().site().role {
+            Role::Param { index } => format!("Param({index})"),
+            Role::ExpansionLeaf { param, leaf } => format!("ExpansionLeaf({param},{leaf})"),
+            ref other => format!("{other}"),
+        })
+        .collect();
+    assert_eq!(
+        roles,
+        [
+            // Every site of `z_run`, so the parameter places are pinned against
+            // the whole set rather than a filtered view of it.
+            "return value".to_string(),
+            "ExpansionLeaf(0,0)".to_string(),
+            "ExpansionLeaf(0,1)".to_string(),
+            "Param(1)".to_string(),
+        ],
+        "the expansion's two leaves belong to parameter 0, and `tail` keeps its \
+         own source position 1 — which the flattened numbering gave away"
+    );
+}
+
+/// A decomposed return's wires are the SAME allocation in the site plan and in
+/// the output plan the emitters read.
+///
+/// Sharing them was not enough on its own: `JPlan::decomposed` used to clone
+/// the `Vec` out of the shared handle, so the carrier matched a transient plan
+/// while the emitters read a copy. Nothing failed, because nothing compared the
+/// carrier with the FINAL plan (#622 review) — so this does.
+#[test]
+fn a_decomposed_return_shares_one_wire_list_with_its_site() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Pair {
+                    pub id: i64,
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn pair_new(id: i64) -> Pair {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Pair))
+                .fun(prebindgen_registry::fun!(pair_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    // The wires the site plan froze for the callback's decomposed delivery…
+    let site_wires: Vec<_> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter_map(|plan| match plan.abi().payload() {
+            crate::jni::compile::JAbiLeaves::Decomposed(wires) => Some(wires.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        !site_wires.is_empty(),
+        "the decomposed delivery must reach the site plan at all"
+    );
+    // …are the ones the FINAL plan holds, not a copy of them. Comparing
+    // against the site store alone would prove nothing: the store owns a
+    // handle, so any count is greater than one by construction.
+    let function = gen
+        .declarations()
+        .generation
+        .as_ref()
+        .expect("resolved JniGen has a frozen generation plan")
+        .function(&syn::parse_quote!(pair_new))
+        .expect("the exported function is planned");
+    let crate::jni::fn_plan::FnOutputPlan::Unfold(output) = &function.output else {
+        panic!("a decomposed return is an unfold delivery");
+    };
+    assert!(
+        site_wires
+            .iter()
+            .any(|wires| std::rc::Rc::ptr_eq(wires, &output.wires)),
+        "the plan the emitters read holds a copy of the wires rather than the \
+         list the site froze"
+    );
+}
+
+/// A whole return's canonical site holds the plan the emitters read — the one
+/// with the **convert delivery** attached, not the intermediate the site hook
+/// produced.
+///
+/// The fixture is a single-leaf `expand_return`, deliberately: an ordinary
+/// scalar return has `convert_delivery: None` before and after finalization, so
+/// it cannot tell the two objects apart and a change that finalized plain
+/// values while dropping the convert branch would pass (#622 review). This one
+/// asserts the three facts together — the return IS a convert, it HAS a
+/// delivery, and the site holds that same object.
+///
+/// `return_plan` answers before `build_output` attaches `convert_delivery`, so
+/// freezing the hook's object made the carrier authoritative for something no
+/// emitter consumes (#622 review). Identity is the check: the site's plan must
+/// be the same allocation `FnOutputPlan::Value` holds.
+#[test]
+fn a_whole_return_site_holds_the_plan_the_emitters_read() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOneStruct {
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_to_struct(o: &ZOne) -> ZOneStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_make(n: i64) -> ZOne {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOne))
+                .fun(prebindgen_registry::fun!(z_one_make)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZOne)
+                .fields(prebindgen_registry::fields!(z_one_to_struct)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let function = gen
+        .declarations()
+        .generation
+        .as_ref()
+        .expect("resolved JniGen has a frozen generation plan")
+        .function(&syn::parse_quote!(z_one_make))
+        .expect("the exported function is planned");
+    let crate::jni::fn_plan::FnOutputPlan::Value(output) = &function.output else {
+        panic!("a single-leaf value form takes the Return delivery");
+    };
+    // The three facts together: without the first two, identity alone would
+    // hold for a plain value whose delivery is `None` either way.
+    assert!(output.is_convert, "the return is a convert");
+    assert!(
+        output.convert_delivery.is_some(),
+        "the convert delivery is attached to the plan the emitters read"
+    );
+    let frozen: Vec<_> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter_map(|plan| match plan.abi().payload() {
+            crate::jni::compile::JAbiLeaves::Whole(value) => Some(value.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        frozen
+            .iter()
+            .any(|value| std::rc::Rc::ptr_eq(value, output)),
+        "the whole-return site holds a plan the emitters do not read"
+    );
 }

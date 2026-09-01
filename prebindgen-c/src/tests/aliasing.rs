@@ -135,7 +135,7 @@ fn preflight_precedes_every_conversion() {
     let src = build(&["pub fn f(a: Thing, b: Thing) -> Result<u64, Error> { unimplemented!() }"]);
     let alias_at = src.find("aliasing arguments").expect("preflight emitted");
     let first_conv = src
-        .find("__cbg_in_Thing(a)")
+        .find("let a = match __c_in_convert_wire_to_Thing_")
         .expect("input conversion emitted");
     assert!(
         alias_at < first_conv,

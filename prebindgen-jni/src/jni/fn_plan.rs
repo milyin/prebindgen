@@ -1,14 +1,14 @@
 //! Input side of the per-function lowered binding plan (issue #90).
 //!
-//! [`JniFunctionPlan`] classifies every input parameter of a bound function
-//! ONCE, deterministically over `(ext, registry, f)`. The three coordinated
-//! emission sites — the Rust `extern "C"` wrapper (`emit_input_param`), the
-//! Kotlin wrapper classifier (`classify_params`), and the `JNINative`
-//! `external fun` declaration (`render_extern_decl`) — all consume the same
-//! [`InputKind`] decision instead of re-running their own copies of the
-//! probe cascade, so the wire arity, types, and call forms agree by
-//! construction. The pattern generalizes [`build_struct_plan`]'s field-level
-//! plan to function granularity; the output side follows in a later stage.
+//! [`JniFunctionPlan`] lowers every input parameter of a bound function ONCE,
+//! deterministically over `(ext, registry, f)`. Each leaf freezes three
+//! independent answers: its exact ordered native ABI leaves, its Rust decode
+//! operation, and its Kotlin call/locking operation. The Rust `extern "C"`
+//! wrapper, Kotlin wrapper, `JNINative` declaration, and JVM-slot validator
+//! consume those answers without reconstructing them from a source-shape tag.
+//! The pattern generalizes [`build_struct_plan`]'s field-level plan to function
+//! granularity. Ordinary decomposed outputs likewise retain their ordered
+//! outgoing wires and converter pipelines before either writer runs.
 
 use kotlin_codegen::KtType;
 use prebindgen_registry::{flat::TypeRef, Conversions};
@@ -39,8 +39,38 @@ pub(crate) struct JniFunctionPlan {
     /// cannot drift. `None` = the domain channel is underivable (the Rust
     /// emitter panics, the Kotlin renderer skips).
     pub onerror_iface: Option<ErrorIfaces>,
+    /// Registry-resolved output decomposition selected for this function.
+    /// Rust delivery, Kotlin surface/KDoc, and the report all consume this
+    /// owned plan after the registry phase is closed.
+    pub unfold: Option<crate::unfold::UnfoldPlan>,
+    /// Registry-resolved domain-error delivery selected for this function.
+    /// The structural decomposition, exact outgoing JNI operations, and any
+    /// composed converter are frozen together before either writer runs.
+    pub error: Option<ErrorOutputPlan>,
     pub params: Vec<PlanParam>,
     pub output: FnOutputPlan,
+}
+
+/// Frozen delivery of a fallible function's `Err(E)` arm.
+///
+/// Kotlin and report generation read [`Self::unfold`]. Rust delivery consumes
+/// [`Self::wires`] and [`Self::chain`], so it cannot reconstruct converters
+/// from `TypeRef` while rendering the wrapper.
+pub(crate) struct ErrorOutputPlan {
+    pub unfold: crate::unfold::UnfoldPlan,
+    pub wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
+    pub chain: Option<crate::jni::compile::ComposedChain>,
+    /// Origin qualification and sum shape for these leaves, frozen with them,
+    /// so rendering the `Err` arm asks the registry nothing.
+    pub delivery: crate::jni::emit::FrozenDelivery,
+}
+
+impl std::ops::Deref for ErrorOutputPlan {
+    type Target = crate::unfold::UnfoldPlan;
+
+    fn deref(&self) -> &Self::Target {
+        &self.unfold
+    }
 }
 
 /// One source parameter: the ident/type as written plus its lowered form.
@@ -54,26 +84,118 @@ pub(crate) struct PlanParam {
     pub form: ParamForm,
 }
 
+impl PlanLeaf {
+    /// The converter this leaf is decoded through, which is the one its own
+    /// Rust operation invokes: a flattened data class and an optional pair are
+    /// rebuilt by one composed converter of their own, and every other kind
+    /// runs the frozen pipeline.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        match &self.rust {
+            RustParamOp::Pipeline { .. } => self.pipeline.calls(out),
+            RustParamOp::OptionalPair(plan) => out.push(
+                prebindgen_registry::write::ArtifactKey::Operation(plan.chain.operation.clone()),
+            ),
+            RustParamOp::FlattenStruct(plan) => out.push(
+                prebindgen_registry::write::ArtifactKey::Operation(plan.chain.operation.clone()),
+            ),
+        }
+    }
+}
+
 /// How a source parameter crosses the boundary. The single leaf is boxed to
 /// keep the variants near the same size (a [`PlanLeaf`] embeds whole
 /// sub-plans; the `Expanded` payload is just a `Vec` header).
 pub(crate) enum ParamForm {
     /// Ordinary parameter — one classified leaf.
-    Single(Box<PlanLeaf>),
+    Single(std::rc::Rc<PlanLeaf>),
     /// Constructor-expansion ([`FoldPlan`] declared for this `(fn, param)`):
     /// the wire form is the plan's flattened leaves, classified individually;
     /// the Rust wrapper folds them back into the built value. Leaves use the
     /// same recursive data-class probe as ordinary parameters (vec-build
     /// remains a source-parameter-only collection optimization), so all three
     /// sites agree on the leaf wire.
-    Expanded(Vec<PlanLeaf>),
+    Expanded {
+        /// The frozen constructor fold and qualified call paths. Keeping it
+        /// beside its lowered leaves lets Rust reconstruction and Kotlin/report
+        /// descriptions use the same decision after resolution.
+        plan: Box<ExpandedParamPlan>,
+        leaves: Vec<std::rc::Rc<PlanLeaf>>,
+    },
+}
+
+/// Registry-built expansion fold plus every Rust constructor path it may call.
+///
+/// The core [`prebindgen_registry::expand::FoldPlan`] owns constructor
+/// selection and recursive argument assembly. JNI freezes origin qualification
+/// beside it while the registry is still available, so final wrapper emission
+/// only supplies decoded leaf locals and never resumes a registry lookup.
+pub(crate) struct ExpandedParamPlan {
+    fold: prebindgen_registry::expand::FoldPlan,
+    constructors: BTreeMap<String, syn::Path>,
+}
+
+impl ExpandedParamPlan {
+    fn new(
+        ext: &Declarations,
+        registry: &Registry,
+        fold: &prebindgen_registry::expand::FoldPlan,
+    ) -> Self {
+        let mut constructors = BTreeMap::new();
+        Self::freeze_variants(ext, registry, &fold.variants, &mut constructors);
+        Self {
+            fold: fold.clone(),
+            constructors,
+        }
+    }
+
+    fn freeze_variants(
+        ext: &Declarations,
+        registry: &Registry,
+        variants: &[prebindgen_registry::expand::FoldVariant],
+        constructors: &mut BTreeMap<String, syn::Path>,
+    ) {
+        for variant in variants {
+            if let Some(ctor) = &variant.ctor {
+                let module = ext.fn_module(registry, ctor);
+                let path = syn::parse_quote!(#module::#ctor);
+                constructors.entry(ctor.to_string()).or_insert(path);
+            }
+            for input in &variant.inputs {
+                if let prebindgen_registry::expand::FoldArg::Build(build) = input {
+                    Self::freeze_variants(ext, registry, &build.variants, constructors);
+                }
+            }
+        }
+    }
+
+    /// The core fold shared with Kotlin overload and report consumers.
+    pub(crate) fn fold(&self) -> &prebindgen_registry::expand::FoldPlan {
+        &self.fold
+    }
+
+    /// Assemble the fold expression from already-decoded leaf locals.
+    pub(crate) fn emit(&self, leaf_locals: &[syn::Ident]) -> syn::Expr {
+        prebindgen_registry::expand::emit_fold(&self.fold, leaf_locals, &|ident| {
+            self.constructors
+                .get(&ident.to_string())
+                .unwrap_or_else(|| {
+                    panic!("frozen JNI expansion plan has no constructor path for `{ident}`")
+                })
+                .clone()
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn constructor_path(&self, ident: &str) -> Option<&syn::Path> {
+        self.constructors.get(ident)
+    }
 }
 
 /// One classified effective parameter (a source param, or one expansion leaf).
 pub(crate) struct PlanLeaf {
     /// The leaf's **reading** — classification and spelling in one value, so
     /// the two cannot disagree and no consumer has to look the type up. Spell
-    /// with `emit.spell(reading)` in an emission callback.
+    /// with `emit.emit_source_type(reading)` in an emission callback.
     pub reading: TypeRef,
     /// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
     /// hard-keyword escaping) — shared by the wrapper signature and the
@@ -82,13 +204,9 @@ pub(crate) struct PlanLeaf {
     /// Typed-wrapper surface type: the projection's Kotlin FQN for
     /// handle/value projections, else the resolved entry's Kotlin name.
     /// `None` when the metadata lacks a name (the Kotlin wrapper renderer
-    /// skips the function — the escape-hatch path) and for [`InputKind::
-    /// Callback`] (typed from the interface spec at render time).
+    /// skips the function — the escape-hatch path) and for callback operations
+    /// (typed from the interface spec at render time).
     pub kt_public: Option<KtType>,
-    /// The resolved entry's raw `metadata.kotlin_name` — the type the
-    /// `JNINative` extern declares for pass-through leaves (for projections
-    /// this is the erased wire name, not the typed surface).
-    pub kt_meta: Option<KtType>,
     /// Whether the leaf crosses as optional, **per the model** — so a wrapped
     /// spelling (`Box<Option<T>>`) answers exactly as the bare one does. Each
     /// site applies its own nullability rule on top (handles stay non-null
@@ -102,13 +220,54 @@ pub(crate) struct PlanLeaf {
     /// `enum_class` enum: surface keeps the typed enum, the extern declares
     /// `Int`/`Int?`, and the call site passes `.value` / `?.value`.
     pub as_enum_value: bool,
-    pub kind: InputKind,
+    /// Primitive sentinel carved by this Optional enum layer. When present,
+    /// the JNI extern keeps `Int` non-null and Kotlin maps `null` to this value.
+    pub enum_niche: Option<String>,
+    /// Frozen Rust converter operation and its JNI wire. Special layouts may
+    /// supply several site wires instead, but ordinary parameters and
+    /// constructor-expansion leaves call this pipeline directly.
+    pub pipeline: crate::jni::chain::JPipeline,
+    /// Exact ordered parameters shared by the Rust extern, `JNINative`
+    /// declaration, and JVM descriptor-slot validation.
+    ///
+    /// Shared, not copied: the site's `AbiLayout` holds this same list, so
+    /// there is ONE ordered ABI rather than a carrier that has to be kept
+    /// equal to it. That is what lets step 5 delete this side without
+    /// re-deriving anything (#622 review).
+    pub native: std::rc::Rc<Vec<NativeParam>>,
+    /// How the Rust wrapper obtains this leaf's source value from `native`.
+    pub rust: RustParamOp,
+    /// How the typed Kotlin wrapper supplies `native`, including handle
+    /// locking/consumption policy.
+    pub kotlin: KotlinParamOp,
 }
 
-/// The classified crossing form. Branches are mutually exclusive by
-/// construction (each probe rejects the shapes the others accept), so the
-/// probe order is canonical, not load-bearing.
-pub(crate) enum InputKind {
+/// One exact JNI parameter in a leaf's ordered native ABI.
+pub(crate) struct NativeParam {
+    pub rust_ident: syn::Ident,
+    /// Final Rust spelling, including the JNI object lifetime when required.
+    pub rust_wire: TokenStream,
+    pub kt_name: String,
+    /// `None` preserves the unresolved-name escape hatch: Kotlin emission
+    /// skips the containing function.
+    pub kt_wire: Option<KtType>,
+    pub jvm_slots: usize,
+}
+
+/// Frozen Rust-side operation for one effective parameter.
+pub(crate) enum RustParamOp {
+    /// Invoke the registry-planned pipeline with this single native leaf.
+    Pipeline { wire_ident: syn::Ident },
+    /// Rebuild an allocation-free optional from its two native leaves.
+    OptionalPair(std::rc::Rc<crate::jni::compile::OptionalPairPlan>),
+    /// Rebuild a data class from its recursively flattened native leaves.
+    FlattenStruct(std::rc::Rc<FlatInputPlan>),
+}
+
+/// Frozen typed-Kotlin call and ownership operation for one effective
+/// parameter. These variants are target operations, not a source-type
+/// classification; native ABI and Rust decoding are stored independently.
+pub(crate) enum KotlinParamOp {
     /// `impl Fn(args)` callback: erased `Any` on the wire. `iface` is the
     /// typed `fun interface` spec (memoized under [`SpecKey::Callback`] —
     /// the same allocation the trampoline and the declaration emitter read);
@@ -116,26 +275,20 @@ pub(crate) enum InputKind {
     Callback { iface: Option<Arc<IfaceSpec>> },
     /// `&[T]` / `Vec<T>` of a flattenable data_class: a single `jlong`
     /// Vec-handle on the wire, built by pushing element leaves.
-    /// The element as a **reading**, and the CANONICAL one: the vec-helper plan
-    /// and the element key are both taken from it, and generated Rust spells
-    /// `emit.spell(elem)`. `elem_wrappers` is what the storage therefore does not
-    /// carry, put back per element on consumption (#296) — empty for the
-    /// ordinary case, and a list rather than a second `TypeRef` because every
-    /// variant of this enum pays its size.
+    /// Rust reconstruction is frozen in [`PlanLeaf::pipeline`]; this kind keeps
+    /// only the helper ABI that Kotlin and the synthetic externs share.
     VecBuild {
-        elem: TypeRef,
-        by_ref: bool,
-        elem_wrappers: Vec<&'static str>,
+        helpers: std::rc::Rc<VecBuildHelpers>,
     },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
-    OptionScalar(OptionScalarInputPlan),
+    OptionalPair(std::rc::Rc<crate::jni::compile::OptionalPairPlan>),
     /// Flattenable data_class: the field leaves cross as separate wire params.
-    FlattenStruct(FlatInputPlan),
-    /// Lockable opaque-handle projection (`jlong` wire). `direct` is
-    /// [`KotlinMeta::is_direct_handle`] — `true` only for the bare
-    /// `T`/`&T` shape, the by-value consume fast-path trigger.
-    Handle { direct: bool },
+    FlattenStruct(std::rc::Rc<FlatInputPlan>),
+    /// Lockable opaque-handle projection (`jlong` wire). Ownership and
+    /// nullability are Kotlin locking policy; Rust conversion is already
+    /// frozen in the leaf pipeline.
+    Handle { mode: HandleMode },
     /// Rust `u64`: typed Kotlin `ULong`, raw JNI `Long`. The wrapper passes
     /// the bit-preserving `toLong()` representation and takes no lock.
     Unsigned64 { niche: Option<String> },
@@ -143,19 +296,39 @@ pub(crate) enum InputKind {
     Plain,
 }
 
+/// Frozen Kotlin ownership/locking mode for an opaque-handle leaf.
+pub(crate) enum HandleMode {
+    Borrow,
+    Consume,
+    BorrowNullable,
+    ConsumeNullable,
+}
+
 /// How the return value crosses the boundary. Mirrors the unfold plan's
-/// [`Delivery`](prebindgen_registry::unfold::Delivery), resolved per function:
+/// [`Delivery`](crate::unfold::Delivery), resolved per function:
 /// `Unfold` = callback delivery (builder/fold lambda, erased `Any?` wire);
 /// `Value` = everything else, including the `Return`-delivery convert.
 pub(crate) enum FnOutputPlan {
-    Unfold(UnfoldOutputPlan),
-    Value(Box<ValueOutputPlan>),
+    Unfold(Box<UnfoldOutputPlan>),
+    Value(std::rc::Rc<ValueOutputPlan>),
 }
 
 /// Callback-delivery shape facts, read off the fn's `UnfoldPlan` once so the
 /// Rust builder param, the erased extern params, and the typed Kotlin
 /// builder/fold surface all branch on the same booleans.
 pub(crate) struct UnfoldOutputPlan {
+    /// Registry-composed values the return site hands to its builder/folder,
+    /// with each target ABI and output pipeline frozen. Empty only for a
+    /// whole-element iterable fold.
+    /// Shared with the site plan that froze them, so the values a decomposed
+    /// return hands out have one owner rather than a plan and a carrier that
+    /// have to agree (#622 review).
+    pub wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
+    /// Exact composed converter for a fixed Product/Optional/Choice return.
+    pub chain: Option<crate::jni::compile::ComposedChain>,
+    /// Whole-element iterable conversion, when `wires` is empty because the
+    /// fold receives each element through its ordinary one-value converter.
+    pub element_pipeline: Option<crate::jni::chain::JPipeline>,
     /// `is_iterable_fold(shape)` — a bare `Iterable` OR one wrapped in an
     /// `Optional` layer (`Option<Vec<T>>`). Selects the fold surface
     /// (`acc` + `fold`) over a scalar builder on every tier.
@@ -168,6 +341,13 @@ pub(crate) struct UnfoldOutputPlan {
     pub fixed_builder: bool,
     /// `plan.element.is_some()` — whole-element (M4) vs decomposed (M5) fold.
     pub whole_element: bool,
+    /// Declaration-normalized decomposition used by fixed Kotlin
+    /// builder/folder singletons. `None` for a whole-element fold, which has
+    /// no deconstructor declaration.
+    pub decon: Option<std::rc::Rc<crate::unfold::DeconSpec>>,
+    /// Origin qualification and sum shape for these leaves, frozen with them,
+    /// so rendering the delivery asks the registry nothing.
+    pub delivery: crate::jni::emit::FrozenDelivery,
     /// Kotlin type variable of the wrapper: `None` for a fixed builder,
     /// `"A"` for an `Iterable` fold (bare or `Optional`-wrapped), `"R"`
     /// otherwise.
@@ -186,29 +366,38 @@ pub(crate) struct UnfoldOutputPlan {
 /// Value-return facts: the resolved conversion target and wire on the Rust
 /// side, the declared-surface classification on the Kotlin side.
 pub(crate) struct ValueOutputPlan {
+    /// Where this return crosses and which fragment answers it, carried from
+    /// the site hook so the plan the emitters actually read — the one with the
+    /// convert delivery attached — is the one frozen into the canonical site,
+    /// rather than the intermediate the hook produced (#622 review).
+    pub site: Option<(
+        prebindgen_registry::recipe::Bound,
+        prebindgen_registry::generation::FragmentId,
+    )>,
     /// `Return`-delivery convert (`convert_output`) — the wrapper returns the
     /// single deconstructed value through its ordinary output converter.
     pub is_convert: bool,
-    /// The type whose output converter runs: `convert_out_ty` for a convert,
-    /// the `Result` Ok type when an error plan peels, else the declared
-    /// return. A **reading** — all three candidates are one, and the emitter
-    /// asks it for the entry directly. Its entry is validated at plan build;
-    /// the Rust emitter re-looks it up (`expect`) to keep the plan
-    /// lifetime-free.
-    pub target_ty: prebindgen_registry::flat::TypeRef,
-    /// The resolved output entry's `destination` — the extern's wire return
-    /// and the sentinel source.
-    pub wire_ty: syn::Type,
+    /// Frozen Rust converter operation and its JNI wire. The ordinary wrapper
+    /// invokes this once instead of looking the crossing up and reconstructing
+    /// its semantic pre-stage order during emission.
+    pub pipeline: crate::jni::chain::JPipeline,
     /// Kotlin surface classification over the **declared** return
     /// (`convert_out_ty` for a convert, else `f.sig.output` — not
-    /// `target_ty`: the Kotlin error peel rides `value_rust_type`).
+    /// `target_ty`: the Kotlin error peel rides `value_reading`).
     pub surface: ReturnSurface,
     /// `enum_class` / `Option<enum>` probes over the canonical
-    /// (`value_rust_type`-peeled) declared return. The extern decl uses them
+    /// (`value_reading`-peeled) declared return. The extern decl uses them
     /// raw; the wrapper surface masks them with `!is_convert` (the historical
     /// `unfold.is_none()` gate).
     pub is_enum: bool,
     pub is_option_enum: bool,
+    /// Primitive sentinels consumed by nested Optional enum layers,
+    /// outside-in. Every one collapses to Kotlin `null` on output.
+    pub enum_niches: Vec<String>,
+    /// Origin qualification for the accessor calls a `Return`-delivery
+    /// convert reaches its single leaf through, frozen with the plan. `None`
+    /// unless [`Self::is_convert`].
+    pub convert_delivery: Option<crate::jni::emit::FrozenDelivery>,
 }
 
 /// The pure classification core of `classify_return` — no import
@@ -216,6 +405,7 @@ pub(crate) struct ValueOutputPlan {
 /// (`render_return_surface`) maps it back to the historical
 /// `(kt_return, projection)` pair, panicking on an unregistered projection
 /// FQN exactly where `classify_return` always did (Kotlin render time).
+#[derive(Clone)]
 pub(crate) enum ReturnSurface {
     /// No Kotlin type resolvable (entry or `kotlin_name` missing): the
     /// Kotlin renderers skip the function; the Rust emitter ignores it.
@@ -315,7 +505,7 @@ impl PlanError {
         let at = self.location_suffix();
         match self {
             PlanError::Unresolved { ty } => format!(
-                "JniGen::on_function: input type `{}` for `{}` is unresolved{at}",
+                "JniGen extern: input type `{}` for `{}` is unresolved{at}",
                 ty.key(),
                 fn_ident,
             ),
@@ -325,7 +515,7 @@ impl PlanError {
                 param,
             ),
             PlanError::UnresolvedOutput { ty } => format!(
-                "JniGen::on_function: return type `{}` of `{}` has no registered output \
+                "JniGen extern: return type `{}` of `{}` has no registered output \
                  converter — register one via `Declarations::output_wrapper(pat, |…| Some((ty, exc, body)))` \
                  (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
                   to bind a domain exception){at}",
@@ -333,16 +523,16 @@ impl PlanError {
                 fn_ident,
             ),
             PlanError::UnknownOutputType { ty } => format!(
-                "JniGen::on_function: return type `{}` of `{}` is not registered — the \
+                "JniGen extern: return type `{}` of `{}` is not registered — the \
                  resolver never saw this type, so no converter can be selected for it. \
                  Declare the type (or the function that produces it) before binding `{}`",
                 ty, fn_ident, fn_ident,
             ),
             PlanError::UnflattenableDataClass(error) => {
-                format!("JniGen::on_function `{fn_ident}`: {}", error.message())
+                format!("JniGen extern `{fn_ident}`: {}", error.message())
             }
             PlanError::JvmParameterLimit { slots } => format!(
-                "JniGen::on_function `{fn_ident}`: flattened JNI signature uses {slots} JVM parameter slots (maximum 255, including the JNINative receiver); reduce the data-class shape or declare an intentional `data_class!(T).jobject_input()` boundary"
+                "JniGen extern `{fn_ident}`: flattened JNI signature uses {slots} JVM parameter slots (maximum 255, including the JNINative receiver); reduce the data-class shape or declare an intentional `data_class!(T).jobject_input()` boundary"
             ),
         }
     }
@@ -402,7 +592,7 @@ pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Resu
     }
 
     // Declared consts: their synthetic nullary getters run through the same
-    // plan machinery (`Declarations::on_const`).
+    // plan machinery, and reach the file as constant artifacts.
     if let Some(declared_consts) = ext.declared_consts() {
         let mut consts: Vec<&prebindgen_registry::flat::Constant> =
             registry.flat().constants().collect();
@@ -429,7 +619,10 @@ pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Resu
         .collect();
     expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
     for decl in expr_decls {
-        let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+        let getter = {
+            ext.freeze_reading_of(registry, &decl.ty);
+            const_expr_getter_fn(&decl.kotlin_name, &decl.ty, ext)
+        };
         match ext.fn_plan(registry, &getter) {
             Ok(plan) => record_symbol(&plan.native_symbol, decl.kotlin_name.clone(), &mut errors),
             Err(e) => errors.push(e.message(&getter.name)),
@@ -446,6 +639,49 @@ pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Resu
     }
 }
 
+impl JniFunctionPlan {
+    /// Every converter the extern's body calls: one chain per parameter, the
+    /// output's, and the error arm's when the function has one.
+    pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
+        for param in &self.params {
+            match &param.form {
+                ParamForm::Single(leaf) => leaf.calls(out),
+                ParamForm::Expanded { leaves, .. } => {
+                    for leaf in leaves {
+                        leaf.calls(out);
+                    }
+                }
+            }
+        }
+        match &self.output {
+            FnOutputPlan::Value(value) => value.pipeline.calls(out),
+            FnOutputPlan::Unfold(unfold) => {
+                for wire in unfold.wires.iter() {
+                    wire.calls(out);
+                }
+                if let Some(chain) = &unfold.chain {
+                    out.push(prebindgen_registry::write::ArtifactKey::Operation(
+                        chain.operation.clone(),
+                    ));
+                }
+                if let Some(pipeline) = &unfold.element_pipeline {
+                    pipeline.calls(out);
+                }
+            }
+        }
+        if let Some(error) = &self.error {
+            for wire in error.wires.iter() {
+                wire.calls(out);
+            }
+            if let Some(chain) = &error.chain {
+                out.push(prebindgen_registry::write::ArtifactKey::Operation(
+                    chain.operation.clone(),
+                ));
+            }
+        }
+    }
+}
+
 impl FnOutputPlan {
     /// The extern's wire return type: the erased builder result (`JObject`)
     /// for a callback delivery, the resolved entry's destination otherwise.
@@ -454,7 +690,7 @@ impl FnOutputPlan {
     pub fn wire_ty(&self) -> syn::Type {
         match self {
             FnOutputPlan::Unfold(_) => syn::parse_quote!(jni::objects::JObject),
-            FnOutputPlan::Value(v) => v.wire_ty.clone(),
+            FnOutputPlan::Value(v) => v.pipeline.wire().clone(),
         }
     }
 }
@@ -469,13 +705,38 @@ impl Declarations {
     /// (an unresolved converter) is passed through — it only occurs at the
     /// validation phase, which reports it and fails `resolve` before any
     /// emitter runs. Same interior-mutable contract as
-    /// [`Declarations::iface_spec`]; drift is guarded externally by the byte-identity
-    /// regen check (a plan change alters generated code).
+    /// [`Declarations::iface_spec`]. Once resolution finishes both memos are
+    /// drained into [`crate::jni::generation::JniGenerationPlan`], so emission
+    /// cannot resume either derivation.
+    /// This function's lowered plan, read from the frozen generation.
+    ///
+    /// For a **render-only** caller. `freeze` drains the lowering memos into
+    /// `GenerationPlan`, which owns them afterwards, so a renderer reads rather
+    /// than re-lowering — and needs no `Registry` to do it.
+    ///
+    /// Not for a caller that also runs during validation: no generation is
+    /// installed then, this answers `None`, and a site that skips silently
+    /// stops reporting what lowering would have diagnosed (#613 step 7).
+    pub(crate) fn fn_plan_frozen(
+        &self,
+        f: &prebindgen_registry::flat::Function,
+    ) -> Option<std::rc::Rc<JniFunctionPlan>> {
+        self.generation.as_deref()?.function(&f.name)
+    }
+
     pub(crate) fn fn_plan(
         &self,
         registry: &Registry,
         f: &prebindgen_registry::flat::Function,
     ) -> Result<std::rc::Rc<JniFunctionPlan>, PlanError> {
+        if let Some(generation) = &self.generation {
+            return Ok(generation.function(&f.name).unwrap_or_else(|| {
+                panic!(
+                    "frozen JNI generation plan has no function entry for `{}`",
+                    f.name
+                )
+            }));
+        }
         if let Some(hit) = self.fn_plans.borrow().get(&f.name).cloned() {
             return Ok(hit);
         }
@@ -498,16 +759,21 @@ impl JniFunctionPlan {
     ) -> Result<Self, PlanError> {
         let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.name.to_string()));
         let native_symbol = ext.native_method_symbol(&jni_method);
+        let unfold = ext.unfolded().unfold_plans.get(&f.name).cloned();
+        let error = ext.unfolded().error_plans.get(&f.name).cloned();
         let onerror_iface = onerror_iface_spec(ext, registry, &f.name);
         // Output first: the Rust emitter historically resolved the output
         // before the inputs, so an unresolved-output failure takes precedence
         // over an unresolved-input one.
-        let output = build_output(ext, registry, f)?;
+        let output = build_output(ext, registry, f, unfold.as_ref(), error.as_ref())?;
+        let error = error
+            .map(|plan| build_error_output(ext, registry, plan))
+            .transpose()?;
         let mut params = Vec::new();
         // The element's parameters: each already a name and a `TypeRef`, so
         // there is no `FnArg`/`Pat` destructuring and no position that could
         // fail to yield a type.
-        for param in &f.params {
+        for (position, param) in f.params.iter().enumerate() {
             let ident = param.name.clone();
             let ty = param.ty.clone();
 
@@ -516,19 +782,24 @@ impl JniFunctionPlan {
                 .get(&(f.name.clone(), ident.clone()))
             {
                 let mut leaves = Vec::new();
-                for leaf in &plan.leaves {
+                for (leaf_index, leaf) in plan.leaves.iter().enumerate() {
                     // The lookup that stood here is gone: the fold leaf carries
                     // its own reading now, so there is nothing to fetch and
                     // nothing that can miss.
                     leaves.push(classify_leaf(
                         ext, registry, &leaf.name, &leaf.ty, /*expanded=*/ true, &ident,
+                        &f.name, position, leaf_index,
                     )?);
                 }
-                ParamForm::Expanded(leaves)
+                ParamForm::Expanded {
+                    plan: Box::new(ExpandedParamPlan::new(ext, registry, plan)),
+                    leaves,
+                }
             } else {
-                ParamForm::Single(Box::new(classify_leaf(
-                    ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident,
-                )?))
+                ParamForm::Single(classify_leaf(
+                    ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident, &f.name,
+                    position, 0,
+                )?)
             };
             params.push(PlanParam { ident, ty, form });
         }
@@ -536,10 +807,12 @@ impl JniFunctionPlan {
             jni_method,
             native_symbol,
             onerror_iface,
+            unfold,
+            error,
             params,
             output,
         };
-        let slots = result.jvm_parameter_slots(ext, registry, f);
+        let slots = result.jvm_parameter_slots();
         if slots > 255 {
             return Err(PlanError::JvmParameterLimit { slots });
         }
@@ -549,39 +822,25 @@ impl JniFunctionPlan {
     /// The flattened effective-parameter view (expansion leaves inline) —
     /// the sequence the Kotlin wrapper and `external fun` declare, in order.
     pub fn leaves(&self) -> impl Iterator<Item = &PlanLeaf> {
-        self.params.iter().flat_map(|p| match &p.form {
-            ParamForm::Single(l) => std::slice::from_ref(&**l).iter(),
-            ParamForm::Expanded(ls) => ls.iter(),
-        })
+        self.params
+            .iter()
+            .flat_map(|p| match &p.form {
+                ParamForm::Single(l) => std::slice::from_ref(l).iter(),
+                ParamForm::Expanded { leaves, .. } => leaves.iter(),
+            })
+            .map(std::rc::Rc::as_ref)
     }
 
-    fn jvm_parameter_slots(
-        &self,
-        ext: &Declarations,
-        registry: &Registry,
-        f: &prebindgen_registry::flat::Function,
-    ) -> usize {
+    fn jvm_parameter_slots(&self) -> usize {
         // `JNINative` is a Kotlin object, so its external methods are instance
         // methods and the JVM counts the implicit receiver as one unit.
         let mut slots = 1usize;
         for leaf in self.leaves() {
-            slots += match &leaf.kind {
-                InputKind::FlattenStruct(plan) => plan
-                    .leaves
-                    .iter()
-                    .map(|l| kotlin_jvm_slots(l.kt_wire_ty()))
-                    .sum(),
-                InputKind::OptionScalar(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
-                InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
-                InputKind::Callback { .. } => 1,
-                InputKind::Unsigned64 { .. } | InputKind::Plain => ext
-                    .in_frag(&leaf.reading)
-                    .and_then(|entry| JniPrim::from_wire(&entry.destination))
-                    .map_or(1, |prim| match prim {
-                        JniPrim::Long | JniPrim::Double => 2,
-                        _ => 1,
-                    }),
-            };
+            slots += leaf
+                .native
+                .iter()
+                .map(|param| param.jvm_slots)
+                .sum::<usize>();
         }
         slots += match &self.output {
             FnOutputPlan::Unfold(plan) if plan.iterable_fold => 2,
@@ -589,14 +848,14 @@ impl JniFunctionPlan {
             FnOutputPlan::Value(_) => 0,
         };
         slots += 1; // binding-error sink
-        if registry.error_plans().contains_key(&f.name) {
+        if self.error.is_some() {
             slots += 1;
         }
         slots
     }
 }
 
-fn kotlin_jvm_slots(ty: &str) -> usize {
+pub(crate) fn kotlin_jvm_slots(ty: &str) -> usize {
     if !ty.ends_with('?') && matches!(ty, "Long" | "Double") {
         2
     } else {
@@ -607,6 +866,28 @@ fn kotlin_jvm_slots(ty: &str) -> usize {
 /// Classify one effective parameter. `expanded` disables only the Vec-build
 /// collection helper; recursive data-class leaves are valid in constructor
 /// expansions and reuse the same Rust/Kotlin lowering as ordinary parameters.
+/// Which place in the exported function this leaf is.
+///
+/// One answer for every caller: the callback shortcut below also runs for an
+/// expansion leaf, and hardcoding `Role::Param` there labelled an expanded
+/// callback leaf as a parameter — undoing the rule the ordinary path states
+/// (#622 review).
+fn leaf_role(
+    expanded: bool,
+    position: usize,
+    leaf_index: usize,
+) -> prebindgen_registry::recipe::Role {
+    use prebindgen_registry::recipe::Role;
+    match expanded {
+        false => Role::Param { index: position },
+        true => Role::ExpansionLeaf {
+            param: position,
+            leaf: leaf_index,
+        },
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn classify_leaf(
     ext: &Declarations,
     registry: &Registry,
@@ -614,8 +895,14 @@ fn classify_leaf(
     reading: &TypeRef,
     expanded: bool,
     source_param: &syn::Ident,
-) -> Result<PlanLeaf, PlanError> {
-    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
+    // The exported function this leaf belongs to, the SOURCE parameter
+    // position it came from, and — when that parameter expanded — which of its
+    // leaves this is.
+    owner: &syn::Ident,
+    position: usize,
+    leaf_index: usize,
+) -> Result<std::rc::Rc<PlanLeaf>, PlanError> {
+    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Site};
     // `impl Fn(args)` never reaches the compiler, for the reason
     // `JniGen::compile_crossing` gives: a callback is answered whole, because a
     // JniGen callback ARGUMENT does not always have a conversion of its own —
@@ -627,17 +914,103 @@ fn classify_leaf(
         // `SpecKey` is a memo key and holds `TypeKey`s, so the args reach it as
         // each arg reading's own identity.
         let iface = ext.iface_spec(registry, &SpecKey::callback(args));
-        return Ok(PlanLeaf {
+        let entry = ext.in_frag(reading).ok_or_else(|| PlanError::Unresolved {
+            ty: Box::new(reading.clone()),
+        })?;
+        let pipeline = entry.pipeline(
+            prebindgen_registry::recipe::Direction::Construct,
+            prebindgen_registry::recipe::Mode::Owned,
+        );
+        let wire_ident = ident.clone();
+        let native = std::rc::Rc::new(vec![NativeParam {
+            rust_ident: wire_ident.clone(),
+            rust_wire: annotate_jobject_with_lifetime(pipeline.wire(), "a").to_token_stream(),
+            kt_name: kt_param_name(&ident.to_string()),
+            kt_wire: entry.metadata.kotlin_name.clone(),
+            jvm_slots: 1,
+        }]);
+        let leaf = std::rc::Rc::new(PlanLeaf {
             reading: reading.clone(),
             kt_name: kt_param_name(&ident.to_string()),
             kt_public: None,
-            kt_meta: ext
-                .in_frag(reading)
-                .and_then(|e| e.metadata.kotlin_name.clone()),
             optional: reading.optional_inner().is_some(),
             as_enum_value: ext.is_kotlin_enum_reading(reading),
-            kind: InputKind::Callback { iface },
+            enum_niche: crate::jni::compile::option_enum_niche(
+                ext,
+                reading,
+                prebindgen_registry::recipe::Direction::Construct,
+            ),
+            native,
+            pipeline,
+            rust: RustParamOp::Pipeline { wire_ident },
+            kotlin: KotlinParamOp::Callback { iface },
         });
+        // This parameter never reaches `Compiler::site`, so nothing else
+        // states it canonically — but every fact a site plan needs is here:
+        // the place in the function, the crossing, and the fragment that
+        // answers it, whose own id carries the recipe that was selected.
+        // Stated here rather than left out, so the canonical site set covers
+        // this path too (#622 review).
+        {
+            let fragment = entry.plan();
+            ext.site_plans
+                .borrow_mut()
+                .push(std::rc::Rc::new(crate::jni::compile::site_plan(
+                    fragment,
+                    &prebindgen_registry::recipe::Bound {
+                        site: Site {
+                            owner: owner.clone(),
+                            role: leaf_role(expanded, position, leaf_index),
+                        },
+                        crossing: Crossing::new(reading.clone(), Direction::Construct),
+                        recipe: fragment.id().recipe().clone(),
+                        origin: prebindgen_registry::recipe::Origin::Function,
+                    },
+                    crate::jni::compile::JAbiLeaves::Params(leaf.clone()),
+                )));
+            // And one site per value the callback delivers. A delivered
+            // argument is a place in THIS function, which is what
+            // `Role::CallbackArg` names and why the registry keeps it apart
+            // from the `Role::Part` the shared callback recipe is compiled at:
+            // several functions taking one `impl Fn` signature share the
+            // delivery, and each states its own site over it.
+            //
+            // The recipe is `site_bindings`' answer, not one composed here. A
+            // fabricated `Bound` is what the first two attempts at this
+            // produced, and a site that misreports which row it took is worse
+            // than an absent one (#622 review).
+            if let Some(plan) = entry.rust.invoke_plan() {
+                let arguments = match fragment.converter().shape() {
+                    prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } => {
+                        arguments.as_slice()
+                    }
+                    _ => &[],
+                };
+                for (arg, ty) in args.iter().enumerate() {
+                    let (Some(edge), Some(abi)) = (arguments.get(arg), plan.arg_abi(arg)) else {
+                        continue;
+                    };
+                    let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
+                    let site = Site {
+                        owner: owner.clone(),
+                        role: prebindgen_registry::recipe::Role::CallbackArg {
+                            param: position,
+                            arg,
+                        },
+                    };
+                    let Some(bound) =
+                        ext.site_bindings()
+                            .resolve(&site, &crossing, ext.recipe_table())
+                    else {
+                        continue;
+                    };
+                    ext.site_plans.borrow_mut().push(std::rc::Rc::new(
+                        crate::jni::compile::callback_arg_site(&bound, edge, abi),
+                    ));
+                }
+            }
+        }
+        return Ok(leaf);
     }
     // The compiler, resumed over what the build already compiled. Every
     // fragment this site's recipe needs is in that store, so `site` finds them
@@ -660,16 +1033,34 @@ fn classify_leaf(
             },
         )),
     };
-    // The site names the parameter it is, and the position is the source
-    // parameter's rather than a running count: a constructor expansion
-    // contributes leaves the signature does not name, and they all belong to
-    // the one parameter that expanded.
+    // A site is a place in an exported function, which is what the registry's
+    // `Site` means: `owner` is the function and `role` names the position in
+    // it. This named the PARAMETER as owner and always index 0, so two
+    // functions with a parameter of the same name froze the same identity, and
+    // every leaf of an expanded parameter collided with its siblings (#622
+    // review).
+    //
+    // `Role::Param`'s index is the position in the SOURCE parameter list, so
+    // an expansion's leaves cannot be numbered as parameters: doing that names
+    // positions the function does not have and attaches one parameter's site to
+    // another's crossing. They are `ExpansionLeaf`s of the parameter that
+    // expanded, which is the same question `CallbackArg` already answers for a
+    // callback's arguments (#622 review).
     let site = Site {
-        owner: source_param.clone(),
-        role: Role::Param { index: 0 },
+        owner: owner.clone(),
+        role: leaf_role(expanded, position, leaf_index),
     };
     let crossing = Crossing::new(reading.clone(), Direction::Construct);
-    let planned = compiler.site(&mut adapter, site, crossing);
+    let use_pair = crate::jni::compile::optional_pair_plan_candidate(ext, reading)
+        && ext
+            .recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::pair())
+            .is_some();
+    let planned = if use_pair {
+        compiler.site_recipe(&mut adapter, site, crossing, &crate::jni::recipes::pair())
+    } else {
+        compiler.site(&mut adapter, site, crossing)
+    };
     *ext.compiled.borrow_mut() = compiler.finish();
     match planned {
         Ok(Some(plan)) => plan.param().ok_or_else(|| PlanError::Unresolved {
@@ -732,24 +1123,51 @@ fn return_site(
     planned.ok().flatten()
 }
 
-/// The values one function's decomposed return hands out, compiled through
-/// `Compiler::site`.
+/// Freeze the exact Rust-to-JNI delivery selected for one domain-error plan.
 ///
-/// Test support until the encode side takes it: this is the whole of what a
-/// decomposed return site produces, and holding it to the expansion plan is
-/// what says the two agree before anything depends on it.
-#[cfg(test)]
-pub(crate) fn decomposed_return_for_test(
+/// Error decompositions may be function-unique value-form walks, so their
+/// leaves are always compiled directly through the registry. A model-derived
+/// Product/Optional/Choice additionally retains its composed converter; the
+/// renderer may use it only when its layout matches the declared error leaves.
+fn build_error_output(
     ext: &Declarations,
     registry: &Registry,
-    func: &syn::Ident,
-) -> Option<Vec<crate::jni::compile::OutWire>> {
-    let f = registry.flat().function(func)?;
-    let ret = f.ret.borrow_target().unwrap_or(&f.ret);
-    let ret = ret.optional_inner().unwrap_or(ret);
-    let ret = ret.sequence_elem().unwrap_or(ret);
-    let ret = ret.borrow_target().unwrap_or(ret);
-    return_site(ext, registry, func, ret, None).and_then(|p| p.decomposed())
+    unfold: crate::unfold::UnfoldPlan,
+) -> Result<ErrorOutputPlan, PlanError> {
+    let wires = std::rc::Rc::new(
+        crate::jni::compile::freeze_out_wires(ext, registry, &unfold.leaves).map_err(|_| {
+            PlanError::UnresolvedOutput {
+                ty: Box::new(unfold.source.clone()),
+            }
+        })?,
+    );
+    let delivered = if unfold.by_ref {
+        unfold.source.borrowed()
+    } else {
+        unfold.source.clone()
+    };
+    let delivered = if unfold.is_optional_base() {
+        delivered.optional()
+    } else {
+        delivered
+    };
+    let chain = if unfold.fixed_builder && unfold.hoists.is_empty() {
+        crate::jni::compile::freeze_output_chain(ext, registry, &delivered).map_err(|_| {
+            PlanError::UnresolvedOutput {
+                ty: Box::new(delivered),
+            }
+        })?
+    } else {
+        None
+    };
+    let delivery =
+        crate::jni::emit::FrozenDelivery::new(ext, registry, &unfold, wires.clone(), chain.clone());
+    Ok(ErrorOutputPlan {
+        unfold,
+        wires,
+        chain,
+        delivery,
+    })
 }
 
 /// Lower the output side. Mirrors the historical derivations exactly:
@@ -761,10 +1179,11 @@ fn build_output(
     ext: &Declarations,
     registry: &Registry,
     f: &prebindgen_registry::flat::Function,
+    unfold_plan: Option<&crate::unfold::UnfoldPlan>,
+    error_plan: Option<&crate::unfold::UnfoldPlan>,
 ) -> Result<FnOutputPlan, PlanError> {
-    use prebindgen_registry::unfold::{Delivery, UnfoldShape};
+    use crate::unfold::{Delivery, UnfoldShape};
     let ident = &f.name;
-    let unfold_plan = registry.unfold_plans().get(ident);
 
     // Callback delivery: the return is decomposed to a foreign builder/fold
     // lambda; no output converter runs and the wire is the erased `JObject`.
@@ -792,14 +1211,90 @@ fn build_output(
                 .expect("record-built plan carries its DeconId");
             ext.iface_spec(registry, &SpecKey::Builder(decon))
         };
-        return Ok(FnOutputPlan::Unfold(UnfoldOutputPlan {
+        let decon = plan.decon.as_ref().map(|id| {
+            std::rc::Rc::new(
+                ext.unfolded()
+                    .decon_plans
+                    .get(id)
+                    .unwrap_or_else(|| panic!("unfold plan names unknown deconstructor `{id:?}`"))
+                    .clone(),
+            )
+        });
+        let (wires, chain, element_pipeline) = if let Some(element) = &plan.element {
+            let pipeline = crate::jni::compile::freeze_output_pipeline(ext, registry, element)
+                .map_err(|_| PlanError::UnresolvedOutput {
+                    ty: Box::new(element.clone()),
+                })?;
+            (std::rc::Rc::new(Vec::new()), None, Some(pipeline))
+        } else {
+            let expected = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
+            let delivered = if plan.by_ref {
+                plan.source.borrowed()
+            } else {
+                plan.source.clone()
+            };
+            // Only an Optional directly around the decomposed base belongs in
+            // the converter chain. `optional` also covers
+            // `Option<Vec<T>>`, whose presence gates the fold outside the
+            // per-element `T` chain.
+            let delivered = if plan.is_optional_base() {
+                delivered.optional()
+            } else {
+                delivered
+            };
+            let composed = return_site(ext, registry, ident, &plan.source, None)
+                .and_then(|site| site.decomposed())
+                .filter(|wires| {
+                    wires.len() == expected.len()
+                        && wires
+                            .iter()
+                            .zip(&expected)
+                            .all(|(left, right)| left.same_delivery(right))
+                });
+            let wires = match composed {
+                Some(wires) => wires,
+                None => std::rc::Rc::new(
+                    crate::jni::compile::freeze_out_wires(ext, registry, &plan.leaves).map_err(
+                        |_| PlanError::UnresolvedOutput {
+                            ty: Box::new(plan.source.clone()),
+                        },
+                    )?,
+                ),
+            };
+            // Chain availability depends on the exact value the delivery owns,
+            // including borrow and outer Optional mode. Freeze that answer now;
+            // the site binding itself intentionally names the core Product.
+            let chain = if fixed_builder && plan.hoists.is_empty() {
+                crate::jni::compile::freeze_output_chain(ext, registry, &delivered).map_err(
+                    |_| PlanError::UnresolvedOutput {
+                        ty: Box::new(delivered),
+                    },
+                )?
+            } else {
+                None
+            };
+            (wires, chain, None)
+        };
+        let delivery = crate::jni::emit::FrozenDelivery::new(
+            ext,
+            registry,
+            plan,
+            wires.clone(),
+            chain.clone(),
+        );
+        return Ok(FnOutputPlan::Unfold(Box::new(UnfoldOutputPlan {
+            wires,
+            chain,
+            delivery,
+            element_pipeline,
             iterable_fold,
             optional,
             fixed_builder,
             whole_element: plan.element.is_some(),
+            decon,
             generic,
             iface,
-        }));
+        })));
     }
 
     // Value return. The conversion target: the converted single value for a
@@ -808,7 +1303,6 @@ fn build_output(
     let is_convert = unfold_plan.is_some();
     // The element normalizes an elided return and a written `-> ()` to one
     // `Unit` reading, so there is no `ReturnType` match here.
-    let error_plan = registry.error_plans().get(ident);
     // The `Ok` side off `TypeKind::Fallible`, where `result_ok_type` found the
     // `Result` in a path first.
     let ok_ty = error_plan
@@ -842,7 +1336,7 @@ fn build_output(
     //
     // The Kotlin surface classifies the DECLARED return: `convert_out_ty` for a
     // convert, else the signature's own output. Not `target_ty` — the Kotlin
-    // error peel rides the conversion's `value_rust_type`, so the full
+    // error peel rides the conversion's `value_reading`, so the full
     // `Result<T, E>` is what the surface reads, and that is the one fact the
     // crossing cannot carry.
     let plan = return_site(
@@ -856,21 +1350,58 @@ fn build_output(
     .ok_or_else(|| PlanError::UnresolvedOutput {
         ty: Box::new(target.clone()),
     })?;
-    let ValueOutputPlan {
-        wire_ty,
-        surface,
-        is_enum,
-        is_option_enum,
-        ..
-    } = plan;
-    Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
+    // Read off the shared plan: it is the site's own answer, and the plan
+    // built below adds the convert delivery to it rather than replacing it.
+    let (pipeline, surface, is_enum, is_option_enum, enum_niches) = (
+        plan.pipeline.clone(),
+        plan.surface.clone(),
+        plan.is_enum,
+        plan.is_option_enum,
+        plan.enum_niches.clone(),
+    );
+    // The convert shortcut reaches the plan's single leaf itself rather than
+    // through the leaf encoder, and qualifies the accessor calls on that reach
+    // — so those origins are frozen here, with the leaf they belong to.
+    let convert_delivery = is_convert.then(|| {
+        let unfold = unfold_plan.expect("a convert is a Return delivery, which carries its plan");
+        crate::jni::emit::FrozenDelivery::new(
+            ext,
+            registry,
+            unfold,
+            std::rc::Rc::new(
+                unfold
+                    .leaves
+                    .iter()
+                    .map(crate::jni::compile::OutWire::from_leaf)
+                    .collect(),
+            ),
+            None,
+        )
+    });
+    // The plan the emitters read: the site's answer with the convert delivery
+    // attached. This is the one frozen into the canonical site, because it is
+    // the authoritative one — freezing the hook's intermediate carried a
+    // `convert_delivery` of `None` while this object owned the real one.
+    let final_plan = std::rc::Rc::new(ValueOutputPlan {
+        site: plan.site.clone(),
         is_convert,
-        target_ty: target_ty.clone(),
-        wire_ty,
+        pipeline,
         surface,
         is_enum,
         is_option_enum,
-    })))
+        enum_niches,
+        convert_delivery,
+    });
+    if let Some((bound, fragment)) = &final_plan.site {
+        ext.site_plans
+            .borrow_mut()
+            .push(std::rc::Rc::new(crate::jni::compile::whole_return_site(
+                bound,
+                fragment,
+                final_plan.clone(),
+            )));
+    }
+    Ok(FnOutputPlan::Value(final_plan))
 }
 
 /// Whether a return surfaces as a Kotlin enum class, and whether an optional
@@ -884,7 +1415,7 @@ pub(crate) struct EnumSurface {
 
 impl ReturnSurface {
     /// Classify a declared return type. Returns the surface plus the
-    /// canonical (`value_rust_type`-peeled) type the enum probes run over —
+    /// canonical (`value_reading`-peeled) type the enum probes run over —
     /// the single peel that subsumed both `classify_return`'s inline peel
     /// and the former `canonical_return_ty`.
     pub fn classify(
@@ -895,19 +1426,13 @@ impl ReturnSurface {
         // reading into a `-> #ty` fragment for this to take apart again, and
         // the `ReturnType::Default` arm was a unit the element already states.
         let outer_meta = ext.out_frag(ret).map(|e| e.metadata.clone());
-        // Unit returns (incl. `ZResult<()>`, whose inner identity rides
-        // `value_rust_type`) declare no Kotlin return type. The peeled type is
-        // the one the converter's metadata stored — a canonical `syn::Type`,
-        // so nothing is rebuilt here. Falling back to the declared return is
-        // not a miss: `value_rust_type` is `None` exactly for plain values and
-        // arity-0 converters, which have no inner identity to peel to.
-        //
-        // `value_rust_type` is a canonical `syn::Type` the ADAPTER composed,
-        // which is why `is_unit` still asks it of a node; with no metadata the
-        // question is the reading's own kind.
-        let stored = outer_meta.as_ref().and_then(|m| m.value_rust_type.as_ref());
+        // Unit returns (incl. `Result<()>`, whose inner identity rides
+        // `value_reading`) declare no Kotlin return type. Falling back to the
+        // declared return is not a miss: `None` means the crossing itself is
+        // the surfaced value.
+        let stored = outer_meta.as_ref().and_then(|m| m.value_reading.as_ref());
         let is_unit = match stored {
-            Some(t) => crate::util::is_unit(t),
+            Some(t) => matches!(t.kind(), prebindgen_registry::flat::TypeKind::Unit),
             None => matches!(ret.kind(), prebindgen_registry::flat::TypeKind::Unit),
         };
         // The two enum questions, answered where BOTH branches are in view.
@@ -915,28 +1440,39 @@ impl ReturnSurface {
         // the reading — and then `option_inner_type` peeled that spelling to
         // ask about its inner, which is the layer-off-a-spelling mistake #273
         // is named for: the model erases wrappers the spelling still shows.
-        // A stored `value_rust_type` is an adapter-composed node and keeps its
-        // node-shaped answer; with no metadata the reading answers directly.
-        let enum_probe = |t: &syn::Type| ext.is_kotlin_enum(t);
+        // A stored `value_reading` is a classified reading. No Rust node is
+        // reconstructed or peeled here.
         let (is_enum, is_option_enum) = match stored {
-            Some(t) => (
-                enum_probe(t),
-                prebindgen_registry::types_util::option_inner_type(t)
-                    .map(|inner| enum_probe(&inner))
-                    .unwrap_or(false),
-            ),
+            Some(t) => {
+                let mut inner = t;
+                let mut optional = false;
+                while let Some(next) = inner.optional_inner() {
+                    optional = true;
+                    inner = next;
+                }
+                (
+                    ext.is_kotlin_enum_key(&t.key()),
+                    optional && ext.is_kotlin_enum_key(&inner.key()),
+                )
+            }
             // `is_kotlin_enum_reading` is NOT the peer here: it probes THROUGH
             // the layers, so `Option<Level>` answers true for the first
             // question, where the node version keys on the whole type and
-            // answers false. Both questions want the exact type's identity —
-            // the second asks it of the optional's inner, which is what
-            // `option_inner_type` did to the spelling.
-            None => (
-                ext.is_kotlin_enum_key(&ret.key()),
-                ret.optional_inner()
-                    .map(|inner| ext.is_kotlin_enum_key(&inner.key()))
-                    .unwrap_or(false),
-            ),
+            // answers false. The first question wants the exact type's
+            // identity; the second requires at least one Optional and asks the
+            // terminal inner type after peeling every Optional layer.
+            None => {
+                let mut inner = ret;
+                let mut optional = false;
+                while let Some(next) = inner.optional_inner() {
+                    optional = true;
+                    inner = next;
+                }
+                (
+                    ext.is_kotlin_enum_key(&ret.key()),
+                    optional && ext.is_kotlin_enum_key(&inner.key()),
+                )
+            }
         };
         let canonical = EnumSurface {
             is_enum,

@@ -147,9 +147,9 @@ fn an_ignore_predicate_covers_every_kind_and_is_silent_when_unmatched() {
     assert!(unclaimed_report(&flat, &claimed).is_empty());
 }
 
-/// `consts: None` means the binding has no const mechanism at all: every const
-/// is re-emitted verbatim, so none was skipped and reporting one would be a lie.
-/// This is the one asymmetry with functions and types.
+/// `consts: None` means the binding has no selective const mechanism: every
+/// const reaches its adapter policy, so none was skipped and reporting one
+/// would be a lie. This is the one asymmetry with functions and types.
 #[test]
 fn no_const_mechanism_reports_no_consts() {
     let flat = flat_with(&["pub const K: u64 = 7;"]);

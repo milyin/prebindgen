@@ -567,7 +567,7 @@ impl CbindgenBuilder {
             )
         });
         let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
-        self.callbacks.insert(key.clone(), CbCfg::new(args));
+        self.callbacks.insert(key.clone(), CbCfg::new());
         self.current = Some(CurrentDecl::Callback(key));
         self
     }
@@ -598,92 +598,6 @@ impl CbindgenBuilder {
 
     // ── Internal helpers ───────────────────────────────────────────────
 
-    /// Fully-qualify every bare single-segment source type inside `ty` against
-    /// [`Self::source_module`] (e.g. `ZKeyExpr` → `zenoh_flat::ZKeyExpr`).
-    /// Anything already qualified, or with no `source_module` set, is returned
-    /// unchanged.
-    ///
-    /// **Every** path node in the type, not the outermost one: a source type
-    /// can sit under any accepted shape — `Option<&Handle>` in a callback
-    /// argument, `&[Payload]`, `(Rec, Rec)` — and a name left bare there does
-    /// not resolve in the consumer crate the generated file is included into
-    /// (#414). The walk is what makes one rule apply everywhere; the rule per
-    /// node is below.
-    pub(super) fn src_ty(&self, ty: &syn::Type) -> syn::Type {
-        use syn::visit_mut::VisitMut;
-        struct Qualifier<'a>(&'a CbindgenBuilder);
-        impl VisitMut for Qualifier<'_> {
-            fn visit_type_path_mut(&mut self, tp: &mut syn::TypePath) {
-                self.0.qualify_path(tp);
-                // The node's own arguments, after it: `Option<Handle>` is the
-                // language's `Option` over the source crate's `Handle`, and the
-                // two halves resolve against different roots.
-                syn::visit_mut::visit_type_path_mut(self, tp);
-            }
-        }
-        // A trait bound is a `syn::Path` and not a `Type::Path`, so overriding
-        // only the type-path visit leaves `impl Fn(..) + Send` alone and still
-        // reaches the argument types written inside it.
-        let mut out = ty.clone();
-        Qualifier(self).visit_type_mut(&mut out);
-        out
-    }
-
-    /// One path node of [`Self::src_ty`]: what root it resolves against.
-    fn qualify_path(&self, tp: &mut syn::TypePath) {
-        if tp.qself.is_some() {
-            return;
-        }
-        let as_ty = syn::Type::Path(tp.clone());
-        // Built-in scalar primitives (`f64`, `i32`, …) live in no source module;
-        // qualifying them would produce invalid paths like `zenoh_flat::f64` (hit by
-        // callback args, e.g. `impl Fn(f64)`). Leave them bare.
-        if is_scalar(&as_ty) {
-            return;
-        }
-        // Std `String` likewise lives in no source module — qualifying it would
-        // produce `zenoh_flat::String`. It can be declared `opaque_ptr` (a boxed
-        // pointer the C side holds as `string_t *`), so resolve it to the std path.
-        if is_string(&as_ty) {
-            tp.path = syn::parse_quote!(::std::string::String);
-            return;
-        }
-        if tp.path.leading_colon.is_some() || tp.path.segments.len() != 1 {
-            return;
-        }
-        let seg = tp.path.segments[0].clone();
-        // A name the language pre-declares is no source crate's, whatever the
-        // source module is — spelled in full, since the generated file is
-        // included into a crate that need not have imported it.
-        if let Some(full) = prelude_path(&seg.ident) {
-            let mut path: syn::Path =
-                syn::parse_str(full).expect("a path literal in `prelude_path`");
-            path.segments.last_mut().expect("non-empty").arguments = seg.arguments;
-            tp.path = path;
-            return;
-        }
-        if let Some(m) = &self.source_module {
-            let mut path = m.clone();
-            path.segments.push(seg);
-            tp.path = path;
-        }
-    }
-
-    /// [`Self::src_ty`] off the **identity** — the type peer of
-    /// [`Self::src_fn`], for the emitters that hold a declared type's key or a
-    /// declaration's own `Origin` rather than a node.
-    ///
-    /// A `TypeKey` is a normalized type, so re-parsing it is the reverse of
-    /// `from_type` and the qualification policy stays in one place: `String`
-    /// still resolves to `::std::string::String` (it can be declared
-    /// `opaque_ptr`), scalars are still left bare, and only a bare
-    /// single-segment path is prefixed.
-    pub(super) fn src_ty_of(&self, key: &TypeKey) -> syn::Type {
-        let spelled: syn::Type = syn::parse_str(key.as_str())
-            .expect("a `TypeKey` is a normalized `syn::Type`, so it re-parses");
-        self.src_ty(&spelled)
-    }
-
     /// Path to a source function (e.g. `zenoh_flat::z_keyexpr_try_from`).
     pub(super) fn src_fn(&self, ident: &syn::Ident) -> syn::Path {
         match &self.source_module {
@@ -696,109 +610,15 @@ impl CbindgenBuilder {
         }
     }
 
-    /// If `ty` is `&[E]` (a shared slice borrow) whose element `E` is a declared
-    /// **inline-opaque by-value** type ([`Self::repr_c_struct`] /
-    /// [`Self::opaque_data_struct`] / [`Self::opaque_owned_struct`] — all in
-    /// `value_opaque`), return `E`. Such a type's C counterpart is layout-identical
-    /// to the Rust value (size+align asserted by a generated `const _`), so a
-    /// `*const counterpart` block reinterprets to `&[E]` zero-copy — exactly as the
-    /// single-`&E` input converter reinterprets one element. Scalar slices take the
-    /// separate [`scalar_slice_elem`](super::scalar_slice_elem) path; other element
-    /// kinds (e.g. `data_struct`, whose wire copies each field) are unsupported here.
-    pub(super) fn value_opaque_slice_elem(&self, ty: &syn::Type) -> Option<syn::Type> {
-        let syn::Type::Reference(r) = ty else {
-            return None;
-        };
-        if r.mutability.is_some() {
-            return None;
-        }
-        let syn::Type::Slice(s) = &*r.elem else {
-            return None;
-        };
-        let elem = (*s.elem).clone();
-        self.value_opaque
-            .contains_key(&TypeKey::from_type(&elem))
-            .then_some(elem)
-    }
-
-    /// For a `&[E]` callback-argument slice, return `(src_elem, c_elem_wire)`:
-    /// the fully-qualified Rust element type and the C element wire it crosses as
-    /// (a scalar crosses as itself; an inline-opaque `E` crosses as its layout-
-    /// identical counterpart, e.g. `payload_t`). Drives the two-component
-    /// `(*const c_elem_wire, size_t)` lowering of the closure `call` param in
-    /// `prereq_callback_structs` / `dispatch_fn_input`. `None` for non-slice args.
-    pub(super) fn callback_slice_elem_wire(
-        &self,
-        ty: &syn::Type,
-    ) -> Option<(syn::Type, syn::Type)> {
-        if let Some(elem) = self.value_opaque_slice_elem(ty) {
-            let wire = self
-                .value_opaque_ty(&elem)
-                .expect("value_opaque_slice_elem guaranteed a value_opaque element")
-                .clone();
-            return Some((self.src_ty(&elem), wire));
-        }
-        scalar_slice_elem(ty).map(|elem| (elem.clone(), elem))
-    }
-
-    /// [`Self::callback_slice_elem_wire`] off the classification, for the
-    /// resolver side — the declaration side keeps the node peer above, because
-    /// a `.callback(...)` argument is written by the build script and the model
-    /// may never have interned it.
-    pub(super) fn callback_slice_elem_wire_of(
-        &self,
-        ty: &TypeRef,
-    ) -> Option<(syn::Type, syn::Type)> {
-        let elem = super::r_shared_slice_elem(ty)?;
-        let key = elem.key();
-        if let Some(wire) = self.value_opaque_ty_of(&key) {
-            return Some((self.src_ty_of(&key), wire.clone()));
-        }
-        super::scalar_ty(elem).map(|s| (s.clone(), s))
-    }
-
-    /// Like [`Self::src_ty`], but recurses into reference and slice element types so
-    /// `&ZSample` becomes `&zenoh_flat::ZSample` and `&[Payload]` becomes
-    /// `&[perftest_flat::Payload]` (needed so a callback's `Fn(&[E])` closure type
-    /// names the qualified element).
-    /// [`Self::src_ty`], recursing into a borrow's and a slice's element — off
-    /// the classification. `&ZSample` becomes `&zenoh_flat::ZSample` and
-    /// `&[Payload]` becomes `&[perftest_flat::Payload]`, so a callback's
-    /// `Fn(&[E])` closure type names the qualified element.
+    /// Wire-only callback-slice classification for the Invoke planner.
     ///
-    /// The two recursing forms are `TypeKind::Ref` and `TypeKind::Slice`, which
-    /// is what the `syn::Type::Reference` / `syn::Type::Slice` match this
-    /// replaces was reading — and the borrow's lifetime and mutability are on
-    /// the kind, so the rebuilt spelling says what the source said.
-    pub(super) fn src_ty_deep_of(&self, ty: &TypeRef) -> syn::Type {
-        match ty.kind() {
-            TypeKind::Ref {
-                lifetime,
-                mutable,
-                inner,
-            } => {
-                let inner = self.src_ty_deep_of(inner);
-                let lt = lifetime.as_ref().map(|l| quote!(#l)).unwrap_or_default();
-                let m = if *mutable { quote!(mut) } else { quote!() };
-                syn::parse_quote!(& #lt #m #inner)
-            }
-            TypeKind::Slice(elem) => {
-                let elem = self.src_ty_deep_of(elem);
-                syn::parse_quote!([#elem])
-            }
-            _ => self.src_ty_of(&ty.key()),
-        }
-    }
-
-    /// [`Self::in_name`] off the **identity**, for a caller holding a reading
-    /// rather than a node — which is every per-field site.
-    pub(super) fn in_name_of(key: &TypeKey) -> syn::Ident {
-        format_ident!("__cbg_in_{}", sanitize(key))
-    }
-
-    /// [`Self::out_name`] off the identity. See [`Self::in_name_of`].
-    pub(super) fn out_name_of(key: &TypeKey) -> syn::Ident {
-        format_ident!("__cbg_out_{}", sanitize(key))
+    /// Resolution retains only the adapter-owned wire; the shared Invoke
+    /// composer owns the source spelling until final render time.
+    pub(super) fn callback_slice_elem_wire_type_of(&self, ty: &TypeRef) -> Option<syn::Type> {
+        let elem = super::r_shared_slice_elem(ty)?;
+        self.value_opaque_ty_of(&elem.key())
+            .cloned()
+            .or_else(|| super::scalar_ty(elem))
     }
 
     /// Config of a declared type (across the opaque/data/enum maps), by key.
@@ -811,20 +631,9 @@ impl CbindgenBuilder {
             .or_else(|| self.tagged_unions.get(key))
     }
 
-    /// The opaque counterpart type of a declared inline-opaque type, if any.
-    pub(super) fn value_opaque_ty(&self, ty: &syn::Type) -> Option<&syn::Type> {
-        self.value_opaque_ty_of(&TypeKey::from_type(ty))
-    }
-
-    /// [`Self::value_opaque_ty`] off the **identity**, for a caller holding a
-    /// reading — which is the whole selector chain.
+    /// The inline-opaque C wire type by semantic identity.
     pub(super) fn value_opaque_ty_of(&self, key: &TypeKey) -> Option<&syn::Type> {
         self.value_opaque.get(key).map(|c| &c.opaque)
-    }
-
-    /// [`Self::value_opaque_slice_elem`] off the classification.
-    pub(super) fn r_value_opaque_slice_elem<'t>(&self, t: &'t TypeRef) -> Option<&'t TypeRef> {
-        super::r_shared_slice_elem(t).filter(|e| self.value_opaque.contains_key(&e.key()))
     }
 
     /// Type keys used as a takeable callback parameter (any `.takeable_param(idx)`
@@ -926,13 +735,6 @@ impl CbindgenBuilder {
     pub(super) fn callback_c_ident(&self, key: &CallbackKey) -> syn::Ident {
         format_ident!("{}", self.callback_c_name(key))
     }
-}
-
-/// Rebuild the canonical `impl Fn(args...) + Send + Sync + 'static` type from an
-/// argument list (matching the source spelling so its [`TypeKey`] round-trips —
-/// see `core::resolve`'s reconstruction).
-pub(super) fn callback_fn_type(args: &[syn::Type]) -> syn::Type {
-    syn::parse_quote!(impl Fn(#(#args),*) + Send + Sync + 'static)
 }
 
 /// Human-readable description of the current declaration, for panic messages.

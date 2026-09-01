@@ -4,8 +4,8 @@
 //! A sum is the one decomposition that is not a deterministic product: only
 //! ONE alternative's leaves are live per value. Core models that with a
 //! synthesized [`LeafSource::SumTag`] selector plus per-leaf
-//! [`UnfoldLeaf::group`] membership
-//! ([`apply_sum_returns`](prebindgen_registry::unfold::apply_sum_returns)); this
+//! [`UnfoldLeaf::groups`] membership
+//! ([`apply_sum_returns`](crate::unfold::apply_sum_returns)); this
 //! module is the JNI adapter's two ends of it — [`synth_sum_leaves`] builds the
 //! leaf list before `resolve`, [`encode_sum_leaves`] emits the single `match`
 //! that fills every slot at emit time.
@@ -25,10 +25,14 @@ use super::*;
 /// variant fragment from its property.
 pub(crate) const SUM_TAG_LEAF: &str = "tag";
 
+/// The leaf-name fragment of a presence flag — what an optional nested class
+/// contributes ahead of the group it gates.
+pub(crate) const PRESENT_LEAF: &str = "present";
+
 /// The leaves of one `sealed_class`-declared sum, as the expansion plans want
 /// them: the [`LeafSource::SumTag`] selector followed by one
 /// [`LeafSource::VariantField`] leaf per payload field, in tag order, each
-/// carrying its variant's tag as its [`group`](UnfoldLeaf::group).
+/// carrying its variant's tag as its [`group`](UnfoldLeaf::groups).
 ///
 /// The list is `Declarations::sum_out_wires`', mapped. Runs BEFORE `resolve`,
 /// which is exactly why it shares that composition rather than walking the
@@ -40,9 +44,9 @@ pub(crate) fn synth_sum_leaves(
     registry: &impl Conversions,
     ident: &syn::Ident,
     sum: &prebindgen_registry::flat::Variant,
-) -> Vec<prebindgen_registry::unfold::UnfoldLeaf> {
-    use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
-    ext.sum_out_wires(registry, ident, sum.type_ref())
+) -> Vec<crate::unfold::UnfoldLeaf> {
+    use crate::unfold::{LeafSource, UnfoldLeaf};
+    ext.sum_out_wires(registry.flat(), ident, sum.type_ref())
         .unwrap_or_default()
         .into_iter()
         .map(|w| UnfoldLeaf {
@@ -64,8 +68,9 @@ pub(crate) fn synth_sum_leaves(
                     }
                 }
                 crate::jni::compile::OutFrom::Place => LeafSource::Reach,
+                crate::jni::compile::OutFrom::Present => LeafSource::Presence,
             },
-            group: w.group,
+            groups: w.groups.clone(),
         })
         .collect()
 }
@@ -84,14 +89,23 @@ pub(crate) struct Slot {
     pub(crate) prim: bool,
     pub(crate) ty: TokenStream,
     pub(crate) default: TokenStream,
+    /// The JVM descriptor of the slot's own type, which the **factory**
+    /// convention spells into its `fromParts` signature. The builder
+    /// convention resolves its method id from the interface's descriptor
+    /// instead and never reads this.
+    pub(crate) descriptor: String,
 }
 
-pub(crate) fn leaf_slot(ext: &Declarations, leaf: &crate::jni::compile::OutWire) -> Slot {
-    if !leaf_is_prim(ext, leaf) {
+pub(crate) fn leaf_slot(
+    context: &crate::jni::emit::delivery::FrozenDelivery,
+    leaf: &crate::jni::compile::OutWire,
+) -> Slot {
+    if !context.leaf_is_prim(leaf) {
         return Slot {
             prim: false,
             ty: quote!(jni::objects::JObject),
             default: quote!(jni::objects::JObject::null()),
+            descriptor: context.object_descriptor(leaf),
         };
     }
     // The tag is synthesized, so it has no converter to read a wire from — it
@@ -99,28 +113,53 @@ pub(crate) fn leaf_slot(ext: &Declarations, leaf: &crate::jni::compile::OutWire)
     let (sig, letter) = if leaf.is_tag() {
         ("I", format_ident!("i"))
     } else {
-        let wire = ext
-            .out_frag(&leaf.out_ty)
-            .expect("leaf_is_prim implies a resolved output entry")
-            .destination
-            .clone();
+        let wire = context.leaf_wire(leaf);
         let (sig, letter, _) =
             jni_field_access(&wire).expect("leaf_is_prim guarantees a primitive wire");
         (sig, letter)
     };
     let zero = primitive_default_for_descriptor(sig);
+    // The two conventions carry a primitive differently. A builder's typed
+    // `run` takes a `jvalue` union and reads the member the descriptor names; a
+    // `fromParts` call is spelled with a signature string and typed `JValue`s,
+    // so its slot holds the wire value itself. Both hold a `JObject` the same
+    // way, which is why only this branch splits.
+    if context.is_factory() {
+        let wire = match leaf.is_tag() {
+            true => quote!(jni::sys::jint),
+            false => {
+                let wire = context.leaf_wire(leaf);
+                quote!(#wire)
+            }
+        };
+        return Slot {
+            prim: true,
+            ty: wire,
+            default: zero,
+            descriptor: sig.to_string(),
+        };
+    }
     Slot {
         prim: true,
         ty: quote!(jni::sys::jvalue),
         default: quote!(jni::sys::jvalue { #letter: #zero }),
+        descriptor: sig.to_string(),
     }
 }
 
-/// True when these values decompose a sum — they carry the synthesized
-/// selector. The one place that question is asked, so every consumer agrees on
-/// it.
-pub(crate) fn is_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
-    leaves.iter().any(|l| l.is_tag())
+/// Whether the delivered value **is** a sum, rather than merely containing one.
+///
+/// The tag comes first and reaches nothing: it selects over the whole value.
+/// A struct with a sum-typed FIELD also carries a tag — reached through that
+/// field — and is a product whose fields include a segment. The two were the
+/// same question only while a field could not decompose to a tag, which is
+/// what #602 changed: the predicate this replaced answered "any leaf is a
+/// tag", and a builder asking it tried to build a sealed-class builder for a
+/// struct.
+pub(crate) fn is_whole_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
+    leaves
+        .first()
+        .is_some_and(|leaf| leaf.is_tag() && leaf.reach.is_empty())
 }
 
 /// Emit the Rust-side encode of a decomposed sum: ONE `match` over the value
@@ -140,13 +179,12 @@ pub(crate) fn is_sum_row(leaves: &[crate::jni::compile::OutWire]) -> bool {
 /// is that a leaf here is not an independent expression — its slot exists in
 /// every arm and only one arm computes it.
 pub(crate) fn encode_sum_group(
-    ext: &Declarations,
-    registry: &impl Conversions,
+    context: &crate::jni::emit::delivery::FrozenDelivery,
     leaves: &[crate::jni::compile::OutWire],
     obj_idents: &[syn::Ident],
     matched: TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
-    emit: &prebindgen_registry::Emit,
+    emit: &prebindgen_registry::RustWriter,
 ) -> (TokenStream, Vec<TokenStream>) {
     // Which sum this is comes from the selector leaf, not from the plan's
     // source: the plan's source is the *containing* value when the sum is a
@@ -155,39 +193,17 @@ pub(crate) fn encode_sum_group(
         .iter()
         .find(|l| l.is_tag())
         .expect("a sum segment carries its selector leaf");
-    // The name off the reading — `TypeId` IS the name, so nothing takes a path
-    // apart to re-derive one.
-    let prebindgen_registry::flat::TypeKind::Named { id, .. } = tag_leaf.out_ty.unwrapped().kind()
-    else {
-        panic!(
-            "jnigen sum unfold: selector type `{}` is not a named type",
-            tag_leaf.out_ty.key()
-        )
-    };
-    // Raw-aware: a sum may legitimately be named `r#type`, and `Ident::new`
-    // rejects that spelling.
-    let ident = id.ident().unwrap_or_else(|| {
-        panic!(
-            "jnigen sum unfold: selector type `{}` is not a single identifier",
-            id.name
-        )
-    });
-    let module = ext.fn_module(registry, &ident);
-    let source: syn::Path = syn::parse_quote!(#module::#ident);
+    let (source, sum) = crate::unfold::DeliveryBridge::sum(context, tag_leaf);
 
-    let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(ext, l)).collect();
+    let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(context, l)).collect();
 
+    // How a filled slot rides the call is the convention's answer, not this
+    // emitter's: a builder takes `jvalue`s, a `fromParts` factory typed
+    // `JValue`s.
     let arg_exprs: Vec<TokenStream> = leaves
         .iter()
         .enumerate()
-        .map(|(idx, _)| {
-            let id = &obj_idents[idx];
-            if slots[idx].prim {
-                quote!(#id)
-            } else {
-                quote!(jni::sys::jvalue { l: #id.as_raw() })
-            }
-        })
+        .map(|(idx, leaf)| crate::unfold::DeliveryBridge::argument(context, leaf, &obj_idents[idx]))
         .collect();
 
     // Declare every slot up front; each arm assigns all of them.
@@ -209,15 +225,9 @@ pub(crate) fn encode_sum_group(
         .position(|l| l.is_tag())
         .expect("a sum plan carries its selector leaf");
     let tag_id = &obj_idents[tag_idx];
-    // A unit variant contributes no leaf, so the arm list is driven by the
-    // enum's own alternatives, not by the grouped leaves. `enum_item` hands
-    // back only the `syn::ItemEnum`, deliberately — a consumer that acts on the
-    // Variant/Enum distinction asks `declared_type` (#289).
-    let Some(prebindgen_registry::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
-    else {
-        panic!("jnigen sum unfold: no indexed sum `{ident}` for the decomposed sum")
-    };
-
+    // How deep this segment sits is its own selector's answer — see
+    // `sum_reconstruct`, which reads the same fact for the Kotlin half.
+    let depth = leaves[tag_idx].groups.len();
     let arms: Vec<TokenStream> = sum
         .alternatives
         .iter()
@@ -226,7 +236,7 @@ pub(crate) fn encode_sum_group(
             let group: Vec<usize> = leaves
                 .iter()
                 .enumerate()
-                .filter(|(_, l)| l.group == Some(tag))
+                .filter(|(_, l)| l.groups.get(depth) == Some(&tag))
                 .map(|(i, _)| i)
                 .collect();
             let binds: Vec<syn::Ident> = group
@@ -256,12 +266,13 @@ pub(crate) fn encode_sum_group(
                 .zip(&binds)
                 .map(|(&idx, bind)| {
                     encode_group_leaf(
-                        ext,
+                        context,
                         &leaves[idx],
                         &obj_idents[idx],
                         slots[idx].prim,
                         bind,
                         fail,
+                        emit,
                     )
                 })
                 .collect();
@@ -279,7 +290,8 @@ pub(crate) fn encode_sum_group(
             // null, which a raw `jint` has no room for), so the live tag boxes
             // like any other nullable primitive leaf.
             let set_tag = if slots[tag_idx].prim {
-                quote! { #tag_id = jni::sys::jvalue { i: #tag_lit }; }
+                let held = context.selector_value(&leaves[tag_idx], quote!(#tag_lit));
+                quote! { #tag_id = #held; }
             } else {
                 let box_fail = fail(quote!(__e));
                 quote! {
@@ -313,45 +325,31 @@ pub(crate) fn encode_sum_group(
 /// payload and a struct field of the same type reach their converter the same
 /// way.
 fn encode_group_leaf(
-    ext: &Declarations,
+    context: &crate::jni::emit::delivery::FrozenDelivery,
     leaf: &crate::jni::compile::OutWire,
     obj_ident: &syn::Ident,
     prim: bool,
     bind: &syn::Ident,
     fail: &dyn Fn(TokenStream) -> TokenStream,
+    emit: &prebindgen_registry::RustWriter,
 ) -> TokenStream {
-    let out_entry = ext.out_frag(&leaf.out_ty).unwrap_or_else(|| {
-        panic!(
-            "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
-            leaf.name,
-            leaf.out_ty.key()
-        )
-    });
-    let wire = out_entry.destination.clone();
+    let frozen_pipeline = match &leaf.abi {
+        Some(crate::jni::compile::OutAbi::Value(value)) => &value.pipeline,
+        Some(crate::jni::compile::OutAbi::Tag) | Some(crate::jni::compile::OutAbi::Present) => {
+            unreachable!("a segment's payload is not its selector")
+        }
+        None => panic!(
+            "jnigen sum delivery: payload leaf `{}` reached Rust rendering without a frozen output ABI",
+            leaf.name
+        ),
+    };
+    let wire = context.leaf_wire(leaf);
     let conv_fail = fail(quote!(__e.to_string()));
     let enc = format_ident!("__enc_{}", obj_ident);
-    // The payload's COMPLETE chain: a `convert!`-declared type reaches the
-    // wire through its rust-side stages first (`Duration → u64 → jlong`).
-    // Stopping at the wire-facing converter would hand it the semantic value
-    // where it expects the representation.
     let mut encode = TokenStream::new();
-    let mut previous = quote!(#bind.clone());
-    for (order, (_, stage)) in out_entry.output_stage_order().enumerate() {
-        let stage_fn = &stage.function.sig.ident;
-        let next = format_ident!("__enc_{}_s{}", obj_ident, order);
-        encode.extend(quote! {
-            let #next = match #stage_fn(&mut env, #previous) {
-                ::core::result::Result::Ok(__w) => __w,
-                ::core::result::Result::Err(__e) => {
-                    #conv_fail
-                }
-            };
-        });
-        previous = quote!(#next);
-    }
-    let conv = out_entry.converter_ident();
+    let call = frozen_pipeline.invoke(quote!(#bind.clone()), emit);
     encode.extend(quote! {
-        let #enc = match #conv(&mut env, #previous) {
+        let #enc = match #call {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
                 #conv_fail
@@ -362,9 +360,10 @@ fn encode_group_leaf(
         let letter = jni_field_access(&wire)
             .expect("leaf_is_prim guarantees a primitive wire")
             .1;
+        let held = context.hold_prim(&letter, quote!(#enc));
         quote! {
             #encode
-            #obj_ident = jni::sys::jvalue { #letter: #enc };
+            #obj_ident = #held;
         }
     } else {
         let cast = cast_wire_to_jobject(&enc, &wire, fail);
@@ -373,4 +372,141 @@ fn encode_group_leaf(
             #obj_ident = #cast;
         }
     }
+}
+
+/// The encode of ONE segment's group, from the value the walk has unwrapped for
+/// it — the tag twin or the presence twin, chosen by the segment's own
+/// selector.
+///
+/// The two are told apart in one place because a group may contain a segment of
+/// its own: an optional nested class whose fields select, an `Option` of a sum.
+/// [`encode_presence_group`] meets those in its own leaves and asks here again,
+/// which is the same question its caller asked — so the answer is one function
+/// rather than a copy of the dispatch inside the recursion.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn encode_segment_group(
+    context: &crate::jni::emit::delivery::FrozenDelivery,
+    leaves: &[crate::jni::compile::OutWire],
+    obj_idents: &[syn::Ident],
+    matched: TokenStream,
+    index: usize,
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    fail: &dyn Fn(TokenStream) -> TokenStream,
+    emit: &prebindgen_registry::RustWriter,
+) -> (TokenStream, Vec<TokenStream>) {
+    match leaves[0].is_tag() {
+        true => encode_sum_group(context, leaves, obj_idents, matched, fail, emit),
+        false => encode_presence_group(
+            context, leaves, obj_idents, matched, index, qualify, fail, emit,
+        ),
+    }
+}
+
+/// The encode of a **presence** segment: an optional nested value's flag and
+/// the leaves it gates, from the value the walk has already unwrapped.
+///
+/// [`crate::unfold::segment`] supplies the gate — one tuple bind
+/// whose absent arm carries every slot's default — and calls this for the
+/// present arm, so what is here is the flag and the child's own leaves read
+/// off the unwrapped value. The sum twin next to it answers the same shape
+/// with alternatives in place of presence.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn encode_presence_group(
+    context: &crate::jni::emit::delivery::FrozenDelivery,
+    leaves: &[crate::jni::compile::OutWire],
+    obj_idents: &[syn::Ident],
+    matched: TokenStream,
+    index: usize,
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    fail: &dyn Fn(TokenStream) -> TokenStream,
+    emit: &prebindgen_registry::RustWriter,
+) -> (TokenStream, Vec<TokenStream>) {
+    use crate::unfold::DeliveryBridge;
+
+    let flag = &obj_idents[0];
+    let flag_slot = leaf_slot(context, &leaves[0]);
+    let flag_ty = &flag_slot.ty;
+    let present = context.selector_value(&leaves[0], quote!(1u8));
+    let mut stmts = quote! { let #flag: #flag_ty = #present; };
+    // Filled by leaf position rather than appended: a nested segment fills a
+    // run of them at once, so the order they are produced in is not the order
+    // they are read in.
+    let mut args: Vec<TokenStream> = vec![TokenStream::new(); leaves.len()];
+    args[0] = context.argument(&leaves[0], flag);
+
+    // The prefix the presence flag reaches is already consumed: the walk bound
+    // what it found there, so each gated leaf reaches on from that binding.
+    let consumed = leaves[0].reach.len();
+    // A gated leaf may itself be a selector — the value this flag speaks for
+    // has a sum-typed field, or is an `Option<sum>` — and a segment's leaves
+    // are not independent, so those are emitted as their own gated `match`
+    // rather than one at a time. One level down from this flag's own, which is
+    // what [`segments_at`] reads.
+    let inner = crate::unfold::segments_at(leaves, leaves[0].groups.len() + 1);
+    let tail_of = |leaf: &crate::jni::compile::OutWire| -> Vec<crate::unfold::PathStep> {
+        leaf.reach.iter().skip(consumed).cloned().collect()
+    };
+    for seg in &inner {
+        let seg_args = std::cell::RefCell::new(Vec::new());
+        let place = crate::unfold::LeafPlace {
+            base: matched.clone(),
+            base_is_ref: true,
+            path: tail_of(&leaves[seg.start]),
+            consuming: false,
+            conditional: None,
+        };
+        let seg_stmts = crate::unfold::segment(
+            context,
+            qualify,
+            &place,
+            index + seg.start,
+            &leaves[seg.clone()],
+            &obj_idents[seg.clone()],
+            &|m| {
+                let (stmts, args) = encode_segment_group(
+                    context,
+                    &leaves[seg.clone()],
+                    &obj_idents[seg.clone()],
+                    m,
+                    index + seg.start,
+                    qualify,
+                    fail,
+                    emit,
+                );
+                *seg_args.borrow_mut() = args;
+                stmts
+            },
+        );
+        stmts.extend(seg_stmts);
+        for (k, e) in seg_args.into_inner().into_iter().enumerate() {
+            args[seg.start + k] = e;
+        }
+    }
+    for (index, leaf) in leaves.iter().enumerate().skip(1) {
+        if inner.iter().any(|s| s.contains(&index)) {
+            continue;
+        }
+        let slot = &obj_idents[index];
+        let tail: Vec<crate::unfold::PathStep> =
+            leaf.reach.iter().skip(consumed).cloned().collect();
+        let matched = matched.clone();
+        let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
+            crate::unfold::reach_leaf(
+                qualify,
+                crate::unfold::LeafAt {
+                    leaf,
+                    path: &tail,
+                    base: matched.clone(),
+                    base_is_ref: true,
+                    consuming: false,
+                    unwrap_last: false,
+                },
+                Some(&|| DeliveryBridge::absent(context)),
+                body,
+            )
+        };
+        stmts.extend(context.encode(leaf, index, slot, &reach, fail, emit));
+        args[index] = context.argument(leaf, slot);
+    }
+    (stmts, args)
 }

@@ -103,14 +103,11 @@ use std::collections::{HashMap, HashSet};
 // `TypeRef` now, so what is left here serves the two node populations that
 // remain — a build-script declaration, and a converter's own generated
 // signature.
-pub(crate) use prebindgen_registry::types_util::{
-    is_result_type as is_result, path_tail_ident as type_path_tail, result_parts,
-};
 use prebindgen_registry::{
     decl::{ConvertDecl, ConvertSpec},
     flat::{extract_fn_trait_args, Field, Origin, ScalarKind, TypeKind, TypeRef},
     recipe::{Bound, Direction},
-    Conversions, ConverterImpl, NicheSlot, Niches, Prebindgen, Registry, TypeKey,
+    Conversions, NicheSlot, Niches, Prebindgen, Registry, TypeKey,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
@@ -187,7 +184,7 @@ struct ValueOpaqueCfg {
     kind: OpaqueKind,
     /// When `true`, the `opaque` counterpart is **not** supplied externally but is
     /// an auto-generated **visible-field** `#[repr(C)]` mirror of the source struct,
-    /// emitted by [`CbindgenBuilder::prereq_value_opaque`]. Set by
+    /// retained in the registry generation plan. Set by
     /// [`CbindgenBuilder::repr_c_struct`]; `false` for `opaque_data_struct` /
     /// `opaque_owned_struct` (counterpart defined elsewhere).
     generate_mirror: bool,
@@ -203,12 +200,6 @@ struct ValueOpaqueCfg {
 /// Per-declared-callback configuration.
 #[derive(Clone)]
 struct CbCfg {
-    /// The argument types this callback was declared with, in order.
-    ///
-    /// `CallbackKey` is a `Vec<TypeKey>` — a list of identities, which is what
-    /// the map is keyed by. Emission needs the argument *types*, and these are
-    /// the ones `extract_fn_trait_args` produced at declaration time (#291).
-    args: Vec<syn::Type>,
     /// Per-declaration **base** token override fed to `mangle_callback` (as the
     /// sole base, replacing the args' derived bases). Set by
     /// [`CbindgenBuilder::base_name`]. `None` ⇒ bases come from the arguments.
@@ -224,9 +215,8 @@ struct CbCfg {
 
 impl CbCfg {
     /// A freshly declared callback signature, no naming or takeable overrides yet.
-    fn new(args: Vec<syn::Type>) -> Self {
+    fn new() -> Self {
         Self {
-            args,
             base: None,
             takeable: std::collections::BTreeSet::new(),
         }
@@ -268,7 +258,7 @@ enum ErrRoute<'a> {
     /// `::core::ptr::null_mut()` for a pointer-returning wrapper).
     Result {
         e_conv: &'a syn::Ident,
-        e_ty_src: syn::Type,
+        e_ty_src: TokenStream,
         fail_return: TokenStream,
     },
     /// Non-`Result` function declared `.panic()`: abort via `panic!`.
@@ -356,10 +346,13 @@ impl Cbindgen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        // Every binding a test writes also checks that the assembly's
+        // dependency edges name every call its artifacts render — the
+        // completeness the emission-time check reasons from.
+        #[cfg(test)]
+        prebindgen_registry::write::assert_edges_cover_rendered_calls(self.gen.assembly(), "c");
         Ok(prebindgen_registry::write::write_rust(
-            &self.registry,
-            &self.gen,
-            &self.gen.compiled_fns,
+            self.gen.assembly(),
             out_path,
         )?)
     }
@@ -444,31 +437,52 @@ pub struct CbindgenBuilder {
     /// Where the `#[prebindgen]` items come from — see
     /// `JniGenBuilder::source`.
     pub(crate) sources: prebindgen_registry::flat::FlatBuilder,
-    /// Every conversion this binding compiled, keyed by crossing.
-    ///
-    /// What the emitters ask instead of the converter table. The table can only
-    /// name **one** wire type per crossing, so it stops being able to answer as
-    /// soon as a crossing occupies several — and the answer an emitter wants
-    /// was always the adapter's own.
-    ///
-    /// Shared and interior-mutable because the emitters that run *during*
-    /// compilation read it too: `dispatch_fn_input` builds a callback's closure
-    /// struct out of `lower_shape` and `encode_value`, and those ask what a
-    /// type crosses as. A conversion for one type is built out of the
-    /// conversions for its inners, which the resolver compiles first, so a
-    /// fragment is there exactly when a table entry would have been.
+    /// Every conversion this binding compiled, keyed by crossing. This mutable
+    /// compilation cache is frozen into [`Self::generation`] before any C
+    /// wrapper or callback artifact renders; later stages remove the cache itself.
     pub(crate) compiled: std::rc::Rc<
         std::cell::RefCell<prebindgen_registry::recipe::Compiled<crate::compile::CFrag>>,
     >,
-    /// Every conversion this binding compiled.
-    ///
-    /// Filled once by [`Self::build_with`] and handed to `write_rust` directly. It is what
-    /// reaches the generated file, so a fragment no longer has to be
-    /// expressible as one `ConverterImpl` to be emitted — only to be looked up.
-    /// The writer sorts and de-duplicates by function name, so the order here
-    /// decides which of two same-named functions wins and not where any of them
-    /// lands.
-    pub(crate) compiled_fns: Vec<syn::ItemFn>,
+    /// Immutable registry-owned C generation plan for ordinary sites, callback
+    /// argument sites, and callback artifacts.
+    pub(crate) generation: Option<
+        std::rc::Rc<
+            prebindgen_registry::generation::GenerationPlan<crate::compile::CRepresentation>,
+        >,
+    >,
+    /// Every final artifact of the generated Rust file, frozen in the order it
+    /// is written. Filled from [`Self::generation`] once resolution is
+    /// complete, and the only thing `write_rust` reads converters from.
+    pub(crate) assembly: Option<prebindgen_registry::write::Assembly<assembly::CFinalArtifact>>,
+}
+
+impl CbindgenBuilder {
+    /// The frozen assembly the generated Rust file is written from.
+    pub(crate) fn assembly(
+        &self,
+    ) -> &prebindgen_registry::write::Assembly<assembly::CFinalArtifact> {
+        self.assembly
+            .as_ref()
+            .expect("C assembly is frozen after resolution")
+    }
+
+    /// Frozen converter artifacts in registry-owned dependency order.
+    #[cfg(test)]
+    pub(crate) fn converter_functions(&self) -> impl Iterator<Item = &chain::CFunction> {
+        self.assembly()
+            .artifacts()
+            .filter_map(|artifact| match artifact {
+                assembly::CFinalArtifact::Converter(converter) => Some(&**converter),
+                assembly::CFinalArtifact::Wrapper(_)
+                | assembly::CFinalArtifact::Const(_)
+                | assembly::CFinalArtifact::Memory(_)
+                | assembly::CFinalArtifact::DataStruct(_)
+                | assembly::CFinalArtifact::Enum(_)
+                | assembly::CFinalArtifact::DomainConstant(_)
+                | assembly::CFinalArtifact::ArrayBuilder
+                | assembly::CFinalArtifact::Planned(_) => None,
+            })
+    }
 }
 
 /// A mangler over a single name component (Rust short name, base, or fn ident).
@@ -476,7 +490,9 @@ type Mangle1 = Box<dyn Fn(&str) -> String>;
 /// A mangler over a callback's argument bases.
 type MangleN = Box<dyn Fn(&[String]) -> String>;
 
+mod assembly;
 mod builder;
+mod chain;
 mod compile;
 mod convert;
 mod emit;
@@ -508,7 +524,7 @@ fn sanitize(key: &TypeKey) -> String {
 /// The short name a C symbol is built from — the key's last path segment, or a
 /// sanitized rendering of the whole key when it is not a path.
 ///
-/// Off the **identity**: `type_path_tail` took the last segment of a node, and
+/// Off the **identity**: this took the last path segment of a node, and
 /// `TypeKey::short_name` is the same question asked of the canonical string, so
 /// the name no longer depends on holding the node it was derived from.
 fn type_short(key: &TypeKey) -> String {
@@ -583,17 +599,6 @@ pub fn snake_case(s: &str) -> String {
     prebindgen_registry::types_util::pascal_to_snake(s)
 }
 
-/// A reading spelled back as a `syn::Type`.
-///
-/// The source's **own tokens**, re-parsed — not [`TypeKind::to_syn`], which
-/// exists to check the lowering rather than to generate with. Every wire this
-/// back-end builds from a field's own type goes through here, so what C sees
-/// is what the source wrote.
-fn spelled(t: &TypeRef, emit: &prebindgen_registry::Emit) -> syn::Type {
-    let toks = emit.spell(t);
-    syn::parse_quote!(#toks)
-}
-
 /// `String`, off the classification.
 fn r_is_string(t: &TypeRef) -> bool {
     matches!(t.kind(), TypeKind::String)
@@ -612,7 +617,7 @@ fn r_is_bool(t: &TypeRef) -> bool {
 /// A scalar's Rust type, built from its **kind**.
 ///
 /// A scalar's spelling is its name — `ScalarKind::as_str` is the closed set the
-/// source can have written — so this needs no captured syntax and no `Emit`.
+/// source can have written — so this needs no captured syntax and no writer.
 /// Three wire policies asked `spelled()` for exactly this behind an
 /// `r_is_scalar` guard, which was a source spelling standing in for an
 /// identity that could answer.
@@ -641,74 +646,6 @@ fn marker_destination(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
 }
 
-/// The composite shapes [`Cbindgen::lower_shape`] decomposes: a value with no
-/// wire of its own, whose ABI is the fields it lowers to.
-///
-/// Read off the model rather than off the marker converter's `()` destination.
-/// `out_wrappers` gives that destination to a `Result` too, and no arm lowers
-/// one — so a destination test answers `yes` for a shape nothing can emit, and
-/// the caller ends up calling the marker it was trying to avoid (#428 review).
-impl CbindgenBuilder {
-    fn is_lowered_composite(&self, t: &TypeRef) -> bool {
-        let composite =
-            t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some();
-        composite && self.shape_is_lowerable(t)
-    }
-}
-
-/// Whether this node already has a wire of its own: a real converter rather
-/// than the marker that stands in for a shape with none.
-///
-/// `select_output_type` tries `out_custom` before `out_wrappers`, so a declared
-/// conversion answers here — and the shape lowering has to agree with the
-/// converter table at **every** level, not only the outermost, or the two
-/// describe different ABIs for the same argument (#428 review).
-impl CbindgenBuilder {
-    fn has_own_wire(&self, t: &TypeRef) -> bool {
-        self.out_frag(t)
-            .is_some_and(|e| !marker_destination(&e.destination))
-    }
-}
-
-/// Whether [`Cbindgen::lower_shape`] decomposes `t` **all the way down**.
-///
-/// Asking only about the outermost layer is not enough: `Option<Result<T, E>>`
-/// is an optional, so a shallow test admits it, and then the lowering reaches
-/// the `Result` as a base field and emits a call to *its* marker — the same
-/// failure one layer in (#428 review).
-///
-/// Every layer below the composite has to end at a value with a **wire of its
-/// own**, and that is a question for the converter table rather than a list of
-/// shapes: a marker destination means "no wire", whatever put it there.
-/// Enumerating the wrapper kinds instead missed `Vec<&'static [u8]>`, whose
-/// element is a plain borrow by every shape test and a shared-slice marker in
-/// the table (#428 review).
-impl CbindgenBuilder {
-    fn shape_is_lowerable(&self, t: &TypeRef) -> bool {
-        // A node with a wire of its own IS the bottom: `lower_shape` stops
-        // there too, so the recursion must not walk past it into a shape that
-        // node no longer describes.
-        if self.has_own_wire(t) {
-            return true;
-        }
-        if let Some(inner) = t.optional_inner() {
-            return self.shape_is_lowerable(inner);
-        }
-        // A run's element must lower to one wire of its own — the same rule
-        // `lower_shape` asserts when it builds the `(ptr, len)` pair.
-        let leaf = r_vec_elem(t).or_else(|| r_cow_slice_elem(t)).unwrap_or(t);
-        self.has_own_wire(leaf)
-    }
-}
-
-/// The element of a `Vec<E>`.
-fn r_vec_elem(t: &TypeRef) -> Option<&TypeRef> {
-    match t.kind() {
-        TypeKind::Vec(elem) => Some(elem),
-        _ => None,
-    }
-}
-
 /// The opaque-pointer payload shape — `Box<T>` or `Option<Box<T>>` — off the
 /// classification, returning the reading of `T`.
 ///
@@ -720,36 +657,6 @@ fn r_boxed_inner(t: &TypeRef) -> Option<&TypeRef> {
         TypeKind::Boxed(inner) => Some(inner),
         _ => None,
     }
-}
-
-fn is_string(ty: &syn::Type) -> bool {
-    type_path_tail(ty).map(|i| i == "String").unwrap_or(false)
-}
-
-/// The full path for a bare name the **language** pre-declares, or `None` for a
-/// name only the source crate can be declaring.
-///
-/// Ingest reduces a captured type's spelling to the bare name the language
-/// knows the constructor by (`std::option::Option<T>` and `Option<T>` are one
-/// type), so by the time an emitter spells a type, a prelude constructor and a
-/// source-crate item look alike: both are one segment. Qualifying either
-/// against the source module produces a path that does not exist — see
-/// [`Cbindgen::src_ty`], which is the only caller.
-///
-/// The paths are spelled in full rather than left bare because the generated
-/// file is `include!`d into a consumer crate, and `MaybeUninit` is not in
-/// Rust's prelude.
-fn prelude_path(ident: &syn::Ident) -> Option<&'static str> {
-    Some(match ident.to_string().as_str() {
-        "Option" => "::core::option::Option",
-        "Result" => "::core::result::Result",
-        "Vec" => "::std::vec::Vec",
-        "Box" => "::std::boxed::Box",
-        "String" => "::std::string::String",
-        "Cow" => "::std::borrow::Cow",
-        "MaybeUninit" => "::core::mem::MaybeUninit",
-        _ => return None,
-    })
 }
 
 /// The C wire for a `bool` in any position C can write: `MaybeUninit<bool>`.
@@ -789,27 +696,13 @@ fn bool_out_expr(value: TokenStream) -> TokenStream {
 
 /// Whether `ty` is an FFI-safe scalar primitive that passes through unchanged
 /// (`bool`, the fixed-width / pointer-width integers, and floats).
+///
+/// The set is `ScalarKind`'s, asked of the model rather than spelled out again
+/// here — the same reason [`r_is_scalar`] asks the classification. This one
+/// takes a written type because its caller has one: a `from!` / `into!`
+/// representation is a type the binding wrote, not a lowered `TypeRef`.
 fn is_scalar(ty: &syn::Type) -> bool {
-    type_path_tail(ty)
-        .map(|i| {
-            matches!(
-                i.to_string().as_str(),
-                "bool"
-                    | "i8"
-                    | "i16"
-                    | "i32"
-                    | "i64"
-                    | "isize"
-                    | "u8"
-                    | "u16"
-                    | "u32"
-                    | "u64"
-                    | "usize"
-                    | "f32"
-                    | "f64"
-            )
-        })
-        .unwrap_or(false)
+    ScalarKind::from_type(ty).is_some()
 }
 
 /// The element of a shared slice borrow (`&[E]`), off the classification.
@@ -826,37 +719,6 @@ fn r_shared_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
         TypeKind::Slice(e) => Some(e),
         _ => None,
     }
-}
-
-/// [`cow_slice_elem`] off the classification: `Cow<'_, [E]>` with scalar `E`.
-fn r_cow_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
-    let TypeKind::Cow { inner, .. } = t.kind() else {
-        return None;
-    };
-    match inner.kind() {
-        TypeKind::Slice(e) if r_is_scalar(e) => Some(e),
-        _ => None,
-    }
-}
-
-/// [`scalar_slice_elem`] off the classification.
-fn r_scalar_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
-    r_shared_slice_elem(t).filter(|e| r_is_scalar(e))
-}
-
-/// If `ty` is `&[E]` (a shared slice borrow) with scalar `E`, return `E`.
-fn scalar_slice_elem(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Reference(r) = ty else {
-        return None;
-    };
-    if r.mutability.is_some() {
-        return None;
-    }
-    let syn::Type::Slice(s) = &*r.elem else {
-        return None;
-    };
-    let elem = (*s.elem).clone();
-    is_scalar(&elem).then_some(elem)
 }
 
 /// C name for an out-parameter field. When the value's primary field (suffix
@@ -879,27 +741,18 @@ fn null_for(wire: &syn::Type) -> TokenStream {
     }
 }
 
-/// One C-ABI wire component of a lowered return value. `suffix` names it
+/// One C-ABI wire component of a frozen site value. `suffix` names it
 /// relative to a base (`""` → `out`, `"_len"` → `len`, `"_present"` → `present`).
 struct WireField {
     suffix: &'static str,
     wire: syn::Type,
 }
 
-/// How a *present / ok* value of a return type is carried over the C ABI: an
-/// ordered list of wire components plus the representation niches still free
-/// for enclosing `Option`/`Result` layers.
-struct ValueShape {
+/// The already-frozen fields and remaining niches an ordinary return wrapper
+/// partitions into its return slot and out-parameters.
+struct FrozenValueLayout {
     fields: Vec<WireField>,
     niches: Niches,
-}
-
-/// Whether a converter function's return type is `Result<_, _>` (⇒ fallible).
-fn returns_result(output: &syn::ReturnType) -> bool {
-    match output {
-        syn::ReturnType::Type(_, ty) => is_result(ty),
-        syn::ReturnType::Default => false,
-    }
 }
 
 fn route_result(call: TokenStream, route: &ErrRoute<'_>) -> TokenStream {

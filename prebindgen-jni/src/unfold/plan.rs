@@ -1,8 +1,8 @@
 //! Resolved output-deconstruction plans.
 
 /// Outer shape wrapping the [core decomposition](`UnfoldShape::Base`).
-/// The output-side analog of [`crate::expand::FoldShape`], on the
-/// unified [`Shape`](prebindgen_flat::shape::Shape) layer stack:
+/// The output-side analog of [`prebindgen_registry::expand::FoldShape`], on the
+/// unified [`Shape`](prebindgen_registry::shape::Shape) layer stack:
 ///   * `Base` — run the accessor's records on the value, producing all
 ///     [leaves](`UnfoldPlan::leaves`) and invoking the builder once;
 ///   * `Optional((), inner)` — `Option<T>`/`Option<&T>` return: `None` ⇒ a null
@@ -15,7 +15,7 @@
 ///
 /// The `()` payload is unused here — only the JNI adapter's
 /// `Shape<NullableKind>` carries per-layer data.
-pub use prebindgen_flat::shape::Shape as UnfoldShape;
+pub use prebindgen_registry::shape::Shape as UnfoldShape;
 
 use super::Delivery;
 
@@ -24,7 +24,7 @@ use super::Delivery;
 /// determined by the declaration, so adapters key such artifacts on this —
 /// functions selecting the same declaration share one artifact; differently
 /// declared decompositions of the same type get distinct ones. The first
-/// field is always the target type's canonical [`TypeKey`](crate::registry::TypeKey)
+/// field is always the target type's canonical [`TypeKey`](prebindgen_registry::TypeKey)
 /// string.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DeconId {
@@ -51,10 +51,10 @@ pub enum DeconId {
 #[derive(Clone)]
 pub struct DeconSpec {
     /// The decomposed type as first encountered. A **reading**, so "compare via
-    /// [`TypeKey`](crate::registry::TypeKey), not syntactically" is
+    /// [`TypeKey`](prebindgen_registry::TypeKey), not syntactically" is
     /// the type rather than an instruction: `source.key()` is the identity and
-    /// `emit.spell(&source)` is what an emission callback writes.
-    pub source: prebindgen_flat::flat::TypeRef,
+    /// `emit.emit_source_type(&source)` is what an emission callback writes.
+    pub source: prebindgen_registry::flat::TypeRef,
     /// Flattened leaves in declared record order — names, types, paths,
     /// nullability all declaration-fixed.
     pub leaves: Vec<UnfoldLeaf>,
@@ -199,13 +199,13 @@ pub enum LeafSource {
     /// it gets a table cell like every other leaf's, but no root, because a sum
     /// has no whole-value output converter and demanding one would fail
     /// resolution over a type that never crosses whole. The reading comes from
-    /// the declaration — [`Variant::type_ref`](prebindgen_flat::flat::Variant::type_ref)
+    /// the declaration — [`Variant::type_ref`](prebindgen_registry::flat::Variant::type_ref)
     /// — never from an adapter composing one out of a name.
     SumTag,
     /// A payload field of ONE alternative of a decomposed sum, reached through
     /// a **variant pattern** rather than a path: the emitter binds `member`
     /// inside `variant`'s `match` arm. The leaf is live only when
-    /// [`UnfoldLeaf::group`] equals the value's tag; in every other arm its
+    /// [`UnfoldLeaf::groups`] ends in the value's tag; in every other arm its
     /// slot carries the wire default.
     ///
     /// This is the selector [`Reach`](Self::Reach) deliberately lacks — a
@@ -217,6 +217,18 @@ pub enum LeafSource {
         /// How the payload field is addressed in the arm's pattern.
         member: syn::Member,
     },
+    /// The **synthesized presence** of an optional value the decomposition
+    /// looks through: a boolean saying whether the leaves that follow carry
+    /// anything.
+    ///
+    /// The selector [`SumTag`](Self::SumTag) is for a value that is one of
+    /// several alternatives; this is for a value that is either there or not,
+    /// and the difference is not a two-alternative sum: absence has no
+    /// alternative of its own to name, and the group it gates is the value's
+    /// own leaves rather than one arm's payload. Like a tag it is not read off
+    /// the value — the emitter assigns it — so [`UnfoldLeaf::path`] reaches
+    /// the OPTIONAL value it tests, not a place holding a boolean.
+    Presence,
 }
 
 /// A resolved output expansion for one function.
@@ -224,7 +236,7 @@ pub enum LeafSource {
 pub struct UnfoldPlan {
     /// Owned core type the records decompose — the function's return after
     /// peeling `&` / `Option` / `Vec`.
-    pub source: prebindgen_flat::flat::TypeRef,
+    pub source: prebindgen_registry::flat::TypeRef,
     /// Which deconstructor declaration produced [`Self::leaves`] — the
     /// identity adapters key signature artifacts on. `None` only for the
     /// whole-element `Iterable` arm (no declaration involved).
@@ -246,7 +258,7 @@ pub struct UnfoldPlan {
     /// delivered to the fold via its own output converter + projection (not
     /// decomposed). `None` for `Decompose`/`Optional` and for a **decomposed**
     /// `Iterable` fold (which uses [`Self::leaves`]).
-    pub element: Option<prebindgen_flat::flat::TypeRef>,
+    pub element: Option<prebindgen_registry::flat::TypeRef>,
     /// Callback (`deconstruct_output`) vs return-value (`convert_output`)
     /// delivery.
     pub delivery: Delivery,
@@ -254,7 +266,7 @@ pub struct UnfoldPlan {
     /// shape (`Decompose` ⇒ `out_ty`, `Optional` ⇒ `Option<out_ty>`). The
     /// wrapper returns this value through its ordinary output converter (no
     /// callback). `None` for [`Delivery::Callback`].
-    pub convert_out_ty: Option<prebindgen_flat::flat::TypeRef>,
+    pub convert_out_ty: Option<prebindgen_registry::flat::TypeRef>,
     /// `true` for a synthesized by-value `data_class` decomposition (see
     /// [`ValueDecon`](crate::unfold::ValueDecon)): the builder/folder
     /// is a **fixed, hoisted** foreign singleton that reconstructs the concrete
@@ -272,6 +284,17 @@ pub struct UnfoldPlan {
     /// first. Ordered outermost-first, so a hoist can be composed from the
     /// longest already-bound prefix of itself.
     pub hoists: Vec<Hoist>,
+}
+
+impl UnfoldPlan {
+    /// Whether this plan is exactly one Optional layer over one scalar/product
+    /// decomposition. Iterable and future composed inner shapes answer false.
+    pub fn is_optional_base(&self) -> bool {
+        matches!(
+            &self.shape,
+            UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)
+        )
+    }
 }
 
 /// One hoisted value form: where it sits, and whether it **consumes** the value
@@ -308,16 +331,16 @@ pub struct UnfoldLeaf {
     /// The **reading** of the type whose resolved output converter encodes this
     /// leaf — a reference type for accessors (`&str`, `&F`), `&Source` for the
     /// identity leaf (so the borrowed-opaque clone converter / projection is
-    /// reused). Spell it with `emit.spell(&out_ty)` in an emission callback.
+    /// reused). Spell it with `emit.emit_source_type(&out_ty)` in an emission callback.
     ///
     /// A reading rather than a spelling because a consumer asking what this
     /// leaf's type *means* had to hand the spelling back to the registry and
     /// hope for a cell — the round trip #263 removed from `api/core`, surviving
     /// in the plans, and answering "no layer" for a type it had never seen
     /// (#275). The composed ones (`&Source`) are built by
-    /// [`TypeRef::borrowed`](prebindgen_flat::flat::TypeRef::borrowed), which
+    /// [`TypeRef::borrowed`](prebindgen_registry::flat::TypeRef::borrowed), which
     /// pairs the kind with its own spelling.
-    pub out_ty: prebindgen_flat::flat::TypeRef,
+    pub out_ty: prebindgen_registry::flat::TypeRef,
     /// `true` for the move/clone-the-value handle leaf, emitted **last** (after
     /// every reference leaf's JVM conversion has ended its borrow).
     pub identity: bool,
@@ -327,26 +350,45 @@ pub struct UnfoldLeaf {
     /// `match Some/None`.
     pub nullable: bool,
     /// How [`Self::path`] is reached from the value — an accessor-fn chain
-    /// (default), a struct-field chain (synthesized `data_class`), or a
-    /// variant pattern binding (decomposed sum).
+    /// (default), a struct-field chain (synthesized `data_class`), a variant
+    /// pattern binding (decomposed sum), or one of the two synthesized
+    /// selectors, which are assigned rather than reached.
     pub source: LeafSource,
-    /// **Group membership**: `Some(tag)` marks the leaf as belonging to the
-    /// leaf group of the sum alternative with that tag — live only when the
-    /// value's [`LeafSource::SumTag`] leaf equals `tag`, wire-defaulted
-    /// otherwise. `None` for an unconditional (product) leaf, including the
-    /// tag leaf itself, which selects between groups rather than joining one.
+    /// **Group membership**, as the path of arms this leaf sits inside —
+    /// outermost first. Empty for a leaf that is always live. A non-empty path
+    /// marks the leaf as belonging to the group a **selector** chooses: live
+    /// only when that selector says so, wire-defaulted otherwise.
+    ///
+    /// Each element is one arm, and what an arm number means is the selector's
+    /// own answer:
+    ///
+    /// * a [`SumTag`](LeafSource::SumTag) chooses among alternatives, and its
+    ///   arm is the alternative's tag;
+    /// * a [`Presence`](LeafSource::Presence) chooses between "the value is
+    ///   there" and "it is not", and its arm is `0` — the one group a presence
+    ///   flag gates, carried by the leaves of the value it speaks for.
     ///
     /// Grouping is what turns a leaf list into a `match`: leaves sharing a
     /// group are emitted together in one arm instead of as independent
     /// per-leaf expressions.
-    pub group: Option<i32>,
+    ///
+    /// **A selector carries the path it is nested in, not its own arms.** An
+    /// unconditional selector's path is empty; one inside a group carries that
+    /// group's path, the same as any other member — which is what lets a
+    /// selector own another. Its own members extend that path by one, so
+    /// "member of the outer group" and "selector of an inner one" are two
+    /// different lengths of the same path rather than two meanings of one
+    /// number, and [`segments`](crate::unfold::segments) reads one nesting
+    /// level at a time (#602).
+    pub groups: Vec<i32>,
 }
 
 impl UnfoldLeaf {
     /// Whether this leaf's [`out_ty`](Self::out_ty) needs a resolved **output
-    /// converter**. False only for the synthesized [`LeafSource::SumTag`]
-    /// selector: it is assigned per `match` arm, never converted, so requiring
-    /// a converter for it would make every sum depend on an unrelated `i32`
+    /// converter**. False for a synthesized **selector** — a
+    /// [`SumTag`](LeafSource::SumTag) or a [`Presence`](LeafSource::Presence):
+    /// each is assigned by the emitter rather than converted, so requiring
+    /// a converter for one would make every sum depend on an unrelated `i32`
     /// crossing existing in the binding.
     ///
     /// **This is the root question, not the registration question.** Every
@@ -356,6 +398,9 @@ impl UnfoldLeaf {
     /// an entry says one resolved — three separate claims, and a `SumTag` leaf
     /// makes only the first (#282).
     pub fn has_converter(&self) -> bool {
-        self.source != LeafSource::SumTag
+        // A presence flag is synthesized like a tag: it says whether the
+        // leaves after it carry anything, and the value it tests crosses
+        // through those leaves rather than through this one.
+        !matches!(self.source, LeafSource::SumTag | LeafSource::Presence)
     }
 }

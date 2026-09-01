@@ -12,9 +12,9 @@ use super::*;
 /// Peel the layers that never change whether a value's core is a Kotlin enum,
 /// **off the model**: a borrow and an optional, in any nesting. So `&Priority`,
 /// `Priority`, `Option<Priority>` and `Option<&Priority>` all probe as
-/// `Priority` — letting nullable enum params (`Option<enum>`) wire as `Int?` +
-/// `?.value` just like a non-null enum wires as `Int` + `.value`, instead of
-/// leaking the enum object to the (boxed-int-expecting) Rust converter.
+/// `Priority` — letting nullable enum params (`Option<enum>`) wire as the raw
+/// `Int` discriminant plus an allocated niche, instead of leaking the enum
+/// object to the Rust converter.
 ///
 /// A **run is not peeled**. `Vec<Priority>` is a `List<Priority>`, not an enum,
 /// so this is deliberately not [`TypeRef::layer_stack`], which strips the
@@ -22,7 +22,7 @@ use super::*;
 ///
 /// Borrowing rather than composing is not a shortcut: every layer of a reading
 /// already holds the next as a `TypeRef` of its own, so there is nothing to
-/// mint — which is also why this needs no registry. What it returns spells
+/// mint — which is also why this needs no flat. What it returns spells
 /// itself (`spell()`) and classifies itself (`kind`), and the two cannot
 /// disagree.
 pub(crate) fn enum_probe(reading: &TypeRef) -> &TypeRef {
@@ -78,375 +78,208 @@ pub(crate) fn projection_wrap_expr(kind: &ProjectionKind, short: &str, raw: &str
     }
 }
 
-/// For a projection (handle / unsigned) **struct field**,
-/// compute the `(wire_param_type, wrap_expr)` the data class's `fromParts`
-/// factory uses: the wire param type matches the leaf wire
-/// `struct_output_body` passes (handle → `Long` jlong sentinel), and the wrap
-/// reconstructs the typed value in JVM
-/// bytecode (`Short(arg)`, with null mapped from the `0L` sentinel for handles
-/// or the declared invalid `Long` for a bounded unsigned representation; JVM
-/// null remains the fallback for non-niche value projections). Only the
-/// `Direct` and `Nullable{Direct}` shapes a scalar projection field can take
-/// are supported — a collection
-/// (`Vec<projection>`) field is rejected (matching the struct bridge's
-/// scalar-only guard).
-pub(crate) fn factory_projection_wire_wrap(
-    proj: &crate::jni::Projection,
-    short: &str,
-    name: &str,
-) -> (KtType, String) {
-    use prebindgen_registry::shape::Shape::*;
-
-    use crate::jni::{NullableKind, ProjectionKind::*};
-    let direct = |kind: &crate::jni::ProjectionKind| match kind {
-        Handle => (KtType::long(), handle_from_raw(short, name)),
-        Unsigned64 => (KtType::long(), format!("{name}.toULong()")),
-    };
-    match &proj.strategy {
-        Base => direct(&proj.kind),
-        Optional(nullable, inner) => {
-            if !matches!(**inner, Base) {
-                panic!(
-                    "factory_projection_wire_wrap: only `Nullable<Direct>` projection struct \
-                     fields are supported (field `{name}`)"
-                );
-            }
-            match proj.kind {
-                // Handle null rides the `0L` jlong sentinel. The present case
-                // mints the handle through `handle_from_raw` for the same
-                // reason the `Base` arm above does: a handle's constructor is
-                // private, and the factory is the only way in (#430).
-                Handle => (
-                    KtType::long(),
-                    format!(
-                        "if ({name} == 0L) null else {}",
-                        handle_from_raw(short, name)
-                    ),
-                ),
-                Unsigned64 => match nullable {
-                    // A bounded unsigned representation reserves an invalid
-                    // raw value for `None`, so the factory receives primitive
-                    // `Long` and restores the nullable semantic property.
-                    NullableKind::Niche => {
-                        let sentinel = projection_leaf_sentinel(proj).unwrap_or_else(|| {
-                            panic!(
-                                "factory_projection_wire_wrap: niche unsigned field `{name}` \
-                                 has no declared sentinel"
-                            )
-                        });
-                        (
-                            KtType::long(),
-                            format!("if ({name} == {sentinel}) null else {name}.toULong()"),
-                        )
-                    }
-                    // Plain `Option<u64>` has no spare bit pattern, so its
-                    // primitive wire is boxed and JVM null represents `None`.
-                    NullableKind::Boxed => {
-                        (KtType::long().nullable(), format!("{name}?.toULong()"))
-                    }
-                },
-            }
-        }
-        Iterable(_) => panic!(
-            "factory_projection_wire_wrap: collection (`Vec<projection>`) struct fields are not \
-             supported by the fromParts factory (field `{name}`)"
-        ),
-    }
-}
-
-/// True for the Kotlin types that map to JVM **primitives** (never null over
-/// the JNI boundary). Used to decide which flattened `Option<nested>` leaf
-/// params must be made nullable in the parent factory signature.
-pub(crate) fn is_kotlin_primitive_ty(t: &KtType) -> bool {
-    !t.is_nullable()
-        && t.leaf_name().is_some_and(|n| {
-            matches!(
-                n,
-                "Long" | "Int" | "Boolean" | "Double" | "Float" | "Byte" | "Short" | "Char"
-            )
-        })
-}
-
 /// The Kotlin side of one struct's `fromParts` bridge — see
 /// [`flatten_struct_factory`], whose returned tuple this names.
 pub(crate) type StructFactory = (Vec<(String, KtType)>, String, bool);
 
-/// Recursively build the Kotlin `fromParts` factory for a data class — the
-/// mirror of the native `flatten_struct_encode` (in the [`jni`](super)
-/// module). Both walk the same [`build_struct_plan`], so the leaf order and
-/// slot types agree by construction.
+/// Build the Kotlin `fromParts` factory for a data class, from the struct's
+/// **decomposition** — the one leaf list, which the Rust encode renders from
+/// and a builder interface declares. Not a mirror of a second walk: there is
+/// no second walk (#620).
+///
 /// Returns `(params, reconstruct, mints_handle)`:
-/// * `params` — the flattened `(name, kotlin_type)` list (one per transitive
-///   leaf wire; nested data-class fields are inlined, `Option<nested>` prepends
-///   a `…__present: Boolean` flag). Order/types match the native call's JVM
-///   descriptor positionally.
+/// * `params` — the flattened `(name, kotlin_type)` list, one per leaf; nested
+///   data-class fields are inlined and `Option<nested>` prepends a
+///   `…__present: Boolean` flag. Order and types match the native call's JVM
+///   descriptor positionally, because both come from
+///   [`plan_leaf_params`](crate::jni::iface::plan_leaf_params).
 /// * `reconstruct` — the Kotlin expression building this struct:
 ///   `Class(<part per constructor field>)`, where a nested field reconstructs
 ///   via `Child.fromParts(<child param names>)` (`if (present) … else null` when
 ///   optional) and a leaf reconstructs with its wrap.
-/// * `mints_handle` — whether any transitive leaf is an opaque handle, i.e.
-///   whether this factory takes a raw native pointer and so needs the
-///   raw-pointer guard (see [`plan_mints_handle`]).
+/// * `mints_handle` — whether any leaf is an opaque handle, i.e. whether this
+///   factory takes a raw native pointer and so needs the raw-pointer guard.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flatten_struct_factory(
     ext: &Declarations,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
     s: &prebindgen_registry::flat::Struct,
     prefix: &str,
     class_name: &str,
     imports: &mut BTreeSet<String>,
     depth: usize,
 ) -> Option<StructFactory> {
-    let plan = build_struct_plan(ext, registry, s, depth)?;
-    let (params, reconstruct) = factory_from_plan(&plan, prefix, class_name, imports)?;
-    Some((params, reconstruct, plan_mints_handle(&plan)))
+    let _ = (prefix, depth);
+    let leaves = ext.struct_out_frozen(flat, s)?;
+    let (params, reconstruct) = factory_from_leaves(ext, flat, &leaves, class_name, imports)?;
+    // Whether this factory takes a raw native pointer, and so needs the
+    // raw-pointer guard: asked of the same leaves, through the wrap that says
+    // a slot is a handle.
+    let mints_handle = crate::jni::iface::plan_leaf_params(ext, &leaves)?
+        .iter()
+        .any(|param| param.wrap.class_fqn().is_some());
+    Some((params, reconstruct, mints_handle))
 }
 
-/// Walk a [`StructPlan`] emitting the Kotlin `fromParts` side: the flattened
-/// factory params and the reconstruct expression.
-fn factory_from_plan(
-    plan: &StructPlan,
-    prefix: &str,
+/// The Kotlin `fromParts` side, derived from the struct's **decomposition** —
+/// the same leaf list the Rust encode renders from and the same one a builder
+/// interface declares.
+///
+/// One derivation, so the factory's parameters cannot drift from the slots the
+/// encoder fills. What each part of the expression needs, the leaves already
+/// say: `reach` which field a leaf came from, `through` which class a boundary
+/// reassembles through, `groups` and the selectors which arm gates it.
+///
+/// Returns `(params, reconstruct)`, where `reconstruct` is
+/// `Class(<one part per constructor field>)`.
+fn factory_from_leaves(
+    ext: &Declarations,
+    flat: &prebindgen_registry::flat::Flat,
+    leaves: &[crate::jni::compile::OutWire],
     class_name: &str,
     imports: &mut BTreeSet<String>,
 ) -> Option<(Vec<(String, KtType)>, String)> {
-    let mut params: Vec<(String, KtType)> = Vec::new();
-    let mut parts: Vec<String> = Vec::new();
+    let params = crate::jni::iface::plan_leaf_params(ext, leaves)?;
+    let names = crate::jni::render::plan_leaf_names(leaves);
+    let declared: Vec<(String, KtType)> = names
+        .iter()
+        .zip(&params)
+        .map(|(name, param)| (name.clone(), param.raw.clone()))
+        .collect();
 
-    for f in &plan.fields {
-        let camel = mangle_kotlin_ident(&kt_snake_to_camel(&f.fname.to_string()));
-        let base = if prefix.is_empty() {
-            camel.clone()
-        } else {
-            format!("{prefix}_{camel}")
+    // One part per constructor field, and a field is what a leaf's reach
+    // starts with — a nested class's leaves, a sum's tag and groups, and an
+    // optional's flag all reach through the one field that carries them.
+    let mut parts: Vec<String> = Vec::new();
+    let mut i = 0usize;
+    while i < leaves.len() {
+        let field = |j: usize| {
+            leaves[j]
+                .reach()
+                .first()
+                .map(|step| step.ident().to_string())
         };
-        let (p, part) = factory_field(&f.kind, &base, imports)?;
-        params.extend(p);
-        parts.push(part);
+        let head = field(i);
+        let end = (i..leaves.len())
+            .take_while(|&j| field(j) == head)
+            .last()
+            .map_or(i + 1, |j| j + 1);
+        parts.push(factory_part(
+            ext,
+            flat,
+            &leaves[i..end],
+            &params[i..end],
+            &names[i..end],
+            None,
+            imports,
+        )?);
+        i = end;
     }
-
-    let reconstruct = format!("{class_name}({})", parts.join(", "));
-    Some((params, reconstruct))
+    Some((declared, format!("{class_name}({})", parts.join(", "))))
 }
 
-/// Declare the `fromParts` slots of ONE value position and the expression
-/// that rebuilds it — the Kotlin mirror of
-/// [`encode_field`](super::encode_field). A sum's payloads go through here
-/// too, so a payload and a struct field of the same type declare the same
-/// slot on both sides.
-fn factory_field(
-    kind: &PlanFieldKind,
-    base: &str,
+/// The expression rebuilding ONE constructor field from the leaves that carry
+/// it: a plain leaf through its own wrap, a nested class through its
+/// `fromParts`, a sum through the `when` over its tag, and any of those behind
+/// a presence flag when the field is optional.
+#[allow(clippy::too_many_arguments)]
+fn factory_part(
+    ext: &Declarations,
+    flat: &prebindgen_registry::flat::Flat,
+    leaves: &[crate::jni::compile::OutWire],
+    params: &[crate::jni::IfaceParam],
+    names: &[String],
+    // `ungated`: the same leaves as the value's OWN class declares them, when a
+    // presence flag above made the parent's copies nullable. `None` when
+    // nothing gates them, in which case the two are the same.
+    ungated: Option<&[crate::jni::IfaceParam]>,
     imports: &mut BTreeSet<String>,
-) -> Option<(Vec<(String, KtType)>, String)> {
-    let mut params: Vec<(String, KtType)> = Vec::new();
-    let mut parts: Vec<String> = Vec::new();
-    let base = base.to_string();
-    {
-        let f_kind = kind;
-        match f_kind {
-            // Projection leaf (handle / `ULong`).
-            PlanFieldKind::Projection { proj, fqn, .. } => {
-                let short = register_fqn(fqn, imports);
-                let (wire_ty, wrap) = factory_projection_wire_wrap(proj, &short, &base);
-                params.push((base.clone(), wire_ty));
-                parts.push(wrap);
-            }
-            // Enum leaf → `Int`, rebuilt via `Enum.fromInt(i)` (raw text: the
-            // enum's short name, its FQN collected as a body import).
-            PlanFieldKind::Enum { kotlin, .. } => {
-                let short = register_fqn(kotlin.leaf_name()?, imports);
-                params.push((base.clone(), KtType::int()));
-                parts.push(format!("{short}.fromInt({base})"));
-            }
-            // `Option<enum>` leaf: the native encoder delivers the discriminant
-            // `box_jint`-boxed (JVM `Ljava/lang/Integer;`, null for `None`), so
-            // the factory takes `Int?` and rebuilds the nullable enum.
-            PlanFieldKind::OptionEnum { kotlin, .. } => {
-                let short = register_fqn(kotlin.leaf_name()?, imports);
-                params.push((base.clone(), KtType::int().nullable()));
-                parts.push(format!("{base}?.let {{ {short}.fromInt(it) }}"));
-            }
-            // Data-carrying enum — the tag slot plus every variant's group
-            // side by side, rebuilt by an inlined `when` (no JNI crossing,
-            // exactly like a nested data class).
-            PlanFieldKind::Sum {
-                kotlin_fqn,
-                optional,
-                variants,
-                ..
-            } => {
-                let iface_short = register_fqn(kotlin_fqn, imports);
-                let flag = format!("{base}__present");
-                if *optional {
-                    params.push((flag.clone(), KtType::boolean()));
+) -> Option<String> {
+    // The class boundary is asked FIRST. A nested child may itself begin with
+    // a selector — an `Option<Mid>` whose `Mid` starts with an optional field,
+    // or with a sum — and that selector belongs to the CHILD's signature, not
+    // to this one. Reading `from` before `through` consumed it here and called
+    // the child factory without it, which is a `fromParts` arity mismatch the
+    // JVM only reports at the call (#620 review).
+    // A nested class: its leaves are the parent's, put back through the class
+    // the decomposition recorded when it flattened them. A gated one receives
+    // wire defaults when absent, so its object slots are nullable in the
+    // parent's signature and re-asserted inside the guard the flag opened.
+    if let Some(fqn) = leaves[0].through.first() {
+        let short = register_fqn(fqn, imports);
+        // Re-asserted only where the NULL came from the gate, never where the
+        // value is legitimately absent: a leaf whose own type is optional is
+        // nullable on its own account, and `!!` there would throw on a value
+        // the class is meant to hold. The same distinction `sum_ctor_arg`
+        // makes for an inert group's payload.
+        let forwarded: Vec<String> = names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                // Re-asserted only where the null is the GATE's doing: the
+                // parent declares the slot nullable so the encoder can default
+                // it when absent, while the class itself declares it non-null.
+                // A slot the class already declares nullable — its own type is
+                // optional, or it belongs to a sum group that is inert whenever
+                // another alternative is live — is forwarded untouched, because
+                // `!!` there would throw on a value the class is meant to hold.
+                let gate_added = params[i].raw.is_nullable()
+                    && !ungated.is_none_or(|own| own[i].raw.is_nullable());
+                match gate_added {
+                    true => format!("{name}!!"),
+                    false => name.clone(),
                 }
-                params.push((format!("{base}__tag"), KtType::int()));
-
-                let mut arms: Vec<String> = Vec::new();
-                for (tag, v) in variants.iter().enumerate() {
-                    // Each group's slots are declared once, in variant order,
-                    // and are INERT whenever another variant is live — so the
-                    // nullability rule below applies to every group, not just
-                    // to an optional one.
-                    let mut fwd: Vec<String> = Vec::new();
-                    for pf in &v.fields {
-                        let slot = format!("{base}_{}", pf.slot);
-                        let (group_params, part) = factory_field(&pf.kind, &slot, imports)?;
-                        fwd.push(nullable_group_part(&mut params, group_params, part));
-                    }
-                    let ctor = if v.fields.is_empty() {
-                        format!("{iface_short}.{}", v.kotlin_name)
-                    } else {
-                        format!("{iface_short}.{}({})", v.kotlin_name, fwd.join(", "))
-                    };
-                    arms.push(format!("{tag} -> {ctor}"));
-                }
-                let when = format!(
-                    "when ({base}__tag) {{ {}; else -> throw IllegalArgumentException(\"{}: \
-                     invalid tag ${base}__tag\") }}",
-                    arms.join("; "),
-                    iface_short,
-                );
-                parts.push(if *optional {
-                    format!("if ({flag}) {when} else null")
-                } else {
-                    when
-                });
-            }
-            // Nested data-class field — inline its leaves and reconstruct via
-            // the child's own `fromParts` (in bytecode, no JNI crossing).
-            PlanFieldKind::Nested {
-                optional,
-                child_fqn,
-                plan: child,
-            } => {
-                let child_fqn = child_fqn.as_ref()?;
-                let child_short = register_fqn(child_fqn, imports);
-                let (child_params, _child_reconstruct) =
-                    factory_from_plan(child, &base, &child_short, imports)?;
-                let child_names = child_params
-                    .iter()
-                    .map(|(n, _)| n.clone())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                if !*optional {
-                    params.extend(child_params);
-                    parts.push(format!("{child_short}.fromParts({child_names})"));
-                } else {
-                    // `Option<nested>`: the parent receives default-null object wires
-                    // for the child's leaves when absent (the native `None` arm), so
-                    // every object-typed child param must be NULLABLE in the parent
-                    // signature. Inside the `if (present)` guard the values are
-                    // non-null again, so forward them to the child's (non-null)
-                    // `fromParts` with `!!`. Primitive params (Long/Int/Boolean)
-                    // can't be null and are forwarded as-is; already-nullable params
-                    // stay nullable.
-                    let flag = format!("{base}__present");
-                    let mut fwd_names: Vec<String> = Vec::with_capacity(child_params.len());
-                    params.push((flag.clone(), KtType::boolean()));
-                    for (n, t) in &child_params {
-                        if is_kotlin_primitive_ty(t) || t.is_nullable() {
-                            params.push((n.clone(), t.clone()));
-                            fwd_names.push(n.clone());
-                        } else {
-                            params.push((n.clone(), t.clone().nullable()));
-                            fwd_names.push(format!("{n}!!"));
-                        }
-                    }
-                    parts.push(format!(
-                        "if ({flag}) {child_short}.fromParts({}) else null",
-                        fwd_names.join(", ")
-                    ));
-                }
-            }
-            // Leaf primitive / object (string, byte array, Vec, …) — forwarded
-            // unchanged to the constructor. Full-FQN param type; the
-            // render-time `ImportSet` shortens it.
-            PlanFieldKind::Leaf {
-                kotlin, nullable, ..
-            } => {
-                let ty = if *nullable {
-                    kotlin.clone().nullable()
-                } else {
-                    kotlin.clone()
-                };
-                params.push((base.clone(), ty));
-                parts.push(base);
-            }
-        }
+            })
+            .collect();
+        return Some(format!("{short}.fromParts({})", forwarded.join(", ")));
     }
-
+    // A presence flag gates everything after it, and contributes no value of
+    // its own: the field is what its group rebuilds, or null.
+    if matches!(leaves[0].from, crate::jni::compile::OutFrom::Present) {
+        // Inside the guard the gate's own arm is no longer in question, so the
+        // group it opened is stripped: what is left is the value as its own
+        // class declares it, which is what says whether a null here is this
+        // gate's doing or the value's own.
+        let inner: Vec<crate::jni::compile::OutWire> = leaves[1..]
+            .iter()
+            .map(|leaf| {
+                let mut leaf = leaf.clone();
+                leaf.groups = leaf
+                    .groups
+                    .split_first()
+                    .map_or_else(Vec::new, |(_, rest)| rest.to_vec());
+                leaf
+            })
+            .collect();
+        let inner_params = crate::jni::iface::plan_leaf_params(ext, &inner)?;
+        let gated = factory_part(
+            ext,
+            flat,
+            &leaves[1..],
+            &params[1..],
+            &names[1..],
+            Some(&inner_params),
+            imports,
+        )?;
+        return Some(format!("if ({}) {gated} else null", names[0]));
+    }
+    if leaves[0].is_tag() {
+        let (_, when) = ext.sum_reconstruct(
+            flat,
+            &leaves[0].out_ty.unwrapped().key(),
+            leaves,
+            params,
+            names,
+            imports,
+        );
+        return Some(when);
+    }
     debug_assert_eq!(
-        parts.len(),
+        leaves.len(),
         1,
-        "factory_field must yield exactly one reconstruct expression"
+        "an unselected field with no class path is one leaf"
     );
-    Some((params, parts.remove(0)))
-}
-
-/// Declare one variant group's slots and return the expression that forwards
-/// them into the variant constructor.
-///
-/// A group is **inert** whenever another variant is live, and the Rust
-/// encoder fills an inert object slot with `JObject::null()`
-/// ([`primitive_default_for_descriptor`](super::primitive_default_for_descriptor)).
-/// A JVM `null` handed to a non-null Kotlin parameter throws inside the
-/// intrinsic null-check, before any generated code runs — so every
-/// object-shaped group slot must be declared nullable and forwarded `!!`
-/// inside its own (live) arm, where it is non-null again. Primitives take
-/// their `0`/`false` default and need no such treatment.
-///
-/// This is the N=1 `Option<nested>` rule (see the `Nested { optional }` arm)
-/// generalized to N groups; both call it so the two paths cannot drift.
-fn nullable_group_part(
-    params: &mut Vec<(String, KtType)>,
-    group_params: Vec<(String, KtType)>,
-    part: String,
-) -> String {
-    let mut part = part;
-    for (n, t) in group_params {
-        if is_kotlin_primitive_ty(&t) || t.is_nullable() {
-            params.push((n, t));
-        } else {
-            // The reconstruct expression references the slot by name; the
-            // live arm re-asserts non-nullness there.
-            part = replace_ident(&part, &n, &format!("{n}!!"));
-            params.push((n, t.nullable()));
-        }
-    }
-    part
-}
-
-/// Replace whole-identifier occurrences of `from` in a rendered Kotlin
-/// expression. Whole-identifier: a match must not be flanked by identifier
-/// characters, so rewriting `x` never touches `x_2` or `ax` — slot names of
-/// one group share a prefix (`exact_v0`, `exact_v01`), and a substring
-/// replace would corrupt them.
-///
-/// The left-hand character is taken from what has already been **written**,
-/// never from the remaining input: `rest` advances past a rejected occurrence,
-/// so by the next candidate the character preceding it can already have been
-/// consumed. Re-slicing `rest` there loses it and turns two adjacent
-/// occurrences (`"axx"`, rewriting `x`) into one accepted match.
-fn replace_ident(haystack: &str, from: &str, to: &str) -> String {
-    let is_ident_char = |c: char| c == '_' || c.is_alphanumeric();
-    let mut out = String::with_capacity(haystack.len());
-    let mut rest = haystack;
-    while let Some(pos) = rest.find(from) {
-        out.push_str(&rest[..pos]);
-        let before_ok = out.chars().next_back().is_none_or(|c| !is_ident_char(c));
-        let after = &rest[pos + from.len()..];
-        let after_ok = after.chars().next().is_none_or(|c| !is_ident_char(c));
-        if before_ok && after_ok {
-            out.push_str(to);
-        } else {
-            out.push_str(from);
-        }
-        rest = after;
-    }
-    out.push_str(rest);
-    out
+    Some(ext.sum_ctor_arg(&leaves[0], &params[0], &names[0], imports))
 }
 
 /// Render the Kotlin `close()` expression for a handle `receiver` through
@@ -677,42 +510,5 @@ pub(crate) fn register_fqn(fqn: &str, used: &mut BTreeSet<String>) -> String {
         fqn.rsplit('.').next().unwrap_or(fqn).to_string()
     } else {
         fqn.to_string()
-    }
-}
-
-#[cfg(test)]
-mod replace_ident_tests {
-    use super::replace_ident;
-
-    /// The property the function exists for: a slot name is rewritten only as a
-    /// whole identifier, so the `!!` never lands on a longer name that merely
-    /// starts (or ends) with it.
-    #[test]
-    fn only_whole_identifiers_are_rewritten() {
-        assert_eq!(replace_ident("x", "x", "x!!"), "x!!");
-        assert_eq!(replace_ident("x_2", "x", "x!!"), "x_2");
-        assert_eq!(replace_ident("ax", "x", "x!!"), "ax");
-        assert_eq!(
-            replace_ident("Reading.Exact(exact_v0)", "exact_v0", "exact_v0!!"),
-            "Reading.Exact(exact_v0!!)"
-        );
-        // A prefix of a longer slot name of the same group is left alone.
-        assert_eq!(
-            replace_ident("f(exact_v0, exact_v01)", "exact_v0", "exact_v0!!"),
-            "f(exact_v0!!, exact_v01)"
-        );
-    }
-
-    /// A rejected occurrence must not consume the context of the next one: with
-    /// the left character re-sliced out of the remaining input, `"axx"` rewrote
-    /// its second `x` — the first having been dropped from `rest` along with the
-    /// `a` that disqualified it.
-    #[test]
-    fn a_rejected_match_keeps_its_left_context() {
-        assert_eq!(replace_ident("axx", "x", "x!!"), "axx");
-        assert_eq!(replace_ident("xxx", "x", "x!!"), "xxx");
-        assert_eq!(replace_ident("x ax", "x", "x!!"), "x!! ax");
-        // Every occurrence of a genuinely standalone identifier is rewritten.
-        assert_eq!(replace_ident("x + x", "x", "x!!"), "x!! + x!!");
     }
 }

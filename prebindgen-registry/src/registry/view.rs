@@ -1,12 +1,9 @@
 //! What a conversion is built against — the partial view during the fill, and
 //! the total one after it.
 
-use std::collections::HashMap;
-
 use prebindgen_flat::flat::{Flat, TypeRef};
 
 use super::*;
-use crate::unfold::{DeconId, DeconSpec, UnfoldPlan};
 
 /// One `(direction, type)` pair that crosses the boundary.
 ///
@@ -60,26 +57,6 @@ pub trait Conversions {
         self.reading(&TypeKey::from_type(ty))
     }
 
-    /// The decomposition of a callback argument type, if it has one.
-    ///
-    /// On the trait because a callback converter needs it while being built,
-    /// and the emitter needs it again afterwards. Plans are applied by
-    /// `prepare`, so they are complete either side of that line.
-    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan>;
-
-    /// Every callback-argument decomposition, for the emitters that enumerate
-    /// them rather than look one up.
-    fn callback_arg_plans(&self) -> &HashMap<TypeKey, UnfoldPlan>;
-
-    /// The return decomposition of a function, if it has one.
-    fn unfold_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan>;
-
-    /// The error-position decomposition of a fallible function.
-    fn error_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan>;
-
-    /// The declaration-default decomposition behind each deconstructor.
-    fn decon_plans(&self) -> &HashMap<DeconId, DeconSpec>;
-
     /// Every type key that crosses in `dir`.
     ///
     /// The niche allocator needs the whole population, not one lookup: it picks
@@ -104,21 +81,6 @@ impl Conversions for Building<'_> {
     fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         self.registry.reading(key)
     }
-    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan> {
-        self.registry.callback_arg_plans.get(key)
-    }
-    fn callback_arg_plans(&self) -> &HashMap<TypeKey, UnfoldPlan> {
-        &self.registry.callback_arg_plans
-    }
-    fn unfold_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
-        &self.registry.unfold_plans
-    }
-    fn error_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
-        &self.registry.error_plans
-    }
-    fn decon_plans(&self) -> &HashMap<DeconId, DeconSpec> {
-        &self.registry.decon_plans
-    }
     fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
         self.all_keys
             .iter()
@@ -134,21 +96,6 @@ impl Conversions for Registry {
     }
     fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         Registry::reading(self, key)
-    }
-    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan> {
-        self.callback_arg_plans.get(key)
-    }
-    fn callback_arg_plans(&self) -> &HashMap<TypeKey, UnfoldPlan> {
-        &self.callback_arg_plans
-    }
-    fn unfold_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
-        &self.unfold_plans
-    }
-    fn error_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
-        &self.error_plans
-    }
-    fn decon_plans(&self) -> &HashMap<DeconId, DeconSpec> {
-        &self.decon_plans
     }
     fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
         self.type_table(dir).keys().cloned().collect()

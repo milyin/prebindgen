@@ -256,11 +256,125 @@ fn assert_cross_artifact(rust_src: &str, kotlin: &BTreeMap<String, String>) {
 }
 
 /// Run a full pipeline and return both artifacts.
+/// The report's signatures against the Kotlin wrappers' — the fourth consumer
+/// #613 step 7 names, beside the Rust externs, the Kotlin declarations and the
+/// callback interfaces the tests above already cross-check.
+///
+/// `report.rs` documents that it renders "through the same `render_wrapper_fn`
+/// the emitters use, so it cannot drift from the real output". That is a
+/// structural argument, and this is the check that keeps it true: every
+/// function the report names must appear in the emitted Kotlin, with a
+/// declaration of that name whose parameter arity matches the report's.
+/// Parameters in one Kotlin parameter list, counted by their `name:` bindings.
+///
+/// A trailing lambda's own `(A) -> B` arrow contains no `:`, so nested types do
+/// not inflate the count.
+fn param_arity(list: &str) -> usize {
+    let mut depth = 0usize;
+    let mut count = 0usize;
+    for (i, c) in list.char_indices() {
+        match c {
+            '(' | '<' => depth += 1,
+            ')' | '>' => depth = depth.saturating_sub(1),
+            ':' if depth == 0 => {
+                // `::` is a path, not a binding.
+                if list[i + 1..].starts_with(':') || list[..i].ends_with(':') {
+                    continue;
+                }
+                count += 1;
+            }
+            _ => {}
+        }
+    }
+    count
+}
+
+/// The index of the `)` closing the `(` that `open` points just past.
+fn matching_paren(s: &str, open: usize) -> usize {
+    let mut depth = 1usize;
+    for (i, c) in s[open..].char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return open + i;
+                }
+            }
+            _ => {}
+        }
+    }
+    s.len()
+}
+
+fn assert_report_agrees(report: &str, kotlin: &BTreeMap<String, String>) {
+    let all: String = kotlin.values().flat_map(|s| s.chars()).collect();
+    let compact: String = all.split_whitespace().collect();
+    let mut checked = 0;
+    for line in report.lines() {
+        // `- `rust_ident` — `fun name(a: A, b: B): R``
+        let Some(rest) = line.strip_prefix("- `") else {
+            continue;
+        };
+        let Some((_ident, sig)) = rest.split_once("` — `") else {
+            continue;
+        };
+        let Some(sig) = sig.strip_suffix('`') else {
+            continue;
+        };
+        let Some(open) = sig.find('(') else { continue };
+        let Some(name) = sig[..open].rsplit(' ').next() else {
+            continue;
+        };
+        if name.is_empty() {
+            continue;
+        }
+        // A name can be declared twice — once as the JNINative extern over ABI
+        // leaves, once as the Kotlin wrapper over the surface types. The report
+        // mirrors the WRAPPER (it renders through `render_wrapper_fn`), so the
+        // agreement is with whichever declaration has the report's arity, and
+        // the assertion is that one exists (#654 review).
+        let marker = format!("fun{name}(");
+        // Only the WRAPPER counts. The same name is also declared as a
+        // `JNINative external fun` over ABI leaves, and accepting that one
+        // means a drifted wrapper passes whenever the extern happens to share
+        // its arity — the common one-wire-per-parameter case (#654 review).
+        let arities: Vec<usize> = compact
+            .match_indices(&marker)
+            .filter(|(i, _)| !compact[..*i].ends_with("externalfun"))
+            .map(|(i, _)| {
+                let o = i + marker.len();
+                param_arity(&compact[o..matching_paren(&compact, o)])
+            })
+            .collect();
+        assert!(
+            !arities.is_empty(),
+            "the report names `{name}`, which the emitted Kotlin does not \
+             declare as a wrapper — the report drifted from the wrappers it \
+             claims to render through"
+        );
+        let report_arity = param_arity(&sig[open + 1..sig.rfind(')').unwrap_or(sig.len())]);
+        assert!(
+            arities.contains(&report_arity),
+            "`{name}`: the report declares {report_arity} parameter(s) and no \
+             emitted Kotlin declaration of that name has that many (found \
+             {arities:?}) — the report drifted from the wrapper it renders \
+             through"
+        );
+        checked += 1;
+    }
+    assert!(
+        checked > 0,
+        "fixture's report names at least one function; it named none, so this \
+         check proved nothing"
+    );
+}
+
 fn run_pipeline(
     tag: &str,
     items: Vec<(syn::Item, prebindgen::SourceLocation)>,
     jni: JniGenBuilder,
-) -> (String, BTreeMap<String, String>) {
+) -> (String, BTreeMap<String, String>, String) {
     let registry =
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let dir = unique_test_dir(tag);
@@ -269,13 +383,14 @@ fn run_pipeline(
     let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let report = gen.report();
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let mut kotlin = BTreeMap::new();
     for p in &paths {
         let name = p.file_name().unwrap().to_string_lossy().to_string();
         kotlin.insert(name, std::fs::read_to_string(p).unwrap());
     }
-    (rust, kotlin)
+    (rust, kotlin, report)
 }
 
 /// Handles, fallible constructor, enum params/returns, `Option<&T>` borrow,
@@ -368,8 +483,80 @@ fn cross_artifact_representative_shapes_agree() {
                 .fun(prebindgen_registry::fun!(z_paint))
                 .constant(crate::constant!(MAX_LEN)),
         );
-    let (rust, kotlin) = run_pipeline("jnigen_xart_repr", items, jni);
+    let (rust, kotlin, report) = run_pipeline("jnigen_xart_repr", items, jni);
     assert_cross_artifact(&rust, &kotlin);
+    assert_report_agrees(&report, &kotlin);
+}
+
+/// Optional enum niches are primitive JNI wires at every reserved nesting
+/// depth. The Kotlin extern must consume that frozen wire decision rather than
+/// inferring a reference return from the intentionally lossy `Priority?`
+/// public surface.
+#[test]
+fn optional_enum_nesting_keeps_rust_and_kotlin_return_wires_equal() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    Normal = 1,
+                    High = 2,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn priority_optional() -> Option<Priority> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn priority_nested_optional() -> Option<Option<Priority>> {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .fun(prebindgen_registry::fun!(priority_optional))
+                .fun(prebindgen_registry::fun!(priority_nested_optional)),
+        );
+    let (rust, kotlin, report) = run_pipeline("jnigen_xart_optional_enum", items, jni);
+
+    assert_cross_artifact(&rust, &kotlin);
+    assert_report_agrees(&report, &kotlin);
+
+    let rust: String = rust.split_whitespace().collect();
+    let kotlin: String = kotlin
+        .values()
+        .flat_map(|source| source.split_whitespace())
+        .collect();
+    assert!(
+        rust.matches("->jni::sys::jint").count() >= 2,
+        "both enum option depths must return jint:\n{rust}"
+    );
+    assert!(
+        kotlin.contains("externalfunpriorityOptional(")
+            && kotlin.contains("externalfunpriorityNestedOptional(")
+            && kotlin.matches("):Int").count() >= 2,
+        "both Kotlin externs must declare the same primitive wire:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains(
+            "returnif(__ret==-2147483647||__ret==Int.MIN_VALUE)nullelseio.test.jni.Priority.fromInt(__ret)"
+        ),
+        "the collapsed Kotlin surface must map both nested absent values to null:\n{kotlin}"
+    );
 }
 
 /// Flattenable data-class inputs, `&[T]` vec-build helper externs,
@@ -423,6 +610,14 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
         ),
         (
             syn::Item::Fn(syn::parse_quote!(
+                pub fn payload_sub(cb: impl Fn(&Payload) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
                 pub fn z_thing_sub(cb: impl Fn(ZThing) + Send + Sync + 'static) {
                     unimplemented!()
                 }
@@ -442,6 +637,7 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
                 .fun(prebindgen_registry::fun!(z_thing_get))
                 .fun(prebindgen_registry::fun!(take_payload))
                 .fun(prebindgen_registry::fun!(take_many))
+                .fun(prebindgen_registry::fun!(payload_sub))
                 .fun(prebindgen_registry::fun!(z_thing_sub)),
         )
         // Canonical output: handle (identity) + its string form — a return /
@@ -452,8 +648,18 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
                 .field_self()
                 .field(prebindgen_registry::fun!(z_thing_name)),
         );
-    let (rust, kotlin) = run_pipeline("jnigen_xart_shapes", items, jni);
+    let (rust, kotlin, report) = run_pipeline("jnigen_xart_shapes", items, jni);
     assert_cross_artifact(&rust, &kotlin);
+    assert_report_agrees(&report, &kotlin);
+    let compact: String = rust.split_whitespace().collect();
+    assert!(
+        compact.contains("Box::new(move|__cb_arg0:&myflat::Payload|")
+            && compact.contains(")=match__jni_out_convert_")
+            && compact.contains("(&mutenv,__cb_arg0,")
+            && !compact.contains("__cb_arg0.id")
+            && !compact.contains("__cb_arg0.name"),
+        "borrowed data-class callbacks must delegate field decomposition to one Product chain:\n{rust}"
+    );
 }
 
 /// Record-built `Iterable` folds, bare AND `Optional`-wrapped (issue #105):
@@ -508,8 +714,9 @@ fn cross_artifact_optional_iterable_fold_agrees() {
                 .field_self()
                 .field(prebindgen_registry::fun!(z_thing_name)),
         );
-    let (rust, kotlin) = run_pipeline("jnigen_xart_opt_fold", items, jni);
+    let (rust, kotlin, report) = run_pipeline("jnigen_xart_opt_fold", items, jni);
     assert_cross_artifact(&rust, &kotlin);
+    assert_report_agrees(&report, &kotlin);
 
     // Both externs take the fold pair on the Rust side…
     let rc: String = rust.chars().filter(|c| !c.is_whitespace()).collect();
@@ -553,5 +760,121 @@ fn cross_artifact_optional_iterable_fold_agrees() {
     assert!(
         call < check && check < cast,
         "optional fold must redispatch a native error before casting its erased result:\n{wrappers}"
+    );
+}
+
+/// The extern is planned once, at the end of resolution: what it renders from
+/// is its own frozen state, never the declaration object the binding was
+/// written into or the registry it was resolved against.
+///
+/// Fenced on the struct's fields rather than on the file, so a mention of
+/// either name in a doc comment or a neighbouring function cannot satisfy it.
+#[test]
+fn a_planned_extern_holds_no_declaration_object() {
+    let source = include_str!("../emit/wrapper.rs");
+    let file = syn::parse_file(source).expect("the JNI wrapper emitter parses");
+    let fields = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Struct(item) if item.ident == "JWrapper" => {
+                Some(item.fields.to_token_stream().to_string())
+            }
+            _ => None,
+        })
+        .expect("the planned extern");
+    let fields: String = fields.split_whitespace().collect();
+    for forbidden in ["Declarations", "Registry", "Compiled", "RefCell"] {
+        assert!(
+            !fields.contains(forbidden),
+            "a planned extern retains {forbidden}, so rendering could resume planning"
+        );
+    }
+    assert!(
+        fields.contains("JniFunctionPlan"),
+        "a planned extern must render from its frozen function plan"
+    );
+}
+
+/// The extern's body reads frozen plans only: the two live lookups it used to
+/// make — the function plan and the origin module of what it calls — are
+/// answered before rendering starts.
+#[test]
+fn extern_rendering_asks_the_registry_nothing() {
+    let source = include_str!("../emit/wrapper.rs");
+    let file = syn::parse_file(source).expect("the JNI wrapper emitter parses");
+    let renderer = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Impl(item) => Some(item),
+            _ => None,
+        })
+        .flat_map(|item| &item.items)
+        .find_map(|item| match item {
+            syn::ImplItem::Fn(method) if method.sig.ident == "render_fn" => Some(method),
+            _ => None,
+        })
+        .expect("the extern renderer");
+    let inputs: String = renderer
+        .sig
+        .inputs
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+    assert_eq!(
+        inputs, "&self,emit:&prebindgen_registry::RustWriter",
+        "the extern renderer takes its frozen self and the writer, and nothing else"
+    );
+    let body: String = renderer
+        .block
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+    for forbidden in ["fn_plan(", "fn_module("] {
+        assert!(
+            !body.contains(forbidden),
+            "the extern renderer resumed planning through {forbidden}"
+        );
+    }
+    assert!(
+        body.contains("self.plan") && body.contains("self.callee"),
+        "the extern renderer must read its frozen plan and callee"
+    );
+}
+
+/// JniGen declares one shape vocabulary of its own, and #613 is about removing
+/// it rather than gaining another.
+///
+/// A shape-shaped enum — one naming three or more of the registry's structural
+/// forms — is a place where the same structural question is asked a second
+/// time. Two are recorded here: `JLayout`, the shape of the single adapter-side
+/// intermediate over flattened ABI leaves, and `JBody`, the rendering half.
+/// Both are deletion targets of steps 4 and 5, so this list may shrink; it may
+/// not grow without a reader deciding that a third is worth having.
+///
+/// The sources are DISCOVERED, not listed: a fence over a list only fences the
+/// files someone remembered to add to it, and a new module is the most natural
+/// way to introduce a third vocabulary.
+#[test]
+fn jnigen_gains_no_third_shape_vocabulary() {
+    let sources = prebindgen_registry::generation::production_sources(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+    );
+    let borrowed: Vec<(&str, &str)> = sources
+        .iter()
+        .map(|(label, text)| (label.as_str(), text.as_str()))
+        .collect();
+    let names: Vec<String> = prebindgen_registry::generation::shape_like_enums(&borrowed)
+        .iter()
+        .map(|(name, label)| format!("{name} ({label})"))
+        .collect();
+    assert_eq!(
+        names,
+        ["JBody (src/jni/chain.rs)", "JLayout (src/jni/compile.rs)"],
+        "the JniGen shape vocabularies changed; #613 shrinks this list, and a \
+         new entry needs an argument rather than a test update"
     );
 }

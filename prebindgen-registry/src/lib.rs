@@ -18,12 +18,15 @@
 //! Write one generator per destination language. It does two things:
 //!
 //! * **Says how the language represents Rust types on the wire** — it builds a
-//!   [`ConverterImpl`] (a generated converter fn plus its wire type) for each
-//!   crossing the registry hands it, and gives them all back through
+//!   [`ConverterImpl`] (a converter artifact identity plus its wire type) for
+//!   each crossing the registry hands it, and gives them all back through
 //!   `RegistryBuilder::convert_with`.
-//! * **Owns the Rust-emission key** and emits wrapper code per item —
-//!   `on_function` / `on_struct` / `on_enum` / `on_const` on the
-//!   [`Prebindgen`] trait.
+//! * **Plans what the generated file holds** — every wrapper, converter,
+//!   helper, mirror and constant is an artifact of the adapter's frozen
+//!   [`Assembly`](write::Assembly), which the registry orders and
+//!   [`write::write_rust`] renders. The adapter emits nothing per item while
+//!   the file is written, and the [`Prebindgen`] trait it implements is two
+//!   validation hooks.
 //!
 //! Everything language-specific that must travel through the pipeline rides on
 //! the adapter's own conversions — a JNI back-end's Kotlin class names and
@@ -63,12 +66,14 @@
 //! The same machinery serves very different languages:
 //!
 //! * **C / cbindgen back-end** (the separate `prebindgen-c` crate): wire types
-//!   are raw pointers and primitive C types; converters are thin transmutes;
-//!   `pre_stages` are usually empty (errors surface as return codes).
+//!   are raw pointers and primitive C types; converter artifacts are thin
+//!   transmutes; `pre_stages` are usually empty (errors surface as return
+//!   codes).
 //! * **JNI / Kotlin back-end** (the separate `prebindgen-jni` crate): wire
-//!   types are JNI handles (`jlong`, `JObject`); converters marshal across the
-//!   JVM boundary; `pre_stages` carry fallible steps whose `Err` arms throw
-//!   JVM exceptions (the exception info lives in that back-end's `Metadata`).
+//!   types are JNI handles (`jlong`, `JObject`); converter artifacts marshal
+//!   across the JVM boundary; `pre_stages` carry fallible steps whose `Err`
+//!   arms throw JVM exceptions (the exception info lives in that back-end's
+//!   `Metadata`).
 //!
 //! # Macros
 //!
@@ -95,13 +100,15 @@
 //! construct a typed `*Decl` for the Kotlin surface and live in the separate
 //! `prebindgen-jni` crate, which hands the result to its `JniGenBuilder`.
 
+pub mod chain;
 pub mod decl;
-pub(crate) mod declared_target;
+pub mod declared_target;
 mod destination;
 pub mod diagnostics;
 pub mod domain;
 mod emit;
 pub mod expand;
+pub mod generation;
 pub mod niches;
 pub mod prebindgen;
 pub mod recipe;
@@ -109,13 +116,12 @@ pub mod registry;
 pub(crate) mod resolve;
 #[cfg(test)]
 pub(crate) mod test_util;
-pub mod unfold;
 pub mod write;
 
 /// The flat model itself lives in the separate `prebindgen-flat` crate —
 /// re-exported here so an adapter names one crate root for the whole
 /// pipeline. `RustEmitter` is deliberately omitted: registry-only adapters
-/// receive rendering authority as [`Emit`] in callbacks. A different collector
+/// receive final rendering authority as [`RustWriter`] in callbacks. A different collector
 /// depends on `prebindgen-flat` directly to implement its own key.
 pub use ::prebindgen_flat::{flat, shape, types_util};
 pub use ::prebindgen_flat::{Element, Flat};
@@ -126,14 +132,21 @@ pub use self::{
         FieldsDecl, FunctionDecl, LocalField, LocalVariant,
     },
     diagnostics::{warn_unclaimed, Claimed},
-    domain::{DomainScalar, RepresentationDomain, ScalarValue},
-    emit::Emit,
+    domain::{DomainKind, DomainScalar, RepresentationDomain, ScalarValue},
+    emit::RustWriter,
+    generation::{
+        AbiLayout, ArtifactId, ArtifactInput, ArtifactPlan, ChainValue, ChoiceArity, Cleanup,
+        ContractAt, ConversionChain, ConverterPlan, ConverterStep, Failure, FixedArity, FragmentId,
+        FragmentPlan, FragmentUse, GenerationPlan, GenerationPlanBuilder, IdentityError, NichePlan,
+        OperationId, OperationRole, PlanError, PlanErrors, Representation, ShapePlan, SiteId,
+        SitePlan,
+    },
     niches::{NicheSlot, Niches},
-    prebindgen::{ConverterImpl, NamePredicate, Prebindgen, Stage},
+    prebindgen::{ConverterImpl, NamePredicate, Prebindgen},
     registry::{
         Answer, Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
-        NotExpressibleEntry, Registry, RegistryBuilder, ScanError, TypeKey, TypeKeyParseError,
-        WriteRustError,
+        NotExpressibleEntry, Registry, RegistryBuilder, Requirement, ScanError, TypeKey,
+        TypeKeyParseError, WriteRustError,
     },
 };
 

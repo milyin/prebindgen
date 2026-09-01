@@ -22,12 +22,10 @@
 //! determinism is a checked invariant rather than a convention.
 
 use kotlin_codegen::{KtCode, KtDecl, KtFun, KtFunInterface, KtFunSig, KtParam, KtType, KtVis};
-use prebindgen_registry::{
-    unfold::{dedup_names, DeconId, UnfoldPlan},
-    Conversions,
-};
+use prebindgen_registry::Conversions;
 
 use super::*;
+use crate::unfold::{dedup_names, DeconId, UnfoldPlan};
 
 /// The JVM-visible single method name of every generated callback interface.
 pub(crate) const IFACE_METHOD: &str = "run";
@@ -180,17 +178,17 @@ impl IfaceParam {
     pub fn conversion(
         &self,
         ext: &crate::jni::Declarations,
-        registry: &impl Conversions,
         imports: &mut std::collections::BTreeSet<String>,
     ) -> String {
         // A key the registry no longer knows is not a layer question — it is a
         // param built from a type this generation never classified, and the
         // leaf's own wrap is the whole answer there.
+        // Frozen when the param was built, not resolved again here: the
+        // renderer asks the declarations, never a `Conversions` (#613 step 7).
         let reading = self
             .reading
             .as_deref()
-            .and_then(|text| TypeKey::parse(text).ok())
-            .and_then(|key| registry.reading(&key));
+            .and_then(|text| ext.frozen_reading(text));
         match reading {
             Some(reading) => ext.carry_layers(
                 &self.wrap,
@@ -577,7 +575,6 @@ impl IfaceSpec {
     pub fn to_as_raw_fun(
         &self,
         ext: &crate::jni::Declarations,
-        registry: &impl Conversions,
         imports: &mut std::collections::BTreeSet<String>,
     ) -> KtFun {
         let bare_generics: Vec<String> = self
@@ -627,7 +624,7 @@ impl IfaceSpec {
             self.params
                 .iter()
                 .map(|p| RunArg {
-                    expr: p.conversion(ext, registry, imports),
+                    expr: p.conversion(ext, imports),
                     // A wrapped handle leaf closes as itself; its nullability
                     // rides `nullable` below, exactly as for a group.
                     close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
@@ -657,7 +654,7 @@ impl IfaceSpec {
                     None => {
                         let p = &self.params[at];
                         args.push(RunArg {
-                            expr: p.conversion(ext, registry, imports),
+                            expr: p.conversion(ext, imports),
                             close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
                             nullable: p.raw.is_nullable(),
                             reassembled: false,
@@ -888,7 +885,7 @@ fn subject_package(ext: &Declarations, subject: &prebindgen_registry::flat::Type
 
 /// The interface param list for a decomposition's leaves: names from
 /// [`plan_leaf_names`], typed + raw views per leaf.
-fn plan_leaf_params(
+pub(crate) fn plan_leaf_params(
     ext: &Declarations,
     leaves: &[crate::jni::compile::OutWire],
 ) -> Option<Vec<IfaceParam>> {
@@ -900,6 +897,25 @@ fn plan_leaf_params(
         out.push(plan_leaf_param(ext, name, leaf)?);
     }
     Some(out)
+}
+
+/// The JVM descriptor each of these leaves occupies, in order.
+///
+/// One derivation for both call conventions: a builder's typed `run` spells
+/// these into the interface descriptor its method id is resolved from, and a
+/// `fromParts` factory spells the same ones into its signature string. Deriving
+/// them twice is how the two could disagree about a leaf while both looked
+/// right on their own.
+pub(crate) fn leaf_descriptors(
+    ext: &Declarations,
+    leaves: &[crate::jni::compile::OutWire],
+) -> Option<Vec<String>> {
+    Some(
+        plan_leaf_params(ext, leaves)?
+            .iter()
+            .map(|param| kt_jvm_descriptor(&param.raw, &[]))
+            .collect(),
+    )
 }
 
 /// Both interface views of ONE decomposition leaf. The single entry point for a
@@ -921,6 +937,13 @@ fn plan_leaf_param(
         let ty = if leaf.nullable { ty.nullable() } else { ty };
         return Some(IfaceParam::same(name, ty));
     }
+    // A presence flag has no converter behind it either: it is a `Boolean` the
+    // gate assigns, and the value it speaks for crosses through the leaves it
+    // gates rather than through this slot. Its `out_ty` is that optional value,
+    // which is why the type cannot be read off it.
+    if matches!(leaf.from, crate::jni::compile::OutFrom::Present) {
+        return Some(IfaceParam::same(name, KtType::boolean()));
+    }
     // A group slot is INERT whenever another variant is live, and the encoder
     // fills an inert object slot with `JObject::null()`. A JVM null handed to a
     // non-null Kotlin parameter throws inside the intrinsic null-check before
@@ -928,7 +951,7 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(ext, &leaf.out_ty);
+    let inert_nullable = !leaf.groups.is_empty() && !leaf_ty_is_prim(ext, &leaf.out_ty);
     leaf_iface_param(
         ext,
         name,
@@ -1015,7 +1038,7 @@ fn leaf_iface_param(
                     typed: builder_kt.clone(),
                     raw,
                     wrap: WrapKind::Unsigned64 { niche_sentinel },
-                    reading: Some(out_ty.key().as_str().to_string()),
+                    reading: Some(ext.freeze_reading(out_ty)),
                 });
             }
             ProjectionKind::Handle => {}
@@ -1052,7 +1075,7 @@ fn leaf_iface_param(
                     fqn,
                     niche_sentinel,
                 },
-                reading: Some(out_ty.key().as_str().to_string()),
+                reading: Some(ext.freeze_reading(out_ty)),
             });
         }
         // Whole arg: typed class in both views (no proxy wrap).
@@ -1082,7 +1105,7 @@ fn leaf_iface_param(
                         typed: builder_kt.clone(),
                         raw,
                         wrap: WrapKind::None,
-                        reading: Some(out_ty.key().as_str().to_string()),
+                        reading: Some(ext.freeze_reading(out_ty)),
                     });
                 }
             }
@@ -1168,11 +1191,12 @@ impl SpecKey {
 /// so it is computed per `DeconId` over all plans, shared by the memo
 /// derivation ([`SpecKey::Folder`]'s typed groups) and the declaration
 /// emitter (the hoisted `fromParts`/appender singletons).
-pub(crate) fn fixed_decon_ids(registry: &impl Conversions) -> std::collections::HashSet<DeconId> {
-    let fixed: std::collections::HashSet<DeconId> = registry
-        .unfold_plans()
+pub(crate) fn fixed_decon_ids(ext: &Declarations) -> std::collections::HashSet<DeconId> {
+    let fixed: std::collections::HashSet<DeconId> = ext
+        .unfolded()
+        .unfold_plans
         .values()
-        .chain(registry.callback_arg_plans().values())
+        .chain(ext.unfolded().callback_arg_plans.values())
         .filter(|p| p.fixed_builder)
         .filter_map(|p| p.decon.clone())
         .collect();
@@ -1190,29 +1214,15 @@ pub(crate) fn fixed_decon_ids(registry: &impl Conversions) -> std::collections::
     // assumed, so a future wiring change fails here instead of emitting a
     // wrapper that references an interface which no longer exists.
     debug_assert!(
-        !registry
-            .unfold_plans()
+        !ext.unfolded()
+            .unfold_plans
             .values()
-            .chain(registry.callback_arg_plans().values())
+            .chain(ext.unfolded().callback_arg_plans.values())
             .any(|p| !p.fixed_builder && p.decon.as_ref().is_some_and(|d| fixed.contains(d))),
         "fixed and non-fixed plans share one DeconId — the typed interface \
          cannot be shaped (or suppressed) for both"
     );
     fixed
-}
-
-/// Element type keys whose whole-element fold is fixed (a synthesized
-/// single-leaf `Vec<T>` fold) — the leaf dual of [`fixed_decon_ids`], used
-/// by the declaration emitter for the hoisted appender singleton.
-pub(crate) fn fixed_leaf_element_keys(registry: &Registry) -> std::collections::HashSet<TypeKey> {
-    registry
-        .unfold_plans()
-        .values()
-        .chain(registry.callback_arg_plans().values())
-        .filter(|p| p.fixed_builder)
-        .filter_map(|p| p.element.as_ref())
-        .map(|el| el.key())
-        .collect()
 }
 
 /// Derive the spec for one identity — the SINGLE construction point behind
@@ -1247,10 +1257,10 @@ fn derive_iface_spec(
                 .collect::<Option<_>>()?;
             callback_iface_spec(ext, registry, &args)
         }
-        SpecKey::Builder(d) => builder_iface_spec(ext, registry, d),
+        SpecKey::Builder(d) => builder_iface_spec(ext, d),
         SpecKey::Folder(d) => {
-            let mut spec = folder_iface_spec(ext, registry, d)?;
-            if fixed_decon_ids(registry).contains(d) {
+            let mut spec = folder_iface_spec(ext, d)?;
+            if fixed_decon_ids(ext).contains(d) {
                 spec.typed_groups = fixed_folder_typed_groups(ext, registry, d)?;
             }
             Some(spec)
@@ -1259,7 +1269,7 @@ fn derive_iface_spec(
         // above: the memo key holds an identity, and the reading behind it is a
         // lookup. `None` defers, exactly as it does there (#291).
         SpecKey::WholeFolder(el_key) => whole_folder_iface_spec(ext, &registry.reading(el_key)?),
-        SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
+        SpecKey::Handler(d) => error_handler_iface_spec(ext, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
     }
 }
@@ -1274,11 +1284,30 @@ impl Declarations {
     /// retries. In debug builds a cache hit re-derives and asserts equality,
     /// so any nondeterminism in the constructors fails loudly under test
     /// instead of shipping descriptor drift.
+    /// The frozen interface spec, for a render caller.
+    ///
+    /// `iface_spec` already answers from the generation first when one is
+    /// installed, so a renderer never reaches the derivation below it and needs
+    /// no `Conversions` to get there. Panics by name if no generation exists,
+    /// which is the failure a renderer would hit deriving without one (#613
+    /// step 7).
+    pub(crate) fn iface_spec_frozen(&self, key: &SpecKey) -> Option<std::sync::Arc<IfaceSpec>> {
+        self.generation
+            .as_deref()
+            .unwrap_or_else(|| {
+                panic!("interface spec `{key:?}`: its frozen JNI generation plan is unavailable")
+            })
+            .interface(key)
+    }
+
     pub(crate) fn iface_spec(
         &self,
         registry: &impl Conversions,
         key: &SpecKey,
     ) -> Option<std::sync::Arc<IfaceSpec>> {
+        if let Some(generation) = &self.generation {
+            return generation.interface(key);
+        }
         let hit = self.iface_specs.borrow().get(key).cloned();
         if let Some(hit) = hit {
             #[cfg(debug_assertions)]
@@ -1315,19 +1344,73 @@ fn fixed_reassembly(
     source: &TypeKey,
     wires: &[crate::jni::compile::OutWire],
     class_fqn: &str,
+    first_slot: usize,
 ) -> (String, Vec<String>) {
-    let slots: Vec<String> = (0..wires.len()).map(|i| format!("${i}")).collect();
-    if !is_sum_row(wires) {
+    // Whether the delivered value IS a sum, not whether it contains one. A
+    // struct with a sum-typed field carries a tag and still reassembles
+    // through its own `fromParts`, with the field's `when` inlined as one
+    // argument; asking the containing question sent it to `sum_reconstruct`,
+    // which panics on a struct (#616 review).
+    if !crate::jni::emit::is_whole_sum_row(wires) {
+        let slots: Vec<String> = (0..wires.len())
+            .map(|i| format!("${}", i + first_slot))
+            .collect();
         let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
         return (
             format!("{class_short}.fromParts({})", slots.join(", ")),
             Vec::new(),
         );
     }
+    sum_segment_reassembly(ext, registry, source, wires, first_slot)
+}
+
+/// The `when` that rebuilds one sum from its own segment — a selector followed
+/// by its groups.
+///
+/// Called directly where the caller has already isolated the segment, and
+/// through [`fixed_reassembly`] where the whole delivered value is the sum.
+fn sum_segment_reassembly(
+    ext: &Declarations,
+    registry: &impl Conversions,
+    source: &TypeKey,
+    wires: &[crate::jni::compile::OutWire],
+    first_slot: usize,
+) -> (String, Vec<String>) {
+    let slots: Vec<String> = (0..wires.len())
+        .map(|i| format!("${}", i + first_slot))
+        .collect();
     let params = plan_leaf_params(ext, wires).unwrap_or_default();
     let mut imports: BTreeSet<String> = BTreeSet::new();
-    let (_, when) = ext.sum_reconstruct(registry, source, wires, &params, &slots, &mut imports);
+    let (_, when) = ext.sum_reconstruct(
+        registry.flat(),
+        source,
+        wires,
+        &params,
+        &slots,
+        &mut imports,
+    );
     (when, imports.into_iter().collect())
+}
+
+/// The callback plan this adapter can actually deliver for `ty`.
+///
+/// An explicit conversion of the whole optional intentionally suppresses the
+/// Optional `parts` row. In that case the registry still knows the model shape,
+/// but JniGen must honor the terminal declaration and deliver the value whole.
+pub(crate) fn effective_callback_plan<'a>(
+    ext: &'a Declarations,
+    ty: &prebindgen_registry::flat::TypeRef,
+) -> Option<&'a UnfoldPlan> {
+    let plan = ext.unfolded().callback_arg_plans.get(&ty.key())?;
+    if plan.is_optional_base() {
+        let crossing = prebindgen_registry::recipe::Crossing::new(
+            plan.source.clone().optional(),
+            prebindgen_registry::recipe::Direction::Deconstruct,
+        );
+        ext.recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::parts())?;
+    }
+    Some(plan)
 }
 
 /// Interface for an `impl Fn(args)` delivery: one `run` parameter per
@@ -1365,6 +1448,7 @@ pub(crate) fn callback_iface_spec(
     /// and `owned_handle` marks a plan-less opaque handle delivered as a raw
     /// `jlong` and wrapped + closed Kotlin-side (Phase 3).
     enum LeafDesc {
+        Presence(String),
         Plan(String, crate::jni::compile::OutWire),
         Whole {
             name: String,
@@ -1377,6 +1461,7 @@ pub(crate) fn callback_iface_spec(
         fn name(&self) -> &str {
             match self {
                 LeafDesc::Plan(n, _) => n,
+                LeafDesc::Presence(n) => n,
                 LeafDesc::Whole { name, .. } => name,
             }
         }
@@ -1391,11 +1476,14 @@ pub(crate) fn callback_iface_spec(
         // `List<Element>`, so it takes the plain whole-value path below (no leaf
         // params, no reassembly group). Only `Base`/accessor plans decompose the
         // arg into the callback's `run` params here.
-        let plan = registry
-            .callback_arg_plans()
-            .get(&t.key())
-            .filter(|p| !super::render::is_iterable_fold(&p.shape));
+        let plan =
+            effective_callback_plan(ext, t).filter(|p| !super::render::is_iterable_fold(&p.shape));
         if let Some(plan) = plan {
+            let optional = plan.is_optional_base();
+            let whole_name = whole_value_name(t, i);
+            if optional {
+                leaf_tys.push(LeafDesc::Presence(format!("{whole_name}Present")));
+            }
             let wires = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
             let leaf_names = plan_leaf_names(&wires);
             for (n, l) in leaf_names.iter().zip(wires.iter()) {
@@ -1405,17 +1493,35 @@ pub(crate) fn callback_iface_spec(
                 any_fixed = true;
                 // Peeled off the reading — `borrow_target` is the model's
                 // answer to "is this a borrow", not a syn match.
-                let core = t.borrow_target().unwrap_or(t);
+                let crossed = t.borrow_target().unwrap_or(t);
+                let core = crossed.optional_inner().unwrap_or(crossed);
                 let fqn = ext.kotlin_fqn(&core.key())?;
-                let (reassemble, imports) =
-                    fixed_reassembly(ext, registry, &core.key(), &wires, &fqn);
+                let (mut reassemble, imports) = fixed_reassembly(
+                    ext,
+                    registry,
+                    &core.key(),
+                    &wires,
+                    &fqn,
+                    usize::from(optional),
+                );
+                if optional {
+                    reassemble = format!("if ($0) {{ {reassemble} }} else null");
+                }
+                let typed = KtType::cls(fqn.to_string());
+                let typed = if optional { typed.nullable() } else { typed };
+                let close_ty = if optional { t } else { core };
                 groups.push(GroupDesc {
-                    name: whole_value_name(t, i),
-                    typed: Some(KtType::cls(fqn.to_string())),
+                    name: whole_name,
+                    typed: Some(typed),
                     reassemble: Some(reassemble),
                     imports,
-                    leaf_count: wires.len(),
-                    close: crate::jni::struct_plan::type_close_strategy(ext, registry, core, 0),
+                    leaf_count: wires.len() + usize::from(optional),
+                    close: crate::jni::struct_plan::type_close_strategy(
+                        ext,
+                        registry.flat(),
+                        close_ty,
+                        0,
+                    ),
                 });
             } else {
                 // Accessor-plan arg: each leaf is its own passthrough group, so
@@ -1432,7 +1538,7 @@ pub(crate) fn callback_iface_spec(
                     // `encode_plan_leaves` walks, asked the same way.
                     let seg = if leaf.is_tag() {
                         (k + 1..wires.len())
-                            .take_while(|&j| wires[j].group.is_some())
+                            .take_while(|&j| !wires[j].groups.is_empty())
                             .last()
                             .map_or(k + 1, |j| j + 1)
                     } else {
@@ -1441,12 +1547,14 @@ pub(crate) fn callback_iface_spec(
                     if leaf.is_tag() {
                         any_fixed = true;
                         let fqn = ext.kotlin_fqn(&leaf.out_ty.key())?;
-                        let (reassemble, imports) = fixed_reassembly(
+                        // An isolated segment: its first leaf IS the tag, so
+                        // the `when` is the answer without asking again.
+                        let (reassemble, imports) = sum_segment_reassembly(
                             ext,
                             registry,
                             &leaf.out_ty.key(),
                             &wires[k..seg],
-                            &fqn,
+                            0,
                         );
                         groups.push(GroupDesc {
                             // The tag leaf is named `<field>__tag`; the value it
@@ -1471,7 +1579,7 @@ pub(crate) fn callback_iface_spec(
                             leaf_count: seg - k,
                             close: crate::jni::struct_plan::type_close_strategy(
                                 ext,
-                                registry,
+                                registry.flat(),
                                 &leaf.out_ty,
                                 0,
                             ),
@@ -1519,6 +1627,7 @@ pub(crate) fn callback_iface_spec(
     for (k, desc) in leaf_tys.iter().enumerate() {
         let name = names[k].clone();
         let param = match desc {
+            LeafDesc::Presence(_) => IfaceParam::same(name, KtType::boolean()),
             LeafDesc::Plan(_, leaf) => plan_leaf_param(ext, name, leaf)?,
             LeafDesc::Whole {
                 ty,
@@ -1563,7 +1672,16 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(subject_short)
+                .map(|ty| {
+                    let short = subject_short(ty);
+                    let optional =
+                        effective_callback_plan(ext, ty).is_some_and(UnfoldPlan::is_optional_base);
+                    if optional {
+                        format!("{short}Optional")
+                    } else {
+                        short
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join("")
         )
@@ -1584,12 +1702,8 @@ pub(crate) fn callback_iface_spec(
 /// representative plan in `registry.decon_plans`, never from a using
 /// function's own plan. Named `<decl-base>Builder`, placed in the source
 /// type's package.
-pub(crate) fn builder_iface_spec(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    decon: &DeconId,
-) -> Option<IfaceSpec> {
-    let spec = registry.decon_plans().get(decon)?;
+pub(crate) fn builder_iface_spec(ext: &Declarations, decon: &DeconId) -> Option<IfaceSpec> {
+    let spec = ext.unfolded().decon_plans.get(decon)?;
     let params = plan_leaf_params(
         ext,
         &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
@@ -1613,12 +1727,8 @@ pub(crate) fn builder_iface_spec(
 /// (invariant — `A` appears in both parameter and return position). Keyed by
 /// the element's deconstructor declaration. Named `<decl-base>Folder`,
 /// placed in the element type's package.
-pub(crate) fn folder_iface_spec(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    decon: &DeconId,
-) -> Option<IfaceSpec> {
-    let spec = registry.decon_plans().get(decon)?;
+pub(crate) fn folder_iface_spec(ext: &Declarations, decon: &DeconId) -> Option<IfaceSpec> {
+    let spec = ext.unfolded().decon_plans.get(decon)?;
     let mut params: Vec<IfaceParam> = vec![IfaceParam::same("acc".to_string(), KtType::var_("A"))];
     params.extend(plan_leaf_params(
         ext,
@@ -1704,7 +1814,7 @@ pub(crate) fn fixed_folder_typed_groups(
     registry: &impl Conversions,
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
-    let spec = registry.decon_plans().get(decon)?;
+    let spec = ext.unfolded().decon_plans.get(decon)?;
     let fqn = ext.kotlin_fqn(&spec.source.key())?;
     let (reassemble, imports) = fixed_reassembly(
         ext,
@@ -1712,6 +1822,7 @@ pub(crate) fn fixed_folder_typed_groups(
         &spec.source.key(),
         &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
         &fqn,
+        0,
     );
     Some(vec![
         TypedGroup {
@@ -1741,7 +1852,12 @@ pub(crate) fn fixed_folder_typed_groups(
             // projection carries `owned: false`, so the element reaches nothing
             // to release and the per-iteration close that would double-free is
             // not emitted.
-            close: crate::jni::struct_plan::type_close_strategy(ext, registry, &spec.source, 0),
+            close: crate::jni::struct_plan::type_close_strategy(
+                ext,
+                registry.flat(),
+                &spec.source,
+                0,
+            ),
         },
     ])
 }
@@ -1754,12 +1870,8 @@ pub(crate) fn fixed_folder_typed_groups(
 /// (`JniErrorHandler`) channel, so there is no discriminator and no defaults.
 /// Keyed by the error type's deconstructor declaration. Named
 /// `<decl-base>Handler`, placed in the error type's package.
-pub(crate) fn error_handler_iface_spec(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    decon: &DeconId,
-) -> Option<IfaceSpec> {
-    let spec = registry.decon_plans().get(decon)?;
+pub(crate) fn error_handler_iface_spec(ext: &Declarations, decon: &DeconId) -> Option<IfaceSpec> {
+    let spec = ext.unfolded().decon_plans.get(decon)?;
     let params: Vec<IfaceParam> = plan_leaf_params(
         ext,
         &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
@@ -1845,7 +1957,7 @@ pub(crate) fn onerror_iface_spec(
     fn_ident: &syn::Ident,
 ) -> Option<ErrorIfaces> {
     let binding = ext.iface_spec(registry, &SpecKey::JniErrorHandler)?;
-    let domain = match registry.error_plans().get(fn_ident) {
+    let domain = match ext.unfolded().error_plans.get(fn_ident) {
         Some(plan) => {
             let decon = plan
                 .decon

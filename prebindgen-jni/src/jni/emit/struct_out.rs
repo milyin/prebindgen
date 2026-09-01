@@ -19,7 +19,7 @@ pub(crate) fn handle_field_fqn(ext: &Declarations, h: &Projection) -> String {
             FoldStrategy::Iterable(_) => panic!(
                 "struct handle field: collection (Vec<Handle>) layers are not yet \
                  supported by the struct encode/decode bridge — add array codegen \
-                 to struct_output_body/struct_input_body to lift this guard"
+                 to the late struct output/input plans to lift this guard"
             ),
         }
     }
@@ -33,18 +33,6 @@ pub(crate) fn handle_field_fqn(ext: &Declarations, h: &Projection) -> String {
                 h.leaf_key
             )
         })
-}
-
-/// One flattened leaf wire slot of a struct's recursive `fromParts` encode
-/// (see [`flatten_struct_encode`]). `ident` holds the encoded wire after the
-/// preludes run; `default` is the value used for this slot when it sits under
-/// an absent `Option<nested>` parent.
-pub(crate) struct EncSlot {
-    ident: proc_macro2::Ident,
-    wire_ty: TokenStream,
-    descriptor: String,
-    is_object: bool,
-    default: TokenStream,
 }
 
 /// Zero/null wire value for a JVM descriptor — used to fill an absent
@@ -64,7 +52,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
     }
 }
 
-/// The [`LeafSource::Reach`](prebindgen_registry::unfold::LeafSource) leaves of
+/// The [`LeafSource::Reach`](crate::unfold::LeafSource) leaves of
 /// a by-value `data_class`, as the fixed-builder output and callback paths want
 /// them.
 ///
@@ -74,18 +62,21 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// `fromParts` parameters and the recipe identically, and two walks agreeing was a
 /// property nothing checked.
 ///
-/// `None` — the type keeps the whole-value `fromParts` path — when a field needs
-/// a transform this fixed builder cannot forward verbatim. See
-/// [`Declarations::struct_out_wires`] for which fields those are and why one of
-/// them declines the whole value.
+/// `None` — the type keeps the whole-value `fromParts` path — when a field is
+/// one the decomposition cannot state at all. Those are structural: a repeated
+/// nested class, a field the model does not hold as a named one, nesting past
+/// 16. Not a missing transform — a handle, an `enum_class`, a sum, an optional
+/// nested class and a selector inside a gated group all state fine, each
+/// carrying its own conversion (#602). See [`Declarations::struct_out_wires`]
+/// for the list and why one such field declines the whole value.
 pub(crate) fn synth_value_struct_leaves(
     ext: &Declarations,
     registry: &impl Conversions,
     s: &prebindgen_registry::flat::Struct,
-) -> Option<Vec<prebindgen_registry::unfold::UnfoldLeaf>> {
-    use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
+) -> Option<Vec<crate::unfold::UnfoldLeaf>> {
+    use crate::unfold::{LeafSource, UnfoldLeaf};
     Some(
-        ext.struct_out_wires_of(registry, &s.name)?
+        ext.struct_out_wires_of(registry.flat(), &s.name)?
             .into_iter()
             .map(|w| UnfoldLeaf {
                 name: w.name,
@@ -93,489 +84,78 @@ pub(crate) fn synth_value_struct_leaves(
                 out_ty: w.out_ty,
                 identity: false,
                 nullable: w.nullable,
-                source: LeafSource::Reach,
-                group: w.group,
+                // A selector is not read off a place: the emitter assigns the
+                // live alternative's number in each arm of its `match`, which
+                // is what `LeafSource::SumTag` says and what keeps
+                // `OutWire::from_leaf` round-tripping it back to a tag rather
+                // than trying to compile the sum type as a crossing.
+                source: match w.from {
+                    crate::jni::compile::OutFrom::Tag => LeafSource::SumTag,
+                    crate::jni::compile::OutFrom::Present => LeafSource::Presence,
+                    _ => LeafSource::Reach,
+                },
+                groups: w.groups,
             })
             .collect(),
     )
 }
 
-/// Recursively flatten a struct's output encode into a list of leaf wire
-/// slots plus the preludes that compute them, so the whole object graph can
-/// be built by a **single** Kotlin `fromParts` call (no per-nested-struct
-/// `call_static_method`). Nested non-optional data-class fields are inlined;
-/// nested `Option<data-class>` fields emit a `present` `jboolean` slot followed
-/// by the child's leaves (encoded in the `Some` arm, defaulted in the `None`
-/// arm). Leaves (primitives, handles→`jlong`, enums→`jint`, strings, arrays,
-/// `Vec`) terminate the recursion.
+/// The prefix an arm-local binding carries, and the outer slot it feeds.
 ///
-/// The field classification is the shared [`build_struct_plan`] — the same
-/// plan `flatten_struct_factory` walks for the Kotlin side, so the slot
-/// order and JVM descriptors agree by construction.
-pub(crate) fn flatten_struct_encode(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    s: &prebindgen_registry::flat::Struct,
-    access: &TokenStream,
-    prefix: &str,
-    depth: usize,
-    env_expr: &TokenStream,
-) -> Option<(TokenStream, Vec<EncSlot>)> {
-    let plan = build_struct_plan(ext, registry, s, depth)?;
-    Some(encode_plan(&plan, access, prefix, depth, env_expr))
-}
+/// A leaf's name is the same on both sides — it is one leaf — so the two would
+/// collide in one function. The arm-local name is the outer name with a
+/// **prefix** this module adds, which is why recovering the outer one is
+/// stripping a known prefix at a known position rather than searching for a
+/// marker: `base` and every slot fragment come from source identifiers, and
+/// any sentinel spelled inside one of them can appear in the middle of a name
+/// too (#616 review).
+/// The one "arm" an optional value has: present. Absence contributes no
+/// bindings of its own, only the defaults its group carries.
+pub(crate) const PRESENT_ARM: i32 = 0;
 
-/// Walk a [`StructPlan`] emitting the Rust-side wire encode: per leaf a
-/// prelude statement binding `__<prefix>_<field>` to the converted wire and
-/// an [`EncSlot`] describing its `JValue` slot. `access` is the Rust
-/// expression yielding the current struct value (`v`, `v.field`, or the
-/// matched `__cN` under an Option); `prefix` namespaces the generated idents.
-fn encode_plan(
-    plan: &StructPlan,
-    access: &TokenStream,
-    prefix: &str,
-    depth: usize,
-    env_expr: &TokenStream,
-) -> (TokenStream, Vec<EncSlot>) {
-    let mut preludes = TokenStream::new();
-    let mut slots: Vec<EncSlot> = Vec::new();
-
-    for f in &plan.fields {
-        let fname = &f.fname;
-        let base = format!("{}_{}", prefix, fname);
-        let value = quote! { #access.#fname };
-        let (pre, sl) = encode_field(&f.kind, &value, &base, depth, env_expr);
-        preludes.extend(pre);
-        slots.extend(sl);
-    }
-    (preludes, slots)
-}
-
-/// Emit the Rust-side wire encode of ONE value position — a struct field or a
-/// sum's variant payload. `value` is the Rust expression yielding it (`v.mode`
-/// at a struct field, the bound pattern variable inside a variant arm), which
-/// is what lets a sum reuse this for its payloads: a payload is encoded by the
-/// same code as a field of the same type, not by a parallel walk.
-fn encode_field(
-    kind: &PlanFieldKind,
-    value: &TokenStream,
-    base: &str,
-    depth: usize,
-    env_expr: &TokenStream,
-) -> (TokenStream, Vec<EncSlot>) {
-    let mut preludes = TokenStream::new();
-    let mut slots: Vec<EncSlot> = Vec::new();
-    {
-        let id = format_ident!("__{}", base);
-        // The leaf's COMPLETE chain, not just its wire-facing converter: a
-        // `convert!`-declared type (`Duration`) reaches the wire through its
-        // rust-side stages first (`Duration → u64 → jlong`).
-        let conv_value = |conv: &ConvChain| -> TokenStream { conv.call(env_expr, value, base) };
-        match kind {
-            // Projection leaf (opaque handle → jlong, `ULong` → jlong).
-            PlanFieldKind::Projection { conv, proj, .. } => {
-                let value_expr = conv_value(conv);
-                match proj.kind {
-                    ProjectionKind::Handle => {
-                        preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
-                        slots.push(EncSlot {
-                            ident: id,
-                            wire_ty: quote!(jni::sys::jlong),
-                            descriptor: "J".to_string(),
-                            is_object: false,
-                            default: quote!(0i64),
-                        });
-                    }
-                    ProjectionKind::Unsigned64 => match proj.strategy {
-                        FoldStrategy::Base => {
-                            preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
-                            slots.push(EncSlot {
-                                ident: id,
-                                wire_ty: quote!(jni::sys::jlong),
-                                descriptor: "J".to_string(),
-                                is_object: false,
-                                default: quote!(0i64),
-                            });
-                        }
-                        FoldStrategy::Optional(NullableKind::Niche, _) => {
-                            preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
-                            slots.push(EncSlot {
-                                ident: id,
-                                wire_ty: quote!(jni::sys::jlong),
-                                descriptor: "J".to_string(),
-                                is_object: false,
-                                default: quote!(0i64),
-                            });
-                        }
-                        FoldStrategy::Optional(NullableKind::Boxed, _) => {
-                            preludes
-                                .extend(quote! { let #id: jni::objects::JObject = #value_expr; });
-                            slots.push(EncSlot {
-                                ident: id,
-                                wire_ty: quote!(jni::objects::JObject),
-                                descriptor: "Ljava/lang/Long;".to_string(),
-                                is_object: true,
-                                default: quote!(jni::objects::JObject::null()),
-                            });
-                        }
-                        FoldStrategy::Iterable(_) => unreachable!(
-                            "projection collection fields are rejected by build_struct_plan"
-                        ),
-                    },
-                }
-            }
-            // Enum leaf → jint discriminant (Kotlin `fromParts` calls `fromInt`).
-            PlanFieldKind::Enum { conv, .. } => {
-                let value_expr = conv_value(conv);
-                preludes.extend(quote! { let #id: jni::sys::jint = #value_expr; });
-                slots.push(EncSlot {
-                    ident: id,
-                    wire_ty: quote!(jni::sys::jint),
-                    descriptor: "I".to_string(),
-                    is_object: false,
-                    default: quote!(0i32),
-                });
-            }
-            // `Option<enum>` leaf → the converter delivers the `box_jint`-boxed
-            // discriminant (JVM null = `None`); the slot is the box class.
-            PlanFieldKind::OptionEnum { conv, .. } => {
-                let value_expr = conv_value(conv);
-                preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
-                slots.push(EncSlot {
-                    ident: id,
-                    wire_ty: quote!(jni::objects::JObject),
-                    descriptor: "Ljava/lang/Integer;".to_string(),
-                    is_object: true,
-                    default: quote!(jni::objects::JObject::null()),
-                });
-            }
-            // Nested data-class: inline the child's leaves; under `Option` add
-            // a `present` flag and default the child slots in the `None` arm.
-            PlanFieldKind::Nested {
-                optional,
-                plan: child,
-                ..
-            } => {
-                if !*optional {
-                    let (child_pre, child_slots) =
-                        encode_plan(child, value, base, depth + 1, env_expr);
-                    preludes.extend(child_pre);
-                    slots.extend(child_slots);
-                } else {
-                    let cbind = format_ident!("__c{}", depth);
-                    let child_access = quote! { #cbind };
-                    let (child_pre, child_slots) =
-                        encode_plan(child, &child_access, base, depth + 1, env_expr);
-                    let flag_id = format_ident!("__{}_present", base);
-                    let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
-                        .map(|i| format_ident!("__{}_o{}", base, i))
-                        .collect();
-                    let outer_tys: Vec<TokenStream> =
-                        child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
-                    let inner_ids: Vec<proc_macro2::Ident> =
-                        child_slots.iter().map(|sl| sl.ident.clone()).collect();
-                    let defaults: Vec<TokenStream> =
-                        child_slots.iter().map(|sl| sl.default.clone()).collect();
-                    // Destructured through a coercion site: `kind` says this
-                    // field is optional, and how Rust spells that is the
-                    // source's business (#268).
-                    let obind = format_ident!("__on{}", depth);
-                    let coerce = bind_as_option(&quote!(&#value), &obind);
-                    preludes.extend(quote! {
-                        let #flag_id: jni::sys::jboolean;
-                        #( let #outer_ids: #outer_tys; )*
-                        #coerce
-                        match #obind {
-                            ::core::option::Option::Some(#cbind) => {
-                                #child_pre
-                                #flag_id = 1u8;
-                                #( #outer_ids = #inner_ids; )*
-                            }
-                            ::core::option::Option::None => {
-                                #flag_id = 0u8;
-                                #( #outer_ids = #defaults; )*
-                            }
-                        }
-                    });
-                    slots.push(EncSlot {
-                        ident: flag_id,
-                        wire_ty: quote!(jni::sys::jboolean),
-                        descriptor: "Z".to_string(),
-                        is_object: false,
-                        default: quote!(0u8),
-                    });
-                    for (i, sl) in child_slots.iter().enumerate() {
-                        slots.push(EncSlot {
-                            ident: outer_ids[i].clone(),
-                            wire_ty: sl.wire_ty.clone(),
-                            descriptor: sl.descriptor.clone(),
-                            is_object: sl.is_object,
-                            default: sl.default.clone(),
-                        });
-                    }
-                }
-            }
-            // Data-carrying enum: one `match` binds the tag and EVERY group's
-            // slots — the live group from its payload, the rest from the same
-            // defaults an absent `Option<nested>` uses. One crossing, no JVM
-            // object built for the sum.
-            PlanFieldKind::Sum {
-                source,
-                optional,
-                variants,
-                ..
-            } => {
-                let tag_id = format_ident!("__{}__tag", base);
-
-                // Encode each variant's group once, against its own pattern
-                // bindings. `arms` keeps them aligned with the flat slot list.
-                struct Arm {
-                    pattern: TokenStream,
-                    preludes: TokenStream,
-                    slots: Vec<EncSlot>,
-                }
-                let mut arms: Vec<Arm> = Vec::new();
-                for v in variants {
-                    let vident = &v.rust_ident;
-                    let binds: Vec<syn::Ident> = (0..v.fields.len())
-                        .map(|i| format_ident!("__s{}_{}", depth, i))
-                        .collect();
-                    let mut vpre = TokenStream::new();
-                    let mut vslots: Vec<EncSlot> = Vec::new();
-                    for (f, bind) in v.fields.iter().zip(&binds) {
-                        let fbase = format!("{base}_{}", f.slot);
-                        let bind_expr = quote!(#bind);
-                        let (p, s) = encode_field(&f.kind, &bind_expr, &fbase, depth + 1, env_expr);
-                        vpre.extend(p);
-                        vslots.extend(s);
-                    }
-                    // Bind every payload field, shaped like the variant.
-                    let pattern = match v.fields.first().map(|f| &f.member) {
-                        None => quote!(#source::#vident),
-                        Some(syn::Member::Named(_)) => {
-                            let pairs = v.fields.iter().zip(&binds).map(|(f, b)| {
-                                let syn::Member::Named(n) = &f.member else {
-                                    unreachable!("variant field shapes are uniform")
-                                };
-                                quote!(#n: #b)
-                            });
-                            quote!(#source::#vident { #(#pairs),* })
-                        }
-                        Some(syn::Member::Unnamed(_)) => quote!(#source::#vident(#(#binds),*)),
-                    };
-                    arms.push(Arm {
-                        pattern,
-                        preludes: vpre,
-                        slots: vslots,
-                    });
-                }
-
-                // Outer bindings: the tag plus every group's slots, side by
-                // side in variant order. Each arm assigns its own group from
-                // the values it just computed and defaults all the others.
-                let all: Vec<&EncSlot> = arms.iter().flat_map(|a| a.slots.iter()).collect();
-                let outer_ids: Vec<proc_macro2::Ident> = (0..all.len())
-                    .map(|i| format_ident!("__{}_g{}", base, i))
-                    .collect();
-                let outer_tys: Vec<TokenStream> = all.iter().map(|s| s.wire_ty.clone()).collect();
-                let defaults: Vec<TokenStream> = all.iter().map(|s| s.default.clone()).collect();
-
-                let mut offset = 0usize;
-                let arm_code: Vec<TokenStream> = arms
-                    .iter()
-                    .enumerate()
-                    .map(|(tag, a)| {
-                        let n = a.slots.len();
-                        let live_outer = &outer_ids[offset..offset + n];
-                        let live_inner: Vec<proc_macro2::Ident> =
-                            a.slots.iter().map(|s| s.ident.clone()).collect();
-                        // Every slot outside this arm's own group is inert.
-                        let inert_outer: Vec<proc_macro2::Ident> = outer_ids
-                            .iter()
-                            .enumerate()
-                            .filter(|(i, _)| *i < offset || *i >= offset + n)
-                            .map(|(_, id)| id.clone())
-                            .collect();
-                        let inert_defaults: Vec<TokenStream> = defaults
-                            .iter()
-                            .enumerate()
-                            .filter(|(i, _)| *i < offset || *i >= offset + n)
-                            .map(|(_, d)| d.clone())
-                            .collect();
-                        offset += n;
-                        let pattern = &a.pattern;
-                        let pre = &a.preludes;
-                        let tag_lit = proc_macro2::Literal::i32_unsuffixed(tag as i32);
-                        quote! {
-                            #pattern => {
-                                #pre
-                                #tag_id = #tag_lit;
-                                #( #live_outer = #live_inner; )*
-                                #( #inert_outer = #inert_defaults; )*
-                            }
-                        }
-                    })
-                    .collect();
-
-                let decls = quote! {
-                    let #tag_id: jni::sys::jint;
-                    #( let #outer_ids: #outer_tys; )*
-                };
-                if !*optional {
-                    preludes.extend(quote! {
-                        #decls
-                        match &#value { #(#arm_code)* }
-                    });
-                } else {
-                    // `Option<sum>` keeps its own present flag ahead of the
-                    // tag: optionality and choice are independent facts.
-                    let flag_id = format_ident!("__{}_present", base);
-                    let sbind = format_ident!("__o{}", depth);
-                    let inner_arms: Vec<TokenStream> =
-                        arm_code.iter().map(|a| quote! { #a }).collect();
-                    // Destructured through a coercion site: `kind` says this
-                    // field is optional, and how Rust spells that is the
-                    // source's business (#268).
-                    let obind = format_ident!("__oc{}", depth);
-                    let coerce = bind_as_option(&quote!(&#value), &obind);
-                    preludes.extend(quote! {
-                        let #flag_id: jni::sys::jboolean;
-                        #decls
-                        #coerce
-                        match #obind {
-                            ::core::option::Option::Some(#sbind) => {
-                                #flag_id = 1u8;
-                                match #sbind { #(#inner_arms)* }
-                            }
-                            ::core::option::Option::None => {
-                                #flag_id = 0u8;
-                                #tag_id = 0i32;
-                                #( #outer_ids = #defaults; )*
-                            }
-                        }
-                    });
-                    slots.push(EncSlot {
-                        ident: flag_id,
-                        wire_ty: quote!(jni::sys::jboolean),
-                        descriptor: "Z".to_string(),
-                        is_object: false,
-                        default: quote!(0u8),
-                    });
-                }
-                slots.push(EncSlot {
-                    ident: tag_id,
-                    wire_ty: quote!(jni::sys::jint),
-                    descriptor: "I".to_string(),
-                    is_object: false,
-                    default: quote!(0i32),
-                });
-                for (i, sl) in all.iter().enumerate() {
-                    slots.push(EncSlot {
-                        ident: outer_ids[i].clone(),
-                        wire_ty: sl.wire_ty.clone(),
-                        descriptor: sl.descriptor.clone(),
-                        is_object: sl.is_object,
-                        default: sl.default.clone(),
-                    });
-                }
-            }
-            // Simple leaf: bind per the plan's wire form.
-            PlanFieldKind::Leaf {
-                conv,
-                wire,
-                form,
-                descriptor,
-                ..
-            } => {
-                let value_expr = conv_value(conv);
-                match form {
-                    LeafForm::Prim => {
-                        preludes.extend(quote! { let #id: #wire = #value_expr; });
-                        slots.push(EncSlot {
-                            ident: id,
-                            wire_ty: quote!(#wire),
-                            descriptor: descriptor.clone(),
-                            is_object: false,
-                            default: primitive_default_for_descriptor(descriptor),
-                        });
-                    }
-                    LeafForm::IntoObject => {
-                        preludes.extend(
-                            quote! { let #id: jni::objects::JObject = #value_expr.into(); },
-                        );
-                        slots.push(EncSlot {
-                            ident: id,
-                            wire_ty: quote!(jni::objects::JObject),
-                            descriptor: descriptor.clone(),
-                            is_object: true,
-                            default: quote!(jni::objects::JObject::null()),
-                        });
-                    }
-                    LeafForm::Object => {
-                        preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
-                        slots.push(EncSlot {
-                            ident: id,
-                            wire_ty: quote!(jni::objects::JObject),
-                            descriptor: descriptor.clone(),
-                            is_object: true,
-                            default: quote!(jni::objects::JObject::null()),
-                        });
-                    }
-                }
-            }
+/// Assemble the Rust→JVM half of a frozen whole-struct codec.
+///
+/// Classification, child selection, JVM descriptors, and the target Kotlin
+/// class are all frozen before this point. This function only turns that plan
+/// into the final converter body; it performs no registry or declaration
+/// lookup and cannot rediscover source-type facts.
+pub(crate) fn render_struct_output_body(
+    delivery: &crate::jni::emit::FrozenDelivery,
+    java_class_name: &str,
+    emit: &prebindgen_registry::RustWriter,
+) -> syn::Expr {
+    // The whole object graph flattened into leaf wires, then built with ONE
+    // `call_static_method("fromParts", …)` — no per-nested-struct JNI crossing.
+    // The Kotlin `fromParts` factory reassembles the graph in bytecode.
+    //
+    // The flattening is the registry's walk, the same one a fixed-builder site
+    // delivers through: `v` is borrowed and each leaf cloned out of it, which
+    // is what `is_field_read` decides, and a gated group is one `match` the
+    // walk emits rather than an arm this module builds.
+    let n = delivery.wire_count();
+    let obj_idents: Vec<syn::Ident> = (0..n).map(|i| format_ident!("__obj{}", i)).collect();
+    // A converter returns its failure; there is no error sink at this site.
+    let fail = |msg: TokenStream| -> TokenStream {
+        quote! {
+            return ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<String>>::from(#msg),
+            );
         }
-    }
-    (preludes, slots)
-}
-
-pub(crate) fn struct_output_body(
-    ext: &Declarations,
-    s: &prebindgen_registry::flat::Struct,
-    registry: &impl Conversions,
-) -> Option<(syn::Type, syn::Expr)> {
-    let struct_name = s.name.to_string();
-    // Prefer the registered Kotlin FQN (`io.zenoh.jni.JniSample`) so the
-    // mangle closure flows through; fall back to the bare struct ident
-    // qualified with the package when no `data_class` /
-    // `ptr_class` declaration exists for this Rust type.
-    let struct_ident = &s.name;
-    let struct_ty: syn::Type = syn::parse_quote!(#struct_ident);
-    let registered_fqn = ext
-        .types
-        .get(&TypeKey::from_type(&struct_ty))
-        .and_then(|cfg| cfg.name_spec.as_ref())
-        .map(|s| ext.fqn_of(s));
-    let java_class_prefix = ext.java_class_prefix();
-    let java_class_name = if let Some(fqn) = registered_fqn {
-        fqn.replace('.', "/")
-    } else if java_class_prefix.is_empty() {
-        struct_name.clone()
-    } else {
-        format!("{}/{}", java_class_prefix, struct_name)
     };
+    let (preludes, args, _) = crate::jni::emit::encode_plan_leaves(
+        delivery,
+        delivery.delivered(),
+        &obj_idents,
+        &quote!(&v),
+        &fail,
+        emit,
+    );
+    let factory_sig_lit = syn::LitStr::new(
+        &delivery.factory_signature(java_class_name),
+        Span::call_site(),
+    );
 
-    // Recursively flatten the whole object graph into leaf wires, then build it
-    // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI
-    // crossing. The Kotlin `fromParts` factory (recursively flattened the same
-    // way in `render_data_class_source`) reassembles the graph in bytecode.
-    let access = quote!(v);
-    let (preludes, slots) = flatten_struct_encode(ext, registry, s, &access, "", 0, &quote!(env))?;
-
-    let mut sig = String::from("(");
-    let mut args: Vec<TokenStream> = Vec::new();
-    for sl in &slots {
-        sig.push_str(&sl.descriptor);
-        let id = &sl.ident;
-        if sl.is_object {
-            args.push(quote!(jni::objects::JValue::Object(&#id)));
-        } else {
-            args.push(quote!(jni::objects::JValue::from(#id)));
-        }
-    }
-    sig.push_str(&format!(")L{};", java_class_name));
-    let factory_sig_lit = syn::LitStr::new(&sig, Span::call_site());
-
-    let body: syn::Expr = syn::parse_quote!({
+    syn::parse_quote!({
         #preludes
         let __obj = env.call_static_method(
             #java_class_name,
@@ -586,8 +166,7 @@ pub(crate) fn struct_output_body(
         .and_then(|__v| __v.l())
         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("encode struct via fromParts: {}", e)))?;
         __obj
-    });
-    Some((syn::parse_quote!(jni::objects::JObject), body))
+    })
 }
 
 pub(crate) fn struct_module_path(

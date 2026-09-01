@@ -144,202 +144,8 @@ pub struct closure_payload_t {
     >,
     pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
-#[repr(C)]
-#[allow(non_camel_case_types)]
-pub struct closure_payload_vec_t {
-    pub context: *mut ::core::ffi::c_void,
-    pub call: ::core::option::Option<
-        unsafe extern "C" fn(*const payload_t, usize, *mut ::core::ffi::c_void),
-    >,
-    pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
-}
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_Payload(
-    v: *mut payload_t,
-) -> ::core::result::Result<perftest_flat::Payload, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null Payload value passed by value"),
-        );
-    }
-    let __live = <payload_t as ::prebindgen_c_runtime::Transmute>::into_rust(
-        ::core::ptr::read(v),
-    );
-    (*v).label = ::core::ptr::null_mut();
-    ::core::result::Result::Ok(__live)
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_PayloadHandler(
-    v: *mut payload_handler_t,
-) -> ::core::result::Result<perftest_flat::PayloadHandler, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null PayloadHandler handle passed by value"),
-        );
-    }
-    ::core::result::Result::Ok(
-        *::std::boxed::Box::from_raw(v as *mut perftest_flat::PayloadHandler),
-    )
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_PayloadVecHandler(
-    v: *mut payload_vec_handler_t,
-) -> ::core::result::Result<perftest_flat::PayloadVecHandler, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null PayloadVecHandler handle passed by value"),
-        );
-    }
-    ::core::result::Result::Ok(
-        *::std::boxed::Box::from_raw(v as *mut perftest_flat::PayloadVecHandler),
-    )
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_Storage(
-    v: *mut storage_t,
-) -> ::core::result::Result<perftest_flat::Storage, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null Storage handle passed by value"),
-        );
-    }
-    ::core::result::Result::Ok(
-        *::std::boxed::Box::from_raw(v as *mut perftest_flat::Storage),
-    )
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_String(
-    v: *mut string_t,
-) -> ::core::result::Result<::std::string::String, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null String handle passed by value"),
-        );
-    }
-    ::core::result::Result::Ok(
-        *::std::boxed::Box::from_raw(v as *mut ::std::string::String),
-    )
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in___Payload<'a>(
-    v: *const payload_t,
-) -> ::core::result::Result<&'a perftest_flat::Payload, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null Payload pointer"),
-        );
-    }
-    ::core::result::Result::Ok(&*(v as *const perftest_flat::Payload))
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in___PayloadHandler<'a>(
-    v: *const payload_handler_t,
-) -> ::core::result::Result<&'a perftest_flat::PayloadHandler, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null PayloadHandler pointer"),
-        );
-    }
-    ::core::result::Result::Ok(&*(v as *const perftest_flat::PayloadHandler))
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in___PayloadVecHandler<'a>(
-    v: *const payload_vec_handler_t,
-) -> ::core::result::Result<
-    &'a perftest_flat::PayloadVecHandler,
-    ::std::string::String,
-> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null PayloadVecHandler pointer"),
-        );
-    }
-    ::core::result::Result::Ok(&*(v as *const perftest_flat::PayloadVecHandler))
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in___Storage<'a>(
-    v: *const storage_t,
-) -> ::core::result::Result<&'a perftest_flat::Storage, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null Storage pointer"),
-        );
-    }
-    ::core::result::Result::Ok(&*(v as *const perftest_flat::Storage))
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in___String<'a>(
-    v: *const string_t,
-) -> ::core::result::Result<&'a ::std::string::String, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null String pointer"),
-        );
-    }
-    ::core::result::Result::Ok(&*(v as *const ::std::string::String))
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in___mut_MaybeUninit___Payload__<'a>(
-    v: *mut payload_t,
-) -> ::core::result::Result<
-    &'a mut ::core::mem::MaybeUninit<perftest_flat::Payload>,
-    ::std::string::String,
-> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null Payload pointer"),
-        );
-    }
-    ::core::result::Result::Ok(
-        &mut *(v as *mut ::core::mem::MaybeUninit<perftest_flat::Payload>),
-    )
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in___mut_Payload<'a>(
-    v: *mut payload_t,
-) -> ::core::result::Result<&'a mut perftest_flat::Payload, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null Payload pointer"),
-        );
-    }
-    ::core::result::Result::Ok(&mut *(v as *mut perftest_flat::Payload))
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in___mut_Storage<'a>(
-    v: *mut storage_t,
-) -> ::core::result::Result<&'a mut perftest_flat::Storage, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null Storage pointer"),
-        );
-    }
-    ::core::result::Result::Ok(&mut *(v as *mut perftest_flat::Storage))
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in___str<'a>(
-    v: *const ::core::ffi::c_char,
-) -> ::core::result::Result<&'a str, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null pointer passed for str argument"),
-        );
-    }
-    match ::std::ffi::CStr::from_ptr(v).to_str() {
-        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s),
-        ::core::result::Result::Err(_) => {
-            ::core::result::Result::Err(
-                ::std::string::String::from("invalid UTF-8 in str argument"),
-            )
-        }
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_bool(v: ::core::mem::MaybeUninit<bool>) -> bool {
-    ::core::ptr::read(v.as_ptr() as *const u8) != 0
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_closure_payload_t(
+pub(crate) unsafe fn __c_in_convert_wire_to_impl_Fn_Payload_Send_Sync_static_c_invoke_callback_capture_1f115f7d391197ee(
     c: closure_payload_t,
 ) -> impl Fn(&perftest_flat::Payload) + Send + Sync + 'static {
     struct __Ctx {
@@ -362,13 +168,24 @@ pub(crate) unsafe fn __cbg_in_closure_payload_t(
     });
     move |__a0: &perftest_flat::Payload| {
         if let ::core::option::Option::Some(__f) = __call {
-            let __w0 = __cbg_out_ref_Payload(__a0);
+            let __w0 = __c_out_convert_Payload_c_borrow_shared_output_to_wire_5d954ba915ba18c7(
+                __a0,
+            );
             unsafe { __f(__w0, __ctx.context) }
         }
     }
 }
+#[repr(C)]
+#[allow(non_camel_case_types)]
+pub struct closure_payload_vec_t {
+    pub context: *mut ::core::ffi::c_void,
+    pub call: ::core::option::Option<
+        unsafe extern "C" fn(*const payload_t, usize, *mut ::core::ffi::c_void),
+    >,
+    pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_closure_payload_vec_t(
+pub(crate) unsafe fn __c_in_convert_wire_to_impl_Fn_Payload_Send_Sync_static_c_invoke_callback_capture_6d4224db8a8b8070(
     c: closure_payload_vec_t,
 ) -> impl Fn(&[perftest_flat::Payload]) + Send + Sync + 'static {
     struct __Ctx {
@@ -396,90 +213,290 @@ pub(crate) unsafe fn __cbg_in_closure_payload_vec_t(
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_f64(v: f64) -> f64 {
-    v
+pub(crate) unsafe fn __c_in_convert_wire_to_Payload_c_borrow_shared_input_9c9dcfae3e193513<
+    'a,
+>(
+    v: *const payload_t,
+) -> ::core::result::Result<&'a perftest_flat::Payload, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Payload pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&*(v as *const perftest_flat::Payload))
 }
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_i32(v: i32) -> i32 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_i64(v: i64) -> i64 {
-    v
-}
-#[allow(non_snake_case, dead_code, unused_variables)]
-pub(crate) fn __cbg_in_str() {}
 #[allow(non_snake_case, dead_code, unused)]
-pub(crate) fn __cbg_inmark_slice_Payload() {}
+pub(crate) unsafe fn __c_out_convert_Payload_c_borrow_shared_output_to_wire_5d954ba915ba18c7(
+    v: &perftest_flat::Payload,
+) -> *const payload_t {
+    v as *const perftest_flat::Payload as *const payload_t
+}
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_Payload(v: perftest_flat::Payload) -> payload_t {
+pub(crate) unsafe fn __c_in_convert_wire_to_PayloadHandler_c_borrow_shared_input_9caa5450154416a9<
+    'a,
+>(
+    v: *const payload_handler_t,
+) -> ::core::result::Result<&'a perftest_flat::PayloadHandler, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null PayloadHandler pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&*(v as *const perftest_flat::PayloadHandler))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_PayloadVecHandler_c_borrow_shared_input_9362e4165ce71691<
+    'a,
+>(
+    v: *const payload_vec_handler_t,
+) -> ::core::result::Result<
+    &'a perftest_flat::PayloadVecHandler,
+    ::std::string::String,
+> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null PayloadVecHandler pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&*(v as *const perftest_flat::PayloadVecHandler))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_Storage_c_borrow_shared_input_5ce0e04c530e69b0<
+    'a,
+>(
+    v: *const storage_t,
+) -> ::core::result::Result<&'a perftest_flat::Storage, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Storage pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&*(v as *const perftest_flat::Storage))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_String_c_borrow_shared_input_1342bc21c35103c2<
+    'a,
+>(
+    v: *const string_t,
+) -> ::core::result::Result<&'a ::std::string::String, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null String pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&*(v as *const ::std::string::String))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_Payload_c_terminal_input_value_opaque_1025354dd257d200(
+    v: *mut payload_t,
+) -> ::core::result::Result<perftest_flat::Payload, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Payload value passed by value"),
+        );
+    }
+    let __live = <payload_t as ::prebindgen_c_runtime::Transmute>::into_rust(
+        ::core::ptr::read(v),
+    );
+    (*v).label = ::core::ptr::null_mut();
+    ::core::result::Result::Ok(__live)
+}
+#[allow(non_snake_case, dead_code, unused)]
+pub(crate) fn __c_in_convert_wire_to_Payload_c_slice_input_reinterpret_45029be4ad5be227() {}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Payload_c_terminal_output_value_opaque_to_wire_ce0f5eae80482d02(
+    v: perftest_flat::Payload,
+) -> payload_t {
     <payload_t as ::prebindgen_c_runtime::Transmute>::from_rust(v)
 }
+#[allow(non_snake_case, dead_code, unused)]
+pub(crate) fn __c_out_convert_Payload_c_marker_sequence_to_wire_2e9a65c76a50a9dc() {}
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_PayloadHandler(
+pub(crate) unsafe fn __c_in_convert_wire_to_Payload_c_borrow_mutable_uninit_input_ad1f621c5ea6e082<
+    'a,
+>(
+    v: *mut payload_t,
+) -> ::core::result::Result<
+    &'a mut ::core::mem::MaybeUninit<perftest_flat::Payload>,
+    ::std::string::String,
+> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Payload pointer"),
+        );
+    }
+    ::core::result::Result::Ok(
+        &mut *(v as *mut ::core::mem::MaybeUninit<perftest_flat::Payload>),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_Payload_c_borrow_mutable_input_580822629a1eb85c<
+    'a,
+>(
+    v: *mut payload_t,
+) -> ::core::result::Result<&'a mut perftest_flat::Payload, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Payload pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&mut *(v as *mut perftest_flat::Payload))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_Storage_c_borrow_mutable_input_8ce0ec1505140f75<
+    'a,
+>(
+    v: *mut storage_t,
+) -> ::core::result::Result<&'a mut perftest_flat::Storage, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Storage pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&mut *(v as *mut perftest_flat::Storage))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_str_c_borrow_str_input_246c2b9955bb6ef2<'a>(
+    v: *const ::core::ffi::c_char,
+) -> ::core::result::Result<&'a str, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null pointer passed for str argument"),
+        );
+    }
+    match ::std::ffi::CStr::from_ptr(v).to_str() {
+        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s),
+        ::core::result::Result::Err(_) => {
+            ::core::result::Result::Err(
+                ::std::string::String::from("invalid UTF-8 in str argument"),
+            )
+        }
+    }
+}
+#[allow(non_snake_case, dead_code, unused)]
+pub(crate) fn __c_out_convert_Option_Payload_c_marker_optional_to_wire_0d65bf71671af35a() {}
+#[allow(non_snake_case, unused_variables, dead_code)]
+#[inline(always)]
+pub(crate) fn __c_out_convert_sequence_Vec_Payload_to_wire_dc890ff48c52049e(
+    v: ::std::vec::Vec<perftest_flat::Payload>,
+) -> ::std::vec::Vec<payload_t> {
+    {
+        let __sequence_source = v;
+        let mut __sequence_output: ::std::vec::Vec<payload_t> = ::std::vec::Vec::with_capacity(
+            (__sequence_source).len(),
+        );
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = __c_out_convert_Payload_c_terminal_output_value_opaque_to_wire_ce0f5eae80482d02(
+                __sequence_element,
+            );
+            __sequence_output.push(__sequence_part);
+        }
+        __sequence_output
+    }
+}
+#[allow(non_snake_case, dead_code, unused)]
+pub(crate) fn __c_out_convert_Option_Vec_Payload_c_marker_optional_to_wire_7a54934e42568ea6() {}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_PayloadHandler_c_terminal_input_owned_handle_bbf919ff94219da7(
+    v: *mut payload_handler_t,
+) -> ::core::result::Result<perftest_flat::PayloadHandler, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null PayloadHandler handle passed by value"),
+        );
+    }
+    ::core::result::Result::Ok(
+        *::std::boxed::Box::from_raw(v as *mut perftest_flat::PayloadHandler),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_PayloadHandler_c_terminal_output_owned_handle_to_wire_138a2e3a98f0b6c1(
     v: perftest_flat::PayloadHandler,
 ) -> *mut payload_handler_t {
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut payload_handler_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_PayloadVecHandler(
+pub(crate) unsafe fn __c_in_convert_wire_to_PayloadVecHandler_c_terminal_input_owned_handle_b1c246bc53a8947f(
+    v: *mut payload_vec_handler_t,
+) -> ::core::result::Result<perftest_flat::PayloadVecHandler, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null PayloadVecHandler handle passed by value"),
+        );
+    }
+    ::core::result::Result::Ok(
+        *::std::boxed::Box::from_raw(v as *mut perftest_flat::PayloadVecHandler),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_PayloadVecHandler_c_terminal_output_owned_handle_to_wire_90de88c77a3ca699(
     v: perftest_flat::PayloadVecHandler,
 ) -> *mut payload_vec_handler_t {
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut payload_vec_handler_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_Storage(v: perftest_flat::Storage) -> *mut storage_t {
+pub(crate) unsafe fn __c_in_convert_wire_to_Storage_c_terminal_input_owned_handle_0940f8aedc25ac46(
+    v: *mut storage_t,
+) -> ::core::result::Result<perftest_flat::Storage, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Storage handle passed by value"),
+        );
+    }
+    ::core::result::Result::Ok(
+        *::std::boxed::Box::from_raw(v as *mut perftest_flat::Storage),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Storage_c_terminal_output_owned_handle_to_wire_1aad3d8ed7ca5bfa(
+    v: perftest_flat::Storage,
+) -> *mut storage_t {
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut storage_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_String(v: ::std::string::String) -> *mut string_t {
+pub(crate) unsafe fn __c_in_convert_wire_to_String_c_terminal_input_owned_handle_23e92025a440d7c8(
+    v: *mut string_t,
+) -> ::core::result::Result<::std::string::String, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null String handle passed by value"),
+        );
+    }
+    ::core::result::Result::Ok(
+        *::std::boxed::Box::from_raw(v as *mut ::std::string::String),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_String_c_terminal_output_owned_handle_to_wire_da496556652b0d98(
+    v: ::std::string::String,
+) -> *mut string_t {
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut string_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_bool(v: bool) -> bool {
+pub(crate) fn __c_out_convert_bool_c_terminal_output_scalar_to_wire_cc0ad9760da17efd(
+    v: bool,
+) -> bool {
     v
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_f64(v: f64) -> f64 {
+pub(crate) fn __c_out_convert_usize_c_terminal_output_scalar_to_wire_4b27414858b3ddc9(
+    v: usize,
+) -> usize {
     v
 }
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_i32(v: i32) -> i32 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_i64(v: i64) -> i64 {
-    v
-}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) unsafe fn __cbg_out_ref_Payload(
-    v: &perftest_flat::Payload,
-) -> *const payload_t {
-    v as *const perftest_flat::Payload as *const payload_t
-}
-#[allow(non_snake_case, dead_code, unused_variables)]
-pub(crate) fn __cbg_out_unit(v: ()) {}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_out_usize(v: usize) -> usize {
-    v
-}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) fn __cbg_outmark_option_Payload() {}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) fn __cbg_outmark_option_Vec___Payload__() {}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) fn __cbg_outmark_slice_Payload() {}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) fn __cbg_outmark_vec_Payload() {}
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn payload_handler_new(
     f: closure_payload_t,
 ) -> *mut payload_handler_t {
-    let f = __cbg_in_closure_payload_t(f);
+    let f = __c_in_convert_wire_to_impl_Fn_Payload_Send_Sync_static_c_invoke_callback_capture_1f115f7d391197ee(
+        f,
+    );
     let __v = perftest_flat::payload_handler_new(f);
     let __ret: *mut payload_handler_t;
-    __ret = __cbg_out_PayloadHandler(__v);
+    __ret = __c_out_convert_PayloadHandler_c_terminal_output_owned_handle_to_wire_138a2e3a98f0b6c1(
+        __v,
+    );
     __ret
 }
 #[no_mangle]
@@ -487,10 +504,14 @@ pub unsafe extern "C" fn payload_handler_new(
 pub unsafe extern "C" fn payload_vec_handler_new(
     f: closure_payload_vec_t,
 ) -> *mut payload_vec_handler_t {
-    let f = __cbg_in_closure_payload_vec_t(f);
+    let f = __c_in_convert_wire_to_impl_Fn_Payload_Send_Sync_static_c_invoke_callback_capture_6d4224db8a8b8070(
+        f,
+    );
     let __v = perftest_flat::payload_vec_handler_new(f);
     let __ret: *mut payload_vec_handler_t;
-    __ret = __cbg_out_PayloadVecHandler(__v);
+    __ret = __c_out_convert_PayloadVecHandler_c_terminal_output_owned_handle_to_wire_90de88c77a3ca699(
+        __v,
+    );
     __ret
 }
 #[no_mangle]
@@ -499,13 +520,17 @@ pub unsafe extern "C" fn storage_callback(
     s: *const storage_t,
     handler: *const payload_handler_t,
 ) {
-    let s = match __cbg_in___Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_shared_input_5ce0e04c530e69b0(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    let handler = match __cbg_in___PayloadHandler(handler) {
+    let handler = match __c_in_convert_wire_to_PayloadHandler_c_borrow_shared_input_9caa5450154416a9(
+        handler,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -519,13 +544,17 @@ pub unsafe extern "C" fn storage_callback_vec(
     s: *const storage_t,
     handler: *const payload_vec_handler_t,
 ) {
-    let s = match __cbg_in___Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_shared_input_5ce0e04c530e69b0(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    let handler = match __cbg_in___PayloadVecHandler(handler) {
+    let handler = match __c_in_convert_wire_to_PayloadVecHandler_c_borrow_shared_input_9362e4165ce71691(
+        handler,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -536,7 +565,9 @@ pub unsafe extern "C" fn storage_callback_vec(
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn storage_get(s: *const storage_t, out: *mut payload_t) -> bool {
-    let s = match __cbg_in___Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_shared_input_5ce0e04c530e69b0(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -547,7 +578,9 @@ pub unsafe extern "C" fn storage_get(s: *const storage_t, out: *mut payload_t) -
     match __v {
         ::core::option::Option::Some(__x) => {
             __ret = true;
-            *out = __cbg_out_Payload(__x);
+            *out = __c_out_convert_Payload_c_terminal_output_value_opaque_to_wire_ce0f5eae80482d02(
+                __x,
+            );
         }
         ::core::option::Option::None => {
             __ret = false;
@@ -561,13 +594,17 @@ pub unsafe extern "C" fn storage_get_into_init(
     s: *const storage_t,
     payload: *mut payload_t,
 ) -> bool {
-    let s = match __cbg_in___Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_shared_input_5ce0e04c530e69b0(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    let payload = match __cbg_in___mut_Payload(payload) {
+    let payload = match __c_in_convert_wire_to_Payload_c_borrow_mutable_input_580822629a1eb85c(
+        payload,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -575,7 +612,7 @@ pub unsafe extern "C" fn storage_get_into_init(
     };
     let __v = perftest_flat::storage_get_into_init(s, payload);
     let __ret: bool;
-    __ret = __cbg_out_bool(__v);
+    __ret = __c_out_convert_bool_c_terminal_output_scalar_to_wire_cc0ad9760da17efd(__v);
     __ret
 }
 #[no_mangle]
@@ -584,13 +621,17 @@ pub unsafe extern "C" fn storage_get_into_uninit(
     s: *const storage_t,
     payload: *mut payload_t,
 ) -> bool {
-    let s = match __cbg_in___Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_shared_input_5ce0e04c530e69b0(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    let payload = match __cbg_in___mut_MaybeUninit___Payload__(payload) {
+    let payload = match __c_in_convert_wire_to_Payload_c_borrow_mutable_uninit_input_ad1f621c5ea6e082(
+        payload,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -598,7 +639,7 @@ pub unsafe extern "C" fn storage_get_into_uninit(
     };
     let __v = perftest_flat::storage_get_into_uninit(s, payload);
     let __ret: bool;
-    __ret = __cbg_out_bool(__v);
+    __ret = __c_out_convert_bool_c_terminal_output_scalar_to_wire_cc0ad9760da17efd(__v);
     __ret
 }
 #[no_mangle]
@@ -608,7 +649,9 @@ pub unsafe extern "C" fn storage_get_vec(
     out: *mut *mut payload_t,
     out_len: *mut usize,
 ) -> bool {
-    let s = match __cbg_in___Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_shared_input_5ce0e04c530e69b0(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -619,10 +662,9 @@ pub unsafe extern "C" fn storage_get_vec(
     match __v {
         ::core::option::Option::Some(__x) => {
             __ret = true;
-            let __arr: ::std::vec::Vec<payload_t> = __x
-                .into_iter()
-                .map(__cbg_out_Payload)
-                .collect();
+            let __arr: ::std::vec::Vec<payload_t> = __c_out_convert_sequence_Vec_Payload_to_wire_dc890ff48c52049e(
+                __x,
+            );
             let (__p, __n) = __cbg_alloc_array(__arr);
             *out = __p;
             *out_len = __n;
@@ -638,7 +680,9 @@ pub unsafe extern "C" fn storage_get_vec(
 pub unsafe extern "C" fn storage_new() -> *mut storage_t {
     let __v = perftest_flat::storage_new();
     let __ret: *mut storage_t;
-    __ret = __cbg_out_Storage(__v);
+    __ret = __c_out_convert_Storage_c_terminal_output_owned_handle_to_wire_1aad3d8ed7ca5bfa(
+        __v,
+    );
     __ret
 }
 #[no_mangle]
@@ -647,13 +691,17 @@ pub unsafe extern "C" fn storage_put_by_read(
     s: *mut storage_t,
     payload: *const payload_t,
 ) {
-    let s = match __cbg_in___mut_Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_mutable_input_8ce0ec1505140f75(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    let payload = match __cbg_in___Payload(payload) {
+    let payload = match __c_in_convert_wire_to_Payload_c_borrow_shared_input_9c9dcfae3e193513(
+        payload,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -667,13 +715,17 @@ pub unsafe extern "C" fn storage_put_by_read_and_update(
     s: *mut storage_t,
     payload: *mut payload_t,
 ) {
-    let s = match __cbg_in___mut_Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_mutable_input_8ce0ec1505140f75(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    let payload = match __cbg_in___mut_Payload(payload) {
+    let payload = match __c_in_convert_wire_to_Payload_c_borrow_mutable_input_580822629a1eb85c(
+        payload,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -687,13 +739,17 @@ pub unsafe extern "C" fn storage_put_by_take(
     s: *mut storage_t,
     payload: *mut payload_t,
 ) {
-    let s = match __cbg_in___mut_Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_mutable_input_8ce0ec1505140f75(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    let payload = match __cbg_in_Payload(payload) {
+    let payload = match __c_in_convert_wire_to_Payload_c_terminal_input_value_opaque_1025354dd257d200(
+        payload,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -708,7 +764,9 @@ pub unsafe extern "C" fn storage_put_slice(
     payloads: *const payload_t,
     payloads_len: usize,
 ) {
-    let s = match __cbg_in___mut_Storage(s) {
+    let s = match __c_in_convert_wire_to_Storage_c_borrow_mutable_input_8ce0ec1505140f75(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -727,7 +785,9 @@ pub unsafe extern "C" fn storage_put_slice(
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn string_len(s: *const string_t) -> usize {
-    let s = match __cbg_in___String(s) {
+    let s = match __c_in_convert_wire_to_String_c_borrow_shared_input_1342bc21c35103c2(
+        s,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -735,13 +795,13 @@ pub unsafe extern "C" fn string_len(s: *const string_t) -> usize {
     };
     let __v = perftest_flat::string_len(s);
     let __ret: usize;
-    __ret = __cbg_out_usize(__v);
+    __ret = __c_out_convert_usize_c_terminal_output_scalar_to_wire_4b27414858b3ddc9(__v);
     __ret
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn string_new(s: *const ::core::ffi::c_char) -> *mut string_t {
-    let s = match __cbg_in___str(s) {
+    let s = match __c_in_convert_wire_to_str_c_borrow_str_input_246c2b9955bb6ef2(s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
@@ -749,7 +809,9 @@ pub unsafe extern "C" fn string_new(s: *const ::core::ffi::c_char) -> *mut strin
     };
     let __v = perftest_flat::string_new(s);
     let __ret: *mut string_t;
-    __ret = __cbg_out_String(__v);
+    __ret = __c_out_convert_String_c_terminal_output_owned_handle_to_wire_da496556652b0d98(
+        __v,
+    );
     __ret
 }
 /// The storage capacity limit advertised to bindings (a primitive const).

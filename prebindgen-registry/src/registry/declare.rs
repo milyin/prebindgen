@@ -18,7 +18,7 @@ use super::*;
 /// let registry = Registry::builder(flat)?
 ///     .export(&name)
 ///     .decompose(decompositions)
-///     .convert_with(|crossing, built, emit| my_gen.convert(crossing, built, emit))?
+///     .convert_with(|crossing, built| my_gen.convert(crossing, built))?
 ///     .build()?;
 /// ```
 ///
@@ -116,9 +116,11 @@ impl RegistryBuilder {
     /// A const this binding exports.
     ///
     /// Separate from [`Self::export`] only because *having a const mechanism at
-    /// all* is itself a fact: a binding that never calls this re-emits every
-    /// captured const verbatim, while one that calls it emits exactly what it
-    /// names. See [`Self::declares_consts`].
+    /// all* is itself a fact, and the unclaimed-item report reads it: a binding
+    /// that never calls this claims no const, so none is reported as skipped,
+    /// while one that calls it claims exactly what it names. Which consts reach
+    /// the file is the adapter's own business — its constant artifacts decide
+    /// that. See [`Self::declares_consts`].
     pub fn export_const(mut self, name: &syn::Ident) -> Self {
         self.registry
             .declared
@@ -129,7 +131,8 @@ impl RegistryBuilder {
     }
 
     /// Declare that this binding has a const mechanism, even if it exports no
-    /// consts. Without it every captured const is re-emitted verbatim.
+    /// consts — which is what makes an unexported const a deliberate omission
+    /// rather than an unclaimed item.
     pub fn declares_consts(mut self) -> Self {
         self.registry
             .declared
@@ -297,6 +300,42 @@ impl RegistryBuilder {
         self.registry.named_item_idents()
     }
 
+    /// Readings introduced as leaves of resolved parameter expansions.
+    ///
+    /// Derives the registry first when necessary, so callers cannot silently
+    /// observe an empty pre-validation plan store. The iterator exposes only
+    /// the readings recipe declaration needs, not the expansion map's storage
+    /// or key representation.
+    pub fn expansion_leaf_readings(
+        &mut self,
+    ) -> Result<impl Iterator<Item = &prebindgen_flat::flat::TypeRef>, WriteRustError> {
+        self.derive()?;
+        Ok(self
+            .registry
+            .expansion_plans
+            .values()
+            .flat_map(|plan| plan.leaves.iter().map(|leaf| &leaf.ty)))
+    }
+
+    /// The `#[prebindgen]` functions this binding exports, as declared with
+    /// [`Self::export`].
+    ///
+    /// Read back by an adapter that applies its own decompositions: which
+    /// functions are exported decides which of them a type's default
+    /// decomposition auto-applies to.
+    pub fn exports(&self) -> &std::collections::HashSet<syn::Ident> {
+        &self.registry.declared.functions
+    }
+
+    /// The exported functions declared with [`Self::accessor`] — the ones that
+    /// read one value out of another.
+    ///
+    /// Read back for the same reason as [`Self::exports`]: an accessor is the
+    /// only kind of function a decomposition record may name.
+    pub fn accessors(&self) -> &std::collections::HashSet<syn::Ident> {
+        &self.registry.declared.accessors
+    }
+
     /// Whether the source declares a type under this name — see
     /// `Registry::declares_type`.
     #[cfg(test)]
@@ -344,9 +383,9 @@ impl RegistryBuilder {
     /// Build a conversion for each crossing, in dependency order.
     ///
     /// `f` is called once per crossing, and answers with an [`Answer`] rather
-    /// than the conversion itself: the conversion belongs to the adapter, which
-    /// emits from it and looks it up, and what the registry needs back is which
-    /// other crossings this one is built out of. Returning `None` records a gap
+    /// than the conversion itself: the executable conversion belongs to the
+    /// adapter's frozen plan, and what the registry needs back is which other
+    /// crossings this one is built out of. Returning `None` records a gap
     /// — whether that gap matters is decided by [`Self::build`], not here.
     ///
     /// The walk is inner types first, so by the time `f` sees `Option<Handle>`
@@ -357,16 +396,11 @@ impl RegistryBuilder {
     /// before this returns.
     pub fn convert_with<F>(mut self, mut f: F) -> Result<Self, WriteRustError>
     where
-        F: FnMut(&Crossing, &Building<'_>, &crate::Emit) -> Option<Answer>,
+        F: FnMut(&Crossing, &Building<'_>) -> Option<Answer>,
     {
-        // A converter IS generated Rust — `ConverterImpl::function` is a
-        // complete `syn::ItemFn` the adapter writes — so this closure is an
-        // emission callback and is handed the capability, exactly as the
-        // `on_*` ones are. See `prebindgen_flat::flat::emit`.
-        let emit = crate::Emit::new();
         let order = self.derive()?.to_vec();
         for crossing in &order {
-            if let Some(answer) = f(crossing, &self.view(), &emit) {
+            if let Some(answer) = f(crossing, &self.view()) {
                 self.built.insert(crossing.clone(), answer);
             }
         }
@@ -428,20 +462,5 @@ impl Conversions for RegistryBuilder {
             .filter(|(d, _)| *d == dir)
             .map(|(_, k)| k.clone())
             .collect()
-    }
-    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::unfold::UnfoldPlan> {
-        self.registry.callback_arg_plans.get(key)
-    }
-    fn callback_arg_plans(&self) -> &HashMap<TypeKey, crate::unfold::UnfoldPlan> {
-        &self.registry.callback_arg_plans
-    }
-    fn unfold_plans(&self) -> &HashMap<syn::Ident, crate::unfold::UnfoldPlan> {
-        &self.registry.unfold_plans
-    }
-    fn error_plans(&self) -> &HashMap<syn::Ident, crate::unfold::UnfoldPlan> {
-        &self.registry.error_plans
-    }
-    fn decon_plans(&self) -> &HashMap<crate::unfold::DeconId, crate::unfold::DeconSpec> {
-        &self.registry.decon_plans
     }
 }

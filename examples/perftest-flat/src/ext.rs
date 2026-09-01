@@ -42,6 +42,17 @@ mod handles {
         pub(super) total: f64,
     }
 
+    pub struct SummaryEnvelope {
+        pub(super) summary: Summary,
+        pub(super) bonus: i64,
+    }
+
+    #[derive(Clone)]
+    pub struct SelectorCode {
+        pub(super) id: u16,
+        pub(super) schema: Option<Vec<u8>>,
+    }
+
     pub struct Archive {
         pub(super) latest: Option<Summary>,
         /// A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
@@ -162,6 +173,30 @@ pub fn priority_or(p: Option<Priority>, fallback: Priority) -> Priority {
     p.unwrap_or(fallback)
 }
 
+/// Exercise the intentionally collapsed Kotlin surface for nested optional
+/// enums: both absent Rust states become Kotlin `null`, while a present enum
+/// remains typed.
+#[prebindgen]
+pub fn priority_nested(which: u8) -> Option<Option<Priority>> {
+    match which {
+        0 => None,
+        1 => Some(None),
+        _ => Some(Some(Priority::High)),
+    }
+}
+
+/// Report which nested optional state arrived through the JNI input. Kotlin's
+/// collapsed `Priority?` surface can express the outer `None` and
+/// `Some(Some(_))`, but not the inner `Some(None)` state.
+#[prebindgen]
+pub fn priority_nested_state(p: Option<Option<Priority>>) -> i32 {
+    match p {
+        None => 0,
+        Some(None) => 1,
+        Some(Some(_)) => 2,
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Reading — a data-carrying enum, i.e. a sum type (→ Kotlin `sealed interface`).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -238,11 +273,10 @@ pub fn observation_new(which: i32, with_fallback: bool) -> Observation {
     }
 }
 
-/// A second sum whose payload is **not leaf-shaped**: `Option<Priority>` is an
-/// enum object (or null) in the JVM slot, which the tag-gated flat form cannot
-/// express. The binding therefore lets this one cross as a whole object through
-/// its own converter rather than failing — the degradation path — which is also
-/// what exercises the `Option<enum>` property read.
+/// A second sum whose payload uses an enum niche: `Option<Priority>` occupies
+/// one primitive `jint`, with an unused discriminant representing `None`.
+/// Together with the sum tag, this keeps `None_`, `Ranked(None)`, and
+/// `Ranked(Some(_))` distinct without a boxed enum object.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Marker {
@@ -271,16 +305,10 @@ pub fn tagged_new(which: i32) -> Tagged {
     }
 }
 
-/// The same `Option<enum>` payload with the sum in **return** position rather
-/// than as a struct field. Only this reaches `synth_sum_leaves`, which hardcodes
-/// `nullable: false` on every group leaf and lets `plan_leaf_param` widen from
-/// the inert side; a struct field takes `PlanFieldKind::Sum` and, for this
-/// payload, degrades to the whole-object crossing instead.
-///
-/// Two nullabilities meet in one slot and must not collapse into each other:
-/// the payload's own `None`, and the slot being inert because the other variant
-/// is live. Both arrive as a JVM null, so `Ranked(null)` and `None_` are only
-/// told apart by the tag.
+/// The same niche-backed `Option<enum>` payload with the sum in **return**
+/// position rather than as a struct field. The payload's `None` uses its enum
+/// sentinel; the sum tag independently selects whether the `Ranked` slot is
+/// active, so the two concepts cannot collapse into one JVM null.
 #[prebindgen]
 pub fn marker_of(which: i32) -> Marker {
     match which {
@@ -290,8 +318,8 @@ pub fn marker_of(which: i32) -> Marker {
     }
 }
 
-/// Read it back — the whole-object sum decode, including the `Option<enum>`
-/// payload, crossing Kotlin → Rust.
+/// Read it back, including the niche-backed `Option<enum>` payload crossing
+/// Kotlin → Rust as one primitive discriminant.
 #[prebindgen]
 pub fn tagged_rank(t: Tagged) -> i32 {
     match t.marker {
@@ -493,6 +521,23 @@ pub struct Verdict {
     pub outcome: Lookup,
 }
 
+/// A `Verdict` — a `data_class` whose field is a **sum** — handed to a
+/// callback, which is the other half of what #602's coverage buys.
+///
+/// A returned `Verdict` reaches its foreign builder through the return path;
+/// this one reaches the callback-interface path, whose reassembly asks a
+/// different question about the same leaves. Both must rebuild the value from
+/// its tag and groups rather than through a whole JVM object.
+#[prebindgen]
+pub fn verdict_each(n: i64, total: f64, sink: impl Fn(Verdict) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(Verdict {
+            id: i,
+            outcome: lookup_of(i - 1, total),
+        });
+    }
+}
+
 /// Build a [`Verdict`] whose outcome comes from [`lookup_of`].
 #[prebindgen]
 pub fn verdict_new(id: i64, count: i64, total: f64) -> Verdict {
@@ -557,6 +602,162 @@ pub fn observation_which(o: Observation) -> i32 {
 pub struct Stamp {
     pub secs: i64,
     pub nanos: i64,
+}
+
+/// A data class whose nested class sits behind an `Option` — the shape #602
+/// names first and the one a decomposition refused outright until it learned
+/// a presence flag.
+///
+/// Nothing else about it is unusual: a sibling scalar beside a nested class
+/// that is sometimes there. `Annotated` has the same field, but also an
+/// `enum_class` one, which is a refusal of its own — so the shape needs a
+/// struct of its own to show up at all.
+#[prebindgen]
+pub struct Envelope {
+    pub id: i64,
+    pub stamp: Option<Stamp>,
+}
+
+/// Build an [`Envelope`], with or without its nested stamp.
+#[prebindgen]
+pub fn envelope_new(id: i64, present: bool) -> Envelope {
+    Envelope {
+        id,
+        stamp: present.then(|| Stamp {
+            secs: id,
+            nanos: id * 2,
+        }),
+    }
+}
+
+/// The same value handed to a callback, which reassembles the leaves by the
+/// other route.
+#[prebindgen]
+pub fn envelope_each(n: i64, sink: impl Fn(Envelope) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(Envelope {
+            id: i,
+            stamp: (i % 2 == 1).then(|| Stamp {
+                secs: i,
+                nanos: i * 2,
+            }),
+        });
+    }
+}
+
+/// The value an optional nested class gates when that class **selects of its
+/// own** — a presence flag and a tag, one arm inside another.
+///
+/// `span` is a second presence, `reading` a sum tag. Both sit inside the group
+/// `Frame::window`'s own flag gates, which is the shape a flat group number
+/// could not state: each of these is a member of the outer group AND a
+/// selector of its own (#602).
+#[prebindgen]
+pub struct Window {
+    pub label: String,
+    pub span: Option<Stamp>,
+    pub reading: Reading,
+}
+
+/// The gate over [`Window`]: one selector owning two.
+#[prebindgen]
+pub struct Frame {
+    pub id: i64,
+    pub window: Option<Window>,
+}
+
+/// Build a [`Frame`]. `window` absent, `window` present with `span` absent, and
+/// both present are the three states of the outer gate; `which` picks the
+/// alternative of the tag nested beside it.
+#[prebindgen]
+pub fn frame_new(id: i64, window: bool, span: bool, which: i64) -> Frame {
+    Frame {
+        id,
+        window: window.then(|| Window {
+            label: format!("w{id}"),
+            span: span.then(|| Stamp {
+                secs: id,
+                nanos: id * 2,
+            }),
+            reading: match which {
+                0 => Reading::Missing,
+                1 => Reading::Exact(42),
+                2 => Reading::Range { low: 1, high: 9 },
+                3 => Reading::Labeled("warm".to_string(), Priority::High),
+                _ => Reading::Companion(5),
+            },
+        }),
+    }
+}
+
+/// The same value handed to a callback — the route that decomposes it into
+/// leaves and reassembles them through the foreign builder, which is where a
+/// nested gate has to hold.
+#[prebindgen]
+pub fn frame_each(n: i64, sink: impl Fn(Frame) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(frame_new(i, i % 3 != 0, i % 2 == 1, i));
+    }
+}
+
+/// A nested class whose **first** field selects: an optional one, then a sum.
+///
+/// The order matters. A child's leading selector belongs to the child's own
+/// `fromParts` signature, and a parent that reads "is this leaf a selector?"
+/// before "does this leaf open a class?" consumes it at the parent level and
+/// calls the child factory without it — an arity mismatch the JVM reports only
+/// at the call (#620 review). `Window` cannot show that, because it begins with
+/// a plain `label`.
+#[prebindgen]
+pub struct Meter {
+    pub span: Option<Stamp>,
+    pub reading: Reading,
+    pub id: i64,
+}
+
+/// Both ways of holding a [`Meter`]: gated, so the child's leading selector
+/// sits under a presence flag of its own, and plain, so it is the first thing
+/// the parent meets.
+#[prebindgen]
+pub struct Rack {
+    pub meter: Option<Meter>,
+    pub plain: Meter,
+    pub name: String,
+}
+
+fn meter_of(id: i64, span: bool, which: i64) -> Meter {
+    Meter {
+        span: span.then(|| Stamp {
+            secs: id,
+            nanos: id * 3,
+        }),
+        reading: match which {
+            0 => Reading::Missing,
+            1 => Reading::Exact(7),
+            2 => Reading::Range { low: 2, high: 4 },
+            3 => Reading::Labeled("hot".to_string(), Priority::Low),
+            _ => Reading::Companion(11),
+        },
+        id,
+    }
+}
+
+/// Build a [`Rack`].
+#[prebindgen]
+pub fn rack_new(id: i64, meter: bool, span: bool, which: i64) -> Rack {
+    Rack {
+        meter: meter.then(|| meter_of(id, span, which)),
+        plain: meter_of(id + 100, !span, (which + 1) % 5),
+        name: format!("r{id}"),
+    }
+}
+
+/// The same value through a callback, which reassembles it by the other route.
+#[prebindgen]
+pub fn rack_each(n: i64, sink: impl Fn(Rack) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(rack_new(i, i % 2 == 0, i % 3 == 0, i));
+    }
 }
 
 /// Build a [`Stamp`] (data-class **return**).
@@ -728,6 +929,31 @@ pub fn storage_try_from_stamp(s: Stamp, tag: [u8; 2]) -> Result<Storage, Storage
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SelectorCode — boxed scalar leaf in a multi-variant input expansion.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Opaque value used to exercise a selector expansion whose required `u16`
+/// constructor leaf becomes nullable when the identity arm is selected.
+#[prebindgen]
+pub type SelectorCode = handles::SelectorCode;
+
+/// Construct a [`SelectorCode`] from the same scalar-plus-optional-vector shape
+/// used by zenoh's expanded `Encoding` input.
+#[prebindgen]
+pub fn selector_code_new(id: u16, schema: Option<Vec<u8>>) -> SelectorCode {
+    SelectorCode { id, schema }
+}
+
+/// Observe all three selector states: absent, rebuilt from leaves, and supplied
+/// as an existing handle.
+#[prebindgen]
+pub fn selector_code_score(value: Option<&SelectorCode>) -> i64 {
+    value
+        .map(|value| i64::from(value.id) + value.schema.as_ref().map_or(0, |v| v.len() as i64))
+        .unwrap_or(-1)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Summary — an opaque handle whose fields decompose at the boundary.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -758,6 +984,24 @@ pub fn summary_count(s: &Summary) -> i64 {
 #[prebindgen]
 pub fn summary_total(s: &Summary) -> f64 {
     s.total
+}
+
+/// Rust-side-only aggregate used to exercise recursive input expansion: its
+/// constructor receives a [`Summary`], whose own default constructor expansion
+/// must be folded before this outer constructor is called.
+#[prebindgen]
+pub type SummaryEnvelope = handles::SummaryEnvelope;
+
+/// Construct the outer half of the recursive input-expansion fixture.
+#[prebindgen]
+pub fn summary_envelope_new(summary: Summary, bonus: i64) -> SummaryEnvelope {
+    SummaryEnvelope { summary, bonus }
+}
+
+/// Observe a recursively reconstructed [`SummaryEnvelope`].
+#[prebindgen]
+pub fn summary_envelope_score(value: SummaryEnvelope) -> i64 {
+    value.summary.count + value.summary.total as i64 + value.bonus
 }
 
 /// Total scaled by a factor (an instance **method**: `&Self` receiver + arg).
@@ -1035,6 +1279,19 @@ pub type Vault = handles::Vault;
 #[prebindgen]
 pub type Ingot = handles::Ingot;
 
+/// Construct an [`Ingot`] for direct owned-handle input tests.
+#[prebindgen]
+pub fn ingot_new(grams: i64) -> Ingot {
+    Ingot { grams }
+}
+
+/// Consume an optional opaque handle. `Some` transfers the allocation and
+/// `None` rides the null-pointer niche without constructing a value.
+#[prebindgen]
+pub fn ingot_optional_grams(i: Option<Ingot>) -> i64 {
+    i.map_or(-1, |i| i.grams)
+}
+
 /// What an [`Ingot`] weighs — enough to prove the handle delivered to the JVM
 /// points at the right object.
 #[prebindgen]
@@ -1237,6 +1494,13 @@ pub fn label_series_echo(labels: Vec<Label>) -> Vec<Label> {
     labels
 }
 
+/// Join a borrowed run of converted elements. JNI decodes the Java list into
+/// an owned `Vec<Label>` carrier and lends it here only for this call.
+#[prebindgen]
+pub fn label_borrowed_concat(labels: &[Label]) -> Label {
+    Label(labels.iter().map(|label| label.0.as_str()).collect())
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Option<scalar> — a nullable primitive return.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1247,6 +1511,15 @@ pub fn label_series_echo(labels: Vec<Label>) -> Vec<Label> {
 #[prebindgen]
 pub fn payload_label_len(p: &Payload) -> Option<i64> {
     p.label.as_ref().map(|s| s.len() as i64)
+}
+
+/// Read a borrowed optional data class without making the JNI side decode the
+/// Kotlin object reflectively. The generated boundary flattens `Payload` into
+/// primitive leaves, lets the registry construct an owned `Option<Payload>`,
+/// and borrows it only for this final source call.
+#[prebindgen]
+pub fn payload_optional_borrow_id(p: Option<&Payload>) -> i64 {
+    p.map_or(-1, |p| p.id)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1702,6 +1975,19 @@ pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
     }
 }
 
+/// Deliver either one [`Payload`] or absence through an
+/// `Option<data-class>` callback argument.
+#[prebindgen]
+pub fn payload_optional_emit(present: bool, f: impl Fn(Option<Payload>) + Send + Sync + 'static) {
+    f(present.then(|| Payload {
+        id: 91,
+        seq: 7,
+        value: 2.5,
+        flag: true,
+        label: Some(Box::new("optional-callback".to_string())),
+    }));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Consts — declared via `PackageDecl::constant`, surfacing as generated JNI
 // getters + lazily-initialized Kotlin top-level `val`s.
@@ -2029,6 +2315,42 @@ pub fn boxed_latest(a: &Archive) -> Box<Option<Summary>> {
 pub struct Holder {
     pub tag: i64,
     pub summary: Summary,
+}
+
+/// A semantic wrapper whose declared representation is an opaque handle.
+#[prebindgen]
+#[derive(Clone)]
+pub struct CallbackToken {
+    pub ingot: Ingot,
+}
+
+#[prebindgen]
+pub fn callback_token_into_ingot(token: CallbackToken) -> Ingot {
+    token.ingot
+}
+
+/// A product that owns the converted handle.
+#[prebindgen]
+pub struct CallbackHolder {
+    pub tag: i64,
+    pub token: CallbackToken,
+}
+
+/// Deliver a present or absent handle-owning data class to a callback.
+///
+/// The generated Kotlin bridge must close `token` after the callback unless
+/// user code has already taken ownership of it.
+#[prebindgen]
+pub fn callback_holder_optional_emit(
+    present: bool,
+    f: impl Fn(Option<CallbackHolder>) + Send + Sync + 'static,
+) {
+    f(present.then_some(CallbackHolder {
+        tag: 17,
+        token: CallbackToken {
+            ingot: handles::Ingot { grams: 23 },
+        },
+    }));
 }
 
 /// `tag` when the holder is present, `fallback` when it is absent — so the

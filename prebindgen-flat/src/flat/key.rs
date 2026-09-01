@@ -27,9 +27,13 @@ use quote::ToTokens;
 /// them from somewhere that knows what they mean: the registry's reading, or
 /// the declaration that wrote them (#291).
 ///
-/// What a key can still answer about itself is what it is **called** —
-/// [`Self::as_str`], [`Self::ident`], [`Self::short_name`] — because a name is
-/// not syntax.
+/// What a key can still answer about itself is its canonical identity label
+/// ([`Self::as_str`]) and, where that identity is a path, its nominal name
+/// ([`Self::ident`], [`Self::short_name`]). The identity label resembles
+/// normalized Rust syntax for structural types, but that resemblance grants no
+/// semantic authority: consumers must never parse it or branch on particular
+/// spellings. Classification belongs to [`TypeRef::kind`](super::TypeRef::kind)
+/// and the structured readings derived from it.
 #[derive(Clone)]
 pub struct TypeKey {
     /// Canonical token string — the identity `Eq`/`Hash` compare, and the whole
@@ -115,7 +119,13 @@ impl TypeKey {
         Self::from_type(&syn::parse_quote!(#ident))
     }
 
-    /// The canonical string form.
+    /// The canonical identity label.
+    ///
+    /// This is for diagnostics, stable artifact labels, and interoperation
+    /// with declaration APIs that identify types textually. It is not a type
+    /// model: do not parse it or compare it with Rust spellings to classify a
+    /// type. Ask [`TypeRef::kind`](super::TypeRef::kind) or another structured
+    /// model reading instead.
     pub fn as_str(&self) -> &str {
         &self.canon
     }

@@ -2,4 +2,8 @@
 /**/target
 /examples/*/build/
 Cargo.lock
+# …except the size report's, whose numbers depend on the exact `syn` and
+# `proc-macro2` it parses with. A gate that can resolve a different parser
+# later is not a gate.
+!tools/line-report/Cargo.lock
 .vscode/
