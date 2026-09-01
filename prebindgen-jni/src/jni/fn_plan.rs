@@ -759,8 +759,8 @@ impl JniFunctionPlan {
     ) -> Result<Self, PlanError> {
         let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.name.to_string()));
         let native_symbol = ext.native_method_symbol(&jni_method);
-        let unfold = registry.unfold_plans().get(&f.name).cloned();
-        let error = registry.error_plans().get(&f.name).cloned();
+        let unfold = ext.unfolded().unfold_plans.get(&f.name).cloned();
+        let error = ext.unfolded().error_plans.get(&f.name).cloned();
         let onerror_iface = onerror_iface_spec(ext, registry, &f.name);
         // Output first: the Rust emitter historically resolved the output
         // before the inputs, so an unresolved-output failure takes precedence
@@ -1212,8 +1212,8 @@ fn build_output(
         };
         let decon = plan.decon.as_ref().map(|id| {
             std::rc::Rc::new(
-                registry
-                    .decon_plans()
+                ext.unfolded()
+                    .decon_plans
                     .get(id)
                     .unwrap_or_else(|| panic!("unfold plan names unknown deconstructor `{id:?}`"))
                     .clone(),

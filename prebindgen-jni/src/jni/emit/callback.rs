@@ -430,8 +430,10 @@ pub(crate) fn callback_input(
         // `fromParts` + `add`), then deliver the assembled list whole to the
         // user callback's `run(List<T>)`. Reuses the OUTPUT fold's folder
         // interface + appender singleton, driven from the trampoline.
-        if let Some(plan) = registry
-            .callback_arg_plan(&arg_ty.key())
+        if let Some(plan) = ext
+            .unfolded()
+            .callback_arg_plans
+            .get(&arg_ty.key())
             .filter(|p| super::render::is_iterable_fold(&p.shape))
         {
             let fragment = *arg_fragments.get(i)?;
@@ -479,7 +481,7 @@ pub(crate) fn callback_input(
 
         // Decomposed arg: deliver the leaves of its type-level canonical
         // output, exactly like a return delivery.
-        if let Some(plan) = effective_callback_plan(ext, registry, arg_ty) {
+        if let Some(plan) = effective_callback_plan(ext, arg_ty) {
             let fragment = *arg_fragments.get(i)?;
             let (wires, chain) = freeze_callback_delivery(ext, plan, fragment)?;
             let optional = plan.is_optional_base();

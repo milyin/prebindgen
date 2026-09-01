@@ -770,7 +770,7 @@ impl JniGen {
     /// a plan rather than through a leaf list.
     pub(crate) fn plan_lines_for_test(&self, func: &str) -> Option<Vec<String>> {
         let ident = syn::Ident::new(func, proc_macro2::Span::call_site());
-        let plan = prebindgen_registry::Conversions::unfold_plans(&self.registry).get(&ident)?;
+        let plan = self.decls.unfolded().unfold_plans.get(&ident)?;
         Some(
             plan.leaves
                 .iter()
@@ -1380,6 +1380,15 @@ pub struct Declarations {
     /// type while function sites are compiled and drained into the frozen
     /// generation plan before any artifact writer runs.
     pub(crate) vec_build_plans: std::cell::RefCell<HashMap<TypeKey, std::rc::Rc<VecBuildHelpers>>>,
+
+    /// The output-side decompositions this binding declared, applied.
+    ///
+    /// Filled once, while the binding declares itself into the registry, and
+    /// read at every emission site that asks how a return, an error or a
+    /// callback argument comes apart. The registry holds none of this: it is
+    /// told only which readings the decompositions need on the output side, and
+    /// which leaves a callback argument's delivery depends on.
+    pub(crate) unfolded: std::cell::OnceCell<prebindgen_registry::unfold::Unfolded>,
 
     /// Present only after resolution has finished. All artifact writers reach
     /// derived JNI decisions through this one immutable store; the mutable

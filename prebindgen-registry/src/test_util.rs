@@ -27,6 +27,25 @@ pub(crate) fn reg_with(sources: &[&str]) -> RegistryBuilder {
     reg_from_items(declare_referenced(items)).expect("index")
 }
 
+/// The flat model from item sources, with referenced types declared.
+///
+/// What a fixture needs when it drives a phase that reads the model and nothing
+/// else — [`unfold`](crate::unfold), whose `apply*` functions take an
+/// [`Unfolding`](crate::unfold::Unfolding) over a model rather than a registry.
+pub(crate) fn flat_with(sources: &[&str]) -> prebindgen_flat::flat::Flat {
+    let items = sources
+        .iter()
+        .map(|src| {
+            let item: syn::Item = syn::parse_str(src).expect("parse item");
+            (item, SourceLocation::default())
+        })
+        .collect::<Vec<_>>();
+    prebindgen_flat::Flat::builder()
+        .items(declare_referenced(items))
+        .build()
+        .expect("index")
+}
+
 /// A **scanned** registry from item sources — for tests that drive `expand` /
 /// `unfold` directly and need the type tables populated, without going through
 /// a generator's conversion loop.

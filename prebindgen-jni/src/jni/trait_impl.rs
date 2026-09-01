@@ -836,7 +836,7 @@ impl Declarations {
     pub fn declare_into(
         &self,
         mut registry: RegistryBuilder,
-    ) -> Result<RegistryBuilder, prebindgen_registry::ScanError> {
+    ) -> Result<RegistryBuilder, prebindgen_registry::WriteRustError> {
         // Binding-local fns first: they become model, and everything below may
         // name one.
         for (item_fn, origin) in self.collect_local_functions() {
@@ -898,14 +898,53 @@ impl Declarations {
         // How composites cross in pieces. Every one of these reads only the
         // model, which is what lets them be stated here rather than asked for
         // mid-resolve.
+        //
+        // The output side is applied here rather than declared: the plans are
+        // this adapter's to keep, and the registry is told only the two things
+        // it needs from them — which readings must cross on the output side,
+        // and which leaves a callback argument's delivery depends on.
+        let mut unfolding = prebindgen_registry::unfold::Unfolding::new(registry.flat());
+        let exports = registry.exports().clone();
+        let accessors = registry.accessors().clone();
+        prebindgen_registry::unfold::apply(
+            &mut unfolding,
+            &self.build_deconstructors(&registry),
+            &exports,
+            &accessors,
+        )?;
+        // Synthesized by-value `data_class` decompositions: the leaves are
+        // already built above; this wires them into fixed-builder plans.
+        prebindgen_registry::unfold::apply_value_structs(
+            &mut unfolding,
+            self.build_value_struct_decons(&registry),
+            &exports,
+        )?;
+        // The same wiring for a value whose alternatives are chosen at runtime
+        // (a tag plus one leaf group per variant) rather than being a fixed
+        // product.
+        prebindgen_registry::unfold::apply_sum_returns(
+            &mut unfolding,
+            self.build_sum_decons(&registry),
+            &exports,
+        )?;
+        // Single-leaf `Vec<T>`/`&[T]` whole-element folds — the dual of the
+        // `data_class` folds above, for String / scalar / handle elements, so
+        // the list is built on the Kotlin side rather than through a Rust
+        // `ArrayList`.
+        prebindgen_registry::unfold::apply_leaf_vec_folds(
+            &mut unfolding,
+            self.build_leaf_vec_fold_elements(&registry),
+            &exports,
+        )?;
         let decompositions = prebindgen_registry::Decompositions {
             expansions: Some(self.build_expansions()),
-            deconstructors: Some(self.build_deconstructors(&registry)),
-            value_structs: self.build_value_struct_decons(&registry),
-            sums: self.build_sum_decons(&registry),
-            leaf_vec_elements: self.build_leaf_vec_fold_elements(&registry),
+            requirements: unfolding.requirements().to_vec(),
+            callback_arg_leaves: unfolding.callback_arg_leaves(),
             replaces: self.boundary_only_types(),
         };
+        self.unfolded
+            .set(unfolding.into_plans())
+            .unwrap_or_else(|_| panic!("a binding declares itself into a registry once"));
         registry = registry.decompose(decompositions);
         Ok(registry)
     }

@@ -102,14 +102,19 @@ impl Registry {
     /// see.
     ///
     /// A callback argument delivered as leaves needs each leaf's own conversion
-    /// before the callback's can be built — and a leaf is named by a plan, not
-    /// by the argument's syntax. Without this the order would be structurally
-    /// correct and still wrong, which is exactly the kind of gap the old
-    /// fixed-point loop papered over by retrying.
+    /// before the callback's can be built — and a leaf is named by a
+    /// decomposition, not by the argument's syntax. Without this the order would
+    /// be structurally correct and still wrong, which is exactly the kind of gap
+    /// the old fixed-point loop papered over by retrying.
+    ///
+    /// The leaves are the adapter's answer, declared as
+    /// [`Decompositions::callback_arg_leaves`](crate::Decompositions::callback_arg_leaves):
+    /// which readings a decomposition delivers is the adapter's to say, while
+    /// what that means for the order is the registry's.
     /// Crossings, not spellings: every edge here is a table lookup, and the
     /// model names both ends. `callback_args` is the classification
     /// `extract_fn_trait_args` re-derived from the parameter's bounds, and a
-    /// leaf's `out_ty` is a reading whose key is its own.
+    /// leaf reading's key is its own.
     pub(super) fn plan_edges(
         &self,
         dir: Direction,
@@ -123,9 +128,14 @@ impl Registry {
         };
         let mut out = Vec::new();
         for arg in args {
-            if let Some(plan) = self.callback_arg_plans.get(&arg.key()) {
-                for leaf in &plan.leaves {
-                    out.push((Direction::Deconstruct, leaf.out_ty.key()));
+            if let Some(leaves) = self
+                .declared
+                .decompositions
+                .callback_arg_leaves
+                .get(&arg.key())
+            {
+                for leaf in leaves {
+                    out.push((Direction::Deconstruct, leaf.key()));
                 }
             }
         }
