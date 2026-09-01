@@ -997,7 +997,9 @@ pub struct FragmentPlan<R: Representation> {
     source: TypeRef,
     intermediate: R::Intermediate,
     converter: ConverterPlan<R>,
-    artifact: Option<R::ConverterArtifact>,
+    conversion: Option<R::ConverterArtifact>,
+    /// Whether [`Self::conversion`] is also emitted into the file.
+    renders: bool,
     yields: Yield,
 }
 
@@ -1015,14 +1017,32 @@ impl<R: Representation> FragmentPlan<R> {
             source,
             intermediate,
             converter,
-            artifact: None,
+            conversion: None,
+            renders: false,
             yields,
         }
     }
 
-    /// Attach the adapter's frozen private-converter artifact.
+    /// Attach the adapter's frozen private-converter artifact, which the file
+    /// emits.
     pub fn with_artifact(mut self, artifact: R::ConverterArtifact) -> Self {
-        self.artifact = Some(artifact);
+        self.conversion = Some(artifact);
+        self.renders = true;
+        self
+    }
+
+    /// Attach a conversion the file does **not** emit.
+    ///
+    /// A fragment can have a conversion and render nothing: one composed into
+    /// its parent emits no converter of its own, and a deferred callable is
+    /// invoked where it lands rather than through a function of its own. Both
+    /// adapters have such fragments, and both still have to say what the
+    /// conversion *is* — an emitter asking how such a value crosses has a fair
+    /// question, and before this the plan could not answer it and the adapter's
+    /// own compile-time carrier had to (#660 item 5).
+    pub fn with_composed_conversion(mut self, conversion: R::ConverterArtifact) -> Self {
+        self.conversion = Some(conversion);
+        self.renders = false;
         self
     }
 
@@ -1047,8 +1067,18 @@ impl<R: Representation> FragmentPlan<R> {
     }
 
     /// Adapter-owned converter artifact in registry dependency order.
+    ///
+    /// `None` for a fragment that renders nothing, whether or not it has a
+    /// conversion — this is the file's question. [`Self::conversion`] is the
+    /// other one.
     pub fn artifact(&self) -> Option<&R::ConverterArtifact> {
-        self.artifact.as_ref()
+        self.conversion.as_ref().filter(|_| self.renders)
+    }
+
+    /// How this fragment's value crosses, whether or not the file emits a
+    /// converter for it — see [`Self::with_composed_conversion`].
+    pub fn conversion(&self) -> Option<&R::ConverterArtifact> {
+        self.conversion.as_ref()
     }
 
     /// Source-value contract produced by this fragment.

@@ -103,7 +103,7 @@ pub(crate) fn optional_pair_plan_candidate(ext: &Declarations, arg: &TypeRef) ->
     JniPrim::from_wire(&inner_entry.wire).is_some()
         && inner_entry.niches.clone().carve().is_none()
         && inner_entry.metadata.projection.is_none()
-        && inner_entry.0.chain.steps().is_empty()
+        && inner_entry.0.converter().chain().steps().is_empty()
 }
 
 /// Kotlin spelling of the niche consumed by the outer Optional enum layer.
@@ -1133,7 +1133,9 @@ impl JFrag {
             self.yields.clone(),
         );
         match self.composed_only {
-            true => plan,
+            // Composed into its parent: it emits no converter of its own, and
+            // it still has a conversion, which an emitter may ask about.
+            true => plan.with_composed_conversion(self.artifact()),
             false => plan.with_artifact(self.artifact()),
         }
     }
@@ -1269,6 +1271,35 @@ pub(crate) fn site_plan(
         Some(()),
         prebindgen_registry::generation::Cleanup::None,
     )
+}
+
+/// The conversion one **planned** fragment's value crosses through.
+///
+/// Read off the plan's conversion rather than its artifact: a fragment composed
+/// into its parent renders no converter and still crosses, and how it crosses
+/// is what an emitter is asking. `None` only for a fragment with no conversion
+/// at all.
+pub(crate) fn pipeline_of(
+    fragment: &prebindgen_registry::generation::FragmentPlan<JRepresentation>,
+    direction: Direction,
+    mode: Mode,
+) -> Option<crate::jni::chain::JPipeline> {
+    Some(pipeline_from(
+        fragment.conversion()?,
+        fragment.converter().chain(),
+        direction,
+        mode,
+    ))
+}
+
+/// [`pipeline_of`]'s outgoing peer: the exact Rust-value-to-JNI operation.
+pub(crate) fn output_abi_of(
+    fragment: &prebindgen_registry::generation::FragmentPlan<JRepresentation>,
+) -> Option<OutAbi> {
+    Some(output_abi_from(
+        fragment.conversion()?,
+        fragment.converter().chain(),
+    ))
 }
 
 /// Every converter function one planned fragment renders.
@@ -2077,13 +2108,13 @@ impl<R: Conversions> JCompile<'_, R> {
             at.crossing.direction(),
             operation.clone(),
             ok.key(),
-            &success.0.chain,
+            success.0.converter().chain(),
             prebindgen_registry::generation::Failure::Fallible,
         );
         let rust = crate::jni::chain::JFunction::result(crate::jni::chain::JResultPlan {
             operation,
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
-            success: success.0.rust.clone(),
+            success: success.1.rust.clone(),
             source: source.clone(),
             ok: ok.clone(),
             err: err.clone(),
@@ -2139,7 +2170,8 @@ impl<R: Conversions> JCompile<'_, R> {
         // fragment's own direction, so neither arm reverses anything.
         let stages: Vec<OperationId> = entry
             .0
-            .chain
+            .converter()
+            .chain()
             .steps()
             .iter()
             .map(|step| step.operation().clone())
@@ -2163,7 +2195,7 @@ impl<R: Conversions> JCompile<'_, R> {
         let rust = crate::jni::chain::JFunction::transparent(crate::jni::chain::JTransparentPlan {
             operation: operation.clone(),
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
-            inner: entry.0.rust.clone(),
+            inner: entry.1.rust.clone(),
             source: source.clone(),
             wire: entry.wire.clone(),
             direction,
@@ -2320,7 +2352,7 @@ impl<R: Conversions> JCompile<'_, R> {
             direction,
             operation.clone(),
             representation_key.clone(),
-            &inner.0.chain,
+            inner.0.converter().chain(),
             if fallible {
                 prebindgen_registry::generation::Failure::Fallible
             } else {
@@ -2357,7 +2389,7 @@ impl<R: Conversions> JCompile<'_, R> {
             metadata,
             subs: vec![representation_key],
         };
-        let mut fragment = JFrag::planned_staged(at, chain, conv, inner.0.rust.clone());
+        let mut fragment = JFrag::planned_staged(at, chain, conv, inner.1.rust.clone());
         fragment.rust_stages.push(plan);
         Some(fragment)
     }
@@ -3813,11 +3845,11 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 // A payload this adapter has no slot for — a nested object or
                 // handle — keeps the explicit whole-value sealed-class decoder.
                 None => {
-                    let conv = self
+                    let fragment = self
                         .decls
-                        .in_frag(at.crossing.spelled())
+                        .compiled_frag(at.crossing.spelled(), Direction::Construct)
                         .ok_or_else(|| refuse(at, "no JNI representation for this sum"))?;
-                    Ok(JFrag::new(at, conv.converter_impl().clone()))
+                    Ok(JFrag::new(at, fragment.conv.clone()))
                 }
             },
             Direction::Deconstruct => {
@@ -4139,7 +4171,22 @@ impl crate::jni::Declarations {
     pub(crate) fn frag(&self, ty: &TypeRef, direction: Direction) -> Option<Conv> {
         let fragment = self.compiled.borrow().fragment(&ty.key(), direction)?;
         let artifact = fragment.artifact();
-        Some(Conv(fragment, artifact))
+        Some(Conv(fragment.freeze(), artifact))
+    }
+
+    /// The compiled fragment itself, for the **compiler's** own use.
+    ///
+    /// [`Self::frag`] is the emitters' door and hands back the plan. This one
+    /// hands back the carrier the compiler is still building with, which only a
+    /// composition hook may ask for: re-answering a crossing as a whole
+    /// fragment needs the `ConverterImpl` that fragment was compiled with, and
+    /// that is not something the plan carries.
+    pub(crate) fn compiled_frag(
+        &self,
+        ty: &TypeRef,
+        direction: Direction,
+    ) -> Option<std::rc::Rc<JFrag>> {
+        self.compiled.borrow().fragment(&ty.key(), direction)
     }
 
     pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<Conv> {
@@ -4216,7 +4263,10 @@ impl ComposedChain {
 /// cannot hold a borrow into it; sharing the fragment's `Rc` and reaching the
 /// conversion through it costs a refcount instead of a whole `syn::ItemFn` per
 /// lookup.
-pub(crate) struct Conv(std::rc::Rc<JFrag>, JConverterArtifact);
+pub(crate) struct Conv(
+    prebindgen_registry::generation::FragmentPlan<JRepresentation>,
+    JConverterArtifact,
+);
 
 impl Conv {
     pub(crate) fn activate(&self) {
@@ -4229,7 +4279,7 @@ impl Conv {
         mode: Mode,
     ) -> crate::jni::chain::JPipeline {
         self.activate();
-        self.0.pipeline(direction, mode)
+        pipeline_of(self.plan(), direction, mode).expect("a conversion a caller can name has one")
     }
 
     /// The JNI wire this conversion produces or consumes, from the artifact —
@@ -4253,7 +4303,7 @@ impl Conv {
 
     /// Freeze this exact compiled fragment as one outgoing ABI operation.
     pub(crate) fn output_abi(&self) -> OutAbi {
-        self.0.output_abi()
+        output_abi_of(self.plan()).expect("a conversion a caller can name has one")
     }
 
     #[cfg(test)]
@@ -4296,27 +4346,15 @@ impl Conv {
 }
 
 impl Conv {
-    /// This conversion's fragment, frozen.
+    /// This conversion's fragment, as the canonical plan.
     ///
     /// A callback parameter is answered whole rather than compiled as a site
     /// (`classify_leaf` says why: a callback ARGUMENT does not always have a
     /// conversion of its own), so it has no `Bound` from the compiler — but it
     /// does have a fragment, and this is what lets its site be stated
-    /// canonically anyway (#622 review). It hands back the plan rather than the
-    /// compiler's fragment: what a caller here needs of one is what the plan
-    /// carries, so the carrier stays inside (#660 item 5).
-    pub(crate) fn plan(&self) -> prebindgen_registry::generation::FragmentPlan<JRepresentation> {
-        self.0.freeze()
-    }
-
-    /// The registry-facing conversion this fragment was compiled with.
-    ///
-    /// The one reader left that needs the `ConverterImpl` rather than the
-    /// artifact: a sealed class with no decomposition is re-answered as a whole
-    /// fragment, which means building a new one from this conversion. It goes
-    /// when `JFrag` does.
-    pub(crate) fn converter_impl(&self) -> &ConverterImpl<KotlinMeta> {
-        &self.0.conv
+    /// canonically anyway (#622 review).
+    pub(crate) fn plan(&self) -> &prebindgen_registry::generation::FragmentPlan<JRepresentation> {
+        &self.0
     }
 }
 

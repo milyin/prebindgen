@@ -508,7 +508,7 @@ pub(crate) fn callback_input(
         // projection, and the final JNI wire; rendering does not look the type
         // up again or reconstruct any of those decisions.
         let fragment = *arg_fragments.get(i)?;
-        let arg_abi = fragment.output_abi();
+        let arg_abi = crate::jni::compile::output_abi_of(&fragment.freeze())?;
         arg_abi.activate();
         let crate::jni::compile::OutAbi::Value(arg_value) = arg_abi else {
             unreachable!("a whole callback argument is not a synthesized selector")
