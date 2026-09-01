@@ -1191,6 +1191,7 @@ pub struct ArtifactPlan<R: Representation> {
     id: ArtifactId,
     prerequisites: Vec<ArtifactId>,
     inputs: Vec<ArtifactInput>,
+    follows: Vec<FragmentId>,
     payload: R::Artifact,
 }
 
@@ -1206,8 +1207,29 @@ impl<R: Representation> ArtifactPlan<R> {
             id,
             prerequisites,
             inputs,
+            follows: Vec::new(),
             payload,
         }
+    }
+
+    /// State that this artifact exists only while one of `fragments` is reached.
+    ///
+    /// The inverse of an [`ArtifactInput::Fragment`]. An input is a *reason* a
+    /// fragment is kept: the artifact needs it, so the plan must not prune it.
+    /// This is a *consequence* of a fragment being kept: the file emits a
+    /// private converter because its fragment survived, and emitting one is no
+    /// reason to keep the fragment. So the plan drops such an artifact when it
+    /// has dropped every fragment it follows.
+    ///
+    /// Several fragments can render one converter — an operation shared by two
+    /// crossings is emitted once — which is why this is a list: the artifact
+    /// stays while any one of them does.
+    ///
+    /// Left unset, the artifact is unconditional: the binding declared it, and
+    /// no fragment's fate withdraws it.
+    pub fn follows(mut self, fragments: Vec<FragmentId>) -> Self {
+        self.follows = fragments;
+        self
     }
 
     /// Semantic artifact identity.
@@ -1225,6 +1247,12 @@ impl<R: Representation> ArtifactPlan<R> {
         &self.inputs
     }
 
+    /// Fragments whose reachability this item's existence follows — see
+    /// [`Self::follows`]. Empty for an unconditional artifact.
+    pub fn followed(&self) -> &[FragmentId] {
+        &self.follows
+    }
+
     /// Adapter-owned artifact description.
     pub fn payload(&self) -> &R::Artifact {
         &self.payload
@@ -1236,6 +1264,10 @@ pub struct GenerationPlanBuilder<R: Representation> {
     fragments: HashMap<FragmentId, FragmentPlan<R>>,
     sites: HashMap<SiteId, SitePlan<R>>,
     artifacts: HashMap<ArtifactId, ArtifactPlan<R>>,
+    /// Artifacts in the order they were added, which is the order the file
+    /// emits them in. A prerequisite still hoists ahead of its dependent.
+    declared: Vec<ArtifactId>,
+    roots: Vec<FragmentId>,
     errors: Vec<PlanError>,
 }
 
@@ -1245,6 +1277,8 @@ impl<R: Representation> Default for GenerationPlanBuilder<R> {
             fragments: HashMap::new(),
             sites: HashMap::new(),
             artifacts: HashMap::new(),
+            declared: Vec::new(),
+            roots: Vec::new(),
             errors: Vec::new(),
         }
     }
@@ -1275,11 +1309,27 @@ impl<R: Representation> GenerationPlanBuilder<R> {
     }
 
     /// Add one final artifact. Duplicate semantic identities are errors.
+    ///
+    /// The order artifacts are added in is the order the file emits them in.
     pub fn artifact(&mut self, plan: ArtifactPlan<R>) -> &mut Self {
         let id = plan.id.clone();
         if self.artifacts.insert(id.clone(), plan).is_some() {
             self.errors.push(PlanError::DuplicateArtifact(id));
+        } else {
+            self.declared.push(id);
         }
+        self
+    }
+
+    /// Declare `fragment` reached because the binding's surface says so.
+    ///
+    /// Sites and artifact inputs are the reasons a fragment is kept that the
+    /// plan can see for itself. This is the one an adapter has to state: a
+    /// declared class crosses in both directions whether or not this build
+    /// happens to export a function that mentions it, so its converters are
+    /// binding surface and not dead code.
+    pub fn root(&mut self, fragment: FragmentId) -> &mut Self {
+        self.roots.push(fragment);
         self
     }
 
@@ -1289,12 +1339,13 @@ impl<R: Representation> GenerationPlanBuilder<R> {
         self.validate_sites();
         self.validate_artifacts();
         let fragment_order = topo_fragments(&self.fragments, &mut self.errors);
-        let artifact_order = topo_artifacts(&self.artifacts, &mut self.errors);
+        let artifact_order = topo_artifacts(&self.artifacts, &self.declared, &mut self.errors);
         if !self.errors.is_empty() {
             return Err(PlanErrors(self.errors));
         }
 
         let mut roots: Vec<_> = self.sites.values().map(|s| s.fragment.clone()).collect();
+        roots.extend(self.roots.iter().cloned());
         roots.extend(self.artifacts.values().flat_map(|artifact| {
             artifact.inputs.iter().filter_map(|input| match input {
                 ArtifactInput::Fragment(id) => Some(id.clone()),
@@ -1309,6 +1360,17 @@ impl<R: Representation> GenerationPlanBuilder<R> {
             .filter(|id| reachable.contains(id))
             .collect();
         self.fragments.retain(|id, _| reachable.contains(id));
+        // An artifact that follows fragments goes with the last of them: it
+        // renders their converter, so with none of them left there is nothing
+        // for it to render. An artifact that follows none is unconditional.
+        let kept = |plan: &ArtifactPlan<R>| {
+            plan.follows.is_empty() || plan.follows.iter().any(|id| reachable.contains(id))
+        };
+        let artifact_order: Vec<_> = artifact_order
+            .into_iter()
+            .filter(|id| self.artifacts.get(id).is_some_and(kept))
+            .collect();
+        self.artifacts.retain(|_, plan| kept(plan));
 
         let mut site_order: Vec<_> = self.sites.keys().cloned().collect();
         site_order.sort_by_cached_key(SiteId::stable_key);
@@ -1792,8 +1854,11 @@ fn visit_fragment<R: Representation>(
     order.push(id.clone());
 }
 
+/// Artifacts in emission order: the order they were declared in, with each
+/// artifact's prerequisites hoisted ahead of it.
 fn topo_artifacts<R: Representation>(
     plans: &HashMap<ArtifactId, ArtifactPlan<R>>,
+    declared: &[ArtifactId],
     errors: &mut Vec<PlanError>,
 ) -> Vec<ArtifactId> {
     fn visit<R: Representation>(
@@ -1826,12 +1891,10 @@ fn topo_artifacts<R: Representation>(
         order.push(id.clone());
     }
 
-    let mut roots: Vec<_> = plans.keys().cloned().collect();
-    roots.sort();
     let mut state = HashMap::new();
     let mut order = Vec::new();
-    for root in roots {
-        visit(&root, plans, &mut state, &mut order, errors);
+    for root in declared {
+        visit(root, plans, &mut state, &mut order, errors);
     }
     order
 }
