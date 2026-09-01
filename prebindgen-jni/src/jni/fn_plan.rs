@@ -956,7 +956,7 @@ fn classify_leaf(
             ext.site_plans
                 .borrow_mut()
                 .push(std::rc::Rc::new(crate::jni::compile::site_plan(
-                    &fragment,
+                    fragment,
                     &prebindgen_registry::recipe::Bound {
                         site: Site {
                             owner: owner.clone(),
