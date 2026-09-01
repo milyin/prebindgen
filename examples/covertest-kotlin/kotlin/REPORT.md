@@ -55,6 +55,7 @@ Base package: `io.prebindgen.covertest`
 
 - `annotated_alternate_value` — `fun annotatedAlternateValue(a: Annotated, onError: JniErrorHandler<Double?>): Double?`
 - `annotated_new` — `fun annotatedNew(payload: Payload, ttl: Long?, priority: Priority?, onError: JniErrorHandler<Annotated?>): Annotated?`
+  - shaped by: return `Annotated` decomposed → [payload__id, payload__seq, payload__value, payload__flag, payload__label, alternate__present, alternate__id, alternate__seq, alternate__value, alternate__flag, alternate__label, ttl, priority] (Callback delivery)
 - `annotated_payload_value` — `fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double`
 - `annotated_priority` — `fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority?`
 - `annotated_ttl` — `fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long?`
@@ -83,14 +84,22 @@ Base package: `io.prebindgen.covertest`
 - `const_array_echo` — `fun constArrayEcho(value: ConstArray, onError: JniErrorHandler<ConstArray?>): ConstArray?`
   - shaped by: return `ConstArray` decomposed → [bytes] (Callback delivery)
 - `dossier_new` — `fun dossierNew(note: Long, tag: Long, count: Long, total: Double, onError: JniErrorHandler<Dossier?>): Dossier?`
+  - shaped by: return `Dossier` decomposed → [note, holder__tag, holder__summary] (Callback delivery)
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary?>): DurationBoundary?`
   - shaped by: return `DurationBoundary` decomposed → [required, delay] (Callback delivery)
 - `duration_emit` — `fun durationEmit(value: ULong, f: DurationCallback, onError: JniErrorHandler<Unit>)`
 - `duration_optional` — `fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
 - `duration_out_of_range` — `fun durationOutOfRange(onError: JniErrorHandler<ULong?>): ULong?`
+- `envelope_each` — `fun envelopeEach(n: Long, sink: EnvelopeCallback, onError: JniErrorHandler<Unit>)`
+- `envelope_new` — `fun envelopeNew(id: Long, present: Boolean, onError: JniErrorHandler<Envelope?>): Envelope?`
+  - shaped by: return `Envelope` decomposed → [id, stamp__present, stamp__secs, stamp__nanos] (Callback delivery)
+- `frame_each` — `fun frameEach(n: Long, sink: FrameCallback, onError: JniErrorHandler<Unit>)`
+- `frame_new` — `fun frameNew(id: Long, window: Boolean, span: Boolean, which: Long, onError: JniErrorHandler<Frame?>): Frame?`
+  - shaped by: return `Frame` decomposed → [id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0] (Callback delivery)
 - `hold_echo` — `fun holdEcho(h: Hold, onError: JniErrorHandler<Hold?>): Hold?`
   - shaped by: return `Hold` decomposed → [tag, for_v0] (Callback delivery)
 - `hold_policy_echo` — `fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy?`
+  - shaped by: return `HoldPolicy` decomposed → [hold__tag, hold__for_v0, grace__present, grace__tag, grace__for_v0] (Callback delivery)
 - `holder_tag_or` — `fun holderTagOr(h: Holder?, fallback: Long, onError: JniErrorHandler<Long>): Long`
 - `ingot_optional_grams` — `fun ingotOptionalGrams(i: Ingot?, onError: JniErrorHandler<Long>): Long`
 - `label_borrowed_concat` — `fun labelBorrowedConcat(labels: List<String>, onError: JniErrorHandler<String?>): String?`
@@ -107,8 +116,10 @@ Base package: `io.prebindgen.covertest`
 - `marker_of` — `fun markerOf(which: Int, onError: JniErrorHandler<Marker?>): Marker?`
   - shaped by: return `Marker` decomposed → [tag, ranked_v0] (Callback delivery)
 - `maybe_holder_new` — `fun maybeHolderNew(tag: Long, count: Long, total: Double, present: Boolean, onError: JniErrorHandler<MaybeHolder?>): MaybeHolder?`
+  - shaped by: return `MaybeHolder` decomposed → [tag, summary] (Callback delivery)
 - `object_boundary_value` — `fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long`
 - `observation_new` — `fun observationNew(which: Int, withFallback: Boolean, onError: JniErrorHandler<Observation?>): Observation?`
+  - shaped by: return `Observation` decomposed → [id, reading__tag, reading__exact_v0, reading__range_low, reading__range_high, reading__tagged_v0, reading__tagged_v1, reading__companion_v0, fallback__present, fallback__tag, fallback__exact_v0, fallback__range_low, fallback__range_high, fallback__tagged_v0, fallback__tagged_v1, fallback__companion_v0, note] (Callback delivery)
 - `observation_which` — `fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int`
 - `payload_priority` — `fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority?>): Priority?`
 - `percent_invalid_output` — `fun percentInvalidOutput(onError: JniErrorHandler<Int?>): Int?`
@@ -122,6 +133,9 @@ Base package: `io.prebindgen.covertest`
 - `probe_each` — `fun probeEach(n: Long, total: Double, sink: ProbeCallback, onError: JniErrorHandler<Unit>)`
 - `probe_new` — `fun <R> probeNew(seq: Long, count: Long, total: Double, onError: JniErrorHandler<R?>, build: ProbeBuilder<R>): R?`
   - shaped by: return `Probe` decomposed → [seq, outcome__tag, outcome__found_v0, outcome__failed_v0] (Callback delivery)
+- `rack_each` — `fun rackEach(n: Long, sink: RackCallback, onError: JniErrorHandler<Unit>)`
+- `rack_new` — `fun rackNew(id: Long, meter: Boolean, span: Boolean, which: Long, onError: JniErrorHandler<Rack?>): Rack?`
+  - shaped by: return `Rack` decomposed → [meter__present, meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id, plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id, name] (Callback delivery)
 - `reading_each` — `fun readingEach(n: Int, sink: ReadingCallback, onError: JniErrorHandler<Unit>)`
 - `reading_maybe` — `fun readingMaybe(which: Int, onError: JniErrorHandler<Reading?>): Reading?`
   - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
@@ -139,6 +153,7 @@ Base package: `io.prebindgen.covertest`
 - `stamp_series` — `fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>?>): List<Stamp>?`
   - shaped by: return `Stamp` decomposed → [secs, nanos] (Callback delivery)
 - `tagged_new` — `fun taggedNew(which: Int, onError: JniErrorHandler<Tagged?>): Tagged?`
+  - shaped by: return `Tagged` decomposed → [id, marker__tag, marker__ranked_v0] (Callback delivery)
 - `tagged_rank` — `fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int`
 - `ticks_emit` — `fun ticksEmit(f: TicksCallback, onError: JniErrorHandler<Unit>)`
 - `unsigned_data_maybe` — `fun unsignedDataMaybe(value: Unsigned, onError: JniErrorHandler<ULong?>): ULong?`
@@ -150,7 +165,9 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `u64` decomposed → [] (Callback delivery)
 - `vault_holder_new` — `fun <R> vaultHolderNew(seq: Long, count: Long, maybeCount: Long, onError: JniErrorHandler<R?>, build: VaultHolderBuilder<R>): R?`
   - shaped by: return `VaultHolder` decomposed → [vaultHolderVault__always, vaultHolderVault__maybe] (Callback delivery)
+- `verdict_each` — `fun verdictEach(n: Long, total: Double, sink: VerdictCallback, onError: JniErrorHandler<Unit>)`
 - `verdict_new` — `fun verdictNew(id: Long, count: Long, total: Double, onError: JniErrorHandler<Verdict?>): Verdict?`
+  - shaped by: return `Verdict` decomposed → [id, outcome__tag, outcome__found_v0, outcome__failed_v0] (Callback delivery)
 - `wrapped_fields_sum` — `fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long`
 
 ## package `io.prebindgen.covertest.storage`
@@ -237,7 +254,9 @@ Base package: `io.prebindgen.covertest`
 - `ConstArray`: data_class → `io.prebindgen.covertest.model.ConstArray` (wire `jni :: objects :: JObject`)
 - `Dossier`: data_class → `io.prebindgen.covertest.Dossier` (wire `jni :: objects :: JObject`)
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
+- `Envelope`: data_class → `io.prebindgen.covertest.model.Envelope` (wire `jni :: objects :: JObject`)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
+- `Frame`: data_class → `io.prebindgen.covertest.model.Frame` (wire `jni :: objects :: JObject`)
 - `Hold`: sealed_class → `io.prebindgen.covertest.model.Hold` (wire `?`)
 - `HoldPolicy`: data_class → `io.prebindgen.covertest.model.HoldPolicy` (wire `jni :: objects :: JObject`)
 - `Holder`: data_class → `io.prebindgen.covertest.Holder` (wire `jni :: objects :: JObject`)
@@ -246,6 +265,7 @@ Base package: `io.prebindgen.covertest`
 - `Lookup`: sealed_class → `io.prebindgen.covertest.model.Lookup` (wire `?`)
 - `Marker`: sealed_class → `io.prebindgen.covertest.model.Marker` (wire `?`)
 - `MaybeHolder`: data_class → `io.prebindgen.covertest.MaybeHolder` (wire `jni :: objects :: JObject`)
+- `Meter`: data_class → `io.prebindgen.covertest.model.Meter` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `ObjectBoundary16`: data_class → `io.prebindgen.covertest.model.ObjectBoundary16` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary2`: data_class → `io.prebindgen.covertest.model.ObjectBoundary2` (wire `jni :: objects :: JObject`)
@@ -261,6 +281,7 @@ Base package: `io.prebindgen.covertest`
 - `PayloadVecHandler`: ptr_class → `io.prebindgen.covertest.PayloadVecHandler` (wire `jni :: sys :: jlong`)
 - `Priority`: enum_class → `io.prebindgen.covertest.model.Priority` (wire `jni :: sys :: jint`)
 - `Probe`: ptr_class → `io.prebindgen.covertest.model.Probe` (wire `jni :: sys :: jlong`)
+- `Rack`: data_class → `io.prebindgen.covertest.model.Rack` (wire `jni :: objects :: JObject`)
 - `Reading`: sealed_class → `io.prebindgen.covertest.model.Reading` (wire `?`)
 - `RepliesConfig`: data_class → `io.prebindgen.covertest.model.RepliesConfig` (wire `jni :: objects :: JObject`)
 - `Report`: ptr_class → `io.prebindgen.covertest.model.Report` (wire `jni :: sys :: jlong`)
@@ -277,6 +298,7 @@ Base package: `io.prebindgen.covertest`
 - `Vault`: ptr_class → `io.prebindgen.covertest.model.Vault` (wire `jni :: sys :: jlong`)
 - `VaultHolder`: ptr_class → `io.prebindgen.covertest.model.VaultHolder` (wire `jni :: sys :: jlong`)
 - `Verdict`: data_class → `io.prebindgen.covertest.model.Verdict` (wire `jni :: objects :: JObject`)
+- `Window`: data_class → `io.prebindgen.covertest.model.Window` (wire `jni :: objects :: JObject`)
 - `WrappedFields`: data_class → `io.prebindgen.covertest.WrappedFields` (wire `jni :: objects :: JObject`)
 
 ## conversions

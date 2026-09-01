@@ -180,17 +180,17 @@ impl IfaceParam {
     pub fn conversion(
         &self,
         ext: &crate::jni::Declarations,
-        registry: &impl Conversions,
         imports: &mut std::collections::BTreeSet<String>,
     ) -> String {
         // A key the registry no longer knows is not a layer question — it is a
         // param built from a type this generation never classified, and the
         // leaf's own wrap is the whole answer there.
+        // Frozen when the param was built, not resolved again here: the
+        // renderer asks the declarations, never a `Conversions` (#613 step 7).
         let reading = self
             .reading
             .as_deref()
-            .and_then(|text| TypeKey::parse(text).ok())
-            .and_then(|key| registry.reading(&key));
+            .and_then(|text| ext.frozen_reading(text));
         match reading {
             Some(reading) => ext.carry_layers(
                 &self.wrap,
@@ -577,7 +577,6 @@ impl IfaceSpec {
     pub fn to_as_raw_fun(
         &self,
         ext: &crate::jni::Declarations,
-        registry: &impl Conversions,
         imports: &mut std::collections::BTreeSet<String>,
     ) -> KtFun {
         let bare_generics: Vec<String> = self
@@ -627,7 +626,7 @@ impl IfaceSpec {
             self.params
                 .iter()
                 .map(|p| RunArg {
-                    expr: p.conversion(ext, registry, imports),
+                    expr: p.conversion(ext, imports),
                     // A wrapped handle leaf closes as itself; its nullability
                     // rides `nullable` below, exactly as for a group.
                     close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
@@ -657,7 +656,7 @@ impl IfaceSpec {
                     None => {
                         let p = &self.params[at];
                         args.push(RunArg {
-                            expr: p.conversion(ext, registry, imports),
+                            expr: p.conversion(ext, imports),
                             close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
                             nullable: p.raw.is_nullable(),
                             reassembled: false,
@@ -888,7 +887,7 @@ fn subject_package(ext: &Declarations, subject: &prebindgen_registry::flat::Type
 
 /// The interface param list for a decomposition's leaves: names from
 /// [`plan_leaf_names`], typed + raw views per leaf.
-fn plan_leaf_params(
+pub(crate) fn plan_leaf_params(
     ext: &Declarations,
     leaves: &[crate::jni::compile::OutWire],
 ) -> Option<Vec<IfaceParam>> {
@@ -900,6 +899,25 @@ fn plan_leaf_params(
         out.push(plan_leaf_param(ext, name, leaf)?);
     }
     Some(out)
+}
+
+/// The JVM descriptor each of these leaves occupies, in order.
+///
+/// One derivation for both call conventions: a builder's typed `run` spells
+/// these into the interface descriptor its method id is resolved from, and a
+/// `fromParts` factory spells the same ones into its signature string. Deriving
+/// them twice is how the two could disagree about a leaf while both looked
+/// right on their own.
+pub(crate) fn leaf_descriptors(
+    ext: &Declarations,
+    leaves: &[crate::jni::compile::OutWire],
+) -> Option<Vec<String>> {
+    Some(
+        plan_leaf_params(ext, leaves)?
+            .iter()
+            .map(|param| kt_jvm_descriptor(&param.raw, &[]))
+            .collect(),
+    )
 }
 
 /// Both interface views of ONE decomposition leaf. The single entry point for a
@@ -921,6 +939,13 @@ fn plan_leaf_param(
         let ty = if leaf.nullable { ty.nullable() } else { ty };
         return Some(IfaceParam::same(name, ty));
     }
+    // A presence flag has no converter behind it either: it is a `Boolean` the
+    // gate assigns, and the value it speaks for crosses through the leaves it
+    // gates rather than through this slot. Its `out_ty` is that optional value,
+    // which is why the type cannot be read off it.
+    if matches!(leaf.from, crate::jni::compile::OutFrom::Present) {
+        return Some(IfaceParam::same(name, KtType::boolean()));
+    }
     // A group slot is INERT whenever another variant is live, and the encoder
     // fills an inert object slot with `JObject::null()`. A JVM null handed to a
     // non-null Kotlin parameter throws inside the intrinsic null-check before
@@ -928,7 +953,7 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(ext, &leaf.out_ty);
+    let inert_nullable = !leaf.groups.is_empty() && !leaf_ty_is_prim(ext, &leaf.out_ty);
     leaf_iface_param(
         ext,
         name,
@@ -1015,7 +1040,7 @@ fn leaf_iface_param(
                     typed: builder_kt.clone(),
                     raw,
                     wrap: WrapKind::Unsigned64 { niche_sentinel },
-                    reading: Some(out_ty.key().as_str().to_string()),
+                    reading: Some(ext.freeze_reading(out_ty)),
                 });
             }
             ProjectionKind::Handle => {}
@@ -1052,7 +1077,7 @@ fn leaf_iface_param(
                     fqn,
                     niche_sentinel,
                 },
-                reading: Some(out_ty.key().as_str().to_string()),
+                reading: Some(ext.freeze_reading(out_ty)),
             });
         }
         // Whole arg: typed class in both views (no proxy wrap).
@@ -1082,7 +1107,7 @@ fn leaf_iface_param(
                         typed: builder_kt.clone(),
                         raw,
                         wrap: WrapKind::None,
-                        reading: Some(out_ty.key().as_str().to_string()),
+                        reading: Some(ext.freeze_reading(out_ty)),
                     });
                 }
             }
@@ -1260,6 +1285,22 @@ impl Declarations {
     /// retries. In debug builds a cache hit re-derives and asserts equality,
     /// so any nondeterminism in the constructors fails loudly under test
     /// instead of shipping descriptor drift.
+    /// The frozen interface spec, for a render caller.
+    ///
+    /// `iface_spec` already answers from the generation first when one is
+    /// installed, so a renderer never reaches the derivation below it and needs
+    /// no `Conversions` to get there. Panics by name if no generation exists,
+    /// which is the failure a renderer would hit deriving without one (#613
+    /// step 7).
+    pub(crate) fn iface_spec_frozen(&self, key: &SpecKey) -> Option<std::sync::Arc<IfaceSpec>> {
+        self.generation
+            .as_deref()
+            .unwrap_or_else(|| {
+                panic!("interface spec `{key:?}`: its frozen JNI generation plan is unavailable")
+            })
+            .interface(key)
+    }
+
     pub(crate) fn iface_spec(
         &self,
         registry: &impl Conversions,
@@ -1306,19 +1347,49 @@ fn fixed_reassembly(
     class_fqn: &str,
     first_slot: usize,
 ) -> (String, Vec<String>) {
-    let slots: Vec<String> = (0..wires.len())
-        .map(|i| format!("${}", i + first_slot))
-        .collect();
-    if !is_sum_row(wires) {
+    // Whether the delivered value IS a sum, not whether it contains one. A
+    // struct with a sum-typed field carries a tag and still reassembles
+    // through its own `fromParts`, with the field's `when` inlined as one
+    // argument; asking the containing question sent it to `sum_reconstruct`,
+    // which panics on a struct (#616 review).
+    if !crate::jni::emit::is_whole_sum_row(wires) {
+        let slots: Vec<String> = (0..wires.len())
+            .map(|i| format!("${}", i + first_slot))
+            .collect();
         let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
         return (
             format!("{class_short}.fromParts({})", slots.join(", ")),
             Vec::new(),
         );
     }
+    sum_segment_reassembly(ext, registry, source, wires, first_slot)
+}
+
+/// The `when` that rebuilds one sum from its own segment — a selector followed
+/// by its groups.
+///
+/// Called directly where the caller has already isolated the segment, and
+/// through [`fixed_reassembly`] where the whole delivered value is the sum.
+fn sum_segment_reassembly(
+    ext: &Declarations,
+    registry: &impl Conversions,
+    source: &TypeKey,
+    wires: &[crate::jni::compile::OutWire],
+    first_slot: usize,
+) -> (String, Vec<String>) {
+    let slots: Vec<String> = (0..wires.len())
+        .map(|i| format!("${}", i + first_slot))
+        .collect();
     let params = plan_leaf_params(ext, wires).unwrap_or_default();
     let mut imports: BTreeSet<String> = BTreeSet::new();
-    let (_, when) = ext.sum_reconstruct(registry, source, wires, &params, &slots, &mut imports);
+    let (_, when) = ext.sum_reconstruct(
+        registry.flat(),
+        source,
+        wires,
+        &params,
+        &slots,
+        &mut imports,
+    );
     (when, imports.into_iter().collect())
 }
 
@@ -1447,7 +1518,12 @@ pub(crate) fn callback_iface_spec(
                     reassemble: Some(reassemble),
                     imports,
                     leaf_count: wires.len() + usize::from(optional),
-                    close: crate::jni::struct_plan::type_close_strategy(ext, registry, close_ty, 0),
+                    close: crate::jni::struct_plan::type_close_strategy(
+                        ext,
+                        registry.flat(),
+                        close_ty,
+                        0,
+                    ),
                 });
             } else {
                 // Accessor-plan arg: each leaf is its own passthrough group, so
@@ -1464,7 +1540,7 @@ pub(crate) fn callback_iface_spec(
                     // `encode_plan_leaves` walks, asked the same way.
                     let seg = if leaf.is_tag() {
                         (k + 1..wires.len())
-                            .take_while(|&j| wires[j].group.is_some())
+                            .take_while(|&j| !wires[j].groups.is_empty())
                             .last()
                             .map_or(k + 1, |j| j + 1)
                     } else {
@@ -1473,12 +1549,13 @@ pub(crate) fn callback_iface_spec(
                     if leaf.is_tag() {
                         any_fixed = true;
                         let fqn = ext.kotlin_fqn(&leaf.out_ty.key())?;
-                        let (reassemble, imports) = fixed_reassembly(
+                        // An isolated segment: its first leaf IS the tag, so
+                        // the `when` is the answer without asking again.
+                        let (reassemble, imports) = sum_segment_reassembly(
                             ext,
                             registry,
                             &leaf.out_ty.key(),
                             &wires[k..seg],
-                            &fqn,
                             0,
                         );
                         groups.push(GroupDesc {
@@ -1504,7 +1581,7 @@ pub(crate) fn callback_iface_spec(
                             leaf_count: seg - k,
                             close: crate::jni::struct_plan::type_close_strategy(
                                 ext,
-                                registry,
+                                registry.flat(),
                                 &leaf.out_ty,
                                 0,
                             ),
@@ -1785,7 +1862,12 @@ pub(crate) fn fixed_folder_typed_groups(
             // projection carries `owned: false`, so the element reaches nothing
             // to release and the per-iteration close that would double-free is
             // not emitted.
-            close: crate::jni::struct_plan::type_close_strategy(ext, registry, &spec.source, 0),
+            close: crate::jni::struct_plan::type_close_strategy(
+                ext,
+                registry.flat(),
+                &spec.source,
+                0,
+            ),
         },
     ])
 }

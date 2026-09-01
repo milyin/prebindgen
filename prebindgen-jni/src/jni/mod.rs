@@ -44,7 +44,7 @@ pub(crate) use prebindgen_registry::{
     flat::Origin,
     types_util::{option_inner_type, vec_inner_type},
     ArtifactId, ConverterImpl, Direction, NicheSlot, Niches, OperationId, Prebindgen, Registry,
-    ScalarValue, Stage, TypeKey,
+    ScalarValue, TypeKey,
 };
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
@@ -499,6 +499,7 @@ fn leaf_reach(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> String {
     use prebindgen_registry::unfold::LeafSource;
     match &leaf.source {
         LeafSource::SumTag => "tag".to_string(),
+        LeafSource::Presence => format!("present({})", reach_of(&leaf.path)),
         LeafSource::VariantField { variant, member } => format!(
             "{variant}.{}",
             crate::jni::struct_plan::sum_field_prop_name(member)
@@ -550,7 +551,7 @@ impl JniGen {
             self.registry.flat(),
             self.decls.recipe_table(),
             self.decls.site_bindings(),
-            self.generation_plan().conversions().clone(),
+            self.decls.compiled.borrow().clone(),
         );
         let mut adapter = crate::jni::compile::JCompile {
             decls: &self.decls,
@@ -631,8 +632,9 @@ impl JniGen {
             prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Deconstruct)
                 .row(crate::jni::recipes::parts());
         let wires = self
-            .generation_plan()
-            .conversions()
+            .decls
+            .compiled
+            .borrow()
             .recipe_fragment(&reading.key(), &row)?
             .out_wires
             .clone()?;
@@ -642,6 +644,9 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Present => {
+                            format!("present({})", reach_of(&w.reach))
+                        }
                         crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
@@ -652,7 +657,7 @@ impl JniGen {
                             crate::jni::struct_plan::sum_field_prop_name(member)
                         ),
                     };
-                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.groups)
                 })
                 .collect(),
         )
@@ -681,7 +686,7 @@ impl JniGen {
                         l.name,
                         l.out_ty.key(),
                         leaf_reach(l),
-                        l.group
+                        l.groups
                     )
                 })
                 .collect(),
@@ -708,6 +713,9 @@ impl JniGen {
                 .map(|w| {
                     let from = match &w.from {
                         crate::jni::compile::OutFrom::Tag => "tag".to_string(),
+                        crate::jni::compile::OutFrom::Present => {
+                            format!("present({})", reach_of(&w.reach))
+                        }
                         crate::jni::compile::OutFrom::Place => reach_of(&w.reach),
                         crate::jni::compile::OutFrom::Payload { variant, member } => format!(
                             "{}.{}",
@@ -718,7 +726,7 @@ impl JniGen {
                             crate::jni::struct_plan::sum_field_prop_name(member)
                         ),
                     };
-                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.group)
+                    format!("{}: {} <- {from} @{:?}", w.name, w.out_ty.key(), w.groups)
                 })
                 .collect(),
         )
@@ -772,7 +780,7 @@ impl JniGen {
                         l.name,
                         l.out_ty.key(),
                         leaf_reach(l),
-                        l.group
+                        l.groups
                     )
                 })
                 .collect(),
@@ -797,8 +805,9 @@ impl JniGen {
             direction,
         }
         .row(crate::jni::recipes::parts());
-        self.generation_plan()
-            .conversions()
+        self.decls
+            .compiled
+            .borrow()
             .recipe_fragment(&TypeKey::from_ident(&ident), &row)
             .is_some()
     }
@@ -814,7 +823,7 @@ impl JniGen {
         let key = reading.key();
         let row = prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Construct)
             .row(crate::jni::recipes::parts());
-        let compiled = self.generation_plan().conversions();
+        let compiled = self.decls.compiled.borrow();
         // A declared class states its composition under `parts`; an optional
         // over one has no recipe of its own and composes on the recipe the registry
         // derived, which is the crossing's default.
@@ -837,7 +846,9 @@ impl JniGen {
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let fragment = self
-            .generation_plan()
+            .decls
+            .compiled
+            .borrow()
             .fragment(&reading.key(), Direction::Construct)?;
         Some(fragment.rust.is_borrowed_optional_handle())
     }
@@ -850,7 +861,9 @@ impl JniGen {
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let fragment = self
-            .generation_plan()
+            .decls
+            .compiled
+            .borrow()
             .fragment(&reading.key(), Direction::Construct)?;
         Some(fragment.rust.is_optional())
     }
@@ -864,7 +877,9 @@ impl JniGen {
         let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
         let key = reading.key();
         let fragment = self
-            .generation_plan()
+            .decls
+            .compiled
+            .borrow()
             .fragment(&key, Direction::Construct)?;
         let rendered = fragment
             .rust
@@ -897,11 +912,12 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
-        // Every binding a test writes also checks that a data class's two
-        // leaf derivations agree wherever both exist — the property #603
-        // measured and #602 needs before it can unify them.
+        // Every binding a test writes also freezes each compiled fragment into
+        // its canonical plan and checks the two describe the same fragment.
+        // Nothing renders from that plan yet — #613 step 4 is what moves JNI
+        // onto it — so this is what says it is ready to.
         #[cfg(test)]
-        self.assert_leaf_derivations_agree();
+        self.assert_fragments_freeze();
 
         // Every binding a test writes also checks that the assembly's
         // dependency edges name every call its artifacts render — the
@@ -925,75 +941,181 @@ impl JniGen {
         )?)
     }
 
-    /// A declared data class is decomposed twice — by `struct_out_wires_of`,
-    /// whose leaves the registry receives, and by `StructPlan`, whose leaves
-    /// the whole-object encode emits and Kotlin's `fromParts` declares. Where
-    /// both exist they must name the same leaves in the same order.
+    /// Every compiled fragment states the same thing twice while step 5 is in
+    /// progress — as a [`JFrag`](crate::jni::compile::JFrag) and as the
+    /// `FragmentPlan` the canonical plan holds — and this is what says the two
+    /// agree.
     ///
-    /// #603 records why the two are not one derivation: the first refuses
-    /// shapes the second supports, so unifying them is the feature #602
-    /// proposes. Until then this is what says they still agree — the
-    /// precondition that unification rests on.
+    /// Identity, source and artifact presence are compared because they are
+    /// what a plan is keyed and spelled by, and what an emitter would read
+    /// instead of the fragment. A composed-only fragment renders nothing, and
+    /// the canonical plan says so by carrying no artifact at all.
     ///
-    /// Both are available only after resolve, which is why this runs here and
-    /// not while planning.
+    /// The plan itself is **not** rebuilt here. Since 5a it is built and
+    /// validated in `JniGenerationPlan::freeze`, so a set-level defect — a
+    /// chain whose endpoints do not join up, an edge naming a fragment nothing
+    /// compiled, a duplicate site identity — fails the binding rather than one
+    /// test. What is left for this check is the per-fragment agreement that
+    /// only survives while `JFrag` still exists; 5c deletes both.
     #[cfg(test)]
-    fn assert_leaf_derivations_agree(&self) {
-        let emit = prebindgen_registry::RustWriter::for_registry_test(&self.registry);
-        for item in self.registry.flat().types() {
-            let prebindgen_registry::flat::Type::Struct(item) = item else {
-                continue;
-            };
-            // Only a declared data class has a frozen plan; the lookup is
-            // panic-backed for anything else, and an opaque handle's struct
-            // decomposes without ever having one.
-            let declared = self
-                .decls
-                .types
-                .get(&item.type_ref().key())
-                .is_some_and(|cfg| !cfg.special_decl() && cfg.name_spec.is_some());
-            if !declared {
-                continue;
-            }
-            let Some(wires) = self.decls.struct_out_wires_of(&self.registry, &item.name) else {
-                continue;
-            };
-            let Some(plan) = self.decls.struct_plan(&self.registry, item, 0) else {
-                continue;
-            };
-            // The two spell a leaf for different audiences: the decomposition
-            // names it as Kotlin will see it (`maybeLong`), the encode as Rust
-            // wrote it (`maybe_long`), and a keyword-colliding name keeps a
-            // trailing underscore on one side only. The property here is which
-            // leaves, in which order — so the comparison drops the spelling.
-            // Two comparisons, because a leaf has two properties that must
-            // agree and one that need not. Its *name* is spelled for two
-            // audiences — the decomposition names it as Kotlin will see it
-            // (`maybeLong`), the encode as Rust wrote it (`maybe_long`), and a
-            // keyword-colliding name keeps a trailing underscore on one side —
-            // so the comparison drops the spelling. Its *nesting* is structure:
-            // the decomposition joins an inlined class's path with the reserved
-            // `__` separator, and the encode counts the same inlining as depth.
-            let plain = |name: &str| name.replace('_', "").to_lowercase();
-            let decomposed: Vec<String> = wires.iter().map(|wire| plain(&wire.name)).collect();
-            let decomposed_depth: Vec<usize> = wires
-                .iter()
-                .map(|wire| wire.name.matches("__").count())
-                .collect();
-            let leaves = crate::jni::emit::encode_leaves(&plan, &emit);
-            let encoded: Vec<String> = leaves.iter().map(|(name, _)| plain(name)).collect();
-            let encoded_depth: Vec<usize> = leaves.iter().map(|(_, depth)| *depth).collect();
+    fn assert_fragments_freeze(&self) {
+        let generation = self
+            .decls
+            .generation
+            .as_ref()
+            .expect("resolved JniGen has no frozen generation plan");
+        // Driven from the PLAN, not from the compiled store. `build` keeps the
+        // fragments reachable from a site and prunes the rest, so the store is
+        // a superset — a converter the assembly still reaches on its own is in
+        // it and not in the plan. Closing that is step 8's, where artifact
+        // ordering moves onto the plan; until then the plan's own fragments are
+        // what there is to agree about.
+        let compiled = self.decls.compiled.borrow();
+        for plan in generation.plan().fragments() {
+            let fragment = compiled
+                .recipe_fragment(plan.id().spelling(), plan.id().recipe())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "`{}`: the canonical plan holds a fragment nothing compiled",
+                        plan.id().spelling()
+                    )
+                });
             assert_eq!(
-                encoded, decomposed,
-                "`{}`: the whole-object encode and the registry-facing \
-                 decomposition name different leaves",
-                item.name
+                plan.id(),
+                &fragment.id,
+                "a frozen fragment plan changed the fragment's identity"
             );
             assert_eq!(
-                encoded_depth, decomposed_depth,
-                "`{}`: the whole-object encode and the registry-facing \
-                 decomposition flatten nesting differently",
-                item.name
+                plan.source().key(),
+                fragment.source.key(),
+                "`{}`: a frozen fragment plan changed the crossing it answers",
+                fragment.source.key()
+            );
+            assert_eq!(
+                plan.artifact().is_some(),
+                !fragment.composed_only,
+                "`{}`: a composed-only fragment renders nothing, and only such a \
+                 fragment freezes without an artifact",
+                fragment.source.key()
+            );
+            // The conversion graph, step for step. Comparing only that a chain
+            // exists would not have caught freezing every staged custom
+            // conversion as `Direct`, which is what the first version of this
+            // did (#621 review): the operations and their order ARE the
+            // contract, and a reader of the plan routes to stage artifacts
+            // through them.
+            let steps = |chain: &prebindgen_registry::generation::ConversionChain<
+                crate::jni::compile::JRepresentation,
+            >| {
+                match chain {
+                    prebindgen_registry::generation::ConversionChain::Direct => Vec::new(),
+                    prebindgen_registry::generation::ConversionChain::Steps(steps) => steps
+                        .iter()
+                        .map(|step| {
+                            format!(
+                                "{:?}:{:?}->{:?}:{:?}",
+                                step.operation(),
+                                step.from(),
+                                step.into(),
+                                step.failure()
+                            )
+                        })
+                        .collect(),
+                }
+            };
+            assert_eq!(
+                steps(plan.converter().chain()),
+                steps(&fragment.chain),
+                "`{}`: a frozen fragment plan changed the conversion graph",
+                fragment.source.key()
+            );
+            // Both niche domains: what the fragment spends on its own absence,
+            // and what it leaves for a parent. Exposing the remainder while
+            // losing the consumed slot was the other thing this check could not
+            // see.
+            // Both niche domains, by identity rather than by count. Comparing
+            // how many there are would pass a substituted sentinel, and
+            // `GenerationPlanBuilder` cannot see one either — a niche is a
+            // bit-pattern contract, so what it IS is the whole of it.
+            let niches = plan.converter().niches();
+            let key = crate::jni::compile::niche_key;
+            assert_eq!(
+                niches.consumed(),
+                fragment
+                    .consumed_niche
+                    .iter()
+                    .map(key)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                "`{}`: a frozen fragment plan changed the niche it consumed",
+                fragment.source.key()
+            );
+            assert_eq!(
+                niches.discriminants(),
+                niches.consumed().len(),
+                "`{}`: a consumed niche is what the fragment discriminates on",
+                fragment.source.key()
+            );
+            assert_eq!(
+                niches.exposed(),
+                fragment
+                    .conv
+                    .niches
+                    .slots
+                    .iter()
+                    .map(key)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                "`{}`: a frozen fragment plan changed the niches it leaves for a parent",
+                fragment.source.key()
+            );
+            // A composition's shape has to be the composition, not the
+            // placeholder every fragment starts with: `JLayout` is what JNI
+            // says today about occupying several wires, so a fragment whose
+            // layout composes must not freeze as `Atomic`.
+            if matches!(
+                fragment.layout,
+                Some(crate::jni::compile::JLayout::Product(_))
+                    | Some(crate::jni::compile::JLayout::Optional(_))
+                    | Some(crate::jni::compile::JLayout::Choice(_))
+            ) {
+                assert!(
+                    !matches!(
+                        plan.converter().shape(),
+                        prebindgen_registry::generation::ShapePlan::Atomic(_)
+                    ),
+                    "`{}`: a fragment whose layout composes froze as atomic — the \
+                     hook that composed it did not state its shape",
+                    fragment.source.key()
+                );
+            }
+        }
+        // Every site the compilation stated reached the stored plan. The
+        // set-level properties — a duplicate identity, a failure route that
+        // does not match its fragment's fallibility, an edge naming a fragment
+        // nothing compiled — are `build`'s, and `build` now runs in `freeze`,
+        // so reaching here at all means it passed. What this adds is that
+        // nothing was dropped between stating a site and storing it.
+        let stated = self.decls.site_plans.borrow();
+        assert_eq!(
+            stated.len(),
+            generation.plan().sites().len(),
+            "the canonical plan holds a different number of sites than were stated"
+        );
+        for site in stated.iter() {
+            // The slot count is what the ABI itself says it is, so the two
+            // cannot drift: `slots` is taken from the leaves rather than
+            // counted beside them.
+            assert_eq!(
+                site.abi().slots(),
+                site.abi().payload().len(),
+                "site {}: the slot count and the ABI disagree",
+                site.id().site()
+            );
+            assert!(
+                generation.plan().site(site.id()).is_some(),
+                "site {} was stated but is not in the canonical plan",
+                site.id().site()
             );
         }
     }
@@ -1211,6 +1333,17 @@ pub struct Declarations {
     pub(crate) iface_specs:
         std::cell::RefCell<std::collections::BTreeMap<SpecKey, std::sync::Arc<IfaceSpec>>>,
 
+    /// Readings an interface param resolved when its spec was built, keyed by
+    /// the identity text the param carries.
+    ///
+    /// `IfaceParam::reading` is text because a spec is memoized behind an
+    /// `Arc` and a `TypeRef` carries non-`Send` interiors, so the resolved
+    /// answer cannot live in the spec. It lives here instead, outside the
+    /// `Arc`, which is what lets a renderer ask for the model's answer without
+    /// holding a `Conversions` (#613 step 7).
+    pub(crate) frozen_readings:
+        std::cell::RefCell<std::collections::BTreeMap<String, prebindgen_registry::flat::TypeRef>>,
+
     /// Memoized per-function lowered plans, one [`JniFunctionPlan`] per bound
     /// function/const-getter ident — the single lowering shared by validation
     /// and every emitter (Rust extern, JNINative extern, Kotlin wrapper,
@@ -1226,6 +1359,17 @@ pub struct Declarations {
     /// Whole-value struct layouts accumulated during resolution. The frozen
     /// generation plan drains this store together with the function and
     /// interface memos, so Rust and Kotlin cannot rebuild the layout apart.
+    /// Every site frozen into the canonical plan while compiling, so the whole
+    /// set can be validated as one — which is where a duplicate site identity
+    /// or a missing failure route shows up, neither being visible in a site
+    /// compared against itself (#622 review).
+    pub(crate) site_plans: std::cell::RefCell<
+        Vec<
+            std::rc::Rc<
+                prebindgen_registry::generation::SitePlan<crate::jni::compile::JRepresentation>,
+            >,
+        >,
+    >,
     pub(crate) struct_plans: std::cell::RefCell<HashMap<TypeKey, Option<std::rc::Rc<StructPlan>>>>,
 
     /// Sealed-class payload/ownership layouts accumulated during resolution.

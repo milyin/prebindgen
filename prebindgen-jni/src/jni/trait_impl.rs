@@ -255,7 +255,10 @@ pub(crate) fn plan_constant_expressions(
         .flat_map(|package| &package.constant_exprs)
         .map(|decl| {
             validate_constant_expr(ext, &decl.kotlin_name, &decl.ty);
-            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+            let getter = {
+                ext.freeze_reading_of(registry, &decl.ty);
+                const_expr_getter_fn(&decl.kotlin_name, &decl.ty, ext)
+            };
             let expr = &decl.expr;
             let callee: syn::Expr = syn::parse_quote!({
                 #(
@@ -520,9 +523,8 @@ impl Declarations {
             .map(|h| Projection { owned: false, ..h });
         Some(ConverterImpl {
             subs: vec![],
-            destination: inner.destination.clone(),
+            destination: inner.wire.clone(),
             converter: inner.converter.clone(),
-            pre_stages: vec![],
             niches: inner.niches.clone(),
             metadata: KotlinMeta {
                 kotlin_name,
@@ -753,7 +755,7 @@ impl JniGenBuilder {
             }
             .into());
         }
-        let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry);
+        let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry)?;
         decls.generation = Some(std::rc::Rc::new(generation));
         Ok(JniGen { decls, registry })
     }
@@ -926,7 +928,7 @@ impl Declarations {
             // A `data_class` is a registered type that is neither an opaque
             // handle nor an enum.
             let is_data_class = matches!(
-                self.type_kind(registry, &reading.key()),
+                self.type_kind(registry.flat(), &reading.key()),
                 TypeKind::DataStruct { cfg: Some(c), .. } if c.name_spec.is_some()
             );
             if !is_data_class {
@@ -1090,7 +1092,6 @@ impl Declarations {
         // arg types' callback plans, not carried in metadata.
         let conv = ConverterImpl {
             subs: vec![],
-            pre_stages: vec![],
             converter: operation,
             destination: wire,
             niches,
@@ -1197,7 +1198,7 @@ impl Prebindgen for Declarations {
             if let Some((ok, _)) = func.ret.fallible_parts() {
                 {
                     let core = crate::util::head_type(ok);
-                    if matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding.flat(), &core.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
                              supported in the success position of a fallible return. A sum \
@@ -1234,7 +1235,9 @@ impl Prebindgen for Declarations {
                         .return_expand_decls
                         .iter()
                         .any(|d| *d.key() == err_ty.key());
-                    if !declared && matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
+                    if !declared
+                        && matches!(self.type_kind(binding.flat(), &core.key()), TypeKind::Sum)
+                    {
                         return Err(format!(
                             "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \
                              but nothing decomposes it in the error position, so it would be \
@@ -1279,7 +1282,7 @@ impl Prebindgen for Declarations {
                         continue;
                     };
                     let elem = peel_one_borrow(elem);
-                    if matches!(self.type_kind(binding, &elem.key()), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding.flat(), &elem.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `impl Fn(&[{}])` — a slice of a sealed_class value \
                              is not supported as a callback argument. A sum crosses as a tag \

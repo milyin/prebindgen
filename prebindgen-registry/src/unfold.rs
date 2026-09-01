@@ -36,8 +36,8 @@ mod error;
 mod walk;
 pub use walk::{
     bind_as_option, bind_hoists, compose_step, conditional_arm, fold_steps, project_leading_fields,
-    reach_leaf, reached_is_ours, segment, segments, DecomposedLeaf, DeliveryBridge, Hoisted,
-    LeafAt, LeafPlace, Reach, Slot,
+    reach_leaf, reached_is_ours, segment, segments, segments_at, DecomposedLeaf, DeliveryBridge,
+    Hoisted, LeafAt, LeafPlace, Reach, Slot,
 };
 
 mod plan;
@@ -540,7 +540,7 @@ pub(crate) fn apply_value_structs(
 ///
 /// Its [`leaves`](Self::leaves) are a [`LeafSource::SumTag`] selector followed
 /// by one **group** per alternative ([`LeafSource::VariantField`] leaves
-/// carrying [`UnfoldLeaf::group`]). Exactly one group is live per value; the
+/// carrying [`UnfoldLeaf::groups`]). Exactly one group is live per value; the
 /// emitter reads the whole list as ONE `match` over the value, filling every
 /// inert slot with its wire default. The foreign side picks the live group by
 /// the tag and rebuilds the alternative, so no object is built on the Rust
@@ -1421,7 +1421,7 @@ fn flatten(
                     identity: true,
                     nullable,
                     source: LeafSource::Reach,
-                    group: None,
+                    groups: Vec::new(),
                 });
             }
             DeconRecord::Fields {
@@ -1604,7 +1604,7 @@ fn flatten(
                             identity: false,
                             nullable,
                             source: LeafSource::Reach,
-                            group: None,
+                            groups: Vec::new(),
                         });
                     }
                 }
@@ -1705,7 +1705,7 @@ fn flatten(
                         identity,
                         nullable,
                         source: LeafSource::Reach,
-                        group: None,
+                        groups: Vec::new(),
                     });
                 }
             }

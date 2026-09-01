@@ -34,14 +34,24 @@ pub trait DecomposedLeaf {
     /// The reading the leaf delivers.
     fn source(&self) -> &TypeRef;
 
-    /// Whether this leaf is the synthesized **selector** — the value naming
-    /// which alternative of a decomposed sum is live. It selects between the
-    /// groups rather than joining one.
+    /// Whether this leaf is a synthesized **selector** — a value naming which
+    /// group of the leaves after it is live. It chooses between groups rather
+    /// than joining one, so its own [`Self::groups`] is the path it sits in,
+    /// not one of the arms it chooses.
+    ///
+    /// Two kinds select: a sum's tag, which names the live alternative, and an
+    /// optional value's presence, which says whether its one group carries
+    /// anything.
     fn selects(&self) -> bool;
 
-    /// The alternative this leaf belongs to, when it is one of a sum's group
-    /// leaves. `None` for a leaf that is always live.
-    fn group(&self) -> Option<i32>;
+    /// The arms this leaf sits inside, outermost first — empty for a leaf that
+    /// is always live. A selector carries the path it is nested in, and its own
+    /// members extend that path by one.
+    ///
+    /// See [`UnfoldLeaf::groups`](crate::unfold::UnfoldLeaf::groups) for what
+    /// an arm number means and why the path is what lets one selector own
+    /// another.
+    fn groups(&self) -> &[i32];
 
     /// Whether the last step reaching it is a field read rather than a call.
     ///
@@ -530,25 +540,48 @@ fn reached_place<L: DecomposedLeaf>(
 /// The **segments** of a decomposition: each selector leaf, together with the
 /// group leaves that follow it.
 ///
-/// A sum's leaves are not independent — only one alternative is live per value
-/// — so a segment is emitted as one `match` rather than as a leaf at a time.
-/// The plan already says which leaves those are: a selector says so of itself,
-/// and each of the leaves after it carries the alternative it belongs to until
-/// one does not. A decomposition may carry several segments, or none: a sum
-/// that IS the delivered value is one segment covering everything, and a value
-/// form contributes one per sum-typed field.
+/// A segment's leaves are not independent — one alternative of a sum is live
+/// per value, and a gated group is live only when its value is there — so a
+/// segment is emitted as one `match` rather than as a leaf at a time. The plan
+/// already says which leaves those are: a selector says so of itself, and each
+/// of the leaves after it carries the group it belongs to until one does not.
+///
+/// **One nesting level at a time.** A group's leaves may themselves include a
+/// selector — an optional nested class whose own fields choose, an `Option` of
+/// a sum — and the ranges returned here would overlap if such an inner selector
+/// opened a segment of its own. So this answers for one level: at `depth`, the
+/// selectors whose arm path is exactly that deep, each with everything nested
+/// under it. A renderer that has entered an arm asks again one level down, and
+/// the inner selectors become the segments of that answer.
+///
+/// A decomposition may carry several segments, or none: a sum that IS the
+/// delivered value is one segment covering everything, and a value form
+/// contributes one per sum-typed field.
 ///
 /// Not recognising a segment is silent rather than a compile error — the
 /// leaves are all there, and a delivery that treats them as independent reads
 /// a dead alternative's fields — which is why this is the registry's answer
 /// and not an adapter's.
 pub fn segments<L: DecomposedLeaf>(leaves: &[L]) -> Vec<std::ops::Range<usize>> {
+    segments_at(leaves, 0)
+}
+
+/// [`segments`] one nesting level down: the selectors whose arm path is exactly
+/// `depth` long, with the leaves nested under each.
+///
+/// `depth` is how many arms the caller has already entered, so a leaf deeper
+/// than that belongs to the segment it follows rather than opening one.
+pub fn segments_at<L: DecomposedLeaf>(leaves: &[L], depth: usize) -> Vec<std::ops::Range<usize>> {
     let n = leaves.len();
+    let nested = |i: usize| leaves[i].groups().len() > depth;
+    // Exactly this deep, not "no deeper": a selector shallower than `depth`
+    // encloses the level being asked about rather than sitting on it, and
+    // answering with it would return the enclosing segment a second time.
     (0..n)
-        .filter(|&i| leaves[i].selects())
+        .filter(|&i| leaves[i].selects() && leaves[i].groups().len() == depth)
         .map(|start| {
             let end = (start + 1..n)
-                .take_while(|&i| leaves[i].group().is_some())
+                .take_while(|&i| nested(i))
                 .last()
                 .map_or(start + 1, |i| i + 1);
             start..end
@@ -557,14 +590,16 @@ pub fn segments<L: DecomposedLeaf>(leaves: &[L]) -> Vec<std::ops::Range<usize>> 
 }
 
 /// Render one segment off `place`, gating the whole of it when the selector
-/// reaches its sum through an optional step.
+/// reaches the value it selects on through an optional step.
 ///
-/// `group` renders the segment's own encode from the expression naming the
-/// live sum — that half is the adapter's, since what a group of slots is
-/// filled with is a target-language question.
+/// A segment's **selected value** is what its selector chooses over: the sum a
+/// tag names an alternative of, or the optional value a presence flag says is
+/// there. `group` renders the segment's own encode from the expression naming
+/// it — that half is the adapter's, since what a group of slots is filled with
+/// is a target-language question.
 ///
-/// **An `Option<sum>` gates the segment, not each slot.** A sum's leaves are
-/// not independent, so absence cannot be the per-leaf absent value
+/// **An optional value gates the segment, not each slot.** A segment's leaves
+/// are not independent, so absence cannot be the per-leaf absent value
 /// [`reach_leaf`] gives an ordinary optional field: it is one tuple bind whose
 /// `None` arm carries every slot's default. That is the same shape a
 /// conditional value form's hoist emits, applied to an optional step inside
@@ -589,8 +624,9 @@ pub fn segment<B: DeliveryBridge>(
     // this field while sibling fields move is exactly what a consuming value
     // form does.
     let (projected, lead) = project_leading_fields(&place.base, place.base_is_ref, path);
-    // The selector's own path reaches the sum (empty when the sum IS the
-    // value), and a step on it MAY be optional.
+    // The selector's own path reaches the selected value (empty when that
+    // value IS the delivered one), and a step on it MAY be optional — which is
+    // always so for a presence flag, whose whole subject is that step.
     let Some(k) = (lead..path.len()).find(|&i| path[i].is_optional()) else {
         return group(fold_steps(qualify, &path[lead..], projected, false));
     };
@@ -600,9 +636,9 @@ pub fn segment<B: DeliveryBridge>(
     let opt_e = fold_steps(qualify, &path[lead..=k], projected, false);
     let bind = format_ident!("__sg{}", index);
     // ONE optional step is what this gate handles. A second one in the tail
-    // would compose `match &Option<..>` against bare variant patterns — an
-    // E0308 in the consumer's crate — so the named diagnostic is raised here
-    // instead.
+    // would compose `match &Option<..>` against the patterns the group's own
+    // encode writes — an E0308 in the consumer's crate — so the named
+    // diagnostic is raised here instead.
     //
     // `assert!`, not `debug_assert!`: a build script inherits the consumer's
     // profile, so a debug-only check is absent from exactly the release build
@@ -610,22 +646,22 @@ pub fn segment<B: DeliveryBridge>(
     // phrasing, as the single-return optional-step assert in [`reach_leaf`].
     //
     // The condition is what actually breaks, not the stronger fact that
-    // happens to hold: every sum leaf's path stops AT the sum, so the tail is
-    // empty today, but a NON-optional tail composes correctly through
-    // [`fold_steps`] — refusing it would refuse a shape that works.
+    // happens to hold: a selector's path stops AT the value it selects on, so
+    // the tail is empty today, but a NON-optional tail composes correctly
+    // through [`fold_steps`] — refusing it would refuse a shape that works.
     assert!(
         !path[k + 1..].iter().any(PathStep::is_optional),
-        "unfold: leaf `{}` reaches its sum through TWO optional steps — the \
-         segment gate has one `None` arm, so the second would be matched as if \
-         it were the sum itself",
+        "unfold: leaf `{}` reaches the value it selects on through TWO optional \
+         steps — the segment gate has one `None` arm, so the second would be \
+         matched as if it were that value itself",
         leaves
             .first()
             .expect("a segment has at least its selector")
             .name(),
     );
     // What the `match` binds, asked of the step rather than assumed: the FIELD
-    // branch scrutinizes `&Option<_>`, so ergonomics binds `&Sum` — a borrow.
-    // Only an owned-yielding CALL binds an owned value.
+    // branch scrutinizes `&Option<_>`, so ergonomics binds a borrow of the
+    // selected value. Only an owned-yielding CALL binds an owned one.
     let inner = group(fold_steps(
         qualify,
         &path[k + 1..],

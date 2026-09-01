@@ -379,6 +379,14 @@ fn main() {
                 // instance methods (`secs()` / `nanos()`) whose receiver crosses
                 // as those field leaves, and `Vec<Stamp>` surfaces as
                 // `List<Stamp>`.
+                // The optional nested class #602 names first: `Envelope`'s
+                // stamp is sometimes there, and the decomposition says so with
+                // a presence flag ahead of the child's leaves.
+                .class(data_class!(Envelope))
+                .class(data_class!(Window))
+                .class(data_class!(Frame))
+                .class(data_class!(Meter))
+                .class(data_class!(Rack))
                 .class(
                     data_class!(Stamp)
                         .method(fun!(stamp_secs))
@@ -638,6 +646,18 @@ fn main() {
                 // #218: the same handle reached through a data-class FIELD, so
                 // the JVM harness can assert the container's cascade closes it.
                 .fun(fun!(verdict_new))
+                // …and the same data class handed to a CALLBACK, which
+                // reassembles through the interface path rather than the
+                // return path — a different question about the same leaves
+                // (#616 review).
+                .fun(fun!(verdict_each))
+                // The optional nested class on both delivery routes.
+                .fun(fun!(envelope_new))
+                .fun(fun!(envelope_each))
+                .fun(fun!(frame_new))
+                .fun(fun!(frame_each))
+                .fun(fun!(rack_new))
+                .fun(fun!(rack_each))
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
                 .fun(fun!(dossier_new))

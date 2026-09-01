@@ -95,6 +95,15 @@ impl JFunction {
         matches!(self.0, JBody::Invoke(_))
     }
 
+    /// The delivery plan of a callback conversion, so the sites of the values
+    /// it delivers can name the ABI it finalized.
+    pub(crate) fn invoke_plan(&self) -> Option<&crate::jni::emit::JInvokePlan> {
+        match &self.0 {
+            JBody::Invoke(plan) => Some(plan),
+            _ => None,
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn is_value_codec(&self) -> bool {
         matches!(self.0, JBody::ValueCodec(_))
@@ -351,7 +360,10 @@ pub(crate) struct JStructCodecPlan {
 pub(crate) enum JStructCodecBody {
     Input(Box<crate::jni::emit::JObjectStructInputPlan>),
     Output {
-        plan: std::rc::Rc<crate::jni::struct_plan::StructPlan>,
+        /// The struct's own frozen decomposition, delivered to its Kotlin
+        /// `fromParts` — the same leaves and the same walk a fixed-builder
+        /// site uses, with the factory call at the end.
+        delivery: Box<crate::jni::emit::FrozenDelivery>,
         java_class_name: String,
     },
 }
@@ -361,7 +373,7 @@ impl JStructCodecPlan {
     fn calls(&self, out: &mut Vec<ArtifactKey>) {
         match &self.body {
             JStructCodecBody::Input(plan) => plan.calls(out),
-            JStructCodecBody::Output { plan, .. } => plan.calls(out),
+            JStructCodecBody::Output { delivery, .. } => delivery.calls(out),
         }
     }
 
@@ -372,9 +384,9 @@ impl JStructCodecPlan {
         let body = match &self.body {
             JStructCodecBody::Input(plan) => plan.render(emit),
             JStructCodecBody::Output {
-                plan,
+                delivery,
                 java_class_name,
-            } => crate::jni::emit::render_struct_output_body(plan, java_class_name, emit),
+            } => crate::jni::emit::render_struct_output_body(delivery, java_class_name, emit),
         };
         let allow = crate::jni::trait_impl::generated_converter_attr();
         match self.direction {
@@ -392,10 +404,13 @@ impl JStructCodecPlan {
             }
             Direction::Deconstruct => {
                 let wire = annotate_jobject_with_lifetime(&wire, "a");
+                // `mut` because the body reborrows it: the shared delivery
+                // walk hands `&mut env` to each leaf's converter, the same way
+                // it does at a call site where the env is owned.
                 syn::parse_quote!(
                     #allow
                     pub(crate) unsafe fn #name<'a>(
-                        env: &mut jni::JNIEnv<'a>,
+                        mut env: &mut jni::JNIEnv<'a>,
                         v: #source,
                     ) -> ::core::result::Result<#wire, __JniErr> {
                         Ok(#body)

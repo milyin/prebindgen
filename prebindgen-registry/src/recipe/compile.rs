@@ -113,27 +113,12 @@ impl At<'_> {
 /// [`Carrier::yields`].
 pub struct Cx<'a> {
     model: &'a Flat,
-    recipes: &'a Recipes,
 }
 
 impl Cx<'_> {
     /// The model every structural fact is read off.
     pub fn model(&self) -> &Flat {
         self.model
-    }
-
-    /// The table, for asking about a crossing without demanding it.
-    pub fn table(&self) -> &Recipes {
-        self.recipes
-    }
-
-    /// Which reusable recipe names are declared under a crossing key.
-    ///
-    /// Demands nothing, so an adapter may ask about an alternative it will not
-    /// take. Empty for a crossing nobody declared, which still has a derived
-    /// recipe.
-    pub fn recipe_names(&self, crossing: &Crossing) -> Vec<&RecipeName> {
-        self.recipes.names_of(&crossing.key())
     }
 }
 
@@ -154,12 +139,24 @@ pub struct Part<'a> {
 }
 
 /// Where one part comes from.
-#[derive(Copy, Clone, Debug)]
+/// `Clone` and not `Copy`: `Path` carries its access chain, and a derived
+/// recipe is owned and dropped inside the compile, so the chain cannot be
+/// borrowed from it (#613 step 10).
+#[derive(Clone, Debug)]
 pub enum PartSource<'a> {
     /// Parameter `index` of the constructor being called.
     Argument {
         /// Position in the constructor's parameter list.
         index: usize,
+    },
+    /// A chain of field accesses, outermost first — an inlined nested class's
+    /// leaf. The one-hop case is [`Self::Field`] (#613 step 10).
+    Path {
+        /// Each hop's position in the struct it indexes. Borrowed from the
+        /// recipe row, which outlives the compile.
+        indices: Vec<usize>,
+        /// The field the chain arrives at.
+        field: &'a Field,
     },
     /// Field `index` of the value, read directly.
     Field {
@@ -168,6 +165,9 @@ pub enum PartSource<'a> {
         /// The field itself.
         field: &'a Field,
     },
+    /// The value itself, as one part — the compiled form of
+    /// [`Reach::Identity`]. Nothing is indexed and nothing is called.
+    Identity,
     /// This accessor call.
     Accessor {
         /// The function to call.
@@ -277,9 +277,13 @@ pub trait Compile {
     fn tolerates(&self, role: &Role) -> Validity {
         match role {
             Role::Return | Role::Error | Role::Const => Validity::SelfSufficient,
-            Role::Param { .. } | Role::Receiver | Role::CallbackArg { .. } | Role::Part { .. } => {
-                Validity::Borrowed
-            }
+            Role::Param { .. }
+            | Role::Receiver
+            | Role::CallbackArg { .. }
+            | Role::Part { .. }
+            // A leaf of an expanded parameter lives exactly as long as the
+            // parameter it came from, so it borrows on the same terms.
+            | Role::ExpansionLeaf { .. } => Validity::Borrowed,
         }
     }
 
@@ -391,24 +395,6 @@ impl<F> Compiled<F> {
     pub fn fragment(&self, ty: &TypeKey, direction: Direction) -> Option<Rc<F>> {
         let recipe = self.defaults.get(&(ty.clone(), direction))?;
         self.recipe_fragment(ty, recipe)
-    }
-
-    /// Record a fragment an adapter built **without** the compiler, as this
-    /// crossing's whole answer.
-    ///
-    /// The escape hatch for a crossing the adapter still answers by hand:
-    /// `Compiler::crossing` never saw it, so nothing would file it, and
-    /// [`Self::fragment`] would have no answer to give. Recording it keeps the
-    /// adapter's emitters on one lookup instead of a per-site fall-back to
-    /// whatever else knows.
-    pub fn record(&mut self, recipe: RecipeKey, fragment: F) {
-        let ty = recipe.crossing().ty.clone();
-        let direction = recipe.crossing().direction;
-        self.fragments.insert(
-            FragmentId::new(ty.clone(), recipe.clone()),
-            std::rc::Rc::new(fragment),
-        );
-        self.defaults.insert((ty, direction), recipe);
     }
 
     /// The fragment for one spelled type and one row key.
@@ -545,10 +531,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
             .into());
         }
-        let mut cx = Cx {
-            model: self.model,
-            recipes: self.recipes,
-        };
+        let mut cx = Cx { model: self.model };
         adapter
             .plan(&mut cx, &bound, &root)
             .map(Some)
@@ -669,7 +652,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         ty: &TypeRef,
         wanted: Mode,
     ) -> Built<C> {
-        self.part_of(adapter, at, direction, None, index, ty, wanted)
+        self.part_of(adapter, at, direction, None, index, ty, wanted, false)
     }
 
     /// [`Self::part`] for a part inside a [`Shape::Choice`] arm, which numbers
@@ -684,9 +667,25 @@ impl<'a, C: Compile> Compiler<'a, C> {
         index: usize,
         ty: &TypeRef,
         wanted: Mode,
+        identity: bool,
     ) -> Built<C> {
         let crossing = Crossing::new(ty.clone(), direction);
         let site = Site::arm_part(at.recipe, arm, index);
+        // An identity part IS its receiver, so resolving it the ordinary way
+        // finds the row being compiled and recurses without bound. It takes the
+        // crossing's DEFAULT row instead — the value's own converter, which is
+        // what a handle leaf delivers. A default that is the row being compiled
+        // is a cycle the declaration actually wrote, and says so (#613 step 10).
+        if identity {
+            let (row, _) = self.recipes.recipe(&crossing);
+            if row == *at.recipe {
+                return Err(RecipeError::Cycle {
+                    path: vec![at.crossing.key(), crossing.key()],
+                }
+                .into());
+            }
+            return self.recipe(adapter, &crossing, &row);
+        }
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRecipe {
                 site,
@@ -887,14 +886,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 index,
                 &part.ty,
                 part.mode,
+                matches!(part.from, PartSource::Identity),
             )?);
         }
         let paired: Vec<(Part<'p>, &C::Fragment)> =
             parts.into_iter().zip(built.iter().map(|f| &**f)).collect();
-        let mut cx = Cx {
-            model: self.model,
-            recipes: self.recipes,
-        };
+        let mut cx = Cx { model: self.model };
         match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
             ProductKind::Fields => adapter.fields(&mut cx, at, &paired),
@@ -910,10 +907,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         arms: Vec<(&'a Alternative, C::Fragment)>,
     ) -> Result<C::Fragment, CompileError<C::Error>> {
         let paired: Vec<(&Alternative, &C::Fragment)> = arms.iter().map(|(a, f)| (*a, f)).collect();
-        let mut cx = Cx {
-            model: self.model,
-            recipes: self.recipes,
-        };
+        let mut cx = Cx { model: self.model };
         adapter
             .choice(&mut cx, at, &paired)
             .map_err(CompileError::Adapter)
@@ -922,10 +916,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
     // ── Reading the parts off the model ───────────────────────────────────
 
     fn cx(&mut self) -> Cx<'_> {
-        Cx {
-            model: self.model,
-            recipes: self.recipes,
-        }
+        Cx { model: self.model }
     }
 
     fn construct_parts(
@@ -1005,6 +996,54 @@ impl<'a, C: Compile> Compiler<'a, C> {
         for reach in reaches {
             match reach {
                 Reach::Omit => {}
+                // The nested shape's own parts, compiled against the field's
+                // type. `deconstruct_parts` is the same entry the outer shape
+                // took, one level in — so a nested `Choice` composes exactly as
+                // a top-level one does (#613 step 10).
+                Reach::Nested { index, shape } => {
+                    let field = fields.get(*index).ok_or_else(|| {
+                        CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                            recipe: at.recipe.clone(),
+                            index: *index,
+                            len: fields.len(),
+                        }))
+                    })?;
+                    let inner = self.fields_of(&field.ty);
+                    let (_, mut inner_parts) = self.deconstruct_parts(at, shape, Some(inner))?;
+                    parts.append(&mut inner_parts);
+                }
+                Reach::Path(indices) => {
+                    // Walk the chain against the model, as validation did.
+                    let mut here: &[Field] = fields;
+                    let mut field: Option<&Field> = None;
+                    for index in indices {
+                        let hop = here.get(*index).ok_or_else(|| {
+                            CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                                recipe: at.recipe.clone(),
+                                index: *index,
+                                len: here.len(),
+                            }))
+                        })?;
+                        field = Some(hop);
+                        here = self.fields_of(&hop.ty);
+                    }
+                    let field = field.ok_or_else(|| {
+                        CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                            recipe: at.recipe.clone(),
+                            index: 0,
+                            len: 0,
+                        }))
+                    })?;
+                    parts.push(Part {
+                        from: PartSource::Path {
+                            indices: indices.clone(),
+                            field,
+                        },
+                        mode: mode_of(&field.ty),
+                        ty: field.ty.clone(),
+                        name: field_name(field, *indices.last().unwrap_or(&0)),
+                    });
+                }
                 Reach::Field(index) => {
                     let field = fields.get(*index).ok_or_else(|| {
                         CompileError::Recipe(Box::new(RecipeError::OutOfRange {
@@ -1023,6 +1062,17 @@ impl<'a, C: Compile> Compiler<'a, C> {
                         name: field_name(field, *index),
                     });
                 }
+                Reach::Identity => parts.push(Part {
+                    from: PartSource::Identity,
+                    // From the SPELLED crossing, not `value()`: the latter
+                    // strips `&`/`&mut`, which would record a borrowed
+                    // identity row as `Owned` and lose the clone-for-borrow /
+                    // move-for-owned distinction this form exists to carry
+                    // (#635 review).
+                    mode: at.crossing.mode(),
+                    ty: at.crossing.value().clone(),
+                    name: "self".to_string(),
+                }),
                 Reach::Accessor(name) => {
                     let func = self.function(at, name)?;
                     parts.push(Part {

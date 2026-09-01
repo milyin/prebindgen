@@ -13,11 +13,22 @@ use super::*;
 
 /// All cross-artifact JNI decisions frozen at the end of resolution.
 pub(crate) struct JniGenerationPlan {
-    /// Registry-compiled recipe fragments, frozen after the last site has been
-    /// planned. This is the sole post-resolution source of private converter
-    /// artifacts and fragment lookups; the mutable planning store is drained
-    /// when this plan is built.
-    conversions: prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag>,
+    /// The canonical plan: every reached fragment and every site of every
+    /// exported function, validated as one set and frozen in dependency order.
+    ///
+    /// Building it is the production gate: `build` is the only thing that can
+    /// see a chain whose endpoints do not join up, an edge naming a fragment
+    /// nothing compiled, a duplicate site identity, or a failure route that
+    /// does not match its fragment's fallibility — and an invalid plan now
+    /// fails the binding rather than one test.
+    ///
+    /// **Retained only where something reads it.** Keeping a carrier no
+    /// emitter consults would be exactly the parallel answer this umbrella
+    /// deletes, so today it is held for the freeze check alone; step 5b ungates
+    /// it with the first reader that needs it. Fragment lookups stay on
+    /// `Declarations::compiled` until then, and 5c deletes that one.
+    #[cfg(test)]
+    plan: prebindgen_registry::generation::GenerationPlan<crate::jni::compile::JRepresentation>,
     functions: HashMap<syn::Ident, Rc<JniFunctionPlan>>,
     interfaces: BTreeMap<SpecKey, Arc<IfaceSpec>>,
     /// Every declared data class is recorded, including an explicit `None` for
@@ -48,6 +59,7 @@ fn jni_artifact(kind: &str, name: impl Into<String>) -> prebindgen_registry::wri
 }
 
 /// One final artifact of the generated Rust file.
+#[derive(Clone)]
 pub(crate) enum JFinalArtifact {
     /// A private converter, carrying one value across the boundary.
     Converter(Box<crate::jni::chain::JFunction>),
@@ -71,6 +83,7 @@ pub(crate) enum JFinalArtifact {
 ///
 /// The source type is retained as a reading and spelled by the writer, since
 /// only the writer knows how to qualify it in the generated file.
+#[derive(Clone)]
 pub(crate) struct JHandleDestructor {
     /// The handle's source type.
     reading: prebindgen_registry::flat::TypeRef,
@@ -127,6 +140,7 @@ impl JHandleDestructor {
 
 /// One element type's `…VecNew/Push/Free` trio: the frozen flatten plan the
 /// push leaves come from, and the three exported symbols.
+#[derive(Clone)]
 pub(crate) struct JVecBuild {
     helpers: Rc<VecBuildHelpers>,
     new_symbol: String,
@@ -201,6 +215,7 @@ impl JVecBuild {
 /// source-crate internals — and exports a nullary getter extern, which is how
 /// the constant's type crosses through the ordinary output-converter
 /// machinery.
+#[derive(Clone)]
 pub(crate) struct JConst {
     /// The constant as the model holds it.
     constant: prebindgen_registry::flat::Constant,
@@ -302,7 +317,10 @@ impl prebindgen_registry::write::RustArtifact for JFinalArtifact {
 
 impl JniGenerationPlan {
     /// Finish planning and take ownership of every derived memo.
-    pub(crate) fn freeze(decls: &mut Declarations, registry: &Registry) -> Self {
+    pub(crate) fn freeze(
+        decls: &mut Declarations,
+        registry: &Registry,
+    ) -> Result<Self, prebindgen_registry::WriteRustError> {
         assert!(
             decls.generation.is_none(),
             "JNI generation plan may be frozen only once"
@@ -329,7 +347,7 @@ impl JniGenerationPlan {
             .cloned()
             .collect();
         for item in &data_classes {
-            let _ = decls.struct_plan(registry, item, 0);
+            let _ = decls.struct_plan(registry.flat(), item, 0);
         }
 
         let sealed_classes: Vec<_> = registry
@@ -393,7 +411,198 @@ impl JniGenerationPlan {
         let vec_builds = crate::jni::emit::plan_vec_build_helpers(decls);
         let constant_exprs = crate::jni::trait_impl::plan_constant_expressions(decls, registry);
 
-        let conversions = std::mem::take(&mut *decls.compiled.borrow_mut());
+        // Borrowed, not drained. The planning store stays where the compiler
+        // left it so one lookup path serves both phases — the branch on
+        // "already frozen?" that used to decide between them was the thing two
+        // stores made necessary (#613 step 5a).
+        let conversions = decls.compiled.borrow();
+        // The canonical plan, validated as one set. Every fragment the
+        // compilation reached and every site the exported functions state.
+        let mut collected = prebindgen_registry::generation::GenerationPlanBuilder::<
+            crate::jni::compile::JRepresentation,
+        >::new();
+        for fragment in conversions.fragments() {
+            collected.fragment(fragment.freeze());
+        }
+        for site in decls.site_plans.borrow().iter() {
+            collected.site((**site).clone());
+        }
+        // Root the plan at what the file actually renders, not at sites alone.
+        // Sites are the boundary positions; the converters a wrapper or helper
+        // reaches are named only by that artifact's own `calls`, so without
+        // these the plan prunes fragments the assembly still emits — which is
+        // what made `plan.fragments()` unusable as the assembly's order
+        // (#613 step 8). C already does exactly this.
+        // Every operation a fragment renders, not just its wire-facing one: a
+        // fragment emits its converter, its stages and one marker per chain
+        // step, and an artifact may call any of them.
+        let mut by_operation = std::collections::HashMap::new();
+        for fragment in conversions.fragments() {
+            for converter in fragment.converter_artifacts() {
+                if let prebindgen_registry::write::ArtifactKey::Operation(operation) =
+                    converter.key()
+                {
+                    by_operation
+                        .entry(operation)
+                        .or_insert_with(Vec::new)
+                        .push(fragment.id.clone());
+                }
+            }
+        }
+        use prebindgen_registry::write::RustArtifact as _;
+        // A borrow delegates to the value it borrows, and says so in
+        // `ConverterImpl::subs` — the census's canonical answer for `subs` is
+        // "FragmentUse edges inside ShapePlan", which an atomic borrow fragment
+        // has nowhere to put. Until it does, the delegation is read from where
+        // the adapter already states it, so the plan roots the owned converter
+        // a borrowed one calls (#613 step 8).
+        let mut declared_surface: Vec<prebindgen_registry::generation::FragmentId> = Vec::new();
+        let mut delegations: std::collections::HashMap<_, Vec<_>> =
+            std::collections::HashMap::new();
+        for fragment in conversions.fragments() {
+            for sub in &fragment.conv.subs {
+                if let Some(target) = conversions.fragment(sub, fragment.id.direction()) {
+                    delegations
+                        .entry(fragment.id.clone())
+                        .or_default()
+                        .push(target.id.clone());
+                }
+            }
+        }
+        let root = |artifact: &JFinalArtifact,
+                    extra: &[prebindgen_registry::generation::FragmentId]| {
+            let calls = artifact.calls();
+            let inputs: Vec<_> = calls
+                .iter()
+                .filter_map(|call| match call {
+                    prebindgen_registry::write::ArtifactKey::Operation(operation) => {
+                        by_operation.get(operation).cloned()
+                    }
+                    prebindgen_registry::write::ArtifactKey::Artifact(_) => None,
+                })
+                .flatten()
+                .chain(extra.iter().cloned())
+                .map(prebindgen_registry::generation::ArtifactInput::Fragment)
+                .collect();
+            if inputs.is_empty() {
+                return None;
+            }
+            let key = artifact.key();
+            let id = match key {
+                prebindgen_registry::write::ArtifactKey::Artifact(id) => id,
+                prebindgen_registry::write::ArtifactKey::Operation(operation) => {
+                    prebindgen_registry::generation::ArtifactId::new(
+                        "jni-operation",
+                        operation.to_string(),
+                    )
+                    .expect("an operation identity is a non-empty artifact name")
+                }
+            };
+            Some(prebindgen_registry::generation::ArtifactPlan::<
+                crate::jni::compile::JRepresentation,
+            >::new(id, Vec::new(), inputs, artifact.clone()))
+        };
+        // A declared class is binding surface in BOTH directions, whether or
+        // not this build happens to export a function that returns it — the
+        // same reason C roots its plan at `opaque`/`data`/`enum` declarations
+        // rather than at call sites alone. Without this a data class's output
+        // converter is reachable only by accident (#613 step 8).
+        for key in decls.types.keys() {
+            for direction in [
+                prebindgen_registry::recipe::Direction::Construct,
+                prebindgen_registry::recipe::Direction::Deconstruct,
+            ] {
+                if let Some(fragment) = conversions.fragment(key, direction) {
+                    declared_surface.push(fragment.id.clone());
+                }
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        for artifact in std::iter::once(JFinalArtifact::Prelude)
+            .chain(
+                destructors
+                    .iter()
+                    .map(|d| JFinalArtifact::HandleDestructor(Box::new(d.clone()))),
+            )
+            .chain(
+                vec_builds
+                    .iter()
+                    .map(|h| JFinalArtifact::VecBuild(Box::new(h.clone()))),
+            )
+            .chain(
+                constant_exprs
+                    .iter()
+                    .map(|g| JFinalArtifact::ConstantExpr(Box::new(g.clone()))),
+            )
+            .chain(
+                wrappers
+                    .iter()
+                    .map(|w| JFinalArtifact::Wrapper(Box::new(w.clone()))),
+            )
+            .chain(
+                constants
+                    .iter()
+                    .map(|c| JFinalArtifact::Const(Box::new(c.clone()))),
+            )
+            // Converters call converters: a `whole` struct converter calls its
+            // fields', and a callback's calls what its body converts through.
+            // Those edges are not in the shape, so the converter states them.
+            .chain(
+                conversions
+                    .fragments()
+                    .into_iter()
+                    // This roots the plan, so it cannot ask the plan. It asks
+                    // the same statement the plan is built from: a fragment
+                    // that freezes without an artifact renders nothing.
+                    .filter(|fragment| fragment.freeze().artifact().is_some())
+                    .flat_map(crate::jni::compile::JFrag::converter_artifacts)
+                    .map(|converter| JFinalArtifact::Converter(Box::new(converter))),
+            )
+        {
+            // A converter artifact carries its owner's delegations; the
+            // exported artifacts above delegate through their calls alone.
+            let extra: Vec<_> = match artifact.key() {
+                prebindgen_registry::write::ArtifactKey::Operation(operation) => by_operation
+                    .get(&operation)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|owner| delegations.get(owner))
+                    .flatten()
+                    .cloned()
+                    .collect(),
+                prebindgen_registry::write::ArtifactKey::Artifact(_) => Vec::new(),
+            };
+            if let Some(rooted) = root(&artifact, &extra) {
+                // Shared converters are reached from several fragments and
+                // named once in the file; the plan names them once too.
+                if seen.insert(rooted.id().clone()) {
+                    collected.artifact(rooted);
+                }
+            }
+        }
+        if !declared_surface.is_empty() {
+            declared_surface.sort_by_cached_key(|id| format!("{id:?}"));
+            declared_surface.dedup();
+            collected.artifact(prebindgen_registry::generation::ArtifactPlan::<
+                crate::jni::compile::JRepresentation,
+            >::new(
+                prebindgen_registry::generation::ArtifactId::new("jni-declared-surface", "classes")
+                    .expect("a constant artifact name is non-empty"),
+                Vec::new(),
+                declared_surface
+                    .iter()
+                    .cloned()
+                    .map(prebindgen_registry::generation::ArtifactInput::Fragment)
+                    .collect(),
+                JFinalArtifact::Prelude,
+            ));
+        }
+        #[cfg_attr(not(test), allow(unused_variables))]
+        let plan = collected.build().map_err(|errors| {
+            prebindgen_registry::ScanError::AdapterInvariant {
+                message: format!("the JNI generation plan is not valid: {errors}"),
+            }
+        })?;
         let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
         assembly.artifact(JFinalArtifact::Prelude);
         for destructor in destructors {
@@ -405,10 +614,20 @@ impl JniGenerationPlan {
         for getter in constant_exprs {
             assembly.artifact(JFinalArtifact::ConstantExpr(Box::new(getter)));
         }
+        // "Reached, and renders something" — both from the plan. A fragment
+        // that freezes without an artifact is the canonical statement of
+        // composed-only, and `JniGenerationPlan::freeze` already asserts the
+        // two agree, so asking the plan removes the second source rather than
+        // trusting it (#613 step 5c).
+        let renders: std::collections::HashSet<_> = plan
+            .fragments()
+            .filter(|fragment| fragment.artifact().is_some())
+            .map(|fragment| fragment.id().clone())
+            .collect();
         for converter in conversions
             .fragments()
             .into_iter()
-            .filter(|fragment| !fragment.composed_only)
+            .filter(|fragment| renders.contains(&fragment.id))
             .flat_map(crate::jni::compile::JFrag::converter_artifacts)
         {
             assembly.artifact(JFinalArtifact::Converter(Box::new(converter)));
@@ -422,38 +641,26 @@ impl JniGenerationPlan {
         // JniGen qualifies each source reference by the item's own origin
         // module, so it declares no single one for the writer to fall back on.
         let assembly = assembly.build(registry, None);
-        Self {
-            conversions,
+        drop(conversions);
+        Ok(Self {
+            #[cfg(test)]
+            plan,
             assembly,
             functions: std::mem::take(decls.fn_plans.get_mut()),
             interfaces: std::mem::take(decls.iface_specs.get_mut()),
             structs: std::mem::take(decls.struct_plans.get_mut()),
             sums: std::mem::take(decls.sum_plans.get_mut()),
             vec_builds: std::mem::take(decls.vec_build_plans.get_mut()),
-        }
+        })
     }
 
-    pub(crate) fn fragment(
-        &self,
-        ty: &TypeKey,
-        direction: prebindgen_registry::recipe::Direction,
-    ) -> Option<Rc<crate::jni::compile::JFrag>> {
-        self.conversions.fragment(ty, direction)
-    }
-
-    pub(crate) fn recipe_fragment(
-        &self,
-        ty: &TypeKey,
-        recipe: &prebindgen_registry::recipe::RecipeKey,
-    ) -> Option<Rc<crate::jni::compile::JFrag>> {
-        self.conversions.recipe_fragment(ty, recipe)
-    }
-
+    /// The canonical plan every fragment and site was validated into.
     #[cfg(test)]
-    pub(crate) fn conversions(
+    pub(crate) fn plan(
         &self,
-    ) -> &prebindgen_registry::recipe::Compiled<crate::jni::compile::JFrag> {
-        &self.conversions
+    ) -> &prebindgen_registry::generation::GenerationPlan<crate::jni::compile::JRepresentation>
+    {
+        &self.plan
     }
 
     /// The frozen assembly the generated Rust file is written from.
@@ -501,7 +708,7 @@ impl JniGenerationPlan {
     #[cfg(test)]
     pub(crate) fn counts(&self) -> (usize, usize, usize, usize, usize, usize) {
         (
-            self.conversions.len(),
+            self.plan.fragments().len(),
             self.functions.len(),
             self.interfaces.len(),
             self.structs.len(),

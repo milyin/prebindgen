@@ -22,30 +22,6 @@ use crate::{generation::OperationId, niches::Niches, registry::Registry};
 /// family rather than an exact ident).
 pub type NamePredicate = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
-/// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
-/// a value-inspecting step that sits between the rust value the
-/// `#[prebindgen]` fn yields/receives and the wire-facing
-/// [`ConverterImpl::converter`].
-///
-/// Each stage is a fallible `In → Result<Out, Err>` function. The core
-/// pipeline only ever orders [`Self::converter`]; how a
-/// stage's `Err` arm is surfaced to the foreign side — throw an exception,
-/// return an error code, set `errno`, … — is entirely up to the
-/// destination-language adapter and is described by [`Self::metadata`].
-#[derive(Clone)]
-pub struct Stage<M = ()> {
-    /// Stable identity of this stage's separately retained executable
-    /// artifact.
-    pub converter: OperationId,
-    /// Adapter-specific extras for this stage — the same type as the owning
-    /// converter's ([`ConverterImpl::metadata`]). The core never
-    /// inspects this; the adapter's emitter reads it to decide how the
-    /// stage's `Err` arm is surfaced (e.g. a JNI adapter stores the JVM
-    /// exception class and `throw_*` fn to call here; a C adapter might
-    /// store the error-code sentinel). Defaults to `()`.
-    pub metadata: M,
-}
-
 /// Result of resolving one converter — the wire (destination) type the rest
 /// of the registry sees, plus the identity of its separately retained
 /// executable artifact.
@@ -69,19 +45,6 @@ pub struct ConverterImpl<M = ()> {
     /// (it takes the wire); for output direction this is the LAST stage
     /// (it produces the wire).
     pub converter: OperationId,
-    /// **Rust-side** stages that compose with [`Self::converter`] to form
-    /// the full conversion chain. Default empty — a 1-stage converter
-    /// is just `function`.
-    ///
-    /// Order is rust-side-first → function-side-last. Concretely:
-    /// * **Input** (wire → rust): chain runs `wire → function →
-    ///   pre_stages[0] → pre_stages[1] → … → pre_stages[N-1] → rust`.
-    /// * **Output** (rust → wire): chain runs `rust → pre_stages[N-1] →
-    ///   … → pre_stages[1] → pre_stages[0] → function → wire`.
-    ///
-    /// Each stage is fallible; how its `Err` arm is surfaced is adapter
-    /// specific and carried in [`Stage::metadata`].
-    pub pre_stages: Vec<Stage<M>>,
     /// Bit-patterns the wire type can represent but this converter never
     /// produces (output) and rejects (input). Wrapper handlers like
     /// `Option<_>` consume one slot for their own discriminant and
@@ -122,18 +85,6 @@ impl<M> ConverterImpl<M> {
     /// Wire type this conversion carries on success.
     pub fn wire_type(&self) -> &syn::Type {
         &self.destination
-    }
-
-    /// Rust-side stages in input execution order, after the wire-facing
-    /// converter has decoded the wire value.
-    pub fn input_stage_order(&self) -> impl Iterator<Item = (usize, &Stage<M>)> {
-        self.pre_stages.iter().enumerate().rev()
-    }
-
-    /// Rust-side stages in output execution order, before the wire-facing
-    /// converter encodes the final wire value.
-    pub fn output_stage_order(&self) -> impl Iterator<Item = (usize, &Stage<M>)> {
-        self.pre_stages.iter().enumerate()
     }
 }
 

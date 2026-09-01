@@ -764,8 +764,9 @@ fn generation_plan_freezes_and_drains_derivations() {
                 .class(crate::sealed_class!(Outcome))
                 .fun(prebindgen_registry::fun!(z_do_thing)),
         );
-    // Resolve runs validation, builds every function plan, then freezes and
-    // drains the mutable planning memos before returning the generator.
+    // Resolve runs validation, builds every function plan, then freezes: the
+    // derived memos are drained into the generation plan, and the recipe
+    // compiler's own store is left where it is as the single fragment lookup.
     let gen = jni.build_with(registry).expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
     let f = registry.flat().function("z_do_thing").expect("indexed");
@@ -775,15 +776,19 @@ fn generation_plan_freezes_and_drains_derivations() {
     assert!(ext.struct_plans.borrow().is_empty());
     assert!(ext.sum_plans.borrow().is_empty());
     assert!(ext.vec_build_plans.borrow().is_empty());
+    // The recipe-compiler store is NOT drained, and that is the point of 5a:
+    // draining it is what forced every fragment lookup to decide first whether
+    // the plan had been frozen, and two stores are what let the two answers
+    // differ. One store now serves both phases.
     assert!(
-        ext.compiled.borrow().is_empty(),
-        "the mutable recipe compiler store is drained at freeze"
+        !ext.compiled.borrow().is_empty(),
+        "one store serves both phases, so freeze leaves it where the compiler did"
     );
-    let (conversions, functions, interfaces, structs, sums, vec_builds) =
+    let (fragments, functions, interfaces, structs, sums, vec_builds) =
         gen.generation_plan().counts();
     assert!(
-        conversions >= 1,
-        "registry fragments are frozen for emission"
+        fragments >= 1,
+        "the canonical plan holds the fragments its sites reach"
     );
     assert_eq!(functions, 1);
     assert!(interfaces >= 1, "the binding error interface is frozen");
@@ -1001,4 +1006,414 @@ fn a_callback_argument_carries_its_layers() {
         kotlin.contains("vec.map { it?.toULong() }"),
         "the proxy converts element by element:\n{kotlin}"
     );
+}
+
+/// A callback-valued parameter is a site, and says so canonically.
+///
+/// It never reaches `Compiler::site` — `classify_leaf` answers it whole,
+/// because a callback ARGUMENT does not always have a conversion of its own —
+/// so nothing else would state it. Leaving it out made "JNI describes its
+/// sites" false for a live path (#622 review), and the collected
+/// `GenerationPlan` could not have noticed: a site that is never frozen is not
+/// a duplicate or an invalid one, it is simply absent.
+#[test]
+fn a_callback_parameter_is_a_site_in_the_canonical_plan() {
+    use prebindgen_registry::recipe::Role;
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Fn(
+            syn::parse_str("pub fn z_each(n: i64, sink: impl Fn(i64) + Send + Sync + 'static) { unimplemented!() }")
+                .expect("parse fn"),
+        ),
+        loc.clone(),
+    )];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_each)))
+        .build_with(registry)
+        .expect("resolve");
+
+    let sites: Vec<String> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter(|plan| plan.id().site().owner == "z_each")
+        .map(|plan| match plan.id().site().role {
+            Role::Param { index } => format!("Param({index})"),
+            ref other => format!("{other}"),
+        })
+        .collect();
+    assert!(
+        sites.contains(&"Param(1)".to_string()),
+        "the callback parameter states its own site: {sites:?}"
+    );
+}
+
+/// An **expanded** parameter's callback leaf is still a leaf of that
+/// parameter.
+///
+/// The callback shortcut in `classify_leaf` runs for expansion leaves too, and
+/// naming it `Role::Param` there would undo the identity rule the ordinary
+/// path states — an expanded callback leaf would claim a source position the
+/// function does not have (#622 review). One role selection answers for both.
+#[test]
+fn an_expanded_callback_leaf_keeps_its_expansion_identity() {
+    use prebindgen_registry::recipe::Role;
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_opts_new(retries: i32, on_tick: impl Fn(i64) + Send + Sync + 'static) -> ZOpts { unimplemented!() }",
+        "pub fn z_go(opts: ZOpts, tail: i64) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_go)))
+        .expand(
+            prebindgen_registry::expand_param!(ZOpts)
+                .variant(prebindgen_registry::fun!(z_opts_new)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let roles: Vec<String> = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter(|plan| plan.id().site().owner == "z_go")
+        .map(|plan| match plan.id().site().role {
+            Role::Param { index } => format!("Param({index})"),
+            Role::ExpansionLeaf { param, leaf } => format!("ExpansionLeaf({param},{leaf})"),
+            ref other => format!("{other}"),
+        })
+        .collect();
+    assert_eq!(
+        roles,
+        [
+            "return value".to_string(),
+            "ExpansionLeaf(0,0)".to_string(),
+            "ExpansionLeaf(0,1)".to_string(),
+            // The value that leaf's callback delivers: a place in `z_go`, and
+            // `param` is the SOURCE parameter the callback came out of — the
+            // same position `ExpansionLeaf` names.
+            "argument 0 of the callback in parameter 0".to_string(),
+            "Param(1)".to_string(),
+        ],
+        "the callback leaf is the expansion's second leaf, not a parameter: {roles:?}"
+    );
+}
+
+/// A value a callback delivers by taking it apart states its own site, and
+/// that site names the row the delivery took.
+///
+/// `ZReply` is the case #622's first two attempts dead-ended on: its
+/// decomposition is a deconstructor declaration, not a value form, so before
+/// this the crossing had no `parts` row at all and a site could only be
+/// fabricated — asking for `parts` answered `NoSuchRecipe` and asking for the
+/// default answered a whole-value conversion the boundary does not have.
+///
+/// What the site says is not derived here. The ABI is the same allocation the
+/// trampoline's `JInvokePart` holds — asserted by identity rather than by
+/// comparing two lists, because a copy that happens to match today is the
+/// second answer this umbrella exists to delete.
+#[test]
+fn a_delivered_argument_names_the_row_it_crossed_on() {
+    use prebindgen::SourceLocation;
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_reply_zid(r: &ZReply) -> Option<ZId> { unimplemented!() }",
+        "pub fn z_reply_is_ok(r: &ZReply) -> bool { unimplemented!() }",
+        "pub fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { unimplemented!() }",
+        "pub fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { unimplemented!() }",
+        "pub fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    items.push((
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZId {
+                pub hi: i64,
+                pub lo: i64,
+            }
+        )),
+        loc.clone(),
+    ));
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_get(cb: impl Fn(ZReply) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    ));
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("query")
+                .class(crate::data_class!(ZId))
+                .class(
+                    crate::ptr_class!(ZKeyExpr)
+                        .method(prebindgen_registry::fun!(z_keyexpr_as_str).name("asStr")),
+                )
+                .class(
+                    crate::ptr_class!(ZSample)
+                        .method(prebindgen_registry::fun!(z_sample_key_expr).name("keyExpr")),
+                )
+                .class(
+                    crate::ptr_class!(ZReply)
+                        .method(prebindgen_registry::fun!(z_reply_zid).name("zid"))
+                        .method(prebindgen_registry::fun!(z_reply_is_ok).name("isOk"))
+                        .method(prebindgen_registry::fun!(z_reply_sample).name("sample")),
+                )
+                .fun(prebindgen_registry::fun!(z_get)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZKeyExpr)
+                .field_self()
+                .field(prebindgen_registry::fun!(z_keyexpr_as_str)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZSample)
+                .field(prebindgen_registry::fun!(z_sample_key_expr)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZReply)
+                .field(prebindgen_registry::fun!(z_reply_zid))
+                .field(prebindgen_registry::fun!(z_reply_is_ok))
+                .field(prebindgen_registry::fun!(z_reply_sample)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let decls = gen.declarations();
+    let plans = decls.site_plans.borrow();
+    let site = plans
+        .iter()
+        .find(|plan| {
+            plan.id().site().owner == "z_get"
+                && matches!(
+                    plan.id().site().role,
+                    prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg: 0 }
+                )
+        })
+        .expect("the delivered ZReply states a site");
+
+    // The row is `site_bindings`' answer, and it is the decomposing one — not
+    // the whole-value default, which for this crossing is a conversion that
+    // does not exist.
+    assert_eq!(
+        site.bound().recipe.name(),
+        &crate::jni::recipes::parts(),
+        "a delivered ZReply crosses on its `parts` row"
+    );
+    assert_eq!(
+        site.bound().crossing.direction(),
+        prebindgen_registry::recipe::Direction::Deconstruct
+    );
+
+    // The ABI is several leaves, and it is the trampoline's own list rather
+    // than a second one derived beside it.
+    let crate::jni::compile::JAbiLeaves::Decomposed(stated) = site.abi().payload() else {
+        panic!("a decomposed delivery does not occupy one whole leaf");
+    };
+    assert!(stated.len() > 1, "ZReply is delivered as several leaves");
+    assert_eq!(site.abi().slots(), stated.len());
+
+    let callback = decls
+        .in_frag(&param_reading(&gen, "z_get", 0))
+        .expect("the callback parameter compiled");
+    let crate::jni::compile::JAbiLeaves::Decomposed(delivered) = callback
+        .fragment()
+        .rust
+        .invoke_plan()
+        .expect("the callback conversion is an Invoke")
+        .arg_abi(0)
+        .expect("its first argument has a delivery")
+    else {
+        panic!("the trampoline delivers ZReply whole");
+    };
+    assert!(
+        std::rc::Rc::ptr_eq(stated, &delivered),
+        "the site's ABI is a copy of the delivery's rather than the same leaves"
+    );
+}
+
+/// A value a callback delivers **whole** states its site over the delivery too.
+///
+/// The other half of the row above: a scalar argument has no decomposition, so
+/// it names no `parts` row and takes its crossing's default — and its site's
+/// ABI is still the trampoline's own, not a second one derived beside it.
+#[test]
+fn a_whole_delivered_argument_shares_the_trampolines_abi() {
+    use prebindgen::SourceLocation;
+    let loc = myflat_loc();
+    let fns: &[&str] =
+        &["pub fn z_watch(on_tick: impl Fn(i64) + Send + Sync + 'static) { unimplemented!() }"];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_watch)))
+        .build_with(registry)
+        .expect("resolve");
+
+    let decls = gen.declarations();
+    let plans = decls.site_plans.borrow();
+    let site = plans
+        .iter()
+        .find(|plan| {
+            plan.id().site().owner == "z_watch"
+                && matches!(
+                    plan.id().site().role,
+                    prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg: 0 }
+                )
+        })
+        .expect("the delivered i64 states a site");
+
+    // No decomposition and no declaration, so there is no row to name at all:
+    // the site takes the recipe the registry derives from the type's kind,
+    // attributed to the adapter because nothing bound it.
+    assert_eq!(site.bound().recipe.name().as_str(), "derived");
+    assert_eq!(
+        site.bound().origin,
+        prebindgen_registry::recipe::Origin::Adapter
+    );
+    assert_eq!(site.abi().slots(), 1);
+
+    let crate::jni::compile::JAbiLeaves::Invoked(stated) = site.abi().payload() else {
+        panic!("a whole delivery is not several leaves");
+    };
+    let crate::jni::compile::JAbiLeaves::Invoked(delivered) = decls
+        .in_frag(&param_reading(&gen, "z_watch", 0))
+        .expect("the callback parameter compiled")
+        .fragment()
+        .rust
+        .invoke_plan()
+        .expect("the callback conversion is an Invoke")
+        .arg_abi(0)
+        .expect("its first argument has a delivery")
+    else {
+        panic!("the trampoline decomposes an i64");
+    };
+    assert!(
+        std::rc::Rc::ptr_eq(stated, &delivered),
+        "the site's ABI is a copy of the delivery's rather than the same plan"
+    );
+}
+
+/// A whole-element fold earns no decomposition row, and a scalar of the same
+/// element type is not dragged onto one.
+///
+/// `apply_leaf_vec_folds` files a plan for `impl Fn(&[T])` keyed under `&[T]`
+/// whose `source` is the ELEMENT and whose `decon` is `None`: nothing is taken
+/// apart, each element crosses whole through its own converter. A row declared
+/// off that plan would state a decomposition of `T` that does not exist — and
+/// the `T` argument beside it would bind to that row and name a fragment
+/// compiled under a different recipe (#623 review).
+///
+/// Both arguments in one callback, which is the shape that makes the collision
+/// observable rather than theoretical.
+#[test]
+fn a_whole_element_fold_states_no_decomposition_row() {
+    use prebindgen::SourceLocation;
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_handle_id(h: &ZHandle) -> i64 { unimplemented!() }",
+        "pub fn z_stream(cb: impl Fn(&[ZHandle], ZHandle) + Send + Sync + 'static) { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("stream")
+                .class(
+                    crate::ptr_class!(ZHandle)
+                        .method(prebindgen_registry::fun!(z_handle_id).name("id")),
+                )
+                .fun(prebindgen_registry::fun!(z_stream)),
+        )
+        .build_with(registry)
+        .expect("resolve");
+
+    let decls = gen.declarations();
+    let element = param_reading(&gen, "z_handle_id", 0);
+    let crossing = prebindgen_registry::recipe::Crossing::new(
+        element.borrow_target().unwrap_or(&element).clone(),
+        prebindgen_registry::recipe::Direction::Deconstruct,
+    );
+    assert!(
+        decls
+            .recipe_table()
+            .key_of(&crossing.key(), &crate::jni::recipes::parts())
+            .is_none(),
+        "a whole-element fold declared a decomposition row for its element: {:?}",
+        decls.recipe_table().names_of(&crossing.key())
+    );
+
+    let plans = decls.site_plans.borrow();
+    let role_of = |arg: usize| {
+        plans
+            .iter()
+            .find(|plan| {
+                plan.id().site().owner == "z_stream"
+                    && plan.id().site().role
+                        == prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg }
+            })
+            .map(|plan| plan.bound().recipe.name().as_str().to_string())
+    };
+    // Both delivered values state a site, and neither took a decomposition row:
+    // the slice is folded element by element, the handle crosses whole.
+    assert!(role_of(0).is_some(), "the folded slice states no site");
+    assert_ne!(role_of(0).as_deref(), Some("parts"));
+    assert_eq!(role_of(1).as_deref(), Some("whole"));
+}
+
+/// One captured function's parameter reading, by name and position.
+#[cfg(test)]
+fn param_reading(
+    gen: &crate::JniGen,
+    func: &str,
+    index: usize,
+) -> prebindgen_registry::flat::TypeRef {
+    gen.registry()
+        .flat()
+        .function(&syn::Ident::new(func, proc_macro2::Span::call_site()))
+        .unwrap_or_else(|| panic!("{func} is captured"))
+        .params[index]
+        .ty
+        .clone()
 }

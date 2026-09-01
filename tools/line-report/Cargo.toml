@@ -1,0 +1,19 @@
+# Outside the workspace on purpose.
+#
+# The report asks `syn` where a `#[cfg(test)]` construct ends, which needs
+# `proc-macro2/span-locations`. Cargo features are additive, so a workspace
+# member carrying that would enable it for every `--all-features` build —
+# and a `Span` that stores its location makes `syn::Type` large enough to trip
+# `clippy::large_enum_variant` across the C adapter. A standalone crate keeps
+# the location tracking here.
+[package]
+name = "line-report"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+syn = { version = "2.0", features = ["full", "visit", "extra-traits"] }
+proc-macro2 = { version = "1.0", features = ["span-locations"] }

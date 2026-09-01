@@ -85,12 +85,12 @@ fn opaque_handles_retain_late_plans_for_all_ownership_operations() {
             .decls
             .in_frag(&shared)
             .expect("shared input")
-            .converter_id(),
+            .converter,
         generation
             .decls
             .in_frag(&exclusive)
             .expect("exclusive input")
-            .converter_id(),
+            .converter,
         "both borrow crossings must retain one semantic handle operation"
     );
 }
@@ -376,13 +376,11 @@ fn unsized_str_retains_semantic_text_codec_plans() {
         "both output crossings must retain the semantic borrowed-text plan"
     );
     assert_eq!(
-        input.converter_id(),
-        string_input.converter_id(),
+        input.converter, string_input.converter,
         "bare str input and String must share the owned-text decoder"
     );
     assert_eq!(
-        bare_output.converter_id(),
-        ref_output.converter_id(),
+        bare_output.converter, ref_output.converter,
         "rank-0 str and rank-1 &str must share one normalized converter"
     );
 }
@@ -504,7 +502,7 @@ fn cow_byte_slices_retain_a_late_value_codec() {
     );
     assert!(
         output
-            .converter_id()
+            .converter
             .fragment()
             .is_some_and(|fragment| fragment.spelling() == &reading.key()),
         "the late codec identity must preserve the crossing's lifetime"
@@ -799,8 +797,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
          answer through rather than wrap it:\n{rust}"
     );
     assert!(
-        rc.contains("let___delay:jni::sys::jlong=__jni_out_convert_")
-            && rc.contains("\"(J)Lio/test/jni/Timed;\""),
+        rc.contains("let__obj0:jni::sys::jlong=") && rc.contains("\"(J)Lio/test/jni/Timed;\""),
         "whole-struct output must pass the niche as primitive jlong:\n{rust}"
     );
     assert!(!rc.contains("let___delay:jni::objects::JObject"), "{rust}");
@@ -1610,7 +1607,7 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
         kc.contains("if(mode==Int.MIN_VALUE)nullelseLevel.fromInt(mode)"),
         "{kotlin}"
     );
-    assert!(kc.contains("Inner.fromParts(inner_id)"), "{kotlin}");
+    assert!(kc.contains("Inner.fromParts(inner__id)"), "{kotlin}");
 
     // INPUT (`job_mode`): the native method receives the recursively flattened
     // leaves. The registry-composed Optional and Product chains reconstruct
@@ -3084,7 +3081,7 @@ fn data_class_properties_match_their_from_parts_params() {
     // child is inlined as its own leaves, the handle arrives as a raw pointer
     // and the enum as its discriminant, then each is rebuilt.
     assert!(kc.contains("Bag(Handle.fromRawPtr(handle)"), "{kotlin}");
-    assert!(kc.contains("Child.fromParts(child_n)"), "{kotlin}");
+    assert!(kc.contains("Child.fromParts(child__n)"), "{kotlin}");
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
 
     // …and the raw-pointer guard follows that same plan, factory by factory

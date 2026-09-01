@@ -24,37 +24,37 @@ use super::*;
 /// the two — the same reason `FnOutputPlan::Value` boxes its own payload.
 pub(crate) enum JPlan {
     /// One parameter, in the seven-way wire layout the emitters branch on.
-    Param(Box<crate::jni::fn_plan::PlanLeaf>),
+    Param(std::rc::Rc<crate::jni::fn_plan::PlanLeaf>),
     /// A return that crosses as one value: what it converts through, and what
     /// the Kotlin surface declares.
-    Return(Box<crate::jni::fn_plan::ValueOutputPlan>),
+    Return(std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>),
     /// A return the binding takes apart: the values it hands out, in the order
     /// the builder receives them.
     ///
     /// Consumed by ordinary decomposed-return delivery. Callback delivery
     /// takes the same result in the following Invoke stage.
-    Decomposed(Vec<OutWire>),
+    Decomposed(std::rc::Rc<Vec<OutWire>>),
 }
 
 impl JPlan {
     /// This plan as a parameter's, or `None` if it is a return's.
-    pub(crate) fn param(self) -> Option<crate::jni::fn_plan::PlanLeaf> {
+    pub(crate) fn param(self) -> Option<std::rc::Rc<crate::jni::fn_plan::PlanLeaf>> {
         match self {
-            JPlan::Param(leaf) => Some(*leaf),
+            JPlan::Param(leaf) => Some(leaf),
             _ => None,
         }
     }
 
     /// This plan as a return's, or `None` if it is a parameter's.
-    pub(crate) fn returned(self) -> Option<crate::jni::fn_plan::ValueOutputPlan> {
+    pub(crate) fn returned(self) -> Option<std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>> {
         match self {
-            JPlan::Return(plan) => Some(*plan),
+            JPlan::Return(plan) => Some(plan),
             _ => None,
         }
     }
 
     /// The values a decomposed return hands out, or `None` if it is not one.
-    pub(crate) fn decomposed(self) -> Option<Vec<OutWire>> {
+    pub(crate) fn decomposed(self) -> Option<std::rc::Rc<Vec<OutWire>>> {
         match self {
             JPlan::Decomposed(wires) => Some(wires),
             _ => None,
@@ -100,10 +100,10 @@ pub(crate) fn optional_pair_plan_candidate(ext: &Declarations, arg: &TypeRef) ->
     let Some(inner_entry) = ext.in_frag(inner) else {
         return false;
     };
-    JniPrim::from_wire(&inner_entry.destination).is_some()
+    JniPrim::from_wire(&inner_entry.wire).is_some()
         && inner_entry.niches.clone().carve().is_none()
         && inner_entry.metadata.projection.is_none()
-        && inner_entry.pre_stages.is_empty()
+        && inner_entry.0.chain.steps().is_empty()
 }
 
 /// Kotlin spelling of the niche consumed by the outer Optional enum layer.
@@ -161,7 +161,7 @@ pub(crate) fn optional_pair_plan(
     optional_pair_plan_candidate(ext, arg).then_some(())?;
     let inner = arg.optional_inner()?;
     let inner_entry = ext.in_frag(inner)?;
-    let value_wire = inner_entry.destination.clone();
+    let value_wire = inner_entry.wire.clone();
     let prim = JniPrim::from_wire(&value_wire)?;
     let is_enum = ext.is_kotlin_enum_reading(inner);
     let chain = root.composed_chain()?;
@@ -182,12 +182,123 @@ pub(crate) fn optional_pair_plan(
     })
 }
 
+/// JniGen's half of the canonical generation plan.
+///
+/// Declared here so a JNI fragment can state its conversion chain in the
+/// registry's vocabulary — [`prebindgen_registry::generation::ConversionChain`]
+/// — rather than in a row of its own. #613 step 4 is what puts JNI fragments
+/// and sites into `FragmentPlan` / `SitePlan`; this states the representation
+/// those will be over, and the chain is its first live use.
+/// One fragment's converter, and the two facts a reader of the canonical plan
+/// needs beside it.
+///
+/// `FragmentPlan` carries the shape, the chain, the niches and the identity;
+/// what it cannot carry is adapter syntax, and both of these are exactly that.
+/// The wire is the JNI type this fragment's converter produces or consumes —
+/// adapter syntax, not captured source syntax, which is what
+/// [`Representation`](prebindgen_registry::generation::Representation) permits
+/// an artifact to retain. The layout is this fragment's own nesting over its
+/// ABI leaves, which no other part of the plan states:
+/// [`AbiLayout`](prebindgen_registry::generation::AbiLayout) is a **site's**
+/// answer, and `ShapePlan` does not imply it — a transparent wrapper over an
+/// optional leaves the shape composed and the layout absent.
+#[derive(Clone)]
+pub(crate) struct JConverterArtifact {
+    /// The private Rust converter this fragment renders.
+    pub(crate) rust: crate::jni::chain::JFunction,
+    /// The JNI wire this converter produces (deconstruct) or consumes
+    /// (construct).
+    pub(crate) wire: syn::Type,
+    /// This fragment's own nesting over its ABI leaves, when it composes.
+    pub(crate) layout: Option<JLayout>,
+    /// The Kotlin-facing extras this conversion carries: the class name a
+    /// value surfaces as, the reading an error peel rides, the handle or
+    /// unsigned projection, and any niche sentinels. Adapter payload, which is
+    /// what an artifact is for — and the last thing `Conv` reaches for through
+    /// `ConverterImpl` rather than through the plan (#613 step 5c).
+    pub(crate) metadata: KotlinMeta,
+    /// Bit-patterns this fragment's wire can hold but its converter never
+    /// produces and rejects on input.
+    pub(crate) niches: prebindgen_registry::Niches,
+    /// The wire-facing conversion's identity.
+    pub(crate) converter: OperationId,
+    /// Semantic stages rendered beside the wire-facing converter. A fragment
+    /// can emit more than one converter function, and this is where it says so
+    /// — adapter payload, so the canonical plan carries it without the registry
+    /// needing a multi-artifact fragment (#613 step 8).
+    pub(crate) stages: Vec<crate::jni::chain::JFunction>,
+}
+
+impl JConverterArtifact {
+    /// Whether the wire is a raw pointer, which decides how a child value is
+    /// handed to its parent converter.
+    pub(crate) fn wire_is_pointer(&self) -> bool {
+        matches!(self.wire, syn::Type::Ptr(_))
+    }
+
+    /// Whether this fragment occupies several ABI leaves under one nesting.
+    pub(crate) fn layout_is_composed(&self) -> bool {
+        self.layout.as_ref().is_some_and(JLayout::is_composed)
+    }
+}
+
+pub(crate) struct JRepresentation;
+
+impl prebindgen_registry::generation::Representation for JRepresentation {
+    /// A stage's carrier is named by the crossing it converts, which is what
+    /// JniGen already keys its fragments on.
+    type Intermediate = TypeKey;
+    /// One stage: the identity of the artifact that renders it.
+    type Step = OperationId;
+    type ConverterArtifact = JConverterArtifact;
+    type TerminalCodec = crate::jni::chain::JFunction;
+    type ProductBridge = crate::jni::chain::JFunction;
+    type OptionalBridge = crate::jni::chain::JFunction;
+    type SequenceBridge = crate::jni::chain::JFunction;
+    type ChoiceBridge = crate::jni::chain::JFunction;
+    type CallbackBridge = crate::jni::chain::JFunction;
+    type Niche = String;
+    type Cleanup = ();
+    type FailureRoute = ();
+    /// A site's ordered ABI: the leaves that cross, in order.
+    type AbiLayout = JAbiLeaves;
+    type Artifact = crate::jni::generation::JFinalArtifact;
+}
+
 /// The JNI adapter's answer for one crossing.
 ///
 /// What a `ConverterImpl` was, minus the bookkeeping the table now does.
 #[derive(Clone)]
 pub(crate) struct JFrag {
+    /// This fragment's canonical identity and the crossing it answers — what
+    /// [`FragmentPlan`](prebindgen_registry::generation::FragmentPlan) is keyed
+    /// and spelled by. Carried here so freezing reads them off the fragment
+    /// rather than re-deriving them from a site that has moved on.
+    pub(crate) id: prebindgen_registry::generation::FragmentId,
+    pub(crate) source: TypeRef,
+    /// The niche this fragment **consumed** to encode its own absence, when it
+    /// did. An `Option` over a value whose wire has a free bit-pattern spends
+    /// one of them on `None` and exposes only the rest; the spent slot lives
+    /// on in the bridge that tests it, so without recording it here the frozen
+    /// plan could describe what a parent may still use but not what this
+    /// fragment took (#621 review).
+    pub(crate) consumed_niche: Option<prebindgen_registry::niches::NicheSlot>,
+    /// The registry-composed shape of this fragment, in the canonical
+    /// vocabulary. Built where the shape is known — the hook the compiler
+    /// called — rather than in an adapter enum translated later, which is the
+    /// duplication #613 step 6 removes on the C side.
+    pub(crate) shape: prebindgen_registry::generation::ShapePlan<JRepresentation>,
     pub(crate) conv: ConverterImpl<KotlinMeta>,
+    /// The conversions between this fragment's wire value and its source
+    /// value, in **execution order for this fragment's direction** — from the
+    /// wire when constructing, from the source when deconstructing.
+    ///
+    /// The registry's chain rather than a row of this adapter's own. It
+    /// replaced `ConverterImpl::pre_stages`, which stored one order and left
+    /// each reader to reverse it for input; storing execution order means the
+    /// reversal happens once, where the chain is built and the direction is
+    /// already in hand.
+    pub(crate) chain: prebindgen_registry::generation::ConversionChain<JRepresentation>,
     pub(crate) rust: crate::jni::chain::JFunction,
     /// Frozen semantic stages beside the wire-facing converter. The
     /// compatibility ConverterImpl keeps marker functions for ordering and
@@ -230,6 +341,99 @@ pub(crate) struct JFrag {
     /// own conversion to emit, so "has wires" is the wrong test for what to
     /// leave out of the file.
     pub(crate) composed_only: bool,
+}
+
+/// A site's ordered ABI is the leaves that cross, and nothing else.
+///
+/// Not the fragment's `JLayout`: that is how the fragment's own intermediate
+/// nests, which is a different fact and a different count — a `data_class`
+/// parameter is one intermediate over two native parameters. Cross-checking
+/// them by count asserted they were the same thing, and they are not.
+/// What a site's ordered leaves are, which depends on which side of the
+/// boundary the site sits on.
+#[derive(Clone)]
+// `Whole` and `Invoked` carry the plan a site converts through, and until step
+// 5b's readers move onto the canonical plan nothing in production reads it back
+// — the site set is a check today. The other two variants are read by `len`.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) enum JAbiLeaves {
+    /// A parameter: its ordered native positions AND the operations that
+    /// decode them — the Rust and Kotlin param ops and the pipeline. The whole
+    /// leaf, shared, because those are what an emitter reads and a carrier
+    /// that held only the descriptors could not replace the plan.
+    Params(std::rc::Rc<crate::jni::fn_plan::PlanLeaf>),
+    /// The values a decomposed return hands out, in builder order.
+    Decomposed(std::rc::Rc<Vec<OutWire>>),
+    /// One returned value: the plan that converts it, which is the plan the
+    /// emitters read rather than the intermediate the site hook produces.
+    Whole(std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>),
+    /// One value a callback delivers whole: the argument's own output ABI,
+    /// shared with the `JInvokePart` the trampoline renders. A returned value
+    /// and a delivered one are converted by different plans, so they are
+    /// different layouts — what they have in common is occupying one leaf.
+    Invoked(std::rc::Rc<OutValueAbi>),
+}
+
+impl JAbiLeaves {
+    /// How many ordered ABI **leaves** these are — not how many JVM descriptor
+    /// slots they occupy. One native parameter is one leaf; `jvm_slots` says
+    /// how wide that leaf is in a descriptor, which is a different count and
+    /// summing it here made a two-slot `long` look like two leaves.
+    pub(crate) fn len(&self) -> usize {
+        match self {
+            Self::Params(leaf) => leaf.native.len(),
+            Self::Decomposed(wires) => wires.len(),
+            Self::Whole(_) | Self::Invoked(_) => 1,
+        }
+    }
+}
+
+/// The canonical site of a whole return, frozen from the plan the emitters read
+/// rather than the intermediate the site hook produced.
+pub(crate) fn whole_return_site(
+    bound: &prebindgen_registry::recipe::Bound,
+    fragment: &prebindgen_registry::generation::FragmentId,
+    plan: std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>,
+) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+    use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+    SitePlan::new(
+        SiteId::new(bound.site.clone()),
+        bound.clone(),
+        fragment.clone(),
+        Yield {
+            ty: bound.crossing.value().stripped_key(),
+            mode: bound.crossing.mode(),
+            validity: Validity::SelfSufficient,
+        },
+        AbiLayout::new(1, JAbiLeaves::Whole(plan)),
+        Some(()),
+        prebindgen_registry::generation::Cleanup::None,
+    )
+}
+
+/// The canonical site of one value a callback delivers.
+///
+/// Built from the edge the `Invoke` recipe already states — the argument's own
+/// fragment and what that edge requires of it — and from the ABI the
+/// trampoline finalized, which it shares rather than copies. Neither half is
+/// derived here, which is what keeps this a carrier rather than a second
+/// answer beside the delivery (#622 review).
+pub(crate) fn callback_arg_site(
+    bound: &prebindgen_registry::recipe::Bound,
+    edge: &prebindgen_registry::generation::FragmentUse,
+    abi: JAbiLeaves,
+) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+    use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+    let slots = abi.len();
+    SitePlan::new(
+        SiteId::new(bound.site.clone()),
+        bound.clone(),
+        edge.fragment().clone(),
+        edge.required().clone(),
+        AbiLayout::new(slots, abi),
+        Some(()),
+        prebindgen_registry::generation::Cleanup::None,
+    )
 }
 
 /// Structural JNI intermediate layout. Leaves are ABI values; Products nest
@@ -453,15 +657,23 @@ pub(crate) struct OutWire {
     /// the tag carries is which alternative is live, and naming the sum is how
     /// an emitter finds the enum to match over.
     pub(crate) out_ty: TypeRef,
-    /// Which alternative produces this value, or `None` for one every call
-    /// produces — including the tag, which selects between the groups rather
-    /// than joining one.
+    /// The arms this value sits inside, outermost first — empty for one every
+    /// call produces, and for a selector, which carries the path it is nested
+    /// in rather than the arms it chooses between.
+    pub(crate) groups: Vec<i32>,
+    /// The **inlined classes** this value sits inside, outermost first, by
+    /// Kotlin FQN — empty for a leaf of the decomposed class itself.
     ///
-    /// Composed and checked but not yet read outside the equivalence fixture:
-    /// grouping is what turns the list into a `match`, and the emitter that
-    /// writes that `match` still reads it off the leaf synthesis.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) group: Option<i32>,
+    /// A decomposition flattens a nested `data_class` into the parent's leaves,
+    /// and the foreign side has to put them back: each boundary reassembles
+    /// through that class's own `fromParts`. Which class that is is known only
+    /// where the flattening happens, so it is recorded there rather than
+    /// recovered later by walking the model a second time — the walk this
+    /// decomposition exists to replace.
+    ///
+    /// Declaration-only, like the rest of this walk: a class FQN comes from the
+    /// `data_class!` that named it, not from any resolved conversion.
+    pub(crate) through: Vec<String>,
     /// How the Rust side reaches it.
     pub(crate) from: OutFrom,
     /// The steps from the crossed value down to this one.
@@ -509,6 +721,9 @@ pub(crate) struct OutWire {
 pub(crate) enum OutAbi {
     /// Synthesized Choice selector: raw `jint`, with no converter.
     Tag,
+    /// Synthesized presence flag: raw `jboolean`, with no converter. The value
+    /// it tests crosses through the leaves it gates, not through this one.
+    Present,
     /// One value encoded through its registry-planned pipeline. Projection is
     /// retained because handle/unsigned delivery owns special jvalue policy.
     Value(Box<OutValueAbi>),
@@ -527,7 +742,9 @@ impl OutAbi {
     /// converted.
     pub(crate) fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
         match self {
-            Self::Tag => {}
+            // Assigned, not converted: a tag by the emitter, a presence flag
+            // by the gate that unwrapped the value.
+            Self::Tag | Self::Present => {}
             Self::Value(value) => value.pipeline.calls(out),
         }
     }
@@ -557,11 +774,15 @@ impl prebindgen_registry::unfold::DecomposedLeaf for OutWire {
     }
 
     fn selects(&self) -> bool {
-        self.is_tag()
+        // A presence flag selects too: between the group being live and the
+        // group carrying its defaults. The walk emits both as one gated
+        // segment, which is the shape an absent optional needs — a per-leaf
+        // absent value cannot fill a primitive slot.
+        matches!(self.from, OutFrom::Tag | OutFrom::Present)
     }
 
-    fn group(&self) -> Option<i32> {
-        self.group
+    fn groups(&self) -> &[i32] {
+        &self.groups
     }
 }
 
@@ -583,9 +804,14 @@ impl OutWire {
         Self {
             name: leaf.name.clone(),
             out_ty: leaf.out_ty.clone(),
-            group: leaf.group,
+            groups: leaf.groups.clone(),
+            // A registry leaf carries no class path: `from_leaf` builds a wire
+            // for a plan the registry composed, not for a data class this
+            // adapter flattened.
+            through: Vec::new(),
             from: match &leaf.source {
                 LeafSource::SumTag => OutFrom::Tag,
+                LeafSource::Presence => OutFrom::Present,
                 LeafSource::VariantField { variant, member } => OutFrom::Payload {
                     variant: Some(variant.clone()),
                     member: member.clone(),
@@ -611,7 +837,7 @@ impl OutWire {
     pub(crate) fn same_delivery(&self, other: &Self) -> bool {
         self.name == other.name
             && self.out_ty.key() == other.out_ty.key()
-            && self.group == other.group
+            && self.groups == other.groups
             && self.from == other.from
             && self.reach == other.reach
             && self.identity == other.identity
@@ -645,6 +871,10 @@ pub(crate) enum OutFrom {
     /// Read off the place [`OutWire::reach`] names — a field access, or the
     /// result of the accessor the reach ends in.
     Place,
+    /// The synthesized presence of an optional value the decomposition looks
+    /// through: the emitter tests the place [`OutWire::reach`] names and the
+    /// leaves after it carry the value when it is there.
+    Present,
     /// A payload of one alternative, bound by that arm's pattern.
     Payload {
         /// The alternative's ident as the source enum declares it. Empty until
@@ -687,6 +917,10 @@ pub(crate) struct Wire {
     /// the value calls it through its wire-facing function **and** whatever
     /// Rust-side stages follow, and a name says nothing about those.
     pub(crate) entry: Option<ConverterImpl<KotlinMeta>>,
+    /// This wire's fragment's conversion chain, in execution order — copied
+    /// from the fragment when the wire is built, because the Rust side that
+    /// rebuilds the value calls the wire-facing converter and then these.
+    pub(crate) stages: Vec<OperationId>,
     /// For a nested owned handle: where Kotlin finds the handle **object**, as
     /// against the `Long` this wire carries.
     ///
@@ -728,10 +962,77 @@ impl Carrier for JFrag {
     }
 }
 
+/// One stage in front of `inner`'s chain, in execution order for `direction`.
+///
+/// A stage converts between the fragment's own source value and the value the
+/// inner fragment carries, so the two endpoints are `ChainValue::Source` and
+/// the inner crossing's key. Which is `from` and which is `into` is the whole
+/// difference between the directions: constructing ends at the source value
+/// and deconstructing starts there, which is also why the inner steps run
+/// before the new one in one direction and after it in the other.
+fn staged_chain(
+    direction: Direction,
+    operation: OperationId,
+    inner_key: TypeKey,
+    inner: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+    failure: prebindgen_registry::generation::Failure,
+) -> prebindgen_registry::generation::ConversionChain<JRepresentation> {
+    use prebindgen_registry::generation::{ChainValue, Cleanup, ConversionChain, ConverterStep};
+    let (from, into) = match direction {
+        Direction::Construct => (
+            ChainValue::Intermediate(inner_key.clone()),
+            ChainValue::Source,
+        ),
+        Direction::Deconstruct => (
+            ChainValue::Source,
+            ChainValue::Intermediate(inner_key.clone()),
+        ),
+    };
+    let own = ConverterStep::new(from, into, operation, failure, Cleanup::None);
+    // `ChainValue::Source` names the source value of the fragment that OWNS
+    // the chain, so the inner fragment's steps change meaning when they are
+    // embedded in this one: what was the inner's source value is this
+    // fragment's `inner_key` carrier. Rebasing it is what keeps the steps
+    // adjacent — each step's `into` is the next step's `from` — with `Source`
+    // appearing only at the end of a construct chain and the start of a
+    // deconstruct one.
+    let rebase = |value: &ChainValue<TypeKey>| match value {
+        ChainValue::Source => ChainValue::Intermediate(inner_key.clone()),
+        ChainValue::Intermediate(key) => ChainValue::Intermediate(key.clone()),
+    };
+    let inner = inner.steps().iter().map(|step| {
+        ConverterStep::new(
+            rebase(step.from()),
+            rebase(step.into()),
+            step.operation().clone(),
+            step.failure(),
+            step.cleanup().clone(),
+        )
+    });
+    let steps: Vec<ConverterStep<JRepresentation>> = match direction {
+        Direction::Construct => inner.chain(std::iter::once(own)).collect(),
+        Direction::Deconstruct => std::iter::once(own).chain(inner).collect(),
+    };
+    ConversionChain::Steps(steps)
+}
+
 impl JFrag {
     fn new(at: At<'_>, conv: ConverterImpl<KotlinMeta>) -> Self {
         let rust = crate::jni::chain::JFunction::marker(conv.converter_id().clone());
         Self::planned(at, conv, rust)
+    }
+
+    /// A fragment whose source value is reached through explicit stages.
+    fn planned_staged(
+        at: At<'_>,
+        chain: prebindgen_registry::generation::ConversionChain<JRepresentation>,
+        conv: ConverterImpl<KotlinMeta>,
+        rust: crate::jni::chain::JFunction,
+    ) -> Self {
+        Self {
+            chain,
+            ..Self::planned(at, conv, rust)
+        }
     }
 
     fn planned(
@@ -741,7 +1042,15 @@ impl JFrag {
     ) -> Self {
         let validity = validity_of(at.crossing.direction(), at.crossing.mode());
         Self {
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            // Atomic until a composing hook says otherwise: a fragment the
+            // compiler reached through `atomic` converts one leaf, and every
+            // other hook overwrites this with the shape it composed.
+            consumed_niche: None,
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             conv,
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             rust,
             rust_stages: Vec::new(),
             choice_arm: None,
@@ -758,31 +1067,186 @@ impl JFrag {
         }
     }
 
+    /// This fragment as a [`FragmentPlan`] — the canonical description, in the
+    /// registry's own vocabulary rather than this adapter's.
+    ///
+    /// Nothing renders from it yet: #613 step 4 is putting JNI fragments and
+    /// sites into the canonical plan, and this is the first half, built beside
+    /// the fields it will replace so that the swap is a deletion rather than a
+    /// rewrite — the shape #620 used for the same kind of move. Its only reader
+    /// so far is the check that says the two describe the same fragment, which
+    /// is why it carries a `dead_code` exemption outside tests; the exemption
+    /// goes when the generation plan holds these instead of `JFrag`.
+    ///
+    /// A **composed-only** fragment freezes without an artifact. That is the
+    /// canonical plan's existing answer for a fragment that emits nothing
+    /// (`FragmentPlan::artifact` is already an `Option`), not a JNI concept:
+    /// the `parts` recipe of a `data_class` occupies wires and states a
+    /// composition, and has no converter of its own to render.
+    pub(crate) fn freeze(&self) -> prebindgen_registry::generation::FragmentPlan<JRepresentation> {
+        use prebindgen_registry::generation::{
+            ConverterPlan, FragmentPlan, NichePlan, {self as generation},
+        };
+        let exposed: Vec<String> = self.conv.niches.slots.iter().map(niche_key).collect();
+        // What this fragment SPENT, beside what it leaves for a parent. An
+        // `Option` that encodes `None` in a free bit-pattern consumes one slot
+        // and discriminates on it; the plan has to carry both domains, or it
+        // describes a contract nothing can validate and a nested `Option` layer
+        // cannot be reconstructed from it.
+        let consumed: Vec<String> = self.consumed_niche.iter().map(niche_key).collect();
+        let converter = ConverterPlan::with_chain(
+            self.shape.clone(),
+            // The authoritative conversion graph, not `Direct`: a `convert!`
+            // declaration's stages, their order, and the artifacts they route
+            // to live here since #615, and freezing without them would hand a
+            // later reader a fragment with no stages at all.
+            self.chain.clone(),
+            NichePlan::new(consumed.len(), consumed, exposed),
+            generation::Failure::Fallible,
+            generation::Cleanup::None,
+        );
+        // The **shape-adjacent** intermediate, which is not always the wire.
+        // A `convert!` declaration puts stages between the source value and the
+        // value the shape converts — `Duration -> u64 -> jlong` — so for a
+        // fragment with a chain the intermediate is the chain's own end: what
+        // it produces when deconstructing, what it starts from when
+        // constructing. Taking the destination unconditionally described a
+        // chain that ends nowhere, which is what validating the collected
+        // fragments as one plan reported (#621 review).
+        let intermediate = match (&self.chain, self.id.direction()) {
+            (generation::ConversionChain::Steps(steps), Direction::Deconstruct) => {
+                steps.last().and_then(|step| match step.into() {
+                    generation::ChainValue::Intermediate(key) => Some(key.clone()),
+                    generation::ChainValue::Source => None,
+                })
+            }
+            (generation::ConversionChain::Steps(steps), Direction::Construct) => {
+                steps.first().and_then(|step| match step.from() {
+                    generation::ChainValue::Intermediate(key) => Some(key.clone()),
+                    generation::ChainValue::Source => None,
+                })
+            }
+            (generation::ConversionChain::Direct, _) => None,
+        }
+        .unwrap_or_else(|| TypeKey::from_type(&self.conv.destination));
+        let plan = FragmentPlan::new(
+            self.id.clone(),
+            self.source.clone(),
+            intermediate,
+            converter,
+            self.yields.clone(),
+        );
+        match self.composed_only {
+            true => plan,
+            false => plan.with_artifact(self.artifact()),
+        }
+    }
+
+    /// This fragment as the plan for one **site** that uses it.
+    ///
+    /// The multi-slot ABI is what JNI demonstrates and C does not need: a C
+    /// site's value occupies the slots its own `CValue` states, while a JNI
+    /// site may occupy several ordered leaves — a `data_class` parameter
+    /// crossing as its fields, an optional as a presence flag ahead of its
+    /// value — and `JLayout` is how their nesting is spelled. `AbiLayout`
+    /// already carries exactly that pair: how many ordered leaves, and the
+    /// adapter's own layout of them.
+    ///
+    /// Failure IS routed at every site, and `Some(())` is how JNI says so. The
+    /// route carries no payload — a conversion failure goes to the error sink
+    /// the wrapper already holds, so there is nothing to choose between, where
+    /// a C site chooses an out-param or a panic. But presence is the semantic
+    /// edge the canonical plan validates: a fallible fragment used by a site
+    /// with no route is `MissingFailureRoute`, and freezing `None` made every
+    /// JNI site that (#622 review).
+    pub(crate) fn freeze_site(
+        &self,
+        bound: &prebindgen_registry::recipe::Bound,
+        leaves: JAbiLeaves,
+    ) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+        use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+        // The leaves come from the plan that produced them — this does not
+        // derive them a second time, which is the whole point: a carrier
+        // derived beside the thing it carries is another parallel answer.
+        let slots = leaves.len();
+        SitePlan::new(
+            SiteId::new(bound.site.clone()),
+            bound.clone(),
+            self.id.clone(),
+            self.yields.clone(),
+            AbiLayout::new(slots, leaves),
+            Some(()),
+            prebindgen_registry::generation::Cleanup::None,
+        )
+    }
+
     /// Every private Rust artifact carried by this registry fragment.
     ///
     /// A custom conversion may add semantic Rust-side stages beside its
     /// wire-facing converter. Marker-only compatibility stages stay in the
     /// ordered list so the shared writer can de-duplicate them by identity;
     /// their `should_emit` policy keeps them out of the final file.
+    /// Every converter function this fragment renders, read off its artifact —
+    /// which is what the canonical plan carries, so the same list is derivable
+    /// from a `FragmentPlan` alone (#613 step 8).
     pub(crate) fn converter_artifacts(&self) -> Vec<crate::jni::chain::JFunction> {
-        std::iter::once(self.rust.clone())
-            .chain(self.rust_stages.iter().cloned())
+        let artifact = self.artifact();
+        std::iter::once(artifact.rust.clone())
+            .chain(artifact.stages.iter().cloned())
             .chain(
-                self.conv
-                    .pre_stages
+                self.chain
+                    .steps()
                     .iter()
-                    .map(|stage| crate::jni::chain::JFunction::marker(stage.converter.clone())),
+                    .map(|step| crate::jni::chain::JFunction::marker(step.operation().clone())),
             )
             .collect()
     }
 
+    /// This fragment's converter with its wire and layout — the one statement
+    /// of the three, which both the frozen plan and `composed_chain` are built
+    /// from rather than each reaching for `conv`, `rust` and `layout` apart.
+    pub(crate) fn artifact(&self) -> JConverterArtifact {
+        JConverterArtifact {
+            rust: self.rust.clone(),
+            wire: self.conv.destination.clone(),
+            layout: self.layout.clone(),
+            metadata: self.conv.metadata.clone(),
+            niches: self.conv.niches.clone(),
+            converter: self.conv.converter_id().clone(),
+            stages: self.rust_stages.clone(),
+        }
+    }
+
+    /// This fragment's pipeline, for a caller that still holds the fragment.
+    ///
+    /// The fragment-side convenience over the plan-shaped
+    /// `planned_pipeline`: it supplies the three things a plan would, so the
+    /// two callers cannot diverge while both exist.
+    pub(crate) fn pipeline(
+        &self,
+        direction: Direction,
+        mode: Mode,
+    ) -> crate::jni::chain::JPipeline {
+        JCompile::<Registry>::planned_pipeline(
+            direction,
+            mode,
+            &self.artifact(),
+            &self.chain,
+            self.conv.converter_id(),
+        )
+    }
+
     pub(crate) fn composed_chain(&self) -> Option<ComposedChain> {
         if !self.composed_only {
-            if let Some(layout) = self.layout.clone().filter(JLayout::is_composed) {
+            // Built from the one statement of converter, wire and layout, so
+            // this route and the frozen plan cannot describe the same fragment
+            // differently.
+            let artifact = self.artifact();
+            if let Some(layout) = artifact.layout.filter(JLayout::is_composed) {
                 return Some(ComposedChain {
                     operation: self.conv.converter_id().clone(),
                     layout,
-                    rust: self.rust.clone(),
+                    rust: artifact.rust,
                 });
             }
         }
@@ -792,11 +1256,7 @@ impl JFrag {
     /// Exact Rust-value-to-JNI operation selected for this fragment.
     pub(crate) fn output_abi(&self) -> OutAbi {
         OutAbi::Value(Box::new(OutValueAbi {
-            pipeline: JCompile::<Registry>::planned_pipeline(
-                Direction::Deconstruct,
-                Mode::Owned,
-                self,
-            ),
+            pipeline: self.pipeline(Direction::Deconstruct, Mode::Owned),
             projection: self.conv.metadata.projection.clone(),
             dependency: self.rust.clone(),
         }))
@@ -1126,7 +1586,6 @@ impl<R: Conversions> JCompile<'_, R> {
         };
         let conv = ConverterImpl {
             subs: vec![],
-            pre_stages: vec![],
             converter: operation,
             destination: wire,
             niches,
@@ -1137,6 +1596,45 @@ impl<R: Conversions> JCompile<'_, R> {
             conv,
             crate::jni::chain::JFunction::value_codec(plan),
         ))
+    }
+
+    /// Freeze this site into the canonical plan, taking its ordered ABI from
+    /// the plan just built rather than deriving it again.
+    fn freeze_site_of(&self, bound: &Bound, root: &JFrag, plan: &JPlan) {
+        let leaves = match plan {
+            // The whole leaf, not just its descriptors: `RustParamOp`,
+            // `KotlinParamOp` and the pipeline are the site's operations, and
+            // a carrier without them could not replace the plan (#622 review).
+            JPlan::Param(leaf) => JAbiLeaves::Params(leaf.clone()),
+            JPlan::Decomposed(wires) => JAbiLeaves::Decomposed(wires.clone()),
+            // A whole return is frozen where its FINAL plan is built, with the
+            // convert delivery attached — the hook's is an intermediate, and
+            // freezing it made the carrier authoritative for something no
+            // emitter reads (#622 review).
+            JPlan::Return(_) => return,
+        };
+        let frozen = root.freeze_site(bound, leaves);
+        // The carrier holds the SAME list the plan does, not a copy of it.
+        // That is the property that makes it a replacement: a copy could only
+        // be checked to match today, while one allocation has nothing to
+        // match. Guarded here so a later `clone()` cannot quietly reintroduce
+        // the second answer (#622 review).
+        match (frozen.abi().payload(), plan) {
+            (JAbiLeaves::Params(frozen), JPlan::Param(leaf)) => assert!(
+                std::rc::Rc::ptr_eq(frozen, leaf),
+                "the site's ABI is a copy of the plan's rather than the same leaf"
+            ),
+            (JAbiLeaves::Decomposed(frozen), JPlan::Decomposed(wires)) => assert!(
+                std::rc::Rc::ptr_eq(frozen, wires),
+                "the site's ABI is a copy of the plan's rather than the same list"
+            ),
+
+            _ => panic!("a site's frozen ABI does not match the plan it was taken from"),
+        }
+        self.decls
+            .site_plans
+            .borrow_mut()
+            .push(std::rc::Rc::new(frozen));
     }
 
     /// Freeze a whole-object struct terminal from the Flat declaration and
@@ -1157,7 +1655,12 @@ impl<R: Conversions> JCompile<'_, R> {
                 crate::jni::emit::build_jobject_struct_input_plan(self.decls, st, self.registry)?,
             )),
             Direction::Deconstruct => {
-                let plan = self.decls.struct_plan(self.registry, st, 0)?;
+                let wires = self.decls.struct_out_frozen(self.registry.flat(), st)?;
+                let delivery = crate::jni::emit::FrozenDelivery::for_value_struct(
+                    self.decls,
+                    self.registry,
+                    wires,
+                )?;
                 let registered = self
                     .decls
                     .types
@@ -1176,7 +1679,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     |fqn| fqn.replace('.', "/"),
                 );
                 crate::jni::chain::JStructCodecBody::Output {
-                    plan,
+                    delivery: Box::new(delivery),
                     java_class_name,
                 }
             }
@@ -1193,7 +1696,6 @@ impl<R: Conversions> JCompile<'_, R> {
             at,
             ConverterImpl {
                 subs: Vec::new(),
-                pre_stages: Vec::new(),
                 converter: operation.clone(),
                 destination: wire,
                 niches,
@@ -1237,7 +1739,6 @@ impl<R: Conversions> JCompile<'_, R> {
             at,
             ConverterImpl {
                 subs: Vec::new(),
-                pre_stages: Vec::new(),
                 converter: operation.clone(),
                 destination: wire.clone(),
                 niches: default_niches_for_wire(&wire),
@@ -1309,7 +1810,6 @@ impl<R: Conversions> JCompile<'_, R> {
         metadata.niche_sentinels = niche_sentinels;
         let conv = ConverterImpl {
             subs: vec![],
-            pre_stages: vec![],
             converter: operation,
             destination: wire,
             niches,
@@ -1343,7 +1843,6 @@ impl<R: Conversions> JCompile<'_, R> {
         );
         let conv = ConverterImpl {
             subs: vec![],
-            pre_stages: vec![],
             converter: operation,
             destination: wire,
             niches,
@@ -1498,15 +1997,19 @@ impl<R: Conversions> JCompile<'_, R> {
                 operation,
             });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination: wire,
                 converter: operation_id,
-                pre_stages: Vec::new(),
                 niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
                 metadata,
                 subs,
             },
             choice_arm: None,
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            consumed_niche: None,
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Leaf),
@@ -1533,11 +2036,15 @@ impl<R: Conversions> JCompile<'_, R> {
         let (ok, err) = source.fallible_parts()?;
         let success = self.decls.out_frag(ok)?;
         let operation = OperationId::stage(at.fragment_id(), 0);
-        let mut pre_stages = vec![Stage {
-            converter: operation.clone(),
-            metadata: KotlinMeta::default(),
-        }];
-        pre_stages.extend(success.pre_stages.iter().cloned());
+        // Peeling a `Result` IS the failure edge: the `Err` arm is what the
+        // site has to route, which is why this stage is always fallible.
+        let chain = staged_chain(
+            at.crossing.direction(),
+            operation.clone(),
+            ok.key(),
+            &success.0.chain,
+            prebindgen_registry::generation::Failure::Fallible,
+        );
         let rust = crate::jni::chain::JFunction::result(crate::jni::chain::JResultPlan {
             operation,
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
@@ -1546,13 +2053,13 @@ impl<R: Conversions> JCompile<'_, R> {
             ok: ok.clone(),
             err: err.clone(),
         });
-        Some(JFrag::planned(
+        Some(JFrag::planned_staged(
             at,
+            chain,
             ConverterImpl {
-                destination: success.destination.clone(),
+                destination: success.wire.clone(),
                 converter: success.converter.clone(),
-                pre_stages,
-                niches: default_niches_for_wire(&success.destination),
+                niches: default_niches_for_wire(&success.wire),
                 metadata: KotlinMeta {
                     kotlin_name: success.metadata.kotlin_name.clone(),
                     value_reading: Some(ok.clone()),
@@ -1593,27 +2100,26 @@ impl<R: Conversions> JCompile<'_, R> {
                 crate::jni::trait_impl::read_through_erased_wrappers(source, quote!(__probe))?;
             }
         }
-        let stages = match direction {
-            Direction::Construct => entry
-                .input_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-            Direction::Deconstruct => entry
-                .output_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-        };
+        // In execution order already — the chain stores it that way for the
+        // fragment's own direction, so neither arm reverses anything.
+        let stages: Vec<OperationId> = entry
+            .0
+            .chain
+            .steps()
+            .iter()
+            .map(|step| step.operation().clone())
+            .collect();
         // The outer bridge already receives the exact parameter form expected
         // by the child converter: a pointer by value, otherwise a borrowed JNI
         // object/scalar wire. Do not add the ordinary site-level borrow again.
         let child = match direction {
             Direction::Construct => crate::jni::chain::JChild::input(
-                entry.converter_id().clone(),
+                entry.converter.clone(),
                 stages,
                 crate::jni::chain::JValueUse::Direct,
             ),
             Direction::Deconstruct => crate::jni::chain::JChild::output(
-                entry.converter_id().clone(),
+                entry.converter.clone(),
                 stages,
                 crate::jni::chain::JValueUse::Direct,
             ),
@@ -1624,16 +2130,15 @@ impl<R: Conversions> JCompile<'_, R> {
             reachable: std::rc::Rc::new(std::cell::Cell::new(false)),
             inner: entry.0.rust.clone(),
             source: source.clone(),
-            wire: entry.destination.clone(),
+            wire: entry.wire.clone(),
             direction,
             child,
         });
         Some(JFrag::planned(
             at,
             ConverterImpl {
-                destination: entry.destination.clone(),
+                destination: entry.wire.clone(),
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches: entry.niches.clone(),
                 metadata: entry.metadata.clone(),
                 subs: vec![stripped],
@@ -1768,6 +2273,25 @@ impl<R: Conversions> JCompile<'_, R> {
             }
         }
         let operation = OperationId::stage(at.fragment_id(), 0);
+        // A declared conversion fails when the declaration says it can: a
+        // `try_into!` trait bound, or a `fun!` whose function returns a
+        // `Result`. A domain adds a failure edge of its own, so a conversion
+        // carrying one is fallible whatever its call says.
+        let fallible = match &call {
+            crate::jni::chain::JCustomCall::Trait { fallible } => *fallible,
+            crate::jni::chain::JCustomCall::Function { error, .. } => error.is_some(),
+        } || decl.domain().is_some();
+        let chain = staged_chain(
+            direction,
+            operation.clone(),
+            representation_key.clone(),
+            &inner.0.chain,
+            if fallible {
+                prebindgen_registry::generation::Failure::Fallible
+            } else {
+                prebindgen_registry::generation::Failure::Infallible
+            },
+        );
         let plan = crate::jni::chain::JFunction::custom_conversion(
             crate::jni::chain::JCustomConversionPlan {
                 operation: operation.clone(),
@@ -1778,16 +2302,11 @@ impl<R: Conversions> JCompile<'_, R> {
                 domain: decl.domain().clone(),
             },
         );
-        let mut pre_stages = vec![Stage {
-            converter: operation,
-            metadata: KotlinMeta::default(),
-        }];
-        pre_stages.extend(inner.pre_stages.iter().cloned());
         let (niches, sentinels) = self.decls.conversion_domain_niches(
             &source.key(),
             self.registry,
             direction,
-            &inner.destination,
+            &inner.wire,
         );
         let mut metadata = KotlinMeta {
             kotlin_name: inner.metadata.kotlin_name.clone(),
@@ -1797,14 +2316,13 @@ impl<R: Conversions> JCompile<'_, R> {
         };
         Declarations::attach_domain_sentinels(&mut metadata, sentinels);
         let conv = ConverterImpl {
-            destination: inner.destination.clone(),
+            destination: inner.wire.clone(),
             converter: inner.converter.clone(),
-            pre_stages,
             niches,
             metadata,
             subs: vec![representation_key],
         };
-        let mut fragment = JFrag::planned(at, conv, inner.0.rust.clone());
+        let mut fragment = JFrag::planned_staged(at, chain, conv, inner.0.rust.clone());
         fragment.rust_stages.push(plan);
         Some(fragment)
     }
@@ -1814,40 +2332,44 @@ impl<R: Conversions> JCompile<'_, R> {
         part: &Part<'_>,
         frag: &JFrag,
     ) -> crate::jni::chain::JChild {
-        Self::planned_child_mode(direction, part.mode, frag)
+        Self::planned_child_mode(
+            direction,
+            part.mode,
+            &frag.artifact(),
+            &frag.chain,
+            frag.conv.converter_id(),
+        )
     }
 
+    /// Takes the three things a **plan** holds — the artifact, the conversion
+    /// chain and the converter's identity — rather than a `JFrag`. Nothing
+    /// about a child's value use is read off the fragment any more, which is
+    /// what lets a reader holding a `FragmentPlan` produce the same answer
+    /// (#613 step 5b).
     fn planned_child_mode(
         direction: Direction,
         mode: Mode,
-        frag: &JFrag,
+        artifact: &JConverterArtifact,
+        chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+        converter: &OperationId,
     ) -> crate::jni::chain::JChild {
-        let stages = match direction {
-            Direction::Construct => frag
-                .conv
-                .input_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-            Direction::Deconstruct => frag
-                .conv
-                .output_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-        };
+        let stages: Vec<OperationId> = chain
+            .steps()
+            .iter()
+            .map(|step| step.operation().clone())
+            .collect();
         match direction {
             Direction::Construct => crate::jni::chain::JChild::input(
-                frag.conv.converter_id().clone(),
+                converter.clone(),
                 stages,
-                if matches!(frag.conv.destination, syn::Type::Ptr(_))
-                    || frag.layout.as_ref().is_some_and(JLayout::is_composed)
-                {
+                if artifact.wire_is_pointer() || artifact.layout_is_composed() {
                     crate::jni::chain::JValueUse::Direct
                 } else {
                     crate::jni::chain::JValueUse::SharedRef
                 },
             ),
             Direction::Deconstruct => crate::jni::chain::JChild::output(
-                frag.conv.converter_id().clone(),
+                converter.clone(),
                 stages,
                 match mode {
                     Mode::Owned => crate::jni::chain::JValueUse::Direct,
@@ -1857,10 +2379,17 @@ impl<R: Conversions> JCompile<'_, R> {
         }
     }
 
+    /// The plan-shaped twin of [`Self::planned_child_mode`]: what a fragment's
+    /// value crosses through, built from the artifact, the chain and the
+    /// converter's identity alone. A `JFrag` is no longer one of its inputs,
+    /// so a reader holding a `FragmentPlan` builds the same pipeline (#613
+    /// step 5b).
     fn planned_pipeline(
         direction: Direction,
         mode: Mode,
-        frag: &JFrag,
+        artifact: &JConverterArtifact,
+        chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+        converter: &OperationId,
     ) -> crate::jni::chain::JPipeline {
         // A root output is already the source call's exact return spelling.
         // Child composition may need to clone a borrowed projection before an
@@ -1870,9 +2399,9 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Deconstruct => Mode::Owned,
         };
         crate::jni::chain::JPipeline::new(
-            frag.conv.destination.clone(),
-            Self::planned_child_mode(direction, mode, frag),
-            direction == Direction::Construct && frag.rust.is_borrowed_optional_value(),
+            artifact.wire.clone(),
+            Self::planned_child_mode(direction, mode, artifact, chain, converter),
+            direction == Direction::Construct && artifact.rust.is_borrowed_optional_value(),
         )
     }
 
@@ -1939,14 +2468,18 @@ impl<R: Conversions> JCompile<'_, R> {
             },
         });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination: intermediate,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta::default(),
                 subs: parts.iter().map(|(part, _)| part.ty.key()).collect(),
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            consumed_niche: None,
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Product(layouts)),
@@ -2103,14 +2636,18 @@ impl<R: Conversions> JCompile<'_, R> {
             },
         });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta::default(),
                 subs: parts_subs(arms),
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            consumed_niche: None,
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Choice(layouts)),
@@ -2214,7 +2751,13 @@ impl<R: Conversions> JCompile<'_, R> {
         if direction == Direction::Construct {
             reject_vec_of_handle(&inner.conv.metadata.projection, &element);
         }
-        let child = Self::planned_child_mode(direction, elements, inner);
+        let child = Self::planned_child_mode(
+            direction,
+            elements,
+            &inner.artifact(),
+            &inner.chain,
+            inner.conv.converter_id(),
+        );
         let destination: syn::Type = syn::parse_quote!(jni::objects::JObject);
         // A shared slice input and an owned vector input both materialize the
         // same `Vec<T>` carrier. Give that produced model type to the plan,
@@ -2255,10 +2798,10 @@ impl<R: Conversions> JCompile<'_, R> {
             Direction::Deconstruct => default_niches_for_wire(&destination),
         };
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches,
                 metadata: KotlinMeta {
                     kotlin_name,
@@ -2268,6 +2811,10 @@ impl<R: Conversions> JCompile<'_, R> {
                 },
                 subs: vec![element.key()],
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            consumed_niche: None,
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Leaf),
@@ -2337,10 +2884,10 @@ impl<R: Conversions> JCompile<'_, R> {
                 ..projection
             });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination: wire,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches: Niches::empty(),
                 metadata: KotlinMeta {
                     kotlin_name,
@@ -2350,6 +2897,10 @@ impl<R: Conversions> JCompile<'_, R> {
                 },
                 subs: vec![target.key()],
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            consumed_niche: None,
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(JLayout::Leaf),
@@ -2401,7 +2952,7 @@ impl<R: Conversions> JCompile<'_, R> {
                     return None;
                 }
                 matches!(
-                    self.decls.type_kind(self.registry, &target.stripped_key()),
+                    self.decls.type_kind(self.registry.flat(), &target.stripped_key()),
                     crate::jni::classify::TypeKind::DataStruct { cfg: Some(cfg), .. }
                         if cfg.name_spec.is_some()
                 )
@@ -2420,18 +2971,12 @@ impl<R: Conversions> JCompile<'_, R> {
         let wrappers = composable_wrappers(at.crossing)?;
 
         let inner_wire = inner.conv.destination.clone();
-        let stages = match direction {
-            Direction::Construct => inner
-                .conv
-                .input_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-            Direction::Deconstruct => inner
-                .conv
-                .output_stage_order()
-                .map(|(_, stage)| stage.converter.clone())
-                .collect(),
-        };
+        let stages: Vec<OperationId> = inner
+            .chain
+            .steps()
+            .iter()
+            .map(|step| step.operation().clone())
+            .collect();
 
         let (bridge, child, destination, niches, nullable_kind, layout, input_by_ref) =
             match direction {
@@ -2586,6 +3131,13 @@ impl<R: Conversions> JCompile<'_, R> {
                 ),
                 ..projection
             });
+        // The slot this optional spends on `None`, when it spends one. Which
+        // slot is `carve`'s answer — the same call the bridge above made to
+        // choose the sentinel it tests — and it is recorded rather than
+        // recomputed later because `freeze` sees the fragment, not its inner.
+        let consumed_niche = (nullable_kind == NullableKind::Niche)
+            .then(|| inner.conv.niches.clone().carve().map(|(slot, _)| slot))
+            .flatten();
         let mut niche_sentinels = inner.conv.metadata.niche_sentinels.clone();
         if nullable_kind == NullableKind::Niche {
             if !niche_sentinels.is_empty() {
@@ -2630,10 +3182,10 @@ impl<R: Conversions> JCompile<'_, R> {
             input_by_ref,
         });
         Some(JFrag {
+            chain: prebindgen_registry::generation::ConversionChain::Direct,
             conv: ConverterImpl {
                 destination,
                 converter: operation,
-                pre_stages: Vec::new(),
                 niches,
                 metadata: KotlinMeta {
                     projection,
@@ -2642,6 +3194,10 @@ impl<R: Conversions> JCompile<'_, R> {
                 },
                 subs: vec![element.key()],
             },
+            id: at.fragment_id(),
+            source: at.crossing.spelled().clone(),
+            consumed_niche,
+            shape: prebindgen_registry::generation::ShapePlan::Atomic(rust.clone()),
             rust,
             rust_stages: Vec::new(),
             layout: Some(layout),
@@ -2687,6 +3243,8 @@ pub(crate) fn freeze_out_wires(
             let mut wire = OutWire::from_leaf(leaf);
             wire.abi = Some(if wire.is_tag() {
                 OutAbi::Tag
+            } else if matches!(wire.from, OutFrom::Present) {
+                OutAbi::Present
             } else {
                 let crossing = prebindgen_registry::recipe::Crossing::new(
                     wire.out_ty.clone(),
@@ -2781,6 +3339,49 @@ pub(crate) fn freeze_output_chain(
     result
 }
 
+/// Pack all fixed positions: a `data_class` crosses as its fields, an
+/// alternative as its payload, and the arity is part of the frozen contract.
+fn product(fragment: &mut JFrag, parts: &[(prebindgen_registry::recipe::Part<'_>, &JFrag)]) {
+    fragment.shape = prebindgen_registry::generation::ShapePlan::Product {
+        bridge: prebindgen_registry::generation::FixedArity::new(
+            parts.len(),
+            fragment.rust.clone(),
+        ),
+        parts: parts.iter().map(|(_, part)| fragment_use(part)).collect(),
+    };
+}
+
+/// The parts of one choice arm. An arm the compiler reached through `fields` is
+/// a product of that alternative's payload, and its parts are the arm's; an arm
+/// with no payload is a product of nothing, which is the arity a unit variant
+/// contributes. Anything else stands for itself.
+fn arm_parts(fragment: &JFrag) -> Vec<prebindgen_registry::generation::FragmentUse> {
+    match &fragment.shape {
+        prebindgen_registry::generation::ShapePlan::Product { parts, .. } => parts.clone(),
+        _ => vec![fragment_use(fragment)],
+    }
+}
+
+/// One niche slot's canonical identity: the value it encodes and the pattern
+/// that recognizes it.
+///
+/// The single spelling, so a plan that states a niche and a check that compares
+/// one cannot disagree about what a slot IS — comparing how many there are was
+/// the gap that let a substituted sentinel pass (#621 review).
+pub(crate) fn niche_key(slot: &prebindgen_registry::niches::NicheSlot) -> String {
+    format!(
+        "{}=>{}",
+        quote::ToTokens::to_token_stream(&slot.value),
+        quote::ToTokens::to_token_stream(&slot.matches),
+    )
+}
+
+/// The edge from a composing fragment to one of its children: which fragment,
+/// and the source-value contract this use of it requires.
+fn fragment_use(fragment: &JFrag) -> prebindgen_registry::generation::FragmentUse {
+    prebindgen_registry::generation::FragmentUse::new(fragment.id.clone(), fragment.yields.clone())
+}
+
 impl<R: Conversions> Compile for JCompile<'_, R> {
     type Fragment = JFrag;
     /// One site of one exported function, classified.
@@ -2817,8 +3418,19 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Direction::Construct => self.borrow(ty, true),
             Direction::Deconstruct => self.borrow(ty, false),
         };
-        if conv.is_none()
-            && at.crossing.direction() == Direction::Deconstruct
+        // Either the type has no whole JNI representation at all, or a site
+        // named the `parts` row a decomposed callback argument states. The
+        // second is how a `Role::CallbackArg` site reaches the same plan the
+        // trampoline delivers, instead of a fragment fabricated beside it.
+        // A `parts` row used to be named here as a second way in. It is not
+        // one: a `parts` row is `Deconstructing::Atomic`, so this hook is where
+        // its crossing lands anyway, and the condition below already admits it
+        // — `conv` is `None` for a type with no whole JNI representation, which
+        // is what a callback argument declared for decomposition is. Disabling
+        // the `asks_parts` arm moves no generated output and fails no test
+        // (#613 step 10).
+        if at.crossing.direction() == Direction::Deconstruct
+            && conv.is_none()
             && !self
                 .decls
                 .types
@@ -2886,6 +3498,16 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 "no registry-composed JNI representation for this optional",
             ));
         };
+        // Absent/present control flow around one value, stated at every exit
+        // below. Every fragment this hook returns is that composition: a
+        // declared whole-`Option` converter is selected as a terminal recipe
+        // before structural compilation, so this hook never sees one.
+        let optional_shape = |frag: &mut JFrag| {
+            frag.shape = prebindgen_registry::generation::ShapePlan::Optional {
+                bridge: frag.rust.clone(),
+                value: fragment_use(inner),
+            };
+        };
         // An optional over something that crosses as several values cannot ride
         // a niche in any one of them — which of `(tag, summary)` would carry
         // the absence? So the presence is its own wire, ahead of the rest: the
@@ -2897,6 +3519,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         // there is no boxed `Option` on this wire to decode.
         if let Some(pair) = pair_wires {
             frag.wires = Some(pair);
+            optional_shape(&mut frag);
             return Ok(frag);
         }
         if at.crossing.direction() == Direction::Construct && inner.wires.is_none() {
@@ -2910,10 +3533,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         refuse(at, "the Optional parts recipe could not compose its pair")
                     })?;
                     frag.wires = Some(pair);
+                    optional_shape(&mut frag);
                     return Ok(frag);
                 }
                 frag.layout = None;
                 frag.wires = Some(pair);
+                optional_shape(&mut frag);
                 return Ok(frag);
             }
         }
@@ -2932,6 +3557,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 // The gate reads the object itself, not through it.
                 access: Access::read(" != null"),
                 entry: None,
+                stages: Vec::new(),
                 handle_target: None,
                 handle_nullable: false,
                 absent: None,
@@ -2947,6 +3573,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             }
             frag.wires = Some(wires);
         }
+        optional_shape(&mut frag);
         Ok(frag)
     }
 
@@ -2967,7 +3594,14 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         if let Some(planned) = self.planned_custom_conversion(at) {
             return Ok(planned);
         }
-        if let Some(planned) = self.planned_sequence(at, elements, inner) {
+        if let Some(mut planned) = self.planned_sequence(at, elements, inner) {
+            // Builder or traversal control flow around one element type. The
+            // terminals above are not this: a declared `Cow<'_, [u8]>` codec is
+            // one byte array, reached through this hook but atomic.
+            planned.shape = prebindgen_registry::generation::ShapePlan::Sequence {
+                bridge: planned.rust.clone(),
+                element: fragment_use(inner),
+            };
             return Ok(planned);
         }
         if let Some(planned) = self.planned_transparent_bridge(at) {
@@ -3027,10 +3661,15 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             if represented {
                 frag.choice_arm = self.planned_choice_arm(at, parts);
             }
+            // One alternative's payload is a product of its fields, which is
+            // what `choice` reads back as that arm's parts.
+            product(&mut frag, parts);
             return Ok(frag);
         }
         if at.crossing.direction() == Direction::Deconstruct {
-            return Ok(self.out_product(at, parts));
+            let mut frag = self.out_product(at, parts);
+            product(&mut frag, parts);
+            return Ok(frag);
         }
         // A `data_class` crosses as its fields, and a field that is itself one
         // contributes its own several — which is the recursion, stated once
@@ -3047,6 +3686,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         // wire reaches on from there.
                         access: w.access.clone().under(&field_kt(part)),
                         entry: w.entry.clone(),
+                        stages: w.stages.clone(),
                         handle_target: w.handle_target.as_ref().map(|t| {
                             std::iter::once(Nav {
                                 field: field_kt(part),
@@ -3076,6 +3716,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                     path: part.name.clone(),
                     access: Access::read("").under(&field_kt(part)),
                     entry: None,
+                    stages: Vec::new(),
                     handle_target: Some(vec![Nav {
                         field: field_kt(part),
                         gated: false,
@@ -3097,6 +3738,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             marker
         });
         frag.wires = Some(wires);
+        product(&mut frag, parts);
         Ok(frag)
     }
 
@@ -3106,16 +3748,33 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         at: At<'_>,
         arms: &[(&Alternative, &JFrag)],
     ) -> Frag<Self> {
+        // Tagged selection among ordered arms, with each arm's exact arity part
+        // of the frozen contract. Applied to whichever fragment answers below
+        // except the whole-value decoder, which is a terminal.
+        let chosen = |frag: &mut JFrag| {
+            let parts: Vec<Vec<prebindgen_registry::generation::FragmentUse>> =
+                arms.iter().map(|(_, arm)| arm_parts(arm)).collect();
+            frag.shape = prebindgen_registry::generation::ShapePlan::Choice {
+                bridge: prebindgen_registry::generation::ChoiceArity::new(
+                    parts.iter().map(Vec::len).collect(),
+                    frag.rust.clone(),
+                ),
+                arms: parts,
+            };
+        };
         match at.crossing.direction() {
             Direction::Construct => match self.selected(at, arms) {
                 Some(wires) => {
-                    if let Some(planned) = self.planned_choice(at, arms, Some(wires.clone()), None)
+                    if let Some(mut planned) =
+                        self.planned_choice(at, arms, Some(wires.clone()), None)
                     {
+                        chosen(&mut planned);
                         return Ok(planned);
                     }
                     let mut legacy = JFrag::new(at, self.parts_marker(at, parts_subs(arms)));
                     legacy.wires = Some(wires);
                     legacy.composed_only = true;
+                    chosen(&mut legacy);
                     Ok(legacy)
                 }
                 // A payload this adapter has no slot for — a nested object or
@@ -3125,15 +3784,17 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                         .decls
                         .in_frag(at.crossing.spelled())
                         .ok_or_else(|| refuse(at, "no JNI representation for this sum"))?;
-                    Ok(JFrag::new(at, (*conv).clone()))
+                    Ok(JFrag::new(at, conv.converter_impl().clone()))
                 }
             },
             Direction::Deconstruct => {
                 let legacy = self.selected_out(at, arms)?;
                 let out_wires = legacy.out_wires.clone();
-                Ok(self
+                let mut frag = self
                     .planned_choice(at, arms, None, out_wires)
-                    .unwrap_or(legacy))
+                    .unwrap_or(legacy);
+                chosen(&mut frag);
+                Ok(frag)
             }
         }
     }
@@ -3159,6 +3820,16 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
         let (conv, rust) = planned.ok_or_else(|| refuse(at, "undeclared callback signature"))?;
         let mut fragment = JFrag::new(at, conv);
         fragment.rust = rust;
+        // Foreign callable construction and later argument delivery. The
+        // arguments' direction is opposite the callable's, which is the
+        // registry's contract rather than a JNI fact.
+        fragment.shape = prebindgen_registry::generation::ShapePlan::Invoke {
+            bridge: prebindgen_registry::generation::FixedArity::new(
+                arg_fragments.len(),
+                fragment.rust.clone(),
+            ),
+            arguments: arg_fragments.iter().copied().map(fragment_use).collect(),
+        };
         Ok(fragment)
     }
 
@@ -3173,9 +3844,6 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
     /// leaf, and the diagnostic for an unresolved leaf names the parameter that
     /// expanded.
     fn plan(&mut self, _cx: &mut Cx<'_>, bound: &Bound, root: &JFrag) -> Result<JPlan, JErr> {
-        use crate::jni::fn_plan::{
-            kotlin_jvm_slots, plan_error, KotlinParamOp, NativeParam, PlanLeaf, RustParamOp,
-        };
         let site = self
             .site
             .as_ref()
@@ -3189,13 +3857,15 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
                 // return: the site asked for the `parts` recipe and got what that
                 // recipe states. Nothing else distinguishes the two cases, and
                 // nothing needs to.
-                return Ok(match &root.out_wires {
+                let plan = match &root.out_wires {
                     Some(wires) => {
                         wires.iter().for_each(OutWire::activate);
-                        JPlan::Decomposed(wires.clone())
+                        JPlan::Decomposed(std::rc::Rc::new(wires.clone()))
                     }
-                    None => JPlan::Return(Box::new(self.return_plan(bound, root))),
-                });
+                    None => JPlan::Return(std::rc::Rc::new(self.return_plan(bound, root))),
+                };
+                self.freeze_site_of(bound, root, &plan);
+                return Ok(plan);
             }
             PlanSite::Param(site) => site,
         };
@@ -3293,9 +3963,8 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             Some(p) => crate::jni::projection_leaf_kt(ext, p),
             None => kt_meta.clone(),
         };
-        let pipeline = site_pipeline.unwrap_or_else(|| {
-            Self::planned_pipeline(Direction::Construct, bound.crossing.mode(), root)
-        });
+        let pipeline = site_pipeline
+            .unwrap_or_else(|| root.pipeline(Direction::Construct, bound.crossing.mode()));
 
         // Freeze the exact native ABI independently from both target-side
         // operations. The declaration and slot validator consume only this
@@ -3398,7 +4067,7 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             }
         };
 
-        Ok(JPlan::Param(Box::new(PlanLeaf {
+        let plan = JPlan::Param(std::rc::Rc::new(PlanLeaf {
             reading: reading.clone(),
             kt_name,
             kt_public,
@@ -3406,10 +4075,12 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             as_enum_value,
             enum_niche,
             pipeline,
-            native,
+            native: std::rc::Rc::new(native),
             rust,
             kotlin,
-        })))
+        }));
+        self.freeze_site_of(bound, root, &plan);
+        Ok(plan)
     }
 }
 
@@ -3429,13 +4100,13 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
 impl crate::jni::Declarations {
     /// The conversion for `ty` in the given direction, from the fragments
     /// compiled so far.
+    /// One store, both phases. The frozen plan no longer drains this one, so
+    /// there is nothing to decide between and no way for the two to answer
+    /// differently (#613 step 5a).
     pub(crate) fn frag(&self, ty: &TypeRef, direction: Direction) -> Option<Conv> {
-        let key = ty.key();
-        let fragment = match &self.generation {
-            Some(generation) => generation.fragment(&key, direction),
-            None => self.compiled.borrow().fragment(&key, direction),
-        }?;
-        Some(Conv(fragment))
+        let fragment = self.compiled.borrow().fragment(&ty.key(), direction)?;
+        let artifact = fragment.artifact();
+        Some(Conv(fragment, artifact))
     }
 
     pub(crate) fn in_frag(&self, ty: &TypeRef) -> Option<Conv> {
@@ -3459,17 +4130,10 @@ impl crate::jni::Declarations {
             .recipe_table()
             .key_of(&crossing.key(), &crate::jni::recipes::parts())
             .cloned();
-        let fragment = match &self.generation {
-            Some(generation) => parts
-                .and_then(|parts| generation.recipe_fragment(&key, &parts))
-                .or_else(|| generation.fragment(&key, Direction::Construct)),
-            None => {
-                let compiled = self.compiled.borrow();
-                parts
-                    .and_then(|parts| compiled.recipe_fragment(&key, &parts))
-                    .or_else(|| compiled.fragment(&key, Direction::Construct))
-            }
-        }?;
+        let compiled = self.compiled.borrow();
+        let fragment = parts
+            .and_then(|parts| compiled.recipe_fragment(&key, &parts))
+            .or_else(|| compiled.fragment(&key, Direction::Construct))?;
         fragment.wires.clone()
     }
 
@@ -3490,11 +4154,10 @@ impl crate::jni::Declarations {
             .key_of(&crossing.key(), &crate::jni::recipes::parts())
             .cloned();
         let key = ty.key();
-        let frag = match (&self.generation, row) {
-            (Some(generation), Some(row)) => generation.recipe_fragment(&key, &row)?,
-            (Some(generation), None) => generation.fragment(&key, direction)?,
-            (None, Some(row)) => self.compiled.borrow().recipe_fragment(&key, &row)?,
-            (None, None) => self.compiled.borrow().fragment(&key, direction)?,
+        let compiled = self.compiled.borrow();
+        let frag = match row {
+            Some(row) => compiled.recipe_fragment(&key, &row)?,
+            None => compiled.fragment(&key, direction)?,
         };
         frag.composed_chain()
     }
@@ -3520,11 +4183,11 @@ impl ComposedChain {
 /// cannot hold a borrow into it; sharing the fragment's `Rc` and reaching the
 /// conversion through it costs a refcount instead of a whole `syn::ItemFn` per
 /// lookup.
-pub(crate) struct Conv(std::rc::Rc<JFrag>);
+pub(crate) struct Conv(std::rc::Rc<JFrag>, JConverterArtifact);
 
 impl Conv {
     pub(crate) fn activate(&self) {
-        self.0.rust.mark_reachable();
+        self.1.rust.mark_reachable();
     }
 
     pub(crate) fn pipeline(
@@ -3533,15 +4196,26 @@ impl Conv {
         mode: Mode,
     ) -> crate::jni::chain::JPipeline {
         self.activate();
-        JCompile::<Registry>::planned_pipeline(direction, mode, &self.0)
+        self.0.pipeline(direction, mode)
     }
 
+    /// The JNI wire this conversion produces or consumes, from the artifact —
+    /// the same value `ConverterImpl::destination` held, reached through what
+    /// the plan carries (#626 review).
     pub(crate) fn destination(&self) -> &syn::Type {
-        &self.0.conv.destination
+        &self.1.wire
     }
 
     pub(crate) fn projection(&self) -> Option<Projection> {
-        self.0.conv.metadata.projection.clone()
+        self.metadata().projection.clone()
+    }
+
+    /// The Kotlin-facing extras, read off this fragment's artifact rather than
+    /// through a `Deref` to `ConverterImpl`. The one door left open onto the
+    /// converter, and closing it is what lets a reader hold a plan instead of a
+    /// fragment (#613 step 5c).
+    pub(crate) fn metadata(&self) -> &KotlinMeta {
+        &self.1.metadata
     }
 
     /// Freeze this exact compiled fragment as one outgoing ABI operation.
@@ -3551,48 +4225,78 @@ impl Conv {
 
     #[cfg(test)]
     pub(crate) fn is_value_codec_plan(&self) -> bool {
-        self.0.rust.is_value_codec()
+        self.1.rust.is_value_codec()
     }
 
     #[cfg(test)]
     pub(crate) fn is_handle_codec_plan(&self) -> bool {
-        self.0.rust.is_handle_codec()
+        self.1.rust.is_handle_codec()
     }
 
     #[cfg(test)]
     pub(crate) fn is_struct_codec_plan(&self) -> bool {
-        self.0.rust.is_struct_codec()
+        self.1.rust.is_struct_codec()
     }
 
     #[cfg(test)]
     pub(crate) fn is_sum_codec_plan(&self) -> bool {
-        self.0.rust.is_sum_codec()
+        self.1.rust.is_sum_codec()
     }
 
     #[cfg(test)]
     pub(crate) fn has_custom_conversion_stage(&self) -> bool {
-        self.0
-            .rust_stages
+        self.1
+            .stages
             .iter()
             .any(crate::jni::chain::JFunction::is_custom_conversion)
     }
 
     #[cfg(test)]
     pub(crate) fn is_result_plan(&self) -> bool {
-        self.0.rust.is_result()
+        self.1.rust.is_result()
     }
 
     #[cfg(test)]
     pub(crate) fn is_transparent_plan(&self) -> bool {
-        self.0.rust.is_transparent()
+        self.1.rust.is_transparent()
     }
 }
 
+impl Conv {
+    /// The fragment behind this conversion.
+    ///
+    /// A callback parameter is answered whole rather than compiled as a site
+    /// (`classify_leaf` says why: a callback ARGUMENT does not always have a
+    /// conversion of its own), so it has no `Bound` from the compiler — but it
+    /// does have a fragment, and this is what lets its site be stated
+    /// canonically anyway (#622 review).
+    pub(crate) fn fragment(&self) -> &JFrag {
+        &self.0
+    }
+
+    /// The registry-facing conversion this fragment was compiled with.
+    ///
+    /// The one reader left that needs the `ConverterImpl` rather than the
+    /// artifact: a sealed class with no decomposition is re-answered as a whole
+    /// fragment, which means building a new one from this conversion. It goes
+    /// when `JFrag` does.
+    pub(crate) fn converter_impl(&self) -> &ConverterImpl<KotlinMeta> {
+        &self.0.conv
+    }
+}
+
+/// A conversion's adapter payload, reached through the fragment's **artifact**
+/// rather than its `ConverterImpl`.
+///
+/// This is the door every emitter reads the Kotlin name, the niches and the
+/// converter identity through — 37 sites across 12 files. Pointing it at the
+/// artifact moves all of them onto what the canonical plan carries, without
+/// touching one of them (#613 step 5c).
 impl std::ops::Deref for Conv {
-    type Target = ConverterImpl<KotlinMeta>;
+    type Target = JConverterArtifact;
 
     fn deref(&self) -> &Self::Target {
-        &self.0.conv
+        &self.1
     }
 }
 
@@ -3612,9 +4316,7 @@ impl Wire {
     /// build helper declines such an element rather than emit a call that does
     /// not compile.
     pub(crate) fn staged(&self) -> bool {
-        self.entry
-            .as_ref()
-            .is_some_and(|e| !e.pre_stages.is_empty())
+        !self.stages.is_empty()
     }
 
     /// Whether this value is a gate rather than something that crosses.
@@ -3645,7 +4347,6 @@ impl<R: Conversions> JCompile<'_, R> {
         ConverterImpl {
             destination: syn::parse_quote!(()),
             converter: OperationId::converter(at.fragment_id()),
-            pre_stages: Vec::new(),
             niches: Niches::empty(),
             metadata: KotlinMeta::default(),
             subs,
@@ -3748,6 +4449,12 @@ impl<R: Conversions> JCompile<'_, R> {
             path: part.name.clone(),
             access: Access::Read { walk, tail },
             entry: Some(frag.conv.clone()),
+            stages: frag
+                .chain
+                .steps()
+                .iter()
+                .map(|step| step.operation().clone())
+                .collect(),
             handle_target: None,
             handle_nullable: false,
             absent,
@@ -3773,7 +4480,8 @@ impl<R: Conversions> JCompile<'_, R> {
                     // is built from.
                     name: crate::jni::struct_plan::sum_field_prop_name(&part_member(part)?),
                     out_ty: part.ty.clone(),
-                    group: None,
+                    groups: Vec::new(),
+                    through: Vec::new(),
                     from: OutFrom::Payload {
                         variant: None,
                         member: part_member(part)?,
@@ -3808,8 +4516,9 @@ impl<R: Conversions> JCompile<'_, R> {
             .unwrap_or_else(|| bound.crossing.spelled());
         let (surface, enums) = crate::jni::fn_plan::ReturnSurface::classify(self.decls, declared);
         crate::jni::fn_plan::ValueOutputPlan {
+            site: Some((bound.clone(), root.id.clone())),
             is_convert: self.declared_return.is_some(),
-            pipeline: Self::planned_pipeline(Direction::Deconstruct, bound.crossing.mode(), root),
+            pipeline: root.pipeline(Direction::Deconstruct, bound.crossing.mode()),
             surface,
             is_enum: enums.is_enum,
             is_option_enum: enums.is_option_enum,
@@ -3894,7 +4603,8 @@ impl<R: Conversions> JCompile<'_, R> {
             wires.push(OutWire {
                 name,
                 out_ty: part.ty.clone(),
-                group: None,
+                groups: Vec::new(),
+                through: Vec::new(),
                 // The chain starts at the accessor's result, which the emitter
                 // binds once. The call itself is the site's to make, so what a
                 // wire states is the field read off it.
@@ -3939,7 +4649,7 @@ impl<R: Conversions> JCompile<'_, R> {
         // splice their already-frozen payload ABIs into that shared layout.
         let mut wires = self
             .decls
-            .sum_out_wires(self.registry, &ident, at.crossing.value())
+            .sum_out_wires(self.registry.flat(), &ident, at.crossing.value())
             .ok_or_else(|| refuse(at, "a choice recipe over an undeclared sum"))?;
         let abis: Vec<OutAbi> = std::iter::once(OutAbi::Tag)
             .chain(arms.iter().flat_map(|(_, arm)| {
@@ -4009,6 +4719,12 @@ impl<R: Conversions> JCompile<'_, R> {
                 zero,
             },
             entry: Some(frag.conv.clone()),
+            stages: frag
+                .chain
+                .steps()
+                .iter()
+                .map(|step| step.operation().clone())
+                .collect(),
             handle_target: None,
             handle_nullable: false,
             absent: None,
@@ -4037,6 +4753,8 @@ impl<R: Conversions> JCompile<'_, R> {
             })
             .collect();
         let mut wires = vec![Wire {
+            // A tag converts nothing: it is read on the Rust side.
+            stages: Vec::new(),
             ty: syn::parse_quote!(jni::sys::jint),
             kt_ty: "Int".to_string(),
             path: "_tag".to_string(),
@@ -4097,7 +4815,7 @@ impl<R: Conversions> JCompile<'_, R> {
         }
         let c = &inner.conv;
         let prim = crate::jni::JniPrim::from_wire(&c.destination)?;
-        if c.niches.clone().carve().is_some() || !c.pre_stages.is_empty() {
+        if c.niches.clone().carve().is_some() || !inner.chain.steps().is_empty() {
             return None;
         }
         // An unsigned representation is the one projection that still takes the
@@ -4146,6 +4864,7 @@ impl<R: Conversions> JCompile<'_, R> {
                 path: "present".to_string(),
                 access: Access::read(" != null"),
                 entry: None,
+                stages: Vec::new(),
                 handle_target: None,
                 handle_nullable: false,
                 absent: None,
@@ -4158,6 +4877,9 @@ impl<R: Conversions> JCompile<'_, R> {
                 path: "value".to_string(),
                 access: value_access,
                 entry: Some(c.clone()),
+                // Refused above unless the inner fragment's chain is empty, so
+                // this value crosses through its converter alone.
+                stages: Vec::new(),
                 handle_target: None,
                 handle_nullable: false,
                 absent: None,
@@ -4177,11 +4899,25 @@ impl Declarations {
     /// that composes after it.
     ///
     /// `None` is this adapter declining, and it declines for the **whole**
-    /// value rather than per field. A handle, an `enum_class`, a sum, or a
-    /// `data_class` behind an `Option` or a `Vec` is delivered with a transform
-    /// the decoupled form does not carry, and one such field sends the whole
-    /// object down the whole-value `fromParts` path — so a recipe that decomposed
-    /// the rest of it would describe a shape nothing emits.
+    /// value rather than per field: one field it cannot state sends the whole
+    /// object down the whole-value `fromParts` path, because a recipe that
+    /// decomposed the rest of it would describe a shape nothing emits.
+    ///
+    /// What is left to decline is **structural**, not a missing transform. A
+    /// handle, an `enum_class`, a sum, an optional nested class and a selector
+    /// inside a gated group are all ordinary leaves here (#602): a fixed number
+    /// of values, laid side by side, each carrying its own conversion. The
+    /// declines are the shapes that have no such number:
+    ///
+    /// * a field the model does not hold as a named `data_class` field —
+    ///   a positional field, or a type that is not a path;
+    /// * a nested `data_class` **repeated** under a `Vec`, whose leaves would
+    ///   be as many as the value happens to hold. That is a sequence rather
+    ///   than a decomposition — and note that only a `Vec` DIRECTLY under a
+    ///   declared `data_class` reaches that arm: `Vec<Child>` keys as a
+    ///   sequence rather than a `DataStruct`, so it stays one leaf whose own
+    ///   converter is the element folder (#217);
+    /// * nesting deeper than 16, which a cyclic `data_class` would not end.
     pub(crate) fn struct_out_wires(
         &self,
         registry: &impl Conversions,
@@ -4190,7 +4926,42 @@ impl Declarations {
         let TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
             return None;
         };
-        self.struct_out_wires_at(registry, &id.ident()?, &[], "", 0)
+        self.struct_out_wires_at(registry.flat(), &id.ident()?, &[], "", 0)
+    }
+
+    /// The same values, with each leaf's **output ABI frozen** — the whole-value
+    /// encode's half of what a fixed-builder site freezes for its own leaves.
+    ///
+    /// A **lookup**, not a compile: each leaf's converter is a sub-crossing the
+    /// registry has already compiled by the time a struct's own codec is
+    /// planned, which is the lifecycle `struct_plan` has always had. `None`
+    /// while one is still unresolved, so the caller defers and retries exactly
+    /// as it does for that plan.
+    ///
+    /// The selectors carry no converter and none is looked up for them: a tag
+    /// is assigned by the emitter in each arm of its `match`, a presence flag by
+    /// the gate that unwrapped the value.
+    ///
+    /// The carrier both whole-value emitters read: the Rust encode renders
+    /// through these leaves, and the Kotlin `fromParts` factory declares its
+    /// parameters from them.
+    pub(crate) fn struct_out_frozen(
+        &self,
+        flat: &prebindgen_registry::flat::Flat,
+        st: &prebindgen_registry::flat::Struct,
+    ) -> Option<Vec<OutWire>> {
+        self.struct_out_wires_of(flat, &st.name)?
+            .into_iter()
+            .map(|mut wire| {
+                wire.abi = Some(match &wire.from {
+                    OutFrom::Tag => OutAbi::Tag,
+                    OutFrom::Present => OutAbi::Present,
+                    _ => self.out_frag(&wire.out_ty)?.output_abi(),
+                });
+                wire.activate();
+                Some(wire)
+            })
+            .collect()
     }
 
     /// One level of [`Self::struct_out_wires`]'s walk. `path` and `name_prefix`
@@ -4200,15 +4971,15 @@ impl Declarations {
     /// has the element rather than a reading of it.
     pub(crate) fn struct_out_wires_of(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         ident: &syn::Ident,
     ) -> Option<Vec<OutWire>> {
-        self.struct_out_wires_at(registry, ident, &[], "", 0)
+        self.struct_out_wires_at(flat, ident, &[], "", 0)
     }
 
     fn struct_out_wires_at(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         ident: &syn::Ident,
         path: &[syn::Ident],
         name_prefix: &str,
@@ -4217,8 +4988,7 @@ impl Declarations {
         if depth > 16 {
             return None;
         }
-        let prebindgen_registry::flat::Type::Struct(st) = registry.flat().declared_type(ident)?
-        else {
+        let prebindgen_registry::flat::Type::Struct(st) = flat.declared_type(ident)? else {
             return None;
         };
         let mut wires = Vec::new();
@@ -4239,44 +5009,163 @@ impl Declarations {
             // The layer questions off the field's own reading — `Optional` to
             // look through, `Vec` to decline — never a last path segment.
             let probe = field.ty.optional_inner().unwrap_or(&field.ty);
-            match self.type_kind(registry, &probe.key()) {
-                crate::jni::classify::TypeKind::Handle
-                | crate::jni::classify::TypeKind::Enum
-                | crate::jni::classify::TypeKind::Sum => return None,
-                // A nested `data_class` inlines when it is reached directly.
-                // Behind an `Option` or a `Vec` there is no chain to reach
-                // through, so the whole value stays object-shaped.
+            // A `Vec` of tag-gated groups has variable arity, and a
+            // decomposition is fixed-layout by construction: there is no
+            // number of slots to lay a sum's alternatives in per element.
+            // Loud rather than a silent decline, because the whole-value path
+            // cannot carry it either — a sum has no converter of its own to
+            // fall through to, so declining would surface as a missing
+            // converter for `Vec<T>` far from the field that caused it.
+            if let Some(elem) = probe.sequence_elem() {
+                if matches!(
+                    self.type_kind(flat, &elem.key()),
+                    crate::jni::classify::TypeKind::Sum
+                ) {
+                    panic!(
+                        "fromParts bridge: `Vec<{elem}>` sealed-class field \
+                         (`{}.{fname}`) is not supported (variable arity)",
+                        st.name,
+                    );
+                }
+            }
+            match self.type_kind(flat, &probe.key()) {
+                // A handle or an enum_class field is an ordinary leaf: its own
+                // output conversion carries it — a `jlong` for the handle the
+                // receiver adopts, a `jint` discriminant for the enum — and
+                // the whole-object encode has always emitted exactly that.
+                crate::jni::classify::TypeKind::Handle | crate::jni::classify::TypeKind::Enum => {}
+                // A `sealed_class` field contributes what a sealed_class
+                // crossing does — a tag naming the live alternative, then one
+                // group of leaves per alternative — reached through this
+                // field. Only one group is live per value, which is what the
+                // registry's segment gate emits as a single `match`.
+                crate::jni::classify::TypeKind::Sum => {
+                    let sum_ident = match probe.unwrapped().kind() {
+                        TypeKind::Named { id, .. } => id.ident()?,
+                        _ => return None,
+                    };
+                    let optional = field.ty.optional_inner().is_some();
+                    let mut reach: Vec<prebindgen_registry::unfold::PathStep> =
+                        field_path.iter().map(field_step).collect();
+                    if optional {
+                        // An OPTIONAL sum is two selectors, one owning the
+                        // other: presence says whether there is an alternative
+                        // at all, and the tag names which. The flag's reach
+                        // ends AT the optional step it tests; the sum's leaves
+                        // reach through it, and their arm paths gain the one
+                        // group presence gates.
+                        let mut flag_reach = reach.clone();
+                        flag_reach[path.len()] =
+                            prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                        wires.push(OutWire {
+                            name: format!("{name}__{}", crate::jni::emit::PRESENT_LEAF),
+                            out_ty: field.ty.clone(),
+                            groups: Vec::new(),
+                            through: Vec::new(),
+                            from: OutFrom::Present,
+                            reach: flag_reach,
+                            nullable: false,
+                            identity: false,
+                            abi: None,
+                        });
+                        reach[path.len()] =
+                            prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                    }
+                    for wire in self.sum_out_wires(flat, &sum_ident, probe)? {
+                        let groups = match optional {
+                            true => std::iter::once(crate::jni::emit::PRESENT_ARM)
+                                .chain(wire.groups.iter().copied())
+                                .collect(),
+                            false => wire.groups,
+                        };
+                        wires.push(OutWire {
+                            name: format!("{name}__{}", wire.name),
+                            reach: reach.clone(),
+                            groups,
+                            ..wire
+                        });
+                    }
+                    continue;
+                }
+                // A nested `data_class` inlines: its own leaves are reached
+                // through this field. An OPTIONAL one contributes a presence
+                // flag ahead of them, and its group carries wire defaults when
+                // the value is absent — the same shape a sum field's tag gives
+                // its groups, with presence in place of an alternative.
                 //
-                // This refusal is why the whole-object output encode
-                // (`emit/struct_out.rs`) is not rendered from this
-                // decomposition: it supports the shapes refused here — an
-                // optional nested class becomes a `present` flag plus a
-                // defaulted group, and a sum field a tag plus one group per
-                // variant. Delivering those to a foreign builder is a feature
-                // this decomposition does not have: the encode is a superset
-                // rather than a second implementation. Where both apply they
-                // name the same leaves, which `assert_leaf_derivations_agree`
-                // checks. See #596 step 5, and #602.
+                // A `Vec` of them is still refused: a repeated value has no
+                // fixed number of leaves to lay side by side, which is a
+                // sequence rather than a decomposition.
                 crate::jni::classify::TypeKind::DataStruct {
                     st: _,
-                    cfg: Some(_),
+                    cfg: Some(child_cfg),
                 } => {
-                    if field.ty.optional_inner().is_some()
-                        || matches!(field.ty.kind(), TypeKind::Vec(_))
-                    {
+                    if matches!(field.ty.kind(), TypeKind::Vec(_)) {
                         return None;
                     }
                     let child = match probe.unwrapped().kind() {
                         TypeKind::Named { id, .. } => id.ident()?,
                         _ => return None,
                     };
-                    wires.extend(self.struct_out_wires_at(
-                        registry,
-                        &child,
-                        &field_path,
-                        &name,
-                        depth + 1,
-                    )?);
+                    let optional = field.ty.optional_inner().is_some();
+                    if optional {
+                        // The flag's own reach ends in the OPTIONAL step it
+                        // tests: presence is the gate, and the walk emits a
+                        // gate exactly where a segment's selector reaches
+                        // through one. The group's leaves then reach on from
+                        // the value that gate unwrapped.
+                        let mut reach: Vec<prebindgen_registry::unfold::PathStep> =
+                            field_path.iter().map(field_step).collect();
+                        reach[path.len()] =
+                            prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                        wires.push(OutWire {
+                            name: format!("{name}__{}", crate::jni::emit::PRESENT_LEAF),
+                            out_ty: field.ty.clone(),
+                            groups: Vec::new(),
+                            through: Vec::new(),
+                            from: OutFrom::Present,
+                            reach,
+                            nullable: false,
+                            identity: false,
+                            abi: None,
+                        });
+                    }
+                    let inlined =
+                        self.struct_out_wires_at(flat, &child, &field_path, &name, depth + 1)?;
+                    // Which class this boundary reassembles through, recorded
+                    // where the flattening happens. `data_class!` named it, so
+                    // this stays a declaration read like the rest of the walk.
+                    let child_fqn = child_cfg.name_spec.as_ref().map(|spec| self.fqn_of(spec))?;
+                    wires.extend(inlined.into_iter().map(|wire| {
+                        let mut reach = wire.reach;
+                        if optional {
+                            // The step reaching THIS field is optional for the
+                            // child's leaves: they are inside the value the
+                            // presence flag tests, so the walk gates them on
+                            // it. The flag's own reach stops at the `Option`,
+                            // which is the value it tests rather than one
+                            // inside it.
+                            reach[path.len()] =
+                                prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                        }
+                        OutWire {
+                            reach,
+                            // Under a presence flag the child's leaves are the
+                            // one group that flag gates — including a selector
+                            // of the child's own, which keeps its own arms one
+                            // level further in.
+                            groups: match optional {
+                                true => std::iter::once(crate::jni::emit::PRESENT_ARM)
+                                    .chain(wire.groups.iter().copied())
+                                    .collect(),
+                                false => wire.groups.clone(),
+                            },
+                            through: std::iter::once(child_fqn.clone())
+                                .chain(wire.through.iter().cloned())
+                                .collect(),
+                            ..wire
+                        }
+                    }));
                     continue;
                 }
                 _ => {}
@@ -4289,7 +5178,8 @@ impl Declarations {
             wires.push(OutWire {
                 name,
                 out_ty: field.ty.clone(),
-                group: None,
+                groups: Vec::new(),
+                through: Vec::new(),
                 from: OutFrom::Place,
                 reach: field_path.iter().map(field_step).collect(),
                 nullable: false,
@@ -4312,12 +5202,11 @@ impl Declarations {
     /// one no `sealed_class!` declares — neither has a decomposition to state.
     pub(crate) fn sum_out_wires(
         &self,
-        registry: &impl Conversions,
+        flat: &prebindgen_registry::flat::Flat,
         ident: &syn::Ident,
         sum_ty: &TypeRef,
     ) -> Option<Vec<OutWire>> {
-        let prebindgen_registry::flat::Type::Variant(sum) = registry.flat().declared_type(ident)?
-        else {
+        let prebindgen_registry::flat::Type::Variant(sum) = flat.declared_type(ident)? else {
             return None;
         };
         let cfg = self.types.get(&TypeKey::from_ident(ident))?.sum()?;
@@ -4329,7 +5218,8 @@ impl Declarations {
         let mut wires = vec![OutWire {
             name: crate::jni::emit::SUM_TAG_LEAF.to_string(),
             out_ty: sum_ty.clone(),
-            group: None,
+            groups: Vec::new(),
+            through: Vec::new(),
             from: OutFrom::Tag,
             nullable: false,
             identity: false,
@@ -4346,7 +5236,8 @@ impl Declarations {
                         &crate::jni::struct_plan::sum_field_prop_name(&member),
                     ),
                     out_ty: field.ty.clone(),
-                    group: Some(crate::jni::struct_plan::sum_tag(alt)),
+                    groups: vec![crate::jni::struct_plan::sum_tag(alt)],
+                    through: Vec::new(),
                     from: OutFrom::Payload {
                         variant: Some(alt.name.clone()),
                         member,
@@ -4499,4 +5390,189 @@ fn is_choice(frag: &JFrag) -> bool {
         .as_ref()
         .and_then(|w| w.first())
         .is_some_and(|w| matches!(w.access, Access::Select { .. }))
+}
+
+#[cfg(test)]
+mod chain_tests {
+    use prebindgen_registry::generation::{ChainValue, ConversionChain, ConverterStep, Failure};
+
+    use super::*;
+
+    fn fragment_id(name: &str) -> prebindgen_registry::FragmentId {
+        let source =
+            prebindgen_registry::flat::TypeRef::scalar(prebindgen_registry::flat::ScalarKind::I64);
+        let crossing =
+            prebindgen_registry::recipe::Crossing::new(source.clone(), Direction::Construct);
+        prebindgen_registry::FragmentId::new(
+            source.key(),
+            crossing.row(prebindgen_registry::recipe::RecipeName::new(name)),
+        )
+    }
+
+    /// One inner chain, in the frame of the fragment that owns it.
+    fn inner_chain(
+        direction: Direction,
+        stage: OperationId,
+        key: &TypeKey,
+    ) -> ConversionChain<JRepresentation> {
+        let (from, into) = match direction {
+            Direction::Construct => (ChainValue::Intermediate(key.clone()), ChainValue::Source),
+            Direction::Deconstruct => (ChainValue::Source, ChainValue::Intermediate(key.clone())),
+        };
+        ConversionChain::Steps(vec![ConverterStep::<JRepresentation>::new(
+            from,
+            into,
+            stage,
+            Failure::Fallible,
+            prebindgen_registry::generation::Cleanup::None,
+        )])
+    }
+
+    /// Every step's destination is the next step's origin, and `Source`
+    /// appears once: at the END of a construct chain and the START of a
+    /// deconstruct one.
+    ///
+    /// The endpoints are what makes the chain a chain. `ChainValue::Source`
+    /// names the source value of the fragment that OWNS the chain, so an inner
+    /// fragment's steps mean something different once they are embedded in an
+    /// outer one — its source value is the outer fragment's carrier. Copying
+    /// them verbatim leaves `Source` in the middle and the steps either side of
+    /// it disconnected, which `validate_chain` rejects as a broken chain and
+    /// today's renderers miss because they read only the operation (#615
+    /// review).
+    #[test]
+    fn an_embedded_chain_is_rebased_into_the_outer_frame() {
+        for direction in [Direction::Construct, Direction::Deconstruct] {
+            let inner_key = TypeKey::parse("Label").expect("test key");
+            let deeper_key = TypeKey::parse("Deeper").expect("test key");
+            let inner_stage = OperationId::stage(fragment_id("inner"), 0);
+            let outer_stage = OperationId::stage(fragment_id("outer"), 0);
+            // The inner fragment's own chain already reaches ITS source value
+            // through a carrier of its own, so the rebase has to cross a chain
+            // that is more than one step long.
+            let inner = staged_chain(
+                direction,
+                inner_stage.clone(),
+                deeper_key,
+                &inner_chain(
+                    direction,
+                    OperationId::stage(fragment_id("deeper"), 0),
+                    &TypeKey::parse("Deepest").expect("test key"),
+                ),
+                Failure::Fallible,
+            );
+
+            let chain = staged_chain(
+                direction,
+                outer_stage.clone(),
+                inner_key.clone(),
+                &inner,
+                Failure::Fallible,
+            );
+            let steps = chain.steps();
+            assert_eq!(steps.len(), 3, "{direction:?}: every step is retained");
+
+            for pair in steps.windows(2) {
+                assert_eq!(
+                    ConverterStep::into(&pair[0]),
+                    ConverterStep::from(&pair[1]),
+                    "{direction:?}: each step's destination is the next one's origin, \
+                     in {chain:?}",
+                    chain = steps
+                        .iter()
+                        .map(|step| format!("{:?} -> {:?}", step.from(), step.into()))
+                        .collect::<Vec<_>>()
+                );
+            }
+            let sources = steps
+                .iter()
+                .filter(|step| {
+                    matches!(ConverterStep::from(step), ChainValue::Source)
+                        || matches!(ConverterStep::into(step), ChainValue::Source)
+                })
+                .count();
+            assert_eq!(sources, 1, "{direction:?}: `Source` appears once");
+            match direction {
+                Direction::Construct => assert!(
+                    matches!(ConverterStep::into(&steps[2]), ChainValue::Source),
+                    "constructing ends at the source value"
+                ),
+                Direction::Deconstruct => assert!(
+                    matches!(ConverterStep::from(&steps[0]), ChainValue::Source),
+                    "deconstructing starts at the source value"
+                ),
+            }
+        }
+    }
+
+    /// A chain is stored in EXECUTION order for its own direction, which is
+    /// the whole reason the two stage-order readers are gone.
+    ///
+    /// The stages nest outward: an outer conversion is declared over an inner
+    /// fragment that already has one. Constructing runs the inner stage first
+    /// and ends at the source value; deconstructing starts at the source value
+    /// and runs the outer stage first. `pre_stages` stored one of those and
+    /// left each reader to reverse it, which is a rule two places could
+    /// disagree about.
+    #[test]
+    fn a_chain_stores_execution_order_for_its_own_direction() {
+        let inner_key = TypeKey::parse("Inner").expect("test key");
+        let inner_stage = OperationId::stage(fragment_id("inner"), 0);
+        let inner = ConversionChain::Steps(vec![ConverterStep::<JRepresentation>::new(
+            ChainValue::Source,
+            ChainValue::Intermediate(inner_key.clone()),
+            inner_stage.clone(),
+            Failure::Fallible,
+            prebindgen_registry::generation::Cleanup::None,
+        )]);
+        let outer_stage = OperationId::stage(fragment_id("outer"), 0);
+
+        let constructing = staged_chain(
+            Direction::Construct,
+            outer_stage.clone(),
+            inner_key.clone(),
+            &inner,
+            Failure::Fallible,
+        );
+        assert_eq!(
+            constructing
+                .steps()
+                .iter()
+                .map(|step| step.operation().clone())
+                .collect::<Vec<_>>(),
+            vec![inner_stage.clone(), outer_stage.clone()],
+            "constructing ends at the source value, so the outer stage runs last"
+        );
+        assert!(
+            matches!(
+                ConverterStep::into(&constructing.steps()[1]),
+                ChainValue::Source
+            ),
+            "and the last step's destination IS the source value"
+        );
+
+        let deconstructing = staged_chain(
+            Direction::Deconstruct,
+            outer_stage.clone(),
+            inner_key,
+            &inner,
+            Failure::Fallible,
+        );
+        assert_eq!(
+            deconstructing
+                .steps()
+                .iter()
+                .map(|step| step.operation().clone())
+                .collect::<Vec<_>>(),
+            vec![outer_stage, inner_stage],
+            "deconstructing starts at the source value, so the outer stage runs first"
+        );
+        assert!(
+            matches!(
+                ConverterStep::from(&deconstructing.steps()[0]),
+                ChainValue::Source
+            ),
+            "and the first step's origin IS the source value"
+        );
+    }
 }

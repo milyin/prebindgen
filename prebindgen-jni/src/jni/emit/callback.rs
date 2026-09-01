@@ -18,8 +18,10 @@ enum JInvokePart {
         optional: bool,
     },
     Whole {
-        pipeline: Box<crate::jni::chain::JPipeline>,
-        projection: Option<Projection>,
+        /// The argument's own output ABI, shared with the site that names it
+        /// rather than copied — the same property `FrozenDelivery` holds for
+        /// the two decomposing arms (#622 review).
+        abi: std::rc::Rc<crate::jni::compile::OutValueAbi>,
         wire: syn::Type,
         primitive: bool,
     },
@@ -30,7 +32,7 @@ impl JInvokePart {
     fn calls(&self, out: &mut Vec<prebindgen_registry::write::ArtifactKey>) {
         match self {
             Self::Fold { delivery, .. } | Self::Decomposed { delivery, .. } => delivery.calls(out),
-            Self::Whole { pipeline, .. } => pipeline.calls(out),
+            Self::Whole { abi, .. } => abi.pipeline.calls(out),
         }
     }
 }
@@ -118,11 +120,11 @@ impl prebindgen_registry::chain::InvokePart for JInvokePart {
                 (stmts, arguments)
             }
             Self::Whole {
-                pipeline,
-                projection,
+                abi,
                 wire,
                 primitive,
             } => {
+                let (pipeline, projection) = (&abi.pipeline, &abi.projection);
                 let enc = format_ident!("__cb{}_enc", index);
                 let call = pipeline.invoke_output(quote!(#value), emit);
                 if projection
@@ -201,6 +203,8 @@ fn freeze_callback_delivery(
             .map(|mut wire| {
                 wire.abi = Some(if wire.is_tag() {
                     crate::jni::compile::OutAbi::Tag
+                } else if matches!(wire.from, crate::jni::compile::OutFrom::Present) {
+                    crate::jni::compile::OutAbi::Present
                 } else {
                     ext.out_frag(&wire.out_ty)?.output_abi()
                 });
@@ -238,6 +242,19 @@ pub(crate) struct JInvokePlan {
 impl JInvokePlan {
     pub(crate) fn operation_id(&self) -> &prebindgen_registry::OperationId {
         &self.operation
+    }
+
+    /// The ABI one delivered argument occupies, as the trampoline finalized
+    /// it. What a `Role::CallbackArg` site names: the same allocation the
+    /// rendered part holds, so the site states the delivery rather than a
+    /// second derivation of it.
+    pub(crate) fn arg_abi(&self, index: usize) -> Option<crate::jni::compile::JAbiLeaves> {
+        Some(match self.chain.parts.get(index)? {
+            JInvokePart::Fold { delivery, .. } | JInvokePart::Decomposed { delivery, .. } => {
+                crate::jni::compile::JAbiLeaves::Decomposed(delivery.wires())
+            }
+            JInvokePart::Whole { abi, .. } => crate::jni::compile::JAbiLeaves::Invoked(abi.clone()),
+        })
     }
 
     /// The converters this callback's Invoke helper calls, argument by
@@ -451,7 +468,7 @@ pub(crate) fn callback_input(
             });
             let elem_frame = std::cmp::max(16, 2 * plan.leaves.len() + 6);
             parts.push(JInvokePart::Fold {
-                delivery: FrozenDelivery::new(ext, registry, plan, wires, chain),
+                delivery: FrozenDelivery::new(ext, registry, plan, std::rc::Rc::new(wires), chain),
                 fold_obj,
                 fold_id,
                 element_frame: syn::LitInt::new(&elem_frame.to_string(), Span::call_site()),
@@ -477,7 +494,7 @@ pub(crate) fn callback_input(
             }
             total += plan.leaves.len() + usize::from(optional);
             parts.push(JInvokePart::Decomposed {
-                delivery: FrozenDelivery::new(ext, registry, plan, wires, chain),
+                delivery: FrozenDelivery::new(ext, registry, plan, std::rc::Rc::new(wires), chain),
                 optional,
             });
             continue;
@@ -494,6 +511,7 @@ pub(crate) fn callback_input(
         let crate::jni::compile::OutAbi::Value(arg_value) = arg_abi else {
             unreachable!("a whole callback argument is not a synthesized selector")
         };
+        let arg_value = std::rc::Rc::new(*arg_value);
         let arg_wire = arg_value.pipeline.wire().clone();
         let arg_is_prim = arg_value
             .projection
@@ -502,8 +520,7 @@ pub(crate) fn callback_input(
             && arg_ty.optional_inner().is_none()
             && matches!(jni_field_access(&arg_wire), Some((_, _, false)));
         parts.push(JInvokePart::Whole {
-            pipeline: Box::new(arg_value.pipeline.clone()),
-            projection: arg_value.projection.clone(),
+            abi: arg_value,
             wire: arg_wire,
             primitive: arg_is_prim,
         });

@@ -16,6 +16,8 @@ import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
 import io.prebindgen.covertest.TicksCallback
 import io.prebindgen.covertest.WrappedFields
+import io.prebindgen.covertest.__DossierBuilderRaw
+import io.prebindgen.covertest.__MaybeHolderBuilderRaw
 import io.prebindgen.covertest.__u64FolderRawHolder
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryBuilder
@@ -336,20 +338,20 @@ public data class Annotated(val payload: Payload, val alternate: Payload?, val t
     public companion object {
         @JvmStatic
         public fun fromParts(
-            payload_id: Long,
-            payload_seq: Int,
-            payload_value: Double,
-            payload_flag: Boolean,
-            payload_label: String?,
+            payload__id: Long,
+            payload__seq: Int,
+            payload__value: Double,
+            payload__flag: Boolean,
+            payload__label: String?,
             alternate__present: Boolean,
-            alternate_id: Long,
-            alternate_seq: Int,
-            alternate_value: Double,
-            alternate_flag: Boolean,
-            alternate_label: String?,
+            alternate__id: Long,
+            alternate__seq: Int,
+            alternate__value: Double,
+            alternate__flag: Boolean,
+            alternate__label: String?,
             ttl: Long?,
             priority: Int,
-        ): Annotated = Annotated(Payload.fromParts(payload_id, payload_seq, payload_value, payload_flag, payload_label), if (alternate__present) Payload.fromParts(alternate_id, alternate_seq, alternate_value, alternate_flag, alternate_label) else null, ttl, if (priority == Int.MIN_VALUE) null else Priority.fromInt(priority))
+        ): Annotated = Annotated(Payload.fromParts(payload__id, payload__seq, payload__value, payload__flag, payload__label), if (alternate__present) Payload.fromParts(alternate__id, alternate__seq, alternate__value, alternate__flag, alternate__label) else null, ttl, if (priority == Int.MIN_VALUE) null else Priority.fromInt(priority))
     }
 }
 
@@ -436,11 +438,11 @@ public data class BlobValue(val stamp: Stamp, val id: ByteArray, val chunks: Lis
     public companion object {
         @JvmStatic
         public fun fromParts(
-            stamp_secs: Long,
-            stamp_nanos: Long,
+            stamp__secs: Long,
+            stamp__nanos: Long,
             id: ByteArray,
             chunks: List<ByteArray>,
-        ): BlobValue = BlobValue(Stamp.fromParts(stamp_secs, stamp_nanos), id, chunks)
+        ): BlobValue = BlobValue(Stamp.fromParts(stamp__secs, stamp__nanos), id, chunks)
     }
 }
 
@@ -453,10 +455,10 @@ public data class CacheConfig(val replies: RepliesConfig, val ttl: Long) {
     public companion object {
         @JvmStatic
         public fun fromParts(
-            replies_priority: Int,
-            replies_maxSamples: Long,
+            replies__priority: Int,
+            replies__maxSamples: Long,
             ttl: Long,
-        ): CacheConfig = CacheConfig(RepliesConfig.fromParts(replies_priority, replies_maxSamples), ttl)
+        ): CacheConfig = CacheConfig(RepliesConfig.fromParts(replies__priority, replies__maxSamples), ttl)
     }
 }
 
@@ -503,6 +505,50 @@ public data class DurationBoundary(val required: ULong, val delay: ULong?) {
 }
 
 /**
+ * A data class whose nested class sits behind an `Option` — the shape #602
+ * names first and the one a decomposition refused outright until it learned
+ * a presence flag.
+ *
+ * Nothing else about it is unusual: a sibling scalar beside a nested class
+ * that is sometimes there. `Annotated` has the same field, but also an
+ * `enum_class` one, which is a refusal of its own — so the shape needs a
+ * struct of its own to show up at all.
+ */
+public data class Envelope(val id: Long, val stamp: Stamp?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            id: Long,
+            stamp__present: Boolean,
+            stamp__secs: Long,
+            stamp__nanos: Long,
+        ): Envelope = Envelope(id, if (stamp__present) Stamp.fromParts(stamp__secs, stamp__nanos) else null)
+    }
+}
+
+/** The gate over [`Window`]: one selector owning two. */
+public data class Frame(val id: Long, val window: Window?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            id: Long,
+            window__present: Boolean,
+            window__label: String?,
+            window__span__present: Boolean,
+            window__span__secs: Long,
+            window__span__nanos: Long,
+            window__reading__tag: Int,
+            window__reading__exact_v0: Long,
+            window__reading__range_low: Long,
+            window__reading__range_high: Long,
+            window__reading__tagged_v0: String?,
+            window__reading__tagged_v1: Int,
+            window__reading__companion_v0: Long,
+        ): Frame = Frame(id, if (window__present) Window.fromParts(window__label!!, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0) else null)
+    }
+}
+
+/**
  * A retention policy: a required converted-payload sum beside an optional one.
  *
  * The data-class position for [`Hold`], so the converted payload is exercised
@@ -514,11 +560,40 @@ public data class HoldPolicy(val hold: Hold, val grace: Hold?) {
         @JvmStatic
         public fun fromParts(
             hold__tag: Int,
-            hold_for_v0: Long,
+            hold__for_v0: Long,
             grace__present: Boolean,
             grace__tag: Int,
-            grace_for_v0: Long,
-        ): HoldPolicy = HoldPolicy(when (hold__tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(hold_for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $hold__tag") }, if (grace__present) when (grace__tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(grace_for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $grace__tag") } else null)
+            grace__for_v0: Long,
+        ): HoldPolicy = HoldPolicy(when (hold__tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(hold__for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $hold__tag") }, if (grace__present) when (grace__tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(grace__for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $grace__tag") } else null)
+    }
+}
+
+/**
+ * A nested class whose **first** field selects: an optional one, then a sum.
+ *
+ * The order matters. A child's leading selector belongs to the child's own
+ * `fromParts` signature, and a parent that reads "is this leaf a selector?"
+ * before "does this leaf open a class?" consumes it at the parent level and
+ * calls the child factory without it — an arity mismatch the JVM reports only
+ * at the call (#620 review). `Window` cannot show that, because it begins with
+ * a plain `label`.
+ */
+public data class Meter(val span: Stamp?, val reading: Reading, val id: Long) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            span__present: Boolean,
+            span__secs: Long,
+            span__nanos: Long,
+            reading__tag: Int,
+            reading__exact_v0: Long,
+            reading__range_low: Long,
+            reading__range_high: Long,
+            reading__tagged_v0: String?,
+            reading__tagged_v1: Int,
+            reading__companion_v0: Long,
+            id: Long,
+        ): Meter = Meter(if (span__present) Stamp.fromParts(span__secs, span__nanos) else null, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading__exact_v0); 2 -> Reading.Range(reading__range_low, reading__range_high); 3 -> Reading.Tagged(reading__tagged_v0!!, Priority.fromInt(reading__tagged_v1)); 4 -> Reading.Companion(reading__companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") }, id)
     }
 }
 
@@ -536,134 +611,134 @@ public data class ObjectBoundary(val left: ObjectBoundary64, val right: ObjectBo
     public companion object {
         @JvmStatic
         public fun fromParts(
-            left_left_left_left_left_left_left_value: Long,
-            left_left_left_left_left_left_right_value: Long,
-            left_left_left_left_left_right_left_value: Long,
-            left_left_left_left_left_right_right_value: Long,
-            left_left_left_left_right_left_left_value: Long,
-            left_left_left_left_right_left_right_value: Long,
-            left_left_left_left_right_right_left_value: Long,
-            left_left_left_left_right_right_right_value: Long,
-            left_left_left_right_left_left_left_value: Long,
-            left_left_left_right_left_left_right_value: Long,
-            left_left_left_right_left_right_left_value: Long,
-            left_left_left_right_left_right_right_value: Long,
-            left_left_left_right_right_left_left_value: Long,
-            left_left_left_right_right_left_right_value: Long,
-            left_left_left_right_right_right_left_value: Long,
-            left_left_left_right_right_right_right_value: Long,
-            left_left_right_left_left_left_left_value: Long,
-            left_left_right_left_left_left_right_value: Long,
-            left_left_right_left_left_right_left_value: Long,
-            left_left_right_left_left_right_right_value: Long,
-            left_left_right_left_right_left_left_value: Long,
-            left_left_right_left_right_left_right_value: Long,
-            left_left_right_left_right_right_left_value: Long,
-            left_left_right_left_right_right_right_value: Long,
-            left_left_right_right_left_left_left_value: Long,
-            left_left_right_right_left_left_right_value: Long,
-            left_left_right_right_left_right_left_value: Long,
-            left_left_right_right_left_right_right_value: Long,
-            left_left_right_right_right_left_left_value: Long,
-            left_left_right_right_right_left_right_value: Long,
-            left_left_right_right_right_right_left_value: Long,
-            left_left_right_right_right_right_right_value: Long,
-            left_right_left_left_left_left_left_value: Long,
-            left_right_left_left_left_left_right_value: Long,
-            left_right_left_left_left_right_left_value: Long,
-            left_right_left_left_left_right_right_value: Long,
-            left_right_left_left_right_left_left_value: Long,
-            left_right_left_left_right_left_right_value: Long,
-            left_right_left_left_right_right_left_value: Long,
-            left_right_left_left_right_right_right_value: Long,
-            left_right_left_right_left_left_left_value: Long,
-            left_right_left_right_left_left_right_value: Long,
-            left_right_left_right_left_right_left_value: Long,
-            left_right_left_right_left_right_right_value: Long,
-            left_right_left_right_right_left_left_value: Long,
-            left_right_left_right_right_left_right_value: Long,
-            left_right_left_right_right_right_left_value: Long,
-            left_right_left_right_right_right_right_value: Long,
-            left_right_right_left_left_left_left_value: Long,
-            left_right_right_left_left_left_right_value: Long,
-            left_right_right_left_left_right_left_value: Long,
-            left_right_right_left_left_right_right_value: Long,
-            left_right_right_left_right_left_left_value: Long,
-            left_right_right_left_right_left_right_value: Long,
-            left_right_right_left_right_right_left_value: Long,
-            left_right_right_left_right_right_right_value: Long,
-            left_right_right_right_left_left_left_value: Long,
-            left_right_right_right_left_left_right_value: Long,
-            left_right_right_right_left_right_left_value: Long,
-            left_right_right_right_left_right_right_value: Long,
-            left_right_right_right_right_left_left_value: Long,
-            left_right_right_right_right_left_right_value: Long,
-            left_right_right_right_right_right_left_value: Long,
-            left_right_right_right_right_right_right_value: Long,
-            right_leaves32_left_left_left_left_left_value: Long,
-            right_leaves32_left_left_left_left_right_value: Long,
-            right_leaves32_left_left_left_right_left_value: Long,
-            right_leaves32_left_left_left_right_right_value: Long,
-            right_leaves32_left_left_right_left_left_value: Long,
-            right_leaves32_left_left_right_left_right_value: Long,
-            right_leaves32_left_left_right_right_left_value: Long,
-            right_leaves32_left_left_right_right_right_value: Long,
-            right_leaves32_left_right_left_left_left_value: Long,
-            right_leaves32_left_right_left_left_right_value: Long,
-            right_leaves32_left_right_left_right_left_value: Long,
-            right_leaves32_left_right_left_right_right_value: Long,
-            right_leaves32_left_right_right_left_left_value: Long,
-            right_leaves32_left_right_right_left_right_value: Long,
-            right_leaves32_left_right_right_right_left_value: Long,
-            right_leaves32_left_right_right_right_right_value: Long,
-            right_leaves32_right_left_left_left_left_value: Long,
-            right_leaves32_right_left_left_left_right_value: Long,
-            right_leaves32_right_left_left_right_left_value: Long,
-            right_leaves32_right_left_left_right_right_value: Long,
-            right_leaves32_right_left_right_left_left_value: Long,
-            right_leaves32_right_left_right_left_right_value: Long,
-            right_leaves32_right_left_right_right_left_value: Long,
-            right_leaves32_right_left_right_right_right_value: Long,
-            right_leaves32_right_right_left_left_left_value: Long,
-            right_leaves32_right_right_left_left_right_value: Long,
-            right_leaves32_right_right_left_right_left_value: Long,
-            right_leaves32_right_right_left_right_right_value: Long,
-            right_leaves32_right_right_right_left_left_value: Long,
-            right_leaves32_right_right_right_left_right_value: Long,
-            right_leaves32_right_right_right_right_left_value: Long,
-            right_leaves32_right_right_right_right_right_value: Long,
-            right_leaves16_left_left_left_left_value: Long,
-            right_leaves16_left_left_left_right_value: Long,
-            right_leaves16_left_left_right_left_value: Long,
-            right_leaves16_left_left_right_right_value: Long,
-            right_leaves16_left_right_left_left_value: Long,
-            right_leaves16_left_right_left_right_value: Long,
-            right_leaves16_left_right_right_left_value: Long,
-            right_leaves16_left_right_right_right_value: Long,
-            right_leaves16_right_left_left_left_value: Long,
-            right_leaves16_right_left_left_right_value: Long,
-            right_leaves16_right_left_right_left_value: Long,
-            right_leaves16_right_left_right_right_value: Long,
-            right_leaves16_right_right_left_left_value: Long,
-            right_leaves16_right_right_left_right_value: Long,
-            right_leaves16_right_right_right_left_value: Long,
-            right_leaves16_right_right_right_right_value: Long,
-            right_leaves8_left_left_left_value: Long,
-            right_leaves8_left_left_right_value: Long,
-            right_leaves8_left_right_left_value: Long,
-            right_leaves8_left_right_right_value: Long,
-            right_leaves8_right_left_left_value: Long,
-            right_leaves8_right_left_right_value: Long,
-            right_leaves8_right_right_left_value: Long,
-            right_leaves8_right_right_right_value: Long,
-            right_leaves4_left_left_value: Long,
-            right_leaves4_left_right_value: Long,
-            right_leaves4_right_left_value: Long,
-            right_leaves4_right_right_value: Long,
-            right_leaves2_left_value: Long,
-            right_leaves2_right_value: Long,
-            right_leaf_value: Long,
-        ): ObjectBoundary = ObjectBoundary(ObjectBoundary64.fromParts(left_left_left_left_left_left_left_value, left_left_left_left_left_left_right_value, left_left_left_left_left_right_left_value, left_left_left_left_left_right_right_value, left_left_left_left_right_left_left_value, left_left_left_left_right_left_right_value, left_left_left_left_right_right_left_value, left_left_left_left_right_right_right_value, left_left_left_right_left_left_left_value, left_left_left_right_left_left_right_value, left_left_left_right_left_right_left_value, left_left_left_right_left_right_right_value, left_left_left_right_right_left_left_value, left_left_left_right_right_left_right_value, left_left_left_right_right_right_left_value, left_left_left_right_right_right_right_value, left_left_right_left_left_left_left_value, left_left_right_left_left_left_right_value, left_left_right_left_left_right_left_value, left_left_right_left_left_right_right_value, left_left_right_left_right_left_left_value, left_left_right_left_right_left_right_value, left_left_right_left_right_right_left_value, left_left_right_left_right_right_right_value, left_left_right_right_left_left_left_value, left_left_right_right_left_left_right_value, left_left_right_right_left_right_left_value, left_left_right_right_left_right_right_value, left_left_right_right_right_left_left_value, left_left_right_right_right_left_right_value, left_left_right_right_right_right_left_value, left_left_right_right_right_right_right_value, left_right_left_left_left_left_left_value, left_right_left_left_left_left_right_value, left_right_left_left_left_right_left_value, left_right_left_left_left_right_right_value, left_right_left_left_right_left_left_value, left_right_left_left_right_left_right_value, left_right_left_left_right_right_left_value, left_right_left_left_right_right_right_value, left_right_left_right_left_left_left_value, left_right_left_right_left_left_right_value, left_right_left_right_left_right_left_value, left_right_left_right_left_right_right_value, left_right_left_right_right_left_left_value, left_right_left_right_right_left_right_value, left_right_left_right_right_right_left_value, left_right_left_right_right_right_right_value, left_right_right_left_left_left_left_value, left_right_right_left_left_left_right_value, left_right_right_left_left_right_left_value, left_right_right_left_left_right_right_value, left_right_right_left_right_left_left_value, left_right_right_left_right_left_right_value, left_right_right_left_right_right_left_value, left_right_right_left_right_right_right_value, left_right_right_right_left_left_left_value, left_right_right_right_left_left_right_value, left_right_right_right_left_right_left_value, left_right_right_right_left_right_right_value, left_right_right_right_right_left_left_value, left_right_right_right_right_left_right_value, left_right_right_right_right_right_left_value, left_right_right_right_right_right_right_value), ObjectBoundary63.fromParts(right_leaves32_left_left_left_left_left_value, right_leaves32_left_left_left_left_right_value, right_leaves32_left_left_left_right_left_value, right_leaves32_left_left_left_right_right_value, right_leaves32_left_left_right_left_left_value, right_leaves32_left_left_right_left_right_value, right_leaves32_left_left_right_right_left_value, right_leaves32_left_left_right_right_right_value, right_leaves32_left_right_left_left_left_value, right_leaves32_left_right_left_left_right_value, right_leaves32_left_right_left_right_left_value, right_leaves32_left_right_left_right_right_value, right_leaves32_left_right_right_left_left_value, right_leaves32_left_right_right_left_right_value, right_leaves32_left_right_right_right_left_value, right_leaves32_left_right_right_right_right_value, right_leaves32_right_left_left_left_left_value, right_leaves32_right_left_left_left_right_value, right_leaves32_right_left_left_right_left_value, right_leaves32_right_left_left_right_right_value, right_leaves32_right_left_right_left_left_value, right_leaves32_right_left_right_left_right_value, right_leaves32_right_left_right_right_left_value, right_leaves32_right_left_right_right_right_value, right_leaves32_right_right_left_left_left_value, right_leaves32_right_right_left_left_right_value, right_leaves32_right_right_left_right_left_value, right_leaves32_right_right_left_right_right_value, right_leaves32_right_right_right_left_left_value, right_leaves32_right_right_right_left_right_value, right_leaves32_right_right_right_right_left_value, right_leaves32_right_right_right_right_right_value, right_leaves16_left_left_left_left_value, right_leaves16_left_left_left_right_value, right_leaves16_left_left_right_left_value, right_leaves16_left_left_right_right_value, right_leaves16_left_right_left_left_value, right_leaves16_left_right_left_right_value, right_leaves16_left_right_right_left_value, right_leaves16_left_right_right_right_value, right_leaves16_right_left_left_left_value, right_leaves16_right_left_left_right_value, right_leaves16_right_left_right_left_value, right_leaves16_right_left_right_right_value, right_leaves16_right_right_left_left_value, right_leaves16_right_right_left_right_value, right_leaves16_right_right_right_left_value, right_leaves16_right_right_right_right_value, right_leaves8_left_left_left_value, right_leaves8_left_left_right_value, right_leaves8_left_right_left_value, right_leaves8_left_right_right_value, right_leaves8_right_left_left_value, right_leaves8_right_left_right_value, right_leaves8_right_right_left_value, right_leaves8_right_right_right_value, right_leaves4_left_left_value, right_leaves4_left_right_value, right_leaves4_right_left_value, right_leaves4_right_right_value, right_leaves2_left_value, right_leaves2_right_value, right_leaf_value))
+            left__left__left__left__left__left__left__value: Long,
+            left__left__left__left__left__left__right__value: Long,
+            left__left__left__left__left__right__left__value: Long,
+            left__left__left__left__left__right__right__value: Long,
+            left__left__left__left__right__left__left__value: Long,
+            left__left__left__left__right__left__right__value: Long,
+            left__left__left__left__right__right__left__value: Long,
+            left__left__left__left__right__right__right__value: Long,
+            left__left__left__right__left__left__left__value: Long,
+            left__left__left__right__left__left__right__value: Long,
+            left__left__left__right__left__right__left__value: Long,
+            left__left__left__right__left__right__right__value: Long,
+            left__left__left__right__right__left__left__value: Long,
+            left__left__left__right__right__left__right__value: Long,
+            left__left__left__right__right__right__left__value: Long,
+            left__left__left__right__right__right__right__value: Long,
+            left__left__right__left__left__left__left__value: Long,
+            left__left__right__left__left__left__right__value: Long,
+            left__left__right__left__left__right__left__value: Long,
+            left__left__right__left__left__right__right__value: Long,
+            left__left__right__left__right__left__left__value: Long,
+            left__left__right__left__right__left__right__value: Long,
+            left__left__right__left__right__right__left__value: Long,
+            left__left__right__left__right__right__right__value: Long,
+            left__left__right__right__left__left__left__value: Long,
+            left__left__right__right__left__left__right__value: Long,
+            left__left__right__right__left__right__left__value: Long,
+            left__left__right__right__left__right__right__value: Long,
+            left__left__right__right__right__left__left__value: Long,
+            left__left__right__right__right__left__right__value: Long,
+            left__left__right__right__right__right__left__value: Long,
+            left__left__right__right__right__right__right__value: Long,
+            left__right__left__left__left__left__left__value: Long,
+            left__right__left__left__left__left__right__value: Long,
+            left__right__left__left__left__right__left__value: Long,
+            left__right__left__left__left__right__right__value: Long,
+            left__right__left__left__right__left__left__value: Long,
+            left__right__left__left__right__left__right__value: Long,
+            left__right__left__left__right__right__left__value: Long,
+            left__right__left__left__right__right__right__value: Long,
+            left__right__left__right__left__left__left__value: Long,
+            left__right__left__right__left__left__right__value: Long,
+            left__right__left__right__left__right__left__value: Long,
+            left__right__left__right__left__right__right__value: Long,
+            left__right__left__right__right__left__left__value: Long,
+            left__right__left__right__right__left__right__value: Long,
+            left__right__left__right__right__right__left__value: Long,
+            left__right__left__right__right__right__right__value: Long,
+            left__right__right__left__left__left__left__value: Long,
+            left__right__right__left__left__left__right__value: Long,
+            left__right__right__left__left__right__left__value: Long,
+            left__right__right__left__left__right__right__value: Long,
+            left__right__right__left__right__left__left__value: Long,
+            left__right__right__left__right__left__right__value: Long,
+            left__right__right__left__right__right__left__value: Long,
+            left__right__right__left__right__right__right__value: Long,
+            left__right__right__right__left__left__left__value: Long,
+            left__right__right__right__left__left__right__value: Long,
+            left__right__right__right__left__right__left__value: Long,
+            left__right__right__right__left__right__right__value: Long,
+            left__right__right__right__right__left__left__value: Long,
+            left__right__right__right__right__left__right__value: Long,
+            left__right__right__right__right__right__left__value: Long,
+            left__right__right__right__right__right__right__value: Long,
+            right__leaves32__left__left__left__left__left__value: Long,
+            right__leaves32__left__left__left__left__right__value: Long,
+            right__leaves32__left__left__left__right__left__value: Long,
+            right__leaves32__left__left__left__right__right__value: Long,
+            right__leaves32__left__left__right__left__left__value: Long,
+            right__leaves32__left__left__right__left__right__value: Long,
+            right__leaves32__left__left__right__right__left__value: Long,
+            right__leaves32__left__left__right__right__right__value: Long,
+            right__leaves32__left__right__left__left__left__value: Long,
+            right__leaves32__left__right__left__left__right__value: Long,
+            right__leaves32__left__right__left__right__left__value: Long,
+            right__leaves32__left__right__left__right__right__value: Long,
+            right__leaves32__left__right__right__left__left__value: Long,
+            right__leaves32__left__right__right__left__right__value: Long,
+            right__leaves32__left__right__right__right__left__value: Long,
+            right__leaves32__left__right__right__right__right__value: Long,
+            right__leaves32__right__left__left__left__left__value: Long,
+            right__leaves32__right__left__left__left__right__value: Long,
+            right__leaves32__right__left__left__right__left__value: Long,
+            right__leaves32__right__left__left__right__right__value: Long,
+            right__leaves32__right__left__right__left__left__value: Long,
+            right__leaves32__right__left__right__left__right__value: Long,
+            right__leaves32__right__left__right__right__left__value: Long,
+            right__leaves32__right__left__right__right__right__value: Long,
+            right__leaves32__right__right__left__left__left__value: Long,
+            right__leaves32__right__right__left__left__right__value: Long,
+            right__leaves32__right__right__left__right__left__value: Long,
+            right__leaves32__right__right__left__right__right__value: Long,
+            right__leaves32__right__right__right__left__left__value: Long,
+            right__leaves32__right__right__right__left__right__value: Long,
+            right__leaves32__right__right__right__right__left__value: Long,
+            right__leaves32__right__right__right__right__right__value: Long,
+            right__leaves16__left__left__left__left__value: Long,
+            right__leaves16__left__left__left__right__value: Long,
+            right__leaves16__left__left__right__left__value: Long,
+            right__leaves16__left__left__right__right__value: Long,
+            right__leaves16__left__right__left__left__value: Long,
+            right__leaves16__left__right__left__right__value: Long,
+            right__leaves16__left__right__right__left__value: Long,
+            right__leaves16__left__right__right__right__value: Long,
+            right__leaves16__right__left__left__left__value: Long,
+            right__leaves16__right__left__left__right__value: Long,
+            right__leaves16__right__left__right__left__value: Long,
+            right__leaves16__right__left__right__right__value: Long,
+            right__leaves16__right__right__left__left__value: Long,
+            right__leaves16__right__right__left__right__value: Long,
+            right__leaves16__right__right__right__left__value: Long,
+            right__leaves16__right__right__right__right__value: Long,
+            right__leaves8__left__left__left__value: Long,
+            right__leaves8__left__left__right__value: Long,
+            right__leaves8__left__right__left__value: Long,
+            right__leaves8__left__right__right__value: Long,
+            right__leaves8__right__left__left__value: Long,
+            right__leaves8__right__left__right__value: Long,
+            right__leaves8__right__right__left__value: Long,
+            right__leaves8__right__right__right__value: Long,
+            right__leaves4__left__left__value: Long,
+            right__leaves4__left__right__value: Long,
+            right__leaves4__right__left__value: Long,
+            right__leaves4__right__right__value: Long,
+            right__leaves2__left__value: Long,
+            right__leaves2__right__value: Long,
+            right__leaf__value: Long,
+        ): ObjectBoundary = ObjectBoundary(ObjectBoundary64.fromParts(left__left__left__left__left__left__left__value, left__left__left__left__left__left__right__value, left__left__left__left__left__right__left__value, left__left__left__left__left__right__right__value, left__left__left__left__right__left__left__value, left__left__left__left__right__left__right__value, left__left__left__left__right__right__left__value, left__left__left__left__right__right__right__value, left__left__left__right__left__left__left__value, left__left__left__right__left__left__right__value, left__left__left__right__left__right__left__value, left__left__left__right__left__right__right__value, left__left__left__right__right__left__left__value, left__left__left__right__right__left__right__value, left__left__left__right__right__right__left__value, left__left__left__right__right__right__right__value, left__left__right__left__left__left__left__value, left__left__right__left__left__left__right__value, left__left__right__left__left__right__left__value, left__left__right__left__left__right__right__value, left__left__right__left__right__left__left__value, left__left__right__left__right__left__right__value, left__left__right__left__right__right__left__value, left__left__right__left__right__right__right__value, left__left__right__right__left__left__left__value, left__left__right__right__left__left__right__value, left__left__right__right__left__right__left__value, left__left__right__right__left__right__right__value, left__left__right__right__right__left__left__value, left__left__right__right__right__left__right__value, left__left__right__right__right__right__left__value, left__left__right__right__right__right__right__value, left__right__left__left__left__left__left__value, left__right__left__left__left__left__right__value, left__right__left__left__left__right__left__value, left__right__left__left__left__right__right__value, left__right__left__left__right__left__left__value, left__right__left__left__right__left__right__value, left__right__left__left__right__right__left__value, left__right__left__left__right__right__right__value, left__right__left__right__left__left__left__value, left__right__left__right__left__left__right__value, left__right__left__right__left__right__left__value, left__right__left__right__left__right__right__value, left__right__left__right__right__left__left__value, left__right__left__right__right__left__right__value, left__right__left__right__right__right__left__value, left__right__left__right__right__right__right__value, left__right__right__left__left__left__left__value, left__right__right__left__left__left__right__value, left__right__right__left__left__right__left__value, left__right__right__left__left__right__right__value, left__right__right__left__right__left__left__value, left__right__right__left__right__left__right__value, left__right__right__left__right__right__left__value, left__right__right__left__right__right__right__value, left__right__right__right__left__left__left__value, left__right__right__right__left__left__right__value, left__right__right__right__left__right__left__value, left__right__right__right__left__right__right__value, left__right__right__right__right__left__left__value, left__right__right__right__right__left__right__value, left__right__right__right__right__right__left__value, left__right__right__right__right__right__right__value), ObjectBoundary63.fromParts(right__leaves32__left__left__left__left__left__value, right__leaves32__left__left__left__left__right__value, right__leaves32__left__left__left__right__left__value, right__leaves32__left__left__left__right__right__value, right__leaves32__left__left__right__left__left__value, right__leaves32__left__left__right__left__right__value, right__leaves32__left__left__right__right__left__value, right__leaves32__left__left__right__right__right__value, right__leaves32__left__right__left__left__left__value, right__leaves32__left__right__left__left__right__value, right__leaves32__left__right__left__right__left__value, right__leaves32__left__right__left__right__right__value, right__leaves32__left__right__right__left__left__value, right__leaves32__left__right__right__left__right__value, right__leaves32__left__right__right__right__left__value, right__leaves32__left__right__right__right__right__value, right__leaves32__right__left__left__left__left__value, right__leaves32__right__left__left__left__right__value, right__leaves32__right__left__left__right__left__value, right__leaves32__right__left__left__right__right__value, right__leaves32__right__left__right__left__left__value, right__leaves32__right__left__right__left__right__value, right__leaves32__right__left__right__right__left__value, right__leaves32__right__left__right__right__right__value, right__leaves32__right__right__left__left__left__value, right__leaves32__right__right__left__left__right__value, right__leaves32__right__right__left__right__left__value, right__leaves32__right__right__left__right__right__value, right__leaves32__right__right__right__left__left__value, right__leaves32__right__right__right__left__right__value, right__leaves32__right__right__right__right__left__value, right__leaves32__right__right__right__right__right__value, right__leaves16__left__left__left__left__value, right__leaves16__left__left__left__right__value, right__leaves16__left__left__right__left__value, right__leaves16__left__left__right__right__value, right__leaves16__left__right__left__left__value, right__leaves16__left__right__left__right__value, right__leaves16__left__right__right__left__value, right__leaves16__left__right__right__right__value, right__leaves16__right__left__left__left__value, right__leaves16__right__left__left__right__value, right__leaves16__right__left__right__left__value, right__leaves16__right__left__right__right__value, right__leaves16__right__right__left__left__value, right__leaves16__right__right__left__right__value, right__leaves16__right__right__right__left__value, right__leaves16__right__right__right__right__value, right__leaves8__left__left__left__value, right__leaves8__left__left__right__value, right__leaves8__left__right__left__value, right__leaves8__left__right__right__value, right__leaves8__right__left__left__value, right__leaves8__right__left__right__value, right__leaves8__right__right__left__value, right__leaves8__right__right__right__value, right__leaves4__left__left__value, right__leaves4__left__right__value, right__leaves4__right__left__value, right__leaves4__right__right__value, right__leaves2__left__value, right__leaves2__right__value, right__leaf__value))
     }
 }
 
@@ -671,30 +746,30 @@ public data class ObjectBoundary16(val left: ObjectBoundary8, val right: ObjectB
     public companion object {
         @JvmStatic
         public fun fromParts(
-            left_left_left_left_value: Long,
-            left_left_left_right_value: Long,
-            left_left_right_left_value: Long,
-            left_left_right_right_value: Long,
-            left_right_left_left_value: Long,
-            left_right_left_right_value: Long,
-            left_right_right_left_value: Long,
-            left_right_right_right_value: Long,
-            right_left_left_left_value: Long,
-            right_left_left_right_value: Long,
-            right_left_right_left_value: Long,
-            right_left_right_right_value: Long,
-            right_right_left_left_value: Long,
-            right_right_left_right_value: Long,
-            right_right_right_left_value: Long,
-            right_right_right_right_value: Long,
-        ): ObjectBoundary16 = ObjectBoundary16(ObjectBoundary8.fromParts(left_left_left_left_value, left_left_left_right_value, left_left_right_left_value, left_left_right_right_value, left_right_left_left_value, left_right_left_right_value, left_right_right_left_value, left_right_right_right_value), ObjectBoundary8.fromParts(right_left_left_left_value, right_left_left_right_value, right_left_right_left_value, right_left_right_right_value, right_right_left_left_value, right_right_left_right_value, right_right_right_left_value, right_right_right_right_value))
+            left__left__left__left__value: Long,
+            left__left__left__right__value: Long,
+            left__left__right__left__value: Long,
+            left__left__right__right__value: Long,
+            left__right__left__left__value: Long,
+            left__right__left__right__value: Long,
+            left__right__right__left__value: Long,
+            left__right__right__right__value: Long,
+            right__left__left__left__value: Long,
+            right__left__left__right__value: Long,
+            right__left__right__left__value: Long,
+            right__left__right__right__value: Long,
+            right__right__left__left__value: Long,
+            right__right__left__right__value: Long,
+            right__right__right__left__value: Long,
+            right__right__right__right__value: Long,
+        ): ObjectBoundary16 = ObjectBoundary16(ObjectBoundary8.fromParts(left__left__left__left__value, left__left__left__right__value, left__left__right__left__value, left__left__right__right__value, left__right__left__left__value, left__right__left__right__value, left__right__right__left__value, left__right__right__right__value), ObjectBoundary8.fromParts(right__left__left__left__value, right__left__left__right__value, right__left__right__left__value, right__left__right__right__value, right__right__left__left__value, right__right__left__right__value, right__right__right__left__value, right__right__right__right__value))
     }
 }
 
 public data class ObjectBoundary2(val left: ObjectBoundaryLeaf, val right: ObjectBoundaryLeaf) {
     public companion object {
         @JvmStatic
-        public fun fromParts(left_value: Long, right_value: Long): ObjectBoundary2 = ObjectBoundary2(ObjectBoundaryLeaf.fromParts(left_value), ObjectBoundaryLeaf.fromParts(right_value))
+        public fun fromParts(left__value: Long, right__value: Long): ObjectBoundary2 = ObjectBoundary2(ObjectBoundaryLeaf.fromParts(left__value), ObjectBoundaryLeaf.fromParts(right__value))
     }
 }
 
@@ -702,39 +777,39 @@ public data class ObjectBoundary32(val left: ObjectBoundary16, val right: Object
     public companion object {
         @JvmStatic
         public fun fromParts(
-            left_left_left_left_left_value: Long,
-            left_left_left_left_right_value: Long,
-            left_left_left_right_left_value: Long,
-            left_left_left_right_right_value: Long,
-            left_left_right_left_left_value: Long,
-            left_left_right_left_right_value: Long,
-            left_left_right_right_left_value: Long,
-            left_left_right_right_right_value: Long,
-            left_right_left_left_left_value: Long,
-            left_right_left_left_right_value: Long,
-            left_right_left_right_left_value: Long,
-            left_right_left_right_right_value: Long,
-            left_right_right_left_left_value: Long,
-            left_right_right_left_right_value: Long,
-            left_right_right_right_left_value: Long,
-            left_right_right_right_right_value: Long,
-            right_left_left_left_left_value: Long,
-            right_left_left_left_right_value: Long,
-            right_left_left_right_left_value: Long,
-            right_left_left_right_right_value: Long,
-            right_left_right_left_left_value: Long,
-            right_left_right_left_right_value: Long,
-            right_left_right_right_left_value: Long,
-            right_left_right_right_right_value: Long,
-            right_right_left_left_left_value: Long,
-            right_right_left_left_right_value: Long,
-            right_right_left_right_left_value: Long,
-            right_right_left_right_right_value: Long,
-            right_right_right_left_left_value: Long,
-            right_right_right_left_right_value: Long,
-            right_right_right_right_left_value: Long,
-            right_right_right_right_right_value: Long,
-        ): ObjectBoundary32 = ObjectBoundary32(ObjectBoundary16.fromParts(left_left_left_left_left_value, left_left_left_left_right_value, left_left_left_right_left_value, left_left_left_right_right_value, left_left_right_left_left_value, left_left_right_left_right_value, left_left_right_right_left_value, left_left_right_right_right_value, left_right_left_left_left_value, left_right_left_left_right_value, left_right_left_right_left_value, left_right_left_right_right_value, left_right_right_left_left_value, left_right_right_left_right_value, left_right_right_right_left_value, left_right_right_right_right_value), ObjectBoundary16.fromParts(right_left_left_left_left_value, right_left_left_left_right_value, right_left_left_right_left_value, right_left_left_right_right_value, right_left_right_left_left_value, right_left_right_left_right_value, right_left_right_right_left_value, right_left_right_right_right_value, right_right_left_left_left_value, right_right_left_left_right_value, right_right_left_right_left_value, right_right_left_right_right_value, right_right_right_left_left_value, right_right_right_left_right_value, right_right_right_right_left_value, right_right_right_right_right_value))
+            left__left__left__left__left__value: Long,
+            left__left__left__left__right__value: Long,
+            left__left__left__right__left__value: Long,
+            left__left__left__right__right__value: Long,
+            left__left__right__left__left__value: Long,
+            left__left__right__left__right__value: Long,
+            left__left__right__right__left__value: Long,
+            left__left__right__right__right__value: Long,
+            left__right__left__left__left__value: Long,
+            left__right__left__left__right__value: Long,
+            left__right__left__right__left__value: Long,
+            left__right__left__right__right__value: Long,
+            left__right__right__left__left__value: Long,
+            left__right__right__left__right__value: Long,
+            left__right__right__right__left__value: Long,
+            left__right__right__right__right__value: Long,
+            right__left__left__left__left__value: Long,
+            right__left__left__left__right__value: Long,
+            right__left__left__right__left__value: Long,
+            right__left__left__right__right__value: Long,
+            right__left__right__left__left__value: Long,
+            right__left__right__left__right__value: Long,
+            right__left__right__right__left__value: Long,
+            right__left__right__right__right__value: Long,
+            right__right__left__left__left__value: Long,
+            right__right__left__left__right__value: Long,
+            right__right__left__right__left__value: Long,
+            right__right__left__right__right__value: Long,
+            right__right__right__left__left__value: Long,
+            right__right__right__left__right__value: Long,
+            right__right__right__right__left__value: Long,
+            right__right__right__right__right__value: Long,
+        ): ObjectBoundary32 = ObjectBoundary32(ObjectBoundary16.fromParts(left__left__left__left__left__value, left__left__left__left__right__value, left__left__left__right__left__value, left__left__left__right__right__value, left__left__right__left__left__value, left__left__right__left__right__value, left__left__right__right__left__value, left__left__right__right__right__value, left__right__left__left__left__value, left__right__left__left__right__value, left__right__left__right__left__value, left__right__left__right__right__value, left__right__right__left__left__value, left__right__right__left__right__value, left__right__right__right__left__value, left__right__right__right__right__value), ObjectBoundary16.fromParts(right__left__left__left__left__value, right__left__left__left__right__value, right__left__left__right__left__value, right__left__left__right__right__value, right__left__right__left__left__value, right__left__right__left__right__value, right__left__right__right__left__value, right__left__right__right__right__value, right__right__left__left__left__value, right__right__left__left__right__value, right__right__left__right__left__value, right__right__left__right__right__value, right__right__right__left__left__value, right__right__right__left__right__value, right__right__right__right__left__value, right__right__right__right__right__value))
     }
 }
 
@@ -742,11 +817,11 @@ public data class ObjectBoundary4(val left: ObjectBoundary2, val right: ObjectBo
     public companion object {
         @JvmStatic
         public fun fromParts(
-            left_left_value: Long,
-            left_right_value: Long,
-            right_left_value: Long,
-            right_right_value: Long,
-        ): ObjectBoundary4 = ObjectBoundary4(ObjectBoundary2.fromParts(left_left_value, left_right_value), ObjectBoundary2.fromParts(right_left_value, right_right_value))
+            left__left__value: Long,
+            left__right__value: Long,
+            right__left__value: Long,
+            right__right__value: Long,
+        ): ObjectBoundary4 = ObjectBoundary4(ObjectBoundary2.fromParts(left__left__value, left__right__value), ObjectBoundary2.fromParts(right__left__value, right__right__value))
     }
 }
 
@@ -755,70 +830,70 @@ public data class ObjectBoundary63(val leaves32: ObjectBoundary32, val leaves16:
     public companion object {
         @JvmStatic
         public fun fromParts(
-            leaves32_left_left_left_left_left_value: Long,
-            leaves32_left_left_left_left_right_value: Long,
-            leaves32_left_left_left_right_left_value: Long,
-            leaves32_left_left_left_right_right_value: Long,
-            leaves32_left_left_right_left_left_value: Long,
-            leaves32_left_left_right_left_right_value: Long,
-            leaves32_left_left_right_right_left_value: Long,
-            leaves32_left_left_right_right_right_value: Long,
-            leaves32_left_right_left_left_left_value: Long,
-            leaves32_left_right_left_left_right_value: Long,
-            leaves32_left_right_left_right_left_value: Long,
-            leaves32_left_right_left_right_right_value: Long,
-            leaves32_left_right_right_left_left_value: Long,
-            leaves32_left_right_right_left_right_value: Long,
-            leaves32_left_right_right_right_left_value: Long,
-            leaves32_left_right_right_right_right_value: Long,
-            leaves32_right_left_left_left_left_value: Long,
-            leaves32_right_left_left_left_right_value: Long,
-            leaves32_right_left_left_right_left_value: Long,
-            leaves32_right_left_left_right_right_value: Long,
-            leaves32_right_left_right_left_left_value: Long,
-            leaves32_right_left_right_left_right_value: Long,
-            leaves32_right_left_right_right_left_value: Long,
-            leaves32_right_left_right_right_right_value: Long,
-            leaves32_right_right_left_left_left_value: Long,
-            leaves32_right_right_left_left_right_value: Long,
-            leaves32_right_right_left_right_left_value: Long,
-            leaves32_right_right_left_right_right_value: Long,
-            leaves32_right_right_right_left_left_value: Long,
-            leaves32_right_right_right_left_right_value: Long,
-            leaves32_right_right_right_right_left_value: Long,
-            leaves32_right_right_right_right_right_value: Long,
-            leaves16_left_left_left_left_value: Long,
-            leaves16_left_left_left_right_value: Long,
-            leaves16_left_left_right_left_value: Long,
-            leaves16_left_left_right_right_value: Long,
-            leaves16_left_right_left_left_value: Long,
-            leaves16_left_right_left_right_value: Long,
-            leaves16_left_right_right_left_value: Long,
-            leaves16_left_right_right_right_value: Long,
-            leaves16_right_left_left_left_value: Long,
-            leaves16_right_left_left_right_value: Long,
-            leaves16_right_left_right_left_value: Long,
-            leaves16_right_left_right_right_value: Long,
-            leaves16_right_right_left_left_value: Long,
-            leaves16_right_right_left_right_value: Long,
-            leaves16_right_right_right_left_value: Long,
-            leaves16_right_right_right_right_value: Long,
-            leaves8_left_left_left_value: Long,
-            leaves8_left_left_right_value: Long,
-            leaves8_left_right_left_value: Long,
-            leaves8_left_right_right_value: Long,
-            leaves8_right_left_left_value: Long,
-            leaves8_right_left_right_value: Long,
-            leaves8_right_right_left_value: Long,
-            leaves8_right_right_right_value: Long,
-            leaves4_left_left_value: Long,
-            leaves4_left_right_value: Long,
-            leaves4_right_left_value: Long,
-            leaves4_right_right_value: Long,
-            leaves2_left_value: Long,
-            leaves2_right_value: Long,
-            leaf_value: Long,
-        ): ObjectBoundary63 = ObjectBoundary63(ObjectBoundary32.fromParts(leaves32_left_left_left_left_left_value, leaves32_left_left_left_left_right_value, leaves32_left_left_left_right_left_value, leaves32_left_left_left_right_right_value, leaves32_left_left_right_left_left_value, leaves32_left_left_right_left_right_value, leaves32_left_left_right_right_left_value, leaves32_left_left_right_right_right_value, leaves32_left_right_left_left_left_value, leaves32_left_right_left_left_right_value, leaves32_left_right_left_right_left_value, leaves32_left_right_left_right_right_value, leaves32_left_right_right_left_left_value, leaves32_left_right_right_left_right_value, leaves32_left_right_right_right_left_value, leaves32_left_right_right_right_right_value, leaves32_right_left_left_left_left_value, leaves32_right_left_left_left_right_value, leaves32_right_left_left_right_left_value, leaves32_right_left_left_right_right_value, leaves32_right_left_right_left_left_value, leaves32_right_left_right_left_right_value, leaves32_right_left_right_right_left_value, leaves32_right_left_right_right_right_value, leaves32_right_right_left_left_left_value, leaves32_right_right_left_left_right_value, leaves32_right_right_left_right_left_value, leaves32_right_right_left_right_right_value, leaves32_right_right_right_left_left_value, leaves32_right_right_right_left_right_value, leaves32_right_right_right_right_left_value, leaves32_right_right_right_right_right_value), ObjectBoundary16.fromParts(leaves16_left_left_left_left_value, leaves16_left_left_left_right_value, leaves16_left_left_right_left_value, leaves16_left_left_right_right_value, leaves16_left_right_left_left_value, leaves16_left_right_left_right_value, leaves16_left_right_right_left_value, leaves16_left_right_right_right_value, leaves16_right_left_left_left_value, leaves16_right_left_left_right_value, leaves16_right_left_right_left_value, leaves16_right_left_right_right_value, leaves16_right_right_left_left_value, leaves16_right_right_left_right_value, leaves16_right_right_right_left_value, leaves16_right_right_right_right_value), ObjectBoundary8.fromParts(leaves8_left_left_left_value, leaves8_left_left_right_value, leaves8_left_right_left_value, leaves8_left_right_right_value, leaves8_right_left_left_value, leaves8_right_left_right_value, leaves8_right_right_left_value, leaves8_right_right_right_value), ObjectBoundary4.fromParts(leaves4_left_left_value, leaves4_left_right_value, leaves4_right_left_value, leaves4_right_right_value), ObjectBoundary2.fromParts(leaves2_left_value, leaves2_right_value), ObjectBoundaryLeaf.fromParts(leaf_value))
+            leaves32__left__left__left__left__left__value: Long,
+            leaves32__left__left__left__left__right__value: Long,
+            leaves32__left__left__left__right__left__value: Long,
+            leaves32__left__left__left__right__right__value: Long,
+            leaves32__left__left__right__left__left__value: Long,
+            leaves32__left__left__right__left__right__value: Long,
+            leaves32__left__left__right__right__left__value: Long,
+            leaves32__left__left__right__right__right__value: Long,
+            leaves32__left__right__left__left__left__value: Long,
+            leaves32__left__right__left__left__right__value: Long,
+            leaves32__left__right__left__right__left__value: Long,
+            leaves32__left__right__left__right__right__value: Long,
+            leaves32__left__right__right__left__left__value: Long,
+            leaves32__left__right__right__left__right__value: Long,
+            leaves32__left__right__right__right__left__value: Long,
+            leaves32__left__right__right__right__right__value: Long,
+            leaves32__right__left__left__left__left__value: Long,
+            leaves32__right__left__left__left__right__value: Long,
+            leaves32__right__left__left__right__left__value: Long,
+            leaves32__right__left__left__right__right__value: Long,
+            leaves32__right__left__right__left__left__value: Long,
+            leaves32__right__left__right__left__right__value: Long,
+            leaves32__right__left__right__right__left__value: Long,
+            leaves32__right__left__right__right__right__value: Long,
+            leaves32__right__right__left__left__left__value: Long,
+            leaves32__right__right__left__left__right__value: Long,
+            leaves32__right__right__left__right__left__value: Long,
+            leaves32__right__right__left__right__right__value: Long,
+            leaves32__right__right__right__left__left__value: Long,
+            leaves32__right__right__right__left__right__value: Long,
+            leaves32__right__right__right__right__left__value: Long,
+            leaves32__right__right__right__right__right__value: Long,
+            leaves16__left__left__left__left__value: Long,
+            leaves16__left__left__left__right__value: Long,
+            leaves16__left__left__right__left__value: Long,
+            leaves16__left__left__right__right__value: Long,
+            leaves16__left__right__left__left__value: Long,
+            leaves16__left__right__left__right__value: Long,
+            leaves16__left__right__right__left__value: Long,
+            leaves16__left__right__right__right__value: Long,
+            leaves16__right__left__left__left__value: Long,
+            leaves16__right__left__left__right__value: Long,
+            leaves16__right__left__right__left__value: Long,
+            leaves16__right__left__right__right__value: Long,
+            leaves16__right__right__left__left__value: Long,
+            leaves16__right__right__left__right__value: Long,
+            leaves16__right__right__right__left__value: Long,
+            leaves16__right__right__right__right__value: Long,
+            leaves8__left__left__left__value: Long,
+            leaves8__left__left__right__value: Long,
+            leaves8__left__right__left__value: Long,
+            leaves8__left__right__right__value: Long,
+            leaves8__right__left__left__value: Long,
+            leaves8__right__left__right__value: Long,
+            leaves8__right__right__left__value: Long,
+            leaves8__right__right__right__value: Long,
+            leaves4__left__left__value: Long,
+            leaves4__left__right__value: Long,
+            leaves4__right__left__value: Long,
+            leaves4__right__right__value: Long,
+            leaves2__left__value: Long,
+            leaves2__right__value: Long,
+            leaf__value: Long,
+        ): ObjectBoundary63 = ObjectBoundary63(ObjectBoundary32.fromParts(leaves32__left__left__left__left__left__value, leaves32__left__left__left__left__right__value, leaves32__left__left__left__right__left__value, leaves32__left__left__left__right__right__value, leaves32__left__left__right__left__left__value, leaves32__left__left__right__left__right__value, leaves32__left__left__right__right__left__value, leaves32__left__left__right__right__right__value, leaves32__left__right__left__left__left__value, leaves32__left__right__left__left__right__value, leaves32__left__right__left__right__left__value, leaves32__left__right__left__right__right__value, leaves32__left__right__right__left__left__value, leaves32__left__right__right__left__right__value, leaves32__left__right__right__right__left__value, leaves32__left__right__right__right__right__value, leaves32__right__left__left__left__left__value, leaves32__right__left__left__left__right__value, leaves32__right__left__left__right__left__value, leaves32__right__left__left__right__right__value, leaves32__right__left__right__left__left__value, leaves32__right__left__right__left__right__value, leaves32__right__left__right__right__left__value, leaves32__right__left__right__right__right__value, leaves32__right__right__left__left__left__value, leaves32__right__right__left__left__right__value, leaves32__right__right__left__right__left__value, leaves32__right__right__left__right__right__value, leaves32__right__right__right__left__left__value, leaves32__right__right__right__left__right__value, leaves32__right__right__right__right__left__value, leaves32__right__right__right__right__right__value), ObjectBoundary16.fromParts(leaves16__left__left__left__left__value, leaves16__left__left__left__right__value, leaves16__left__left__right__left__value, leaves16__left__left__right__right__value, leaves16__left__right__left__left__value, leaves16__left__right__left__right__value, leaves16__left__right__right__left__value, leaves16__left__right__right__right__value, leaves16__right__left__left__left__value, leaves16__right__left__left__right__value, leaves16__right__left__right__left__value, leaves16__right__left__right__right__value, leaves16__right__right__left__left__value, leaves16__right__right__left__right__value, leaves16__right__right__right__left__value, leaves16__right__right__right__right__value), ObjectBoundary8.fromParts(leaves8__left__left__left__value, leaves8__left__left__right__value, leaves8__left__right__left__value, leaves8__left__right__right__value, leaves8__right__left__left__value, leaves8__right__left__right__value, leaves8__right__right__left__value, leaves8__right__right__right__value), ObjectBoundary4.fromParts(leaves4__left__left__value, leaves4__left__right__value, leaves4__right__left__value, leaves4__right__right__value), ObjectBoundary2.fromParts(leaves2__left__value, leaves2__right__value), ObjectBoundaryLeaf.fromParts(leaf__value))
     }
 }
 
@@ -826,71 +901,71 @@ public data class ObjectBoundary64(val left: ObjectBoundary32, val right: Object
     public companion object {
         @JvmStatic
         public fun fromParts(
-            left_left_left_left_left_left_value: Long,
-            left_left_left_left_left_right_value: Long,
-            left_left_left_left_right_left_value: Long,
-            left_left_left_left_right_right_value: Long,
-            left_left_left_right_left_left_value: Long,
-            left_left_left_right_left_right_value: Long,
-            left_left_left_right_right_left_value: Long,
-            left_left_left_right_right_right_value: Long,
-            left_left_right_left_left_left_value: Long,
-            left_left_right_left_left_right_value: Long,
-            left_left_right_left_right_left_value: Long,
-            left_left_right_left_right_right_value: Long,
-            left_left_right_right_left_left_value: Long,
-            left_left_right_right_left_right_value: Long,
-            left_left_right_right_right_left_value: Long,
-            left_left_right_right_right_right_value: Long,
-            left_right_left_left_left_left_value: Long,
-            left_right_left_left_left_right_value: Long,
-            left_right_left_left_right_left_value: Long,
-            left_right_left_left_right_right_value: Long,
-            left_right_left_right_left_left_value: Long,
-            left_right_left_right_left_right_value: Long,
-            left_right_left_right_right_left_value: Long,
-            left_right_left_right_right_right_value: Long,
-            left_right_right_left_left_left_value: Long,
-            left_right_right_left_left_right_value: Long,
-            left_right_right_left_right_left_value: Long,
-            left_right_right_left_right_right_value: Long,
-            left_right_right_right_left_left_value: Long,
-            left_right_right_right_left_right_value: Long,
-            left_right_right_right_right_left_value: Long,
-            left_right_right_right_right_right_value: Long,
-            right_left_left_left_left_left_value: Long,
-            right_left_left_left_left_right_value: Long,
-            right_left_left_left_right_left_value: Long,
-            right_left_left_left_right_right_value: Long,
-            right_left_left_right_left_left_value: Long,
-            right_left_left_right_left_right_value: Long,
-            right_left_left_right_right_left_value: Long,
-            right_left_left_right_right_right_value: Long,
-            right_left_right_left_left_left_value: Long,
-            right_left_right_left_left_right_value: Long,
-            right_left_right_left_right_left_value: Long,
-            right_left_right_left_right_right_value: Long,
-            right_left_right_right_left_left_value: Long,
-            right_left_right_right_left_right_value: Long,
-            right_left_right_right_right_left_value: Long,
-            right_left_right_right_right_right_value: Long,
-            right_right_left_left_left_left_value: Long,
-            right_right_left_left_left_right_value: Long,
-            right_right_left_left_right_left_value: Long,
-            right_right_left_left_right_right_value: Long,
-            right_right_left_right_left_left_value: Long,
-            right_right_left_right_left_right_value: Long,
-            right_right_left_right_right_left_value: Long,
-            right_right_left_right_right_right_value: Long,
-            right_right_right_left_left_left_value: Long,
-            right_right_right_left_left_right_value: Long,
-            right_right_right_left_right_left_value: Long,
-            right_right_right_left_right_right_value: Long,
-            right_right_right_right_left_left_value: Long,
-            right_right_right_right_left_right_value: Long,
-            right_right_right_right_right_left_value: Long,
-            right_right_right_right_right_right_value: Long,
-        ): ObjectBoundary64 = ObjectBoundary64(ObjectBoundary32.fromParts(left_left_left_left_left_left_value, left_left_left_left_left_right_value, left_left_left_left_right_left_value, left_left_left_left_right_right_value, left_left_left_right_left_left_value, left_left_left_right_left_right_value, left_left_left_right_right_left_value, left_left_left_right_right_right_value, left_left_right_left_left_left_value, left_left_right_left_left_right_value, left_left_right_left_right_left_value, left_left_right_left_right_right_value, left_left_right_right_left_left_value, left_left_right_right_left_right_value, left_left_right_right_right_left_value, left_left_right_right_right_right_value, left_right_left_left_left_left_value, left_right_left_left_left_right_value, left_right_left_left_right_left_value, left_right_left_left_right_right_value, left_right_left_right_left_left_value, left_right_left_right_left_right_value, left_right_left_right_right_left_value, left_right_left_right_right_right_value, left_right_right_left_left_left_value, left_right_right_left_left_right_value, left_right_right_left_right_left_value, left_right_right_left_right_right_value, left_right_right_right_left_left_value, left_right_right_right_left_right_value, left_right_right_right_right_left_value, left_right_right_right_right_right_value), ObjectBoundary32.fromParts(right_left_left_left_left_left_value, right_left_left_left_left_right_value, right_left_left_left_right_left_value, right_left_left_left_right_right_value, right_left_left_right_left_left_value, right_left_left_right_left_right_value, right_left_left_right_right_left_value, right_left_left_right_right_right_value, right_left_right_left_left_left_value, right_left_right_left_left_right_value, right_left_right_left_right_left_value, right_left_right_left_right_right_value, right_left_right_right_left_left_value, right_left_right_right_left_right_value, right_left_right_right_right_left_value, right_left_right_right_right_right_value, right_right_left_left_left_left_value, right_right_left_left_left_right_value, right_right_left_left_right_left_value, right_right_left_left_right_right_value, right_right_left_right_left_left_value, right_right_left_right_left_right_value, right_right_left_right_right_left_value, right_right_left_right_right_right_value, right_right_right_left_left_left_value, right_right_right_left_left_right_value, right_right_right_left_right_left_value, right_right_right_left_right_right_value, right_right_right_right_left_left_value, right_right_right_right_left_right_value, right_right_right_right_right_left_value, right_right_right_right_right_right_value))
+            left__left__left__left__left__left__value: Long,
+            left__left__left__left__left__right__value: Long,
+            left__left__left__left__right__left__value: Long,
+            left__left__left__left__right__right__value: Long,
+            left__left__left__right__left__left__value: Long,
+            left__left__left__right__left__right__value: Long,
+            left__left__left__right__right__left__value: Long,
+            left__left__left__right__right__right__value: Long,
+            left__left__right__left__left__left__value: Long,
+            left__left__right__left__left__right__value: Long,
+            left__left__right__left__right__left__value: Long,
+            left__left__right__left__right__right__value: Long,
+            left__left__right__right__left__left__value: Long,
+            left__left__right__right__left__right__value: Long,
+            left__left__right__right__right__left__value: Long,
+            left__left__right__right__right__right__value: Long,
+            left__right__left__left__left__left__value: Long,
+            left__right__left__left__left__right__value: Long,
+            left__right__left__left__right__left__value: Long,
+            left__right__left__left__right__right__value: Long,
+            left__right__left__right__left__left__value: Long,
+            left__right__left__right__left__right__value: Long,
+            left__right__left__right__right__left__value: Long,
+            left__right__left__right__right__right__value: Long,
+            left__right__right__left__left__left__value: Long,
+            left__right__right__left__left__right__value: Long,
+            left__right__right__left__right__left__value: Long,
+            left__right__right__left__right__right__value: Long,
+            left__right__right__right__left__left__value: Long,
+            left__right__right__right__left__right__value: Long,
+            left__right__right__right__right__left__value: Long,
+            left__right__right__right__right__right__value: Long,
+            right__left__left__left__left__left__value: Long,
+            right__left__left__left__left__right__value: Long,
+            right__left__left__left__right__left__value: Long,
+            right__left__left__left__right__right__value: Long,
+            right__left__left__right__left__left__value: Long,
+            right__left__left__right__left__right__value: Long,
+            right__left__left__right__right__left__value: Long,
+            right__left__left__right__right__right__value: Long,
+            right__left__right__left__left__left__value: Long,
+            right__left__right__left__left__right__value: Long,
+            right__left__right__left__right__left__value: Long,
+            right__left__right__left__right__right__value: Long,
+            right__left__right__right__left__left__value: Long,
+            right__left__right__right__left__right__value: Long,
+            right__left__right__right__right__left__value: Long,
+            right__left__right__right__right__right__value: Long,
+            right__right__left__left__left__left__value: Long,
+            right__right__left__left__left__right__value: Long,
+            right__right__left__left__right__left__value: Long,
+            right__right__left__left__right__right__value: Long,
+            right__right__left__right__left__left__value: Long,
+            right__right__left__right__left__right__value: Long,
+            right__right__left__right__right__left__value: Long,
+            right__right__left__right__right__right__value: Long,
+            right__right__right__left__left__left__value: Long,
+            right__right__right__left__left__right__value: Long,
+            right__right__right__left__right__left__value: Long,
+            right__right__right__left__right__right__value: Long,
+            right__right__right__right__left__left__value: Long,
+            right__right__right__right__left__right__value: Long,
+            right__right__right__right__right__left__value: Long,
+            right__right__right__right__right__right__value: Long,
+        ): ObjectBoundary64 = ObjectBoundary64(ObjectBoundary32.fromParts(left__left__left__left__left__left__value, left__left__left__left__left__right__value, left__left__left__left__right__left__value, left__left__left__left__right__right__value, left__left__left__right__left__left__value, left__left__left__right__left__right__value, left__left__left__right__right__left__value, left__left__left__right__right__right__value, left__left__right__left__left__left__value, left__left__right__left__left__right__value, left__left__right__left__right__left__value, left__left__right__left__right__right__value, left__left__right__right__left__left__value, left__left__right__right__left__right__value, left__left__right__right__right__left__value, left__left__right__right__right__right__value, left__right__left__left__left__left__value, left__right__left__left__left__right__value, left__right__left__left__right__left__value, left__right__left__left__right__right__value, left__right__left__right__left__left__value, left__right__left__right__left__right__value, left__right__left__right__right__left__value, left__right__left__right__right__right__value, left__right__right__left__left__left__value, left__right__right__left__left__right__value, left__right__right__left__right__left__value, left__right__right__left__right__right__value, left__right__right__right__left__left__value, left__right__right__right__left__right__value, left__right__right__right__right__left__value, left__right__right__right__right__right__value), ObjectBoundary32.fromParts(right__left__left__left__left__left__value, right__left__left__left__left__right__value, right__left__left__left__right__left__value, right__left__left__left__right__right__value, right__left__left__right__left__left__value, right__left__left__right__left__right__value, right__left__left__right__right__left__value, right__left__left__right__right__right__value, right__left__right__left__left__left__value, right__left__right__left__left__right__value, right__left__right__left__right__left__value, right__left__right__left__right__right__value, right__left__right__right__left__left__value, right__left__right__right__left__right__value, right__left__right__right__right__left__value, right__left__right__right__right__right__value, right__right__left__left__left__left__value, right__right__left__left__left__right__value, right__right__left__left__right__left__value, right__right__left__left__right__right__value, right__right__left__right__left__left__value, right__right__left__right__left__right__value, right__right__left__right__right__left__value, right__right__left__right__right__right__value, right__right__right__left__left__left__value, right__right__right__left__left__right__value, right__right__right__left__right__left__value, right__right__right__left__right__right__value, right__right__right__right__left__left__value, right__right__right__right__left__right__value, right__right__right__right__right__left__value, right__right__right__right__right__right__value))
     }
 }
 
@@ -898,15 +973,15 @@ public data class ObjectBoundary8(val left: ObjectBoundary4, val right: ObjectBo
     public companion object {
         @JvmStatic
         public fun fromParts(
-            left_left_left_value: Long,
-            left_left_right_value: Long,
-            left_right_left_value: Long,
-            left_right_right_value: Long,
-            right_left_left_value: Long,
-            right_left_right_value: Long,
-            right_right_left_value: Long,
-            right_right_right_value: Long,
-        ): ObjectBoundary8 = ObjectBoundary8(ObjectBoundary4.fromParts(left_left_left_value, left_left_right_value, left_right_left_value, left_right_right_value), ObjectBoundary4.fromParts(right_left_left_value, right_left_right_value, right_right_left_value, right_right_right_value))
+            left__left__left__value: Long,
+            left__left__right__value: Long,
+            left__right__left__value: Long,
+            left__right__right__value: Long,
+            right__left__left__value: Long,
+            right__left__right__value: Long,
+            right__right__left__value: Long,
+            right__right__right__value: Long,
+        ): ObjectBoundary8 = ObjectBoundary8(ObjectBoundary4.fromParts(left__left__left__value, left__left__right__value, left__right__left__value, left__right__right__value), ObjectBoundary4.fromParts(right__left__left__value, right__left__right__value, right__right__left__value, right__right__right__value))
     }
 }
 
@@ -936,22 +1011,59 @@ public data class Observation(val id: Long, val reading: Reading, val fallback: 
         public fun fromParts(
             id: Long,
             reading__tag: Int,
-            reading_exact_v0: Long,
-            reading_range_low: Long,
-            reading_range_high: Long,
-            reading_tagged_v0: String?,
-            reading_tagged_v1: Int,
-            reading_companion_v0: Long,
+            reading__exact_v0: Long,
+            reading__range_low: Long,
+            reading__range_high: Long,
+            reading__tagged_v0: String?,
+            reading__tagged_v1: Int,
+            reading__companion_v0: Long,
             fallback__present: Boolean,
             fallback__tag: Int,
-            fallback_exact_v0: Long,
-            fallback_range_low: Long,
-            fallback_range_high: Long,
-            fallback_tagged_v0: String?,
-            fallback_tagged_v1: Int,
-            fallback_companion_v0: Long,
+            fallback__exact_v0: Long,
+            fallback__range_low: Long,
+            fallback__range_high: Long,
+            fallback__tagged_v0: String?,
+            fallback__tagged_v1: Int,
+            fallback__companion_v0: Long,
             note: String,
-        ): Observation = Observation(id, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading_exact_v0); 2 -> Reading.Range(reading_range_low, reading_range_high); 3 -> Reading.Tagged(reading_tagged_v0!!, Priority.fromInt(reading_tagged_v1)); 4 -> Reading.Companion(reading_companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") }, if (fallback__present) when (fallback__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(fallback_exact_v0); 2 -> Reading.Range(fallback_range_low, fallback_range_high); 3 -> Reading.Tagged(fallback_tagged_v0!!, Priority.fromInt(fallback_tagged_v1)); 4 -> Reading.Companion(fallback_companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $fallback__tag") } else null, note)
+        ): Observation = Observation(id, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading__exact_v0); 2 -> Reading.Range(reading__range_low, reading__range_high); 3 -> Reading.Tagged(reading__tagged_v0!!, Priority.fromInt(reading__tagged_v1)); 4 -> Reading.Companion(reading__companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") }, if (fallback__present) when (fallback__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(fallback__exact_v0); 2 -> Reading.Range(fallback__range_low, fallback__range_high); 3 -> Reading.Tagged(fallback__tagged_v0!!, Priority.fromInt(fallback__tagged_v1)); 4 -> Reading.Companion(fallback__companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $fallback__tag") } else null, note)
+    }
+}
+
+/**
+ * Both ways of holding a [`Meter`]: gated, so the child's leading selector
+ * sits under a presence flag of its own, and plain, so it is the first thing
+ * the parent meets.
+ */
+public data class Rack(val meter: Meter?, val plain: Meter, val name: String) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            meter__present: Boolean,
+            meter__span__present: Boolean,
+            meter__span__secs: Long,
+            meter__span__nanos: Long,
+            meter__reading__tag: Int,
+            meter__reading__exact_v0: Long,
+            meter__reading__range_low: Long,
+            meter__reading__range_high: Long,
+            meter__reading__tagged_v0: String?,
+            meter__reading__tagged_v1: Int,
+            meter__reading__companion_v0: Long,
+            meter__id: Long,
+            plain__span__present: Boolean,
+            plain__span__secs: Long,
+            plain__span__nanos: Long,
+            plain__reading__tag: Int,
+            plain__reading__exact_v0: Long,
+            plain__reading__range_low: Long,
+            plain__reading__range_high: Long,
+            plain__reading__tagged_v0: String?,
+            plain__reading__tagged_v1: Int,
+            plain__reading__companion_v0: Long,
+            plain__id: Long,
+            name: String,
+        ): Rack = Rack(if (meter__present) Meter.fromParts(meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id) else null, Meter.fromParts(plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id), name)
     }
 }
 
@@ -1002,7 +1114,7 @@ public data class Stamp(val secs: Long, val nanos: Long) {
 public data class Tagged(val id: Long, val marker: Marker) {
     public companion object {
         @JvmStatic
-        public fun fromParts(id: Long, marker__tag: Int, marker_ranked_v0: Int): Tagged = Tagged(id, when (marker__tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(if (marker_ranked_v0 == Int.MIN_VALUE) null else Priority.fromInt(marker_ranked_v0)); else -> throw IllegalArgumentException("Marker: invalid tag $marker__tag") })
+        public fun fromParts(id: Long, marker__tag: Int, marker__ranked_v0: Int): Tagged = Tagged(id, when (marker__tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(if (marker__ranked_v0 == Int.MIN_VALUE) null else Priority.fromInt(marker__ranked_v0)); else -> throw IllegalArgumentException("Marker: invalid tag $marker__tag") })
     }
 }
 
@@ -1044,9 +1156,37 @@ public data class Verdict(val id: Long, val outcome: Lookup) : AutoCloseable {
         public fun fromParts(
             id: Long,
             outcome__tag: Int,
-            outcome_found_v0: Long,
-            outcome_failed_v0: String?,
-        ): Verdict = Verdict(id, when (outcome__tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary.fromRawPtr(outcome_found_v0)); 2 -> Lookup.Failed(outcome_failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $outcome__tag") })
+            outcome__found_v0: Long,
+            outcome__failed_v0: String?,
+        ): Verdict = Verdict(id, when (outcome__tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary.fromRawPtr(outcome__found_v0)); 2 -> Lookup.Failed(outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $outcome__tag") })
+    }
+}
+
+/**
+ * The value an optional nested class gates when that class **selects of its
+ * own** — a presence flag and a tag, one arm inside another.
+ *
+ * `span` is a second presence, `reading` a sum tag. Both sit inside the group
+ * `Frame::window`'s own flag gates, which is the shape a flat group number
+ * could not state: each of these is a member of the outer group AND a
+ * selector of its own (#602).
+ */
+public data class Window(val label: String, val span: Stamp?, val reading: Reading) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            label: String,
+            span__present: Boolean,
+            span__secs: Long,
+            span__nanos: Long,
+            reading__tag: Int,
+            reading__exact_v0: Long,
+            reading__range_low: Long,
+            reading__range_high: Long,
+            reading__tagged_v0: String?,
+            reading__tagged_v1: Int,
+            reading__companion_v0: Long,
+        ): Window = Window(label, if (span__present) Stamp.fromParts(span__secs, span__nanos) else null, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading__exact_v0); 2 -> Reading.Range(reading__range_low, reading__range_high); 3 -> Reading.Tagged(reading__tagged_v0!!, Priority.fromInt(reading__tagged_v1)); 4 -> Reading.Companion(reading__companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") })
     }
 }
 
@@ -1276,6 +1416,69 @@ public class VaultHolder private constructor(initialPtr: Long) : NativeHandle(in
     }
 }
 
+public fun interface EnvelopeCallback {
+    public fun run(envelope: Envelope)
+}
+
+internal fun interface EnvelopeCallbackRaw {
+    public fun run(id: Long, stamp__present: Boolean, stamp__secs: Long, stamp__nanos: Long)
+}
+
+@JvmSynthetic
+internal fun EnvelopeCallback.asRaw(): EnvelopeCallbackRaw =
+    EnvelopeCallbackRaw {
+        id,
+        stamp__present,
+        stamp__secs,
+        stamp__nanos ->
+        run(
+            Envelope.fromParts(id, stamp__present, stamp__secs, stamp__nanos)
+        )
+    }
+
+public fun interface FrameCallback {
+    public fun run(frame: Frame)
+}
+
+internal fun interface FrameCallbackRaw {
+    public fun run(
+        id: Long,
+        window__present: Boolean,
+        window__label: String?,
+        window__span__present: Boolean,
+        window__span__secs: Long,
+        window__span__nanos: Long,
+        window__reading__tag: Int,
+        window__reading__exact_v0: Long,
+        window__reading__range_low: Long,
+        window__reading__range_high: Long,
+        window__reading__tagged_v0: String?,
+        window__reading__tagged_v1: Int,
+        window__reading__companion_v0: Long,
+    )
+}
+
+@JvmSynthetic
+internal fun FrameCallback.asRaw(): FrameCallbackRaw =
+    FrameCallbackRaw {
+        id,
+        window__present,
+        window__label,
+        window__span__present,
+        window__span__secs,
+        window__span__nanos,
+        window__reading__tag,
+        window__reading__exact_v0,
+        window__reading__range_low,
+        window__reading__range_high,
+        window__reading__tagged_v0,
+        window__reading__tagged_v1,
+        window__reading__companion_v0 ->
+        run(
+            Frame.fromParts(id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0)
+        )
+    }
+
 public fun interface LookupCallback {
     public fun run(lookup: Lookup)
 }
@@ -1324,6 +1527,71 @@ internal fun ProbeCallback.asRaw(): ProbeCallbackRaw =
         } finally {
             __own0?.close()
         }
+    }
+
+public fun interface RackCallback {
+    public fun run(rack: Rack)
+}
+
+internal fun interface RackCallbackRaw {
+    public fun run(
+        meter__present: Boolean,
+        meter__span__present: Boolean,
+        meter__span__secs: Long,
+        meter__span__nanos: Long,
+        meter__reading__tag: Int,
+        meter__reading__exact_v0: Long,
+        meter__reading__range_low: Long,
+        meter__reading__range_high: Long,
+        meter__reading__tagged_v0: String?,
+        meter__reading__tagged_v1: Int,
+        meter__reading__companion_v0: Long,
+        meter__id: Long,
+        plain__span__present: Boolean,
+        plain__span__secs: Long,
+        plain__span__nanos: Long,
+        plain__reading__tag: Int,
+        plain__reading__exact_v0: Long,
+        plain__reading__range_low: Long,
+        plain__reading__range_high: Long,
+        plain__reading__tagged_v0: String?,
+        plain__reading__tagged_v1: Int,
+        plain__reading__companion_v0: Long,
+        plain__id: Long,
+        name: String,
+    )
+}
+
+@JvmSynthetic
+internal fun RackCallback.asRaw(): RackCallbackRaw =
+    RackCallbackRaw {
+        meter__present,
+        meter__span__present,
+        meter__span__secs,
+        meter__span__nanos,
+        meter__reading__tag,
+        meter__reading__exact_v0,
+        meter__reading__range_low,
+        meter__reading__range_high,
+        meter__reading__tagged_v0,
+        meter__reading__tagged_v1,
+        meter__reading__companion_v0,
+        meter__id,
+        plain__span__present,
+        plain__span__secs,
+        plain__span__nanos,
+        plain__reading__tag,
+        plain__reading__exact_v0,
+        plain__reading__range_low,
+        plain__reading__range_high,
+        plain__reading__tagged_v0,
+        plain__reading__tagged_v1,
+        plain__reading__companion_v0,
+        plain__id,
+        name ->
+        run(
+            Rack.fromParts(meter__present, meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id, plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id, name)
+        )
     }
 
 public fun interface ReadingCallback {
@@ -1403,6 +1671,56 @@ internal fun ReportCallback.asRaw(): ReportCallbackRaw =
         }
     }
 
+public fun interface VerdictCallback {
+    public fun run(verdict: Verdict)
+}
+
+internal fun interface VerdictCallbackRaw {
+    public fun run(
+        id: Long,
+        outcome__tag: Int,
+        outcome__found_v0: Long,
+        outcome__failed_v0: String?,
+    )
+}
+
+@JvmSynthetic
+internal fun VerdictCallback.asRaw(): VerdictCallbackRaw =
+    VerdictCallbackRaw {
+        id,
+        outcome__tag,
+        outcome__found_v0,
+        outcome__failed_v0 ->
+        val __own0 = Verdict.fromParts(id, outcome__tag, outcome__found_v0, outcome__failed_v0)
+        try {
+            run(__own0)
+        } finally {
+            __own0.close()
+        }
+    }
+
+public fun interface AnnotatedBuilder<out R> {
+    public fun run(
+        payload__id: Long,
+        payload__seq: Int,
+        payload__value: Double,
+        payload__flag: Boolean,
+        payload__label: String?,
+        alternate__present: Boolean,
+        alternate__id: Long,
+        alternate__seq: Int,
+        alternate__value: Double,
+        alternate__flag: Boolean,
+        alternate__label: String?,
+        ttl: Long?,
+        priority: Int,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __AnnotatedBuilder: AnnotatedBuilder<Annotated> =
+AnnotatedBuilder { payload__id, payload__seq, payload__value, payload__flag, payload__label, alternate__present, alternate__id, alternate__seq, alternate__value, alternate__flag, alternate__label, ttl, priority -> Annotated.fromParts(payload__id, payload__seq, payload__value, payload__flag, payload__label, alternate__present, alternate__id, alternate__seq, alternate__value, alternate__flag, alternate__label, ttl, priority) }
+
 public fun interface ArraysBuilder<out R> {
     public fun run(
         bytes: ByteArray,
@@ -1443,6 +1761,36 @@ internal fun interface DurationBoundaryBuilderRaw<out R> {
 internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
 DurationBoundaryBuilderRaw { required, delay -> DurationBoundary.fromParts(required, delay) }
 
+public fun interface EnvelopeBuilder<out R> {
+    public fun run(id: Long, stamp__present: Boolean, stamp__secs: Long, stamp__nanos: Long): R
+}
+
+@get:JvmSynthetic
+internal val __EnvelopeBuilder: EnvelopeBuilder<Envelope> =
+EnvelopeBuilder { id, stamp__present, stamp__secs, stamp__nanos -> Envelope.fromParts(id, stamp__present, stamp__secs, stamp__nanos) }
+
+public fun interface FrameBuilder<out R> {
+    public fun run(
+        id: Long,
+        window__present: Boolean,
+        window__label: String?,
+        window__span__present: Boolean,
+        window__span__secs: Long,
+        window__span__nanos: Long,
+        window__reading__tag: Int,
+        window__reading__exact_v0: Long,
+        window__reading__range_low: Long,
+        window__reading__range_high: Long,
+        window__reading__tagged_v0: String?,
+        window__reading__tagged_v1: Int,
+        window__reading__companion_v0: Long,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __FrameBuilder: FrameBuilder<Frame> =
+FrameBuilder { id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0 -> Frame.fromParts(id, window__present, window__label, window__span__present, window__span__secs, window__span__nanos, window__reading__tag, window__reading__exact_v0, window__reading__range_low, window__reading__range_high, window__reading__tagged_v0, window__reading__tagged_v1, window__reading__companion_v0) }
+
 internal fun interface HoldBuilderRaw<out R> {
     public fun run(tag: Int, for_v0: Long): R
 }
@@ -1452,6 +1800,20 @@ internal val __HoldBuilderRaw: HoldBuilderRaw<Hold> =
 HoldBuilderRaw { tag, for_v0 ->
     when (tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $tag") }
 }
+
+internal fun interface HoldPolicyBuilderRaw<out R> {
+    public fun run(
+        hold__tag: Int,
+        hold__for_v0: Long,
+        grace__present: Boolean,
+        grace__tag: Int,
+        grace__for_v0: Long,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __HoldPolicyBuilderRaw: HoldPolicyBuilderRaw<HoldPolicy> =
+HoldPolicyBuilderRaw { hold__tag, hold__for_v0, grace__present, grace__tag, grace__for_v0 -> HoldPolicy.fromParts(hold__tag, hold__for_v0, grace__present, grace__tag, grace__for_v0) }
 
 internal fun interface LayeredBuilderRaw<out R> {
     public fun run(
@@ -1492,6 +1854,32 @@ MarkerBuilder { tag, ranked_v0 ->
     when (tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(if (ranked_v0 == Int.MIN_VALUE) null else Priority.fromInt(ranked_v0)); else -> throw IllegalArgumentException("Marker: invalid tag $tag") }
 }
 
+public fun interface ObservationBuilder<out R> {
+    public fun run(
+        id: Long,
+        reading__tag: Int,
+        reading__exact_v0: Long,
+        reading__range_low: Long,
+        reading__range_high: Long,
+        reading__tagged_v0: String?,
+        reading__tagged_v1: Int,
+        reading__companion_v0: Long,
+        fallback__present: Boolean,
+        fallback__tag: Int,
+        fallback__exact_v0: Long,
+        fallback__range_low: Long,
+        fallback__range_high: Long,
+        fallback__tagged_v0: String?,
+        fallback__tagged_v1: Int,
+        fallback__companion_v0: Long,
+        note: String,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __ObservationBuilder: ObservationBuilder<Observation> =
+ObservationBuilder { id, reading__tag, reading__exact_v0, reading__range_low, reading__range_high, reading__tagged_v0, reading__tagged_v1, reading__companion_v0, fallback__present, fallback__tag, fallback__exact_v0, fallback__range_low, fallback__range_high, fallback__tagged_v0, fallback__tagged_v1, fallback__companion_v0, note -> Observation.fromParts(id, reading__tag, reading__exact_v0, reading__range_low, reading__range_high, reading__tagged_v0, reading__tagged_v1, reading__companion_v0, fallback__present, fallback__tag, fallback__exact_v0, fallback__range_low, fallback__range_high, fallback__tagged_v0, fallback__tagged_v1, fallback__companion_v0, note) }
+
 public fun interface ProbeBuilder<out R> {
     public fun run(
         seq: Long,
@@ -1524,6 +1912,39 @@ internal fun <R> ProbeBuilder<R>.asRaw(): ProbeBuilderRaw<R> =
             outcome__failed_v0
         )
     }
+
+public fun interface RackBuilder<out R> {
+    public fun run(
+        meter__present: Boolean,
+        meter__span__present: Boolean,
+        meter__span__secs: Long,
+        meter__span__nanos: Long,
+        meter__reading__tag: Int,
+        meter__reading__exact_v0: Long,
+        meter__reading__range_low: Long,
+        meter__reading__range_high: Long,
+        meter__reading__tagged_v0: String?,
+        meter__reading__tagged_v1: Int,
+        meter__reading__companion_v0: Long,
+        meter__id: Long,
+        plain__span__present: Boolean,
+        plain__span__secs: Long,
+        plain__span__nanos: Long,
+        plain__reading__tag: Int,
+        plain__reading__exact_v0: Long,
+        plain__reading__range_low: Long,
+        plain__reading__range_high: Long,
+        plain__reading__tagged_v0: String?,
+        plain__reading__tagged_v1: Int,
+        plain__reading__companion_v0: Long,
+        plain__id: Long,
+        name: String,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __RackBuilder: RackBuilder<Rack> =
+RackBuilder { meter__present, meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id, plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id, name -> Rack.fromParts(meter__present, meter__span__present, meter__span__secs, meter__span__nanos, meter__reading__tag, meter__reading__exact_v0, meter__reading__range_low, meter__reading__range_high, meter__reading__tagged_v0, meter__reading__tagged_v1, meter__reading__companion_v0, meter__id, plain__span__present, plain__span__secs, plain__span__nanos, plain__reading__tag, plain__reading__exact_v0, plain__reading__range_low, plain__reading__range_high, plain__reading__tagged_v0, plain__reading__tagged_v1, plain__reading__companion_v0, plain__id, name) }
 
 public fun interface ReadingBuilder<out R> {
     public fun run(
@@ -1570,6 +1991,14 @@ public fun interface StampBuilder<out R> {
 internal val __StampBuilder: StampBuilder<Stamp> =
 StampBuilder { secs, nanos -> Stamp.fromParts(secs, nanos) }
 
+public fun interface TaggedBuilder<out R> {
+    public fun run(id: Long, marker__tag: Int, marker__ranked_v0: Int): R
+}
+
+@get:JvmSynthetic
+internal val __TaggedBuilder: TaggedBuilder<Tagged> =
+TaggedBuilder { id, marker__tag, marker__ranked_v0 -> Tagged.fromParts(id, marker__tag, marker__ranked_v0) }
+
 internal fun interface UnsignedBuilderRaw<out R> {
     public fun run(byte: Int, short: Int, int: Long, long: Long, maybeLong: Long?): R
 }
@@ -1596,6 +2025,19 @@ internal fun <R> VaultHolderBuilder<R>.asRaw(): VaultHolderBuilderRaw<R> =
             vaultHolderVault__maybe?.let { if (it == 0L) null else Ingot.fromRawPtr(it) }
         )
     }
+
+internal fun interface VerdictBuilderRaw<out R> {
+    public fun run(
+        id: Long,
+        outcome__tag: Int,
+        outcome__found_v0: Long,
+        outcome__failed_v0: String?,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __VerdictBuilderRaw: VerdictBuilderRaw<Verdict> =
+VerdictBuilderRaw { id, outcome__tag, outcome__found_v0, outcome__failed_v0 -> Verdict.fromParts(id, outcome__tag, outcome__found_v0, outcome__failed_v0) }
 
 internal fun interface ReadingFolderRaw<A> {
     public fun run(
@@ -1839,7 +2281,10 @@ public fun labelBorrowedConcat(labels: List<String>, onError: JniErrorHandler<St
 /**
  * Assemble an [`Annotated`] (nested data-class **output** + bare
  * `Option<scalar>` / `Option<enum>` inputs).
+ *
+ * The Rust `Annotated` result is delivered decomposed: the builder callback receives (`payload__id`, `payload__seq`, `payload__value`, `payload__flag`, `payload__label`, `alternate__present`, `alternate__id`, `alternate__seq`, `alternate__value`, `alternate__flag`, `alternate__label`, `ttl`, `priority`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun annotatedNew(
     payload: Payload,
     ttl: Long?,
@@ -1856,10 +2301,11 @@ public fun annotatedNew(
         ttl != null,
         ttl ?: 0L,
         priority?.value ?: Int.MIN_VALUE,
+        __AnnotatedBuilder,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Annotated
 }
 
 /**
@@ -1972,16 +2418,19 @@ public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>)
  * Build an [`Observation`] carrying the selected alternative, optionally with
  * a `fallback` (the next alternative round-robin) — a **sum as a struct
  * field** crossing Rust → Kotlin, required and optional in one value.
+ *
+ * The Rust `Observation` result is delivered decomposed: the builder callback receives (`id`, `reading__tag`, `reading__exact_v0`, `reading__range_low`, `reading__range_high`, `reading__tagged_v0`, `reading__tagged_v1`, `reading__companion_v0`, `fallback__present`, `fallback__tag`, `fallback__exact_v0`, `fallback__range_low`, `fallback__range_high`, `fallback__tagged_v0`, `fallback__tagged_v1`, `fallback__companion_v0`, `note`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun observationNew(
     which: Int,
     withFallback: Boolean,
     onError: JniErrorHandler<Observation?>,
 ): Observation? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.observationNew(which, withFallback, __bcap)
+    val __ret = CovNative.observationNew(which, withFallback, __ObservationBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Observation
 }
 
 /**
@@ -2022,12 +2471,17 @@ public fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int 
     return __ret
 }
 
-/** Build a [`Tagged`]: `which` 0 = `None_`, 1 = `Ranked(None)`, 2 = `Ranked(Some(High))`. */
+/**
+ * Build a [`Tagged`]: `which` 0 = `None_`, 1 = `Ranked(None)`, 2 = `Ranked(Some(High))`.
+ *
+ * The Rust `Tagged` result is delivered decomposed: the builder callback receives (`id`, `marker__tag`, `marker__ranked_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun taggedNew(which: Int, onError: JniErrorHandler<Tagged?>): Tagged? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.taggedNew(which, __bcap)
+    val __ret = CovNative.taggedNew(which, __TaggedBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Tagged
 }
 
 /**
@@ -2188,7 +2642,12 @@ public fun ticksEmit(f: TicksCallback, onError: JniErrorHandler<Unit>) {
     if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
-/** Build a [`Verdict`] whose outcome comes from [`lookup_of`]. */
+/**
+ * Build a [`Verdict`] whose outcome comes from [`lookup_of`].
+ *
+ * The Rust `Verdict` result is delivered decomposed: the builder callback receives (`id`, `outcome__tag`, `outcome__found_v0`, `outcome__failed_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun verdictNew(
     id: Long,
     count: Long,
@@ -2196,12 +2655,118 @@ public fun verdictNew(
     onError: JniErrorHandler<Verdict?>,
 ): Verdict? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.verdictNew(id, count, total, __bcap)
+    val __ret = CovNative.verdictNew(id, count, total, __VerdictBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Verdict
 }
 
-/** Build a [`Dossier`] over a fresh [`Summary`] — the two-level container. */
+/**
+ * A `Verdict` — a `data_class` whose field is a **sum** — handed to a
+ * callback, which is the other half of what #602's coverage buys.
+ *
+ * A returned `Verdict` reaches its foreign builder through the return path;
+ * this one reaches the callback-interface path, whose reassembly asks a
+ * different question about the same leaves. Both must rebuild the value from
+ * its tag and groups rather than through a whole JVM object.
+ */
+public fun verdictEach(
+    n: Long,
+    total: Double,
+    sink: VerdictCallback,
+    onError: JniErrorHandler<Unit>,
+) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.verdictEach(n, total, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build an [`Envelope`], with or without its nested stamp.
+ *
+ * The Rust `Envelope` result is delivered decomposed: the builder callback receives (`id`, `stamp__present`, `stamp__secs`, `stamp__nanos`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun envelopeNew(id: Long, present: Boolean, onError: JniErrorHandler<Envelope?>): Envelope? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.envelopeNew(id, present, __EnvelopeBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Envelope
+}
+
+/**
+ * The same value handed to a callback, which reassembles the leaves by the
+ * other route.
+ */
+public fun envelopeEach(n: Long, sink: EnvelopeCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.envelopeEach(n, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Frame`]. `window` absent, `window` present with `span` absent, and
+ * both present are the three states of the outer gate; `which` picks the
+ * alternative of the tag nested beside it.
+ *
+ * The Rust `Frame` result is delivered decomposed: the builder callback receives (`id`, `window__present`, `window__label`, `window__span__present`, `window__span__secs`, `window__span__nanos`, `window__reading__tag`, `window__reading__exact_v0`, `window__reading__range_low`, `window__reading__range_high`, `window__reading__tagged_v0`, `window__reading__tagged_v1`, `window__reading__companion_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun frameNew(
+    id: Long,
+    window: Boolean,
+    span: Boolean,
+    which: Long,
+    onError: JniErrorHandler<Frame?>,
+): Frame? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.frameNew(id, window, span, which, __FrameBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Frame
+}
+
+/**
+ * The same value handed to a callback — the route that decomposes it into
+ * leaves and reassembles them through the foreign builder, which is where a
+ * nested gate has to hold.
+ */
+public fun frameEach(n: Long, sink: FrameCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.frameEach(n, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Rack`].
+ *
+ * The Rust `Rack` result is delivered decomposed: the builder callback receives (`meter__present`, `meter__span__present`, `meter__span__secs`, `meter__span__nanos`, `meter__reading__tag`, `meter__reading__exact_v0`, `meter__reading__range_low`, `meter__reading__range_high`, `meter__reading__tagged_v0`, `meter__reading__tagged_v1`, `meter__reading__companion_v0`, `meter__id`, `plain__span__present`, `plain__span__secs`, `plain__span__nanos`, `plain__reading__tag`, `plain__reading__exact_v0`, `plain__reading__range_low`, `plain__reading__range_high`, `plain__reading__tagged_v0`, `plain__reading__tagged_v1`, `plain__reading__companion_v0`, `plain__id`, `name`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun rackNew(
+    id: Long,
+    meter: Boolean,
+    span: Boolean,
+    which: Long,
+    onError: JniErrorHandler<Rack?>,
+): Rack? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.rackNew(id, meter, span, which, __RackBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Rack
+}
+
+/** The same value through a callback, which reassembles it by the other route. */
+public fun rackEach(n: Long, sink: RackCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.rackEach(n, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Dossier`] over a fresh [`Summary`] — the two-level container.
+ *
+ * The Rust `Dossier` result is delivered decomposed: the builder callback receives (`note`, `holder__tag`, `holder__summary`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun dossierNew(
     note: Long,
     tag: Long,
@@ -2210,12 +2775,17 @@ public fun dossierNew(
     onError: JniErrorHandler<Dossier?>,
 ): Dossier? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.dossierNew(note, tag, count, total, __bcap)
+    val __ret = CovNative.dossierNew(note, tag, count, total, __DossierBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Dossier
 }
 
-/** Build a [`MaybeHolder`] with the handle present or absent. */
+/**
+ * Build a [`MaybeHolder`] with the handle present or absent.
+ *
+ * The Rust `MaybeHolder` result is delivered decomposed: the builder callback receives (`tag`, `summary`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun maybeHolderNew(
     tag: Long,
     count: Long,
@@ -2224,9 +2794,16 @@ public fun maybeHolderNew(
     onError: JniErrorHandler<MaybeHolder?>,
 ): MaybeHolder? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.maybeHolderNew(tag, count, total, present, __bcap)
+    val __ret = CovNative.maybeHolderNew(
+        tag,
+        count,
+        total,
+        present,
+        __MaybeHolderBuilderRaw,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as MaybeHolder
 }
 
 /**
@@ -2690,12 +3267,17 @@ public fun holdEcho(h: Hold, onError: JniErrorHandler<Hold?>): Hold? {
     return __ret as Hold
 }
 
-/** Round-trip a data class carrying converted-payload sums. */
+/**
+ * Round-trip a data class carrying converted-payload sums.
+ *
+ * The Rust `HoldPolicy` result is delivered decomposed: the builder callback receives (`hold__tag`, `hold__for_v0`, `grace__present`, `grace__tag`, `grace__for_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.holdPolicyEcho(p.hold, p.grace, __bcap)
+    val __ret = CovNative.holdPolicyEcho(p.hold, p.grace, __HoldPolicyBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as HoldPolicy
 }
 
 /**

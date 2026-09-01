@@ -75,7 +75,15 @@ impl Declarations {
                     (
                         ctor.map(|c| c.to_string())
                             .unwrap_or_else(|| "variant_self()".to_string()),
-                        arm_erased_sig(self, registry, &target, ctor),
+                        {
+                            // Validation sees every target and holds the model;
+                            // freezing the reading here is what lets the render
+                            // path answer without one (#613 step 7).
+                            if let Some(reading) = registry.reading(&target) {
+                                self.freeze_reading(&reading);
+                            }
+                            arm_erased_sig(self, registry.flat(), &target, ctor)
+                        },
                     )
                 })
                 .collect();
@@ -110,12 +118,12 @@ impl Declarations {
 /// ambiguity check and the whole-artifact overload table agree on erasure.
 fn arm_erased_sig(
     ext: &Declarations,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
     target: &TypeKey,
     ctor: Option<&syn::Ident>,
 ) -> Vec<ErasedJvmType> {
     match ctor {
-        Some(cf) => match registry.flat().function(&cf) {
+        Some(cf) => match flat.function(&cf) {
             Some(f) => f
                 .params
                 .iter()
@@ -129,7 +137,11 @@ fn arm_erased_sig(
         // it did, the reading answers as before; where it did not, the erased
         // form is the identity's own canonical spelling — which is all a
         // declaration has to be told apart by.
-        None => vec![match registry.reading(target) {
+        // The reading, frozen where validation saw it — the render path has no
+        // model to ask (#613 step 7). A target the freeze never reached falls
+        // back to the identity's own canonical spelling, which is the same
+        // answer `reading` gave for an un-interned declaration.
+        None => vec![match ext.frozen_reading(target.as_str()) {
             Some(reading) => rust_type_erased(ext, &reading),
             None => ErasedJvmType::raw(target.as_str().to_string()),
         }],
@@ -243,7 +255,7 @@ fn non_null(mut ty: KtType) -> KtType {
 /// for an `Option<…>` parameter `null` encodes absence (nullable-arm rule).
 /// Returns `None` if any input is not a flat leaf.
 fn variant_typed_params(
-    registry: &impl Conversions,
+    flat: &prebindgen_registry::flat::Flat,
     variant: &prebindgen_registry::expand::FoldVariant,
     origin: &syn::Ident,
     block: &[KtParam],
@@ -253,7 +265,7 @@ fn variant_typed_params(
     let origin_kt = kt_param_name(&origin.to_string());
     let (names, optional): (Vec<String>, Vec<bool>) = match &variant.ctor {
         Some(cf) => {
-            let f = registry.flat().function(&cf)?;
+            let f = flat.function(&cf)?;
             // `Optional` off the kind, not `is_option` off a path: the same
             // question, asked of the grammar the source wrote.
             let optional = f
@@ -312,7 +324,7 @@ fn find_block(params: &[KtParam], leaf_names: &[String]) -> Option<usize> {
 /// validating the parameter is expandable, multi-variant, and in-scope (all
 /// hard errors — the user explicitly asked to split it).
 fn resolve_split<'a>(
-    registry: &'a Registry,
+    flat: &'a prebindgen_registry::flat::Flat,
     fplan: &'a JniFunctionPlan,
     f: &prebindgen_registry::flat::Function,
     sel_fun: &KtFun,
@@ -372,7 +384,7 @@ fn resolve_split<'a>(
         .enumerate()
         .filter(|(_, v)| !optional || v.inputs.len() == 1)
         .map(|(vi, v)| {
-            let typed = variant_typed_params(registry, v, &param, block, multi, optional)
+            let typed = variant_typed_params(flat, v, &param, block, multi, optional)
                 .unwrap_or_else(|| {
                     panic!(
                         "fun!({}).split_on_param(\"{param_name}\"): an arm has a non-flat input; \
@@ -405,10 +417,52 @@ fn resolve_split<'a>(
 /// wrapper `sel_fun`. Empty unless the function has `.split_on_param` requests.
 /// Emits the cartesian product of the named params' arms; panics (a build
 /// error) if the product has two combinations with the same JVM signature.
+/// The overloads for one function, **lowering** its plan through the registry.
+///
+/// For a validating caller: `symbols.rs` reaches this before a generation
+/// exists, so the plan has to be built rather than read.
 pub(crate) fn render_param_overloads(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
     registry: &Registry,
+    sel_fun: &KtFun,
+) -> Vec<KtFun> {
+    let fplan = ext.fn_plan(registry, f).unwrap_or_else(|_| {
+        panic!(
+            "fun!({}): its frozen JNI generation plan is unavailable",
+            f.name
+        )
+    });
+    param_overloads_with(ext, f, &fplan, registry.flat(), sel_fun)
+}
+
+/// The same overloads, from a plan the caller already holds.
+///
+/// For a **render** caller, which has the frozen generation and must not
+/// re-lower (#613 step 7).
+pub(crate) fn param_overloads_of(
+    ext: &Declarations,
+    f: &prebindgen_registry::flat::Function,
+    flat: &prebindgen_registry::flat::Flat,
+    sel_fun: &KtFun,
+) -> Vec<KtFun> {
+    // The lookup and its failure policy live here, not at each caller: five
+    // render sites share one contract, and repeating it is the duplication
+    // this umbrella exists to remove (#648 review).
+    let fplan = ext.fn_plan_frozen(f).unwrap_or_else(|| {
+        panic!(
+            "fun!({}): its frozen JNI generation plan is unavailable",
+            f.name
+        )
+    });
+    param_overloads_with(ext, f, &fplan, flat, sel_fun)
+}
+
+fn param_overloads_with(
+    ext: &Declarations,
+    f: &prebindgen_registry::flat::Function,
+    fplan: &std::rc::Rc<crate::jni::fn_plan::JniFunctionPlan>,
+    flat: &prebindgen_registry::flat::Flat,
     sel_fun: &KtFun,
 ) -> Vec<KtFun> {
     // Requested split params for this function, in signature order.
@@ -439,16 +493,10 @@ pub(crate) fn render_param_overloads(
         }
     }
 
-    let fplan = ext.fn_plan(registry, f).unwrap_or_else(|_| {
-        panic!(
-            "fun!({}): its frozen JNI generation plan is unavailable",
-            f.name
-        )
-    });
     let multi = requested.len() > 1;
     let splits: Vec<Split> = requested
         .iter()
-        .map(|name| resolve_split(registry, &fplan, f, sel_fun, name, multi))
+        .map(|name| resolve_split(flat, fplan, f, sel_fun, name, multi))
         .collect();
 
     // Cartesian product of arm indices across all split params.
@@ -464,7 +512,7 @@ pub(crate) fn render_param_overloads(
                 .zip(combo)
                 .flat_map(|(s, &ai)| {
                     let ctor = s.plan.variants[s.arms[ai].0].ctor.as_ref();
-                    arm_erased_sig(ext, registry, &s.plan.target.key(), ctor)
+                    arm_erased_sig(ext, flat, &s.plan.target.key(), ctor)
                 })
                 .collect()
         })
@@ -627,7 +675,7 @@ mod tests {
         ];
 
         let params = variant_typed_params(
-            &registry,
+            registry.flat(),
             &variant,
             &syn::parse_quote!(expected),
             &block,

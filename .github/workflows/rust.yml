@@ -65,6 +65,15 @@ jobs:
     - name: Run tests
       run: cargo test --all
 
+    # The size report is a standalone crate — source locations on spans are a
+    # `proc-macro2` feature, and Cargo features are additive, so carrying it in
+    # the workspace would enable location tracking for every `--all-features`
+    # build. Its own tests pin the `#[cfg(test)]` boundary cases that decide
+    # the production line counts #613 gates on, so they run here rather than
+    # only when someone remembers the tool exists.
+    - name: Test the line report
+      run: cargo test --manifest-path tools/line-report/Cargo.toml
+
   docs:
     # `RUSTDOCFLAGS=-D warnings cargo doc` is one of the release checks
     # publish.yml runs, and it fails on things no other job looks at: an

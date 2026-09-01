@@ -101,6 +101,17 @@ import io.prebindgen.covertest.model.probeEach
 import io.prebindgen.covertest.model.probeNew
 import io.prebindgen.covertest.model.lookupOf
 import io.prebindgen.covertest.model.layeredOf
+import io.prebindgen.covertest.model.Envelope
+import io.prebindgen.covertest.model.envelopeEach
+import io.prebindgen.covertest.model.envelopeNew
+import io.prebindgen.covertest.model.Frame
+import io.prebindgen.covertest.model.frameEach
+import io.prebindgen.covertest.model.frameNew
+import io.prebindgen.covertest.model.Meter
+import io.prebindgen.covertest.model.Rack
+import io.prebindgen.covertest.model.rackEach
+import io.prebindgen.covertest.model.rackNew
+import io.prebindgen.covertest.model.verdictEach
 import io.prebindgen.covertest.model.verdictNew
 import io.prebindgen.covertest.model.dossierNew
 import io.prebindgen.covertest.model.archiveReading
@@ -697,6 +708,177 @@ fun main() {
         val absent = verdictNew(8L, 0L, 0.0, boom).orThrow()
         check(absent.outcome === Lookup.Absent)
         absent.close()
+    }
+
+    // An OPTIONAL nested data class, the shape #602 names first. The
+    // decomposition refused it outright until it learned a presence flag, so a
+    // struct carrying one got no fixed-builder delivery at all — on either
+    // route. Both routes are here because they fill the gated slots by
+    // different code: a return through the class's own factory, a callback
+    // through its interface.
+    section("an optional nested data class crosses as presence plus its group") {
+        val present = envelopeNew(7L, true, boom).orThrow()
+        check(present.id == 7L)
+        check(present.stamp == Stamp(7L, 14L)) { "got ${present.stamp}" }
+
+        // Absent: the flag is false and the group carries wire defaults, which
+        // the factory must read as "no value" rather than as a zeroed one.
+        val absent = envelopeNew(9L, false, boom).orThrow()
+        check(absent.id == 9L)
+        check(absent.stamp == null) { "got ${absent.stamp}" }
+
+        val seen = mutableListOf<String>()
+        envelopeEach(4L, { envelope ->
+            seen.add("${envelope.id}:${envelope.stamp?.secs ?: "-"}")
+        }, boom).orThrow()
+        check(seen == listOf("0:-", "1:1", "2:-", "3:3")) { "got $seen" }
+    }
+
+    // A gate INSIDE a gate: `Frame.window` is optional, and the `Window` it
+    // gates selects twice of its own — a second presence (`span`) and a sum tag
+    // (`reading`). A flat group number could not state that, since each inner
+    // selector is a member of the outer group AND a selector of its own; the
+    // arm PATH can, and `segments` reads one level at a time.
+    //
+    // `REPORT.md` records that this takes fixed-builder delivery: `Frame`
+    // decomposed into thirteen leaves, `window__present` gating
+    // `window__span__present` and `window__reading__tag` and everything under
+    // them. What is checked here is that the leaves reassemble to the value
+    // they came from — through the class's own factory on the return route and
+    // through its builder interface on the callback route.
+    section("a gate inside a gate (nested selectors under one presence flag)") {
+        // Outer absent: every inner slot carries a wire default, and neither
+        // inner selector may be read as if it had chosen something.
+        val none = frameNew(1L, false, true, 2L, boom).orThrow()
+        check(none.id == 1L)
+        check(none.window == null) { "got ${none.window}" }
+
+        // Outer present, inner presence absent — the two flags are independent
+        // facts, and the inner one must survive the outer arm defaulting.
+        val noSpan = frameNew(2L, true, false, 1L, boom).orThrow()
+        check(noSpan.window?.span == null) { "got ${noSpan.window?.span}" }
+        check(noSpan.window?.reading == Reading.Exact(42L))
+        check(noSpan.window?.label == "w2")
+
+        // Both present, with the nested tag live beside the nested flag.
+        val both = frameNew(3L, true, true, 2L, boom).orThrow()
+        check(both.window?.span == Stamp(3L, 6L)) { "got ${both.window?.span}" }
+        check(both.window?.reading == Reading.Range(1L, 9L))
+
+        // Every alternative of the nested tag, under a live outer gate: an
+        // inner group is selected from inside an arm the outer flag opened.
+        val readings = (0..4).map { frameNew(4L, true, true, it.toLong(), boom).orThrow().window?.reading }
+        check(
+            readings == listOf(
+                Reading.Missing,
+                Reading.Exact(42L),
+                Reading.Range(1L, 9L),
+                Reading.Tagged("warm", Priority.HIGH),
+                Reading.Companion(5L),
+            )
+        ) { "got $readings" }
+
+        // …and the same values by the other route, which fills the gated slots
+        // through the builder interface rather than the factory.
+        val seen = mutableListOf<String>()
+        frameEach(6L, { frame ->
+            val w = frame.window
+            seen.add("${frame.id}:${w?.span?.secs ?: "-"}:${w?.reading?.let { it::class.simpleName } ?: "-"}")
+        }, boom).orThrow()
+        check(
+            seen == listOf(
+                "0:-:-",
+                "1:1:Exact",
+                "2:-:Range",
+                "3:-:-",
+                "4:-:Companion",
+                "5:5:Companion",
+            )
+        ) { "got $seen" }
+    }
+
+    // A nested class whose FIRST field selects. `Meter` begins with an optional
+    // `span` and a sum `reading`, so both of its leading leaves are selectors
+    // that belong to `Meter.fromParts` — not to the parent's expression.
+    //
+    // A parent that asks "is this leaf a selector?" before "does this leaf open
+    // a class?" consumes them itself and calls the child factory without them.
+    // Kotlin compiles that (the arity is still an overload it fails to find
+    // only at the call), and `Window` cannot catch it because it begins with a
+    // plain `label`. Both ways of holding a `Meter` are here: gated, and plain.
+    section("a nested class whose first field selects") {
+        val both = rackNew(5L, true, true, 1L, boom).orThrow()
+        check(both.name == "r5")
+        check(both.meter?.span == Stamp(5L, 15L)) { "got ${both.meter?.span}" }
+        check(both.meter?.reading == Reading.Exact(7L))
+        check(both.meter?.id == 5L)
+        // The ungated sibling carries its own leading selectors independently.
+        check(both.plain.span == null) { "got ${both.plain.span}" }
+        check(both.plain.reading == Reading.Range(2L, 4L))
+        check(both.plain.id == 105L)
+
+        // The gate absent: the child's own leading selectors must not be read
+        // as the parent's when there is no child at all.
+        val none = rackNew(6L, false, false, 0L, boom).orThrow()
+        check(none.meter == null) { "got ${none.meter}" }
+        check(none.plain.span == Stamp(106L, 318L)) { "got ${none.plain.span}" }
+        check(none.plain.reading == Reading.Exact(7L))
+
+        // Every alternative of the nested leading sum, through the gate.
+        val readings = (0..4).map { rackNew(7L, true, false, it.toLong(), boom).orThrow().meter?.reading }
+        check(
+            readings == listOf(
+                Reading.Missing,
+                Reading.Exact(7L),
+                Reading.Range(2L, 4L),
+                Reading.Tagged("hot", Priority.LOW),
+                Reading.Companion(11L),
+            )
+        ) { "got $readings" }
+
+        // …and by the callback route, which fills the same slots through the
+        // builder interface rather than the factory.
+        val seen = mutableListOf<String>()
+        rackEach(4L, { rack ->
+            seen.add("${rack.meter?.id ?: "-"}:${rack.plain.id}:${rack.plain.reading::class.simpleName}")
+        }, boom).orThrow()
+        check(seen == listOf("0:100:Exact", "-:101:Range", "2:102:Tagged", "-:103:Companion")) { "got $seen" }
+    }
+
+    // The same data class arriving at a CALLBACK rather than as a return.
+    //
+    // #602 taught the decomposition a sum-typed field, so `Verdict` crosses as
+    // its leaves — `id`, the outcome's tag, and one slot per alternative — on
+    // both paths. They are two different reassemblies of the same leaves: the
+    // return path builds through the class's own `fromParts`, and this one
+    // through the callback interface, whose derivation asked a different
+    // question about the tag and used to reject a struct that merely contains
+    // one (#616 review). Only a run proves both rebuild the same value.
+    section("a data class with a sum field arrives whole at a callback") {
+        val seen = mutableListOf<String>()
+        val escaped = mutableListOf<Summary>()
+        verdictEach(3L, 2.5, { verdict ->
+            seen.add("${verdict.id}:" + when (val o = verdict.outcome) {
+                is Lookup.Failed -> "failed:${o.v0}"
+                Lookup.Absent -> "absent"
+                is Lookup.Found -> {
+                    val s = o.v0
+                    check(!s.isClosed())
+                    escaped.add(s)
+                    "found:${s.count(boom)}"
+                }
+            })
+        }, boom).orThrow()
+
+        // One value per iteration, each rebuilt from the leaves: the id is the
+        // sibling field, and the outcome is the alternative its tag selected —
+        // all three alternatives, since `lookup_of(i - 1)` walks them.
+        check(seen == listOf("0:failed:negative count", "1:absent", "2:found:1")) { "got $seen" }
+
+        // The container is closed when `run` returns, and its cascade reaches
+        // the handle the sum holds — the same close-unless-taken contract a
+        // bare handle argument has.
+        check(escaped.all { it.isClosed() }) { "the cascade closed every payload" }
     }
 
     // The FOURTH position, and the row an emission test cannot cover: the field

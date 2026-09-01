@@ -521,6 +521,23 @@ pub struct Verdict {
     pub outcome: Lookup,
 }
 
+/// A `Verdict` — a `data_class` whose field is a **sum** — handed to a
+/// callback, which is the other half of what #602's coverage buys.
+///
+/// A returned `Verdict` reaches its foreign builder through the return path;
+/// this one reaches the callback-interface path, whose reassembly asks a
+/// different question about the same leaves. Both must rebuild the value from
+/// its tag and groups rather than through a whole JVM object.
+#[prebindgen]
+pub fn verdict_each(n: i64, total: f64, sink: impl Fn(Verdict) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(Verdict {
+            id: i,
+            outcome: lookup_of(i - 1, total),
+        });
+    }
+}
+
 /// Build a [`Verdict`] whose outcome comes from [`lookup_of`].
 #[prebindgen]
 pub fn verdict_new(id: i64, count: i64, total: f64) -> Verdict {
@@ -585,6 +602,162 @@ pub fn observation_which(o: Observation) -> i32 {
 pub struct Stamp {
     pub secs: i64,
     pub nanos: i64,
+}
+
+/// A data class whose nested class sits behind an `Option` — the shape #602
+/// names first and the one a decomposition refused outright until it learned
+/// a presence flag.
+///
+/// Nothing else about it is unusual: a sibling scalar beside a nested class
+/// that is sometimes there. `Annotated` has the same field, but also an
+/// `enum_class` one, which is a refusal of its own — so the shape needs a
+/// struct of its own to show up at all.
+#[prebindgen]
+pub struct Envelope {
+    pub id: i64,
+    pub stamp: Option<Stamp>,
+}
+
+/// Build an [`Envelope`], with or without its nested stamp.
+#[prebindgen]
+pub fn envelope_new(id: i64, present: bool) -> Envelope {
+    Envelope {
+        id,
+        stamp: present.then(|| Stamp {
+            secs: id,
+            nanos: id * 2,
+        }),
+    }
+}
+
+/// The same value handed to a callback, which reassembles the leaves by the
+/// other route.
+#[prebindgen]
+pub fn envelope_each(n: i64, sink: impl Fn(Envelope) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(Envelope {
+            id: i,
+            stamp: (i % 2 == 1).then(|| Stamp {
+                secs: i,
+                nanos: i * 2,
+            }),
+        });
+    }
+}
+
+/// The value an optional nested class gates when that class **selects of its
+/// own** — a presence flag and a tag, one arm inside another.
+///
+/// `span` is a second presence, `reading` a sum tag. Both sit inside the group
+/// `Frame::window`'s own flag gates, which is the shape a flat group number
+/// could not state: each of these is a member of the outer group AND a
+/// selector of its own (#602).
+#[prebindgen]
+pub struct Window {
+    pub label: String,
+    pub span: Option<Stamp>,
+    pub reading: Reading,
+}
+
+/// The gate over [`Window`]: one selector owning two.
+#[prebindgen]
+pub struct Frame {
+    pub id: i64,
+    pub window: Option<Window>,
+}
+
+/// Build a [`Frame`]. `window` absent, `window` present with `span` absent, and
+/// both present are the three states of the outer gate; `which` picks the
+/// alternative of the tag nested beside it.
+#[prebindgen]
+pub fn frame_new(id: i64, window: bool, span: bool, which: i64) -> Frame {
+    Frame {
+        id,
+        window: window.then(|| Window {
+            label: format!("w{id}"),
+            span: span.then(|| Stamp {
+                secs: id,
+                nanos: id * 2,
+            }),
+            reading: match which {
+                0 => Reading::Missing,
+                1 => Reading::Exact(42),
+                2 => Reading::Range { low: 1, high: 9 },
+                3 => Reading::Labeled("warm".to_string(), Priority::High),
+                _ => Reading::Companion(5),
+            },
+        }),
+    }
+}
+
+/// The same value handed to a callback — the route that decomposes it into
+/// leaves and reassembles them through the foreign builder, which is where a
+/// nested gate has to hold.
+#[prebindgen]
+pub fn frame_each(n: i64, sink: impl Fn(Frame) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(frame_new(i, i % 3 != 0, i % 2 == 1, i));
+    }
+}
+
+/// A nested class whose **first** field selects: an optional one, then a sum.
+///
+/// The order matters. A child's leading selector belongs to the child's own
+/// `fromParts` signature, and a parent that reads "is this leaf a selector?"
+/// before "does this leaf open a class?" consumes it at the parent level and
+/// calls the child factory without it — an arity mismatch the JVM reports only
+/// at the call (#620 review). `Window` cannot show that, because it begins with
+/// a plain `label`.
+#[prebindgen]
+pub struct Meter {
+    pub span: Option<Stamp>,
+    pub reading: Reading,
+    pub id: i64,
+}
+
+/// Both ways of holding a [`Meter`]: gated, so the child's leading selector
+/// sits under a presence flag of its own, and plain, so it is the first thing
+/// the parent meets.
+#[prebindgen]
+pub struct Rack {
+    pub meter: Option<Meter>,
+    pub plain: Meter,
+    pub name: String,
+}
+
+fn meter_of(id: i64, span: bool, which: i64) -> Meter {
+    Meter {
+        span: span.then(|| Stamp {
+            secs: id,
+            nanos: id * 3,
+        }),
+        reading: match which {
+            0 => Reading::Missing,
+            1 => Reading::Exact(7),
+            2 => Reading::Range { low: 2, high: 4 },
+            3 => Reading::Labeled("hot".to_string(), Priority::Low),
+            _ => Reading::Companion(11),
+        },
+        id,
+    }
+}
+
+/// Build a [`Rack`].
+#[prebindgen]
+pub fn rack_new(id: i64, meter: bool, span: bool, which: i64) -> Rack {
+    Rack {
+        meter: meter.then(|| meter_of(id, span, which)),
+        plain: meter_of(id + 100, !span, (which + 1) % 5),
+        name: format!("r{id}"),
+    }
+}
+
+/// The same value through a callback, which reassembles it by the other route.
+#[prebindgen]
+pub fn rack_each(n: i64, sink: impl Fn(Rack) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(rack_new(i, i % 2 == 0, i % 3 == 0, i));
+    }
 }
 
 /// Build a [`Stamp`] (data-class **return**).

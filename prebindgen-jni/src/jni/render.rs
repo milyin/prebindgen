@@ -87,27 +87,27 @@ pub(crate) fn build_data_class(
     ext: &Declarations,
     class_name: &str,
     item_struct: &prebindgen_registry::flat::Struct,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
 ) -> KtClass {
     // A tuple struct is an `Extern` in the model, never a `Struct`, so every
     // field here is named by construction.
     let fields_named = &item_struct.fields;
 
-    // The class declaration is derived from the SAME plan the `fromParts`
-    // factory and the Rust encoder walk. Deriving it separately — a third
-    // classification with its own rules — is what let a property's type
-    // disagree with its own factory parameter (#156).
-    let plan = ext
-        .struct_plan(registry, item_struct, 0)
-        .unwrap_or_else(|| {
-            panic!(
-                "data class `{}`: could not classify every field for the fromParts bridge. Each \
+    // The class declaration is derived from ONE classification of the fields,
+    // shared with the sealed-class emitter rather than repeated here. Deriving
+    // it separately — a classification with its own rules — is what let a
+    // property's type disagree with the parameter that fills it (#156). The
+    // parameter itself comes from the decomposition, so what these two must
+    // agree about is the value, not the slot.
+    let plan = ext.struct_plan(flat, item_struct, 0).unwrap_or_else(|| {
+        panic!(
+            "data class `{}`: could not classify every field for the fromParts bridge. Each \
              field needs a resolved OUTPUT converter (that direction declares the slot the \
              encoder fills) AND the Kotlin metadata that converter carries — a `kotlin_name`, \
              or a registered class for a projection leaf",
-                item_struct.name
-            )
-        });
+            item_struct.name
+        )
+    });
 
     let mut ctor_params: Vec<KtCtorParam> = Vec::new();
     // Property (name, type) pairs, for the content-equality members an
@@ -127,12 +127,16 @@ pub(crate) fn build_data_class(
         let owner = format!("{}.{}", item_struct.name, field_ident);
 
         // The declaration reads ONE direction — output — because that is the
-        // direction that declares the `fromParts` slots the encoder fills, and
-        // it is the direction both plans already use exclusively
-        // (`build_struct_plan` output-only, `flat_input.rs` input-only). A
-        // property whose type came from whichever direction happened to
-        // resolve, while its wire came from the other, is how the declaration
-        // drifted from the plans.
+        // direction the class hands values OUT in, and the direction
+        // `build_struct_plan` classifies exclusively (`flat_input.rs` is the
+        // input side's own). A property whose type came from whichever
+        // direction happened to resolve, while the slot carrying it came from
+        // the other, is how the declaration drifted.
+        //
+        // The property and the slot are different questions — one per field,
+        // one per leaf — and the slots are the decomposition's now. What must
+        // still agree is that they describe the same value, which is what
+        // reading one direction for both is for.
         //
         // A projection visible only on the INPUT side is exactly that drift
         // made reachable: the old walk emitted a typed handle property (plus
@@ -163,16 +167,17 @@ pub(crate) fn build_data_class(
         }
     }
 
-    // `fromParts` companion factory — recursively flattened the same way as the
-    // native `flatten_struct_encode`: nested data-class fields are inlined as
-    // their leaf wires, so native builds the whole object graph with ONE
-    // `call_static_method`. Its raw-text class references (`Child.fromParts`,
-    // `Enum.fromInt`, projection wraps) use short names; the FQNs they need are
-    // collected here and attached to the factory body `Code` below.
+    // `fromParts` companion factory, from the struct's decomposition — the
+    // same leaves the native encode fills, so nested data-class fields are
+    // inlined as their leaf wires and native builds the whole object graph with
+    // ONE `call_static_method`. Its raw-text class references
+    // (`Child.fromParts`, `Enum.fromInt`, projection wraps) use short names; the
+    // FQNs they need are collected here and attached to the factory body `Code`
+    // below.
     let mut factory_imports: BTreeSet<String> = BTreeSet::new();
     let (factory_params, factory_reconstruct, factory_mints_handle) = flatten_struct_factory(
         ext,
-        registry,
+        flat,
         item_struct,
         "",
         class_name,
@@ -280,7 +285,7 @@ pub(crate) fn build_data_class(
 /// extern on the Rust side (the auto-generated destructor).
 pub(crate) fn build_typed_handle(
     ext: &Declarations,
-    registry: &Registry,
+    flat: &prebindgen_registry::flat::Flat,
     class_name: &str,
     rust_doc_name: &str,
     key: &TypeKey,
@@ -359,15 +364,14 @@ pub(crate) fn build_typed_handle(
                 .expr_body(KtCode::new().line(format!("{class_name}(initialPtr)"))),
         );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
-        if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
+        if let Some(item_fn) = flat.function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
-                registry,
                 Some(ext.effective_method_name(key, m).as_str()),
                 None,
             ) {
-                for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                for ov in crate::jni::param_overloads_of(ext, item_fn, flat, &f) {
                     companion = companion.member(ov);
                 }
                 companion = companion.member(f);
@@ -377,7 +381,7 @@ pub(crate) fn build_typed_handle(
 
     // KDoc: the Rust struct's `///` prose first, framework line after.
     let framework_line = format!("Typed handle for a native Zenoh `{rust_doc_name}`.");
-    let class_kdoc = source_item_doc(registry, key)
+    let class_kdoc = source_item_doc(flat, key)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     // Consumer interfaces (`.implements`) and the generated `<Name>Api`
@@ -475,15 +479,14 @@ pub(crate) fn build_typed_handle(
     // (receiver bound to `this`), delegating to the same centralized
     // `JNINative` extern as a free wrapper would.
     for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-        if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
+        if let Some(item_fn) = flat.function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
-                registry,
                 Some(ext.effective_method_name(key, m).as_str()),
                 Some(key),
             ) {
-                for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                for ov in crate::jni::param_overloads_of(ext, item_fn, flat, &f) {
                     class = class.member(ov);
                 }
                 class = class.member(f);
@@ -514,16 +517,15 @@ pub(crate) fn is_iterable_fold(shape: &prebindgen_registry::unfold::UnfoldShape)
 pub(crate) fn render_extern_decl(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
 ) -> Option<KtFun> {
     // The name and wire params come straight off the lowered plan — the
     // same classification the Rust extern and the Kotlin call site consume,
     // so the three sites agree on arity, types, and symbol by construction.
-    let fplan = ext.fn_plan(registry, f).ok()?;
+    let fplan = ext.fn_plan_frozen(f)?;
     let jni_call = &fplan.jni_method;
     let mut params: Vec<KtParam> = Vec::new();
     for leaf in fplan.leaves() {
-        for native in &leaf.native {
+        for native in leaf.native.iter() {
             params.push(KtParam::new(
                 native.kt_name.clone(),
                 native.kt_wire.clone()?,
@@ -783,7 +785,7 @@ fn nullable_recovery_type(declared: KtType, generics: &[String]) -> KtType {
 
 /// Build the [`WrapperSurface`]: everything [`render_wrapper_fn`] does up to
 /// (but not including) the body render — the single surface-signature
-/// derivation. **Pure** over `(ext, f, registry, name, receiver)`: signature
+/// derivation. **Pure** over `(ext, f, flat, name, receiver)`: signature
 /// types are full-FQN `KtType`s and any body-import FQNs are returned in
 /// [`WrapperSurface::body_imports`], so nothing is registered into a caller's
 /// import set. Validation calls this directly and skips the body work
@@ -791,14 +793,18 @@ fn nullable_recovery_type(declared: KtType, generics: &[String]) -> KtType {
 pub(crate) fn build_wrapper_surface(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
+    registry: &prebindgen_registry::Registry,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<WrapperSurface> {
+    // The one validating entry in this file. `symbols.rs` is its only caller
+    // and it LOWERS a plan rather than reading one, so it keeps the registry
+    // every other function here has given up (#613 step 7).
+    let fplan = ext.fn_plan(registry, f).ok()?;
     build_wrapper_surface_with_recovery(
         ext,
         f,
-        registry,
+        &fplan,
         kotlin_name_override,
         receiver_key,
         RecoveryReturn::NullableReferences,
@@ -808,13 +814,12 @@ pub(crate) fn build_wrapper_surface(
 fn build_wrapper_surface_with_recovery(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
+    fplan: &std::rc::Rc<crate::jni::fn_plan::JniFunctionPlan>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
     recovery: RecoveryReturn,
 ) -> Option<WrapperSurface> {
     let mut body_imports = BTreeSet::new();
-    let fplan = ext.fn_plan(registry, f).ok()?;
     // The Kotlin extern in `JNINative` is keyed on the Rust ident (the
     // plan's `jni_method`). The per-entry `.name("...")` override only
     // changes the *user-facing* Kotlin wrapper name; the JNI call still has
@@ -824,10 +829,10 @@ fn build_wrapper_surface_with_recovery(
         None => kt_snake_to_camel(&f.name.to_string()),
     };
     let jni_call = fplan.jni_method.clone();
-    let (params, receiver_idx) = classify_params(&fplan, &mut body_imports, receiver_key)?;
-    let out = classify_output(ext, &fplan, &mut body_imports)?;
+    let (params, receiver_idx) = classify_params(fplan, &mut body_imports, receiver_key)?;
+    let out = classify_output(ext, fplan, &mut body_imports)?;
     let r_ty = recovery_return_type(&out, recovery);
-    let sink = error_sink_parts(&fplan, &mut body_imports, &r_ty)?;
+    let sink = error_sink_parts(fplan, &mut body_imports, &r_ty)?;
 
     let mut fun = KtFun::new(&kt_name).vis(KtVis::Public);
     if let Some(g) = &out.generic {
@@ -884,14 +889,14 @@ fn build_wrapper_surface_with_recovery(
 pub(crate) fn render_wrapper_fn(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<KtFun> {
+    let fplan = ext.fn_plan_frozen(f)?;
     render_wrapper_fn_with_recovery(
         ext,
         f,
-        registry,
+        &fplan,
         kotlin_name_override,
         receiver_key,
         RecoveryReturn::NullableReferences,
@@ -901,7 +906,7 @@ pub(crate) fn render_wrapper_fn(
 fn render_wrapper_fn_with_recovery(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
+    fplan: &std::rc::Rc<crate::jni::fn_plan::JniFunctionPlan>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
     recovery: RecoveryReturn,
@@ -909,7 +914,7 @@ fn render_wrapper_fn_with_recovery(
     let surface = build_wrapper_surface_with_recovery(
         ext,
         f,
-        registry,
+        fplan,
         kotlin_name_override,
         receiver_key,
         recovery,
@@ -925,8 +930,7 @@ fn render_wrapper_fn_with_recovery(
     // KDoc: the Rust fn's `///` prose first, then generated notes for every
     // position an expansion reshaped away from the Rust signature (N1).
     // Emission-only — the validator skips it.
-    let fplan = ext.fn_plan(registry, f).ok()?;
-    if let Some(doc) = wrapper_kdoc(f, &fplan) {
+    if let Some(doc) = wrapper_kdoc(f, fplan) {
         fun = fun.kdoc(doc);
     }
     // Collect the opaque-handle params so we can scaffold pointer-ordered
@@ -968,17 +972,17 @@ pub(crate) fn render_const_val(
     ext: &Declarations,
     package: &str,
     c: &prebindgen_registry::flat::Constant,
-    registry: &Registry,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(KtFun, KtProperty)> {
     let getter = const_getter_fn(c);
+    let fplan = ext.fn_plan_frozen(&getter)?;
     let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn_with_recovery(
         ext,
         &getter,
-        registry,
+        &fplan,
         Some(&helper_name),
         None,
         RecoveryReturn::Declared,
@@ -995,7 +999,7 @@ pub(crate) fn render_const_val(
         .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
-    render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
+    render_val_over_helper(ext, helper, val_name, kdoc, imports)
 }
 
 /// Render one fn-sourced constant (see `ConstDecl::fun`):
@@ -1007,16 +1011,16 @@ pub(crate) fn render_constant_fn_val(
     ext: &Declarations,
     package: &str,
     f: &prebindgen_registry::flat::Function,
-    registry: &Registry,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(KtFun, KtProperty)> {
+    let fplan = ext.fn_plan_frozen(f)?;
     let default = kt_snake_to_camel(&f.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn_with_recovery(
         ext,
         f,
-        registry,
+        &fplan,
         Some(&helper_name),
         None,
         RecoveryReturn::Declared,
@@ -1033,7 +1037,7 @@ pub(crate) fn render_constant_fn_val(
         .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
-    render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
+    render_val_over_helper(ext, helper, val_name, kdoc, imports)
 }
 
 /// Render one expression-backed constant (see `ConstDecl::expr`):
@@ -1045,16 +1049,16 @@ pub(crate) fn render_const_expr_val(
     ext: &Declarations,
     package: &str,
     decl: &crate::jni::decl::ConstExprDecl,
-    registry: &Registry,
     imports: &mut BTreeSet<String>,
 ) -> Option<(KtFun, KtProperty)> {
-    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, ext);
+    let fplan = ext.fn_plan_frozen(&getter)?;
     let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn_with_recovery(
         ext,
         &getter,
-        registry,
+        &fplan,
         Some(&helper_name),
         None,
         RecoveryReturn::Declared,
@@ -1064,14 +1068,7 @@ pub(crate) fn render_const_expr_val(
         "Binding-defined constant: `{expr}` (evaluated lazily, once, through \
          the generated JNI getter on first use)."
     );
-    render_val_over_helper(
-        ext,
-        registry,
-        helper,
-        decl.kotlin_name.clone(),
-        kdoc,
-        imports,
-    )
+    render_val_over_helper(ext, helper, decl.kotlin_name.clone(), kdoc, imports)
 }
 
 /// Shared val-rendering core for both constant kinds (`ConstDecl` /
@@ -1083,7 +1080,6 @@ pub(crate) fn render_const_expr_val(
 /// not fire one JNI call per `val` at class-load (issue #58).
 fn render_val_over_helper(
     ext: &Declarations,
-    registry: &Registry,
     mut helper: KtFun,
     val_name: String,
     kdoc: String,
@@ -1094,7 +1090,7 @@ fn render_val_over_helper(
     // A constant always carries a value type; a helper with no return would
     // mean the type never resolved — skip like an unresolvable fn.
     let val_ty = helper.ret.clone()?;
-    let spec = ext.iface_spec(registry, &SpecKey::JniErrorHandler)?;
+    let spec = ext.iface_spec_frozen(&SpecKey::JniErrorHandler)?;
     imports.insert(spec.fqn());
     let init = format!(
         "{helper_name}(JniErrorHandler {{ je -> error(je ?: \"const {val_name}: JNI getter failed\") }})"
@@ -2423,10 +2419,13 @@ fn shape_notes(fplan: &JniFunctionPlan) -> Option<String> {
 
 /// The `///` doc of the `#[prebindgen]` struct/enum behind a declared type
 /// key, when the item is indexed (a re-exported foreign type has none).
-pub(crate) fn source_item_doc(registry: &Registry, key: &TypeKey) -> Option<String> {
+pub(crate) fn source_item_doc(
+    flat: &prebindgen_registry::flat::Flat,
+    key: &TypeKey,
+) -> Option<String> {
     // Whichever of the three shapes the name declares — the docs are the
     // element's answer, so there is no `attrs` slice to unify across them.
-    match registry.flat().declared_type(&key.ident()?)? {
+    match flat.declared_type(&key.ident()?)? {
         prebindgen_registry::flat::Type::Struct(s) => s.docs(),
         prebindgen_registry::flat::Type::Enum(e) => e.docs(),
         prebindgen_registry::flat::Type::Variant(v) => v.docs(),

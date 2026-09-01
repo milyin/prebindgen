@@ -880,10 +880,10 @@ impl JObjectSumInputPlan {
 // Struct input flattening (pass a data_class param as its leaf fields)
 // ──────────────────────────────────────────────────────────────────────
 
-/// One flattened leaf of a struct **input** param. The mirror of
-/// [`EncSlot`] for the input direction: instead of reading the field with
-/// `env.get_field(...)` out of a single `JObject`, the leaf crosses the JNI
-/// boundary as its own wrapper parameter, and the three coordinated sites — the
+/// One flattened leaf of a struct **input** param — the input direction's own
+/// slot: instead of reading the field with `env.get_field(...)` out of a single
+/// `JObject`, the leaf crosses the JNI boundary as its own wrapper parameter,
+/// and the three coordinated sites — the
 /// native wrapper signature, the `JNINative` extern declaration and the Kotlin
 /// call-site destructure — read it so they cannot drift in order, type, or
 /// nullability.

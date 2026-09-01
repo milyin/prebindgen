@@ -78,6 +78,56 @@ impl DeclaredKind {
 }
 
 impl Declarations {
+    /// Key `out_ty` the way an `IfaceParam` carries it, and remember the
+    /// reading behind that key so rendering needs no registry lookup.
+    ///
+    /// The param stores text, not the `TypeRef`, because its spec is memoized
+    /// behind an `Arc` and a `TypeRef` is not `Send`. Freezing the answer here
+    /// keeps the identity where it has to be and the resolution where a
+    /// renderer can reach it (#613 step 7).
+    pub(crate) fn freeze_reading(&self, out_ty: &prebindgen_registry::flat::TypeRef) -> String {
+        let key = out_ty.key().as_str().to_string();
+        self.frozen_readings
+            .borrow_mut()
+            .entry(key.clone())
+            .or_insert_with(|| out_ty.clone());
+        key
+    }
+
+    /// Freeze the reading for a **type**, keyed by its spelling.
+    ///
+    /// The `constant_expr` path names a type in a build script, so no element
+    /// carries it and only a `Conversions` can resolve it. The validating
+    /// callers do that once; a renderer reads it back (#613 step 7).
+    pub(crate) fn freeze_reading_of(
+        &self,
+        registry: &impl prebindgen_registry::Conversions,
+        ty: &syn::Type,
+    ) -> Option<prebindgen_registry::flat::TypeRef> {
+        let reading = registry.reading_of(ty)?;
+        self.frozen_readings.borrow_mut().insert(
+            quote::ToTokens::to_token_stream(ty).to_string(),
+            reading.clone(),
+        );
+        Some(reading)
+    }
+
+    /// The reading frozen for a type spelling.
+    pub(crate) fn frozen_reading_of(
+        &self,
+        ty: &syn::Type,
+    ) -> Option<prebindgen_registry::flat::TypeRef> {
+        self.frozen_readings
+            .borrow()
+            .get(&quote::ToTokens::to_token_stream(ty).to_string())
+            .cloned()
+    }
+
+    /// The reading behind an `IfaceParam`'s identity text.
+    pub(crate) fn frozen_reading(&self, text: &str) -> Option<prebindgen_registry::flat::TypeRef> {
+        self.frozen_readings.borrow().get(text).cloned()
+    }
+
     /// The module path a generated call to `#[prebindgen]` fn `ident` must be
     /// qualified with: the fn's **origin crate** as recorded from its
     /// stream's `SourceLocation` stamp (multi-source bindings — helper
@@ -129,6 +179,7 @@ impl Default for Declarations {
         Self {
             tables: None,
             compiled: Default::default(),
+            site_plans: Default::default(),
             package: String::new(),
             fun_name_mangle: None,
             ptr_class_name_mangle: None,
@@ -154,6 +205,7 @@ impl Default for Declarations {
             ignored_const_idents: std::collections::HashSet::new(),
             local_fns: Vec::new(),
             iface_specs: Default::default(),
+            frozen_readings: Default::default(),
             fn_plans: Default::default(),
             struct_plans: Default::default(),
             sum_plans: Default::default(),
@@ -910,7 +962,7 @@ impl Declarations {
              value form returns the struct holding this type's fields",
             key.as_str(),
         );
-        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, &ret.key()) else {
+        let TypeKind::DataStruct { st, .. } = self.type_kind(registry.flat(), &ret.key()) else {
             panic!(
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
@@ -1058,7 +1110,7 @@ impl Declarations {
             // must decompose into its selector and groups wherever it appears.
             let bare = field.ty.optional_inner().unwrap_or(&field.ty);
             let probe = bare.sequence_elem().unwrap_or(bare);
-            match self.type_kind(registry, &probe.key()) {
+            match self.type_kind(registry.flat(), &probe.key()) {
                 TypeKind::DataStruct { st, cfg: Some(_) }
                     if field.ty.optional_inner().is_none()
                         && field.ty.sequence_elem().is_none() =>

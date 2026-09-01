@@ -136,7 +136,7 @@ impl super::JniGen {
             let wire = registry
                 .reading(key)
                 .and_then(|tr| ext.out_frag(&tr))
-                .map(|e| e.wire_type().to_token_stream().to_string())
+                .map(|e| e.wire.to_token_stream().to_string())
                 .unwrap_or_else(|| "?".to_string());
             out.push_str(&format!(
                 "- `{}`: {} → `{fqn}` (wire `{wire}`{})\n",
@@ -201,7 +201,7 @@ impl super::JniGen {
         let Some(item_fn) = registry.flat().function(&rust_ident) else {
             return;
         };
-        let Some(f) = render_wrapper_fn(ext, item_fn, registry, kotlin_name, receiver_key) else {
+        let Some(f) = render_wrapper_fn(ext, item_fn, kotlin_name, receiver_key) else {
             return;
         };
         let fplan = ext

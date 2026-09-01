@@ -4,13 +4,13 @@
 use prebindgen_registry::{
     types_util::result_ok_type,
     unfold::{bind_hoists, reach_leaf, LeafAt},
-    Conversions,
 };
 
 use super::*;
 use crate::jni::trait_impl::read_through_erased_wrappers;
 
 /// What the extern calls once its inputs are decoded.
+#[derive(Clone)]
 pub(crate) enum JCallee {
     /// The `#[prebindgen]` function itself, under the module it comes from.
     Source(syn::Path),
@@ -25,6 +25,7 @@ pub(crate) enum JCallee {
 /// Everything the extern needs is here: the frozen function plan, the model
 /// element it exports, and what it calls. Nothing is looked up in a live
 /// registry while the file is assembled.
+#[derive(Clone)]
 pub(crate) struct JWrapper {
     /// This function's frozen JNI plan — symbol, inputs, output delivery,
     /// error channels.
@@ -186,14 +187,17 @@ pub(crate) fn validate_constant_fn(ext: &Declarations, f: &prebindgen_registry::
 pub(crate) fn const_expr_getter_fn(
     kotlin_name: &str,
     ty: &syn::Type,
-    registry: &impl Conversions,
+    ext: &crate::jni::Declarations,
 ) -> prebindgen_registry::flat::Function {
     let ident = format_ident!("const_get_{}", kotlin_name.to_lowercase());
     // The one lookup this path needs: the type is named by a build script, so
     // no element carries it. A miss means the declared type never entered the
     // pipeline, which is a binding error worth naming rather than a `None` to
     // absorb.
-    let ret = registry.reading_of(ty).unwrap_or_else(|| {
+    // Frozen by the validating callers, which hold a `Conversions`; a render
+    // caller has none and reads what they stored (#613 step 7). The freeze is
+    // idempotent, so the validating path can call this unchanged.
+    let ret = ext.frozen_reading_of(ty).unwrap_or_else(|| {
         panic!(
             "constant_expr `{kotlin_name}`: type `{}` is not a type this binding crosses — \
              declare it, or name one that is",
@@ -731,7 +735,7 @@ fn emit_plain_decode(
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
     plan: &ExpandedParamPlan,
-    leaves: &[PlanLeaf],
+    leaves: &[std::rc::Rc<PlanLeaf>],
     orig_param: &syn::Ident,
     on_err: &TokenStream,
     emit: &prebindgen_registry::RustWriter,

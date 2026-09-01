@@ -117,7 +117,7 @@ impl Declarations {
         let Some(ident) = id.ident() else { return 0 };
         match registry.flat().declared_type(&ident) {
             Some(prebindgen_registry::flat::Type::Variant(_)) => self
-                .sum_out_wires(registry, &ident, ty)
+                .sum_out_wires(registry.flat(), &ident, ty)
                 .map_or(0, |w| w.len()),
             Some(prebindgen_registry::flat::Type::Struct(_)) => {
                 self.struct_out_wires(registry, ty).map_or(0, |w| w.len())
@@ -165,13 +165,33 @@ impl Declarations {
             if !matches!(record.decon, FieldDecon::Default) {
                 return None;
             }
-            let [member] = record.members.as_slice() else {
-                return None;
+            // A record with several members is an INLINED nested class: each
+            // member is one hop of a field-access chain. `Reach::Path` states
+            // that; before it existed this row declined and fell back to a
+            // placeholder (#613 step 10).
+            let mut here = st;
+            let mut indices = Vec::with_capacity(record.members.len());
+            for member in &record.members {
+                let hop = here
+                    .fields
+                    .iter()
+                    .position(|f| f.name.as_ref() == Some(member))?;
+                indices.push(hop);
+                if indices.len() < record.members.len() {
+                    let next = here.fields[hop].ty.stripped_key().ident()?;
+                    let prebindgen_registry::flat::Type::Struct(next) =
+                        model.declared_type(&next)?
+                    else {
+                        return None;
+                    };
+                    here = next;
+                }
+            }
+            let [index] = indices.as_slice() else {
+                reaches.push(Reach::Path(indices));
+                continue;
             };
-            let index = st
-                .fields
-                .iter()
-                .position(|f| f.name.as_ref() == Some(member))?;
+            let index = *index;
             // A field that reaches the type being taken apart. The leaf
             // synthesis treats `Box<T>` as a spelling of its own and stops
             // there; a recipe keys a crossing by the value that crosses, so
@@ -266,6 +286,57 @@ impl Declarations {
     /// A type declared but absent from the model is skipped rather than
     /// refused: the scan already reports it, and reporting it twice in
     /// different words helps nobody.
+    /// This type's `parts` decomposition, read off its `expand_return!`
+    /// declaration in the recipe table's own vocabulary.
+    ///
+    /// `None` when the declaration states a shape a `Deconstruct` cannot hold —
+    /// a value-form record mixed with others, since `ValueForm` is the whole
+    /// row while `LocalField::Fields` is one record among many. No declaration
+    /// in this workspace has that shape (measured: every `Fields` record stands
+    /// alone), so the caller's `Atomic` fallback is a guard rather than a path
+    /// anything takes.
+    fn parts_deconstruct(
+        &self,
+        model: &Flat,
+        registry: &impl prebindgen_registry::Conversions,
+        ty: &TypeRef,
+    ) -> Option<Deconstruct> {
+        let decl = self
+            .return_expand_decls
+            .iter()
+            .find(|d| *d.key() == ty.stripped_key())?;
+        let fields = decl.field_list();
+        if matches!(fields, [crate::jni::LocalField::Fields(_)]) {
+            // `ValueForm` means "call this accessor, then read these parts off
+            // its result" — the parts are how the compiler reaches the returned
+            // struct's fields, so an empty list is a decomposition with nothing
+            // in it rather than one of everything (#638 review).
+            //
+            // `value_form_of` already computes exactly that mapping, and it is
+            // not a count: `lower_value_form` returns FLATTENED records, one of
+            // which can splice a child's fields, so `Report` yields six records
+            // over a five-field struct. It maps each record back to the struct
+            // field it names and declines the shapes a row cannot hold.
+            let (func, parts) = self.value_form_of(model, registry, ty)?;
+            return Some(Deconstruct::ValueForm { func, parts });
+        }
+        let mut reaches = Vec::with_capacity(fields.len());
+        for field in fields {
+            reaches.push(match field {
+                crate::jni::LocalField::Named(func, _) => Reach::Accessor(func.clone()),
+                // The handle itself — the leaf `Reach::Identity` was added for.
+                crate::jni::LocalField::SelfField => Reach::Identity,
+                // A binding-local accessor resolves by its path's last segment:
+                // `local_functions()` registers it under exactly that ident.
+                crate::jni::LocalField::Local { path, .. } => {
+                    Reach::Accessor(path.segments.last()?.ident.clone())
+                }
+                crate::jni::LocalField::Fields(_) => return None,
+            });
+        }
+        Some(Deconstruct::Fields(reaches))
+    }
+
     pub(crate) fn recipes(
         &self,
         model: &Flat,
@@ -273,6 +344,9 @@ impl Declarations {
         registry: &impl prebindgen_registry::Conversions,
     ) -> Result<Recipes, Vec<RecipeError>> {
         let mut recipes = Recipes::builder();
+        // Which crossings already state a deconstructing `parts` row, so the
+        // decomposition block below adds one only where none was declared.
+        let mut parts_out: std::collections::HashSet<TypeKey> = std::collections::HashSet::new();
         // Every Kotlin class declaration, and every `convert!`-declared
         // conversion. The second matters as much as the first: a conversion may
         // be declared on a type the registry would otherwise read as an arity
@@ -319,6 +393,7 @@ impl Declarations {
                     recipes.declare_default(ty.clone(), whole(), Deconstructing::Atomic);
                     if !arms.is_empty() {
                         recipes.declare(ty.clone(), parts(), Deconstructing::Choice { arms });
+                        parts_out.insert(ty.stripped_key());
                     }
                 }
                 // A `data_class` hands its value out as its fields too, so the
@@ -333,6 +408,7 @@ impl Declarations {
                             parts(),
                             Deconstructing::Product(Deconstruct::Fields(reaches)),
                         );
+                        parts_out.insert(ty.stripped_key());
                     }
                 }
                 _ => {
@@ -352,6 +428,7 @@ impl Declarations {
                         parts: reaches,
                     }),
                 );
+                parts_out.insert(ty.stripped_key());
             }
             // A `data_class` also has a recipe that says what it is made of, so
             // its constructing side names which of the two a site takes by
@@ -379,6 +456,58 @@ impl Declarations {
                 }
                 _ => {
                     recipes.declare(ty, whole(), Constructing::Atomic);
+                }
+            }
+        }
+
+        // A type a callback delivers by taking it apart states that as a row,
+        // so the argument's site has a recipe to name. Without one the site
+        // could only be fabricated — a `Bound` no binding answered — which is
+        // what #622's first two attempts produced and why they were withdrawn.
+        //
+        // `Atomic` for the reason the declared-type loop above gives for the
+        // two shapes that plainly have parts: the adapter emits this
+        // conversion itself, and how many wire values that costs is its own
+        // business. The parts are stated by the deconstructor declaration the
+        // registry already resolved into an `UnfoldPlan`, which this row does
+        // not restate — it names the crossing that plan decomposes. Deleting
+        // that second statement is #613 step 5b's, not this row's.
+        //
+        // The source is the plan's own owned core, so a plan keyed under `&T`
+        // and one keyed under `T` state one row; a type that already declared
+        // `parts` — a `data_class`, a `sealed_class`, a value form — keeps it.
+        //
+        // A **whole-element fold** is not one of these and must not earn a row.
+        // `apply_leaf_vec_folds` files a plan for `impl Fn(&[T])` under `&[T]`
+        // whose `source` is the ELEMENT and whose `decon` is `None`: nothing is
+        // taken apart, each element crosses whole through its own converter.
+        // Declaring `parts` off it would state a decomposition of `T` that does
+        // not exist — and, worse, a scalar `T` argument elsewhere in the same
+        // model would then bind to that row and name a fragment compiled under
+        // a different recipe (#623 review). `decon` is the gate the model
+        // already carries for this: `None` only for the whole-element arm.
+        let mut decomposed: BTreeMap<TypeKey, TypeRef> = BTreeMap::new();
+        for plan in registry.callback_arg_plans().values() {
+            if plan.decon.is_none() {
+                continue;
+            }
+            let key = plan.source.stripped_key();
+            if parts_out.contains(&key) {
+                continue;
+            }
+            decomposed.entry(key).or_insert_with(|| plan.source.clone());
+        }
+        for ty in decomposed.into_values() {
+            // A real row where the declaration can state one. #622 wrote
+            // `Atomic` here because `Reach` could not spell an identity leaf;
+            // it can now (#635), so the row says how the value comes apart
+            // instead of only existing to be selected (#613 step 10).
+            match self.parts_deconstruct(model, registry, &ty) {
+                Some(deconstruct) => {
+                    recipes.declare(ty, parts(), Deconstructing::Product(deconstruct));
+                }
+                None => {
+                    recipes.declare(ty, parts(), Deconstructing::Atomic);
                 }
             }
         }
@@ -680,7 +809,14 @@ impl Declarations {
                         );
                         continue;
                     }
-                    if !self.field_crosses_as_its_fields(core) {
+                    // A model-derived data class, or a type whose deconstructor
+                    // declaration earned the `parts` row above. Both take that
+                    // row here, so the fragment the trampoline delivers and the
+                    // one the argument's own `Role::CallbackArg` site names are
+                    // one fragment rather than two rows over one crossing.
+                    if !self.field_crosses_as_its_fields(core)
+                        && registry.callback_arg_plan(&arg.key()).is_none()
+                    {
                         continue;
                     }
                     let crossing = Crossing::new(arg.clone(), Direction::Deconstruct);
@@ -689,6 +825,42 @@ impl Declarations {
                     }
                     bound.bind(
                         Site::part(&row, index),
+                        crossing,
+                        Ask::Recipe(parts()),
+                        Origin::Adapter,
+                    );
+                }
+            }
+        }
+
+        // Each value a callback delivers is a root site of its own — the
+        // function-unique `Role::CallbackArg` the registry names, not the
+        // `Role::Part` above, which is keyed by the callback recipe every
+        // function with that signature shares.
+        //
+        // Bound to `parts` exactly where the argument's crossing states that
+        // row, which is now every argument the trampoline takes apart: a
+        // `data_class`, a `sealed_class`, an implicit Optional over one of
+        // those, or a type whose deconstructor declaration earned the row
+        // declared above. An argument that crosses whole names nothing here and
+        // takes its crossing's default, attributed to the adapter.
+        for f in model.functions() {
+            for (param, p) in f.params.iter().enumerate() {
+                let prebindgen_registry::flat::TypeKind::Callback { args } =
+                    p.ty.unwrapped().kind()
+                else {
+                    continue;
+                };
+                for (arg, ty) in args.iter().enumerate() {
+                    let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
+                    if recipes.key_of(&crossing.key(), &parts()).is_none() {
+                        continue;
+                    }
+                    bound.bind(
+                        Site {
+                            owner: f.name.clone(),
+                            role: prebindgen_registry::recipe::Role::CallbackArg { param, arg },
+                        },
                         crossing,
                         Ask::Recipe(parts()),
                         Origin::Adapter,

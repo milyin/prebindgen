@@ -205,7 +205,7 @@ pub enum LeafSource {
     /// A payload field of ONE alternative of a decomposed sum, reached through
     /// a **variant pattern** rather than a path: the emitter binds `member`
     /// inside `variant`'s `match` arm. The leaf is live only when
-    /// [`UnfoldLeaf::group`] equals the value's tag; in every other arm its
+    /// [`UnfoldLeaf::groups`] ends in the value's tag; in every other arm its
     /// slot carries the wire default.
     ///
     /// This is the selector [`Reach`](Self::Reach) deliberately lacks — a
@@ -217,6 +217,18 @@ pub enum LeafSource {
         /// How the payload field is addressed in the arm's pattern.
         member: syn::Member,
     },
+    /// The **synthesized presence** of an optional value the decomposition
+    /// looks through: a boolean saying whether the leaves that follow carry
+    /// anything.
+    ///
+    /// The selector [`SumTag`](Self::SumTag) is for a value that is one of
+    /// several alternatives; this is for a value that is either there or not,
+    /// and the difference is not a two-alternative sum: absence has no
+    /// alternative of its own to name, and the group it gates is the value's
+    /// own leaves rather than one arm's payload. Like a tag it is not read off
+    /// the value — the emitter assigns it — so [`UnfoldLeaf::path`] reaches
+    /// the OPTIONAL value it tests, not a place holding a boolean.
+    Presence,
 }
 
 /// A resolved output expansion for one function.
@@ -338,26 +350,45 @@ pub struct UnfoldLeaf {
     /// `match Some/None`.
     pub nullable: bool,
     /// How [`Self::path`] is reached from the value — an accessor-fn chain
-    /// (default), a struct-field chain (synthesized `data_class`), or a
-    /// variant pattern binding (decomposed sum).
+    /// (default), a struct-field chain (synthesized `data_class`), a variant
+    /// pattern binding (decomposed sum), or one of the two synthesized
+    /// selectors, which are assigned rather than reached.
     pub source: LeafSource,
-    /// **Group membership**: `Some(tag)` marks the leaf as belonging to the
-    /// leaf group of the sum alternative with that tag — live only when the
-    /// value's [`LeafSource::SumTag`] leaf equals `tag`, wire-defaulted
-    /// otherwise. `None` for an unconditional (product) leaf, including the
-    /// tag leaf itself, which selects between groups rather than joining one.
+    /// **Group membership**, as the path of arms this leaf sits inside —
+    /// outermost first. Empty for a leaf that is always live. A non-empty path
+    /// marks the leaf as belonging to the group a **selector** chooses: live
+    /// only when that selector says so, wire-defaulted otherwise.
+    ///
+    /// Each element is one arm, and what an arm number means is the selector's
+    /// own answer:
+    ///
+    /// * a [`SumTag`](LeafSource::SumTag) chooses among alternatives, and its
+    ///   arm is the alternative's tag;
+    /// * a [`Presence`](LeafSource::Presence) chooses between "the value is
+    ///   there" and "it is not", and its arm is `0` — the one group a presence
+    ///   flag gates, carried by the leaves of the value it speaks for.
     ///
     /// Grouping is what turns a leaf list into a `match`: leaves sharing a
     /// group are emitted together in one arm instead of as independent
     /// per-leaf expressions.
-    pub group: Option<i32>,
+    ///
+    /// **A selector carries the path it is nested in, not its own arms.** An
+    /// unconditional selector's path is empty; one inside a group carries that
+    /// group's path, the same as any other member — which is what lets a
+    /// selector own another. Its own members extend that path by one, so
+    /// "member of the outer group" and "selector of an inner one" are two
+    /// different lengths of the same path rather than two meanings of one
+    /// number, and [`segments`](crate::unfold::segments) reads one nesting
+    /// level at a time (#602).
+    pub groups: Vec<i32>,
 }
 
 impl UnfoldLeaf {
     /// Whether this leaf's [`out_ty`](Self::out_ty) needs a resolved **output
-    /// converter**. False only for the synthesized [`LeafSource::SumTag`]
-    /// selector: it is assigned per `match` arm, never converted, so requiring
-    /// a converter for it would make every sum depend on an unrelated `i32`
+    /// converter**. False for a synthesized **selector** — a
+    /// [`SumTag`](LeafSource::SumTag) or a [`Presence`](LeafSource::Presence):
+    /// each is assigned by the emitter rather than converted, so requiring
+    /// a converter for one would make every sum depend on an unrelated `i32`
     /// crossing existing in the binding.
     ///
     /// **This is the root question, not the registration question.** Every
@@ -367,6 +398,9 @@ impl UnfoldLeaf {
     /// an entry says one resolved — three separate claims, and a `SumTag` leaf
     /// makes only the first (#282).
     pub fn has_converter(&self) -> bool {
-        self.source != LeafSource::SumTag
+        // A presence flag is synthesized like a tag: it says whether the
+        // leaves after it carry anything, and the value it tests crosses
+        // through those leaves rather than through this one.
+        !matches!(self.source, LeafSource::SumTag | LeafSource::Presence)
     }
 }

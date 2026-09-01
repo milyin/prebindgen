@@ -58,7 +58,7 @@ pub(crate) struct JniFunctionPlan {
 /// from `TypeRef` while rendering the wrapper.
 pub(crate) struct ErrorOutputPlan {
     pub unfold: prebindgen_registry::unfold::UnfoldPlan,
-    pub wires: Vec<crate::jni::compile::OutWire>,
+    pub wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
     pub chain: Option<crate::jni::compile::ComposedChain>,
     /// Origin qualification and sum shape for these leaves, frozen with them,
     /// so rendering the `Err` arm asks the registry nothing.
@@ -107,7 +107,7 @@ impl PlanLeaf {
 /// sub-plans; the `Expanded` payload is just a `Vec` header).
 pub(crate) enum ParamForm {
     /// Ordinary parameter — one classified leaf.
-    Single(Box<PlanLeaf>),
+    Single(std::rc::Rc<PlanLeaf>),
     /// Constructor-expansion ([`FoldPlan`] declared for this `(fn, param)`):
     /// the wire form is the plan's flattened leaves, classified individually;
     /// the Rust wrapper folds them back into the built value. Leaves use the
@@ -119,7 +119,7 @@ pub(crate) enum ParamForm {
         /// beside its lowered leaves lets Rust reconstruction and Kotlin/report
         /// descriptions use the same decision after resolution.
         plan: Box<ExpandedParamPlan>,
-        leaves: Vec<PlanLeaf>,
+        leaves: Vec<std::rc::Rc<PlanLeaf>>,
     },
 }
 
@@ -229,7 +229,12 @@ pub(crate) struct PlanLeaf {
     pub pipeline: crate::jni::chain::JPipeline,
     /// Exact ordered parameters shared by the Rust extern, `JNINative`
     /// declaration, and JVM descriptor-slot validation.
-    pub native: Vec<NativeParam>,
+    ///
+    /// Shared, not copied: the site's `AbiLayout` holds this same list, so
+    /// there is ONE ordered ABI rather than a carrier that has to be kept
+    /// equal to it. That is what lets step 5 delete this side without
+    /// re-deriving anything (#622 review).
+    pub native: std::rc::Rc<Vec<NativeParam>>,
     /// How the Rust wrapper obtains this leaf's source value from `native`.
     pub rust: RustParamOp,
     /// How the typed Kotlin wrapper supplies `native`, including handle
@@ -305,7 +310,7 @@ pub(crate) enum HandleMode {
 /// `Value` = everything else, including the `Return`-delivery convert.
 pub(crate) enum FnOutputPlan {
     Unfold(Box<UnfoldOutputPlan>),
-    Value(Box<ValueOutputPlan>),
+    Value(std::rc::Rc<ValueOutputPlan>),
 }
 
 /// Callback-delivery shape facts, read off the fn's `UnfoldPlan` once so the
@@ -315,7 +320,10 @@ pub(crate) struct UnfoldOutputPlan {
     /// Registry-composed values the return site hands to its builder/folder,
     /// with each target ABI and output pipeline frozen. Empty only for a
     /// whole-element iterable fold.
-    pub wires: Vec<crate::jni::compile::OutWire>,
+    /// Shared with the site plan that froze them, so the values a decomposed
+    /// return hands out have one owner rather than a plan and a carrier that
+    /// have to agree (#622 review).
+    pub wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
     /// Exact composed converter for a fixed Product/Optional/Choice return.
     pub chain: Option<crate::jni::compile::ComposedChain>,
     /// Whole-element iterable conversion, when `wires` is empty because the
@@ -358,6 +366,14 @@ pub(crate) struct UnfoldOutputPlan {
 /// Value-return facts: the resolved conversion target and wire on the Rust
 /// side, the declared-surface classification on the Kotlin side.
 pub(crate) struct ValueOutputPlan {
+    /// Where this return crosses and which fragment answers it, carried from
+    /// the site hook so the plan the emitters actually read — the one with the
+    /// convert delivery attached — is the one frozen into the canonical site,
+    /// rather than the intermediate the hook produced (#622 review).
+    pub site: Option<(
+        prebindgen_registry::recipe::Bound,
+        prebindgen_registry::generation::FragmentId,
+    )>,
     /// `Return`-delivery convert (`convert_output`) — the wrapper returns the
     /// single deconstructed value through its ordinary output converter.
     pub is_convert: bool,
@@ -389,6 +405,7 @@ pub(crate) struct ValueOutputPlan {
 /// (`render_return_surface`) maps it back to the historical
 /// `(kt_return, projection)` pair, panicking on an unregistered projection
 /// FQN exactly where `classify_return` always did (Kotlin render time).
+#[derive(Clone)]
 pub(crate) enum ReturnSurface {
     /// No Kotlin type resolvable (entry or `kotlin_name` missing): the
     /// Kotlin renderers skip the function; the Rust emitter ignores it.
@@ -602,7 +619,10 @@ pub(crate) fn validate_bindings(ext: &Declarations, registry: &Registry) -> Resu
         .collect();
     expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
     for decl in expr_decls {
-        let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+        let getter = {
+            ext.freeze_reading_of(registry, &decl.ty);
+            const_expr_getter_fn(&decl.kotlin_name, &decl.ty, ext)
+        };
         match ext.fn_plan(registry, &getter) {
             Ok(plan) => record_symbol(&plan.native_symbol, decl.kotlin_name.clone(), &mut errors),
             Err(e) => errors.push(e.message(&getter.name)),
@@ -636,7 +656,7 @@ impl JniFunctionPlan {
         match &self.output {
             FnOutputPlan::Value(value) => value.pipeline.calls(out),
             FnOutputPlan::Unfold(unfold) => {
-                for wire in &unfold.wires {
+                for wire in unfold.wires.iter() {
                     wire.calls(out);
                 }
                 if let Some(chain) = &unfold.chain {
@@ -650,7 +670,7 @@ impl JniFunctionPlan {
             }
         }
         if let Some(error) = &self.error {
-            for wire in &error.wires {
+            for wire in error.wires.iter() {
                 wire.calls(out);
             }
             if let Some(chain) = &error.chain {
@@ -688,6 +708,22 @@ impl Declarations {
     /// [`Declarations::iface_spec`]. Once resolution finishes both memos are
     /// drained into [`crate::jni::generation::JniGenerationPlan`], so emission
     /// cannot resume either derivation.
+    /// This function's lowered plan, read from the frozen generation.
+    ///
+    /// For a **render-only** caller. `freeze` drains the lowering memos into
+    /// `GenerationPlan`, which owns them afterwards, so a renderer reads rather
+    /// than re-lowering — and needs no `Registry` to do it.
+    ///
+    /// Not for a caller that also runs during validation: no generation is
+    /// installed then, this answers `None`, and a site that skips silently
+    /// stops reporting what lowering would have diagnosed (#613 step 7).
+    pub(crate) fn fn_plan_frozen(
+        &self,
+        f: &prebindgen_registry::flat::Function,
+    ) -> Option<std::rc::Rc<JniFunctionPlan>> {
+        self.generation.as_deref()?.function(&f.name)
+    }
+
     pub(crate) fn fn_plan(
         &self,
         registry: &Registry,
@@ -737,7 +773,7 @@ impl JniFunctionPlan {
         // The element's parameters: each already a name and a `TypeRef`, so
         // there is no `FnArg`/`Pat` destructuring and no position that could
         // fail to yield a type.
-        for param in &f.params {
+        for (position, param) in f.params.iter().enumerate() {
             let ident = param.name.clone();
             let ty = param.ty.clone();
 
@@ -746,12 +782,13 @@ impl JniFunctionPlan {
                 .get(&(f.name.clone(), ident.clone()))
             {
                 let mut leaves = Vec::new();
-                for leaf in &plan.leaves {
+                for (leaf_index, leaf) in plan.leaves.iter().enumerate() {
                     // The lookup that stood here is gone: the fold leaf carries
                     // its own reading now, so there is nothing to fetch and
                     // nothing that can miss.
                     leaves.push(classify_leaf(
                         ext, registry, &leaf.name, &leaf.ty, /*expanded=*/ true, &ident,
+                        &f.name, position, leaf_index,
                     )?);
                 }
                 ParamForm::Expanded {
@@ -759,9 +796,10 @@ impl JniFunctionPlan {
                     leaves,
                 }
             } else {
-                ParamForm::Single(Box::new(classify_leaf(
-                    ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident,
-                )?))
+                ParamForm::Single(classify_leaf(
+                    ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident, &f.name,
+                    position, 0,
+                )?)
             };
             params.push(PlanParam { ident, ty, form });
         }
@@ -784,10 +822,13 @@ impl JniFunctionPlan {
     /// The flattened effective-parameter view (expansion leaves inline) —
     /// the sequence the Kotlin wrapper and `external fun` declare, in order.
     pub fn leaves(&self) -> impl Iterator<Item = &PlanLeaf> {
-        self.params.iter().flat_map(|p| match &p.form {
-            ParamForm::Single(l) => std::slice::from_ref(&**l).iter(),
-            ParamForm::Expanded { leaves, .. } => leaves.iter(),
-        })
+        self.params
+            .iter()
+            .flat_map(|p| match &p.form {
+                ParamForm::Single(l) => std::slice::from_ref(l).iter(),
+                ParamForm::Expanded { leaves, .. } => leaves.iter(),
+            })
+            .map(std::rc::Rc::as_ref)
     }
 
     fn jvm_parameter_slots(&self) -> usize {
@@ -825,6 +866,28 @@ pub(crate) fn kotlin_jvm_slots(ty: &str) -> usize {
 /// Classify one effective parameter. `expanded` disables only the Vec-build
 /// collection helper; recursive data-class leaves are valid in constructor
 /// expansions and reuse the same Rust/Kotlin lowering as ordinary parameters.
+/// Which place in the exported function this leaf is.
+///
+/// One answer for every caller: the callback shortcut below also runs for an
+/// expansion leaf, and hardcoding `Role::Param` there labelled an expanded
+/// callback leaf as a parameter — undoing the rule the ordinary path states
+/// (#622 review).
+fn leaf_role(
+    expanded: bool,
+    position: usize,
+    leaf_index: usize,
+) -> prebindgen_registry::recipe::Role {
+    use prebindgen_registry::recipe::Role;
+    match expanded {
+        false => Role::Param { index: position },
+        true => Role::ExpansionLeaf {
+            param: position,
+            leaf: leaf_index,
+        },
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn classify_leaf(
     ext: &Declarations,
     registry: &Registry,
@@ -832,8 +895,14 @@ fn classify_leaf(
     reading: &TypeRef,
     expanded: bool,
     source_param: &syn::Ident,
-) -> Result<PlanLeaf, PlanError> {
-    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
+    // The exported function this leaf belongs to, the SOURCE parameter
+    // position it came from, and — when that parameter expanded — which of its
+    // leaves this is.
+    owner: &syn::Ident,
+    position: usize,
+    leaf_index: usize,
+) -> Result<std::rc::Rc<PlanLeaf>, PlanError> {
+    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Site};
     // `impl Fn(args)` never reaches the compiler, for the reason
     // `JniGen::compile_crossing` gives: a callback is answered whole, because a
     // JniGen callback ARGUMENT does not always have a conversion of its own —
@@ -853,7 +922,14 @@ fn classify_leaf(
             prebindgen_registry::recipe::Mode::Owned,
         );
         let wire_ident = ident.clone();
-        return Ok(PlanLeaf {
+        let native = std::rc::Rc::new(vec![NativeParam {
+            rust_ident: wire_ident.clone(),
+            rust_wire: annotate_jobject_with_lifetime(pipeline.wire(), "a").to_token_stream(),
+            kt_name: kt_param_name(&ident.to_string()),
+            kt_wire: entry.metadata.kotlin_name.clone(),
+            jvm_slots: 1,
+        }]);
+        let leaf = std::rc::Rc::new(PlanLeaf {
             reading: reading.clone(),
             kt_name: kt_param_name(&ident.to_string()),
             kt_public: None,
@@ -864,17 +940,76 @@ fn classify_leaf(
                 reading,
                 prebindgen_registry::recipe::Direction::Construct,
             ),
-            native: vec![NativeParam {
-                rust_ident: wire_ident.clone(),
-                rust_wire: annotate_jobject_with_lifetime(pipeline.wire(), "a").to_token_stream(),
-                kt_name: kt_param_name(&ident.to_string()),
-                kt_wire: entry.metadata.kotlin_name.clone(),
-                jvm_slots: 1,
-            }],
+            native,
             pipeline,
             rust: RustParamOp::Pipeline { wire_ident },
             kotlin: KotlinParamOp::Callback { iface },
         });
+        // This parameter never reaches `Compiler::site`, so nothing else
+        // states it canonically — but every fact a site plan needs is here:
+        // the place in the function, the crossing, and the fragment that
+        // answers it, whose own id carries the recipe that was selected.
+        // Stated here rather than left out, so the canonical site set covers
+        // this path too (#622 review).
+        {
+            let fragment = entry.fragment();
+            ext.site_plans
+                .borrow_mut()
+                .push(std::rc::Rc::new(fragment.freeze_site(
+                    &prebindgen_registry::recipe::Bound {
+                        site: Site {
+                            owner: owner.clone(),
+                            role: leaf_role(expanded, position, leaf_index),
+                        },
+                        crossing: Crossing::new(reading.clone(), Direction::Construct),
+                        recipe: fragment.id.recipe().clone(),
+                        origin: prebindgen_registry::recipe::Origin::Function,
+                    },
+                    crate::jni::compile::JAbiLeaves::Params(leaf.clone()),
+                )));
+            // And one site per value the callback delivers. A delivered
+            // argument is a place in THIS function, which is what
+            // `Role::CallbackArg` names and why the registry keeps it apart
+            // from the `Role::Part` the shared callback recipe is compiled at:
+            // several functions taking one `impl Fn` signature share the
+            // delivery, and each states its own site over it.
+            //
+            // The recipe is `site_bindings`' answer, not one composed here. A
+            // fabricated `Bound` is what the first two attempts at this
+            // produced, and a site that misreports which row it took is worse
+            // than an absent one (#622 review).
+            if let Some(plan) = fragment.rust.invoke_plan() {
+                let arguments = match &fragment.shape {
+                    prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } => {
+                        arguments.as_slice()
+                    }
+                    _ => &[],
+                };
+                for (arg, ty) in args.iter().enumerate() {
+                    let (Some(edge), Some(abi)) = (arguments.get(arg), plan.arg_abi(arg)) else {
+                        continue;
+                    };
+                    let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
+                    let site = Site {
+                        owner: owner.clone(),
+                        role: prebindgen_registry::recipe::Role::CallbackArg {
+                            param: position,
+                            arg,
+                        },
+                    };
+                    let Some(bound) =
+                        ext.site_bindings()
+                            .resolve(&site, &crossing, ext.recipe_table())
+                    else {
+                        continue;
+                    };
+                    ext.site_plans.borrow_mut().push(std::rc::Rc::new(
+                        crate::jni::compile::callback_arg_site(&bound, edge, abi),
+                    ));
+                }
+            }
+        }
+        return Ok(leaf);
     }
     // The compiler, resumed over what the build already compiled. Every
     // fragment this site's recipe needs is in that store, so `site` finds them
@@ -897,13 +1032,22 @@ fn classify_leaf(
             },
         )),
     };
-    // The site names the parameter it is, and the position is the source
-    // parameter's rather than a running count: a constructor expansion
-    // contributes leaves the signature does not name, and they all belong to
-    // the one parameter that expanded.
+    // A site is a place in an exported function, which is what the registry's
+    // `Site` means: `owner` is the function and `role` names the position in
+    // it. This named the PARAMETER as owner and always index 0, so two
+    // functions with a parameter of the same name froze the same identity, and
+    // every leaf of an expanded parameter collided with its siblings (#622
+    // review).
+    //
+    // `Role::Param`'s index is the position in the SOURCE parameter list, so
+    // an expansion's leaves cannot be numbered as parameters: doing that names
+    // positions the function does not have and attaches one parameter's site to
+    // another's crossing. They are `ExpansionLeaf`s of the parameter that
+    // expanded, which is the same question `CallbackArg` already answers for a
+    // callback's arguments (#622 review).
     let site = Site {
-        owner: source_param.clone(),
-        role: Role::Param { index: 0 },
+        owner: owner.clone(),
+        role: leaf_role(expanded, position, leaf_index),
     };
     let crossing = Crossing::new(reading.clone(), Direction::Construct);
     let use_pair = crate::jni::compile::optional_pair_plan_candidate(ext, reading)
@@ -989,12 +1133,13 @@ fn build_error_output(
     registry: &Registry,
     unfold: prebindgen_registry::unfold::UnfoldPlan,
 ) -> Result<ErrorOutputPlan, PlanError> {
-    let wires =
+    let wires = std::rc::Rc::new(
         crate::jni::compile::freeze_out_wires(ext, registry, &unfold.leaves).map_err(|_| {
             PlanError::UnresolvedOutput {
                 ty: Box::new(unfold.source.clone()),
             }
-        })?;
+        })?,
+    );
     let delivered = if unfold.by_ref {
         unfold.source.borrowed()
     } else {
@@ -1079,7 +1224,7 @@ fn build_output(
                 .map_err(|_| PlanError::UnresolvedOutput {
                     ty: Box::new(element.clone()),
                 })?;
-            (Vec::new(), None, Some(pipeline))
+            (std::rc::Rc::new(Vec::new()), None, Some(pipeline))
         } else {
             let expected = crate::jni::compile::OutWire::from_leaves(&plan.leaves);
             let delivered = if plan.by_ref {
@@ -1107,10 +1252,13 @@ fn build_output(
                 });
             let wires = match composed {
                 Some(wires) => wires,
-                None => crate::jni::compile::freeze_out_wires(ext, registry, &plan.leaves)
-                    .map_err(|_| PlanError::UnresolvedOutput {
-                        ty: Box::new(plan.source.clone()),
-                    })?,
+                None => std::rc::Rc::new(
+                    crate::jni::compile::freeze_out_wires(ext, registry, &plan.leaves).map_err(
+                        |_| PlanError::UnresolvedOutput {
+                            ty: Box::new(plan.source.clone()),
+                        },
+                    )?,
+                ),
             };
             // Chain availability depends on the exact value the delivery owns,
             // including borrow and outer Optional mode. Freeze that answer now;
@@ -1201,14 +1349,15 @@ fn build_output(
     .ok_or_else(|| PlanError::UnresolvedOutput {
         ty: Box::new(target.clone()),
     })?;
-    let ValueOutputPlan {
-        pipeline,
-        surface,
-        is_enum,
-        is_option_enum,
-        enum_niches,
-        ..
-    } = plan;
+    // Read off the shared plan: it is the site's own answer, and the plan
+    // built below adds the convert delivery to it rather than replacing it.
+    let (pipeline, surface, is_enum, is_option_enum, enum_niches) = (
+        plan.pipeline.clone(),
+        plan.surface.clone(),
+        plan.is_enum,
+        plan.is_option_enum,
+        plan.enum_niches.clone(),
+    );
     // The convert shortcut reaches the plan's single leaf itself rather than
     // through the leaf encoder, and qualifies the accessor calls on that reach
     // — so those origins are frozen here, with the leaf they belong to.
@@ -1218,15 +1367,22 @@ fn build_output(
             ext,
             registry,
             unfold,
-            unfold
-                .leaves
-                .iter()
-                .map(crate::jni::compile::OutWire::from_leaf)
-                .collect(),
+            std::rc::Rc::new(
+                unfold
+                    .leaves
+                    .iter()
+                    .map(crate::jni::compile::OutWire::from_leaf)
+                    .collect(),
+            ),
             None,
         )
     });
-    Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
+    // The plan the emitters read: the site's answer with the convert delivery
+    // attached. This is the one frozen into the canonical site, because it is
+    // the authoritative one — freezing the hook's intermediate carried a
+    // `convert_delivery` of `None` while this object owned the real one.
+    let final_plan = std::rc::Rc::new(ValueOutputPlan {
+        site: plan.site.clone(),
         is_convert,
         pipeline,
         surface,
@@ -1234,7 +1390,17 @@ fn build_output(
         is_option_enum,
         enum_niches,
         convert_delivery,
-    })))
+    });
+    if let Some((bound, fragment)) = &final_plan.site {
+        ext.site_plans
+            .borrow_mut()
+            .push(std::rc::Rc::new(crate::jni::compile::whole_return_site(
+                bound,
+                fragment,
+                final_plan.clone(),
+            )));
+    }
+    Ok(FnOutputPlan::Value(final_plan))
 }
 
 /// Whether a return surfaces as a Kotlin enum class, and whether an optional
