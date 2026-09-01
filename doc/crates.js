@@ -1,2 +1,2 @@
-window.ALL_CRATES = ["covertest_helpers","covertest_kotlin","emitcheck","example_cbindgen","example_flat","perftest_c","perftest_flat","perftest_kotlin","prebindgen","prebindgen_c","prebindgen_c_runtime","prebindgen_flat","prebindgen_jni","prebindgen_jni_runtime","prebindgen_proc_macro","prebindgen_registry"];
-//{"start":21,"fragment_lengths":[19,19,12,19,15,13,16,18,13,15,23,18,17,25,24,22]}
+window.ALL_CRATES = ["prebindgen","prebindgen_c","prebindgen_c_runtime","prebindgen_flat","prebindgen_jni","prebindgen_jni_runtime","prebindgen_proc_macro","prebindgen_registry"];
+//{"start":21,"fragment_lengths":[12,15,23,18,17,25,24,22]}

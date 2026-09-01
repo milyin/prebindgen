@@ -9,8 +9,8 @@
 <a href=#9 id=9 data-nosnippet>9</a>    /// and its origin are already here rather than re-derived per consumer.
 <a href=#10 id=10 data-nosnippet>10</a>    ///
 <a href=#11 id=11 data-nosnippet>11</a>    /// **Every** cell has one. There used to be a second variant for "a type only
-<a href=#12 id=12 data-nosnippet>12</a>    /// the binding authored", on the assumption that a declared wire type or an
-<a href=#13 id=13 data-nosnippet>13</a>    /// [`unfold`](crate::unfold) leaf had no reading to give. It did:
+<a href=#12 id=12 data-nosnippet>12</a>    /// the binding authored", on the assumption that a declared wire type or a
+<a href=#13 id=13 data-nosnippet>13</a>    /// decomposition leaf had no reading to give. It did:
 <a href=#14 id=14 data-nosnippet>14</a>    /// those are ordinary types in this language, they were simply absent from an
 <a href=#15 id=15 data-nosnippet>15</a>    /// index of what the *source* wrote. `ensure_entry` takes the reading from the
 <a href=#16 id=16 data-nosnippet>16</a>    /// grammar when the cell is born and stores it right here, so it is always
@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a>    /// less than its neighbours.
 <a href=#20 id=20 data-nosnippet>20</a>    </span><span class="kw">pub </span>subject: Box&lt;prebindgen_flat::flat::TypeRef&gt;,
 <a href=#21 id=21 data-nosnippet>21</a>    <span class="doccomment">/// The binding asks for this cell **directly** — a declared fn's signature, a
-<a href=#22 id=22 data-nosnippet>22</a>    /// declared type, an `unfold` leaf — as opposed to reaching it through
+<a href=#22 id=22 data-nosnippet>22</a>    /// declared type, a decomposition leaf — as opposed to reaching it through
 <a href=#23 id=23 data-nosnippet>23</a>    /// another crossing's [`Answer::subs`].
 <a href=#24 id=24 data-nosnippet>24</a>    ///
 <a href=#25 id=25 data-nosnippet>25</a>    /// A scan fact. Whether a converter is *needed* here is reachability from

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["Java_io_prebindgen_emitcheck_JNINative_zSampleSub"],"mod":["myflat"]};

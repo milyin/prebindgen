@@ -6,10 +6,10 @@
 </div><span id="structfield.ty" class="structfield section-header"><a href="#structfield.ty" class="anchor field">§</a><code>ty: <a class="struct" href="../flat/struct.TypeRef.html" title="struct prebindgen_registry::flat::TypeRef">TypeRef</a></code></span><div class="docblock"><p>The <strong>reading</strong> of the type whose resolved input converter decodes this
 leaf. For a single constructor these are the raw constructor parameter
 types; for a combined one the selector (<code>i32</code>) and <code>Option</code>-wrapped
-variant inputs. Spell it with <code>emit.spell(&amp;ty)</code> in an emission callback.</p>
-<p>A reading rather than a spelling for the reason <code>UnfoldLeaf::out_ty</code>
-gives: a consumer asking what this leaf’s type MEANS had to hand the
-spelling back to the registry (#275). The leaves no source wrote — the
+variant inputs. Spell it with <code>emit.emit_source_type(&amp;ty)</code> in an emission callback.</p>
+<p>A reading rather than a spelling, for the same reason every leaf type in
+this pipeline is one: a consumer asking what this leaf’s type MEANS had
+to hand the spelling back to the registry (#275). The leaves no source wrote — the
 presence flag, the selector — are built by
 <a href="../flat/struct.TypeRef.html#method.scalar" title="associated function prebindgen_registry::flat::TypeRef::scalar"><code>TypeRef::scalar</code></a>, which
 pairs the kind with its own spelling and is placeless by construction.</p>

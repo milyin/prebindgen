@@ -25,9 +25,9 @@ same-named overloads by hand.</p>
 <p>The type does <strong>not</strong> have to be declared in any package. A boundary decl
 on an undeclared type makes it <strong>rust-side-only</strong>: the value is always
 built from its ingredients at the boundary and never materializes in
-Kotlin — no class, no handle, nothing to <code>close()</code>. The one restriction is
-structural: <a href="../struct.ExpandParamDecl.html#method.variant_self" title="method prebindgen_jni::ExpandParamDecl::variant_self"><code>variant_self</code></a> hard-errors for such a
-type, since there is no Kotlin object to pass.</p>
+the target language — no class, no handle, nothing to close. The one
+restriction is structural: <a href="../struct.ExpandParamDecl.html#method.variant_self" title="method prebindgen_jni::ExpandParamDecl::variant_self"><code>variant_self</code></a> hard-errors
+for such a type, since there is no target-language object to pass.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// A KeyExpr param accepts EITHER a String (built via keyexpr_new_try_from)
 // OR an existing KeyExpr handle:
@@ -46,8 +46,8 @@ named <code>#[prebindgen]</code> constructor’s inputs on the wire, and Rust
 builds the value in the same call. E.g. <code>keyexpr_new_try_from(&amp;str)</code>
 gives every function taking a <code>KeyExpr</code> a String-carrying arm —
 as a selector + nullable slot at the wire tier (see the type-level
-docs for the exact generated shape), not as a Kotlin overload.</p>
-<p>A variant arm only <em>names</em> the constructor: no Kotlin surface of its
+docs for the exact generated shape), not as a target-language overload.</p>
+<p>A variant arm only <em>names</em> the constructor: no target-language surface of its
 own, so a decorated <code>fun!</code> (<code>.name()</code> / expand overrides) is a hard
 error rather than a silent discard.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.variant_self" class="method"><a class="src rightside" href="../../src/prebindgen_registry/decl.rs.html#357">Source</a><h4 class="code-header">pub fn <a href="#method.variant_self" class="fn">variant_self</a>(self) -&gt; <a class="struct" href="../struct.ExpandParamDecl.html" title="struct prebindgen_jni::ExpandParamDecl">ExpandParamDecl</a></h4></section></summary><div class="docblock"><p>Add the <strong>existing-handle</strong> arm: also accept an already-built value.

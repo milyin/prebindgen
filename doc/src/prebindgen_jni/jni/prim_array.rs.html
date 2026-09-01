@@ -136,18 +136,18 @@
 <a href=#136 id=136 data-nosnippet>136</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>input_body(
 <a href=#137 id=137 data-nosnippet>137</a>    ty: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
 <a href=#138 id=138 data-nosnippet>138</a>    spec: <span class="kw-2">&amp;</span>PrimArray,
-<a href=#139 id=139 data-nosnippet>139</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::Emit,
+<a href=#139 id=139 data-nosnippet>139</a>    emit: <span class="kw-2">&amp;</span>prebindgen_registry::RustWriter,
 <a href=#140 id=140 data-nosnippet>140</a>) -&gt; syn::Expr {
 <a href=#141 id=141 data-nosnippet>141</a>    <span class="kw">let </span>key = ty.key();
 <a href=#142 id=142 data-nosnippet>142</a>    <span class="comment">// The element spelled from the model's own `Array`, so the local's type
 <a href=#143 id=143 data-nosnippet>143</a>    // ascription cannot disagree with what `prim_array_of` matched.
 <a href=#144 id=144 data-nosnippet>144</a>    </span><span class="kw">let </span>elem_ty = <span class="kw">match </span>ty.kind() {
-<a href=#145 id=145 data-nosnippet>145</a>        prebindgen_registry::flat::TypeKind::Array { elem, .. } =&gt; emit.spell(elem),
+<a href=#145 id=145 data-nosnippet>145</a>        prebindgen_registry::flat::TypeKind::Array { elem, .. } =&gt; emit.emit_source_type(elem),
 <a href=#146 id=146 data-nosnippet>146</a>        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"prim_array_of matched a non-array"</span>),
 <a href=#147 id=147 data-nosnippet>147</a>    };
 <a href=#148 id=148 data-nosnippet>148</a>    <span class="comment">// The ascription the decoded array is checked against — spelled from the
 <a href=#149 id=149 data-nosnippet>149</a>    // reading, as generated Rust always spells.
-<a href=#150 id=150 data-nosnippet>150</a>    </span><span class="kw">let </span>ty = emit.spell(ty);
+<a href=#150 id=150 data-nosnippet>150</a>    </span><span class="kw">let </span>ty = emit.emit_source_type(ty);
 <a href=#151 id=151 data-nosnippet>151</a>    <span class="kw">let </span>len_err = <span class="macro">format!</span>(<span class="string">"fixed-size array decode: `{key}` expects a different length"</span>);
 <a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">if </span>spec.is_u8 {
 <a href=#153 id=153 data-nosnippet>153</a>        <span class="kw">return </span><span class="macro">syn::parse_quote!</span>({

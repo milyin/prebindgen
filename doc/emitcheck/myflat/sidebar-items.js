@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["z_keyexpr_as_str","z_sample_sub","z_sample_to_struct"],"struct":["ZKeyExpr","ZSample","ZSampleStruct"]};
