@@ -1,8 +1,8 @@
 //! Resolved output-deconstruction plans.
 
 /// Outer shape wrapping the [core decomposition](`UnfoldShape::Base`).
-/// The output-side analog of [`crate::expand::FoldShape`], on the
-/// unified [`Shape`](prebindgen_flat::shape::Shape) layer stack:
+/// The output-side analog of [`prebindgen_registry::expand::FoldShape`], on the
+/// unified [`Shape`](prebindgen_registry::shape::Shape) layer stack:
 ///   * `Base` — run the accessor's records on the value, producing all
 ///     [leaves](`UnfoldPlan::leaves`) and invoking the builder once;
 ///   * `Optional((), inner)` — `Option<T>`/`Option<&T>` return: `None` ⇒ a null
@@ -15,7 +15,7 @@
 ///
 /// The `()` payload is unused here — only the JNI adapter's
 /// `Shape<NullableKind>` carries per-layer data.
-pub use prebindgen_flat::shape::Shape as UnfoldShape;
+pub use prebindgen_registry::shape::Shape as UnfoldShape;
 
 use super::Delivery;
 
@@ -24,7 +24,7 @@ use super::Delivery;
 /// determined by the declaration, so adapters key such artifacts on this —
 /// functions selecting the same declaration share one artifact; differently
 /// declared decompositions of the same type get distinct ones. The first
-/// field is always the target type's canonical [`TypeKey`](crate::registry::TypeKey)
+/// field is always the target type's canonical [`TypeKey`](prebindgen_registry::TypeKey)
 /// string.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DeconId {
@@ -51,10 +51,10 @@ pub enum DeconId {
 #[derive(Clone)]
 pub struct DeconSpec {
     /// The decomposed type as first encountered. A **reading**, so "compare via
-    /// [`TypeKey`](crate::registry::TypeKey), not syntactically" is
+    /// [`TypeKey`](prebindgen_registry::TypeKey), not syntactically" is
     /// the type rather than an instruction: `source.key()` is the identity and
     /// `emit.emit_source_type(&source)` is what an emission callback writes.
-    pub source: prebindgen_flat::flat::TypeRef,
+    pub source: prebindgen_registry::flat::TypeRef,
     /// Flattened leaves in declared record order — names, types, paths,
     /// nullability all declaration-fixed.
     pub leaves: Vec<UnfoldLeaf>,
@@ -199,7 +199,7 @@ pub enum LeafSource {
     /// it gets a table cell like every other leaf's, but no root, because a sum
     /// has no whole-value output converter and demanding one would fail
     /// resolution over a type that never crosses whole. The reading comes from
-    /// the declaration — [`Variant::type_ref`](prebindgen_flat::flat::Variant::type_ref)
+    /// the declaration — [`Variant::type_ref`](prebindgen_registry::flat::Variant::type_ref)
     /// — never from an adapter composing one out of a name.
     SumTag,
     /// A payload field of ONE alternative of a decomposed sum, reached through
@@ -236,7 +236,7 @@ pub enum LeafSource {
 pub struct UnfoldPlan {
     /// Owned core type the records decompose — the function's return after
     /// peeling `&` / `Option` / `Vec`.
-    pub source: prebindgen_flat::flat::TypeRef,
+    pub source: prebindgen_registry::flat::TypeRef,
     /// Which deconstructor declaration produced [`Self::leaves`] — the
     /// identity adapters key signature artifacts on. `None` only for the
     /// whole-element `Iterable` arm (no declaration involved).
@@ -258,7 +258,7 @@ pub struct UnfoldPlan {
     /// delivered to the fold via its own output converter + projection (not
     /// decomposed). `None` for `Decompose`/`Optional` and for a **decomposed**
     /// `Iterable` fold (which uses [`Self::leaves`]).
-    pub element: Option<prebindgen_flat::flat::TypeRef>,
+    pub element: Option<prebindgen_registry::flat::TypeRef>,
     /// Callback (`deconstruct_output`) vs return-value (`convert_output`)
     /// delivery.
     pub delivery: Delivery,
@@ -266,7 +266,7 @@ pub struct UnfoldPlan {
     /// shape (`Decompose` ⇒ `out_ty`, `Optional` ⇒ `Option<out_ty>`). The
     /// wrapper returns this value through its ordinary output converter (no
     /// callback). `None` for [`Delivery::Callback`].
-    pub convert_out_ty: Option<prebindgen_flat::flat::TypeRef>,
+    pub convert_out_ty: Option<prebindgen_registry::flat::TypeRef>,
     /// `true` for a synthesized by-value `data_class` decomposition (see
     /// [`ValueDecon`](crate::unfold::ValueDecon)): the builder/folder
     /// is a **fixed, hoisted** foreign singleton that reconstructs the concrete
@@ -338,9 +338,9 @@ pub struct UnfoldLeaf {
     /// hope for a cell — the round trip #263 removed from `api/core`, surviving
     /// in the plans, and answering "no layer" for a type it had never seen
     /// (#275). The composed ones (`&Source`) are built by
-    /// [`TypeRef::borrowed`](prebindgen_flat::flat::TypeRef::borrowed), which
+    /// [`TypeRef::borrowed`](prebindgen_registry::flat::TypeRef::borrowed), which
     /// pairs the kind with its own spelling.
-    pub out_ty: prebindgen_flat::flat::TypeRef,
+    pub out_ty: prebindgen_registry::flat::TypeRef,
     /// `true` for the move/clone-the-value handle leaf, emitted **last** (after
     /// every reference leaf's JVM conversion has ended its borrow).
     pub identity: bool,

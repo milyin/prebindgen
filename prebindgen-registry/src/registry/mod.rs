@@ -323,6 +323,30 @@ pub(crate) struct Declared {
     pub(crate) edges: Vec<(Crossing, Crossing)>,
 }
 
+/// One output-side registration a decomposition asks the registry for.
+///
+/// An adapter that plans how a value comes apart reads the model alone; the one
+/// thing it needs the registry for is to say which readings must cross on the
+/// output side. It states those asks as a list, in the order it made them, and
+/// the registry replays them onto its type tables in one place — so the
+/// planning can happen before a registry exists, and nothing but the replay
+/// mutates it.
+///
+/// The order is part of the meaning: [`Self::Unrequire`] drops a demand an
+/// earlier [`Self::Output`] made.
+#[derive(Clone, Debug)]
+pub enum Requirement {
+    /// This reading must cross on the output side, and a converter for it must
+    /// resolve.
+    Output(prebindgen_flat::flat::TypeRef),
+    /// This reading enters the output table without demanding a converter — a
+    /// type a plan *names* rather than one that crosses.
+    Reference(prebindgen_flat::flat::TypeRef),
+    /// Drop an earlier demand that this reading's converter must resolve. The
+    /// table entry stays, so a converter is still produced if one resolves.
+    Unrequire(prebindgen_flat::flat::TypeRef),
+}
+
 /// How a binding's composites cross **in pieces** instead of whole.
 ///
 /// One value, pushed once through `RegistryBuilder::decompose`, in place of the
@@ -330,8 +354,7 @@ pub(crate) struct Declared {
 /// model alone, which is what makes stating it up front possible.
 ///
 /// The output side is stated as its **effects** rather than as its
-/// declarations: an adapter applies its own deconstructor declarations with
-/// [`unfold::Unfolding`](crate::unfold::Unfolding), keeps the plans it gets,
+/// declarations: an adapter plans how its values come apart, keeps those plans,
 /// and hands over the two things a registry needs from them — the output
 /// registrations to replay, and the leaf readings a callback argument's
 /// delivery depends on. The parameter side is still stated as declarations,
@@ -342,12 +365,9 @@ pub struct Decompositions {
     /// cross separately.
     pub expansions: Option<crate::expand::Expansions>,
     /// Output-side registrations the adapter's decompositions asked for, in the
-    /// order they were asked — see
-    /// [`Unfolding::requirements`](crate::unfold::Unfolding::requirements).
-    pub requirements: Vec<crate::unfold::Requirement>,
-    /// Per callback-argument type, the readings its decomposition delivers —
-    /// see
-    /// [`Unfolding::callback_arg_leaves`](crate::unfold::Unfolding::callback_arg_leaves).
+    /// order they were asked.
+    pub requirements: Vec<Requirement>,
+    /// Per callback-argument type, the readings its decomposition delivers.
     ///
     /// The ordering fact no syntax shows: each leaf's own conversion has to
     /// exist before the callback's can be built, and a leaf is named by a plan

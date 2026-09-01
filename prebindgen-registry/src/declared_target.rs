@@ -11,7 +11,7 @@
 //! **The comparison is shared here; being *asked* is enforced elsewhere.** A
 //! helper alone would not have prevented that defect — a new declarator could
 //! simply not call it. What prevents it is that the signature lookups
-//! (`expand::ctor_signature` and `unfold::accessor_signature`) take the
+//! (`expand::ctor_signature`, and an adapter's own accessor lookup) take the
 //! expected target as a **parameter** and run this
 //! check themselves. There is no way to obtain a declared function's signature
 //! without naming the type it must match, so the obligation is discharged by
@@ -26,18 +26,18 @@ use crate::registry::TypeKey;
 /// directions say it differently — a constructor *produces*, an accessor
 /// *takes*. Those messages are the binding author's diagnostics and belong with
 /// their own error enum, not here.
-pub(crate) struct TargetMismatch {
+pub struct TargetMismatch {
     /// The declared function's ident.
-    pub(crate) func: String,
+    pub func: String,
     /// The type it is actually about.
-    pub(crate) actual: String,
+    pub actual: String,
     /// The type it was declared for.
-    pub(crate) expected: String,
+    pub expected: String,
 }
 
 /// The comparison itself: two [`TypeKey`]s, keyed so that spelling differences
 /// which do not change identity cannot make a correct declaration fail.
-pub(crate) fn check_declared_target(
+pub fn check_declared_target(
     func: &syn::Ident,
     actual: &TypeKey,
     expected: &TypeKey,
