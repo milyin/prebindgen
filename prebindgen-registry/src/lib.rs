@@ -102,7 +102,7 @@
 
 pub mod chain;
 pub mod decl;
-pub(crate) mod declared_target;
+pub mod declared_target;
 mod destination;
 pub mod diagnostics;
 pub mod domain;
@@ -116,7 +116,6 @@ pub mod registry;
 pub(crate) mod resolve;
 #[cfg(test)]
 pub(crate) mod test_util;
-pub mod unfold;
 pub mod write;
 
 /// The flat model itself lives in the separate `prebindgen-flat` crate —
@@ -146,8 +145,8 @@ pub use self::{
     prebindgen::{ConverterImpl, NamePredicate, Prebindgen},
     registry::{
         Answer, Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
-        NotExpressibleEntry, Registry, RegistryBuilder, ScanError, TypeKey, TypeKeyParseError,
-        WriteRustError,
+        NotExpressibleEntry, Registry, RegistryBuilder, Requirement, ScanError, TypeKey,
+        TypeKeyParseError, WriteRustError,
     },
 };
 

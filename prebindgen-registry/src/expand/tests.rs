@@ -9,7 +9,8 @@ fn key(s: &str) -> crate::registry::TypeKey {
     crate::registry::TypeKey::parse(s).expect("a fixture type")
 }
 
-/// A reading for a fixture type — see the twin in `core/unfold/tests.rs`.
+/// A reading for a fixture type — see the twin in `prebindgen-jni`'s
+/// `unfold/tests.rs`.
 /// Plan leaves carry `TypeRef`s, and a fixture naming a type inline needs one.
 fn tref(ty: syn::Type) -> prebindgen_flat::flat::TypeRef {
     prebindgen_flat::flat::Flat::builder()

@@ -5,7 +5,7 @@
 //! ONE alternative's leaves are live per value. Core models that with a
 //! synthesized [`LeafSource::SumTag`] selector plus per-leaf
 //! [`UnfoldLeaf::groups`] membership
-//! ([`apply_sum_returns`](prebindgen_registry::unfold::apply_sum_returns)); this
+//! ([`apply_sum_returns`](crate::unfold::apply_sum_returns)); this
 //! module is the JNI adapter's two ends of it — [`synth_sum_leaves`] builds the
 //! leaf list before `resolve`, [`encode_sum_leaves`] emits the single `match`
 //! that fills every slot at emit time.
@@ -44,8 +44,8 @@ pub(crate) fn synth_sum_leaves(
     registry: &impl Conversions,
     ident: &syn::Ident,
     sum: &prebindgen_registry::flat::Variant,
-) -> Vec<prebindgen_registry::unfold::UnfoldLeaf> {
-    use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
+) -> Vec<crate::unfold::UnfoldLeaf> {
+    use crate::unfold::{LeafSource, UnfoldLeaf};
     ext.sum_out_wires(registry.flat(), ident, sum.type_ref())
         .unwrap_or_default()
         .into_iter()
@@ -193,7 +193,7 @@ pub(crate) fn encode_sum_group(
         .iter()
         .find(|l| l.is_tag())
         .expect("a sum segment carries its selector leaf");
-    let (source, sum) = prebindgen_registry::unfold::DeliveryBridge::sum(context, tag_leaf);
+    let (source, sum) = crate::unfold::DeliveryBridge::sum(context, tag_leaf);
 
     let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(context, l)).collect();
 
@@ -203,9 +203,7 @@ pub(crate) fn encode_sum_group(
     let arg_exprs: Vec<TokenStream> = leaves
         .iter()
         .enumerate()
-        .map(|(idx, leaf)| {
-            prebindgen_registry::unfold::DeliveryBridge::argument(context, leaf, &obj_idents[idx])
-        })
+        .map(|(idx, leaf)| crate::unfold::DeliveryBridge::argument(context, leaf, &obj_idents[idx]))
         .collect();
 
     // Declare every slot up front; each arm assigns all of them.
@@ -407,7 +405,7 @@ pub(crate) fn encode_segment_group(
 /// The encode of a **presence** segment: an optional nested value's flag and
 /// the leaves it gates, from the value the walk has already unwrapped.
 ///
-/// [`prebindgen_registry::unfold::segment`] supplies the gate — one tuple bind
+/// [`crate::unfold::segment`] supplies the gate — one tuple bind
 /// whose absent arm carries every slot's default — and calls this for the
 /// present arm, so what is here is the flag and the child's own leaves read
 /// off the unwrapped value. The sum twin next to it answers the same shape
@@ -423,7 +421,7 @@ pub(crate) fn encode_presence_group(
     fail: &dyn Fn(TokenStream) -> TokenStream,
     emit: &prebindgen_registry::RustWriter,
 ) -> (TokenStream, Vec<TokenStream>) {
-    use prebindgen_registry::unfold::DeliveryBridge;
+    use crate::unfold::DeliveryBridge;
 
     let flag = &obj_idents[0];
     let flag_slot = leaf_slot(context, &leaves[0]);
@@ -444,21 +442,20 @@ pub(crate) fn encode_presence_group(
     // are not independent, so those are emitted as their own gated `match`
     // rather than one at a time. One level down from this flag's own, which is
     // what [`segments_at`] reads.
-    let inner = prebindgen_registry::unfold::segments_at(leaves, leaves[0].groups.len() + 1);
-    let tail_of =
-        |leaf: &crate::jni::compile::OutWire| -> Vec<prebindgen_registry::unfold::PathStep> {
-            leaf.reach.iter().skip(consumed).cloned().collect()
-        };
+    let inner = crate::unfold::segments_at(leaves, leaves[0].groups.len() + 1);
+    let tail_of = |leaf: &crate::jni::compile::OutWire| -> Vec<crate::unfold::PathStep> {
+        leaf.reach.iter().skip(consumed).cloned().collect()
+    };
     for seg in &inner {
         let seg_args = std::cell::RefCell::new(Vec::new());
-        let place = prebindgen_registry::unfold::LeafPlace {
+        let place = crate::unfold::LeafPlace {
             base: matched.clone(),
             base_is_ref: true,
             path: tail_of(&leaves[seg.start]),
             consuming: false,
             conditional: None,
         };
-        let seg_stmts = prebindgen_registry::unfold::segment(
+        let seg_stmts = crate::unfold::segment(
             context,
             qualify,
             &place,
@@ -490,13 +487,13 @@ pub(crate) fn encode_presence_group(
             continue;
         }
         let slot = &obj_idents[index];
-        let tail: Vec<prebindgen_registry::unfold::PathStep> =
+        let tail: Vec<crate::unfold::PathStep> =
             leaf.reach.iter().skip(consumed).cloned().collect();
         let matched = matched.clone();
         let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
-            prebindgen_registry::unfold::reach_leaf(
+            crate::unfold::reach_leaf(
                 qualify,
-                prebindgen_registry::unfold::LeafAt {
+                crate::unfold::LeafAt {
                     leaf,
                     path: &tail,
                     base: matched.clone(),

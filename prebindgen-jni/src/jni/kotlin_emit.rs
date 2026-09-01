@@ -1197,12 +1197,12 @@ impl Declarations {
         /// single-leaf appender for a whole-element leaf fold. The wrapper
         /// references the singleton instead of taking a caller `build`/`fold`.
         enum FixedSingleton {
-            StructBuilder(std::rc::Rc<prebindgen_registry::unfold::DeconSpec>),
-            StructFolder(std::rc::Rc<prebindgen_registry::unfold::DeconSpec>),
+            StructBuilder(std::rc::Rc<crate::unfold::DeconSpec>),
+            StructFolder(std::rc::Rc<crate::unfold::DeconSpec>),
             /// A decomposed **sum**: the reassembly is a `when` over the tag
             /// picking the live group, not a `fromParts` over a fixed product.
-            SumBuilder(std::rc::Rc<prebindgen_registry::unfold::DeconSpec>),
-            SumFolder(std::rc::Rc<prebindgen_registry::unfold::DeconSpec>),
+            SumBuilder(std::rc::Rc<crate::unfold::DeconSpec>),
+            SumFolder(std::rc::Rc<crate::unfold::DeconSpec>),
             LeafFolder,
         }
         // The interface allocations and their use-site roles are already in
@@ -1406,7 +1406,7 @@ impl Declarations {
     fn value_struct_builder_singleton(
         &self,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen_registry::unfold::DeconSpec,
+        decon: &crate::unfold::DeconSpec,
     ) -> KtDecl {
         let source = &decon.source;
         let class_fqn = self
@@ -1452,7 +1452,7 @@ impl Declarations {
     fn value_struct_folder_singleton(
         &self,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen_registry::unfold::DeconSpec,
+        decon: &crate::unfold::DeconSpec,
     ) -> KtDecl {
         let source = &decon.source;
         let class_fqn = self
@@ -1512,7 +1512,7 @@ impl Declarations {
         &self,
         flat: &prebindgen_registry::flat::Flat,
         spec: &crate::jni::IfaceSpec,
-        plan: &prebindgen_registry::unfold::DeconSpec,
+        plan: &crate::unfold::DeconSpec,
     ) -> KtDecl {
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
@@ -1554,7 +1554,7 @@ impl Declarations {
         &self,
         flat: &prebindgen_registry::flat::Flat,
         spec: &crate::jni::IfaceSpec,
-        plan: &prebindgen_registry::unfold::DeconSpec,
+        plan: &crate::unfold::DeconSpec,
     ) -> KtDecl {
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();

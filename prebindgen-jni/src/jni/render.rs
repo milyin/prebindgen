@@ -499,7 +499,7 @@ pub(crate) fn build_typed_handle(
 /// True for an `Iterable` fold delivery, including one wrapped in an
 /// `Optional` layer (`Option<Vec<T>>` → a nullable delivery). Selects the fold
 /// surface (`acc` + `fold`) over a scalar `Optional`/`Base` builder.
-pub(crate) fn is_iterable_fold(shape: &prebindgen_registry::unfold::UnfoldShape) -> bool {
+pub(crate) fn is_iterable_fold(shape: &crate::unfold::UnfoldShape) -> bool {
     shape.has_iterable_layer()
 }
 
@@ -2159,7 +2159,7 @@ pub(crate) fn unfold_leaf_kt(
 /// writes valid Kotlin identifiers) and no dedup (uniqueness is enforced in
 /// `core::unfold`).
 ///
-/// [`UnfoldLeaf::name`]: prebindgen_registry::unfold::UnfoldLeaf::name
+/// [`UnfoldLeaf::name`]: crate::unfold::UnfoldLeaf::name
 pub(crate) fn plan_leaf_names(leaves: &[crate::jni::compile::OutWire]) -> Vec<String> {
     leaves.iter().map(|leaf| leaf.name.clone()).collect()
 }
@@ -2384,14 +2384,14 @@ fn shape_notes(fplan: &JniFunctionPlan) -> Option<String> {
         let source = plan.source.to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         match plan.delivery {
-            prebindgen_registry::unfold::Delivery::Callback if !leaves.is_empty() => {
+            crate::unfold::Delivery::Callback if !leaves.is_empty() => {
                 notes.push(format!(
                     "The Rust `{source}` result is delivered decomposed: the builder \
                      callback receives (`{}`).",
                     leaves.join("`, `")
                 ));
             }
-            prebindgen_registry::unfold::Delivery::Return => {
+            crate::unfold::Delivery::Return => {
                 notes.push(format!(
                     "The Rust `{source}` result is converted and returned as a single value."
                 ));

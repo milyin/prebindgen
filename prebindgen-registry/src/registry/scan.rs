@@ -614,8 +614,8 @@ impl Registry {
     /// readings and no way to tell them apart. The fallback fired constantly, and
     /// on **scalars** — `i64`, `String`, `bool` — which are certainly registered by
     /// the time a binding is built. That was the tell: the misses were not unknown
-    /// types but an inverted order, [`unfold`](crate::unfold) asking
-    /// about the leaves its caller registers one loop later. Because `classify`
+    /// types but an inverted order, an adapter's decomposition asking about the
+    /// leaves its caller registers one loop later. Because `classify`
     /// answered correctly, nothing downstream was wrong and nothing showed it
     /// (#266). The declarations now carry their own readings, so there is no such
     /// caller left.
@@ -643,8 +643,9 @@ impl Registry {
 
     /// Register `ty` (and its nested positions) as a required **output** so the
     /// resolver produces a converter for it. The output-side peer of
-    /// [`Self::require_input`]; used by [`crate::unfold`] to pull in
-    /// the leaf types a decomposition delivers.
+    /// [`Self::require_input`]; replayed from
+    /// [`Requirement::Output`](crate::Requirement::Output) to pull in the leaf
+    /// types an adapter's decomposition delivers.
     pub(crate) fn require_output(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
         self.register_type_recursive(Direction::Deconstruct, reading, true);
     }
@@ -656,10 +657,11 @@ impl Registry {
     /// The third thing a table cell can mean, now said out loud. A cell records
     /// that a type **entered the pipeline**; `root` records that the binding
     /// asked for it *directly*; `entry` records that a converter resolved. This
-    /// makes the first without the second, which is exactly what a
-    /// [`SumTag`](crate::unfold::LeafSource::SumTag) selector needs:
-    /// it names *which* sum it chooses between, and that sum has no whole-value
-    /// output converter at all, so requiring one would fail resolution (#282).
+    /// makes the first without the second, which is exactly what a sum-type
+    /// selector leaf needs: it names *which* sum it chooses between, and that sum
+    /// has no whole-value output converter at all, so requiring one would fail
+    /// resolution (#282). Replayed from
+    /// [`Requirement::Reference`](crate::Requirement::Reference).
     ///
     /// **Not [`require_output`](Self::require_output) with a flag.** That one is
     /// `root = true` by definition — its whole job is to say a converter must
@@ -673,9 +675,9 @@ impl Registry {
     /// Drop `ty` from the required-output scan set. The type's table entry is
     /// left intact (so [`crate::resolve`]'s PASS A still resolves it
     /// if it can, and emits it when resolved), but a `None` resolution no longer
-    /// counts as an unresolved-required error. Used by
-    /// [`crate::unfold::apply_leaf_vec_folds`]: when a `Vec<T>` /
-    /// `Option<Vec<T>>` return is delivered element-by-element through a fold,
+    /// counts as an unresolved-required error. Replayed from
+    /// [`Requirement::Unrequire`](crate::Requirement::Unrequire): when a `Vec<T>`
+    /// / `Option<Vec<T>>` return is delivered element-by-element through a fold,
     /// the whole-collection converter is genuinely not needed — and for a
     /// `Vec<opaque-handle>` it cannot resolve at all (a `jlong` wire is not
     /// JObject-shaped), so requiring it would wrongly fail resolution.
