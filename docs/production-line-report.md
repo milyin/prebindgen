@@ -29,6 +29,12 @@ The additions landed and the deletion they were for did not.
   `FragmentPlan` directly, because two of `Conv`'s four remaining fragment
   reads are composition, which happens before any plan exists.
 
+  **Superseded by #660** — see `docs/api-coherence-report.md`. Only one of those
+  reads was composition; `pipeline` and `output_abi` were blocked because a
+  fragment composed into its parent froze without an artifact and
+  `Conv::pipeline` is asked of one. Of the four names, only `Conv` was a
+  carrier, and it no longer holds one.
+
 So the ledger is honest about direction: this is a carrier-first refactor whose
 payment is still outstanding, not a reduction that failed to materialise.
 
