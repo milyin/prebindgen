@@ -540,16 +540,15 @@ pub trait Representation {
     type ConverterArtifact;
     /// Terminal conversion at an [`Atomic`](ShapePlan::Atomic) shape.
     type TerminalCodec;
-    /// Packing or unpacking a fixed product.
-    type ProductBridge;
-    /// Absent/present control flow.
-    type OptionalBridge;
-    /// Builder or traversal control flow for a sequence.
-    type SequenceBridge;
-    /// Arm/tag control flow for a choice.
-    type ChoiceBridge;
-    /// Callable construction and invocation control flow.
-    type CallbackBridge;
+    /// The control flow of one composite shape.
+    ///
+    /// Packing a product, gating an optional, building or traversing a
+    /// sequence, selecting a choice arm, and constructing or invoking a
+    /// callable are all the same kind of answer: what the adapter does at a
+    /// shape whose children carry the values. The [`ShapePlan`] variant that
+    /// holds the bridge says which of those it is, so the adapter does not
+    /// need a separate type per variant to know.
+    type Bridge;
     /// One semantic niche identity. Equal values denote the same bit domain.
     type Niche: Clone + Eq + Hash;
     /// A cleanup operation.
@@ -832,35 +831,35 @@ pub enum ShapePlan<R: Representation> {
     /// Pack or unpack all fixed positions.
     Product {
         /// Adapter representation operation.
-        bridge: FixedArity<R::ProductBridge>,
+        bridge: FixedArity<R::Bridge>,
         /// Ordered source parts.
         parts: Vec<FragmentUse>,
     },
     /// Absent/present control flow around one value.
     Optional {
         /// Adapter representation operation.
-        bridge: R::OptionalBridge,
+        bridge: R::Bridge,
         /// The present value.
         value: FragmentUse,
     },
     /// Builder or traversal control flow around one element type.
     Sequence {
         /// Adapter representation operation.
-        bridge: R::SequenceBridge,
+        bridge: R::Bridge,
         /// The repeated element.
         element: FragmentUse,
     },
     /// Tagged selection among ordered arms.
     Choice {
         /// Adapter representation operation and arm contracts.
-        bridge: ChoiceArity<R::ChoiceBridge>,
+        bridge: ChoiceArity<R::Bridge>,
         /// Parts in every arm, in tag and then position order.
         arms: Vec<Vec<FragmentUse>>,
     },
     /// Foreign callable construction and later argument delivery.
     Invoke {
         /// Adapter callable operation.
-        bridge: FixedArity<R::CallbackBridge>,
+        bridge: FixedArity<R::Bridge>,
         /// Callback arguments. Their direction is opposite the callable's.
         arguments: Vec<FragmentUse>,
     },
@@ -873,11 +872,7 @@ pub enum ShapePlan<R: Representation> {
 impl<R: Representation> Clone for ShapePlan<R>
 where
     R::TerminalCodec: Clone,
-    R::ProductBridge: Clone,
-    R::OptionalBridge: Clone,
-    R::SequenceBridge: Clone,
-    R::ChoiceBridge: Clone,
-    R::CallbackBridge: Clone,
+    R::Bridge: Clone,
 {
     fn clone(&self) -> Self {
         match self {

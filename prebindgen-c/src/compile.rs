@@ -308,11 +308,7 @@ impl Representation for CRepresentation {
     type Step = CCall;
     type ConverterArtifact = CFunction;
     type TerminalCodec = CCall;
-    type ProductBridge = CCall;
-    type OptionalBridge = CCall;
-    type SequenceBridge = CCall;
-    type ChoiceBridge = CCall;
-    type CallbackBridge = CCall;
+    type Bridge = CCall;
     type Niche = String;
     type Cleanup = ();
     type FailureRoute = CFailureRoute;
