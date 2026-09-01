@@ -952,555 +952,556 @@
 <a href=#952 id=952 data-nosnippet>952</a>        // Stated here rather than left out, so the canonical site set covers
 <a href=#953 id=953 data-nosnippet>953</a>        // this path too (#622 review).
 <a href=#954 id=954 data-nosnippet>954</a>        </span>{
-<a href=#955 id=955 data-nosnippet>955</a>            <span class="kw">let </span>fragment = entry.fragment();
+<a href=#955 id=955 data-nosnippet>955</a>            <span class="kw">let </span>fragment = entry.plan();
 <a href=#956 id=956 data-nosnippet>956</a>            ext.site_plans
 <a href=#957 id=957 data-nosnippet>957</a>                .borrow_mut()
-<a href=#958 id=958 data-nosnippet>958</a>                .push(std::rc::Rc::new(fragment.freeze_site(
-<a href=#959 id=959 data-nosnippet>959</a>                    <span class="kw-2">&amp;</span>prebindgen_registry::recipe::Bound {
-<a href=#960 id=960 data-nosnippet>960</a>                        site: Site {
-<a href=#961 id=961 data-nosnippet>961</a>                            owner: owner.clone(),
-<a href=#962 id=962 data-nosnippet>962</a>                            role: leaf_role(expanded, position, leaf_index),
-<a href=#963 id=963 data-nosnippet>963</a>                        },
-<a href=#964 id=964 data-nosnippet>964</a>                        crossing: Crossing::new(reading.clone(), Direction::Construct),
-<a href=#965 id=965 data-nosnippet>965</a>                        recipe: fragment.id.recipe().clone(),
-<a href=#966 id=966 data-nosnippet>966</a>                        origin: prebindgen_registry::recipe::Origin::Function,
-<a href=#967 id=967 data-nosnippet>967</a>                    },
-<a href=#968 id=968 data-nosnippet>968</a>                    <span class="kw">crate</span>::jni::compile::JAbiLeaves::Params(leaf.clone()),
-<a href=#969 id=969 data-nosnippet>969</a>                )));
-<a href=#970 id=970 data-nosnippet>970</a>            <span class="comment">// And one site per value the callback delivers. A delivered
-<a href=#971 id=971 data-nosnippet>971</a>            // argument is a place in THIS function, which is what
-<a href=#972 id=972 data-nosnippet>972</a>            // `Role::CallbackArg` names and why the registry keeps it apart
-<a href=#973 id=973 data-nosnippet>973</a>            // from the `Role::Part` the shared callback recipe is compiled at:
-<a href=#974 id=974 data-nosnippet>974</a>            // several functions taking one `impl Fn` signature share the
-<a href=#975 id=975 data-nosnippet>975</a>            // delivery, and each states its own site over it.
-<a href=#976 id=976 data-nosnippet>976</a>            //
-<a href=#977 id=977 data-nosnippet>977</a>            // The recipe is `site_bindings`' answer, not one composed here. A
-<a href=#978 id=978 data-nosnippet>978</a>            // fabricated `Bound` is what the first two attempts at this
-<a href=#979 id=979 data-nosnippet>979</a>            // produced, and a site that misreports which row it took is worse
-<a href=#980 id=980 data-nosnippet>980</a>            // than an absent one (#622 review).
-<a href=#981 id=981 data-nosnippet>981</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(plan) = fragment.rust.invoke_plan() {
-<a href=#982 id=982 data-nosnippet>982</a>                <span class="kw">let </span>arguments = <span class="kw">match </span><span class="kw-2">&amp;</span>fragment.shape {
-<a href=#983 id=983 data-nosnippet>983</a>                    prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } =&gt; {
-<a href=#984 id=984 data-nosnippet>984</a>                        arguments.as_slice()
-<a href=#985 id=985 data-nosnippet>985</a>                    }
-<a href=#986 id=986 data-nosnippet>986</a>                    <span class="kw">_ </span>=&gt; <span class="kw-2">&amp;</span>[],
-<a href=#987 id=987 data-nosnippet>987</a>                };
-<a href=#988 id=988 data-nosnippet>988</a>                <span class="kw">for </span>(arg, ty) <span class="kw">in </span>args.iter().enumerate() {
-<a href=#989 id=989 data-nosnippet>989</a>                    <span class="kw">let </span>(<span class="prelude-val">Some</span>(edge), <span class="prelude-val">Some</span>(abi)) = (arguments.get(arg), plan.arg_abi(arg)) <span class="kw">else </span>{
-<a href=#990 id=990 data-nosnippet>990</a>                        <span class="kw">continue</span>;
-<a href=#991 id=991 data-nosnippet>991</a>                    };
-<a href=#992 id=992 data-nosnippet>992</a>                    <span class="kw">let </span>crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
-<a href=#993 id=993 data-nosnippet>993</a>                    <span class="kw">let </span>site = Site {
-<a href=#994 id=994 data-nosnippet>994</a>                        owner: owner.clone(),
-<a href=#995 id=995 data-nosnippet>995</a>                        role: prebindgen_registry::recipe::Role::CallbackArg {
-<a href=#996 id=996 data-nosnippet>996</a>                            param: position,
-<a href=#997 id=997 data-nosnippet>997</a>                            arg,
-<a href=#998 id=998 data-nosnippet>998</a>                        },
-<a href=#999 id=999 data-nosnippet>999</a>                    };
-<a href=#1000 id=1000 data-nosnippet>1000</a>                    <span class="kw">let </span><span class="prelude-val">Some</span>(bound) =
-<a href=#1001 id=1001 data-nosnippet>1001</a>                        ext.site_bindings()
-<a href=#1002 id=1002 data-nosnippet>1002</a>                            .resolve(<span class="kw-2">&amp;</span>site, <span class="kw-2">&amp;</span>crossing, ext.recipe_table())
-<a href=#1003 id=1003 data-nosnippet>1003</a>                    <span class="kw">else </span>{
-<a href=#1004 id=1004 data-nosnippet>1004</a>                        <span class="kw">continue</span>;
-<a href=#1005 id=1005 data-nosnippet>1005</a>                    };
-<a href=#1006 id=1006 data-nosnippet>1006</a>                    ext.site_plans.borrow_mut().push(std::rc::Rc::new(
-<a href=#1007 id=1007 data-nosnippet>1007</a>                        <span class="kw">crate</span>::jni::compile::callback_arg_site(<span class="kw-2">&amp;</span>bound, edge, abi),
-<a href=#1008 id=1008 data-nosnippet>1008</a>                    ));
-<a href=#1009 id=1009 data-nosnippet>1009</a>                }
-<a href=#1010 id=1010 data-nosnippet>1010</a>            }
-<a href=#1011 id=1011 data-nosnippet>1011</a>        }
-<a href=#1012 id=1012 data-nosnippet>1012</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(leaf);
-<a href=#1013 id=1013 data-nosnippet>1013</a>    }
-<a href=#1014 id=1014 data-nosnippet>1014</a>    <span class="comment">// The compiler, resumed over what the build already compiled. Every
-<a href=#1015 id=1015 data-nosnippet>1015</a>    // fragment this site's recipe needs is in that store, so `site` finds them
-<a href=#1016 id=1016 data-nosnippet>1016</a>    // rather than building them again — and the plan it wraps them in is the
-<a href=#1017 id=1017 data-nosnippet>1017</a>    // one hook the registry calls per site rather than per crossing.
-<a href=#1018 id=1018 data-nosnippet>1018</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>compiler = Compiler::resume(
-<a href=#1019 id=1019 data-nosnippet>1019</a>        registry.flat(),
-<a href=#1020 id=1020 data-nosnippet>1020</a>        ext.recipe_table(),
-<a href=#1021 id=1021 data-nosnippet>1021</a>        ext.site_bindings(),
-<a href=#1022 id=1022 data-nosnippet>1022</a>        ext.compiled.borrow().clone(),
-<a href=#1023 id=1023 data-nosnippet>1023</a>    );
-<a href=#1024 id=1024 data-nosnippet>1024</a>    <span class="kw">let </span><span class="kw-2">mut </span>adapter = <span class="kw">crate</span>::jni::compile::JCompile {
-<a href=#1025 id=1025 data-nosnippet>1025</a>        decls: ext,
-<a href=#1026 id=1026 data-nosnippet>1026</a>        registry,
-<a href=#1027 id=1027 data-nosnippet>1027</a>        declared_return: <span class="prelude-val">None</span>,
-<a href=#1028 id=1028 data-nosnippet>1028</a>        site: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::PlanSite::Param(
-<a href=#1029 id=1029 data-nosnippet>1029</a>            <span class="kw">crate</span>::jni::compile::ParamSite {
-<a href=#1030 id=1030 data-nosnippet>1030</a>                ident: ident.clone(),
-<a href=#1031 id=1031 data-nosnippet>1031</a>                expanded,
-<a href=#1032 id=1032 data-nosnippet>1032</a>            },
-<a href=#1033 id=1033 data-nosnippet>1033</a>        )),
-<a href=#1034 id=1034 data-nosnippet>1034</a>    };
-<a href=#1035 id=1035 data-nosnippet>1035</a>    <span class="comment">// A site is a place in an exported function, which is what the registry's
-<a href=#1036 id=1036 data-nosnippet>1036</a>    // `Site` means: `owner` is the function and `role` names the position in
-<a href=#1037 id=1037 data-nosnippet>1037</a>    // it. This named the PARAMETER as owner and always index 0, so two
-<a href=#1038 id=1038 data-nosnippet>1038</a>    // functions with a parameter of the same name froze the same identity, and
-<a href=#1039 id=1039 data-nosnippet>1039</a>    // every leaf of an expanded parameter collided with its siblings (#622
-<a href=#1040 id=1040 data-nosnippet>1040</a>    // review).
-<a href=#1041 id=1041 data-nosnippet>1041</a>    //
-<a href=#1042 id=1042 data-nosnippet>1042</a>    // `Role::Param`'s index is the position in the SOURCE parameter list, so
-<a href=#1043 id=1043 data-nosnippet>1043</a>    // an expansion's leaves cannot be numbered as parameters: doing that names
-<a href=#1044 id=1044 data-nosnippet>1044</a>    // positions the function does not have and attaches one parameter's site to
-<a href=#1045 id=1045 data-nosnippet>1045</a>    // another's crossing. They are `ExpansionLeaf`s of the parameter that
-<a href=#1046 id=1046 data-nosnippet>1046</a>    // expanded, which is the same question `CallbackArg` already answers for a
-<a href=#1047 id=1047 data-nosnippet>1047</a>    // callback's arguments (#622 review).
-<a href=#1048 id=1048 data-nosnippet>1048</a>    </span><span class="kw">let </span>site = Site {
-<a href=#1049 id=1049 data-nosnippet>1049</a>        owner: owner.clone(),
-<a href=#1050 id=1050 data-nosnippet>1050</a>        role: leaf_role(expanded, position, leaf_index),
-<a href=#1051 id=1051 data-nosnippet>1051</a>    };
-<a href=#1052 id=1052 data-nosnippet>1052</a>    <span class="kw">let </span>crossing = Crossing::new(reading.clone(), Direction::Construct);
-<a href=#1053 id=1053 data-nosnippet>1053</a>    <span class="kw">let </span>use_pair = <span class="kw">crate</span>::jni::compile::optional_pair_plan_candidate(ext, reading)
-<a href=#1054 id=1054 data-nosnippet>1054</a>        &amp;&amp; ext
-<a href=#1055 id=1055 data-nosnippet>1055</a>            .recipe_table()
-<a href=#1056 id=1056 data-nosnippet>1056</a>            .key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::recipes::pair())
-<a href=#1057 id=1057 data-nosnippet>1057</a>            .is_some();
-<a href=#1058 id=1058 data-nosnippet>1058</a>    <span class="kw">let </span>planned = <span class="kw">if </span>use_pair {
-<a href=#1059 id=1059 data-nosnippet>1059</a>        compiler.site_recipe(<span class="kw-2">&amp;mut </span>adapter, site, crossing, <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::recipes::pair())
-<a href=#1060 id=1060 data-nosnippet>1060</a>    } <span class="kw">else </span>{
-<a href=#1061 id=1061 data-nosnippet>1061</a>        compiler.site(<span class="kw-2">&amp;mut </span>adapter, site, crossing)
-<a href=#1062 id=1062 data-nosnippet>1062</a>    };
-<a href=#1063 id=1063 data-nosnippet>1063</a>    <span class="kw-2">*</span>ext.compiled.borrow_mut() = compiler.finish();
-<a href=#1064 id=1064 data-nosnippet>1064</a>    <span class="kw">match </span>planned {
-<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(plan)) =&gt; plan.param().ok_or_else(|| PlanError::Unresolved {
-<a href=#1066 id=1066 data-nosnippet>1066</a>            ty: Box::new(reading.clone()),
-<a href=#1067 id=1067 data-nosnippet>1067</a>        }),
-<a href=#1068 id=1068 data-nosnippet>1068</a>        <span class="comment">// A site the bindings omitted, which JniGen never declares.
-<a href=#1069 id=1069 data-nosnippet>1069</a>        </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="prelude-val">Err</span>(PlanError::Unresolved {
-<a href=#1070 id=1070 data-nosnippet>1070</a>            ty: Box::new(reading.clone()),
-<a href=#1071 id=1071 data-nosnippet>1071</a>        }),
-<a href=#1072 id=1072 data-nosnippet>1072</a>        <span class="prelude-val">Err</span>(prebindgen_registry::recipe::CompileError::Adapter(
-<a href=#1073 id=1073 data-nosnippet>1073</a>            <span class="kw">crate</span>::jni::compile::JErr::Plan(e),
-<a href=#1074 id=1074 data-nosnippet>1074</a>        )) =&gt; <span class="prelude-val">Err</span>(<span class="kw-2">*</span>e),
-<a href=#1075 id=1075 data-nosnippet>1075</a>        <span class="comment">// A refusal or a table disagreement, which reach this path only for a
-<a href=#1076 id=1076 data-nosnippet>1076</a>        // type with no conversion — the same failure the entry lookup reported.
-<a href=#1077 id=1077 data-nosnippet>1077</a>        </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="kw">if </span>expanded {
-<a href=#1078 id=1078 data-nosnippet>1078</a>            PlanError::UnresolvedLeaf {
-<a href=#1079 id=1079 data-nosnippet>1079</a>                ty: Box::new(reading.clone()),
-<a href=#1080 id=1080 data-nosnippet>1080</a>                param: source_param.clone(),
-<a href=#1081 id=1081 data-nosnippet>1081</a>            }
-<a href=#1082 id=1082 data-nosnippet>1082</a>        } <span class="kw">else </span>{
-<a href=#1083 id=1083 data-nosnippet>1083</a>            PlanError::Unresolved {
-<a href=#1084 id=1084 data-nosnippet>1084</a>                ty: Box::new(reading.clone()),
-<a href=#1085 id=1085 data-nosnippet>1085</a>            }
-<a href=#1086 id=1086 data-nosnippet>1086</a>        }),
-<a href=#1087 id=1087 data-nosnippet>1087</a>    }
-<a href=#1088 id=1088 data-nosnippet>1088</a>}
-<a href=#1089 id=1089 data-nosnippet>1089</a>
-<a href=#1090 id=1090 data-nosnippet>1090</a><span class="doccomment">/// Compile the return of `func` as one site.
-<a href=#1091 id=1091 data-nosnippet>1091</a>///
-<a href=#1092 id=1092 data-nosnippet>1092</a>/// `declared` is what the signature says the function returns, when that
-<a href=#1093 id=1093 data-nosnippet>1093</a>/// differs from the value that crosses — a `Return`-delivery convert crosses
-<a href=#1094 id=1094 data-nosnippet>1094</a>/// what its decomposition produced. `None` when the two are the same.
-<a href=#1095 id=1095 data-nosnippet>1095</a></span><span class="kw">fn </span>return_site(
-<a href=#1096 id=1096 data-nosnippet>1096</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1097 id=1097 data-nosnippet>1097</a>    registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#1098 id=1098 data-nosnippet>1098</a>    func: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#1099 id=1099 data-nosnippet>1099</a>    target: <span class="kw-2">&amp;</span>TypeRef,
-<a href=#1100 id=1100 data-nosnippet>1100</a>    declared: <span class="prelude-ty">Option</span>&lt;TypeRef&gt;,
-<a href=#1101 id=1101 data-nosnippet>1101</a>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::jni::compile::JPlan&gt; {
-<a href=#1102 id=1102 data-nosnippet>1102</a>    <span class="kw">use </span>prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
-<a href=#1103 id=1103 data-nosnippet>1103</a>    <span class="kw">let </span><span class="kw-2">mut </span>compiler = Compiler::resume(
-<a href=#1104 id=1104 data-nosnippet>1104</a>        registry.flat(),
-<a href=#1105 id=1105 data-nosnippet>1105</a>        ext.recipe_table(),
-<a href=#1106 id=1106 data-nosnippet>1106</a>        ext.site_bindings(),
-<a href=#1107 id=1107 data-nosnippet>1107</a>        ext.compiled.borrow().clone(),
-<a href=#1108 id=1108 data-nosnippet>1108</a>    );
-<a href=#1109 id=1109 data-nosnippet>1109</a>    <span class="kw">let </span><span class="kw-2">mut </span>adapter = <span class="kw">crate</span>::jni::compile::JCompile {
-<a href=#1110 id=1110 data-nosnippet>1110</a>        decls: ext,
-<a href=#1111 id=1111 data-nosnippet>1111</a>        registry,
-<a href=#1112 id=1112 data-nosnippet>1112</a>        declared_return: declared,
-<a href=#1113 id=1113 data-nosnippet>1113</a>        site: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::PlanSite::Return),
-<a href=#1114 id=1114 data-nosnippet>1114</a>    };
-<a href=#1115 id=1115 data-nosnippet>1115</a>    <span class="kw">let </span>site = Site {
-<a href=#1116 id=1116 data-nosnippet>1116</a>        owner: func.clone(),
-<a href=#1117 id=1117 data-nosnippet>1117</a>        role: Role::Return,
-<a href=#1118 id=1118 data-nosnippet>1118</a>    };
-<a href=#1119 id=1119 data-nosnippet>1119</a>    <span class="kw">let </span>crossing = Crossing::new(target.clone(), Direction::Deconstruct);
-<a href=#1120 id=1120 data-nosnippet>1120</a>    <span class="kw">let </span>planned = compiler.site(<span class="kw-2">&amp;mut </span>adapter, site, crossing);
-<a href=#1121 id=1121 data-nosnippet>1121</a>    <span class="kw-2">*</span>ext.compiled.borrow_mut() = compiler.finish();
-<a href=#1122 id=1122 data-nosnippet>1122</a>    planned.ok().flatten()
-<a href=#1123 id=1123 data-nosnippet>1123</a>}
-<a href=#1124 id=1124 data-nosnippet>1124</a>
-<a href=#1125 id=1125 data-nosnippet>1125</a><span class="doccomment">/// Freeze the exact Rust-to-JNI delivery selected for one domain-error plan.
-<a href=#1126 id=1126 data-nosnippet>1126</a>///
-<a href=#1127 id=1127 data-nosnippet>1127</a>/// Error decompositions may be function-unique value-form walks, so their
-<a href=#1128 id=1128 data-nosnippet>1128</a>/// leaves are always compiled directly through the registry. A model-derived
-<a href=#1129 id=1129 data-nosnippet>1129</a>/// Product/Optional/Choice additionally retains its composed converter; the
-<a href=#1130 id=1130 data-nosnippet>1130</a>/// renderer may use it only when its layout matches the declared error leaves.
-<a href=#1131 id=1131 data-nosnippet>1131</a></span><span class="kw">fn </span>build_error_output(
-<a href=#1132 id=1132 data-nosnippet>1132</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1133 id=1133 data-nosnippet>1133</a>    registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#1134 id=1134 data-nosnippet>1134</a>    unfold: <span class="kw">crate</span>::unfold::UnfoldPlan,
-<a href=#1135 id=1135 data-nosnippet>1135</a>) -&gt; <span class="prelude-ty">Result</span>&lt;ErrorOutputPlan, PlanError&gt; {
-<a href=#1136 id=1136 data-nosnippet>1136</a>    <span class="kw">let </span>wires = std::rc::Rc::new(
-<a href=#1137 id=1137 data-nosnippet>1137</a>        <span class="kw">crate</span>::jni::compile::freeze_out_wires(ext, registry, <span class="kw-2">&amp;</span>unfold.leaves).map_err(|<span class="kw">_</span>| {
-<a href=#1138 id=1138 data-nosnippet>1138</a>            PlanError::UnresolvedOutput {
-<a href=#1139 id=1139 data-nosnippet>1139</a>                ty: Box::new(unfold.source.clone()),
-<a href=#1140 id=1140 data-nosnippet>1140</a>            }
-<a href=#1141 id=1141 data-nosnippet>1141</a>        })<span class="question-mark">?</span>,
-<a href=#1142 id=1142 data-nosnippet>1142</a>    );
-<a href=#1143 id=1143 data-nosnippet>1143</a>    <span class="kw">let </span>delivered = <span class="kw">if </span>unfold.by_ref {
-<a href=#1144 id=1144 data-nosnippet>1144</a>        unfold.source.borrowed()
-<a href=#1145 id=1145 data-nosnippet>1145</a>    } <span class="kw">else </span>{
-<a href=#1146 id=1146 data-nosnippet>1146</a>        unfold.source.clone()
-<a href=#1147 id=1147 data-nosnippet>1147</a>    };
-<a href=#1148 id=1148 data-nosnippet>1148</a>    <span class="kw">let </span>delivered = <span class="kw">if </span>unfold.is_optional_base() {
-<a href=#1149 id=1149 data-nosnippet>1149</a>        delivered.optional()
-<a href=#1150 id=1150 data-nosnippet>1150</a>    } <span class="kw">else </span>{
-<a href=#1151 id=1151 data-nosnippet>1151</a>        delivered
-<a href=#1152 id=1152 data-nosnippet>1152</a>    };
-<a href=#1153 id=1153 data-nosnippet>1153</a>    <span class="kw">let </span>chain = <span class="kw">if </span>unfold.fixed_builder &amp;&amp; unfold.hoists.is_empty() {
-<a href=#1154 id=1154 data-nosnippet>1154</a>        <span class="kw">crate</span>::jni::compile::freeze_output_chain(ext, registry, <span class="kw-2">&amp;</span>delivered).map_err(|<span class="kw">_</span>| {
-<a href=#1155 id=1155 data-nosnippet>1155</a>            PlanError::UnresolvedOutput {
-<a href=#1156 id=1156 data-nosnippet>1156</a>                ty: Box::new(delivered),
-<a href=#1157 id=1157 data-nosnippet>1157</a>            }
-<a href=#1158 id=1158 data-nosnippet>1158</a>        })<span class="question-mark">?
-<a href=#1159 id=1159 data-nosnippet>1159</a>    </span>} <span class="kw">else </span>{
-<a href=#1160 id=1160 data-nosnippet>1160</a>        <span class="prelude-val">None
-<a href=#1161 id=1161 data-nosnippet>1161</a>    </span>};
-<a href=#1162 id=1162 data-nosnippet>1162</a>    <span class="kw">let </span>delivery =
-<a href=#1163 id=1163 data-nosnippet>1163</a>        <span class="kw">crate</span>::jni::emit::FrozenDelivery::new(ext, registry, <span class="kw-2">&amp;</span>unfold, wires.clone(), chain.clone());
-<a href=#1164 id=1164 data-nosnippet>1164</a>    <span class="prelude-val">Ok</span>(ErrorOutputPlan {
-<a href=#1165 id=1165 data-nosnippet>1165</a>        unfold,
-<a href=#1166 id=1166 data-nosnippet>1166</a>        wires,
-<a href=#1167 id=1167 data-nosnippet>1167</a>        chain,
-<a href=#1168 id=1168 data-nosnippet>1168</a>        delivery,
-<a href=#1169 id=1169 data-nosnippet>1169</a>    })
-<a href=#1170 id=1170 data-nosnippet>1170</a>}
-<a href=#1171 id=1171 data-nosnippet>1171</a>
-<a href=#1172 id=1172 data-nosnippet>1172</a><span class="doccomment">/// Lower the output side. Mirrors the historical derivations exactly:
-<a href=#1173 id=1173 data-nosnippet>1173</a>/// the Rust facts (`is_convert`, target type, wire) from the former
-<a href=#1174 id=1174 data-nosnippet>1174</a>/// `lower_output`/`output_target_type` (emit/wrapper.rs), the Kotlin
-<a href=#1175 id=1175 data-nosnippet>1175</a>/// declared-surface facts from `classify_return`'s inputs
-<a href=#1176 id=1176 data-nosnippet>1176</a>/// (render_extern_decl's `ret_decl` reconstruction).
-<a href=#1177 id=1177 data-nosnippet>1177</a></span><span class="kw">fn </span>build_output(
-<a href=#1178 id=1178 data-nosnippet>1178</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1179 id=1179 data-nosnippet>1179</a>    registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#1180 id=1180 data-nosnippet>1180</a>    f: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Function,
-<a href=#1181 id=1181 data-nosnippet>1181</a>    unfold_plan: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::UnfoldPlan&gt;,
-<a href=#1182 id=1182 data-nosnippet>1182</a>    error_plan: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::UnfoldPlan&gt;,
-<a href=#1183 id=1183 data-nosnippet>1183</a>) -&gt; <span class="prelude-ty">Result</span>&lt;FnOutputPlan, PlanError&gt; {
-<a href=#1184 id=1184 data-nosnippet>1184</a>    <span class="kw">use </span><span class="kw">crate</span>::unfold::{Delivery, UnfoldShape};
-<a href=#1185 id=1185 data-nosnippet>1185</a>    <span class="kw">let </span>ident = <span class="kw-2">&amp;</span>f.name;
-<a href=#1186 id=1186 data-nosnippet>1186</a>
-<a href=#1187 id=1187 data-nosnippet>1187</a>    <span class="comment">// Callback delivery: the return is decomposed to a foreign builder/fold
-<a href=#1188 id=1188 data-nosnippet>1188</a>    // lambda; no output converter runs and the wire is the erased `JObject`.
-<a href=#1189 id=1189 data-nosnippet>1189</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(plan) = unfold_plan.filter(|p| p.delivery == Delivery::Callback) {
-<a href=#1190 id=1190 data-nosnippet>1190</a>        <span class="kw">let </span>iterable_fold = <span class="kw">super</span>::is_iterable_fold(<span class="kw-2">&amp;</span>plan.shape);
-<a href=#1191 id=1191 data-nosnippet>1191</a>        <span class="kw">let </span>optional = <span class="macro">matches!</span>(plan.shape, UnfoldShape::Optional(..));
-<a href=#1192 id=1192 data-nosnippet>1192</a>        <span class="kw">let </span>fixed_builder = plan.fixed_builder;
-<a href=#1193 id=1193 data-nosnippet>1193</a>        <span class="comment">// The generic-surface rule (see `classify_output`): a fixed builder
-<a href=#1194 id=1194 data-nosnippet>1194</a>        // is not generic; an `Iterable` fold — bare or `Optional`-wrapped —
-<a href=#1195 id=1195 data-nosnippet>1195</a>        // folds with `&lt;A&gt;` (the wrapped form returns `A?`, null = `None`);
-<a href=#1196 id=1196 data-nosnippet>1196</a>        // everything else builds with `&lt;R&gt;`.
-<a href=#1197 id=1197 data-nosnippet>1197</a>        </span><span class="kw">let </span>generic = <span class="kw">if </span>fixed_builder {
-<a href=#1198 id=1198 data-nosnippet>1198</a>            <span class="prelude-val">None
-<a href=#1199 id=1199 data-nosnippet>1199</a>        </span>} <span class="kw">else if </span>iterable_fold {
-<a href=#1200 id=1200 data-nosnippet>1200</a>            <span class="prelude-val">Some</span>(<span class="string">"A"</span>)
-<a href=#1201 id=1201 data-nosnippet>1201</a>        } <span class="kw">else </span>{
-<a href=#1202 id=1202 data-nosnippet>1202</a>            <span class="prelude-val">Some</span>(<span class="string">"R"</span>)
-<a href=#1203 id=1203 data-nosnippet>1203</a>        };
-<a href=#1204 id=1204 data-nosnippet>1204</a>        <span class="kw">let </span>iface = <span class="kw">if </span>iterable_fold {
-<a href=#1205 id=1205 data-nosnippet>1205</a>            folder_iface_for_plan(ext, registry, plan)
-<a href=#1206 id=1206 data-nosnippet>1206</a>        } <span class="kw">else </span>{
-<a href=#1207 id=1207 data-nosnippet>1207</a>            <span class="kw">let </span>decon = plan
-<a href=#1208 id=1208 data-nosnippet>1208</a>                .decon
-<a href=#1209 id=1209 data-nosnippet>1209</a>                .clone()
-<a href=#1210 id=1210 data-nosnippet>1210</a>                .expect(<span class="string">"record-built plan carries its DeconId"</span>);
-<a href=#1211 id=1211 data-nosnippet>1211</a>            ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::Builder(decon))
-<a href=#1212 id=1212 data-nosnippet>1212</a>        };
-<a href=#1213 id=1213 data-nosnippet>1213</a>        <span class="kw">let </span>decon = plan.decon.as_ref().map(|id| {
-<a href=#1214 id=1214 data-nosnippet>1214</a>            std::rc::Rc::new(
-<a href=#1215 id=1215 data-nosnippet>1215</a>                ext.unfolded()
-<a href=#1216 id=1216 data-nosnippet>1216</a>                    .decon_plans
-<a href=#1217 id=1217 data-nosnippet>1217</a>                    .get(id)
-<a href=#1218 id=1218 data-nosnippet>1218</a>                    .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"unfold plan names unknown deconstructor `{id:?}`"</span>))
-<a href=#1219 id=1219 data-nosnippet>1219</a>                    .clone(),
-<a href=#1220 id=1220 data-nosnippet>1220</a>            )
-<a href=#1221 id=1221 data-nosnippet>1221</a>        });
-<a href=#1222 id=1222 data-nosnippet>1222</a>        <span class="kw">let </span>(wires, chain, element_pipeline) = <span class="kw">if let </span><span class="prelude-val">Some</span>(element) = <span class="kw-2">&amp;</span>plan.element {
-<a href=#1223 id=1223 data-nosnippet>1223</a>            <span class="kw">let </span>pipeline = <span class="kw">crate</span>::jni::compile::freeze_output_pipeline(ext, registry, element)
-<a href=#1224 id=1224 data-nosnippet>1224</a>                .map_err(|<span class="kw">_</span>| PlanError::UnresolvedOutput {
-<a href=#1225 id=1225 data-nosnippet>1225</a>                    ty: Box::new(element.clone()),
-<a href=#1226 id=1226 data-nosnippet>1226</a>                })<span class="question-mark">?</span>;
-<a href=#1227 id=1227 data-nosnippet>1227</a>            (std::rc::Rc::new(Vec::new()), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(pipeline))
-<a href=#1228 id=1228 data-nosnippet>1228</a>        } <span class="kw">else </span>{
-<a href=#1229 id=1229 data-nosnippet>1229</a>            <span class="kw">let </span>expected = <span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>plan.leaves);
-<a href=#1230 id=1230 data-nosnippet>1230</a>            <span class="kw">let </span>delivered = <span class="kw">if </span>plan.by_ref {
-<a href=#1231 id=1231 data-nosnippet>1231</a>                plan.source.borrowed()
-<a href=#1232 id=1232 data-nosnippet>1232</a>            } <span class="kw">else </span>{
-<a href=#1233 id=1233 data-nosnippet>1233</a>                plan.source.clone()
-<a href=#1234 id=1234 data-nosnippet>1234</a>            };
-<a href=#1235 id=1235 data-nosnippet>1235</a>            <span class="comment">// Only an Optional directly around the decomposed base belongs in
-<a href=#1236 id=1236 data-nosnippet>1236</a>            // the converter chain. `optional` also covers
-<a href=#1237 id=1237 data-nosnippet>1237</a>            // `Option&lt;Vec&lt;T&gt;&gt;`, whose presence gates the fold outside the
-<a href=#1238 id=1238 data-nosnippet>1238</a>            // per-element `T` chain.
-<a href=#1239 id=1239 data-nosnippet>1239</a>            </span><span class="kw">let </span>delivered = <span class="kw">if </span>plan.is_optional_base() {
-<a href=#1240 id=1240 data-nosnippet>1240</a>                delivered.optional()
-<a href=#1241 id=1241 data-nosnippet>1241</a>            } <span class="kw">else </span>{
-<a href=#1242 id=1242 data-nosnippet>1242</a>                delivered
-<a href=#1243 id=1243 data-nosnippet>1243</a>            };
-<a href=#1244 id=1244 data-nosnippet>1244</a>            <span class="kw">let </span>composed = return_site(ext, registry, ident, <span class="kw-2">&amp;</span>plan.source, <span class="prelude-val">None</span>)
-<a href=#1245 id=1245 data-nosnippet>1245</a>                .and_then(|site| site.decomposed())
-<a href=#1246 id=1246 data-nosnippet>1246</a>                .filter(|wires| {
-<a href=#1247 id=1247 data-nosnippet>1247</a>                    wires.len() == expected.len()
-<a href=#1248 id=1248 data-nosnippet>1248</a>                        &amp;&amp; wires
-<a href=#1249 id=1249 data-nosnippet>1249</a>                            .iter()
-<a href=#1250 id=1250 data-nosnippet>1250</a>                            .zip(<span class="kw-2">&amp;</span>expected)
-<a href=#1251 id=1251 data-nosnippet>1251</a>                            .all(|(left, right)| left.same_delivery(right))
-<a href=#1252 id=1252 data-nosnippet>1252</a>                });
-<a href=#1253 id=1253 data-nosnippet>1253</a>            <span class="kw">let </span>wires = <span class="kw">match </span>composed {
-<a href=#1254 id=1254 data-nosnippet>1254</a>                <span class="prelude-val">Some</span>(wires) =&gt; wires,
-<a href=#1255 id=1255 data-nosnippet>1255</a>                <span class="prelude-val">None </span>=&gt; std::rc::Rc::new(
-<a href=#1256 id=1256 data-nosnippet>1256</a>                    <span class="kw">crate</span>::jni::compile::freeze_out_wires(ext, registry, <span class="kw-2">&amp;</span>plan.leaves).map_err(
-<a href=#1257 id=1257 data-nosnippet>1257</a>                        |<span class="kw">_</span>| PlanError::UnresolvedOutput {
-<a href=#1258 id=1258 data-nosnippet>1258</a>                            ty: Box::new(plan.source.clone()),
-<a href=#1259 id=1259 data-nosnippet>1259</a>                        },
-<a href=#1260 id=1260 data-nosnippet>1260</a>                    )<span class="question-mark">?</span>,
-<a href=#1261 id=1261 data-nosnippet>1261</a>                ),
-<a href=#1262 id=1262 data-nosnippet>1262</a>            };
-<a href=#1263 id=1263 data-nosnippet>1263</a>            <span class="comment">// Chain availability depends on the exact value the delivery owns,
-<a href=#1264 id=1264 data-nosnippet>1264</a>            // including borrow and outer Optional mode. Freeze that answer now;
-<a href=#1265 id=1265 data-nosnippet>1265</a>            // the site binding itself intentionally names the core Product.
-<a href=#1266 id=1266 data-nosnippet>1266</a>            </span><span class="kw">let </span>chain = <span class="kw">if </span>fixed_builder &amp;&amp; plan.hoists.is_empty() {
-<a href=#1267 id=1267 data-nosnippet>1267</a>                <span class="kw">crate</span>::jni::compile::freeze_output_chain(ext, registry, <span class="kw-2">&amp;</span>delivered).map_err(
-<a href=#1268 id=1268 data-nosnippet>1268</a>                    |<span class="kw">_</span>| PlanError::UnresolvedOutput {
-<a href=#1269 id=1269 data-nosnippet>1269</a>                        ty: Box::new(delivered),
-<a href=#1270 id=1270 data-nosnippet>1270</a>                    },
-<a href=#1271 id=1271 data-nosnippet>1271</a>                )<span class="question-mark">?
-<a href=#1272 id=1272 data-nosnippet>1272</a>            </span>} <span class="kw">else </span>{
-<a href=#1273 id=1273 data-nosnippet>1273</a>                <span class="prelude-val">None
-<a href=#1274 id=1274 data-nosnippet>1274</a>            </span>};
-<a href=#1275 id=1275 data-nosnippet>1275</a>            (wires, chain, <span class="prelude-val">None</span>)
-<a href=#1276 id=1276 data-nosnippet>1276</a>        };
-<a href=#1277 id=1277 data-nosnippet>1277</a>        <span class="kw">let </span>delivery = <span class="kw">crate</span>::jni::emit::FrozenDelivery::new(
-<a href=#1278 id=1278 data-nosnippet>1278</a>            ext,
-<a href=#1279 id=1279 data-nosnippet>1279</a>            registry,
-<a href=#1280 id=1280 data-nosnippet>1280</a>            plan,
-<a href=#1281 id=1281 data-nosnippet>1281</a>            wires.clone(),
-<a href=#1282 id=1282 data-nosnippet>1282</a>            chain.clone(),
-<a href=#1283 id=1283 data-nosnippet>1283</a>        );
-<a href=#1284 id=1284 data-nosnippet>1284</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(FnOutputPlan::Unfold(Box::new(UnfoldOutputPlan {
-<a href=#1285 id=1285 data-nosnippet>1285</a>            wires,
-<a href=#1286 id=1286 data-nosnippet>1286</a>            chain,
-<a href=#1287 id=1287 data-nosnippet>1287</a>            delivery,
-<a href=#1288 id=1288 data-nosnippet>1288</a>            element_pipeline,
-<a href=#1289 id=1289 data-nosnippet>1289</a>            iterable_fold,
-<a href=#1290 id=1290 data-nosnippet>1290</a>            optional,
-<a href=#1291 id=1291 data-nosnippet>1291</a>            fixed_builder,
-<a href=#1292 id=1292 data-nosnippet>1292</a>            whole_element: plan.element.is_some(),
-<a href=#1293 id=1293 data-nosnippet>1293</a>            decon,
-<a href=#1294 id=1294 data-nosnippet>1294</a>            generic,
-<a href=#1295 id=1295 data-nosnippet>1295</a>            iface,
-<a href=#1296 id=1296 data-nosnippet>1296</a>        })));
-<a href=#1297 id=1297 data-nosnippet>1297</a>    }
-<a href=#1298 id=1298 data-nosnippet>1298</a>
-<a href=#1299 id=1299 data-nosnippet>1299</a>    <span class="comment">// Value return. The conversion target: the converted single value for a
-<a href=#1300 id=1300 data-nosnippet>1300</a>    // `Return` delivery, the `Result` Ok type when an error plan peels, else
-<a href=#1301 id=1301 data-nosnippet>1301</a>    // the function's own return.
-<a href=#1302 id=1302 data-nosnippet>1302</a>    </span><span class="kw">let </span>is_convert = unfold_plan.is_some();
-<a href=#1303 id=1303 data-nosnippet>1303</a>    <span class="comment">// The element normalizes an elided return and a written `-&gt; ()` to one
-<a href=#1304 id=1304 data-nosnippet>1304</a>    // `Unit` reading, so there is no `ReturnType` match here.
-<a href=#1305 id=1305 data-nosnippet>1305</a>    // The `Ok` side off `TypeKind::Fallible`, where `result_ok_type` found the
-<a href=#1306 id=1306 data-nosnippet>1306</a>    // `Result` in a path first.
-<a href=#1307 id=1307 data-nosnippet>1307</a>    </span><span class="kw">let </span>ok_ty = error_plan
-<a href=#1308 id=1308 data-nosnippet>1308</a>        .and_then(|<span class="kw">_</span>| f.ret.fallible_parts())
-<a href=#1309 id=1309 data-nosnippet>1309</a>        .map(|(ok, <span class="kw">_</span>)| ok);
-<a href=#1310 id=1310 data-nosnippet>1310</a>    <span class="comment">// All three candidates are readings: a plan's `convert_out_ty`, the `Ok`
-<a href=#1311 id=1311 data-nosnippet>1311</a>    // side of the return, and the return itself. This met them as spellings
-<a href=#1312 id=1312 data-nosnippet>1312</a>    // because one of them used to be a node.
-<a href=#1313 id=1313 data-nosnippet>1313</a>    </span><span class="kw">let </span>target_ty: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef = <span class="kw">match </span>unfold_plan {
-<a href=#1314 id=1314 data-nosnippet>1314</a>        <span class="prelude-val">Some</span>(p) =&gt; p
-<a href=#1315 id=1315 data-nosnippet>1315</a>            .convert_out_ty
-<a href=#1316 id=1316 data-nosnippet>1316</a>            .as_ref()
-<a href=#1317 id=1317 data-nosnippet>1317</a>            .expect(<span class="string">"Return delivery carries convert_out_ty"</span>),
-<a href=#1318 id=1318 data-nosnippet>1318</a>        <span class="prelude-val">None </span>=&gt; ok_ty.unwrap_or(<span class="kw-2">&amp;</span>f.ret),
-<a href=#1319 id=1319 data-nosnippet>1319</a>    };
-<a href=#1320 id=1320 data-nosnippet>1320</a>    <span class="comment">// Two failures, told apart. Holding a reading is not the same as being in
-<a href=#1321 id=1321 data-nosnippet>1321</a>    // the type table — `target_ty` is reached through a plan or a peel, so it
-<a href=#1322 id=1322 data-nosnippet>1322</a>    // may genuinely have no cell — and "not registered" wants different advice
-<a href=#1323 id=1323 data-nosnippet>1323</a>    // from "registered, no converter". Collapsed into one `and_then`, both got
-<a href=#1324 id=1324 data-nosnippet>1324</a>    // the `output_wrapper` message and the first one got it wrong.
-<a href=#1325 id=1325 data-nosnippet>1325</a>    </span><span class="kw">let </span><span class="prelude-val">Some</span>(target) = registry.reading(<span class="kw-2">&amp;</span>target_ty.key()) <span class="kw">else </span>{
-<a href=#1326 id=1326 data-nosnippet>1326</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(PlanError::UnknownOutputType {
-<a href=#1327 id=1327 data-nosnippet>1327</a>            ty: target_ty.key(),
-<a href=#1328 id=1328 data-nosnippet>1328</a>        });
-<a href=#1329 id=1329 data-nosnippet>1329</a>    };
-<a href=#1330 id=1330 data-nosnippet>1330</a>    <span class="comment">// The site's own recipe, compiled through the hook. `Compiler::site` is what
-<a href=#1331 id=1331 data-nosnippet>1331</a>    // makes this a site rather than a lookup: it picks the recipe, builds the
-<a href=#1332 id=1332 data-nosnippet>1332</a>    // fragment, checks the value's validity against what a return tolerates —
-<a href=#1333 id=1333 data-nosnippet>1333</a>    // the JVM keeps what it is given, so a borrowed one is refused here rather
-<a href=#1334 id=1334 data-nosnippet>1334</a>    // than emitted — and hands the fragment to `Compile::plan`.
-<a href=#1335 id=1335 data-nosnippet>1335</a>    //
-<a href=#1336 id=1336 data-nosnippet>1336</a>    // The Kotlin surface classifies the DECLARED return: `convert_out_ty` for a
-<a href=#1337 id=1337 data-nosnippet>1337</a>    // convert, else the signature's own output. Not `target_ty` — the Kotlin
-<a href=#1338 id=1338 data-nosnippet>1338</a>    // error peel rides the conversion's `value_reading`, so the full
-<a href=#1339 id=1339 data-nosnippet>1339</a>    // `Result&lt;T, E&gt;` is what the surface reads, and that is the one fact the
-<a href=#1340 id=1340 data-nosnippet>1340</a>    // crossing cannot carry.
-<a href=#1341 id=1341 data-nosnippet>1341</a>    </span><span class="kw">let </span>plan = return_site(
-<a href=#1342 id=1342 data-nosnippet>1342</a>        ext,
-<a href=#1343 id=1343 data-nosnippet>1343</a>        registry,
-<a href=#1344 id=1344 data-nosnippet>1344</a>        ident,
-<a href=#1345 id=1345 data-nosnippet>1345</a>        <span class="kw-2">&amp;</span>target,
-<a href=#1346 id=1346 data-nosnippet>1346</a>        is_convert.then(|| target_ty.clone()),
-<a href=#1347 id=1347 data-nosnippet>1347</a>    )
-<a href=#1348 id=1348 data-nosnippet>1348</a>    .and_then(|p| p.returned())
-<a href=#1349 id=1349 data-nosnippet>1349</a>    .ok_or_else(|| PlanError::UnresolvedOutput {
-<a href=#1350 id=1350 data-nosnippet>1350</a>        ty: Box::new(target.clone()),
-<a href=#1351 id=1351 data-nosnippet>1351</a>    })<span class="question-mark">?</span>;
-<a href=#1352 id=1352 data-nosnippet>1352</a>    <span class="comment">// Read off the shared plan: it is the site's own answer, and the plan
-<a href=#1353 id=1353 data-nosnippet>1353</a>    // built below adds the convert delivery to it rather than replacing it.
-<a href=#1354 id=1354 data-nosnippet>1354</a>    </span><span class="kw">let </span>(pipeline, surface, is_enum, is_option_enum, enum_niches) = (
-<a href=#1355 id=1355 data-nosnippet>1355</a>        plan.pipeline.clone(),
-<a href=#1356 id=1356 data-nosnippet>1356</a>        plan.surface.clone(),
-<a href=#1357 id=1357 data-nosnippet>1357</a>        plan.is_enum,
-<a href=#1358 id=1358 data-nosnippet>1358</a>        plan.is_option_enum,
-<a href=#1359 id=1359 data-nosnippet>1359</a>        plan.enum_niches.clone(),
-<a href=#1360 id=1360 data-nosnippet>1360</a>    );
-<a href=#1361 id=1361 data-nosnippet>1361</a>    <span class="comment">// The convert shortcut reaches the plan's single leaf itself rather than
-<a href=#1362 id=1362 data-nosnippet>1362</a>    // through the leaf encoder, and qualifies the accessor calls on that reach
-<a href=#1363 id=1363 data-nosnippet>1363</a>    // — so those origins are frozen here, with the leaf they belong to.
-<a href=#1364 id=1364 data-nosnippet>1364</a>    </span><span class="kw">let </span>convert_delivery = is_convert.then(|| {
-<a href=#1365 id=1365 data-nosnippet>1365</a>        <span class="kw">let </span>unfold = unfold_plan.expect(<span class="string">"a convert is a Return delivery, which carries its plan"</span>);
-<a href=#1366 id=1366 data-nosnippet>1366</a>        <span class="kw">crate</span>::jni::emit::FrozenDelivery::new(
-<a href=#1367 id=1367 data-nosnippet>1367</a>            ext,
-<a href=#1368 id=1368 data-nosnippet>1368</a>            registry,
-<a href=#1369 id=1369 data-nosnippet>1369</a>            unfold,
-<a href=#1370 id=1370 data-nosnippet>1370</a>            std::rc::Rc::new(
-<a href=#1371 id=1371 data-nosnippet>1371</a>                unfold
-<a href=#1372 id=1372 data-nosnippet>1372</a>                    .leaves
-<a href=#1373 id=1373 data-nosnippet>1373</a>                    .iter()
-<a href=#1374 id=1374 data-nosnippet>1374</a>                    .map(<span class="kw">crate</span>::jni::compile::OutWire::from_leaf)
-<a href=#1375 id=1375 data-nosnippet>1375</a>                    .collect(),
-<a href=#1376 id=1376 data-nosnippet>1376</a>            ),
-<a href=#1377 id=1377 data-nosnippet>1377</a>            <span class="prelude-val">None</span>,
-<a href=#1378 id=1378 data-nosnippet>1378</a>        )
-<a href=#1379 id=1379 data-nosnippet>1379</a>    });
-<a href=#1380 id=1380 data-nosnippet>1380</a>    <span class="comment">// The plan the emitters read: the site's answer with the convert delivery
-<a href=#1381 id=1381 data-nosnippet>1381</a>    // attached. This is the one frozen into the canonical site, because it is
-<a href=#1382 id=1382 data-nosnippet>1382</a>    // the authoritative one — freezing the hook's intermediate carried a
-<a href=#1383 id=1383 data-nosnippet>1383</a>    // `convert_delivery` of `None` while this object owned the real one.
-<a href=#1384 id=1384 data-nosnippet>1384</a>    </span><span class="kw">let </span>final_plan = std::rc::Rc::new(ValueOutputPlan {
-<a href=#1385 id=1385 data-nosnippet>1385</a>        site: plan.site.clone(),
-<a href=#1386 id=1386 data-nosnippet>1386</a>        is_convert,
-<a href=#1387 id=1387 data-nosnippet>1387</a>        pipeline,
-<a href=#1388 id=1388 data-nosnippet>1388</a>        surface,
-<a href=#1389 id=1389 data-nosnippet>1389</a>        is_enum,
-<a href=#1390 id=1390 data-nosnippet>1390</a>        is_option_enum,
-<a href=#1391 id=1391 data-nosnippet>1391</a>        enum_niches,
-<a href=#1392 id=1392 data-nosnippet>1392</a>        convert_delivery,
-<a href=#1393 id=1393 data-nosnippet>1393</a>    });
-<a href=#1394 id=1394 data-nosnippet>1394</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>((bound, fragment)) = <span class="kw-2">&amp;</span>final_plan.site {
-<a href=#1395 id=1395 data-nosnippet>1395</a>        ext.site_plans
-<a href=#1396 id=1396 data-nosnippet>1396</a>            .borrow_mut()
-<a href=#1397 id=1397 data-nosnippet>1397</a>            .push(std::rc::Rc::new(<span class="kw">crate</span>::jni::compile::whole_return_site(
-<a href=#1398 id=1398 data-nosnippet>1398</a>                bound,
-<a href=#1399 id=1399 data-nosnippet>1399</a>                fragment,
-<a href=#1400 id=1400 data-nosnippet>1400</a>                final_plan.clone(),
-<a href=#1401 id=1401 data-nosnippet>1401</a>            )));
-<a href=#1402 id=1402 data-nosnippet>1402</a>    }
-<a href=#1403 id=1403 data-nosnippet>1403</a>    <span class="prelude-val">Ok</span>(FnOutputPlan::Value(final_plan))
-<a href=#1404 id=1404 data-nosnippet>1404</a>}
-<a href=#1405 id=1405 data-nosnippet>1405</a>
-<a href=#1406 id=1406 data-nosnippet>1406</a><span class="doccomment">/// Whether a return surfaces as a Kotlin enum class, and whether an optional
-<a href=#1407 id=1407 data-nosnippet>1407</a>/// one does — the only two things the old `canonical` spelling was consulted
-<a href=#1408 id=1408 data-nosnippet>1408</a>/// for, now answered at the one place that can see how it was obtained.
-<a href=#1409 id=1409 data-nosnippet>1409</a></span><span class="attr">#[derive(Clone, Copy)]
-<a href=#1410 id=1410 data-nosnippet>1410</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>EnumSurface {
-<a href=#1411 id=1411 data-nosnippet>1411</a>    <span class="kw">pub </span>is_enum: bool,
-<a href=#1412 id=1412 data-nosnippet>1412</a>    <span class="kw">pub </span>is_option_enum: bool,
-<a href=#1413 id=1413 data-nosnippet>1413</a>}
-<a href=#1414 id=1414 data-nosnippet>1414</a>
-<a href=#1415 id=1415 data-nosnippet>1415</a><span class="kw">impl </span>ReturnSurface {
-<a href=#1416 id=1416 data-nosnippet>1416</a>    <span class="doccomment">/// Classify a declared return type. Returns the surface plus the
-<a href=#1417 id=1417 data-nosnippet>1417</a>    /// canonical (`value_reading`-peeled) type the enum probes run over —
-<a href=#1418 id=1418 data-nosnippet>1418</a>    /// the single peel that subsumed both `classify_return`'s inline peel
-<a href=#1419 id=1419 data-nosnippet>1419</a>    /// and the former `canonical_return_ty`.
-<a href=#1420 id=1420 data-nosnippet>1420</a>    </span><span class="kw">pub fn </span>classify(
-<a href=#1421 id=1421 data-nosnippet>1421</a>        ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1422 id=1422 data-nosnippet>1422</a>        ret: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
-<a href=#1423 id=1423 data-nosnippet>1423</a>    ) -&gt; (<span class="self">Self</span>, EnumSurface) {
-<a href=#1424 id=1424 data-nosnippet>1424</a>        <span class="comment">// The RETURN, as the model classified it. Both callers used to spell a
-<a href=#1425 id=1425 data-nosnippet>1425</a>        // reading into a `-&gt; #ty` fragment for this to take apart again, and
-<a href=#1426 id=1426 data-nosnippet>1426</a>        // the `ReturnType::Default` arm was a unit the element already states.
-<a href=#1427 id=1427 data-nosnippet>1427</a>        </span><span class="kw">let </span>outer_meta = ext.out_frag(ret).map(|e| e.metadata.clone());
-<a href=#1428 id=1428 data-nosnippet>1428</a>        <span class="comment">// Unit returns (incl. `Result&lt;()&gt;`, whose inner identity rides
-<a href=#1429 id=1429 data-nosnippet>1429</a>        // `value_reading`) declare no Kotlin return type. Falling back to the
-<a href=#1430 id=1430 data-nosnippet>1430</a>        // declared return is not a miss: `None` means the crossing itself is
-<a href=#1431 id=1431 data-nosnippet>1431</a>        // the surfaced value.
-<a href=#1432 id=1432 data-nosnippet>1432</a>        </span><span class="kw">let </span>stored = outer_meta.as_ref().and_then(|m| m.value_reading.as_ref());
-<a href=#1433 id=1433 data-nosnippet>1433</a>        <span class="kw">let </span>is_unit = <span class="kw">match </span>stored {
-<a href=#1434 id=1434 data-nosnippet>1434</a>            <span class="prelude-val">Some</span>(t) =&gt; <span class="macro">matches!</span>(t.kind(), prebindgen_registry::flat::TypeKind::Unit),
-<a href=#1435 id=1435 data-nosnippet>1435</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">matches!</span>(ret.kind(), prebindgen_registry::flat::TypeKind::Unit),
-<a href=#1436 id=1436 data-nosnippet>1436</a>        };
-<a href=#1437 id=1437 data-nosnippet>1437</a>        <span class="comment">// The two enum questions, answered where BOTH branches are in view.
-<a href=#1438 id=1438 data-nosnippet>1438</a>        // They used to ride out on a `canonical: syn::Type` built by spelling
-<a href=#1439 id=1439 data-nosnippet>1439</a>        // the reading — and then `option_inner_type` peeled that spelling to
-<a href=#1440 id=1440 data-nosnippet>1440</a>        // ask about its inner, which is the layer-off-a-spelling mistake #273
-<a href=#1441 id=1441 data-nosnippet>1441</a>        // is named for: the model erases wrappers the spelling still shows.
-<a href=#1442 id=1442 data-nosnippet>1442</a>        // A stored `value_reading` is a classified reading. No Rust node is
-<a href=#1443 id=1443 data-nosnippet>1443</a>        // reconstructed or peeled here.
-<a href=#1444 id=1444 data-nosnippet>1444</a>        </span><span class="kw">let </span>(is_enum, is_option_enum) = <span class="kw">match </span>stored {
-<a href=#1445 id=1445 data-nosnippet>1445</a>            <span class="prelude-val">Some</span>(t) =&gt; {
-<a href=#1446 id=1446 data-nosnippet>1446</a>                <span class="kw">let </span><span class="kw-2">mut </span>inner = t;
-<a href=#1447 id=1447 data-nosnippet>1447</a>                <span class="kw">let </span><span class="kw-2">mut </span>optional = <span class="bool-val">false</span>;
-<a href=#1448 id=1448 data-nosnippet>1448</a>                <span class="kw">while let </span><span class="prelude-val">Some</span>(next) = inner.optional_inner() {
-<a href=#1449 id=1449 data-nosnippet>1449</a>                    optional = <span class="bool-val">true</span>;
-<a href=#1450 id=1450 data-nosnippet>1450</a>                    inner = next;
-<a href=#1451 id=1451 data-nosnippet>1451</a>                }
-<a href=#1452 id=1452 data-nosnippet>1452</a>                (
-<a href=#1453 id=1453 data-nosnippet>1453</a>                    ext.is_kotlin_enum_key(<span class="kw-2">&amp;</span>t.key()),
-<a href=#1454 id=1454 data-nosnippet>1454</a>                    optional &amp;&amp; ext.is_kotlin_enum_key(<span class="kw-2">&amp;</span>inner.key()),
-<a href=#1455 id=1455 data-nosnippet>1455</a>                )
-<a href=#1456 id=1456 data-nosnippet>1456</a>            }
-<a href=#1457 id=1457 data-nosnippet>1457</a>            <span class="comment">// `is_kotlin_enum_reading` is NOT the peer here: it probes THROUGH
-<a href=#1458 id=1458 data-nosnippet>1458</a>            // the layers, so `Option&lt;Level&gt;` answers true for the first
-<a href=#1459 id=1459 data-nosnippet>1459</a>            // question, where the node version keys on the whole type and
-<a href=#1460 id=1460 data-nosnippet>1460</a>            // answers false. The first question wants the exact type's
-<a href=#1461 id=1461 data-nosnippet>1461</a>            // identity; the second requires at least one Optional and asks the
-<a href=#1462 id=1462 data-nosnippet>1462</a>            // terminal inner type after peeling every Optional layer.
-<a href=#1463 id=1463 data-nosnippet>1463</a>            </span><span class="prelude-val">None </span>=&gt; {
-<a href=#1464 id=1464 data-nosnippet>1464</a>                <span class="kw">let </span><span class="kw-2">mut </span>inner = ret;
-<a href=#1465 id=1465 data-nosnippet>1465</a>                <span class="kw">let </span><span class="kw-2">mut </span>optional = <span class="bool-val">false</span>;
-<a href=#1466 id=1466 data-nosnippet>1466</a>                <span class="kw">while let </span><span class="prelude-val">Some</span>(next) = inner.optional_inner() {
-<a href=#1467 id=1467 data-nosnippet>1467</a>                    optional = <span class="bool-val">true</span>;
-<a href=#1468 id=1468 data-nosnippet>1468</a>                    inner = next;
-<a href=#1469 id=1469 data-nosnippet>1469</a>                }
-<a href=#1470 id=1470 data-nosnippet>1470</a>                (
-<a href=#1471 id=1471 data-nosnippet>1471</a>                    ext.is_kotlin_enum_key(<span class="kw-2">&amp;</span>ret.key()),
-<a href=#1472 id=1472 data-nosnippet>1472</a>                    optional &amp;&amp; ext.is_kotlin_enum_key(<span class="kw-2">&amp;</span>inner.key()),
-<a href=#1473 id=1473 data-nosnippet>1473</a>                )
-<a href=#1474 id=1474 data-nosnippet>1474</a>            }
-<a href=#1475 id=1475 data-nosnippet>1475</a>        };
-<a href=#1476 id=1476 data-nosnippet>1476</a>        <span class="kw">let </span>canonical = EnumSurface {
-<a href=#1477 id=1477 data-nosnippet>1477</a>            is_enum,
-<a href=#1478 id=1478 data-nosnippet>1478</a>            is_option_enum,
-<a href=#1479 id=1479 data-nosnippet>1479</a>        };
-<a href=#1480 id=1480 data-nosnippet>1480</a>        <span class="kw">if </span>is_unit {
-<a href=#1481 id=1481 data-nosnippet>1481</a>            <span class="kw">return </span>(<span class="self">Self</span>::Unit, canonical);
-<a href=#1482 id=1482 data-nosnippet>1482</a>        }
-<a href=#1483 id=1483 data-nosnippet>1483</a>        <span class="comment">// Projection return (opaque handle or `ULong`): read the folded
-<a href=#1484 id=1484 data-nosnippet>1484</a>        // `Projection` the type-unfolding mechanism propagated onto this
-<a href=#1485 id=1485 data-nosnippet>1485</a>        // return type's converter metadata — one source of truth, no
-<a href=#1486 id=1486 data-nosnippet>1486</a>        // shape-specific peeling.
-<a href=#1487 id=1487 data-nosnippet>1487</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(h) = outer_meta.as_ref().and_then(|m| m.projection.clone()) {
-<a href=#1488 id=1488 data-nosnippet>1488</a>            <span class="kw">let </span>leaf_fqn = projection_leaf_kt(ext, <span class="kw-2">&amp;</span>h).map(|t| t.to_string());
-<a href=#1489 id=1489 data-nosnippet>1489</a>            <span class="kw">return </span>(
-<a href=#1490 id=1490 data-nosnippet>1490</a>                <span class="self">Self</span>::Projected {
-<a href=#1491 id=1491 data-nosnippet>1491</a>                    projection: h,
-<a href=#1492 id=1492 data-nosnippet>1492</a>                    leaf_fqn,
-<a href=#1493 id=1493 data-nosnippet>1493</a>                },
-<a href=#1494 id=1494 data-nosnippet>1494</a>                canonical,
-<a href=#1495 id=1495 data-nosnippet>1495</a>            );
-<a href=#1496 id=1496 data-nosnippet>1496</a>        }
-<a href=#1497 id=1497 data-nosnippet>1497</a>        <span class="comment">// Non-opaque: the resolved entry's Kotlin name — the rank-N handler
-<a href=#1498 id=1498 data-nosnippet>1498</a>        // propagates `ZResult&lt;T&gt;` / `Option&lt;T&gt;` / `Vec&lt;T&gt;` derivations
-<a href=#1499 id=1499 data-nosnippet>1499</a>        // alongside the wire, so no peel-and-fallback chain is needed here.
-<a href=#1500 id=1500 data-nosnippet>1500</a>        </span><span class="kw">match </span>outer_meta.and_then(|m| m.kotlin_name) {
-<a href=#1501 id=1501 data-nosnippet>1501</a>            <span class="prelude-val">Some</span>(kt) =&gt; (<span class="self">Self</span>::Plain { kt }, canonical),
-<a href=#1502 id=1502 data-nosnippet>1502</a>            <span class="prelude-val">None </span>=&gt; (<span class="self">Self</span>::Skip, canonical),
-<a href=#1503 id=1503 data-nosnippet>1503</a>        }
-<a href=#1504 id=1504 data-nosnippet>1504</a>    }
-<a href=#1505 id=1505 data-nosnippet>1505</a>}
+<a href=#958 id=958 data-nosnippet>958</a>                .push(std::rc::Rc::new(<span class="kw">crate</span>::jni::compile::site_plan(
+<a href=#959 id=959 data-nosnippet>959</a>                    <span class="kw-2">&amp;</span>fragment,
+<a href=#960 id=960 data-nosnippet>960</a>                    <span class="kw-2">&amp;</span>prebindgen_registry::recipe::Bound {
+<a href=#961 id=961 data-nosnippet>961</a>                        site: Site {
+<a href=#962 id=962 data-nosnippet>962</a>                            owner: owner.clone(),
+<a href=#963 id=963 data-nosnippet>963</a>                            role: leaf_role(expanded, position, leaf_index),
+<a href=#964 id=964 data-nosnippet>964</a>                        },
+<a href=#965 id=965 data-nosnippet>965</a>                        crossing: Crossing::new(reading.clone(), Direction::Construct),
+<a href=#966 id=966 data-nosnippet>966</a>                        recipe: fragment.id().recipe().clone(),
+<a href=#967 id=967 data-nosnippet>967</a>                        origin: prebindgen_registry::recipe::Origin::Function,
+<a href=#968 id=968 data-nosnippet>968</a>                    },
+<a href=#969 id=969 data-nosnippet>969</a>                    <span class="kw">crate</span>::jni::compile::JAbiLeaves::Params(leaf.clone()),
+<a href=#970 id=970 data-nosnippet>970</a>                )));
+<a href=#971 id=971 data-nosnippet>971</a>            <span class="comment">// And one site per value the callback delivers. A delivered
+<a href=#972 id=972 data-nosnippet>972</a>            // argument is a place in THIS function, which is what
+<a href=#973 id=973 data-nosnippet>973</a>            // `Role::CallbackArg` names and why the registry keeps it apart
+<a href=#974 id=974 data-nosnippet>974</a>            // from the `Role::Part` the shared callback recipe is compiled at:
+<a href=#975 id=975 data-nosnippet>975</a>            // several functions taking one `impl Fn` signature share the
+<a href=#976 id=976 data-nosnippet>976</a>            // delivery, and each states its own site over it.
+<a href=#977 id=977 data-nosnippet>977</a>            //
+<a href=#978 id=978 data-nosnippet>978</a>            // The recipe is `site_bindings`' answer, not one composed here. A
+<a href=#979 id=979 data-nosnippet>979</a>            // fabricated `Bound` is what the first two attempts at this
+<a href=#980 id=980 data-nosnippet>980</a>            // produced, and a site that misreports which row it took is worse
+<a href=#981 id=981 data-nosnippet>981</a>            // than an absent one (#622 review).
+<a href=#982 id=982 data-nosnippet>982</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(plan) = entry.rust.invoke_plan() {
+<a href=#983 id=983 data-nosnippet>983</a>                <span class="kw">let </span>arguments = <span class="kw">match </span>fragment.converter().shape() {
+<a href=#984 id=984 data-nosnippet>984</a>                    prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } =&gt; {
+<a href=#985 id=985 data-nosnippet>985</a>                        arguments.as_slice()
+<a href=#986 id=986 data-nosnippet>986</a>                    }
+<a href=#987 id=987 data-nosnippet>987</a>                    <span class="kw">_ </span>=&gt; <span class="kw-2">&amp;</span>[],
+<a href=#988 id=988 data-nosnippet>988</a>                };
+<a href=#989 id=989 data-nosnippet>989</a>                <span class="kw">for </span>(arg, ty) <span class="kw">in </span>args.iter().enumerate() {
+<a href=#990 id=990 data-nosnippet>990</a>                    <span class="kw">let </span>(<span class="prelude-val">Some</span>(edge), <span class="prelude-val">Some</span>(abi)) = (arguments.get(arg), plan.arg_abi(arg)) <span class="kw">else </span>{
+<a href=#991 id=991 data-nosnippet>991</a>                        <span class="kw">continue</span>;
+<a href=#992 id=992 data-nosnippet>992</a>                    };
+<a href=#993 id=993 data-nosnippet>993</a>                    <span class="kw">let </span>crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
+<a href=#994 id=994 data-nosnippet>994</a>                    <span class="kw">let </span>site = Site {
+<a href=#995 id=995 data-nosnippet>995</a>                        owner: owner.clone(),
+<a href=#996 id=996 data-nosnippet>996</a>                        role: prebindgen_registry::recipe::Role::CallbackArg {
+<a href=#997 id=997 data-nosnippet>997</a>                            param: position,
+<a href=#998 id=998 data-nosnippet>998</a>                            arg,
+<a href=#999 id=999 data-nosnippet>999</a>                        },
+<a href=#1000 id=1000 data-nosnippet>1000</a>                    };
+<a href=#1001 id=1001 data-nosnippet>1001</a>                    <span class="kw">let </span><span class="prelude-val">Some</span>(bound) =
+<a href=#1002 id=1002 data-nosnippet>1002</a>                        ext.site_bindings()
+<a href=#1003 id=1003 data-nosnippet>1003</a>                            .resolve(<span class="kw-2">&amp;</span>site, <span class="kw-2">&amp;</span>crossing, ext.recipe_table())
+<a href=#1004 id=1004 data-nosnippet>1004</a>                    <span class="kw">else </span>{
+<a href=#1005 id=1005 data-nosnippet>1005</a>                        <span class="kw">continue</span>;
+<a href=#1006 id=1006 data-nosnippet>1006</a>                    };
+<a href=#1007 id=1007 data-nosnippet>1007</a>                    ext.site_plans.borrow_mut().push(std::rc::Rc::new(
+<a href=#1008 id=1008 data-nosnippet>1008</a>                        <span class="kw">crate</span>::jni::compile::callback_arg_site(<span class="kw-2">&amp;</span>bound, edge, abi),
+<a href=#1009 id=1009 data-nosnippet>1009</a>                    ));
+<a href=#1010 id=1010 data-nosnippet>1010</a>                }
+<a href=#1011 id=1011 data-nosnippet>1011</a>            }
+<a href=#1012 id=1012 data-nosnippet>1012</a>        }
+<a href=#1013 id=1013 data-nosnippet>1013</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(leaf);
+<a href=#1014 id=1014 data-nosnippet>1014</a>    }
+<a href=#1015 id=1015 data-nosnippet>1015</a>    <span class="comment">// The compiler, resumed over what the build already compiled. Every
+<a href=#1016 id=1016 data-nosnippet>1016</a>    // fragment this site's recipe needs is in that store, so `site` finds them
+<a href=#1017 id=1017 data-nosnippet>1017</a>    // rather than building them again — and the plan it wraps them in is the
+<a href=#1018 id=1018 data-nosnippet>1018</a>    // one hook the registry calls per site rather than per crossing.
+<a href=#1019 id=1019 data-nosnippet>1019</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>compiler = Compiler::resume(
+<a href=#1020 id=1020 data-nosnippet>1020</a>        registry.flat(),
+<a href=#1021 id=1021 data-nosnippet>1021</a>        ext.recipe_table(),
+<a href=#1022 id=1022 data-nosnippet>1022</a>        ext.site_bindings(),
+<a href=#1023 id=1023 data-nosnippet>1023</a>        ext.compiled.borrow().clone(),
+<a href=#1024 id=1024 data-nosnippet>1024</a>    );
+<a href=#1025 id=1025 data-nosnippet>1025</a>    <span class="kw">let </span><span class="kw-2">mut </span>adapter = <span class="kw">crate</span>::jni::compile::JCompile {
+<a href=#1026 id=1026 data-nosnippet>1026</a>        decls: ext,
+<a href=#1027 id=1027 data-nosnippet>1027</a>        registry,
+<a href=#1028 id=1028 data-nosnippet>1028</a>        declared_return: <span class="prelude-val">None</span>,
+<a href=#1029 id=1029 data-nosnippet>1029</a>        site: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::PlanSite::Param(
+<a href=#1030 id=1030 data-nosnippet>1030</a>            <span class="kw">crate</span>::jni::compile::ParamSite {
+<a href=#1031 id=1031 data-nosnippet>1031</a>                ident: ident.clone(),
+<a href=#1032 id=1032 data-nosnippet>1032</a>                expanded,
+<a href=#1033 id=1033 data-nosnippet>1033</a>            },
+<a href=#1034 id=1034 data-nosnippet>1034</a>        )),
+<a href=#1035 id=1035 data-nosnippet>1035</a>    };
+<a href=#1036 id=1036 data-nosnippet>1036</a>    <span class="comment">// A site is a place in an exported function, which is what the registry's
+<a href=#1037 id=1037 data-nosnippet>1037</a>    // `Site` means: `owner` is the function and `role` names the position in
+<a href=#1038 id=1038 data-nosnippet>1038</a>    // it. This named the PARAMETER as owner and always index 0, so two
+<a href=#1039 id=1039 data-nosnippet>1039</a>    // functions with a parameter of the same name froze the same identity, and
+<a href=#1040 id=1040 data-nosnippet>1040</a>    // every leaf of an expanded parameter collided with its siblings (#622
+<a href=#1041 id=1041 data-nosnippet>1041</a>    // review).
+<a href=#1042 id=1042 data-nosnippet>1042</a>    //
+<a href=#1043 id=1043 data-nosnippet>1043</a>    // `Role::Param`'s index is the position in the SOURCE parameter list, so
+<a href=#1044 id=1044 data-nosnippet>1044</a>    // an expansion's leaves cannot be numbered as parameters: doing that names
+<a href=#1045 id=1045 data-nosnippet>1045</a>    // positions the function does not have and attaches one parameter's site to
+<a href=#1046 id=1046 data-nosnippet>1046</a>    // another's crossing. They are `ExpansionLeaf`s of the parameter that
+<a href=#1047 id=1047 data-nosnippet>1047</a>    // expanded, which is the same question `CallbackArg` already answers for a
+<a href=#1048 id=1048 data-nosnippet>1048</a>    // callback's arguments (#622 review).
+<a href=#1049 id=1049 data-nosnippet>1049</a>    </span><span class="kw">let </span>site = Site {
+<a href=#1050 id=1050 data-nosnippet>1050</a>        owner: owner.clone(),
+<a href=#1051 id=1051 data-nosnippet>1051</a>        role: leaf_role(expanded, position, leaf_index),
+<a href=#1052 id=1052 data-nosnippet>1052</a>    };
+<a href=#1053 id=1053 data-nosnippet>1053</a>    <span class="kw">let </span>crossing = Crossing::new(reading.clone(), Direction::Construct);
+<a href=#1054 id=1054 data-nosnippet>1054</a>    <span class="kw">let </span>use_pair = <span class="kw">crate</span>::jni::compile::optional_pair_plan_candidate(ext, reading)
+<a href=#1055 id=1055 data-nosnippet>1055</a>        &amp;&amp; ext
+<a href=#1056 id=1056 data-nosnippet>1056</a>            .recipe_table()
+<a href=#1057 id=1057 data-nosnippet>1057</a>            .key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::recipes::pair())
+<a href=#1058 id=1058 data-nosnippet>1058</a>            .is_some();
+<a href=#1059 id=1059 data-nosnippet>1059</a>    <span class="kw">let </span>planned = <span class="kw">if </span>use_pair {
+<a href=#1060 id=1060 data-nosnippet>1060</a>        compiler.site_recipe(<span class="kw-2">&amp;mut </span>adapter, site, crossing, <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::recipes::pair())
+<a href=#1061 id=1061 data-nosnippet>1061</a>    } <span class="kw">else </span>{
+<a href=#1062 id=1062 data-nosnippet>1062</a>        compiler.site(<span class="kw-2">&amp;mut </span>adapter, site, crossing)
+<a href=#1063 id=1063 data-nosnippet>1063</a>    };
+<a href=#1064 id=1064 data-nosnippet>1064</a>    <span class="kw-2">*</span>ext.compiled.borrow_mut() = compiler.finish();
+<a href=#1065 id=1065 data-nosnippet>1065</a>    <span class="kw">match </span>planned {
+<a href=#1066 id=1066 data-nosnippet>1066</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(plan)) =&gt; plan.param().ok_or_else(|| PlanError::Unresolved {
+<a href=#1067 id=1067 data-nosnippet>1067</a>            ty: Box::new(reading.clone()),
+<a href=#1068 id=1068 data-nosnippet>1068</a>        }),
+<a href=#1069 id=1069 data-nosnippet>1069</a>        <span class="comment">// A site the bindings omitted, which JniGen never declares.
+<a href=#1070 id=1070 data-nosnippet>1070</a>        </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="prelude-val">Err</span>(PlanError::Unresolved {
+<a href=#1071 id=1071 data-nosnippet>1071</a>            ty: Box::new(reading.clone()),
+<a href=#1072 id=1072 data-nosnippet>1072</a>        }),
+<a href=#1073 id=1073 data-nosnippet>1073</a>        <span class="prelude-val">Err</span>(prebindgen_registry::recipe::CompileError::Adapter(
+<a href=#1074 id=1074 data-nosnippet>1074</a>            <span class="kw">crate</span>::jni::compile::JErr::Plan(e),
+<a href=#1075 id=1075 data-nosnippet>1075</a>        )) =&gt; <span class="prelude-val">Err</span>(<span class="kw-2">*</span>e),
+<a href=#1076 id=1076 data-nosnippet>1076</a>        <span class="comment">// A refusal or a table disagreement, which reach this path only for a
+<a href=#1077 id=1077 data-nosnippet>1077</a>        // type with no conversion — the same failure the entry lookup reported.
+<a href=#1078 id=1078 data-nosnippet>1078</a>        </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="kw">if </span>expanded {
+<a href=#1079 id=1079 data-nosnippet>1079</a>            PlanError::UnresolvedLeaf {
+<a href=#1080 id=1080 data-nosnippet>1080</a>                ty: Box::new(reading.clone()),
+<a href=#1081 id=1081 data-nosnippet>1081</a>                param: source_param.clone(),
+<a href=#1082 id=1082 data-nosnippet>1082</a>            }
+<a href=#1083 id=1083 data-nosnippet>1083</a>        } <span class="kw">else </span>{
+<a href=#1084 id=1084 data-nosnippet>1084</a>            PlanError::Unresolved {
+<a href=#1085 id=1085 data-nosnippet>1085</a>                ty: Box::new(reading.clone()),
+<a href=#1086 id=1086 data-nosnippet>1086</a>            }
+<a href=#1087 id=1087 data-nosnippet>1087</a>        }),
+<a href=#1088 id=1088 data-nosnippet>1088</a>    }
+<a href=#1089 id=1089 data-nosnippet>1089</a>}
+<a href=#1090 id=1090 data-nosnippet>1090</a>
+<a href=#1091 id=1091 data-nosnippet>1091</a><span class="doccomment">/// Compile the return of `func` as one site.
+<a href=#1092 id=1092 data-nosnippet>1092</a>///
+<a href=#1093 id=1093 data-nosnippet>1093</a>/// `declared` is what the signature says the function returns, when that
+<a href=#1094 id=1094 data-nosnippet>1094</a>/// differs from the value that crosses — a `Return`-delivery convert crosses
+<a href=#1095 id=1095 data-nosnippet>1095</a>/// what its decomposition produced. `None` when the two are the same.
+<a href=#1096 id=1096 data-nosnippet>1096</a></span><span class="kw">fn </span>return_site(
+<a href=#1097 id=1097 data-nosnippet>1097</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1098 id=1098 data-nosnippet>1098</a>    registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#1099 id=1099 data-nosnippet>1099</a>    func: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#1100 id=1100 data-nosnippet>1100</a>    target: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#1101 id=1101 data-nosnippet>1101</a>    declared: <span class="prelude-ty">Option</span>&lt;TypeRef&gt;,
+<a href=#1102 id=1102 data-nosnippet>1102</a>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::jni::compile::JPlan&gt; {
+<a href=#1103 id=1103 data-nosnippet>1103</a>    <span class="kw">use </span>prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
+<a href=#1104 id=1104 data-nosnippet>1104</a>    <span class="kw">let </span><span class="kw-2">mut </span>compiler = Compiler::resume(
+<a href=#1105 id=1105 data-nosnippet>1105</a>        registry.flat(),
+<a href=#1106 id=1106 data-nosnippet>1106</a>        ext.recipe_table(),
+<a href=#1107 id=1107 data-nosnippet>1107</a>        ext.site_bindings(),
+<a href=#1108 id=1108 data-nosnippet>1108</a>        ext.compiled.borrow().clone(),
+<a href=#1109 id=1109 data-nosnippet>1109</a>    );
+<a href=#1110 id=1110 data-nosnippet>1110</a>    <span class="kw">let </span><span class="kw-2">mut </span>adapter = <span class="kw">crate</span>::jni::compile::JCompile {
+<a href=#1111 id=1111 data-nosnippet>1111</a>        decls: ext,
+<a href=#1112 id=1112 data-nosnippet>1112</a>        registry,
+<a href=#1113 id=1113 data-nosnippet>1113</a>        declared_return: declared,
+<a href=#1114 id=1114 data-nosnippet>1114</a>        site: <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::PlanSite::Return),
+<a href=#1115 id=1115 data-nosnippet>1115</a>    };
+<a href=#1116 id=1116 data-nosnippet>1116</a>    <span class="kw">let </span>site = Site {
+<a href=#1117 id=1117 data-nosnippet>1117</a>        owner: func.clone(),
+<a href=#1118 id=1118 data-nosnippet>1118</a>        role: Role::Return,
+<a href=#1119 id=1119 data-nosnippet>1119</a>    };
+<a href=#1120 id=1120 data-nosnippet>1120</a>    <span class="kw">let </span>crossing = Crossing::new(target.clone(), Direction::Deconstruct);
+<a href=#1121 id=1121 data-nosnippet>1121</a>    <span class="kw">let </span>planned = compiler.site(<span class="kw-2">&amp;mut </span>adapter, site, crossing);
+<a href=#1122 id=1122 data-nosnippet>1122</a>    <span class="kw-2">*</span>ext.compiled.borrow_mut() = compiler.finish();
+<a href=#1123 id=1123 data-nosnippet>1123</a>    planned.ok().flatten()
+<a href=#1124 id=1124 data-nosnippet>1124</a>}
+<a href=#1125 id=1125 data-nosnippet>1125</a>
+<a href=#1126 id=1126 data-nosnippet>1126</a><span class="doccomment">/// Freeze the exact Rust-to-JNI delivery selected for one domain-error plan.
+<a href=#1127 id=1127 data-nosnippet>1127</a>///
+<a href=#1128 id=1128 data-nosnippet>1128</a>/// Error decompositions may be function-unique value-form walks, so their
+<a href=#1129 id=1129 data-nosnippet>1129</a>/// leaves are always compiled directly through the registry. A model-derived
+<a href=#1130 id=1130 data-nosnippet>1130</a>/// Product/Optional/Choice additionally retains its composed converter; the
+<a href=#1131 id=1131 data-nosnippet>1131</a>/// renderer may use it only when its layout matches the declared error leaves.
+<a href=#1132 id=1132 data-nosnippet>1132</a></span><span class="kw">fn </span>build_error_output(
+<a href=#1133 id=1133 data-nosnippet>1133</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1134 id=1134 data-nosnippet>1134</a>    registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#1135 id=1135 data-nosnippet>1135</a>    unfold: <span class="kw">crate</span>::unfold::UnfoldPlan,
+<a href=#1136 id=1136 data-nosnippet>1136</a>) -&gt; <span class="prelude-ty">Result</span>&lt;ErrorOutputPlan, PlanError&gt; {
+<a href=#1137 id=1137 data-nosnippet>1137</a>    <span class="kw">let </span>wires = std::rc::Rc::new(
+<a href=#1138 id=1138 data-nosnippet>1138</a>        <span class="kw">crate</span>::jni::compile::freeze_out_wires(ext, registry, <span class="kw-2">&amp;</span>unfold.leaves).map_err(|<span class="kw">_</span>| {
+<a href=#1139 id=1139 data-nosnippet>1139</a>            PlanError::UnresolvedOutput {
+<a href=#1140 id=1140 data-nosnippet>1140</a>                ty: Box::new(unfold.source.clone()),
+<a href=#1141 id=1141 data-nosnippet>1141</a>            }
+<a href=#1142 id=1142 data-nosnippet>1142</a>        })<span class="question-mark">?</span>,
+<a href=#1143 id=1143 data-nosnippet>1143</a>    );
+<a href=#1144 id=1144 data-nosnippet>1144</a>    <span class="kw">let </span>delivered = <span class="kw">if </span>unfold.by_ref {
+<a href=#1145 id=1145 data-nosnippet>1145</a>        unfold.source.borrowed()
+<a href=#1146 id=1146 data-nosnippet>1146</a>    } <span class="kw">else </span>{
+<a href=#1147 id=1147 data-nosnippet>1147</a>        unfold.source.clone()
+<a href=#1148 id=1148 data-nosnippet>1148</a>    };
+<a href=#1149 id=1149 data-nosnippet>1149</a>    <span class="kw">let </span>delivered = <span class="kw">if </span>unfold.is_optional_base() {
+<a href=#1150 id=1150 data-nosnippet>1150</a>        delivered.optional()
+<a href=#1151 id=1151 data-nosnippet>1151</a>    } <span class="kw">else </span>{
+<a href=#1152 id=1152 data-nosnippet>1152</a>        delivered
+<a href=#1153 id=1153 data-nosnippet>1153</a>    };
+<a href=#1154 id=1154 data-nosnippet>1154</a>    <span class="kw">let </span>chain = <span class="kw">if </span>unfold.fixed_builder &amp;&amp; unfold.hoists.is_empty() {
+<a href=#1155 id=1155 data-nosnippet>1155</a>        <span class="kw">crate</span>::jni::compile::freeze_output_chain(ext, registry, <span class="kw-2">&amp;</span>delivered).map_err(|<span class="kw">_</span>| {
+<a href=#1156 id=1156 data-nosnippet>1156</a>            PlanError::UnresolvedOutput {
+<a href=#1157 id=1157 data-nosnippet>1157</a>                ty: Box::new(delivered),
+<a href=#1158 id=1158 data-nosnippet>1158</a>            }
+<a href=#1159 id=1159 data-nosnippet>1159</a>        })<span class="question-mark">?
+<a href=#1160 id=1160 data-nosnippet>1160</a>    </span>} <span class="kw">else </span>{
+<a href=#1161 id=1161 data-nosnippet>1161</a>        <span class="prelude-val">None
+<a href=#1162 id=1162 data-nosnippet>1162</a>    </span>};
+<a href=#1163 id=1163 data-nosnippet>1163</a>    <span class="kw">let </span>delivery =
+<a href=#1164 id=1164 data-nosnippet>1164</a>        <span class="kw">crate</span>::jni::emit::FrozenDelivery::new(ext, registry, <span class="kw-2">&amp;</span>unfold, wires.clone(), chain.clone());
+<a href=#1165 id=1165 data-nosnippet>1165</a>    <span class="prelude-val">Ok</span>(ErrorOutputPlan {
+<a href=#1166 id=1166 data-nosnippet>1166</a>        unfold,
+<a href=#1167 id=1167 data-nosnippet>1167</a>        wires,
+<a href=#1168 id=1168 data-nosnippet>1168</a>        chain,
+<a href=#1169 id=1169 data-nosnippet>1169</a>        delivery,
+<a href=#1170 id=1170 data-nosnippet>1170</a>    })
+<a href=#1171 id=1171 data-nosnippet>1171</a>}
+<a href=#1172 id=1172 data-nosnippet>1172</a>
+<a href=#1173 id=1173 data-nosnippet>1173</a><span class="doccomment">/// Lower the output side. Mirrors the historical derivations exactly:
+<a href=#1174 id=1174 data-nosnippet>1174</a>/// the Rust facts (`is_convert`, target type, wire) from the former
+<a href=#1175 id=1175 data-nosnippet>1175</a>/// `lower_output`/`output_target_type` (emit/wrapper.rs), the Kotlin
+<a href=#1176 id=1176 data-nosnippet>1176</a>/// declared-surface facts from `classify_return`'s inputs
+<a href=#1177 id=1177 data-nosnippet>1177</a>/// (render_extern_decl's `ret_decl` reconstruction).
+<a href=#1178 id=1178 data-nosnippet>1178</a></span><span class="kw">fn </span>build_output(
+<a href=#1179 id=1179 data-nosnippet>1179</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1180 id=1180 data-nosnippet>1180</a>    registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#1181 id=1181 data-nosnippet>1181</a>    f: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Function,
+<a href=#1182 id=1182 data-nosnippet>1182</a>    unfold_plan: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::UnfoldPlan&gt;,
+<a href=#1183 id=1183 data-nosnippet>1183</a>    error_plan: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::UnfoldPlan&gt;,
+<a href=#1184 id=1184 data-nosnippet>1184</a>) -&gt; <span class="prelude-ty">Result</span>&lt;FnOutputPlan, PlanError&gt; {
+<a href=#1185 id=1185 data-nosnippet>1185</a>    <span class="kw">use </span><span class="kw">crate</span>::unfold::{Delivery, UnfoldShape};
+<a href=#1186 id=1186 data-nosnippet>1186</a>    <span class="kw">let </span>ident = <span class="kw-2">&amp;</span>f.name;
+<a href=#1187 id=1187 data-nosnippet>1187</a>
+<a href=#1188 id=1188 data-nosnippet>1188</a>    <span class="comment">// Callback delivery: the return is decomposed to a foreign builder/fold
+<a href=#1189 id=1189 data-nosnippet>1189</a>    // lambda; no output converter runs and the wire is the erased `JObject`.
+<a href=#1190 id=1190 data-nosnippet>1190</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(plan) = unfold_plan.filter(|p| p.delivery == Delivery::Callback) {
+<a href=#1191 id=1191 data-nosnippet>1191</a>        <span class="kw">let </span>iterable_fold = <span class="kw">super</span>::is_iterable_fold(<span class="kw-2">&amp;</span>plan.shape);
+<a href=#1192 id=1192 data-nosnippet>1192</a>        <span class="kw">let </span>optional = <span class="macro">matches!</span>(plan.shape, UnfoldShape::Optional(..));
+<a href=#1193 id=1193 data-nosnippet>1193</a>        <span class="kw">let </span>fixed_builder = plan.fixed_builder;
+<a href=#1194 id=1194 data-nosnippet>1194</a>        <span class="comment">// The generic-surface rule (see `classify_output`): a fixed builder
+<a href=#1195 id=1195 data-nosnippet>1195</a>        // is not generic; an `Iterable` fold — bare or `Optional`-wrapped —
+<a href=#1196 id=1196 data-nosnippet>1196</a>        // folds with `&lt;A&gt;` (the wrapped form returns `A?`, null = `None`);
+<a href=#1197 id=1197 data-nosnippet>1197</a>        // everything else builds with `&lt;R&gt;`.
+<a href=#1198 id=1198 data-nosnippet>1198</a>        </span><span class="kw">let </span>generic = <span class="kw">if </span>fixed_builder {
+<a href=#1199 id=1199 data-nosnippet>1199</a>            <span class="prelude-val">None
+<a href=#1200 id=1200 data-nosnippet>1200</a>        </span>} <span class="kw">else if </span>iterable_fold {
+<a href=#1201 id=1201 data-nosnippet>1201</a>            <span class="prelude-val">Some</span>(<span class="string">"A"</span>)
+<a href=#1202 id=1202 data-nosnippet>1202</a>        } <span class="kw">else </span>{
+<a href=#1203 id=1203 data-nosnippet>1203</a>            <span class="prelude-val">Some</span>(<span class="string">"R"</span>)
+<a href=#1204 id=1204 data-nosnippet>1204</a>        };
+<a href=#1205 id=1205 data-nosnippet>1205</a>        <span class="kw">let </span>iface = <span class="kw">if </span>iterable_fold {
+<a href=#1206 id=1206 data-nosnippet>1206</a>            folder_iface_for_plan(ext, registry, plan)
+<a href=#1207 id=1207 data-nosnippet>1207</a>        } <span class="kw">else </span>{
+<a href=#1208 id=1208 data-nosnippet>1208</a>            <span class="kw">let </span>decon = plan
+<a href=#1209 id=1209 data-nosnippet>1209</a>                .decon
+<a href=#1210 id=1210 data-nosnippet>1210</a>                .clone()
+<a href=#1211 id=1211 data-nosnippet>1211</a>                .expect(<span class="string">"record-built plan carries its DeconId"</span>);
+<a href=#1212 id=1212 data-nosnippet>1212</a>            ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::Builder(decon))
+<a href=#1213 id=1213 data-nosnippet>1213</a>        };
+<a href=#1214 id=1214 data-nosnippet>1214</a>        <span class="kw">let </span>decon = plan.decon.as_ref().map(|id| {
+<a href=#1215 id=1215 data-nosnippet>1215</a>            std::rc::Rc::new(
+<a href=#1216 id=1216 data-nosnippet>1216</a>                ext.unfolded()
+<a href=#1217 id=1217 data-nosnippet>1217</a>                    .decon_plans
+<a href=#1218 id=1218 data-nosnippet>1218</a>                    .get(id)
+<a href=#1219 id=1219 data-nosnippet>1219</a>                    .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"unfold plan names unknown deconstructor `{id:?}`"</span>))
+<a href=#1220 id=1220 data-nosnippet>1220</a>                    .clone(),
+<a href=#1221 id=1221 data-nosnippet>1221</a>            )
+<a href=#1222 id=1222 data-nosnippet>1222</a>        });
+<a href=#1223 id=1223 data-nosnippet>1223</a>        <span class="kw">let </span>(wires, chain, element_pipeline) = <span class="kw">if let </span><span class="prelude-val">Some</span>(element) = <span class="kw-2">&amp;</span>plan.element {
+<a href=#1224 id=1224 data-nosnippet>1224</a>            <span class="kw">let </span>pipeline = <span class="kw">crate</span>::jni::compile::freeze_output_pipeline(ext, registry, element)
+<a href=#1225 id=1225 data-nosnippet>1225</a>                .map_err(|<span class="kw">_</span>| PlanError::UnresolvedOutput {
+<a href=#1226 id=1226 data-nosnippet>1226</a>                    ty: Box::new(element.clone()),
+<a href=#1227 id=1227 data-nosnippet>1227</a>                })<span class="question-mark">?</span>;
+<a href=#1228 id=1228 data-nosnippet>1228</a>            (std::rc::Rc::new(Vec::new()), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(pipeline))
+<a href=#1229 id=1229 data-nosnippet>1229</a>        } <span class="kw">else </span>{
+<a href=#1230 id=1230 data-nosnippet>1230</a>            <span class="kw">let </span>expected = <span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>plan.leaves);
+<a href=#1231 id=1231 data-nosnippet>1231</a>            <span class="kw">let </span>delivered = <span class="kw">if </span>plan.by_ref {
+<a href=#1232 id=1232 data-nosnippet>1232</a>                plan.source.borrowed()
+<a href=#1233 id=1233 data-nosnippet>1233</a>            } <span class="kw">else </span>{
+<a href=#1234 id=1234 data-nosnippet>1234</a>                plan.source.clone()
+<a href=#1235 id=1235 data-nosnippet>1235</a>            };
+<a href=#1236 id=1236 data-nosnippet>1236</a>            <span class="comment">// Only an Optional directly around the decomposed base belongs in
+<a href=#1237 id=1237 data-nosnippet>1237</a>            // the converter chain. `optional` also covers
+<a href=#1238 id=1238 data-nosnippet>1238</a>            // `Option&lt;Vec&lt;T&gt;&gt;`, whose presence gates the fold outside the
+<a href=#1239 id=1239 data-nosnippet>1239</a>            // per-element `T` chain.
+<a href=#1240 id=1240 data-nosnippet>1240</a>            </span><span class="kw">let </span>delivered = <span class="kw">if </span>plan.is_optional_base() {
+<a href=#1241 id=1241 data-nosnippet>1241</a>                delivered.optional()
+<a href=#1242 id=1242 data-nosnippet>1242</a>            } <span class="kw">else </span>{
+<a href=#1243 id=1243 data-nosnippet>1243</a>                delivered
+<a href=#1244 id=1244 data-nosnippet>1244</a>            };
+<a href=#1245 id=1245 data-nosnippet>1245</a>            <span class="kw">let </span>composed = return_site(ext, registry, ident, <span class="kw-2">&amp;</span>plan.source, <span class="prelude-val">None</span>)
+<a href=#1246 id=1246 data-nosnippet>1246</a>                .and_then(|site| site.decomposed())
+<a href=#1247 id=1247 data-nosnippet>1247</a>                .filter(|wires| {
+<a href=#1248 id=1248 data-nosnippet>1248</a>                    wires.len() == expected.len()
+<a href=#1249 id=1249 data-nosnippet>1249</a>                        &amp;&amp; wires
+<a href=#1250 id=1250 data-nosnippet>1250</a>                            .iter()
+<a href=#1251 id=1251 data-nosnippet>1251</a>                            .zip(<span class="kw-2">&amp;</span>expected)
+<a href=#1252 id=1252 data-nosnippet>1252</a>                            .all(|(left, right)| left.same_delivery(right))
+<a href=#1253 id=1253 data-nosnippet>1253</a>                });
+<a href=#1254 id=1254 data-nosnippet>1254</a>            <span class="kw">let </span>wires = <span class="kw">match </span>composed {
+<a href=#1255 id=1255 data-nosnippet>1255</a>                <span class="prelude-val">Some</span>(wires) =&gt; wires,
+<a href=#1256 id=1256 data-nosnippet>1256</a>                <span class="prelude-val">None </span>=&gt; std::rc::Rc::new(
+<a href=#1257 id=1257 data-nosnippet>1257</a>                    <span class="kw">crate</span>::jni::compile::freeze_out_wires(ext, registry, <span class="kw-2">&amp;</span>plan.leaves).map_err(
+<a href=#1258 id=1258 data-nosnippet>1258</a>                        |<span class="kw">_</span>| PlanError::UnresolvedOutput {
+<a href=#1259 id=1259 data-nosnippet>1259</a>                            ty: Box::new(plan.source.clone()),
+<a href=#1260 id=1260 data-nosnippet>1260</a>                        },
+<a href=#1261 id=1261 data-nosnippet>1261</a>                    )<span class="question-mark">?</span>,
+<a href=#1262 id=1262 data-nosnippet>1262</a>                ),
+<a href=#1263 id=1263 data-nosnippet>1263</a>            };
+<a href=#1264 id=1264 data-nosnippet>1264</a>            <span class="comment">// Chain availability depends on the exact value the delivery owns,
+<a href=#1265 id=1265 data-nosnippet>1265</a>            // including borrow and outer Optional mode. Freeze that answer now;
+<a href=#1266 id=1266 data-nosnippet>1266</a>            // the site binding itself intentionally names the core Product.
+<a href=#1267 id=1267 data-nosnippet>1267</a>            </span><span class="kw">let </span>chain = <span class="kw">if </span>fixed_builder &amp;&amp; plan.hoists.is_empty() {
+<a href=#1268 id=1268 data-nosnippet>1268</a>                <span class="kw">crate</span>::jni::compile::freeze_output_chain(ext, registry, <span class="kw-2">&amp;</span>delivered).map_err(
+<a href=#1269 id=1269 data-nosnippet>1269</a>                    |<span class="kw">_</span>| PlanError::UnresolvedOutput {
+<a href=#1270 id=1270 data-nosnippet>1270</a>                        ty: Box::new(delivered),
+<a href=#1271 id=1271 data-nosnippet>1271</a>                    },
+<a href=#1272 id=1272 data-nosnippet>1272</a>                )<span class="question-mark">?
+<a href=#1273 id=1273 data-nosnippet>1273</a>            </span>} <span class="kw">else </span>{
+<a href=#1274 id=1274 data-nosnippet>1274</a>                <span class="prelude-val">None
+<a href=#1275 id=1275 data-nosnippet>1275</a>            </span>};
+<a href=#1276 id=1276 data-nosnippet>1276</a>            (wires, chain, <span class="prelude-val">None</span>)
+<a href=#1277 id=1277 data-nosnippet>1277</a>        };
+<a href=#1278 id=1278 data-nosnippet>1278</a>        <span class="kw">let </span>delivery = <span class="kw">crate</span>::jni::emit::FrozenDelivery::new(
+<a href=#1279 id=1279 data-nosnippet>1279</a>            ext,
+<a href=#1280 id=1280 data-nosnippet>1280</a>            registry,
+<a href=#1281 id=1281 data-nosnippet>1281</a>            plan,
+<a href=#1282 id=1282 data-nosnippet>1282</a>            wires.clone(),
+<a href=#1283 id=1283 data-nosnippet>1283</a>            chain.clone(),
+<a href=#1284 id=1284 data-nosnippet>1284</a>        );
+<a href=#1285 id=1285 data-nosnippet>1285</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(FnOutputPlan::Unfold(Box::new(UnfoldOutputPlan {
+<a href=#1286 id=1286 data-nosnippet>1286</a>            wires,
+<a href=#1287 id=1287 data-nosnippet>1287</a>            chain,
+<a href=#1288 id=1288 data-nosnippet>1288</a>            delivery,
+<a href=#1289 id=1289 data-nosnippet>1289</a>            element_pipeline,
+<a href=#1290 id=1290 data-nosnippet>1290</a>            iterable_fold,
+<a href=#1291 id=1291 data-nosnippet>1291</a>            optional,
+<a href=#1292 id=1292 data-nosnippet>1292</a>            fixed_builder,
+<a href=#1293 id=1293 data-nosnippet>1293</a>            whole_element: plan.element.is_some(),
+<a href=#1294 id=1294 data-nosnippet>1294</a>            decon,
+<a href=#1295 id=1295 data-nosnippet>1295</a>            generic,
+<a href=#1296 id=1296 data-nosnippet>1296</a>            iface,
+<a href=#1297 id=1297 data-nosnippet>1297</a>        })));
+<a href=#1298 id=1298 data-nosnippet>1298</a>    }
+<a href=#1299 id=1299 data-nosnippet>1299</a>
+<a href=#1300 id=1300 data-nosnippet>1300</a>    <span class="comment">// Value return. The conversion target: the converted single value for a
+<a href=#1301 id=1301 data-nosnippet>1301</a>    // `Return` delivery, the `Result` Ok type when an error plan peels, else
+<a href=#1302 id=1302 data-nosnippet>1302</a>    // the function's own return.
+<a href=#1303 id=1303 data-nosnippet>1303</a>    </span><span class="kw">let </span>is_convert = unfold_plan.is_some();
+<a href=#1304 id=1304 data-nosnippet>1304</a>    <span class="comment">// The element normalizes an elided return and a written `-&gt; ()` to one
+<a href=#1305 id=1305 data-nosnippet>1305</a>    // `Unit` reading, so there is no `ReturnType` match here.
+<a href=#1306 id=1306 data-nosnippet>1306</a>    // The `Ok` side off `TypeKind::Fallible`, where `result_ok_type` found the
+<a href=#1307 id=1307 data-nosnippet>1307</a>    // `Result` in a path first.
+<a href=#1308 id=1308 data-nosnippet>1308</a>    </span><span class="kw">let </span>ok_ty = error_plan
+<a href=#1309 id=1309 data-nosnippet>1309</a>        .and_then(|<span class="kw">_</span>| f.ret.fallible_parts())
+<a href=#1310 id=1310 data-nosnippet>1310</a>        .map(|(ok, <span class="kw">_</span>)| ok);
+<a href=#1311 id=1311 data-nosnippet>1311</a>    <span class="comment">// All three candidates are readings: a plan's `convert_out_ty`, the `Ok`
+<a href=#1312 id=1312 data-nosnippet>1312</a>    // side of the return, and the return itself. This met them as spellings
+<a href=#1313 id=1313 data-nosnippet>1313</a>    // because one of them used to be a node.
+<a href=#1314 id=1314 data-nosnippet>1314</a>    </span><span class="kw">let </span>target_ty: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef = <span class="kw">match </span>unfold_plan {
+<a href=#1315 id=1315 data-nosnippet>1315</a>        <span class="prelude-val">Some</span>(p) =&gt; p
+<a href=#1316 id=1316 data-nosnippet>1316</a>            .convert_out_ty
+<a href=#1317 id=1317 data-nosnippet>1317</a>            .as_ref()
+<a href=#1318 id=1318 data-nosnippet>1318</a>            .expect(<span class="string">"Return delivery carries convert_out_ty"</span>),
+<a href=#1319 id=1319 data-nosnippet>1319</a>        <span class="prelude-val">None </span>=&gt; ok_ty.unwrap_or(<span class="kw-2">&amp;</span>f.ret),
+<a href=#1320 id=1320 data-nosnippet>1320</a>    };
+<a href=#1321 id=1321 data-nosnippet>1321</a>    <span class="comment">// Two failures, told apart. Holding a reading is not the same as being in
+<a href=#1322 id=1322 data-nosnippet>1322</a>    // the type table — `target_ty` is reached through a plan or a peel, so it
+<a href=#1323 id=1323 data-nosnippet>1323</a>    // may genuinely have no cell — and "not registered" wants different advice
+<a href=#1324 id=1324 data-nosnippet>1324</a>    // from "registered, no converter". Collapsed into one `and_then`, both got
+<a href=#1325 id=1325 data-nosnippet>1325</a>    // the `output_wrapper` message and the first one got it wrong.
+<a href=#1326 id=1326 data-nosnippet>1326</a>    </span><span class="kw">let </span><span class="prelude-val">Some</span>(target) = registry.reading(<span class="kw-2">&amp;</span>target_ty.key()) <span class="kw">else </span>{
+<a href=#1327 id=1327 data-nosnippet>1327</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(PlanError::UnknownOutputType {
+<a href=#1328 id=1328 data-nosnippet>1328</a>            ty: target_ty.key(),
+<a href=#1329 id=1329 data-nosnippet>1329</a>        });
+<a href=#1330 id=1330 data-nosnippet>1330</a>    };
+<a href=#1331 id=1331 data-nosnippet>1331</a>    <span class="comment">// The site's own recipe, compiled through the hook. `Compiler::site` is what
+<a href=#1332 id=1332 data-nosnippet>1332</a>    // makes this a site rather than a lookup: it picks the recipe, builds the
+<a href=#1333 id=1333 data-nosnippet>1333</a>    // fragment, checks the value's validity against what a return tolerates —
+<a href=#1334 id=1334 data-nosnippet>1334</a>    // the JVM keeps what it is given, so a borrowed one is refused here rather
+<a href=#1335 id=1335 data-nosnippet>1335</a>    // than emitted — and hands the fragment to `Compile::plan`.
+<a href=#1336 id=1336 data-nosnippet>1336</a>    //
+<a href=#1337 id=1337 data-nosnippet>1337</a>    // The Kotlin surface classifies the DECLARED return: `convert_out_ty` for a
+<a href=#1338 id=1338 data-nosnippet>1338</a>    // convert, else the signature's own output. Not `target_ty` — the Kotlin
+<a href=#1339 id=1339 data-nosnippet>1339</a>    // error peel rides the conversion's `value_reading`, so the full
+<a href=#1340 id=1340 data-nosnippet>1340</a>    // `Result&lt;T, E&gt;` is what the surface reads, and that is the one fact the
+<a href=#1341 id=1341 data-nosnippet>1341</a>    // crossing cannot carry.
+<a href=#1342 id=1342 data-nosnippet>1342</a>    </span><span class="kw">let </span>plan = return_site(
+<a href=#1343 id=1343 data-nosnippet>1343</a>        ext,
+<a href=#1344 id=1344 data-nosnippet>1344</a>        registry,
+<a href=#1345 id=1345 data-nosnippet>1345</a>        ident,
+<a href=#1346 id=1346 data-nosnippet>1346</a>        <span class="kw-2">&amp;</span>target,
+<a href=#1347 id=1347 data-nosnippet>1347</a>        is_convert.then(|| target_ty.clone()),
+<a href=#1348 id=1348 data-nosnippet>1348</a>    )
+<a href=#1349 id=1349 data-nosnippet>1349</a>    .and_then(|p| p.returned())
+<a href=#1350 id=1350 data-nosnippet>1350</a>    .ok_or_else(|| PlanError::UnresolvedOutput {
+<a href=#1351 id=1351 data-nosnippet>1351</a>        ty: Box::new(target.clone()),
+<a href=#1352 id=1352 data-nosnippet>1352</a>    })<span class="question-mark">?</span>;
+<a href=#1353 id=1353 data-nosnippet>1353</a>    <span class="comment">// Read off the shared plan: it is the site's own answer, and the plan
+<a href=#1354 id=1354 data-nosnippet>1354</a>    // built below adds the convert delivery to it rather than replacing it.
+<a href=#1355 id=1355 data-nosnippet>1355</a>    </span><span class="kw">let </span>(pipeline, surface, is_enum, is_option_enum, enum_niches) = (
+<a href=#1356 id=1356 data-nosnippet>1356</a>        plan.pipeline.clone(),
+<a href=#1357 id=1357 data-nosnippet>1357</a>        plan.surface.clone(),
+<a href=#1358 id=1358 data-nosnippet>1358</a>        plan.is_enum,
+<a href=#1359 id=1359 data-nosnippet>1359</a>        plan.is_option_enum,
+<a href=#1360 id=1360 data-nosnippet>1360</a>        plan.enum_niches.clone(),
+<a href=#1361 id=1361 data-nosnippet>1361</a>    );
+<a href=#1362 id=1362 data-nosnippet>1362</a>    <span class="comment">// The convert shortcut reaches the plan's single leaf itself rather than
+<a href=#1363 id=1363 data-nosnippet>1363</a>    // through the leaf encoder, and qualifies the accessor calls on that reach
+<a href=#1364 id=1364 data-nosnippet>1364</a>    // — so those origins are frozen here, with the leaf they belong to.
+<a href=#1365 id=1365 data-nosnippet>1365</a>    </span><span class="kw">let </span>convert_delivery = is_convert.then(|| {
+<a href=#1366 id=1366 data-nosnippet>1366</a>        <span class="kw">let </span>unfold = unfold_plan.expect(<span class="string">"a convert is a Return delivery, which carries its plan"</span>);
+<a href=#1367 id=1367 data-nosnippet>1367</a>        <span class="kw">crate</span>::jni::emit::FrozenDelivery::new(
+<a href=#1368 id=1368 data-nosnippet>1368</a>            ext,
+<a href=#1369 id=1369 data-nosnippet>1369</a>            registry,
+<a href=#1370 id=1370 data-nosnippet>1370</a>            unfold,
+<a href=#1371 id=1371 data-nosnippet>1371</a>            std::rc::Rc::new(
+<a href=#1372 id=1372 data-nosnippet>1372</a>                unfold
+<a href=#1373 id=1373 data-nosnippet>1373</a>                    .leaves
+<a href=#1374 id=1374 data-nosnippet>1374</a>                    .iter()
+<a href=#1375 id=1375 data-nosnippet>1375</a>                    .map(<span class="kw">crate</span>::jni::compile::OutWire::from_leaf)
+<a href=#1376 id=1376 data-nosnippet>1376</a>                    .collect(),
+<a href=#1377 id=1377 data-nosnippet>1377</a>            ),
+<a href=#1378 id=1378 data-nosnippet>1378</a>            <span class="prelude-val">None</span>,
+<a href=#1379 id=1379 data-nosnippet>1379</a>        )
+<a href=#1380 id=1380 data-nosnippet>1380</a>    });
+<a href=#1381 id=1381 data-nosnippet>1381</a>    <span class="comment">// The plan the emitters read: the site's answer with the convert delivery
+<a href=#1382 id=1382 data-nosnippet>1382</a>    // attached. This is the one frozen into the canonical site, because it is
+<a href=#1383 id=1383 data-nosnippet>1383</a>    // the authoritative one — freezing the hook's intermediate carried a
+<a href=#1384 id=1384 data-nosnippet>1384</a>    // `convert_delivery` of `None` while this object owned the real one.
+<a href=#1385 id=1385 data-nosnippet>1385</a>    </span><span class="kw">let </span>final_plan = std::rc::Rc::new(ValueOutputPlan {
+<a href=#1386 id=1386 data-nosnippet>1386</a>        site: plan.site.clone(),
+<a href=#1387 id=1387 data-nosnippet>1387</a>        is_convert,
+<a href=#1388 id=1388 data-nosnippet>1388</a>        pipeline,
+<a href=#1389 id=1389 data-nosnippet>1389</a>        surface,
+<a href=#1390 id=1390 data-nosnippet>1390</a>        is_enum,
+<a href=#1391 id=1391 data-nosnippet>1391</a>        is_option_enum,
+<a href=#1392 id=1392 data-nosnippet>1392</a>        enum_niches,
+<a href=#1393 id=1393 data-nosnippet>1393</a>        convert_delivery,
+<a href=#1394 id=1394 data-nosnippet>1394</a>    });
+<a href=#1395 id=1395 data-nosnippet>1395</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>((bound, fragment)) = <span class="kw-2">&amp;</span>final_plan.site {
+<a href=#1396 id=1396 data-nosnippet>1396</a>        ext.site_plans
+<a href=#1397 id=1397 data-nosnippet>1397</a>            .borrow_mut()
+<a href=#1398 id=1398 data-nosnippet>1398</a>            .push(std::rc::Rc::new(<span class="kw">crate</span>::jni::compile::whole_return_site(
+<a href=#1399 id=1399 data-nosnippet>1399</a>                bound,
+<a href=#1400 id=1400 data-nosnippet>1400</a>                fragment,
+<a href=#1401 id=1401 data-nosnippet>1401</a>                final_plan.clone(),
+<a href=#1402 id=1402 data-nosnippet>1402</a>            )));
+<a href=#1403 id=1403 data-nosnippet>1403</a>    }
+<a href=#1404 id=1404 data-nosnippet>1404</a>    <span class="prelude-val">Ok</span>(FnOutputPlan::Value(final_plan))
+<a href=#1405 id=1405 data-nosnippet>1405</a>}
+<a href=#1406 id=1406 data-nosnippet>1406</a>
+<a href=#1407 id=1407 data-nosnippet>1407</a><span class="doccomment">/// Whether a return surfaces as a Kotlin enum class, and whether an optional
+<a href=#1408 id=1408 data-nosnippet>1408</a>/// one does — the only two things the old `canonical` spelling was consulted
+<a href=#1409 id=1409 data-nosnippet>1409</a>/// for, now answered at the one place that can see how it was obtained.
+<a href=#1410 id=1410 data-nosnippet>1410</a></span><span class="attr">#[derive(Clone, Copy)]
+<a href=#1411 id=1411 data-nosnippet>1411</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>EnumSurface {
+<a href=#1412 id=1412 data-nosnippet>1412</a>    <span class="kw">pub </span>is_enum: bool,
+<a href=#1413 id=1413 data-nosnippet>1413</a>    <span class="kw">pub </span>is_option_enum: bool,
+<a href=#1414 id=1414 data-nosnippet>1414</a>}
+<a href=#1415 id=1415 data-nosnippet>1415</a>
+<a href=#1416 id=1416 data-nosnippet>1416</a><span class="kw">impl </span>ReturnSurface {
+<a href=#1417 id=1417 data-nosnippet>1417</a>    <span class="doccomment">/// Classify a declared return type. Returns the surface plus the
+<a href=#1418 id=1418 data-nosnippet>1418</a>    /// canonical (`value_reading`-peeled) type the enum probes run over —
+<a href=#1419 id=1419 data-nosnippet>1419</a>    /// the single peel that subsumed both `classify_return`'s inline peel
+<a href=#1420 id=1420 data-nosnippet>1420</a>    /// and the former `canonical_return_ty`.
+<a href=#1421 id=1421 data-nosnippet>1421</a>    </span><span class="kw">pub fn </span>classify(
+<a href=#1422 id=1422 data-nosnippet>1422</a>        ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1423 id=1423 data-nosnippet>1423</a>        ret: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
+<a href=#1424 id=1424 data-nosnippet>1424</a>    ) -&gt; (<span class="self">Self</span>, EnumSurface) {
+<a href=#1425 id=1425 data-nosnippet>1425</a>        <span class="comment">// The RETURN, as the model classified it. Both callers used to spell a
+<a href=#1426 id=1426 data-nosnippet>1426</a>        // reading into a `-&gt; #ty` fragment for this to take apart again, and
+<a href=#1427 id=1427 data-nosnippet>1427</a>        // the `ReturnType::Default` arm was a unit the element already states.
+<a href=#1428 id=1428 data-nosnippet>1428</a>        </span><span class="kw">let </span>outer_meta = ext.out_frag(ret).map(|e| e.metadata.clone());
+<a href=#1429 id=1429 data-nosnippet>1429</a>        <span class="comment">// Unit returns (incl. `Result&lt;()&gt;`, whose inner identity rides
+<a href=#1430 id=1430 data-nosnippet>1430</a>        // `value_reading`) declare no Kotlin return type. Falling back to the
+<a href=#1431 id=1431 data-nosnippet>1431</a>        // declared return is not a miss: `None` means the crossing itself is
+<a href=#1432 id=1432 data-nosnippet>1432</a>        // the surfaced value.
+<a href=#1433 id=1433 data-nosnippet>1433</a>        </span><span class="kw">let </span>stored = outer_meta.as_ref().and_then(|m| m.value_reading.as_ref());
+<a href=#1434 id=1434 data-nosnippet>1434</a>        <span class="kw">let </span>is_unit = <span class="kw">match </span>stored {
+<a href=#1435 id=1435 data-nosnippet>1435</a>            <span class="prelude-val">Some</span>(t) =&gt; <span class="macro">matches!</span>(t.kind(), prebindgen_registry::flat::TypeKind::Unit),
+<a href=#1436 id=1436 data-nosnippet>1436</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">matches!</span>(ret.kind(), prebindgen_registry::flat::TypeKind::Unit),
+<a href=#1437 id=1437 data-nosnippet>1437</a>        };
+<a href=#1438 id=1438 data-nosnippet>1438</a>        <span class="comment">// The two enum questions, answered where BOTH branches are in view.
+<a href=#1439 id=1439 data-nosnippet>1439</a>        // They used to ride out on a `canonical: syn::Type` built by spelling
+<a href=#1440 id=1440 data-nosnippet>1440</a>        // the reading — and then `option_inner_type` peeled that spelling to
+<a href=#1441 id=1441 data-nosnippet>1441</a>        // ask about its inner, which is the layer-off-a-spelling mistake #273
+<a href=#1442 id=1442 data-nosnippet>1442</a>        // is named for: the model erases wrappers the spelling still shows.
+<a href=#1443 id=1443 data-nosnippet>1443</a>        // A stored `value_reading` is a classified reading. No Rust node is
+<a href=#1444 id=1444 data-nosnippet>1444</a>        // reconstructed or peeled here.
+<a href=#1445 id=1445 data-nosnippet>1445</a>        </span><span class="kw">let </span>(is_enum, is_option_enum) = <span class="kw">match </span>stored {
+<a href=#1446 id=1446 data-nosnippet>1446</a>            <span class="prelude-val">Some</span>(t) =&gt; {
+<a href=#1447 id=1447 data-nosnippet>1447</a>                <span class="kw">let </span><span class="kw-2">mut </span>inner = t;
+<a href=#1448 id=1448 data-nosnippet>1448</a>                <span class="kw">let </span><span class="kw-2">mut </span>optional = <span class="bool-val">false</span>;
+<a href=#1449 id=1449 data-nosnippet>1449</a>                <span class="kw">while let </span><span class="prelude-val">Some</span>(next) = inner.optional_inner() {
+<a href=#1450 id=1450 data-nosnippet>1450</a>                    optional = <span class="bool-val">true</span>;
+<a href=#1451 id=1451 data-nosnippet>1451</a>                    inner = next;
+<a href=#1452 id=1452 data-nosnippet>1452</a>                }
+<a href=#1453 id=1453 data-nosnippet>1453</a>                (
+<a href=#1454 id=1454 data-nosnippet>1454</a>                    ext.is_kotlin_enum_key(<span class="kw-2">&amp;</span>t.key()),
+<a href=#1455 id=1455 data-nosnippet>1455</a>                    optional &amp;&amp; ext.is_kotlin_enum_key(<span class="kw-2">&amp;</span>inner.key()),
+<a href=#1456 id=1456 data-nosnippet>1456</a>                )
+<a href=#1457 id=1457 data-nosnippet>1457</a>            }
+<a href=#1458 id=1458 data-nosnippet>1458</a>            <span class="comment">// `is_kotlin_enum_reading` is NOT the peer here: it probes THROUGH
+<a href=#1459 id=1459 data-nosnippet>1459</a>            // the layers, so `Option&lt;Level&gt;` answers true for the first
+<a href=#1460 id=1460 data-nosnippet>1460</a>            // question, where the node version keys on the whole type and
+<a href=#1461 id=1461 data-nosnippet>1461</a>            // answers false. The first question wants the exact type's
+<a href=#1462 id=1462 data-nosnippet>1462</a>            // identity; the second requires at least one Optional and asks the
+<a href=#1463 id=1463 data-nosnippet>1463</a>            // terminal inner type after peeling every Optional layer.
+<a href=#1464 id=1464 data-nosnippet>1464</a>            </span><span class="prelude-val">None </span>=&gt; {
+<a href=#1465 id=1465 data-nosnippet>1465</a>                <span class="kw">let </span><span class="kw-2">mut </span>inner = ret;
+<a href=#1466 id=1466 data-nosnippet>1466</a>                <span class="kw">let </span><span class="kw-2">mut </span>optional = <span class="bool-val">false</span>;
+<a href=#1467 id=1467 data-nosnippet>1467</a>                <span class="kw">while let </span><span class="prelude-val">Some</span>(next) = inner.optional_inner() {
+<a href=#1468 id=1468 data-nosnippet>1468</a>                    optional = <span class="bool-val">true</span>;
+<a href=#1469 id=1469 data-nosnippet>1469</a>                    inner = next;
+<a href=#1470 id=1470 data-nosnippet>1470</a>                }
+<a href=#1471 id=1471 data-nosnippet>1471</a>                (
+<a href=#1472 id=1472 data-nosnippet>1472</a>                    ext.is_kotlin_enum_key(<span class="kw-2">&amp;</span>ret.key()),
+<a href=#1473 id=1473 data-nosnippet>1473</a>                    optional &amp;&amp; ext.is_kotlin_enum_key(<span class="kw-2">&amp;</span>inner.key()),
+<a href=#1474 id=1474 data-nosnippet>1474</a>                )
+<a href=#1475 id=1475 data-nosnippet>1475</a>            }
+<a href=#1476 id=1476 data-nosnippet>1476</a>        };
+<a href=#1477 id=1477 data-nosnippet>1477</a>        <span class="kw">let </span>canonical = EnumSurface {
+<a href=#1478 id=1478 data-nosnippet>1478</a>            is_enum,
+<a href=#1479 id=1479 data-nosnippet>1479</a>            is_option_enum,
+<a href=#1480 id=1480 data-nosnippet>1480</a>        };
+<a href=#1481 id=1481 data-nosnippet>1481</a>        <span class="kw">if </span>is_unit {
+<a href=#1482 id=1482 data-nosnippet>1482</a>            <span class="kw">return </span>(<span class="self">Self</span>::Unit, canonical);
+<a href=#1483 id=1483 data-nosnippet>1483</a>        }
+<a href=#1484 id=1484 data-nosnippet>1484</a>        <span class="comment">// Projection return (opaque handle or `ULong`): read the folded
+<a href=#1485 id=1485 data-nosnippet>1485</a>        // `Projection` the type-unfolding mechanism propagated onto this
+<a href=#1486 id=1486 data-nosnippet>1486</a>        // return type's converter metadata — one source of truth, no
+<a href=#1487 id=1487 data-nosnippet>1487</a>        // shape-specific peeling.
+<a href=#1488 id=1488 data-nosnippet>1488</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(h) = outer_meta.as_ref().and_then(|m| m.projection.clone()) {
+<a href=#1489 id=1489 data-nosnippet>1489</a>            <span class="kw">let </span>leaf_fqn = projection_leaf_kt(ext, <span class="kw-2">&amp;</span>h).map(|t| t.to_string());
+<a href=#1490 id=1490 data-nosnippet>1490</a>            <span class="kw">return </span>(
+<a href=#1491 id=1491 data-nosnippet>1491</a>                <span class="self">Self</span>::Projected {
+<a href=#1492 id=1492 data-nosnippet>1492</a>                    projection: h,
+<a href=#1493 id=1493 data-nosnippet>1493</a>                    leaf_fqn,
+<a href=#1494 id=1494 data-nosnippet>1494</a>                },
+<a href=#1495 id=1495 data-nosnippet>1495</a>                canonical,
+<a href=#1496 id=1496 data-nosnippet>1496</a>            );
+<a href=#1497 id=1497 data-nosnippet>1497</a>        }
+<a href=#1498 id=1498 data-nosnippet>1498</a>        <span class="comment">// Non-opaque: the resolved entry's Kotlin name — the rank-N handler
+<a href=#1499 id=1499 data-nosnippet>1499</a>        // propagates `ZResult&lt;T&gt;` / `Option&lt;T&gt;` / `Vec&lt;T&gt;` derivations
+<a href=#1500 id=1500 data-nosnippet>1500</a>        // alongside the wire, so no peel-and-fallback chain is needed here.
+<a href=#1501 id=1501 data-nosnippet>1501</a>        </span><span class="kw">match </span>outer_meta.and_then(|m| m.kotlin_name) {
+<a href=#1502 id=1502 data-nosnippet>1502</a>            <span class="prelude-val">Some</span>(kt) =&gt; (<span class="self">Self</span>::Plain { kt }, canonical),
+<a href=#1503 id=1503 data-nosnippet>1503</a>            <span class="prelude-val">None </span>=&gt; (<span class="self">Self</span>::Skip, canonical),
+<a href=#1504 id=1504 data-nosnippet>1504</a>        }
+<a href=#1505 id=1505 data-nosnippet>1505</a>    }
+<a href=#1506 id=1506 data-nosnippet>1506</a>}
 </code></pre></div></section></main></body></html>
