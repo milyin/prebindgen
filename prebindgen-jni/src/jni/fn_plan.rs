@@ -952,17 +952,18 @@ fn classify_leaf(
         // Stated here rather than left out, so the canonical site set covers
         // this path too (#622 review).
         {
-            let fragment = entry.fragment();
+            let fragment = entry.plan();
             ext.site_plans
                 .borrow_mut()
-                .push(std::rc::Rc::new(fragment.freeze_site(
+                .push(std::rc::Rc::new(crate::jni::compile::site_plan(
+                    &fragment,
                     &prebindgen_registry::recipe::Bound {
                         site: Site {
                             owner: owner.clone(),
                             role: leaf_role(expanded, position, leaf_index),
                         },
                         crossing: Crossing::new(reading.clone(), Direction::Construct),
-                        recipe: fragment.id.recipe().clone(),
+                        recipe: fragment.id().recipe().clone(),
                         origin: prebindgen_registry::recipe::Origin::Function,
                     },
                     crate::jni::compile::JAbiLeaves::Params(leaf.clone()),
@@ -978,8 +979,8 @@ fn classify_leaf(
             // fabricated `Bound` is what the first two attempts at this
             // produced, and a site that misreports which row it took is worse
             // than an absent one (#622 review).
-            if let Some(plan) = fragment.rust.invoke_plan() {
-                let arguments = match &fragment.shape {
+            if let Some(plan) = entry.rust.invoke_plan() {
+                let arguments = match fragment.converter().shape() {
                     prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } => {
                         arguments.as_slice()
                     }
